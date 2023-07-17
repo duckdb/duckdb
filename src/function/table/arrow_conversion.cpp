@@ -644,8 +644,42 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		}
 		break;
 	}
+	case LogicalTypeId::UNION: {
+		auto type_ids = ArrowBufferData<int8_t>(array, array.n_buffers == 1 ? 0 : 1);
+		D_ASSERT(type_ids);
+		auto members = UnionType::CopyMemberTypes(vector.GetType());
+
+		auto &validity_mask = FlatVector::Validity(vector);
+
+		duckdb::vector<Vector> children;
+		for (idx_t type_idx = 0; type_idx < (::idx_t)array.n_children; type_idx++) {
+			Vector child(members[type_idx].second);
+			auto arrow_array = array.children[type_idx];
+
+			SetValidityMask(child, *arrow_array, scan_state, size, nested_offset);
+
+			ColumnArrowToDuckDB(child, *arrow_array, scan_state, size, arrow_convert_data, col_idx, arrow_convert_idx,
+			                    nested_offset, &validity_mask);
+
+			children.push_back(std::move(child));
+		}
+
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			auto tag = type_ids[row_idx];
+
+			auto out_of_range = tag < 0 || tag >= array.n_children;
+			if (out_of_range) {
+				throw InvalidInputException("Arrow union tag out of range: %d", tag);
+			}
+
+			const Value &value = children[tag].GetValue(row_idx);
+			vector.SetValue(row_idx, value.IsNull() ? Value() : Value::UNION(members, tag, value));
+		}
+
+		break;
+	}
 	default:
-		throw NotImplementedException("Unsupported type %s", vector.GetType().ToString());
+		throw NotImplementedException("Unsupported type for arrow conversion: %s", vector.GetType().ToString());
 	}
 }
 

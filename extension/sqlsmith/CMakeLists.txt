@@ -10,7 +10,7 @@ set(SQLSMITH_SOURCES
     sqlsmith_extension.cpp statement_generator.cpp statement_simplifier.cpp
     fuzzyduck.cpp ${SQLSMITH_OBJECT_FILES})
 
-add_library(sqlsmith_extension STATIC ${SQLSMITH_SOURCES})
+build_static_extension(sqlsmith ${SQLSMITH_SOURCES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(sqlsmith ${PARAMETERS} ${SQLSMITH_SOURCES})
 
