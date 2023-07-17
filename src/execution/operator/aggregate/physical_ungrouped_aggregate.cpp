@@ -379,7 +379,6 @@ public:
 	idx_t tasks_scheduled;
 	idx_t tasks_done;
 
-	vector<idx_t> distinct_agg_idxs;
 	vector<unique_ptr<GlobalSourceState>> global_source_states;
 };
 
@@ -421,20 +420,16 @@ void UngroupedDistinctAggregateFinalizeEvent::Schedule() {
 
 		// If aggregate is not distinct, skip it
 		if (!distinct_data.IsDistinct(agg_idx)) {
+			global_source_states.push_back(nullptr);
 			continue;
 		}
 		D_ASSERT(distinct_data.info.table_map.count(agg_idx));
-
-		distinct_agg_idxs.push_back(agg_idx);
 
 		// Create global state for scanning
 		auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table_p = *distinct_data.radix_tables[table_idx];
 		global_source_states.push_back(radix_table_p.GetGlobalSourceState(context));
 	}
-
-	D_ASSERT(!distinct_agg_idxs.empty());
-	D_ASSERT(distinct_agg_idxs.size() == global_source_states.size());
 
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	vector<shared_ptr<Task>> tasks;
@@ -465,12 +460,22 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 	ThreadContext thread_context(executor.context);
 	ExecutionContext execution_context(executor.context, thread_context, nullptr);
 
-	// Now loop through the distinct aggregates, scanning the distinct HTs
 	auto &finalize_event = event->Cast<UngroupedDistinctAggregateFinalizeEvent>();
-	for (idx_t distinct_idx = 0; distinct_idx < finalize_event.distinct_agg_idxs.size(); distinct_idx++) {
-		const auto &agg_idx = finalize_event.distinct_agg_idxs[distinct_idx];
+
+	// Now loop through the distinct aggregates, scanning the distinct HTs
+	idx_t payload_idx = 0;
+	idx_t next_payload_idx = 0;
+	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
-		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
+
+		// Forward the payload idx
+		payload_idx = next_payload_idx;
+		next_payload_idx = payload_idx + aggregate.children.size();
+
+		// If aggregate is not distinct, skip it
+		if (!distinct_data.IsDistinct(agg_idx)) {
+			continue;
+		}
 
 		const auto table_idx = distinct_data.info.table_map.at(agg_idx);
 		auto &radix_table = *distinct_data.radix_tables[table_idx];
@@ -478,7 +483,7 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 
 		auto &sink = *distinct_state.radix_states[table_idx];
 		InterruptState interrupt_state;
-		OperatorSourceInput source_input {*finalize_event.global_source_states[distinct_idx], *lstate, interrupt_state};
+		OperatorSourceInput source_input {*finalize_event.global_source_states[agg_idx], *lstate, interrupt_state};
 
 		DataChunk output_chunk;
 		output_chunk.Initialize(executor.context, distinct_state.distinct_output_chunks[table_idx]->GetTypes());
@@ -487,10 +492,11 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 		payload_chunk.InitializeEmpty(distinct_data.grouped_aggregate_data[table_idx]->group_types);
 		payload_chunk.SetCardinality(0);
 
+		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
 		while (true) {
 			output_chunk.Reset();
-			auto res = radix_table.GetData(execution_context, output_chunk, sink, source_input);
 
+			auto res = radix_table.GetData(execution_context, output_chunk, sink, source_input);
 			if (res == SourceResultType::FINISHED) {
 				D_ASSERT(output_chunk.size() == 0);
 				break;
@@ -519,8 +525,13 @@ void UngroupedDistinctAggregateFinalizeTask::AggregateDistinct() {
 
 	// After scanning the distinct HTs, we can combine the thread-local agg states with the thread-global
 	lock_guard<mutex> guard(finalize_event.lock);
-	for (idx_t distinct_idx = 0; distinct_idx < finalize_event.distinct_agg_idxs.size(); distinct_idx++) {
-		const auto &agg_idx = finalize_event.distinct_agg_idxs[distinct_idx];
+	payload_idx = 0;
+	next_payload_idx = 0;
+	for (idx_t agg_idx = 0; agg_idx < aggregates.size(); agg_idx++) {
+		if (!distinct_data.IsDistinct(agg_idx)) {
+			continue;
+		}
+
 		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), allocator);
 
