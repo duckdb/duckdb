@@ -176,6 +176,87 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	}
 }
 
+template <bool HAS_RSEL, bool FIRST_HASH>
+static inline void FixedSizeListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+	auto hdata = FlatVector::GetData<hash_t>(hashes);
+
+	UnifiedVectorFormat idata;
+	input.ToUnifiedFormat(count, idata);
+
+	// Hash the children into a temporary
+	auto &child = ArrayVector::GetEntry(input);
+	auto fixed_size = ArrayType::GetSize(input.GetType());
+	auto child_count = fixed_size * count;
+
+	Vector child_hashes(LogicalType::HASH, child_count);
+	if (child_count > 0) {
+		VectorOperations::Hash(child, child_hashes, child_count);
+	}
+	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
+
+	// Reduce the number of entries to check to the non-empty ones
+	SelectionVector unprocessed(count);
+	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
+	idx_t remaining = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
+		const auto lidx = idata.sel->get_index(ridx);
+		if (idata.validity.RowIsValid(lidx)) {
+			unprocessed.set_index(remaining++, ridx);
+			cursor.set_index(ridx, lidx * fixed_size); // or (i * fixed_size) ?
+		} else if (FIRST_HASH) {
+			hdata[ridx] = HashOp::NULL_HASH;
+		}
+		// Empty or NULL non-first elements have no effect.
+	}
+
+	count = remaining;
+	if (count == 0) {
+		return;
+	}
+
+	// Merge the first position hash into the main hash
+	idx_t position = 1;
+	if (FIRST_HASH) {
+		remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto cidx = cursor.get_index(ridx);
+			hdata[ridx] = chdata[cidx];
+			if (fixed_size > position) {
+				// Entry still has values to hash
+				unprocessed.set_index(remaining++, ridx);
+				cursor.set_index(ridx, cidx + 1);
+			}
+		}
+		count = remaining;
+		if (count == 0) {
+			return;
+		}
+		++position;
+	}
+
+	// Combine the hashes for the remaining positions until there are none left
+	for (;; ++position) {
+		remaining = 0;
+		for (idx_t i = 0; i < count; ++i) {
+			const auto ridx = unprocessed.get_index(i);
+			const auto cidx = cursor.get_index(ridx);
+			hdata[ridx] = CombineHashScalar(hdata[ridx], chdata[cidx]);
+			if (fixed_size > position) {
+				// Entry still has values to hash
+				unprocessed.set_index(remaining++, ridx);
+				cursor.set_index(ridx, cidx + 1);
+			}
+		}
+
+		count = remaining;
+		if (count == 0) {
+			break;
+		}
+	}
+}
+
 template <bool HAS_RSEL>
 static inline void HashTypeSwitch(Vector &input, Vector &result, const SelectionVector *rsel, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
@@ -225,6 +306,9 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 		break;
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
+		break;
+	case PhysicalType::FIXED_SIZE_LIST:
+		FixedSizeListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");

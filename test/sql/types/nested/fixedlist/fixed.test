@@ -1,0 +1,6 @@
+
+
+# conversion failure (mixed types)
+query I
+SELECT array_value(1, 2, 3)
+----

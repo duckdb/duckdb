@@ -1403,6 +1403,19 @@ string Value::ToSQLString() const {
 		ret += "]";
 		return ret;
 	}
+	case LogicalTypeId::ARRAY: {
+		string ret = "[";
+		auto &array_values = ArrayValue::GetChildren(*this);
+		for (size_t i = 0; i < array_values.size(); i++) {
+			auto &child = array_values[i];
+			ret += child.ToSQLString();
+			if (i < array_values.size() - 1) {
+				ret += ", ";
+			}
+		}
+		ret += "]";
+		return ret;
+	}
 	default:
 		return ToString();
 	}

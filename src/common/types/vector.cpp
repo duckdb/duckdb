@@ -821,6 +821,10 @@ void Vector::Flatten(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
+		case PhysicalType::FIXED_SIZE_LIST: {
+			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
+			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+		} break;
 		case PhysicalType::STRUCT: {
 			auto normalified_buffer = make_uniq<VectorStructBuffer>();
 
@@ -989,6 +993,17 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			serializer.WriteData(const_data_ptr_cast(data.get()), count * sizeof(list_entry_t));
 
 			child.Serialize(list_size, serializer);
+			break;
+		}
+		case PhysicalType::FIXED_SIZE_LIST: {
+			// TODO: Technically, fixed size lists are constant size types, 
+			// but we cant get the actual size from just the physical type. 
+			// Maybe there is a better way to do this?
+			auto &child = ArrayVector::GetEntry(*this);
+			auto fixed_list_size = ArrayType::GetSize(type);
+
+			serializer.Write<idx_t>(fixed_list_size);
+			child.Serialize(count * fixed_list_size, serializer);
 			break;
 		}
 		default:
@@ -1227,6 +1242,12 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 			auto &child = ListVector::GetEntry(*this);
 			child.Deserialize(list_size, source);
 
+			break;
+		}
+		case PhysicalType::FIXED_SIZE_LIST: {
+			auto fixed_list_size = source.Read<idx_t>();
+			auto &child = ArrayVector::GetEntry(*this);
+			child.Deserialize(count * fixed_list_size, source);
 			break;
 		}
 		default:

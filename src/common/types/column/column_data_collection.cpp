@@ -625,6 +625,32 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	}
 }
 
+void ColumnDataCopyFixedSizeList(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                          idx_t offset, idx_t copy_count) {
+	
+	auto &segment = meta_data.segment;
+
+	auto &child_vector = ListVector::GetEntry(source);
+	auto &child_type = child_vector.GetType();
+
+	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
+		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
+		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
+	}
+
+	auto &child_function = meta_data.copy_function.child_functions[0];
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
+	idx_t current_list_size = 0;
+	auto current_child_index = child_index;
+	while (current_child_index.IsValid()) {
+		auto &child_vdata = segment.GetVectorData(current_child_index);
+		current_list_size += child_vdata.count;
+		current_child_index = child_vdata.next_data;
+	}
+
+}
+
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
 	ColumnDataCopyFunction result;
 	column_data_copy_function_t function;
@@ -685,6 +711,12 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		result.child_functions.push_back(child_function);
 		break;
 	}
+	case PhysicalType::FIXED_SIZE_LIST: {
+		function = ColumnDataCopyFixedSizeList;
+		auto child_function = GetCopyFunction(ArrayType::GetChildType(type));
+		result.child_functions.push_back(child_function);
+		break;
+	}
 	default:
 		throw InternalException("Unsupported type for ColumnDataCollection::GetCopyFunction");
 	}
@@ -696,6 +728,7 @@ static bool IsComplexType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
+	case PhysicalType::FIXED_SIZE_LIST:
 		return true;
 	default:
 		return false;

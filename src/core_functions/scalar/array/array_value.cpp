@@ -20,7 +20,7 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 	for (idx_t i = 0; i < args.size(); i++) {
 		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
 			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
-			child.SetValue(i, val);
+			child.SetValue(col_idx, val);
 		}
 	}
 
