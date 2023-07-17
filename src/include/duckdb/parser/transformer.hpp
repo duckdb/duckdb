@@ -314,7 +314,7 @@ private:
 	//! Transform a path pattern (SQL/PGQ)
 	unique_ptr<PathPattern> TransformPath(duckdb_libpgquery::PGPathPattern *root);
 	//! Transform a path element (SQL/PGQ)
-	unique_ptr<PathElement> TransformPathElement(duckdb_libpgquery::PGPathElement *element);
+	static unique_ptr<PathElement> TransformPathElement(duckdb_libpgquery::PGPathElement *element);
 	//! Transform a subpath (SQL/PGQ)
 	unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element);
 

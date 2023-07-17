@@ -66,10 +66,10 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 		result->path_mode = PGQPathMode::ACYCLIC;
 		break;
 	}
-	if (result->path_mode > PGQPathMode::NONE) {
+	if (result->path_mode > PGQPathMode::WALK) {
 		throw NotImplementedException("Path modes have not been implemented yet.");
 	}
-
+`
 	//! Path sequence
 	for (auto node = root->path->head; node != nullptr; node = lnext(node)) {
 		// Parse path element
