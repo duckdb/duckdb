@@ -103,9 +103,15 @@ def get_deserialize_element_template(template, property_name, property_key, prop
         read_method = 'ReadOptionalProperty'
     return template.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_KEY}', property_key).replace('ReadProperty', read_method).replace('${PROPERTY_TYPE}', property_type).replace('${ASSIGNMENT}', assignment)
 
-
 def get_deserialize_element(property_name, property_key, property_type, is_optional, pointer_type):
     return get_deserialize_element_template(deserialize_element, property_name, property_key, property_type, is_optional, pointer_type)
+
+def get_deserialize_assignment(property_name, property_type, pointer_type):
+    assignment = '.' if pointer_type == 'none' else '->'
+    property = property_name
+    if requires_move(property_type):
+        property = f'std::move({property})'
+    return f'\tresult{assignment}{property_name} = {property};\n'
 
 def get_return_value(pointer_type, class_name):
     if pointer_type == 'none':
@@ -270,12 +276,16 @@ def generate_class_code(class_entry):
 
     constructor_parameters = ''
     constructor_entries = {}
+    last_constructor_index = -1
     if class_entry.constructor is not None:
         for constructor_entry in class_entry.constructor:
             constructor_entries[constructor_entry] = True
             found = False
-            for entry in class_entry.members:
+            for entry_idx in range(len(class_entry.members)):
+                entry = class_entry.members[entry_idx]
                 if entry.name == constructor_entry:
+                    if entry_idx > last_constructor_index:
+                        last_constructor_index = entry_idx
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
@@ -283,7 +293,6 @@ def generate_class_code(class_entry):
                         constructor_parameters += 'std::move(' + entry.name + ')'
                     else:
                         constructor_parameters += entry.name
-                    class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
                     found = True
                     break
             if constructor_entry.startswith('$'):
@@ -307,12 +316,17 @@ def generate_class_code(class_entry):
 
     if class_entry.base is not None:
         class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', class_entry.base)
+    for entry_idx in range(last_constructor_index + 1):
+        entry = class_entry.members[entry_idx]
+        type_name = replace_pointer(entry.type)
+        class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
+
     class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.return_class, constructor_parameters)
     if class_entry.members is None:
         return None
-    for entry in class_entry.members:
+    for entry_idx in range(len(class_entry.members)):
+        entry = class_entry.members[entry_idx]
         property_key = entry.name
-        is_optional = False
         write_property_name = entry.serialize_property
         is_optional = entry.optional
         if is_pointer(entry.type):
@@ -326,8 +340,10 @@ def generate_class_code(class_entry):
             deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry.base.replace('*', '')).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(write_property_name, property_key, type_name, is_optional, class_entry.pointer_type)
-        if entry.name not in constructor_entries:
+        if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(deserialize_template_str, entry.deserialize_property, property_key, type_name, is_optional, class_entry.pointer_type)
+        elif entry.name not in constructor_entries:
+            class_deserialize += get_deserialize_assignment(entry.name, entry.type, class_entry.pointer_type)
 
     if class_entry.base is None:
         class_deserialize += '\treturn result;'

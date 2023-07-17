@@ -47,9 +47,9 @@ void LogicalAggregate::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalAggregate::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto group_index = deserializer.ReadProperty<idx_t>("group_index");
 	auto aggregate_index = deserializer.ReadProperty<idx_t>("aggregate_index");
-	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto result = duckdb::unique_ptr<LogicalAggregate>(new LogicalAggregate(group_index, aggregate_index, std::move(expressions)));
 	deserializer.ReadProperty("groupings_index", result->groupings_index);
 	deserializer.ReadProperty("groups", result->groups);

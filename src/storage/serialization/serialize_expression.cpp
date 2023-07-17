@@ -193,9 +193,10 @@ void BoundLambdaExpression::FormatSerialize(FormatSerializer &serializer) const 
 unique_ptr<Expression> BoundLambdaExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
 	auto lambda_expr = deserializer.ReadProperty<unique_ptr<Expression>>("lambda_expr");
+	auto captures = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("captures");
 	auto parameter_count = deserializer.ReadProperty<idx_t>("parameter_count");
 	auto result = duckdb::unique_ptr<BoundLambdaExpression>(new BoundLambdaExpression(deserializer.Get<ExpressionType>(), std::move(return_type), std::move(lambda_expr), parameter_count));
-	deserializer.ReadProperty("captures", result->captures);
+	result->captures = std::move(captures);
 	return std::move(result);
 }
 
