@@ -60,17 +60,17 @@ void Prefix::Free(ART &art, Node &node) {
 	Node::Free(art, child);
 }
 
-//Node current_node = node;
-//Node next_node;
-//while (current_node.IsSet() && !current_node.IsSerialized() && current_node.GetType() ==
+// Node current_node = node;
+// Node next_node;
+// while (current_node.IsSet() && !current_node.IsSerialized() && current_node.GetType() ==
 //                                                                   NType::PREFIX) {
 //	next_node = Prefix::Get(art, current_node).ptr;
 //	Node::GetAllocator(art, NType::PREFIX).Free(current_node);
 //	current_node = next_node;
 //}
 //
-//Node::Free(art, current_node);
-//node.Reset();
+// Node::Free(art, current_node);
+// node.Reset();
 
 void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
@@ -335,7 +335,7 @@ BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 //
-//BlockPointer Prefix::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
+// BlockPointer Prefix::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 //
 //	reference<Node> first_non_prefix (node);
 //	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
@@ -381,7 +381,7 @@ void Prefix::Deserialize(MetaBlockReader &reader) {
 	ptr = Node(reader);
 }
 
-//void Prefix::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
+// void Prefix::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
 //
 //	auto total_count = reader.Read<idx_t>();
 //	reference<Node> ref_node(node);
@@ -409,7 +409,7 @@ void Prefix::Deserialize(MetaBlockReader &reader) {
 
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 
-    bool flag_set = flags.vacuum_flags[(uint8_t)NType::PREFIX - 1];
+	bool flag_set = flags.vacuum_flags[(uint8_t)NType::PREFIX - 1];
 	auto &allocator = Node::GetAllocator(art, NType::PREFIX);
 
 	reference<Node> node_ref(node);

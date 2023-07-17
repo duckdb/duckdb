@@ -68,10 +68,10 @@ void Node::Free(ART &art, Node &node) {
 	if (!node.IsSerialized()) {
 
 		// iterative
-//		return Prefix::Free(art, node);
+		//		return Prefix::Free(art, node);
 
 		// iterative
-//		return Leaf::Free(art, node);
+		//		return Leaf::Free(art, node);
 
 		// free the children of the nodes
 		auto type = node.GetType();
@@ -239,7 +239,7 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 	}
 
 	// iterative
-//	return Prefix::Serialize(art, *this, writer);
+	//	return Prefix::Serialize(art, *this, writer);
 
 	switch (GetType()) {
 	case NType::PREFIX:
@@ -262,7 +262,7 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 }
 
 //// iterative functions
-//if (decoded_type == NType::PREFIX) {
+// if (decoded_type == NType::PREFIX) {
 //	return Prefix::Deserialize(art, *this, reader);
 //}
 

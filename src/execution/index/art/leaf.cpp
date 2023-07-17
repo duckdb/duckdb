@@ -47,15 +47,15 @@ void Leaf::Free(ART &art, Node &node) {
 	Node::Free(art, child);
 }
 
-//Node current_node = node;
-//Node next_node;
-//while (current_node.IsSet() && !current_node.IsSerialized()) {
+// Node current_node = node;
+// Node next_node;
+// while (current_node.IsSet() && !current_node.IsSerialized()) {
 //	next_node = Leaf::Get(art, current_node).ptr;
 //	Node::GetAllocator(art, NType::LEAF).Free(current_node);
 //	current_node = next_node;
 //}
 //
-//node.Reset();
+// node.Reset();
 
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
