@@ -334,6 +334,10 @@ include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
 include/duckdb/common/multi_file_reader_options.hpp	3
 include/duckdb/common/opener_file_system.hpp	21
+include/duckdb/common/arrow/appender/append_data.hpp	1
+include/duckdb/common/arrow/appender/map_data.hpp	7
+include/duckdb/common/arrow/appender/scalar_data.hpp	2
+include/duckdb/common/arrow/appender/varchar_data.hpp	2
 include/duckdb/common/operator/abs.hpp	1
 include/duckdb/common/operator/add.hpp	2
 include/duckdb/common/operator/decimal_cast_operators.hpp	3

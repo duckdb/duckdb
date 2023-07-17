@@ -1,7 +1,8 @@
 #pragma once
 
+#include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
-#include "duckdb/common/arrow/appender/scalar_data.hpp"
+#include "duckdb/common/arrow/appender/list_data.hpp"
 
 namespace duckdb {
 
@@ -41,21 +42,12 @@ struct ArrowMapData {
 		auto &key_data = *struct_data.child_data[0];
 		auto &value_data = *struct_data.child_data[1];
 
-		if (size != input_size) {
-			// Let's avoid doing this
-			Vector key_vector_copy(key_vector.GetType());
-			key_vector_copy.Slice(key_vector, child_sel, list_size);
-			Vector value_vector_copy(value_vector.GetType());
-			value_vector_copy.Slice(value_vector, child_sel, list_size);
-			key_data.append_vector(key_data, key_vector_copy, 0, list_size, list_size);
-			value_data.append_vector(value_data, value_vector_copy, 0, list_size, list_size);
-		} else {
-			// We don't care about the vector, slice it
-			key_vector.Slice(child_sel, list_size);
-			value_vector.Slice(child_sel, list_size);
-			key_data.append_vector(key_data, key_vector, 0, list_size, list_size);
-			value_data.append_vector(value_data, value_vector, 0, list_size, list_size);
-		}
+		Vector key_vector_copy(key_vector.GetType());
+		key_vector_copy.Slice(key_vector, child_sel, list_size);
+		Vector value_vector_copy(value_vector.GetType());
+		value_vector_copy.Slice(value_vector, child_sel, list_size);
+		key_data.append_vector(key_data, key_vector_copy, 0, list_size, list_size);
+		value_data.append_vector(value_data, value_vector_copy, 0, list_size, list_size);
 
 		append_data.row_count += size;
 		struct_data.row_count += size;
