@@ -254,5 +254,96 @@
       }
     ],
     "constructor": ["table_index", "chunk_types", "collection"]
+  },
+  {
+    "class": "LogicalDelimGet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DELIM_GET",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "chunk_types",
+        "type": "vector<LogicalType>"
+      }
+    ],
+    "constructor": ["table_index", "chunk_types"]
+  },
+  {
+    "class": "LogicalExpressionGet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPRESSION_GET",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "expr_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<vector<Expression*>>"
+      }
+    ],
+    "constructor": ["table_index", "expr_types", "expressions"]
+  },
+  {
+    "class": "LogicalDummyScan",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DUMMY_SCAN",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["table_index"]
+  },
+  {
+    "class": "LogicalEmptyResult",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EMPTY_RESULT",
+    "members": [
+      {
+        "name": "return_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "bindings",
+        "type": "vector<ColumnBinding>"
+      }
+    ]
+  },
+  {
+    "class": "LogicalCTERef",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CTE_REF",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "cte_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "chunk_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "bound_columns",
+        "type": "vector<string>"
+      },
+      {
+        "name": "materialized_cte",
+        "type": "CTEMaterialize"
+      }
+    ],
+    "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
   }
 ]
