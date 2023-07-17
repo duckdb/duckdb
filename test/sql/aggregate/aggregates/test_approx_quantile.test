@@ -8,6 +8,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 SELECT SETSEED(0.8675309);
 
 statement ok
@@ -199,6 +202,9 @@ SELECT CASE
 # Test reservoir quantile
 statement ok
 PRAGMA disable_verification;
+
+statement ok
+PRAGMA disable_verify_external;
 
 statement ok
 SELECT reservoir_quantile(r, 0.9)  from quantile

@@ -383,12 +383,8 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UUID: {
 		return py::str("UUID");
 	}
-	case LogicalTypeId::USER:
-	case LogicalTypeId::ENUM: {
-		return py::str(type.ToString());
-	}
 	default:
-		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
+		return py::str(type.ToString());
 	}
 }
 

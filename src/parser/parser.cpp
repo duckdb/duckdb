@@ -191,6 +191,7 @@ void Parser::ParseQuery(const string &query) {
 		} else {
 			// split sql string into statements and re-parse using extension
 			auto query_statements = SplitQueryStringIntoStatements(query);
+			auto stmt_loc = 0;
 			for (auto const &query_statement : query_statements) {
 				PostgresParser another_parser;
 				another_parser.Parse(query_statement);
@@ -202,6 +203,10 @@ void Parser::ParseQuery(const string &query) {
 						continue;
 					}
 					transformer.TransformParseTree(another_parser.parse_tree, statements);
+					// important to set in the case of a mixture of DDB and parser ext statements
+					statements.back()->stmt_length = query_statement.size() - 1;
+					statements.back()->stmt_location = stmt_loc;
+					stmt_loc += query_statement.size();
 				} else {
 					// let extensions parse the statement which DuckDB failed to parse
 					bool parsed_single_statement = false;
@@ -211,8 +216,9 @@ void Parser::ParseQuery(const string &query) {
 						auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 						if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 							auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-							statement->stmt_length = query_statement.size();
-							statement->stmt_location = 0;
+							statement->stmt_length = query_statement.size() - 1;
+							statement->stmt_location = stmt_loc;
+							stmt_loc += query_statement.size();
 							statements.push_back(std::move(statement));
 							parsed_single_statement = true;
 							break;

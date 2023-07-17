@@ -16,10 +16,10 @@ statement ok
 CREATE TABLE t2 (i integer,  uid varchar);
 
 statement ok
-CREATE UNIQUE INDEX iu on t2(uid);
+INSERT INTO t2 SELECT i.range AS i, gen_random_uuid() AS uid FROM range(10000) AS i;
 
 statement ok
-INSERT INTO t2 SELECT i.range AS i, gen_random_uuid() AS uid FROM range(10000) AS i;
+CREATE UNIQUE INDEX iu ON t2(uid);
 
 statement ok
 CHECKPOINT;
@@ -27,10 +27,13 @@ CHECKPOINT;
 statement ok
 SELECT * FROM pragma_database_size();
 
-# A prior version of index checkpoint caused index data to be written twice,
-# which results in a database size of 2.8MB (11 blocks). When the data is not
-# duplicated, the size is just under 1.8MB (7 blocks). This verifies we do not regress.
+# A prior version of index checkpoint caused index data to be written twice.
+# If a node type exists, then we write at least one block for it.
+# Due to the UUIDs causing many different prefixes, we have 4 blocks for prefixes.
+# We can fit all 10k leaves on one LEAF block. Then, we have one NODE4 block and
+# one NODE16 block. This makes a total of 7 blocks for the index. With extra blocks from
+# storing the data, we should stay below 12 blocks.
 query I
-SELECT total_blocks * block_size < 2100000 FROM pragma_database_size();
+SELECT total_blocks < 12 FROM pragma_database_size();
 ----
 true

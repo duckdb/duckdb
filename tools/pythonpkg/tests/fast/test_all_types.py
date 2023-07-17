@@ -82,13 +82,13 @@ class TestAllTypes(object):
             , 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(datetime.timedelta(0),), (datetime.timedelta(days=30969, seconds=999, microseconds=999999),), (None,)]
             , 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
             , 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=pytz.UTC),)],}
-
+            , 'union':[('Frank',),(5,),(None,)],}
         for cur_type in all_types:
             if cur_type in replacement_values:
                 result = conn.execute("select "+replacement_values[cur_type]).fetchall()
                 print(cur_type, result)
             else:
-                result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
+                result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
             correct_result = correct_answer_map[cur_type]
             assert recursive_equality(result, correct_result)
 
@@ -301,6 +301,11 @@ class TestAllTypes(object):
                 mask=[0, 0, 1],
                 dtype=object,
             ),
+            'union': np.ma.array(
+                ['Frank', 5, None],
+                mask=[0, 0, 1],
+                dtype=object
+            ),
         }
 
         # The following types don't have a numpy equivalent, and are coerced to
@@ -329,7 +334,7 @@ class TestAllTypes(object):
         for cur_type in all_types:
             if cur_type not in correct_answer_map:
                 continue
-            result = rel.project(cur_type).fetchnumpy()
+            result = rel.project(f'"{cur_type}"').fetchnumpy()
             result = result[cur_type]
             correct_answer = correct_answer_map[cur_type]
             if isinstance(result, pd.Categorical) or result.dtype == object:
@@ -356,7 +361,7 @@ class TestAllTypes(object):
             if cur_type in replacement_values:
                 arrow_table = conn.execute("select "+replacement_values[cur_type]).arrow()
             else:
-                arrow_table = conn.execute("select "+cur_type+" from test_all_types()").arrow()
+                arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
             if cur_type in enum_types:
                 round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
                 result_arrow = conn.execute("select * from arrow_table").fetchall()
@@ -385,8 +390,10 @@ class TestAllTypes(object):
             if cur_type in replacement_values:
                 dataframe = conn.execute("select "+replacement_values[cur_type]).df()
             else:
-                dataframe = conn.execute("select "+cur_type+" from test_all_types()").df()
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+            print(cur_type)
             round_trip_dataframe = conn.execute("select * from dataframe").df()
             result_dataframe = conn.execute("select * from dataframe").fetchall()
+            print(round_trip_dataframe)
             result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
             assert recursive_equality(result_dataframe, result_roundtrip)

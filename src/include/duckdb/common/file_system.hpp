@@ -246,6 +246,8 @@ public:
 
 	//! Whether or not a file is remote or local, based only on file path
 	DUCKDB_API static bool IsRemoteFile(const string &path);
+
+	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 };
 
 } // namespace duckdb

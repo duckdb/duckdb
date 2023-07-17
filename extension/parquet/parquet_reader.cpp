@@ -76,7 +76,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	}
 	// read four-byte footer length from just before the end magic bytes
 	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
-	if (footer_len <= 0 || file_size < 12 + footer_len) {
+	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
 	auto metadata_pos = file_size - (footer_len + 8);
@@ -429,7 +429,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
-      parquet_options(parquet_options_p) {
+      parquet_options(std::move(parquet_options_p)) {
 	file_name = std::move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
@@ -457,7 +457,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
+      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
 	InitializeSchema();
 }
 

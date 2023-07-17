@@ -1,7 +1,6 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -15,7 +14,6 @@ Node4 &Node4::New(ART &art, Node &node) {
 	auto &n4 = Node4::Get(art, node);
 
 	n4.count = 0;
-	n4.prefix.Initialize();
 	return n4;
 }
 
@@ -39,8 +37,6 @@ Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 
 	D_ASSERT(n16.count <= Node::NODE_4_CAPACITY);
 	n4.count = n16.count;
-	n4.prefix.Move(n16.prefix);
-
 	for (idx_t i = 0; i < n16.count; i++) {
 		n4.key[i] = n16.key[i];
 		n4.children[i] = n16.children[i];
@@ -94,7 +90,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 	}
 }
 
-void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
+void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
@@ -123,13 +119,18 @@ void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	// this is a one way node, compress
 	if (n4.count == 1) {
 
+		// we need to keep track of the old node pointer
+		// because Concatenate() might overwrite that pointer while appending bytes to
+		// the prefix (and by doing so overwriting the subsequent node with
+		// new prefix nodes)
+		auto old_n4_node = node;
+
 		// get only child and concatenate prefixes
 		auto child = *n4.GetChild(n4.key[0]);
-		child.GetPrefix(art).Concatenate(art, n4.key[0], n4.prefix);
-		n4.count--;
+		Prefix::Concatenate(art, prefix, n4.key[0], child);
 
-		Node::Free(art, node);
-		node = child;
+		n4.count--;
+		Node::Free(art, old_n4_node);
 	}
 }
 
@@ -180,7 +181,6 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_4);
 	writer.Write<uint8_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write key values
 	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
@@ -196,10 +196,9 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node4::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
-	prefix.Deserialize(art, reader);
 
 	// read key values
 	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {

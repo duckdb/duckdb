@@ -5,6 +5,12 @@
 statement ok
 SET default_null_order='nulls_first';
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 #Corner cases
 statement error
 select mode()

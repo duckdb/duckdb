@@ -312,6 +312,7 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 	case PythonObjectType::MemoryView:
 	case PythonObjectType::Bytes:
 		return LogicalType::BLOB;
+	case PythonObjectType::Tuple:
 	case PythonObjectType::List:
 		return LogicalType::LIST(GetListType(ele, can_convert));
 	case PythonObjectType::Dict: {

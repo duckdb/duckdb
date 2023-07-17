@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 #include "duckdb/common/vector.hpp"
 
 using duckdb::ApiInfo;
@@ -20,27 +21,48 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 }
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		string query("SELECT * FROM (VALUES ");
+	duckdb::OdbcHandleStmt *hstmt = nullptr;
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
 
-		if (data_type == SQL_ALL_TYPES) {
-			auto vec_types = ApiInfo::GetVectorTypesAddr();
-			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
-		} else {
-			vector<TypeInfo> vec_types;
-			ApiInfo::FindDataType(data_type, vec_types);
-			ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
-		}
+	string query("SELECT * FROM (VALUES ");
 
-		query += ") AS odbc_types (\"TYPE_NAME\", \"DATA_TYPE\", \"COLUMN_SIZE\", \"LITERAL_PREFIX\", "
-		         "\"LITERAL_SUFFIX\", \"CREATE_PARAMS\", \"NULLABLE\", "
-		         "\"CASE_SENSITIVE\", \"SEARCHABLE\", \"UNSIGNED_ATTRIBUTE\", \"FIXED_PREC_SCALE\", "
-		         "\"AUTO_UNIQUE_VALUE\", \"LOCAL_TYPE_NAME\", "
-		         "\"MINIMUM_SCALE\", \"MAXIMUM_SCALE\", \"SQL_DATA_TYPE\", \"SQL_DATETIME_SUB\", \"NUM_PREC_RADIX\", "
-		         "\"INTERVAL_PRECISION\")";
+	if (data_type == SQL_ALL_TYPES) {
+		auto vec_types = ApiInfo::GetVectorTypesAddr();
+		ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+	} else {
+		vector<TypeInfo> vec_types;
+		ApiInfo::FindDataType(data_type, vec_types);
+		ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
+	}
 
-		return duckdb::ExecDirectStmt(stmt, (SQLCHAR *)query.c_str(), query.size());
-	});
+	// clang-format off
+	query += R"(
+	) AS odbc_types (
+		"TYPE_NAME",
+		"DATA_TYPE",
+		"COLUMN_SIZE",
+		"LITERAL_PREFIX",
+		"LITERAL_SUFFIX",
+		"CREATE_PARAMS",
+		"NULLABLE",
+		"CASE_SENSITIVE",
+		"SEARCHABLE",
+		"UNSIGNED_ATTRIBUTE",
+		"FIXED_PREC_SCALE",
+		"AUTO_UNIQUE_VALUE",
+		"LOCAL_TYPE_NAME",
+		"MINIMUM_SCALE",
+		"MAXIMUM_SCALE",
+		"SQL_DATA_TYPE",
+		"SQL_DATETIME_SUB",
+		"NUM_PREC_RADIX",
+		"INTERVAL_PRECISION"
+	))";
+	// clang-format on
+
+	return duckdb::ExecDirectStmt(hstmt, (SQLCHAR *)query.c_str(), query.size());
 }
 
 /*** ApiInfo private attributes ********************************/

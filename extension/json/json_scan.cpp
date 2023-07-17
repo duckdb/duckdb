@@ -19,7 +19,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options)) {
+		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
@@ -51,10 +51,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	}
 
 	files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
-
-	if (options.file_options.auto_detect_hive_partitioning) {
-		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
-	}
+	options.file_options.AutoDetectHivePartitioning(files, context);
 
 	InitializeReaders(context);
 }
@@ -236,7 +233,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader::FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
 		                              reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                              input.column_ids, reader->reader_data);
+		                              input.column_ids, reader->reader_data, context);
 	}
 
 	return std::move(result);

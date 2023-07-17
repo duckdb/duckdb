@@ -3,7 +3,7 @@
 using namespace duckdb;
 
 void duckdb::ConnDeleter(ConnWrapper *conn) {
-	cpp11::warning("Connection is garbage-collected, use dbDisconnect() to avoid this.");
+	cpp11::warning(std::string("Connection is garbage-collected, use dbDisconnect() to avoid this."));
 	delete conn;
 }
 

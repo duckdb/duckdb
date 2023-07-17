@@ -23,7 +23,7 @@ public:
 	static constexpr const TableReferenceType TYPE = TableReferenceType::JOIN;
 
 public:
-	explicit JoinRef(JoinRefType ref_type)
+	explicit JoinRef(JoinRefType ref_type = JoinRefType::REGULAR)
 	    : TableRef(TableReferenceType::JOIN), type(JoinType::INNER), ref_type(ref_type) {
 	}
 

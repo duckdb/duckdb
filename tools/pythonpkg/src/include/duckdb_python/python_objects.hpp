@@ -162,7 +162,7 @@ public:
 	timestamp_t ToTimestamp();
 	date_t ToDate();
 	dtime_t ToDuckTime();
-	Value ToDuckValue();
+	Value ToDuckValue(const LogicalType &target_type);
 
 public:
 	static int32_t GetYears(PyObject *obj);
