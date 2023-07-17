@@ -102,6 +102,9 @@ DROP TABLE integers
 
 # test insertion after matching prefixes
 
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
 statement ok
 CREATE TABLE tbl_leaf_cov (id INTEGER);
 
@@ -110,3 +113,123 @@ CREATE INDEX idx_leaf_cov ON tbl_leaf_cov(id);
 
 statement ok
 INSERT INTO tbl_leaf_cov VALUES (1), (1);
+
+# testing growing/shrinking leaves
+
+statement ok
+CREATE TABLE tbl_grow_shrink (id_var VARCHAR, id_int INTEGER, id_point BIGINT);
+
+statement ok
+CREATE INDEX idx_var ON tbl_grow_shrink(id_var);
+
+statement ok
+CREATE INDEX idx_int ON tbl_grow_shrink(id_int);
+
+statement ok
+CREATE INDEX idx_both ON tbl_grow_shrink(id_var, id_int, id_point);
+
+statement ok
+CREATE INDEX idx_point ON tbl_grow_shrink(id_point);
+
+# growing
+
+loop i 0 29
+
+statement ok
+INSERT INTO tbl_grow_shrink VALUES ('hello there stranger! :sunshine:', 2, ${i});
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+restart
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+endloop
+
+# some more queries
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+29
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+58
+
+restart
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+29
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+58
+
+# shrinking
+
+loop i 0 29
+
+query I
+SELECT id_var FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+hello there stranger! :sunshine:
+
+query I
+SELECT id_int FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+----
+2
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink WHERE id_point = ${i};
+----
+1
+
+statement ok
+DELETE FROM tbl_grow_shrink WHERE rowid = (SELECT min(rowid) FROM tbl_grow_shrink);
+
+restart
+
+endloop
+
+# some final checking
+
+query I
+SELECT count(id_var) FROM tbl_grow_shrink;
+----
+0
+
+query I
+SELECT sum(id_int) FROM tbl_grow_shrink;
+----
+NULL

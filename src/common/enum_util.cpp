@@ -3124,8 +3124,9 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_256";
 	case NType::LEAF_INLINED:
 		return "LEAF_INLINED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
-	throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 }
 
 template<>
