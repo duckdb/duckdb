@@ -241,7 +241,6 @@ static void PackDelta128(const hugeint_t *__restrict in, uint32_t *__restrict ou
 
 void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width) {
 	D_ASSERT(width <= 128);
-	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
 		break;
@@ -268,7 +267,6 @@ void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict ou
 
 void HugeIntPacker::Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width) {
 	D_ASSERT(width <= 128);
-	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
 		UnpackDelta0(in, out);
