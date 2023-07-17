@@ -838,20 +838,20 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-void NumpyResultConversion::SetCategories() {
-	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		auto &type = Type(col_idx);
-		if (type.id() == LogicalTypeId::ENUM) {
-			// It's an ENUM type, in addition to converting the codes we must convert the categories
-			if (categories.find(col_idx) == categories.end()) {
-				auto &categories_list = EnumType::GetValuesInsertOrder(type);
-				auto categories_size = EnumType::GetSize(type);
-				for (idx_t i = 0; i < categories_size; i++) {
-					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
-				}
-			}
-		}
+py::list &NumpyResultConversion::InsertCategory(idx_t col_idx) {
+	auto &type = Type(col_idx);
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	D_ASSERT(categories.find(col_idx) == categories.end());
+
+	auto &categories_list = EnumType::GetValuesInsertOrder(type);
+	auto categories_size = EnumType::GetSize(type);
+	auto result = categories.insert(std::make_pair(col_idx, py::list()));
+	D_ASSERT(result.first);
+	auto &list = result.second.second;
+	for (idx_t i = 0; i < categories_size; i++) {
+		list.append(py::cast(categories_list.GetValue(i).ToString()));
 	}
+	return list;
 }
 
 void NumpyResultConversion::Append(DataChunk &chunk, idx_t offset) {

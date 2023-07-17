@@ -62,7 +62,7 @@ public:
 	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
 
 public:
-	void SetCategories();
+	py::list &InsertCategory(idx_t col_idx);
 	void Append(DataChunk &chunk, idx_t offset);
 	void Append(DataChunk &chunk);
 	void SetCardinality(idx_t cardinality);
@@ -94,17 +94,26 @@ public:
 		return owned_data[col_idx].Type();
 	}
 
+	py::list &GetCategory(idx_t col_idx) {
+		D_ASSERT(type.id() == LogicalTypeId::ENUM);
+		auto category_entry = categories.find(col_idx);
+		if (category_entry != categories.end()) {
+			return category_entry.second;
+		}
+		return InsertCategory(col_idx);
+	}
+
 	py::object ToArray(idx_t col_idx) {
 		D_ASSERT(py::gil_check());
-		SetCategories();
 		if (Type(col_idx).id() == LogicalTypeId::ENUM) {
+			py::list &category = GetCategory(col_idx);
 			// first we (might) need to create the categorical type
 			auto category_entry = categories_type.find(col_idx);
 			if (category_entry == categories_type.end()) {
 				// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-				auto result = categories_type.emplace(
-				    std::make_pair(col_idx, py::module::import("pandas").attr("CategoricalDtype")(
-				                                categories[col_idx], py::arg("ordered") = true)));
+				auto result = categories_type.emplace(std::make_pair(
+				    col_idx,
+				    py::module::import("pandas").attr("CategoricalDtype")(category, py::arg("ordered") = true)));
 				D_ASSERT(result.second);
 				category_entry = result.first;
 			}
