@@ -107,9 +107,6 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
 			meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmt_ref);
 			params = new Object[0];
-			returnsResultSet = meta.return_type.equals(StatementReturnType.QUERY_RESULT);
-			returnsChangedRows = meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
-			returnsNothing = meta.return_type.equals(StatementReturnType.NOTHING);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it might already be allocated
@@ -168,18 +165,12 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public ResultSet executeQuery() throws SQLException {
-		if (!returnsResultSet) {
-			throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
-		}
 		execute();
 		return getResultSet();
 	}
 
 	@Override
 	public int executeUpdate() throws SQLException {
-		if (!(returnsChangedRows || returnsNothing)) {
-			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
-		}
 		execute();
 		return getUpdateCount();
 	}
