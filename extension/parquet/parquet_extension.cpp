@@ -109,7 +109,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool CanRemoveFilterColumns() const {
 		return !projection_ids.empty();
 	}
-
 };
 
 struct ParquetWriteBindData : public TableFunctionData {

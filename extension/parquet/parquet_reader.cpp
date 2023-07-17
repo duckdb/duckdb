@@ -494,7 +494,6 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	}
 
 	unique_ptr<BaseStatistics> column_stats;
-	// could we not move file metadata as well?
 	auto file_meta_data = GetFileMetadata();
 	auto column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
 
