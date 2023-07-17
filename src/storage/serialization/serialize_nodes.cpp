@@ -9,6 +9,7 @@
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
@@ -29,6 +30,20 @@ BoundCaseCheck BoundCaseCheck::FormatDeserialize(FormatDeserializer &deserialize
 	BoundCaseCheck result;
 	deserializer.ReadProperty("when_expr", result.when_expr);
 	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
+
+void BoundOrderByNode::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("null_order", null_order);
+	serializer.WriteProperty("expression", *expression);
+}
+
+BoundOrderByNode BoundOrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<OrderType>("type");
+	auto null_order = deserializer.ReadProperty<OrderByNullType>("null_order");
+	auto expression = deserializer.ReadProperty<unique_ptr<Expression>>("expression");
+	BoundOrderByNode result(type, null_order, std::move(expression));
 	return result;
 }
 

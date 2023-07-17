@@ -76,6 +76,28 @@
     "constructor": ["type", "null_order", "expression"]
   },
   {
+    "class": "BoundOrderByNode",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
+  },
+  {
     "class": "CaseCheck",
     "includes": [
       "duckdb/parser/expression/case_expression.hpp"

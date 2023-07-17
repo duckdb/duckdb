@@ -82,5 +82,79 @@
       }
     ],
     "constructor": ["group_index", "aggregate_index", "expressions"]
+  },
+  {
+    "class": "LogicalWindow",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_WINDOW",
+    "members": [
+      {
+        "name": "window_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["window_index"]
+  },
+  {
+    "class": "LogicalUnnest",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_UNNEST",
+    "members": [
+      {
+        "name": "unnest_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["unnest_index"]
+  },
+  {
+    "class": "LogicalLimit",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_LIMIT",
+    "members": [
+      {
+        "name": "limit_val",
+        "type": "int64_t"
+      },
+      {
+        "name": "offset_val",
+        "type": "int64_t"
+      },
+      {
+        "name": "limit",
+        "type": "Expression*",
+        "optional": true
+      },
+      {
+        "name": "offset",
+        "type": "Expression*",
+        "optional": true
+      }
+    ],
+    "constructor": ["limit_val", "offset_val", "limit", "offset"]
+  },
+  {
+    "class": "LogicalOrder",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ORDER_BY",
+    "members": [
+      {
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      },
+      {
+        "name": "projections",
+        "type": "vector<idx_t>"
+      }
+    ],
+    "constructor": ["orders"]
   }
 ]

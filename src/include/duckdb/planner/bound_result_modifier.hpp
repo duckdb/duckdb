@@ -63,6 +63,9 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static BoundOrderByNode Deserialize(Deserializer &source, PlanDeserializationState &state);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BoundOrderByNode FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class BoundLimitModifier : public BoundResultModifier {

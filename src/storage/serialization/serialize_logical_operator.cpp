@@ -25,8 +25,20 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_LIMIT:
+		result = LogicalLimit::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		result = LogicalOrder::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_UNNEST:
+		result = LogicalUnnest::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		result = LogicalWindow::FormatDeserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of LogicalOperator!");
@@ -71,6 +83,36 @@ unique_ptr<LogicalOperator> LogicalFilter::FormatDeserialize(FormatDeserializer 
 	return std::move(result);
 }
 
+void LogicalLimit::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("limit_val", limit_val);
+	serializer.WriteProperty("offset_val", offset_val);
+	serializer.WriteOptionalProperty("limit", limit);
+	serializer.WriteOptionalProperty("offset", offset);
+}
+
+unique_ptr<LogicalOperator> LogicalLimit::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto limit_val = deserializer.ReadProperty<int64_t>("limit_val");
+	auto offset_val = deserializer.ReadProperty<int64_t>("offset_val");
+	auto limit = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("limit");
+	auto offset = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("offset");
+	auto result = duckdb::unique_ptr<LogicalLimit>(new LogicalLimit(limit_val, offset_val, std::move(limit), std::move(offset)));
+	return std::move(result);
+}
+
+void LogicalOrder::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("orders", orders);
+	serializer.WriteProperty("projections", projections);
+}
+
+unique_ptr<LogicalOperator> LogicalOrder::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto orders = deserializer.ReadProperty<vector<BoundOrderByNode>>("orders");
+	auto result = duckdb::unique_ptr<LogicalOrder>(new LogicalOrder(std::move(orders)));
+	deserializer.ReadProperty("projections", result->projections);
+	return std::move(result);
+}
+
 void LogicalProjection::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("table_index", table_index);
@@ -81,6 +123,32 @@ unique_ptr<LogicalOperator> LogicalProjection::FormatDeserialize(FormatDeseriali
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto result = duckdb::unique_ptr<LogicalProjection>(new LogicalProjection(table_index, std::move(expressions)));
+	return std::move(result);
+}
+
+void LogicalUnnest::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("unnest_index", unnest_index);
+	serializer.WriteProperty("expressions", expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalUnnest::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto unnest_index = deserializer.ReadProperty<idx_t>("unnest_index");
+	auto result = duckdb::unique_ptr<LogicalUnnest>(new LogicalUnnest(unnest_index));
+	deserializer.ReadProperty("expressions", result->expressions);
+	return std::move(result);
+}
+
+void LogicalWindow::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("window_index", window_index);
+	serializer.WriteProperty("expressions", expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalWindow::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto window_index = deserializer.ReadProperty<idx_t>("window_index");
+	auto result = duckdb::unique_ptr<LogicalWindow>(new LogicalWindow(window_index));
+	deserializer.ReadProperty("expressions", result->expressions);
 	return std::move(result);
 }
 
