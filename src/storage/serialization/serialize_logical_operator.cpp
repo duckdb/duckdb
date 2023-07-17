@@ -22,6 +22,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = LogicalAggregate::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_DISTINCT:
+		result = LogicalDistinct::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
 		break;
@@ -33,6 +36,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_TOP_N:
+		result = LogicalTopN::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		result = LogicalUnnest::FormatDeserialize(deserializer);
@@ -67,6 +73,21 @@ unique_ptr<LogicalOperator> LogicalAggregate::FormatDeserialize(FormatDeserializ
 	deserializer.ReadProperty("groups", result->groups);
 	deserializer.ReadProperty("grouping_sets", result->grouping_sets);
 	deserializer.ReadProperty("grouping_functions", result->grouping_functions);
+	return std::move(result);
+}
+
+void LogicalDistinct::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("distinct_type", distinct_type);
+	serializer.WriteProperty("distinct_targets", distinct_targets);
+	serializer.WriteOptionalProperty("order_by", order_by);
+}
+
+unique_ptr<LogicalOperator> LogicalDistinct::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto distinct_type = deserializer.ReadProperty<DistinctType>("distinct_type");
+	auto distinct_targets = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("distinct_targets");
+	auto result = duckdb::unique_ptr<LogicalDistinct>(new LogicalDistinct(std::move(distinct_targets), distinct_type));
+	deserializer.ReadOptionalProperty("order_by", result->order_by);
 	return std::move(result);
 }
 
@@ -123,6 +144,21 @@ unique_ptr<LogicalOperator> LogicalProjection::FormatDeserialize(FormatDeseriali
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto result = duckdb::unique_ptr<LogicalProjection>(new LogicalProjection(table_index, std::move(expressions)));
+	return std::move(result);
+}
+
+void LogicalTopN::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("orders", orders);
+	serializer.WriteProperty("limit", limit);
+	serializer.WriteProperty("offset", offset);
+}
+
+unique_ptr<LogicalOperator> LogicalTopN::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto orders = deserializer.ReadProperty<vector<BoundOrderByNode>>("orders");
+	auto limit = deserializer.ReadProperty<idx_t>("limit");
+	auto offset = deserializer.ReadProperty<idx_t>("offset");
+	auto result = duckdb::unique_ptr<LogicalTopN>(new LogicalTopN(std::move(orders), limit, offset));
 	return std::move(result);
 }
 

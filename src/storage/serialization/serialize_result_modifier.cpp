@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,16 @@ unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(FormatDeserializer 
 	default:
 		throw SerializationException("Unsupported type for deserialization of ResultModifier!");
 	}
+	return result;
+}
+
+void BoundOrderModifier::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("orders", orders);
+}
+
+unique_ptr<BoundOrderModifier> BoundOrderModifier::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<BoundOrderModifier>(new BoundOrderModifier());
+	deserializer.ReadProperty("orders", result->orders);
 	return result;
 }
 

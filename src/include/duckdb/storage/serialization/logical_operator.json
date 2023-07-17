@@ -156,5 +156,46 @@
       }
     ],
     "constructor": ["orders"]
+  },
+  {
+    "class": "LogicalTopN",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_TOP_N",
+    "members": [
+      {
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      },
+      {
+        "name": "limit",
+        "type": "idx_t"
+      },
+      {
+        "name": "offset",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["orders", "limit", "offset"]
+  },
+  {
+    "class": "LogicalDistinct",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DISTINCT",
+    "members": [
+      {
+        "name": "distinct_type",
+        "type": "DistinctType"
+      },
+      {
+        "name": "distinct_targets",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "order_by",
+        "type": "BoundOrderModifier*",
+        "optional": true
+      }
+    ],
+    "constructor": ["distinct_targets", "distinct_type"]
   }
 ]
