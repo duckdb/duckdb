@@ -325,8 +325,7 @@ public:
 		}
 		first_position = current_csv_position;
 		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
-		next_buffer = shared_ptr<CSVBuffer>(
-		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		running_threads = MaxThreads();
 
 		// Initialize all the book-keeping variables
@@ -554,8 +553,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
-			next_buffer = shared_ptr<CSVBuffer>(
-			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -575,8 +573,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = shared_ptr<CSVBuffer>(
-			    next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
 		}
 	}
 	if (!reader || reader->options.file_path != current_file_path) {

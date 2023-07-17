@@ -300,6 +300,7 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	vector<idx_t> escape_positions;
 
 	idx_t line_start = position;
+	idx_t line_size = 0;
 	// read values into the buffer (if any)
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start, line_start)) {
@@ -317,6 +318,7 @@ value_start:
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start = position + 1;
+		line_size++;
 		goto in_quotes;
 	} else {
 		// no quote, move to normal parsing state
@@ -328,6 +330,7 @@ normal:
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	do {
 		for (; position < buffer_size; position++) {
+			line_size++;
 			if (buffer[position] == options.delimiter) {
 				// delimiter: end the value and add it to the chunk
 				goto add_value;
@@ -345,6 +348,7 @@ add_value:
 	offset = 0;
 	has_quotes = false;
 	start = ++position;
+	line_size++;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 		// file ends right after delimiter, go to final state
 		goto final_state;
@@ -368,6 +372,7 @@ add_row : {
 	offset = 0;
 	has_quotes = false;
 	position++;
+	line_size = 0;
 	start = position;
 	line_start = position;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
@@ -399,8 +404,10 @@ in_quotes:
 	// this state parses the remainder of a quoted value
 	has_quotes = true;
 	position++;
+	line_size++;
 	do {
 		for (; position < buffer_size; position++) {
+			line_size++;
 			if (buffer[position] == options.quote) {
 				// quote: move to unquoted state
 				goto unquote;
@@ -420,6 +427,7 @@ unquote:
 	// in this state we expect either another quote (entering the quoted state again, and escaping the quote)
 	// or a delimiter/newline, ending the current value and moving on to the next value
 	position++;
+	line_size++;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 		// file ends right after unquote, go to final state
 		offset = 1;
@@ -447,6 +455,7 @@ handle_escape:
 	/* state: handle_escape */
 	// escape should be followed by a quote or another escape character
 	position++;
+	line_size++;
 	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
@@ -469,6 +478,8 @@ carriage_return:
 		// newline after carriage return: skip
 		// increase position by 1 and move start to the new position
 		start = ++position;
+		line_size++;
+
 		if (position >= buffer_size && !ReadBuffer(start, line_start)) {
 			// file ends right after delimiter, go to final state
 			goto final_state;
@@ -500,7 +511,7 @@ final_state:
 
 		finished_chunk = AddRow(insert_chunk, column, error_message);
 		SkipEmptyLines();
-		UpdateMaxLineLength(context, position - line_start);
+		UpdateMaxLineLength(context, line_size);
 		if (!error_message.empty()) {
 			return false;
 		}

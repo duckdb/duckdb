@@ -26,7 +26,7 @@ public:
 	          idx_t global_csv_current_position, idx_t file_number);
 
 	//! Creates a new buffer with the next part of the CSV File
-	unique_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
+	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
 	                           idx_t file_number);
 
 	//! Gets the buffer actual size

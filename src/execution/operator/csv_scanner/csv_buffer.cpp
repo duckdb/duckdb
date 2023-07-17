@@ -24,7 +24,7 @@ CSVBuffer::CSVBuffer(ClientContext &context, BufferHandle buffer_p, idx_t buffer
       global_csv_start(global_csv_current_position), file_number(file_number_p) {
 }
 
-unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
+shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
                                       idx_t file_number_p) {
 	auto next_buffer = AllocateBuffer(buffer_size);
 	idx_t next_buffer_actual_size = file_handle.Read(next_buffer.Ptr(), buffer_size);
@@ -34,8 +34,8 @@ unique_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_s
 	}
 
 	auto next_csv_buffer =
-	    make_uniq<CSVBuffer>(context, std::move(next_buffer), buffer_size, next_buffer_actual_size,
-	                         file_handle.FinishedReading(), global_csv_current_position, file_number_p);
+	    make_shared<CSVBuffer>(context, std::move(next_buffer), buffer_size, next_buffer_actual_size,
+	                           file_handle.FinishedReading(), global_csv_current_position, file_number_p);
 	global_csv_current_position += next_buffer_actual_size;
 	return next_csv_buffer;
 }
