@@ -773,7 +773,7 @@ hugeint_t::operator bool() const {
 }
 
 template <class T>
-static T NarrowCast(hugeint_t input) {
+static T NarrowCast(const hugeint_t &input) {
 	// NarrowCast is supposed to truncate (take lower)
 	return static_cast<T>(input.lower);
 }
