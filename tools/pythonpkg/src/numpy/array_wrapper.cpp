@@ -276,11 +276,11 @@ struct StructConvert {
 };
 
 struct UnionConvert {
-	static py::object ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
 		auto val = input.GetValue(chunk_offset);
 		auto value = UnionValue::GetValue(val);
 
-		return PythonObject::FromValue(value, UnionValue::GetType(val));
+		return PythonObject::FromValue(value, UnionValue::GetType(val), client_properties);
 	}
 };
 
@@ -751,8 +751,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                       idata, count, client_properties);
 		break;
 	case LogicalTypeId::UNION:
-		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(current_offset, dataptr, maskptr,
-		                                                                           input, idata, count);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(
+		    current_offset, dataptr, maskptr, input, idata, count, client_properties);
 		break;
 	case LogicalTypeId::STRUCT:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(
