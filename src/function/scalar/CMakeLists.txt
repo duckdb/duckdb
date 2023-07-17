@@ -5,6 +5,7 @@ add_subdirectory(operators)
 add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(struct)
+add_subdirectory(debug)
 add_subdirectory(system)
 add_library_unity(
   duckdb_func_scalar
@@ -16,7 +17,8 @@ add_library_unity(
   nested_functions.cpp
   operators.cpp
   pragma_functions.cpp
-  sequence_functions.cpp)
+  sequence_functions.cpp
+  debug_functions.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_scalar>
     PARENT_SCOPE)

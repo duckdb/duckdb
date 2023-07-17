@@ -99,6 +99,7 @@ void BuiltinFunctions::Initialize() {
 	RegisterGenericFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
+	RegisterDebugFunctions();
 	RegisterStringFunctions();
 	RegisterNestedFunctions();
 

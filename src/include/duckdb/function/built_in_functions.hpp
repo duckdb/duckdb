@@ -63,6 +63,7 @@ private:
 	void RegisterStringFunctions();
 	void RegisterNestedFunctions();
 	void RegisterSequenceFunctions();
+	void RegisterDebugFunctions();
 
 	// pragmas
 	void RegisterPragmaFunctions();
