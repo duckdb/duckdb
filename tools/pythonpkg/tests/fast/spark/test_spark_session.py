@@ -1,4 +1,5 @@
 import pytest
+_ = pytest.importorskip("pyduckdb.spark")
 from pyduckdb.spark.sql import SparkSession
 
 class TestSparkSession(object):

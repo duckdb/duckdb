@@ -1,4 +1,5 @@
 import pytest
+_ = pytest.importorskip("pyduckdb.spark")
 from pyduckdb.spark.sql.types import Row
 from pyduckdb.spark.sql.types import (
 	LongType,
