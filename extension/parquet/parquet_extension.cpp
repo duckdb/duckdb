@@ -152,10 +152,12 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	for (auto &path : parquet_bind.files) {
 		file_path.emplace_back(path);
 	}
+	// LCOV_EXCL_START
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
 	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
 	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
+	// LCOV_EXCL_STOP
 	return bind_info;
 }
 

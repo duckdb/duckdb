@@ -231,7 +231,8 @@ void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
 	D_ASSERT(py::gil_check());
-	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame")(o, py::arg("copy") = py::bool_(false)));
+	auto df = py::cast<PandasDataFrame>(
+	    py::module::import("pandas").attr("DataFrame")(o, py::arg("copy") = py::bool_(false)));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {
@@ -370,12 +371,8 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UUID: {
 		return py::str("UUID");
 	}
-	case LogicalTypeId::USER:
-	case LogicalTypeId::ENUM: {
-		return py::str(type.ToString());
-	}
 	default:
-		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
+		return py::str(type.ToString());
 	}
 }
 
