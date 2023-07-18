@@ -10,14 +10,11 @@
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 
-#include "stdlib.h"
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 
 namespace duckdb_adbc {
 

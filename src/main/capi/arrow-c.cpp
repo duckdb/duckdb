@@ -1,5 +1,4 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/arrow/arrow_options.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
