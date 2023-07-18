@@ -49,6 +49,7 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 	result->lower = root->lower;
 	result->upper = root->upper;
 	result->single_bind = root->single_bind;
+    result->path_variable = root->path_var;
 	switch (root->mode) {
 	case duckdb_libpgquery::PG_PATHMODE_NONE:
 		result->path_mode = PGQPathMode::NONE;
