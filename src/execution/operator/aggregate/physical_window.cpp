@@ -1272,9 +1272,11 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 	lstate.Combine();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {

@@ -210,7 +210,7 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 	if (lstate.hash_table) {
@@ -221,6 +221,8 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInp
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.build_executor, "build_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

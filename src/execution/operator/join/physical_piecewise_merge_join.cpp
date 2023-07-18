@@ -118,7 +118,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);
@@ -126,6 +126,8 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, OperatorSink
 
 	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

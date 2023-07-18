@@ -116,7 +116,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalLimit::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalLimit::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<LimitGlobalState>();
 	auto &state = input.local_state.Cast<LimitLocalState>();
 
@@ -124,6 +124,8 @@ void PhysicalLimit::Combine(ExecutionContext &context, OperatorSinkCombineInput 
 	gstate.limit = state.limit;
 	gstate.offset = state.offset;
 	gstate.data.Merge(state.data);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

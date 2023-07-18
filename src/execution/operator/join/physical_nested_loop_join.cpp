@@ -191,12 +191,14 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalNestedLoopJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<NestedLoopJoinLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this, state.rhs_executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

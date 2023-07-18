@@ -133,7 +133,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 
 	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
@@ -145,6 +145,8 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombine
 
 	// vacuum excess memory
 	gstate.global_index->Vacuum();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

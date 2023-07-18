@@ -140,7 +140,7 @@ public:
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.
-	virtual void Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
+	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished

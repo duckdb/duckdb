@@ -57,7 +57,7 @@ SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalVacuum::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalVacuum::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<VacuumGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<VacuumLocalSinkState>();
 
@@ -66,6 +66,8 @@ void PhysicalVacuum::Combine(ExecutionContext &context, OperatorSinkCombineInput
 	for (idx_t col_idx = 0; col_idx < gstate.column_distinct_stats.size(); col_idx++) {
 		gstate.column_distinct_stats[col_idx]->Merge(*lstate.column_distinct_stats[col_idx]);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

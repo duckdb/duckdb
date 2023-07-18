@@ -425,7 +425,7 @@ void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, OperatorS
 	}
 }
 
-void PhysicalHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalState>();
 	auto &llstate = input.local_state.Cast<HashAggregateLocalState>();
 
@@ -437,7 +437,7 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombi
 	CombineDistinct(context,combine_distinct_input);
 
 	if (CanSkipRegularSink()) {
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping_gstate = gstate.grouping_states[i];
@@ -447,6 +447,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombi
 		auto &table = grouping.table_data;
 		table.Combine(context, *grouping_gstate.table_state, *grouping_lstate.table_state);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //! REGULAR FINALIZE EVENT

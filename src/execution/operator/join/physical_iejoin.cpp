@@ -143,7 +143,7 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalIEJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(lstate.table);
@@ -151,6 +151,8 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput
 
 	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

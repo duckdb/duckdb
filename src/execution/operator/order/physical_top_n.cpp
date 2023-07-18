@@ -446,13 +446,15 @@ SinkResultType PhysicalTopN::Sink(ExecutionContext &context, DataChunk &chunk, O
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalTopN::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<TopNGlobalState>();
 	auto &lstate = input.local_state.Cast<TopNLocalState>();
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.heap.Combine(lstate.heap);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

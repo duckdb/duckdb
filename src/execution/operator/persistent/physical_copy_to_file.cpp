@@ -97,7 +97,7 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 	return path;
 }
 
-void PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
@@ -130,7 +130,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineI
 			function.copy_to_finalize(context.client, *bind_data, *fun_data_global);
 		}
 
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	if (function.copy_to_combine) {
@@ -141,6 +141,8 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineI
 			function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 		}
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

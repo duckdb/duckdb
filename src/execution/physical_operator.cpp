@@ -97,7 +97,8 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chun
 
 // LCOV_EXCL_STOP
 
-void PhysicalOperator::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalOperator::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

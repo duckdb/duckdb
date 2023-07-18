@@ -318,7 +318,7 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Oper
 	}
 }
 
-void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalState>();
 	auto &source = input.local_state.Cast<UngroupedAggregateLocalState>();
 	D_ASSERT(!gstate.finished);
@@ -356,6 +356,8 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, OperatorSink
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, source.child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 class UngroupedDistinctAggregateFinalizeTask : public ExecutorTask {

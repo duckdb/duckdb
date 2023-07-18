@@ -344,7 +344,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
@@ -352,7 +352,7 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombine
 	client_profiler.Flush(context.thread.profiler);
 
 	if (!lstate.current_collection) {
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	if (lstate.current_collection->GetTotalRows() > 0) {
@@ -365,6 +365,8 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombine
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,

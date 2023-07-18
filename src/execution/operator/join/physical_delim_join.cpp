@@ -98,7 +98,7 @@ SinkResultType PhysicalDelimJoin::Sink(ExecutionContext &context, DataChunk &chu
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalDelimJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalDelimJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<DelimJoinLocalState>();
 	auto &gstate = input.global_state.Cast<DelimJoinGlobalState>();
 	gstate.Merge(lstate.lhs_data);
@@ -109,6 +109,8 @@ void PhysicalDelimJoin::Combine(ExecutionContext &context, OperatorSinkCombineIn
 	    input.interrupt_state
 	};
 	distinct->Combine(context, distinct_combine_input);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
