@@ -380,5 +380,41 @@
       }
     ],
     "constructor": ["join_type", "type"]
+  },
+  {
+    "class": "LogicalDelimJoin",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DELIM_JOIN",
+    "members": [
+      {
+        "name": "join_type",
+        "type": "JoinType"
+      },
+      {
+        "name": "mark_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "left_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "right_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "conditions",
+        "type": "vector<JoinCondition>"
+      },
+      {
+        "name": "mark_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["join_type"]
   }
 ]
