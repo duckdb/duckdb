@@ -147,7 +147,6 @@ void TestManySQLTypes(HSTMT &hstmt) {
 }
 
 TEST_CASE("Test Row Wise Testing and SQLFetchScroll", "[odbc]") {
-	// FIXME: add actual test body
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
