@@ -10,6 +10,11 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
+LogicalUpdate::LogicalUpdate(ClientContext &context, string catalog, string schema, string table)
+	: LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
+{
+}
+
 void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);

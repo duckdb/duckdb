@@ -109,6 +109,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		result = LogicalUnnest::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_UPDATE:
+		result = LogicalUpdate::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = LogicalWindow::FormatDeserialize(deserializer);
 		break;
@@ -568,6 +571,33 @@ unique_ptr<LogicalOperator> LogicalUnnest::FormatDeserialize(FormatDeserializer 
 	auto unnest_index = deserializer.ReadProperty<idx_t>("unnest_index");
 	auto result = duckdb::unique_ptr<LogicalUnnest>(new LogicalUnnest(unnest_index));
 	deserializer.ReadProperty("expressions", result->expressions);
+	return std::move(result);
+}
+
+void LogicalUpdate::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("catalog", table.ParentCatalog().GetName());
+	serializer.WriteProperty("schema", table.ParentSchema().name);
+	serializer.WriteProperty("table", table.name);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("return_chunk", return_chunk);
+	serializer.WriteProperty("expressions", expressions);
+	serializer.WriteProperty("columns", columns);
+	serializer.WriteProperty("bound_defaults", bound_defaults);
+	serializer.WriteProperty("update_is_del_and_insert", update_is_del_and_insert);
+}
+
+unique_ptr<LogicalOperator> LogicalUpdate::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto table = deserializer.ReadProperty<string>("table");
+	auto result = duckdb::unique_ptr<LogicalUpdate>(new LogicalUpdate(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("return_chunk", result->return_chunk);
+	deserializer.ReadProperty("expressions", result->expressions);
+	deserializer.ReadProperty("columns", result->columns);
+	deserializer.ReadProperty("bound_defaults", result->bound_defaults);
+	deserializer.ReadProperty("update_is_del_and_insert", result->update_is_del_and_insert);
 	return std::move(result);
 }
 

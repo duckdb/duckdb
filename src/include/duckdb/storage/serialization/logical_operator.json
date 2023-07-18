@@ -676,5 +676,52 @@
       }
     ],
     "constructor": ["$ClientContext", "catalog", "schema", "table"]
+  },
+  {
+    "class": "LogicalUpdate",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_UPDATE",
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string",
+        "serialize_property": "table.ParentCatalog().GetName()"
+      },
+      {
+        "name": "schema",
+        "type": "string",
+        "serialize_property": "table.ParentSchema().name"
+      },
+      {
+        "name": "table",
+        "type": "string",
+        "serialize_property": "table.name"
+      },
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "return_chunk",
+        "type": "bool"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "columns",
+        "type": "vector<PhysicalIndex>"
+      },
+      {
+        "name": "bound_defaults",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "update_is_del_and_insert",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["$ClientContext", "catalog", "schema", "table"]
   }
 ]
