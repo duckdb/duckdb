@@ -146,6 +146,7 @@ void LogicalComparisonJoin::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WriteProperty("left_projection_map", left_projection_map);
 	serializer.WriteProperty("right_projection_map", right_projection_map);
 	serializer.WriteProperty("conditions", conditions);
+	serializer.WriteProperty("mark_types", mark_types);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -155,6 +156,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
+	deserializer.ReadProperty("mark_types", result->mark_types);
 	return std::move(result);
 }
 

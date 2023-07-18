@@ -373,6 +373,10 @@
       {
         "name": "conditions",
         "type": "vector<JoinCondition>"
+      },
+      {
+        "name": "mark_types",
+        "type": "vector<LogicalType>"
       }
     ],
     "constructor": ["join_type", "type"]
