@@ -194,6 +194,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		plan = CreatePlan(op.Cast<LogicalMaterializedCTE>());
+		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		plan = CreatePlan(op.Cast<LogicalCTERef>());
 		break;
@@ -217,6 +220,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_INVALID: {
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}

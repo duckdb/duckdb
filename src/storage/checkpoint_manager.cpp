@@ -111,6 +111,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	// truncate the WAL
 	wal->Truncate(0);
 
+	// truncate the file
+	block_manager.Truncate();
+
 	// mark all blocks written as part of the metadata as modified
 	metadata_writer->MarkWrittenBlocks();
 	table_metadata_writer->MarkWrittenBlocks();

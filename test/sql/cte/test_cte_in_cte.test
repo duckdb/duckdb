@@ -47,6 +47,8 @@ with cte1 as (Select i as j from a) select * from cte1 where j = (with cte2 as (
 ----
 42
 
+require noalternativeverify
+
 # refer to same-named CTE in a subquery expression
 query I
 with cte as (Select i as j from a) select * from cte where j = (with cte as (select max(j) as j from cte) select j from cte);

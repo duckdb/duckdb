@@ -23,9 +23,9 @@ public:
 	    : BoundConstraint(ConstraintType::UNIQUE), keys(std::move(keys)), key_set(std::move(key_set)),
 	      is_primary_key(is_primary_key) {
 #ifdef DEBUG
-		D_ASSERT(keys.size() == key_set.size());
-		for (auto &key : keys) {
-			D_ASSERT(key_set.find(key) != key_set.end());
+		D_ASSERT(this->keys.size() == this->key_set.size());
+		for (auto &key : this->keys) {
+			D_ASSERT(this->key_set.find(key) != this->key_set.end());
 		}
 #endif
 	}

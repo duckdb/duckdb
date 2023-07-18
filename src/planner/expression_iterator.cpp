@@ -5,6 +5,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
+#include "duckdb/planner/query_node/bound_cte_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 
 namespace duckdb {
@@ -196,6 +197,11 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		auto &cte_node = node.Cast<BoundRecursiveCTENode>();
 		EnumerateQueryNodeChildren(*cte_node.left, callback);
 		EnumerateQueryNodeChildren(*cte_node.right, callback);
+		break;
+	}
+	case QueryNodeType::CTE_NODE: {
+		auto &cte_node = node.Cast<BoundCTENode>();
+		EnumerateQueryNodeChildren(*cte_node.child, callback);
 		break;
 	}
 	case QueryNodeType::SELECT_NODE: {

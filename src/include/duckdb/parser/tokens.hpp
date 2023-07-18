@@ -50,6 +50,7 @@ class QueryNode;
 class SelectNode;
 class SetOperationNode;
 class RecursiveCTENode;
+class CTENode;
 
 //===--------------------------------------------------------------------===//
 // Expressions

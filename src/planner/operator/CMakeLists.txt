@@ -15,6 +15,7 @@ add_library_unity(
   logical_delete.cpp
   logical_delim_get.cpp
   logical_delim_join.cpp
+  logical_dependent_join.cpp
   logical_distinct.cpp
   logical_dummy_scan.cpp
   logical_empty_result.cpp
@@ -36,6 +37,7 @@ add_library_unity(
   logical_prepare.cpp
   logical_projection.cpp
   logical_recursive_cte.cpp
+  logical_materialized_cte.cpp
   logical_sample.cpp
   logical_set.cpp
   logical_reset.cpp

@@ -1,0 +1,31 @@
+# name: test/sql/storage/compression/constant/constant_columns_top_n.test_slow
+# description: Test Top-N operation on constant columns
+# group: [constant]
+
+# load the DB from disk
+load __TEST_DIR__/constant_columns.db
+
+# simple constant
+statement ok
+CREATE TABLE integers AS SELECT 1 i FROM range(1000000)
+
+statement ok
+INSERT INTO integers SELECT 2 FROM range(1000000)
+
+query I
+SELECT * FROM integers ORDER BY i LIMIT 5
+----
+1
+1
+1
+1
+1
+
+query I
+SELECT * FROM integers ORDER BY i DESC LIMIT 5
+----
+2
+2
+2
+2
+2

@@ -1141,7 +1141,11 @@ public class DuckDBResultSet implements ResultSet {
 	public void updateNClob(String columnLabel, Reader reader) throws SQLException {
 		throw new SQLFeatureNotSupportedException("updateNClob");
 	}
-
+	
+	private boolean isTimestamp(DuckDBColumnType sqlType) {
+		return (sqlType == DuckDBColumnType.TIMESTAMP || sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE);
+	}
+	
 	public <T> T getObject(int columnIndex, Class<T> type) throws SQLException {
 		if (type == null) {
 			throw new SQLException("type is null");
@@ -1193,8 +1197,7 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to integer " + type.toString());
 			}
 		} else if (type == Long.class) {
-			if (sqlType == DuckDBColumnType.BIGINT
-					|| sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (sqlType == DuckDBColumnType.BIGINT || isTimestamp(sqlType)) {
 				return type.cast(getLong(columnIndex));
 			} else if (sqlType == DuckDBColumnType.UINTEGER) {
 				throw new SQLException("Can't convert value to long " + type.toString());
@@ -1227,13 +1230,13 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to Time " + type.toString());
 			}
 		} else if (type == Timestamp.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (isTimestamp(sqlType)) {
 				return type.cast(getTimestamp(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to Timestamp " + type.toString());
 			}
 		} else if (type == LocalDateTime.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (isTimestamp(sqlType)) {
 				return type.cast(getLocalDateTime(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to LocalDateTime " + type.toString());

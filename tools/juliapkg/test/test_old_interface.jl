@@ -42,7 +42,7 @@ end
     DuckDB.appendDataFrame(input_df, con, "dtypes")
 
     # Output the data from the table
-    output_df = DuckDB.toDataFrame(con, "select * from dtypes;")
+    output_df = DataFrame(DuckDB.toDataFrame(con, "select * from dtypes;"))
 
     # Compare each column of the input and output dataframe with each other
     for (col_pos, input_col) in enumerate(eachcol(input_df))
@@ -60,9 +60,9 @@ end
     res = DuckDB.execute(con, "CREATE TABLE integers(date DATE, jcol INTEGER)")
     res = DuckDB.execute(con, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8)")
     res = DuckDB.execute(con, "SELECT * FROM integers")
-    df = DuckDB.toDataFrame(res)
+    df = DataFrame(DuckDB.toDataFrame(res))
     @test isa(df, DataFrame)
-    df = DuckDB.toDataFrame(con, "SELECT * FROM integers")
+    df = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM integers"))
     println(typeof(df))
     @test isa(df, DataFrame)
     DuckDB.appendDataFrame(df, con, "integers")
@@ -94,7 +94,7 @@ INSERT INTO interval VALUES
 (INTERVAL 1 YEAR);
 """
     )
-    res = DuckDB.toDataFrame(con, "SELECT * FROM interval;")
+    res = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM interval;"))
     @test isa(res, DataFrame)
     DuckDB.disconnect(con)
     DuckDB.close(db)
@@ -172,7 +172,7 @@ end
     con = DuckDB.connect(db)
     res = DuckDB.execute(con, "CREATE TABLE items(item VARCHAR, value DECIMAL(10,2), count INTEGER);")
     res = DuckDB.execute(con, "INSERT INTO items VALUES ('jeans', 20.0, 1), ('hammer', 42.2, 2);")
-    res = DuckDB.toDataFrame(con, "SELECT * FROM items;")
+    res = DataFrame(DuckDB.toDataFrame(con, "SELECT * FROM items;"))
     @test isa(res, DataFrame)
     DuckDB.disconnect(con)
 end
@@ -183,7 +183,7 @@ end
     res =
         DBInterface.execute(db, "INSERT INTO integers VALUES ('2021-09-27', 4), ('2021-09-28', 6), ('2021-09-29', 8);")
     res = DBInterface.execute(db, "SELECT * FROM integers;")
-    res = DuckDB.toDataFrame(res)
+    res = DataFrame(DuckDB.toDataFrame(res))
     @test res.date == [Date(2021, 9, 27), Date(2021, 9, 28), Date(2021, 9, 29)]
     @test isa(res, DataFrame)
     DBInterface.close!(db)

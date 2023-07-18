@@ -1,0 +1,118 @@
+# name: test/sql/index/art/nodes/test_art_node_48.test
+# description: Test ART Node 48
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+# insert elements
+
+loop i 0 20
+
+statement ok
+INSERT INTO integers VALUES (${i} + 1);
+
+endloop
+
+restart
+
+# verify counts
+
+loop i 0 20
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = ${i} + 1
+----
+1
+
+endloop
+
+# verify sums
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+3
+
+query I
+SELECT sum(i) FROM integers WHERE i > 15
+----
+90
+
+# delete an element and reinsert it
+
+statement ok
+DELETE FROM integers WHERE i=16;
+
+statement ok
+INSERT INTO integers VALUES (16);
+
+query I
+SELECT sum(i) FROM integers WHERE i <= 2
+----
+3
+
+query I
+SELECT sum(i) FROM integers WHERE i > 15
+----
+90
+
+# now delete all elements
+
+loop i 0 20
+
+statement ok
+DELETE FROM integers WHERE i = ${i} + 1
+
+endloop
+
+statement ok
+DELETE FROM integers WHERE i = 0
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE n48_tbl(i varchar, k integer)
+
+statement ok
+INSERT INTO n48_tbl SELECT 'a', range FROM range(10000);
+
+statement ok
+INSERT INTO n48_tbl SELECT 'b', range FROM range(25);
+
+statement ok
+INSERT INTO n48_tbl SELECT 'c', range FROM range(25);
+
+statement ok
+CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);
+
+# test freeing all the children of a Node48
+
+statement ok
+CREATE TABLE n48_free (id INTEGER);
+
+statement ok
+INSERT INTO n48_free SELECT range % 100 FROM range(2048);
+
+loop i 0 20
+
+statement ok
+INSERT INTO n48_free VALUES (${i} + 107);
+
+endloop
+
+statement ok
+CREATE INDEX idx_n48_free ON n48_free(id);

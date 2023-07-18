@@ -330,17 +330,6 @@ void PivotRef::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(include_nulls);
 }
 
-void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("source", source);
-	serializer.WriteProperty("aggregates", aggregates);
-	serializer.WriteProperty("unpivot_names", unpivot_names);
-	serializer.WriteProperty("pivots", pivots);
-	serializer.WriteProperty("groups", groups);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-	serializer.WriteProperty("include_nulls", include_nulls);
-}
-
 unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 	auto result = make_uniq<PivotRef>();
 	result->source = reader.ReadRequiredSerializable<TableRef>();
@@ -350,18 +339,6 @@ unique_ptr<TableRef> PivotRef::Deserialize(FieldReader &reader) {
 	result->groups = reader.ReadRequiredList<string>();
 	result->column_name_alias = reader.ReadRequiredList<string>();
 	result->include_nulls = reader.ReadRequired<bool>();
-	return std::move(result);
-}
-
-unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_uniq<PivotRef>();
-	source.ReadProperty("source", result->source);
-	source.ReadProperty("aggregates", result->aggregates);
-	source.ReadProperty("unpivot_names", result->unpivot_names);
-	source.ReadProperty("pivots", result->pivots);
-	source.ReadProperty("groups", result->groups);
-	source.ReadProperty("column_name_alias", result->column_name_alias);
-	source.ReadProperty("include_nulls", result->include_nulls);
 	return std::move(result);
 }
 

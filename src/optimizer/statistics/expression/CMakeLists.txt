@@ -2,7 +2,6 @@ add_library_unity(
   duckdb_optimizer_statistics_expr
   OBJECT
   propagate_aggregate.cpp
-  propagate_and_compress.cpp
   propagate_between.cpp
   propagate_case.cpp
   propagate_cast.cpp

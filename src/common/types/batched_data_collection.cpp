@@ -1,11 +1,14 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
+
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
-BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(std::move(types_p)) {
+BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p,
+                                             bool buffer_managed_p)
+    : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p) {
 }
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
@@ -20,6 +23,8 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		unique_ptr<ColumnDataCollection> new_collection;
 		if (last_collection.collection) {
 			new_collection = make_uniq<ColumnDataCollection>(*last_collection.collection);
+		} else if (buffer_managed) {
+			new_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
 		} else {
 			new_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		}

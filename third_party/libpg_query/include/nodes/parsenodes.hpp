@@ -1058,10 +1058,19 @@ typedef struct PGOnConflictClause {
  *
  * We don't currently support the SEARCH or CYCLE clause.
  */
+
+typedef enum PGCTEMaterialize
+{
+	PGCTEMaterializeDefault,		/* no option specified */
+	PGCTEMaterializeAlways,		/* MATERIALIZED */
+	PGCTEMaterializeNever			/* NOT MATERIALIZED */
+} PGCTEMaterialize;
+
 typedef struct PGCommonTableExpr {
 	PGNodeTag type;
 	char *ctename;         /* query name (never qualified) */
 	PGList *aliascolnames; /* optional list of column names */
+	PGCTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, PGQuery afterwards: */
 	PGNode *ctequery; /* the CTE's subquery */
 	int location;     /* token location, or -1 if unknown */

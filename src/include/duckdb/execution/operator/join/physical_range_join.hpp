@@ -89,9 +89,17 @@ public:
 	};
 
 public:
-	PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
+	PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
 	                  unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
 	                  idx_t estimated_cardinality);
+
+	// Projection mappings
+	using ProjectionMapping = vector<column_t>;
+	ProjectionMapping left_projection_map;
+	ProjectionMapping right_projection_map;
+
+	//!	The full set of types (left + right child)
+	vector<LogicalType> unprojected_types;
 
 public:
 	// Gather the result values and slice the payload columns to those values.
@@ -102,6 +110,9 @@ public:
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
+
+	//!	Utility to project full width internal chunks to projected results
+	void ProjectResult(DataChunk &chunk, DataChunk &result) const;
 };
 
 } // namespace duckdb

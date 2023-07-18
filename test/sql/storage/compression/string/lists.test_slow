@@ -1,0 +1,81 @@
+# name: test/sql/storage/compression/string/lists.test_slow
+# description: Test storage with string compression inside lists
+# group: [string]
+
+# load the DB from disk
+load __TEST_DIR__/test_string_compression.db
+
+foreach compression fsst dictionary
+
+foreach enable_fsst_vector true false
+
+statement ok
+SET enable_fsst_vectors='${enable_fsst_vector}'
+
+statement ok
+pragma threads=1
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE test (id INTEGER, l VARCHAR[]);
+
+statement ok
+INSERT INTO test SELECT i, case when (i//1000)%2=0 then [1::VARCHAR, 1::VARCHAR, 1::VARCHAR] else [2::VARCHAR, 2::VARCHAR] end FROM range(200000) tbl(i)
+
+# full unnest
+query II
+SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(l) FROM test) tbl(i)
+----
+500000	700000
+
+# filters/skips
+query II
+SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(l) FROM test WHERE id>=5000 AND id<6000) tbl(i)
+----
+2000	4000
+
+# zonemaps
+query II
+SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(l) FROM test WHERE id>=150000 AND id<160000) tbl(i)
+----
+25000	35000
+
+statement ok
+CREATE INDEX i_index ON test(id)
+
+# index lookup in lists
+query II
+SELECT * FROM test WHERE id=150001
+----
+150001	[1, 1, 1]
+
+# large lists
+statement ok
+CREATE TABLE test_large_list AS SELECT i%100 AS id, LIST((-i)::VARCHAR) AS list FROM range(0,100000) tbl(i) GROUP BY id;
+
+query II
+SELECT COUNT(*), SUM(i::INT) FROM (SELECT UNNEST(list) FROM test_large_list) tbl(i)
+----
+100000	-4999950000
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test_large_list') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+query I
+SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+1
+
+statement ok
+DROP TABLE test_large_list
+
+statement ok
+DROP TABLE test
+
+endloop
+
+endloop

@@ -84,32 +84,33 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
-   manylinux-extensions:
-    name: DuckDB Extensions (gcc4)
+   manylinux-extensions-x64:
+    # Builds extensions for linux_md64_gcc4
+    name: Linux Extensions (ggc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     needs: linux-python3-9
+    env:
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/centos_7_setup
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
+        aws-cli: 1
+        ninja-build: 1
+        ccache: 1
+        ssh: 1
+        python_alias: 1
         openssl: 1
-
-    - name: Version Check
-      shell: bash
-      run: |
-        cmake --version
-        ldd --version ldd
-        ls -al
-        pwd
-        echo "$USER"
 
     - uses: ./.github/actions/build_extensions
       with:
+        vcpkg_target_triplet: x64-linux
+        post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64_gcc4
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
@@ -118,7 +119,7 @@ jobs:
 
     - uses: actions/upload-artifact@v3
       with:
-        name: manylinux-extensions-x86_64
+        name: manylinux-extensions-x64
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -144,7 +145,7 @@ jobs:
             arch: i686
           - isRelease: false
             arch: aarch64
-    needs: manylinux-extensions
+    needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
@@ -173,7 +174,7 @@ jobs:
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: manylinux-extensions-x86_64
+        name: manylinux-extensions-x64
         path: tools/pythonpkg
 
     - name: List extensions to be tested

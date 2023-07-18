@@ -113,6 +113,8 @@ public:
 
 	static void Close(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static void Interrupt(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);

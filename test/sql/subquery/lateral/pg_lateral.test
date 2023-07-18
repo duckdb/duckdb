@@ -315,7 +315,7 @@ where ss1.c2 = 0;
 
 mode unskip
 
-statement error
+query IIII
 select i8.*, ss.v, t.unique2
   from int8_tbl i8
     left join int4_tbl i4 on i4.f1 = 1
@@ -323,7 +323,7 @@ select i8.*, ss.v, t.unique2
     left join tenk1 t on t.unique2 = ss.v
 where q2 = 456;
 ----
-Join condition for non-inner LATERAL JOIN must be a comparison
+123	456	NULL	NULL
 
 query II
 select unique2, x.*
@@ -337,11 +337,16 @@ from int4_tbl x, lateral (select unique2 from tenk1 where f1 = unique1) ss;
 ----
 9998	0
 
-statement error
+query II
 select unique2, x.*
-from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true;
+from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true
+order by all;
 ----
-Join condition for non-inner LATERAL JOIN must be a comparison
+9998	0
+NULL	-2147483647
+NULL	-123456
+NULL	123456
+NULL	2147483647
 
 # FIXME: INTERNAL Error: Logical operator type "DELIM_JOIN" for dependent join
 mode skip
@@ -376,17 +381,17 @@ select * from generate_series(100,200) g(g),
 123	123	4567890123456789
 123	4567890123456789	123
 
-statement error
+query I
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1)) ss(x) on b.unique2 = ss.x;
 ----
-Nested lateral joins
+10000
 
-statement error
+query I
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
 ----
-Nested lateral joins
+10000
 
 query III
 select * from (select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1,

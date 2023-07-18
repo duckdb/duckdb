@@ -1,0 +1,302 @@
+# name: test/sql/function/list/list_resize.test
+# description: test for list_resize()
+# group: [list]
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT list_resize([1, 2, 4], 2);
+----
+[1, 2]
+
+statement ok
+create table tbl(a int[], b int);
+
+statement ok
+insert into tbl values ([5,4,3], 3);
+
+statement ok
+insert into tbl values ([1,2,3], 5);
+
+statement ok
+insert into tbl values (NULL, 8);
+
+statement ok
+insert into tbl values ([10,11,12], 2);
+
+query I
+select list_resize(a, b) from tbl;
+----
+[5, 4, 3]
+[1, 2, 3, NULL, NULL]
+NULL
+[10, 11]
+
+query I
+SELECT list_resize([], 2);
+----
+[NULL, NULL]
+
+# Strings
+
+statement ok
+create table string_tbl(a string[], b int);
+
+statement ok
+insert into string_tbl values (['abc', 'def'], 3);
+
+statement ok
+insert into string_tbl values (['d', 'ef', 'ghij'], 8);
+
+statement ok
+insert into string_tbl values (['lmnopqrs'], 5);
+
+statement ok
+insert into string_tbl values (['here is a little story about a duck,', 'whose name is harold.', 'He is a cool duck who lives in a cool world'], 5);
+
+query I
+select list_resize(a, b) from string_tbl;
+----
+[abc, def, NULL]
+[d, ef, ghij, NULL, NULL, NULL, NULL, NULL]
+[lmnopqrs, NULL, NULL, NULL, NULL]
+[here is a little story about a duck,, whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
+
+# Null Check
+
+query I
+SELECT list_resize(NULL, 1, 1);
+----
+NULL
+
+query I
+SELECT list_resize(NULL, 2, NULL);
+----
+NULL
+
+query I
+SELECT list_resize(NULL, NULL, NULL);
+----
+NULL
+
+statement ok
+SELECT list_resize([1,2,3], NULL);
+
+statement ok
+CREATE TABLE nulls(l INT[], b INT);
+
+statement ok
+INSERT INTO nulls VALUES ([1, 2, 3], 2), (NULL, 6), ([], 4), ([NULL, NULL, 5, 6, NULL], 6);
+
+query I
+SELECT list_resize(l, b) FROM nulls;
+----
+[1, 2]
+NULL
+[NULL, NULL, NULL, NULL]
+[NULL, NULL, 5, 6, NULL, NULL]
+
+# Nested Lists
+
+query I
+SELECT list_resize([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]], 3)
+----
+[[1], [1, 2], NULL]
+
+statement ok
+create table list_tbl(a int[][], b int);
+
+statement ok
+insert into list_tbl values ([[1, 2, 3], [4, 5, 6]], 3);
+
+statement ok
+insert into list_tbl values ([[7, 8, 9], [10, NULL, 6], [9, 8, 7]], 5);
+
+statement ok
+insert into list_tbl values ([[1, 2, 3], NULL, [4, 5, 6]], 2);
+
+query I
+select list_resize(a, b) from list_tbl;
+----
+[[1, 2, 3], [4, 5, 6], NULL]
+[[7, 8, 9], [10, NULL, 6], [9, 8, 7], NULL, NULL]
+[[1, 2, 3], NULL]
+
+# Structs
+
+query I
+select list_resize([{'i': 1,'j': 2}, NULL, {'i': 3, 'j': 4}], 2);
+----
+[{'i': 1, 'j': 2}, NULL]
+
+query I
+select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4);
+----
+[{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL]
+
+# Nested Lists of Structs and Structs of Lists in Structs and Lists of Structs in Lists
+
+query I
+select list_resize([{'i': 1,'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}], 4);
+----
+[{'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL]
+
+query I
+select list_resize([{'i': 1,'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}], 4);
+----
+[{'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL]
+
+query I
+select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ]], [[10, 11, 12], [13, 14, 15]]], 2);
+----
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9]]]
+
+query I
+select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]]], 8);
+----
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]], NULL, NULL, NULL]
+
+# Nested Function
+
+query I
+select list_resize([1, 2, 3], len(list_resize([1, 2, 3], 2)));
+----
+[1, 2]
+
+query I
+select list_resize(list_filter([1, 2, 3, 4, 5, 6], x -> x > 1), 4);
+----
+[2, 3, 4, 5]
+
+# Default Values
+
+query I
+SELECT list_resize([1, 2], 3, 4)
+----
+[1, 2, 4]
+
+statement ok
+create table def(tbl int[], b int, d int);
+
+statement ok
+insert into def values ([1, 2, 3], 5, 4);
+
+statement ok
+insert into def values ([4, 5, 6], 6, NULL);
+
+statement ok
+insert into def values ([7, 8, NULL], 3, 10);
+
+query I
+select list_resize(tbl, b, d) from def;
+----
+[1, 2, 3, 4, 4]
+[4, 5, 6, NULL, NULL, NULL]
+[7, 8, NULL]
+
+query I
+SELECT list_resize([1, 2], 3, NULL)
+----
+[1, 2, NULL]
+
+# Struct Default Values
+query I
+select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4, {'i': 5, 'j': [10, 10]});
+----
+[{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, {'i': 5, 'j': [10, 10]}]
+
+query I
+select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 6, NULL);
+----
+[{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL, NULL, NULL]
+
+# Lists that exceed standard vector size (2048)
+statement ok
+SELECT list_resize(range(10000), 4000);
+
+
+statement ok
+SELECT list_resize([1, 2, 3], 4000);
+
+# Vector_types
+statement ok
+CREATE TABLE bool_table(a bool[], b int);
+
+statement ok
+INSERT INTO bool_table VALUES ([true, false, true], 1);
+
+statement ok
+INSERT INTO bool_table VALUES ([false, true, false], 2);
+
+statement ok
+INSERT INTO bool_table VALUES ([true, true, NULL], 3);
+
+query I
+SELECT list_resize(a, b) FROM bool_table;
+----
+[true]
+[false, true]
+[true, true, NULL]
+
+
+query I
+SELECT list_resize([true], 2);
+----
+[true, NULL]
+
+query I
+SELECT list_resize([false], 2);
+----
+[false, NULL]
+
+query I
+SELECT list_resize([NULL], 2);
+----
+[NULL, NULL]
+
+# Prepared Statements
+statement ok
+prepare q1 as select list_resize(?, ?);
+
+statement ok
+prepare q2 as select array_resize(?, ?);
+
+foreach q q1 q2
+
+query I
+execute ${q}([1, 2, 3], 4);
+----
+[1, 2, 3, NULL]
+
+query I
+execute ${q}([1, 2, 3], 2);
+----
+[1, 2]
+
+query I
+execute ${q}([1, 2, 3], 0);
+----
+[]
+
+query I
+execute ${q}([1, 2, 3], NULL);
+----
+[]
+
+query I
+execute ${q}([1, 2, 3], 1.4);
+----
+[1]
+
+statement ok
+execute ${q}([2], 2::TINYINT);
+
+endloop
+
+query I
+SELECT list_resize([1, 2, 3]::BIGINT[], 5, 42);
+----
+[1, 2, 3, 42, 42]
+
+

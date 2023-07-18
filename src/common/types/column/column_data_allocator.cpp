@@ -1,8 +1,8 @@
 #include "duckdb/common/types/column/column_data_allocator.hpp"
 
 #include "duckdb/common/types/column/column_data_collection_segment.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -19,6 +19,7 @@ ColumnDataAllocator::ColumnDataAllocator(ClientContext &context, ColumnDataAlloc
     : type(allocator_type) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		alloc.buffer_manager = &BufferManager::GetBufferManager(context);
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
@@ -33,6 +34,7 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 	type = other.GetType();
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		alloc.allocator = other.alloc.allocator;
 		break;
 	case ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR:
@@ -44,7 +46,7 @@ ColumnDataAllocator::ColumnDataAllocator(ColumnDataAllocator &other) {
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	shared_ptr<BlockHandle> handle;
 	if (shared) {
 		// we only need to grab the lock when accessing the vector, because vector access is not thread-safe:
@@ -58,7 +60,7 @@ BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {
 }
 
 BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
-	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
+	D_ASSERT(type == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR || type == ColumnDataAllocatorType::HYBRID);
 	auto block_size = MaxValue<idx_t>(size, Storage::BLOCK_SIZE);
 	BlockMetaData data;
 	data.size = 0;
@@ -136,6 +138,7 @@ void ColumnDataAllocator::AllocateData(idx_t size, uint32_t &block_id, uint32_t 
                                        ChunkManagementState *chunk_state) {
 	switch (type) {
 	case ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR:
+	case ColumnDataAllocatorType::HYBRID:
 		if (shared) {
 			lock_guard<mutex> guard(lock);
 			AllocateBuffer(size, block_id, offset, chunk_state);
@@ -174,8 +177,8 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 	return state.handles[block_id].Ptr() + offset;
 }
 
-void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset,
-                                            uint16_t count, uint32_t block_id, uint32_t offset) {
+void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
+                                            uint32_t block_id, uint32_t offset) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	lock_guard<mutex> guard(lock);
 
@@ -225,7 +228,7 @@ Allocator &ColumnDataAllocator::GetAllocator() {
 }
 
 void ColumnDataAllocator::InitializeChunkState(ChunkManagementState &state, ChunkMetaData &chunk) {
-	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+	if (type != ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR && type != ColumnDataAllocatorType::HYBRID) {
 		// nothing to pin
 		return;
 	}

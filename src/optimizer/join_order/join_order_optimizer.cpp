@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -323,6 +324,65 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode &node) {
 	}
 }
 
+static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_t>> &current,
+                                                 const vector<idx_t> &all_neighbors) {
+	vector<unordered_set<idx_t>> ret;
+
+	for (const auto &neighbor_set : current) {
+		auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
+		for (const auto &neighbor : all_neighbors) {
+			if (*max_val >= neighbor) {
+				continue;
+			}
+			if (neighbor_set.count(neighbor) == 0) {
+				unordered_set<idx_t> new_set;
+				for (auto &n : neighbor_set) {
+					new_set.insert(n);
+				}
+				new_set.insert(neighbor);
+				ret.push_back(new_set);
+			}
+		}
+	}
+
+	return ret;
+}
+
+// works by first creating all sets with cardinality 1
+// then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
+// is greater than all relations in the set.
+static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) {
+	vector<unordered_set<idx_t>> ret;
+	sort(neighbors.begin(), neighbors.end());
+	vector<unordered_set<idx_t>> added;
+	for (auto &neighbor : neighbors) {
+		added.push_back(unordered_set<idx_t>({neighbor}));
+		ret.push_back(unordered_set<idx_t>({neighbor}));
+	}
+	do {
+		added = AddSuperSets(added, neighbors);
+		for (auto &d : added) {
+			ret.push_back(d);
+		}
+	} while (!added.empty());
+#if DEBUG
+	// drive by test to make sure we have an accurate amount of
+	// subsets, and that each neighbor is in a correct amount
+	// of those subsets.
+	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
+	for (auto &n : neighbors) {
+		idx_t count = 0;
+		for (auto &set : ret) {
+			if (set.count(n) >= 1) {
+				count += 1;
+			}
+		}
+		D_ASSERT(count == pow(2, neighbors.size() - 1));
+	}
+#endif
+	return ret;
+}
+
 JoinNode &JoinOrderOptimizer::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
                                        const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
@@ -405,8 +465,19 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	//! Neighbors should be reversed when iterating over them.
 	std::sort(neighbors.begin(), neighbors.end(), std::greater_equal<idx_t>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
-		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
+		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}
+
+	// Dphyp paper missiing this.
+	// Because we are traversing in reverse order, we need to add neighbors whose number is smaller than the current
+	// node to exclusion_set
+	// This avoids duplicated enumeration
+	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	for (idx_t i = 0; i < neighbors.size(); ++i) {
+		D_ASSERT(new_exclusion_set.find(neighbors[i]) == new_exclusion_set.end());
+		new_exclusion_set.insert(neighbors[i]);
+	}
+
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
@@ -417,27 +488,35 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 				return false;
 			}
 		}
-		if (!EnumerateCmpRecursive(node, neighbor_relation, exclusion_set)) {
+
+		if (!EnumerateCmpRecursive(node, neighbor_relation, new_exclusion_set)) {
 			return false;
 		}
+
+		new_exclusion_set.erase(neighbor);
 	}
 	return true;
 }
 
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-                                               unordered_set<idx_t> exclusion_set) {
+                                               unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
 	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
+
+	auto all_subset = GetAllNeighborSets(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(neighbors.size());
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
-		if (combined_set.count > right.count && plans.find(&combined_set) != plans.end()) {
+		// If combined_set.count == right.count, This means we found a neighbor that has been present before
+		// This means we didn't set exclusion_set correctly.
+		D_ASSERT(combined_set.count > right.count);
+		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
 				if (!TryEmitPair(left, combined_set, connections)) {
@@ -447,11 +526,15 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		}
 		union_sets.push_back(combined_set);
 	}
-	// recursively enumerate the sets
+
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
-	for (idx_t i = 0; i < neighbors.size(); i++) {
+	for (const auto &neighbor : neighbors) {
+		new_exclusion_set.insert(neighbor);
+	}
+
+	// recursively enumerate the sets
+	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
@@ -465,26 +548,30 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 	if (neighbors.empty()) {
 		return true;
 	}
+
+	auto all_subset = GetAllNeighborSets(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(neighbors.size());
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &new_set = set_manager.Union(node, neighbor);
-		if (new_set.count > node.count && plans.find(&new_set) != plans.end()) {
+		D_ASSERT(new_set.count > node.count);
+		if (plans.find(&new_set) != plans.end()) {
 			if (!EmitCSG(new_set)) {
 				return false;
 			}
 		}
 		union_sets.push_back(new_set);
 	}
-	// recursively enumerate the sets
+
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		// Reset the exclusion set so that the algorithm considers all combinations
-		// of the exclusion_set with a subset of neighbors.
-		new_exclusion_set = exclusion_set;
-		new_exclusion_set.insert(neighbors[i]);
+	for (const auto &neighbor : neighbors) {
+		new_exclusion_set.insert(neighbor);
+	}
+
+	// recursively enumerate the sets
+	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
@@ -505,7 +592,7 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 		}
 		// initialize the set of exclusion_set as all the nodes with a number below this
 		unordered_set<idx_t> exclusion_set;
-		for (idx_t j = 0; j < i - 1; j++) {
+		for (idx_t j = 0; j < i; j++) {
 			exclusion_set.insert(j);
 		}
 		// then we recursively search for neighbors that do not belong to the banned entries
@@ -514,63 +601,6 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 		}
 	}
 	return true;
-}
-
-static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
-                                                 const vector<idx_t> &all_neighbors) {
-	vector<unordered_set<idx_t>> ret;
-	for (auto &neighbor : all_neighbors) {
-		for (auto &neighbor_set : current) {
-			auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
-			if (*max_val >= neighbor) {
-				continue;
-			}
-			if (neighbor_set.count(neighbor) == 0) {
-				unordered_set<idx_t> new_set;
-				for (auto &n : neighbor_set) {
-					new_set.insert(n);
-				}
-				new_set.insert(neighbor);
-				ret.push_back(new_set);
-			}
-		}
-	}
-	return ret;
-}
-
-// works by first creating all sets with cardinality 1
-// then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
-// is greater than all relations in the set.
-static vector<unordered_set<idx_t>> GetAllNeighborSets(unordered_set<idx_t> &exclusion_set, vector<idx_t> neighbors) {
-	vector<unordered_set<idx_t>> ret;
-	sort(neighbors.begin(), neighbors.end());
-	vector<unordered_set<idx_t>> added;
-	for (auto &neighbor : neighbors) {
-		added.push_back(unordered_set<idx_t>({neighbor}));
-		ret.push_back(unordered_set<idx_t>({neighbor}));
-	}
-	do {
-		added = AddSuperSets(added, neighbors);
-		for (auto &d : added) {
-			ret.push_back(d);
-		}
-	} while (!added.empty());
-#if DEBUG
-	// drive by test to make sure we have an accurate amount of
-	// subsets, and that each neighbor is in a correct amount
-	// of those subsets.
-	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
-	for (auto &n : neighbors) {
-		idx_t count = 0;
-		for (auto &set : ret) {
-			if (set.count(n) >= 1) {
-				count += 1;
-			}
-		}
-		D_ASSERT(count == pow(2, neighbors.size() - 1));
-	}
-#endif
-	return ret;
 }
 
 void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
@@ -586,8 +616,8 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
 		exclusion_set.insert(new_set.relations[i]);
 	}
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-	auto all_neighbors = GetAllNeighborSets(exclusion_set, neighbors);
-	for (auto neighbor : all_neighbors) {
+	auto all_neighbors = GetAllNeighborSets(neighbors);
+	for (const auto &neighbor : all_neighbors) {
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto &combined_set = set_manager.Union(new_set, neighbor_relation);
 
@@ -820,8 +850,9 @@ GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<Logical
 		// FILTER on top of GET, add estimated properties to both
 		auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		child_operator.estimated_props = make_uniq<EstimatedProperties>(
-		    filter_props.GetCardinality<double>() / CardinalityEstimator::DEFAULT_SELECTIVITY, filter_props.GetCost());
+		child_operator.estimated_props = make_uniq<EstimatedProperties>(filter_props.GetCardinality<double>() /
+		                                                                    CardinalityEstimator::DEFAULT_SELECTIVITY,
+		                                                                filter_props.GetCost<double>());
 		child_operator.estimated_cardinality = child_operator.estimated_props->GetCardinality<idx_t>();
 		child_operator.has_estimated_cardinality = true;
 	}

@@ -111,22 +111,12 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 #ifdef DEBUG
 	// ensure that all row IDs of this chunk exist in the ART
+	auto &local_art = lstate.local_index->Cast<ART>();
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
-		auto leaf_node =
-		    lstate.local_index->Cast<ART>().Lookup(*lstate.local_index->Cast<ART>().tree, lstate.keys[i], 0);
-		D_ASSERT(leaf_node.IsSet());
-		auto &leaf = Leaf::Get(lstate.local_index->Cast<ART>(), leaf_node);
-
-		if (leaf.IsInlined()) {
-			D_ASSERT(row_ids[i] == leaf.row_ids.inlined);
-			continue;
-		}
-
-		D_ASSERT(leaf.row_ids.ptr.IsSet());
-		Node leaf_segment = leaf.row_ids.ptr;
-		auto position = leaf.FindRowId(lstate.local_index->Cast<ART>(), leaf_segment, row_ids[i]);
-		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
+		auto leaf = local_art.Lookup(*local_art.tree, lstate.keys[i], 0);
+		D_ASSERT(leaf.IsSet());
+		D_ASSERT(Leaf::ContainsRowId(local_art, leaf, row_ids[i]));
 	}
 #endif
 

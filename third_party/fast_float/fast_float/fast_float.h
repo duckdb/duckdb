@@ -130,6 +130,8 @@ from_chars_result from_chars(const char *first, const char *last,
 #include <machine/endian.h>
 #elif defined(sun) || defined(__sun)
 #include <sys/byteorder.h>
+#elif defined(__MVS__)
+#include <sys/endian.h>
 #else
 #include <endian.h>
 #endif

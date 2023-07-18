@@ -1,0 +1,33 @@
+# name: test/sql/index/art/types/test_art_real.test
+# description: Test ART REAL key type
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE numbers(i REAL)
+
+# +0
+statement ok
+INSERT INTO numbers VALUES (CAST(0 AS REAL))
+
+# -0
+statement ok
+INSERT INTO numbers VALUES (CAST(-0 AS REAL))
+
+statement ok
+CREATE INDEX i_index ON numbers(i)
+
+# +0
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(0 AS REAL)
+----
+2
+
+# -0
+query I
+SELECT COUNT(i) FROM numbers WHERE i = CAST(-0 AS REAL)
+----
+2
+

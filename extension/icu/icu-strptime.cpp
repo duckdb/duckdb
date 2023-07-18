@@ -249,8 +249,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr cal(info->calendar->clone());
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr cal(info.calendar->clone());
 
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -476,8 +476,8 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr calendar(info->calendar->clone());
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(source, result, count,
 		                                                       [&](timestamp_t input, ValidityMask &mask, idx_t idx) {

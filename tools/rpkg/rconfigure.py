@@ -32,8 +32,9 @@ def open_utf8(fpath, flags):
         return open(fpath, flags, encoding="utf8")
 
 extension_list = ""
+
 for ext in extensions:
-    extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+    extension_list += ' -DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())
     extension_list += " -DDUCKDB_BUILD_LIBRARY"
 
 libraries = []

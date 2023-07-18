@@ -1,0 +1,71 @@
+# name: test/sql/index/art/create_drop/test_art_drop_index.test
+# description: Test the DROP INDEX statement
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE A (A1 INTEGER,A2 VARCHAR, A3 INTEGER)
+
+statement ok
+INSERT INTO A VALUES (1, 1, 1)
+
+statement ok
+INSERT INTO A VALUES (2, 2, 2)
+
+statement ok
+CREATE TABLE B (B1 INTEGER,B2 INTEGER, B3 INTEGER)
+
+statement ok
+INSERT INTO B VALUES (1, 1, 1)
+
+statement ok
+INSERT INTO B VALUES (2, 2, 2)
+
+statement ok
+CREATE TABLE C (C1 VARCHAR, C2 INTEGER, C3 INTEGER)
+
+statement ok
+INSERT INTO C VALUES ('t1', 1, 1)
+
+statement ok
+INSERT INTO C VALUES ('t2', 2, 2)
+
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
+
+statement ok
+CREATE INDEX A_index ON A (A1)
+
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
+
+statement ok
+CREATE INDEX B_index ON B (B1)
+
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
+
+statement ok
+CREATE INDEX C_index ON C (C2)
+
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
+
+statement ok
+DROP INDEX IF EXISTS A_index
+
+query T
+SELECT A2 FROM A WHERE A1=1
+----
+1
+

@@ -1,0 +1,132 @@
+# name: test/sql/index/art/insert_update_delete/test_art_update_other_column.test
+# description: Test an ART index on a table with updates to other columns
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+require skip_reload
+
+statement ok con1
+CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR)
+
+statement ok con1
+CREATE INDEX i_index ON integers using art(j)
+
+statement ok con1
+INSERT INTO integers VALUES (10, 1, 'hello'), (11, 2, 'world')
+
+# condition on "j"
+query IIT con1
+SELECT * FROM integers WHERE j=1
+----
+10	1	hello
+
+# now update the column
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con2
+UPDATE integers SET i=100, k='update' WHERE j=1
+
+# con sees the old state, con2 sees the new state
+query IIT con1
+SELECT * FROM integers WHERE j=1
+----
+10	1	hello
+
+query IIT con2
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+# after a commit, both see the new state
+statement ok con2
+COMMIT
+
+query IIT con1
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+query IIT con2
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+# now do the same but with two outstanding updates
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE integers SET i=20, k='t1' WHERE j=1
+
+statement ok con2
+UPDATE integers SET i=21, k='t2' WHERE j=2
+
+# con1 sees the updated state for the first tuple, but the old state for the new tuple
+query IIT con1
+SELECT * FROM integers WHERE j=1
+----
+20	1	t1
+
+query IIT con1
+SELECT * FROM integers WHERE j=2
+----
+11	2	world
+
+query IIT con1
+SELECT * FROM integers ORDER BY j
+----
+20	1	t1
+11	2	world
+
+# con2 sees the updated state for the second tuple, but the old state for the new tuple
+query IIT con2
+SELECT * FROM integers WHERE j=1
+----
+100	1	update
+
+query IIT con2
+SELECT * FROM integers WHERE j=2
+----
+21	2	t2
+
+query IIT con2
+SELECT * FROM integers ORDER BY j
+----
+100	1	update
+21	2	t2
+
+# after commit, both see the updated state
+statement ok con1
+COMMIT
+
+statement ok con2
+COMMIT
+
+query IIT con1
+SELECT * FROM integers WHERE j=1
+----
+20	1	t1
+
+query IIT con1
+SELECT * FROM integers WHERE j=2
+----
+21	2	t2
+
+query IIT con1
+SELECT * FROM integers ORDER BY j
+----
+20	1	t1
+21	2	t2
+
+query IIT con2
+SELECT * FROM integers ORDER BY j
+----
+20	1	t1
+21	2	t2
+

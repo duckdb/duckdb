@@ -9,6 +9,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE integers(g integer, i integer);
 
 statement ok

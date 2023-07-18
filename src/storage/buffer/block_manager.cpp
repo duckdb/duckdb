@@ -79,4 +79,7 @@ void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	}
 }
 
+void BlockManager::Truncate() {
+}
+
 } // namespace duckdb

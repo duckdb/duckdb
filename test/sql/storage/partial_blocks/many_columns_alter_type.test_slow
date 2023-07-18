@@ -1,0 +1,48 @@
+# name: test/sql/storage/partial_blocks/many_columns_alter_type.test_slow
+# description: Verify that altering columns with multi-use blocks does not leak memory
+# group: [partial_blocks]
+
+load __TEST_DIR__/many_columns.db
+
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i0 INTEGER, i1 INTEGER, i2 INTEGER, i3 INTEGER, i4 INTEGER, i5 INTEGER, i6 INTEGER, i7 INTEGER, i8 INTEGER, i9 INTEGER, i10 INTEGER, i11 INTEGER, i12 INTEGER, i13 INTEGER, i14 INTEGER, i15 INTEGER, i16 INTEGER, i17 INTEGER, i18 INTEGER, i19 INTEGER, i20 INTEGER, i21 INTEGER, i22 INTEGER, i23 INTEGER, i24 INTEGER, i25 INTEGER, i26 INTEGER, i27 INTEGER, i28 INTEGER, i29 INTEGER, i30 INTEGER, i31 INTEGER, i32 INTEGER, i33 INTEGER, i34 INTEGER, i35 INTEGER, i36 INTEGER, i37 INTEGER, i38 INTEGER, i39 INTEGER, i40 INTEGER, i41 INTEGER, i42 INTEGER, i43 INTEGER, i44 INTEGER, i45 INTEGER, i46 INTEGER, i47 INTEGER, i48 INTEGER, i49 INTEGER, i50 INTEGER, i51 INTEGER, i52 INTEGER, i53 INTEGER, i54 INTEGER, i55 INTEGER, i56 INTEGER, i57 INTEGER, i58 INTEGER, i59 INTEGER, i60 INTEGER, i61 INTEGER, i62 INTEGER, i63 INTEGER, i64 INTEGER, i65 INTEGER, i66 INTEGER, i67 INTEGER, i68 INTEGER, i69 INTEGER, i70 INTEGER, i71 INTEGER, i72 INTEGER, i73 INTEGER, i74 INTEGER, i75 INTEGER, i76 INTEGER, i77 INTEGER, i78 INTEGER, i79 INTEGER, i80 INTEGER, i81 INTEGER, i82 INTEGER, i83 INTEGER, i84 INTEGER, i85 INTEGER, i86 INTEGER, i87 INTEGER, i88 INTEGER, i89 INTEGER, i90 INTEGER, i91 INTEGER, i92 INTEGER, i93 INTEGER, i94 INTEGER, i95 INTEGER, i96 INTEGER, i97 INTEGER, i98 INTEGER, i99 INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99);
+
+statement ok
+INSERT INTO integers VALUES (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100);
+
+statement ok
+COMMIT
+
+# verify that doing this in a loop doesn't increase database size (i.e. blocks properly get added to the free list)
+
+foreach type BIGINT INTEGER SMALLINT TINYINT BIGINT INTEGER
+
+statement ok
+BEGIN TRANSACTION
+
+loop i 0 99
+
+statement ok
+ALTER TABLE integers ALTER i${i} SET DATA TYPE ${type}
+
+endloop
+
+statement ok
+COMMIT
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT total_blocks * block_size < 15 * 262144 FROM pragma_database_size()
+----
+true
+
+endloop

@@ -96,7 +96,7 @@ public:
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
 	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
-		auto &allocator = Allocator::Get(context);
+		auto &allocator = BufferAllocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
 		}
@@ -124,7 +124,7 @@ public:
 unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &context) const {
 	auto result =
 	    make_uniq<JoinHashTable>(BufferManager::GetBufferManager(context), conditions, build_types, join_type);
-	result->max_ht_size = double(BufferManager::GetBufferManager(context).GetMaxMemory()) * 0.6;
+	result->max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
 	if (!delim_types.empty() && join_type == JoinType::MARK) {
 		// correlated MARK join
 		if (delim_types.size() + 1 == conditions.size()) {
@@ -162,7 +162,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));
 
-			auto &allocator = Allocator::Get(context);
+			auto &allocator = BufferAllocator::Get(context);
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
 			                                                              payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
@@ -312,10 +312,10 @@ void HashJoinGlobalSinkState::InitializeProbeSpill() {
 	}
 }
 
-class HashJoinPartitionTask : public ExecutorTask {
+class HashJoinRepartitionTask : public ExecutorTask {
 public:
-	HashJoinPartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
-	                      JoinHashTable &local_ht)
+	HashJoinRepartitionTask(shared_ptr<Event> event_p, ClientContext &context, JoinHashTable &global_ht,
+	                        JoinHashTable &local_ht)
 	    : ExecutorTask(context), event(std::move(event_p)), global_ht(global_ht), local_ht(local_ht) {
 	}
 
@@ -349,7 +349,7 @@ public:
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
 			partition_tasks.push_back(
-			    make_uniq<HashJoinPartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht));
+			    make_uniq<HashJoinRepartitionTask>(shared_from_this(), context, *sink.hash_table, *local_ht));
 		}
 		SetTasks(std::move(partition_tasks));
 	}
@@ -434,7 +434,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &allocator = Allocator::Get(context.client);
+	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto state = make_uniq<HashJoinOperatorState>(context.client);
 	if (sink.perfect_join_executor) {
@@ -532,7 +532,18 @@ public:
 	bool AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate);
 
 	idx_t MaxThreads() override {
-		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
+		D_ASSERT(op.sink_state);
+		auto &gstate = op.sink_state->Cast<HashJoinGlobalSinkState>();
+
+		idx_t count;
+		if (gstate.probe_spill) {
+			count = probe_count;
+		} else if (IsRightOuterJoin(op.join_type)) {
+			count = gstate.hash_table->Count();
+		} else {
+			return 0;
+		}
+		return count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 
 public:
@@ -611,7 +622,7 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_uniq<HashJoinLocalSourceState>(*this, Allocator::Get(context.client));
+	return make_uniq<HashJoinLocalSourceState>(*this, BufferAllocator::Get(context.client));
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)
