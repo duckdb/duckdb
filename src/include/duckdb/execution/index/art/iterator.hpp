@@ -70,8 +70,8 @@ public:
 private:
 	//! Stack of nodes from the root to the currently active node
 	stack<IteratorEntry> nodes;
-	//! Last visited leaf
-	optional_ptr<Leaf> last_leaf = nullptr;
+	//! Last visited leaf node
+	Node last_leaf = Node();
 
 	//! Goes to the next leaf in the ART and sets it as last_leaf,
 	//! returns false if there is no next leaf

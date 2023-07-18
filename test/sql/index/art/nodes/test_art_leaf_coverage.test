@@ -1,6 +1,6 @@
-# name: test/sql/index/art/test_art_coverage_leaf.test
+# name: test/sql/index/art/nodes/test_art_leaf_coverage.test
 # description: ART coverage tests for leaf code coverage
-# group: [art]
+# group: [nodes]
 
 # test deserialization of leaf segments
 
@@ -72,3 +72,17 @@ INSERT INTO leaf_merge_2 VALUES (2047, 2047)
 
 statement ok
 CREATE INDEX idx_merge_2 ON leaf_merge_2(id, id2);
+
+# test merging leaves with same key
+
+statement ok
+CREATE TABLE tbl_dup_ser (id INTEGER);
+
+statement ok
+INSERT INTO tbl_dup_ser SELECT range FROM range(2043);
+
+statement ok
+INSERT INTO tbl_dup_ser SELECT 12345 FROM range(11);
+
+statement ok
+CREATE INDEX idx_dup_ser ON tbl_dup_ser(id);
