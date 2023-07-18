@@ -257,7 +257,7 @@ unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 	return pg_table;
 }
 
-unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
+shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	auto result = make_uniq<PropertyGraphTable>();
 
 	result->table_name = table_name;

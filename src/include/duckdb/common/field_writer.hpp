@@ -105,6 +105,15 @@ public:
 	}
 
 	template <class T>
+	void WriteSerializableList(const vector<shared_ptr<T>> &elements) {
+		AddField();
+		Write<uint32_t>(elements.size());
+		for (idx_t i = 0; i < elements.size(); i++) {
+			elements[i]->Serialize(*buffer);
+		}
+	}
+
+	template <class T>
 	void WriteRegularSerializableList(const vector<T> &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
@@ -360,6 +369,23 @@ public:
 		}
 		return result;
 	}
+
+		template <class T, class RETURN_TYPE = shared_ptr<T>,typename... ARGS>
+		vector<RETURN_TYPE> ReadRequiredSharedSerializableList(ARGS &&... args) {
+			if (field_count >= max_field_count) {
+				// field is not there, throw an exception
+				throw SerializationException("Attempting to read mandatory field, but field is missing");
+			}
+			// field is there, read the actual value
+			AddField();
+			auto result_count = source.Read<uint32_t>();
+
+			vector<RETURN_TYPE> result;
+			for (idx_t i = 0; i < result_count; i++) {
+				result.push_back(T::Deserialize(source, std::forward<ARGS>(args)...));
+			}
+			return result;
+		}
 
 	template <class T, class RETURN_TYPE = T *, typename... ARGS>
 	case_insensitive_map_t<RETURN_TYPE> ReadRequiredSerializableMap(ARGS &&... args) {
