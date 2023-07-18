@@ -362,8 +362,8 @@ public:
 };
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                            GlobalSinkState &gstate) const {
-	auto &sink = gstate.Cast<HashJoinGlobalSinkState>();
+                                            OperatorSinkFinalizeInput &input) const {
+	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
 	sink.external = ht.RequiresExternalJoin(context.config, sink.local_hash_tables);

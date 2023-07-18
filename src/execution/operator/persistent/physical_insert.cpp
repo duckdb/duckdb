@@ -503,8 +503,8 @@ void PhysicalInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput
 }
 
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &state) const {
-	auto &gstate = state.Cast<InsertGlobalState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
 	if (!parallel && gstate.initialized) {
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();

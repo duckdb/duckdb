@@ -69,8 +69,8 @@ void PhysicalVacuum::Combine(ExecutionContext &context, OperatorSinkCombineInput
 }
 
 SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &gstate) const {
-	auto &sink = gstate.Cast<VacuumGlobalSinkState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &sink = input.global_state.Cast<VacuumGlobalSinkState>();
 
 	auto table = info->table;
 	for (idx_t col_idx = 0; col_idx < sink.column_distinct_stats.size(); col_idx++) {

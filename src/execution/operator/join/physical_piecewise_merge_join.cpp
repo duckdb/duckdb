@@ -132,8 +132,8 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, OperatorSink
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+                                                      OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (IsRightOuterJoin(join_type)) {

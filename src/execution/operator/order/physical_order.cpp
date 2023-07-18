@@ -163,8 +163,8 @@ public:
 };
 
 SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                         GlobalSinkState &gstate_p) const {
-	auto &state = gstate_p.Cast<OrderGlobalSinkState>();
+                                         OperatorSinkFinalizeInput &input) const {
+	auto &state = input.global_state.Cast<OrderGlobalSinkState>();
 	auto &global_sort_state = state.global_sort_state;
 
 	if (global_sort_state.sorted_blocks.empty()) {

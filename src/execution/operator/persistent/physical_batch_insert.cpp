@@ -368,8 +368,8 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombine
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
+                                               OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 
 	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
 	// together

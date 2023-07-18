@@ -224,7 +224,10 @@ void Pipeline::Finalize(Event &event) {
 	}
 	D_ASSERT(ready);
 	try {
-		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
+		// TODO: move to a task instead so we can actually block here
+		InterruptState interrupt_state;
+		OperatorSinkFinalizeInput finalize_input {*sink->sink_state, interrupt_state};
+		auto sink_state = sink->Finalize(*this, event, executor.context, finalize_input);
 		sink->sink_state->state = sink_state;
 	} catch (Exception &ex) { // LCOV_EXCL_START
 		executor.PushError(PreservedError(ex));

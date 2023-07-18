@@ -157,8 +157,8 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 

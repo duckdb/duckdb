@@ -459,8 +459,8 @@ void PhysicalTopN::Combine(ExecutionContext &context, OperatorSinkCombineInput &
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                        GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<TopNGlobalState>();
+                                        OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<TopNGlobalState>();
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
 	return SinkFinalizeType::READY;

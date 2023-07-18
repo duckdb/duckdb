@@ -152,8 +152,8 @@ void PhysicalAsOfJoin::Combine(ExecutionContext &context, OperatorSinkCombineInp
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                            GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<AsOfGlobalSinkState>();
+                                            OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<AsOfGlobalSinkState>();
 
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;

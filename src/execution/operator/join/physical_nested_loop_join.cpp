@@ -200,8 +200,8 @@ void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, OperatorSinkComb
 }
 
 SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<NestedLoopJoinGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<NestedLoopJoinGlobalState>();
 	gstate.right_outer.Initialize(gstate.right_payload_data.Count());
 	if (gstate.right_payload_data.Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;

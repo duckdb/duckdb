@@ -539,11 +539,11 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalState>();
+                                                      OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalState>();
 
 	if (distinct_data) {
-		return FinalizeDistinct(pipeline, event, context, gstate_p);
+		return FinalizeDistinct(pipeline, event, context, input.global_state);
 	}
 
 	D_ASSERT(!gstate.finished);

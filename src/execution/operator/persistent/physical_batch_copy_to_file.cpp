@@ -113,8 +113,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 }
 
 SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	FinalFlush(context, gstate_p);
+                                                   OperatorSinkFinalizeInput &input) const {
+	FinalFlush(context, input.global_state);
 	return SinkFinalizeType::READY;
 }
 

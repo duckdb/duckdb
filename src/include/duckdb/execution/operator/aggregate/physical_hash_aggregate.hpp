@@ -108,7 +108,7 @@ public:
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 	SinkFinalizeType FinalizeInternal(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate,
 	                                  bool check_distinct) const;
 

@@ -144,8 +144,8 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineI
 }
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                              GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
+                                              OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
 	if (per_thread_output || partition_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;

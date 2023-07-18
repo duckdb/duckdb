@@ -46,8 +46,8 @@ void PhysicalBatchCollector::Combine(ExecutionContext &context, OperatorSinkComb
 }
 
 SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),

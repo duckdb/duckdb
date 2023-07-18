@@ -224,16 +224,16 @@ SinkFinalizeType PhysicalFixedBatchCopy::FinalFlush(ClientContext &context, Glob
 }
 
 SinkFinalizeType PhysicalFixedBatchCopy::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
 	// repartition any remaining batches
-	RepartitionBatches(context, gstate_p, min_batch_index, true);
+	RepartitionBatches(context, input.global_state, min_batch_index, true);
 	// check if we have multiple tasks to execute
 	if (gstate.TaskCount() <= 1) {
 		// we don't - just execute the remaining task and finish flushing to disk
-		ExecuteTasks(context, gstate_p);
-		FinalFlush(context, gstate_p);
+		ExecuteTasks(context, input.global_state);
+		FinalFlush(context, input.global_state);
 		return SinkFinalizeType::READY;
 	}
 	// we have multiple tasks remaining - launch an event to execute the tasks in parallel

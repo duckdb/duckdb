@@ -1287,8 +1287,8 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 }
 
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &gstate_p) const {
-	auto &state = gstate_p.Cast<WindowGlobalSinkState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &state = input.global_state.Cast<WindowGlobalSinkState>();
 
 	//	Did we get any data?
 	if (!state.global_partition->count) {

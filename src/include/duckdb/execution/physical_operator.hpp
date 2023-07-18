@@ -144,9 +144,8 @@ public:
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
-//	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context, OperatorSinkFinalizeInput &input) const;
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                                  GlobalSinkState &gstate) const;
+	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
 	//! This allows flushing of the current batch (e.g. to disk) TODO: should this be able to block too?
 	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;

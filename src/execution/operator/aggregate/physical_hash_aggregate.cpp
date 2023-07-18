@@ -823,8 +823,8 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 }
 
 SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                 GlobalSinkState &gstate_p) const {
-	return FinalizeInternal(pipeline, event, context, gstate_p, true);
+                                                 OperatorSinkFinalizeInput &input) const {
+	return FinalizeInternal(pipeline, event, context, input.global_state, true);
 }
 
 //===--------------------------------------------------------------------===//

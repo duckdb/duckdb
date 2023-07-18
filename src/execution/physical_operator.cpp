@@ -101,7 +101,7 @@ void PhysicalOperator::Combine(ExecutionContext &context, OperatorSinkCombineInp
 }
 
 SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                            GlobalSinkState &gstate) const {
+                                            OperatorSinkFinalizeInput &input) const {
 	return SinkFinalizeType::READY;
 }
 

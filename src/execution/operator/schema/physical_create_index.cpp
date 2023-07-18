@@ -148,11 +148,11 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombine
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
+                                               OperatorSinkFinalizeInput &input) const {
 
 	// here, we just set the resulting global index as the newly created index of the table
 
-	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	auto &storage = table.GetStorage();

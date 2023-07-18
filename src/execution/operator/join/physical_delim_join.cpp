@@ -112,10 +112,12 @@ void PhysicalDelimJoin::Combine(ExecutionContext &context, OperatorSinkCombineIn
 }
 
 SinkFinalizeType PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
-                                             GlobalSinkState &gstate) const {
+                                             OperatorSinkFinalizeInput &input) const {
 	// finalize the distinct HT
 	D_ASSERT(distinct);
-	distinct->Finalize(pipeline, event, client, *distinct->sink_state);
+
+	OperatorSinkFinalizeInput finalize_input {*distinct->sink_state, input.interrupt_state};
+	distinct->Finalize(pipeline, event, client, finalize_input );
 	return SinkFinalizeType::READY;
 }
 
