@@ -124,6 +124,10 @@ def generate_constructor(pointer_type, class_name, constructor_parameters):
         return f'\t{class_name} result{params};\n'
     return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
 
+supported_member_entries = [
+    'name', 'type', 'property', 'serialize_property', 'deserialize_property', 'optional', 'base'
+]
+
 class MemberVariable:
     def __init__(self, entry):
         self.name = entry['name']
@@ -144,6 +148,14 @@ class MemberVariable:
             self.optional = entry['optional']
         if 'base' in entry:
             self.base = entry['base']
+        for key in entry.keys():
+            if key not in supported_member_entries:
+                print(f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}")
+
+supported_serialize_entries = [
+    'class', 'class_type', 'pointer_type', 'base', 'enum', 'constructor', 'custom_implementation', 'custom_switch_code', 'members', 'return_type', 'set_parameters',
+    'includes'
+]
 
 class SerializableClass:
     def __init__(self, entry):
@@ -195,6 +207,9 @@ class SerializableClass:
                         break
                 if not found:
                     raise Exception(f'Set parameter {set_parameter_name} not found in member list')
+        for key in entry.keys():
+            if key not in supported_serialize_entries:
+                print(f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}")
 
     def inherit(self, base_class):
         self.base_object = base_class

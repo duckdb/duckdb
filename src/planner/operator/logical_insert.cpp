@@ -12,6 +12,11 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
       action_type(OnConflictAction::THROW) {
 }
 
+LogicalInsert::LogicalInsert(ClientContext &context, string catalog, string schema, string table)
+	: LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
+{
+}
+
 void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(insert_values.size());
 	for (auto &entry : insert_values) {

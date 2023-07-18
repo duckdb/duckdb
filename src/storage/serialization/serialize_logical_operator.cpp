@@ -6,6 +6,8 @@
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -64,6 +66,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_INSERT:
+		result = LogicalInsert::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		result = LogicalSetOperation::FormatDeserialize(deserializer);
@@ -339,6 +344,53 @@ unique_ptr<LogicalOperator> LogicalFilter::FormatDeserialize(FormatDeserializer 
 	auto result = duckdb::unique_ptr<LogicalFilter>(new LogicalFilter());
 	deserializer.ReadProperty("expressions", result->expressions);
 	deserializer.ReadProperty("projection_map", result->projection_map);
+	return std::move(result);
+}
+
+void LogicalInsert::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("catalog", table.ParentCatalog().GetName());
+	serializer.WriteProperty("schema", table.ParentSchema().name);
+	serializer.WriteProperty("table", table.name);
+	serializer.WriteProperty("insert_values", insert_values);
+	serializer.WriteProperty("column_index_map", column_index_map);
+	serializer.WriteProperty("expected_types", expected_types);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("return_chunk", return_chunk);
+	serializer.WriteProperty("bound_defaults", bound_defaults);
+	serializer.WriteProperty("action_type", action_type);
+	serializer.WriteProperty("expected_set_types", expected_set_types);
+	serializer.WriteProperty("on_conflict_filter", on_conflict_filter);
+	serializer.WriteOptionalProperty("on_conflict_condition", on_conflict_condition);
+	serializer.WriteOptionalProperty("do_update_condition", do_update_condition);
+	serializer.WriteProperty("set_columns", set_columns);
+	serializer.WriteProperty("set_types", set_types);
+	serializer.WriteProperty("excluded_table_index", excluded_table_index);
+	serializer.WriteProperty("columns_to_fetch", columns_to_fetch);
+	serializer.WriteProperty("source_columns", source_columns);
+}
+
+unique_ptr<LogicalOperator> LogicalInsert::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto table = deserializer.ReadProperty<string>("table");
+	auto result = duckdb::unique_ptr<LogicalInsert>(new LogicalInsert(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	deserializer.ReadProperty("insert_values", result->insert_values);
+	deserializer.ReadProperty("column_index_map", result->column_index_map);
+	deserializer.ReadProperty("expected_types", result->expected_types);
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("return_chunk", result->return_chunk);
+	deserializer.ReadProperty("bound_defaults", result->bound_defaults);
+	deserializer.ReadProperty("action_type", result->action_type);
+	deserializer.ReadProperty("expected_set_types", result->expected_set_types);
+	deserializer.ReadProperty("on_conflict_filter", result->on_conflict_filter);
+	deserializer.ReadOptionalProperty("on_conflict_condition", result->on_conflict_condition);
+	deserializer.ReadOptionalProperty("do_update_condition", result->do_update_condition);
+	deserializer.ReadProperty("set_columns", result->set_columns);
+	deserializer.ReadProperty("set_types", result->set_types);
+	deserializer.ReadProperty("excluded_table_index", result->excluded_table_index);
+	deserializer.ReadProperty("columns_to_fetch", result->columns_to_fetch);
+	deserializer.ReadProperty("source_columns", result->source_columns);
 	return std::move(result);
 }
 

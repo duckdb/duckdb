@@ -548,5 +548,98 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "class": "LogicalInsert",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_INSERT",
+    "includes": [
+      "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp",
+      "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+    ],
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string",
+        "serialize_property": "table.ParentCatalog().GetName()"
+      },
+      {
+        "name": "schema",
+        "type": "string",
+        "serialize_property": "table.ParentSchema().name"
+      },
+      {
+        "name": "table",
+        "type": "string",
+        "serialize_property": "table.name"
+      },
+      {
+        "name": "insert_values",
+        "type": "vector<vector<Expression*>>"
+      },
+      {
+        "name": "column_index_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "expected_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "return_chunk",
+        "type": "bool"
+      },
+      {
+        "name": "bound_defaults",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "action_type",
+        "type": "OnConflictAction"
+      },
+      {
+        "name": "expected_set_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "on_conflict_filter",
+        "type": "unordered_set<idx_t>"
+      },
+      {
+        "name": "on_conflict_condition",
+        "type": "Expression*",
+        "optional": true
+      },
+      {
+        "name": "do_update_condition",
+        "type": "Expression*",
+        "optional": true
+      },
+      {
+        "name": "set_columns",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "set_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "excluded_table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "columns_to_fetch",
+        "type": "vector<column_t>"
+      },
+      {
+        "name": "source_columns",
+        "type": "vector<column_t>"
+      }
+    ],
+    "constructor": ["$ClientContext", "catalog", "schema", "table"]
   }
 ]
