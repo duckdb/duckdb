@@ -174,9 +174,8 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAlloc
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
-                                        ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
-                                        idx_t &entry_idx) {
+static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &, ListSegment *segment,
+                                        RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
@@ -187,8 +186,9 @@ static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, A
 
 	// write value
 	if (valid) {
-		auto data = GetPrimitiveData<T>(segment);
-		Store<T>(((T *)input_data.format.data)[sel_entry_idx], data_ptr_cast(data + segment->count));
+		auto segment_data = GetPrimitiveData<T>(segment);
+		auto input_data_ptr = UnifiedVectorFormat::GetData<T>(input_data.format);
+		Store<T>(input_data_ptr[sel_entry_idx], data_ptr_cast(segment_data + segment->count));
 	}
 }
 
@@ -210,7 +210,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	// get the string
 	string_t str_t;
 	if (valid) {
-		str_t = ((string_t *)input_data.format.data)[sel_entry_idx];
+		str_t = UnifiedVectorFormat::GetData<string_t>(input_data.format)[sel_entry_idx];
 		str_length = str_t.GetSize();
 	}
 
@@ -250,7 +250,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaA
 
 	if (valid) {
 		// get list entry information
-		const auto &list_entry = ((list_entry_t *)input_data.format.data)[sel_entry_idx];
+		const auto &list_entry = UnifiedVectorFormat::GetData<list_entry_t>(input_data.format)[sel_entry_idx];
 		list_length = list_entry.length;
 
 		// loop over the child vector entries and recurse on them

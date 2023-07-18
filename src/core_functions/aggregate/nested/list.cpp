@@ -157,7 +157,7 @@ static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, Aggrega
 	D_ASSERT(input_count == 1);
 	auto &input = inputs[0];
 
-	// FIXME: we unify more values than necessary
+	// FIXME: we unify more values than necessary (count is frame.end)
 	RecursiveUnifiedVectorFormat input_data;
 	Vector::RecursiveToUnifiedFormat(input, frame.end, input_data);
 
