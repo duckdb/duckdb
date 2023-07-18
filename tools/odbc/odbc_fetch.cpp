@@ -390,7 +390,7 @@ SQLRETURN OdbcFetch::RowWise(OdbcHandleStmt *hstmt) {
 	for (SQLULEN row_idx = first_row_to_fetch; row_idx < last_row_to_fetch; ++row_idx, ++rows_fetched) {
 		++chunk_row;
 		SetRowStatus(row_idx, SQL_SUCCESS);
-		auto row_offeset = row_size * row_idx;
+		auto row_offset = row_size * row_idx;
 		for (duckdb::idx_t col_idx = 0; col_idx < hstmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_col = hstmt->bound_cols[col_idx];
 			if (!bound_col.IsBound()) {
@@ -398,8 +398,8 @@ SQLRETURN OdbcFetch::RowWise(OdbcHandleStmt *hstmt) {
 			}
 
 			// the addresses must be byte addressable for row offset pointer arithmetic
-			uint8_t *target_val_addr = (uint8_t *)bound_col.ptr + row_offeset;
-			uint8_t *target_len_addr = (uint8_t *)bound_col.strlen_or_ind + row_offeset;
+			uint8_t *target_val_addr = (uint8_t *)bound_col.ptr + row_offset;
+			uint8_t *target_len_addr = (uint8_t *)bound_col.strlen_or_ind + row_offset;
 
 			if (!SQL_SUCCEEDED(duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr,
 			                                             bound_col.len, (SQLLEN *)target_len_addr))) {
