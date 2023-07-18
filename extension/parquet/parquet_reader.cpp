@@ -253,7 +253,8 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                               idx_t &next_schema_idx, idx_t &next_file_idx,
-                                                              optional_ptr<case_insensitive_set_t> used_columns, bool is_needed) {
+                                                              optional_ptr<case_insensitive_set_t> used_columns,
+                                                              bool is_needed) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
