@@ -747,7 +747,7 @@ endfunction()
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES)
   include(FetchContent)
   if (${APPLY_PATCHES})
-    set(PATCH_COMMAND ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.sh ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME})
+    set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
   endif()
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
