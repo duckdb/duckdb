@@ -116,6 +116,11 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
+
+	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
+	static constexpr const idx_t BYTES_PER_ROW = 1024;
+	idx_t row_group_size_bytes;
+
 	ChildFieldIDs field_ids;
 };
 
@@ -152,10 +157,12 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	for (auto &path : parquet_bind.files) {
 		file_path.emplace_back(path);
 	}
+	// LCOV_EXCL_START
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
 	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
 	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
+	// LCOV_EXCL_STOP
 	return bind_info;
 }
 
@@ -739,33 +746,39 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
+	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
-		auto loption = StringUtil::Lower(option.first);
+		const auto loption = StringUtil::Lower(option.first);
+		if (option.second.size() != 1) {
+			// All parquet write options require exactly one argument
+			throw BinderException("%s requires exactly one argument", StringUtil::Upper(loption));
+		}
 		if (loption == "row_group_size" || loption == "chunk_size") {
 			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
+		} else if (loption == "row_group_size_bytes") {
+			auto roption = option.second[0];
+			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
+				bind_data->row_group_size_bytes = DBConfig::ParseMemoryLimit(roption.ToString());
+			} else {
+				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
+			}
+			row_group_size_bytes_set = true;
 		} else if (loption == "compression" || loption == "codec") {
-			if (!option.second.empty()) {
-				auto roption = StringUtil::Lower(option.second[0].ToString());
-				if (roption == "uncompressed") {
-					bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
-					continue;
-				} else if (roption == "snappy") {
-					bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
-					continue;
-				} else if (roption == "gzip") {
-					bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
-					continue;
-				} else if (roption == "zstd") {
-					bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
-					continue;
-				}
+			const auto roption = StringUtil::Lower(option.second[0].ToString());
+			if (roption == "uncompressed") {
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::UNCOMPRESSED;
+			} else if (roption == "snappy") {
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
+			} else if (roption == "gzip") {
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::GZIP;
+			} else if (roption == "zstd") {
+				bind_data->codec = duckdb_parquet::format::CompressionCodec::ZSTD;
+			} else {
+				throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]",
+				                      loption);
 			}
-			throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
 		} else if (loption == "field_ids") {
-			if (option.second.size() != 1) {
-				throw BinderException("FIELD_IDS requires exactly one argument");
-			}
 			if (option.second[0].type().id() == LogicalTypeId::VARCHAR &&
 			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				idx_t field_id = 0;
@@ -785,6 +798,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
+	}
+	if (!row_group_size_bytes_set) {
+		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
@@ -810,8 +826,10 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
-	if (local_state.buffer.Count() > bind_data.row_group_size) {
-		// if the chunk collection exceeds a certain size we flush it to the parquet file
+
+	if (local_state.buffer.Count() > bind_data.row_group_size ||
+	    local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes) {
+		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
 		local_state.buffer.InitializeAppend(local_state.append_state);
