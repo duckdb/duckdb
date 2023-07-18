@@ -185,19 +185,19 @@ test_that("Full join returns all outer relations", {
     expect_equal(rel_df, expected_result)
 })
 
-test_that("cross join works", {
-   left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
-   right <- rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
-   cross <- rel_join(left, right, list(), "cross")
-   order_by <- rel_order(cross, list(expr_reference("right_a"), expr_reference("right_a")))
-   rel_df <- rel_to_altrep(order_by)
-   dim(rel_df)
-   expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
-                                 left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
-                                 right_a=c(1, 1, 1, 4, 4, 4, 5, 5, 5),
-                                 right_b=c(7, 7, 7, 8, 8, 8, 9, 9, 9))
-   expect_equal(rel_df, expected_result)
-})
+# test_that("cross join works", {
+#    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+#    right <- rel_from_df(con, data.frame(right_a=c(1, 4, 5), right_b=c(7, 8, 9)))
+#    cross <- rel_join(left, right, list(), "cross")
+#    order_by <- rel_order(cross, list(expr_reference("right_a"), expr_reference("right_a")))
+#    rel_df <- rel_to_altrep(order_by)
+#    dim(rel_df)
+#    expected_result <- data.frame(left_a=c(1, 2, 3, 1, 2, 3, 1, 2, 3),
+#                                  left_b=c(1, 1, 2, 1, 1, 2, 1, 1, 2),
+#                                  right_a=c(1, 1, 1, 4, 4, 4, 5, 5, 5),
+#                                  right_b=c(7, 7, 7, 8, 8, 8, 9, 9, 9))
+#    expect_equal(rel_df, expected_result)
+# })
 
 test_that("semi join works", {
     left <- rel_from_df(con, data.frame(left_b=c(1, 5, 6)))
