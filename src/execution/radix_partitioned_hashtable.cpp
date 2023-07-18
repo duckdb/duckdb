@@ -149,6 +149,8 @@ public:
 	mutex lock;
 	//! Whether we've called Finalize
 	bool finalized;
+	//! Whether we've repartitioned
+	bool repartitioned;
 
 	//! The radix partitions during the sink
 	vector<unique_ptr<AggregatePartition>> sink_partitions;
@@ -182,9 +184,9 @@ public:
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState()
-    : finalized(false), finalize_in_use(false), repartition_idx(0), repartition_task_idx(0), repartition_done(0),
-      finalize_idx(0), finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE),
-      count_before_combining(0) {
+    : finalized(false), repartitioned(false), finalize_in_use(false), repartition_idx(0), repartition_task_idx(0),
+      repartition_done(0), finalize_idx(0), finalize_done(0),
+      scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 	// Initialize sink partitions
 	sink_partitions.resize(RadixHTConfig::SinkPartitionCount());
 	for (idx_t partition_idx = 0; partition_idx < RadixHTConfig::SinkPartitionCount(); partition_idx++) {
@@ -313,12 +315,16 @@ struct RadixHTAbandonStatus {
 
 static idx_t SingleHTMemoryLimit(ClientContext &context) {
 	auto hts_in_memory = TaskScheduler::GetScheduler(context).NumberOfThreads() + RadixHTConfig::SinkPartitionCount();
-	return double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory() / hts_in_memory;
+	const auto limit = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory() / hts_in_memory;
+	if (context.config.force_external) {
+		return MinValue<double>(Storage::BLOCK_SIZE * RadixHTConfig::SinkPartitionCount() * 1.5, limit);
+	}
+	return limit;
 }
 
 static RadixHTAbandonStatus GetAbandonStatus(ClientContext &context, const GroupedAggregateHashTable &ht) {
 	RadixHTAbandonStatus result;
-	if (context.config.force_external || ht.TotalSize() > SingleHTMemoryLimit(context)) {
+	if (ht.TotalSize() > SingleHTMemoryLimit(context)) {
 		result.abandon = true;
 		result.over_memory_limit = true;
 	}
@@ -328,10 +334,9 @@ static RadixHTAbandonStatus GetAbandonStatus(ClientContext &context, const Group
 		return result;
 	}
 
-	const auto ht_count = ht.Count();
-	if (result.abandon || ht_count > RadixHTConfig::SINK_ABANDON_THRESHOLD) {
+	if (result.abandon || ht.Count() > RadixHTConfig::SINK_ABANDON_THRESHOLD) {
 		// Math taken from https://math.stackexchange.com/a/1088094
-		const double k = ht_count * RadixHTConfig::SINK_EXPECTED_GROUP_COUNT_FACTOR;
+		const double k = ht.Count() * RadixHTConfig::SINK_EXPECTED_GROUP_COUNT_FACTOR;
 		const double n = ht.SinkCount();
 
 		// Compute the expected number of groups after seeing 'n' tuples,
@@ -350,7 +355,7 @@ static RadixHTAbandonStatus GetAbandonStatus(ClientContext &context, const Group
 		// With 3 standard deviations we're 99.9% sure we're headed not towards 'k' or more groups
 		const auto threshold = ev - 3 * stdev;
 
-		if (ht_count > threshold) {
+		if (ht.Count() > threshold) {
 			result.abandon = true;
 			result.too_many_uniques = true;
 		}
@@ -547,10 +552,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		    finalize_partition->combined_data ? finalize_partition->combined_data->Count() : 0;
 	}
 
-	// TODO: first check if we need to combine anything at all (for single-threaded case we don't)
-
 	// Check if we want to repartition
 	if (RequiresRepartitioning(context, gstate_p)) {
+		gstate.repartitioned = true;
 		// Move the combined data in the sink partitions to the finalize partitions
 		for (idx_t partition_idx = 0; partition_idx < RadixHTConfig::SinkPartitionCount(); partition_idx++) {
 			auto &sink_partition = gstate.sink_partitions[partition_idx];
@@ -631,14 +635,14 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	const auto partition_size = MaxValue<idx_t>(partition_sizes[max_partition_idx], 1);
 	const auto partition_ht_size = partition_size + GroupedAggregateHashTable::PointerTableSize(partition_count);
 
-	if (gstate.finalize_in_use || n_threads > RadixHTConfig::SinkPartitionCount() ||
+	if (context.config.force_external || gstate.finalize_in_use || n_threads > RadixHTConfig::SinkPartitionCount() ||
 	    n_threads * partition_ht_size > max_ht_size) {
 		gstate.finalize_radix_bits = RadixHTConfig::FINALIZE_RADIX_BITS;
 	} else {
 		gstate.finalize_radix_bits = RadixHTConfig::SINK_RADIX_BITS;
 	}
 
-	if (partition_size > max_ht_size) {
+	if (context.config.force_external || partition_size > max_ht_size) {
 		// Single partition is very large, all threads work on same partition
 		gstate.repartition_tasks_per_partition = n_threads;
 	} else {
@@ -889,7 +893,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 
 	if (++sink_partition.repartition_tasks_done == sink.repartition_tasks_per_partition.GetIndex()) {
 		// All repartition tasks for this partition are done, mark the finalizes as available
-		sink_partition.uncombined_data.clear();
+		D_ASSERT(sink_partition.uncombined_data.empty());
 		for (idx_t i = 0; i < multiplier; i++) {
 			const auto finalize_partition_idx = sink_partition_idx * multiplier + i;
 			auto &finalize_partition = *sink.finalize_partitions[finalize_partition_idx];
@@ -906,7 +910,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
 	D_ASSERT(!finalize_partition.finalize_available);
 
-	if (!finalize_partition.combined_data && finalize_partition.uncombined_data.size() == 1) {
+	if (!sink.repartitioned && !finalize_partition.combined_data && finalize_partition.uncombined_data.size() == 1) {
 		// Special case, no need to combine if there's only one uncombined data
 		sink.AddToFinal(std::move(finalize_partition.uncombined_data[0]));
 		sink.finalize_done++;

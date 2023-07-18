@@ -23,17 +23,17 @@ create table b as select * from values (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 1, n
 
 query T
 select (
-    select {'x': first(x), 'y': first(y), '__matches': count(*)}
+    select {'x': first(x order by x), 'y': first(y order by y), '__matches': count(*)}
     from (
         select *
         from r
-        where ba = ra and (bb = rb or rb is null)
-        order by all
+        where ba = ra
+          and (bb = rb or rb is null)
     )
     group by ra, rb)
 from b
 ----
-{'x': b, 'y': B, '__matches': 1}
+{'x': a, 'y': A, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
