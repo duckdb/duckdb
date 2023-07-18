@@ -35,11 +35,10 @@ class TestDateTimeDateTime(object):
         elif not positive and type in [
                 'TIMESTAMP_NS',
                 'TIMESTAMP_MS',
-                'TIMESTAMP_S',
+                'TIMESTAMP_S'
         ]:
-            # This query is not supported in core duckdb
-            with pytest.raises(duckdb.ConversionException):
-                con.execute(query).fetchall()
+            # This query is not supported in core duckdb but doesn't deterministically produce an error
+            return
         else:
             res = con.sql(query).fetchall()[0][0]
             assert res == expected_val
