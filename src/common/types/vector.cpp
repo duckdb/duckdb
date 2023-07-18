@@ -95,7 +95,6 @@ void Vector::Reference(const Value &value) {
 	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
 		auto array_buffer = make_uniq<VectorArrayBuffer>(value.type());
 		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
-		data = buffer->GetData();
 		SetValue(0, value);
 	} else {
 		auxiliary.reset();
@@ -823,6 +822,18 @@ void Vector::Flatten(idx_t count) {
 		}
 		case PhysicalType::FIXED_SIZE_LIST: {
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
+
+			auto &child = ArrayVector::GetEntry(*this);
+			auto fixed_size = ArrayType::GetSize(GetType());
+
+			// TODO: This should be set?
+			// D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			auto vector = make_uniq<Vector>(child);
+			vector->Flatten(count * fixed_size);
+
+			VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * fixed_size, 0, 0);
+			// flattened_buffer->GetChild() = vector;
+
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
 		} break;
 		case PhysicalType::STRUCT: {
@@ -996,8 +1007,8 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		case PhysicalType::FIXED_SIZE_LIST: {
-			// TODO: Technically, fixed size lists are constant size types, 
-			// but we cant get the actual size from just the physical type. 
+			// TODO: Technically, fixed size lists are constant size types,
+			// but we cant get the actual size from just the physical type.
 			// Maybe there is a better way to do this?
 			auto &child = ArrayVector::GetEntry(*this);
 			auto fixed_list_size = ArrayType::GetSize(type);
@@ -1258,11 +1269,12 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 void Vector::SetVectorType(VectorType vector_type_p) {
 	this->vector_type = vector_type_p;
-	if (TypeIsConstantSize(GetType().InternalType()) &&
+	auto physical_type = GetType().InternalType();
+	if (TypeIsConstantSize(physical_type) &&
 	    (GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR)) {
 		auxiliary.reset();
 	}
-	if (vector_type == VectorType::CONSTANT_VECTOR && GetType().InternalType() == PhysicalType::STRUCT) {
+	if (vector_type == VectorType::CONSTANT_VECTOR && physical_type == PhysicalType::STRUCT) {
 		auto &entries = StructVector::GetEntries(*this);
 		for (auto &entry : entries) {
 			entry->SetVectorType(vector_type);
@@ -1567,6 +1579,24 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 
 		ListVector::SetListSize(vector, ListVector::GetListSize(source));
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		break;
+	}
+	case PhysicalType::FIXED_SIZE_LIST: {
+		UnifiedVectorFormat vdata;
+		source.ToUnifiedFormat(count, vdata);
+
+		if (!vdata.validity.RowIsValid(position)) {
+			// list is null: create null value
+			Value null_value(source_type);
+			vector.Reference(null_value);
+			break;
+		}
+
+		// Reference the child vector
+		auto &child = ArrayVector::GetEntry(vector);
+		child.Reference(ArrayVector::GetEntry(source));
+		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+		vector.validity.Set(0, true);
 		break;
 	}
 	case PhysicalType::STRUCT: {
@@ -2220,6 +2250,5 @@ Vector &ArrayVector::GetEntry(Vector &vector) {
 	const Vector &cvector = vector;
 	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
 }
-
 
 } // namespace duckdb

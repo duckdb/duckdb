@@ -4,8 +4,12 @@
 namespace duckdb {
 
 static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::ARRAY);
-	auto &child_type = ArrayType::GetChildType(result.GetType());
+	auto array_type = result.GetType();
+
+	D_ASSERT(array_type.id() == LogicalTypeId::ARRAY);
+	D_ASSERT(args.ColumnCount() == ArrayType::GetSize(array_type));
+
+	auto &child_type = ArrayType::GetChildType(array_type);
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
@@ -14,13 +18,15 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	D_ASSERT(args.ColumnCount() == ArrayType::GetSize(result.GetType()));
-
 	auto &child = ArrayVector::GetEntry(result);
-	for (idx_t i = 0; i < args.size(); i++) {
-		for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-			auto val = args.GetValue(col_idx, i).DefaultCastAs(child_type);
-			child.SetValue(col_idx, val);
+
+	auto num_rows = args.size();
+	auto num_columns = args.ColumnCount();
+
+	for (idx_t i = 0; i < num_rows; i++) {
+		for (idx_t j = 0; j < num_columns; j++) {
+			auto val = args.GetValue(j, i).DefaultCastAs(child_type);
+			child.SetValue((i * num_columns) + j, val);
 		}
 	}
 
@@ -28,14 +34,14 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &bound_function,
-                                              vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	// collect names and deconflict, construct return type
 	LogicalType child_type = arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type;
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
 	}
 
-	if(arguments.size() >= NumericLimits<uint32_t>::Maximum()) {
+	if (arguments.size() >= NumericLimits<uint32_t>::Maximum()) {
 		throw Exception("Too many arguments for array_value");
 	}
 
@@ -47,14 +53,14 @@ static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFun
 
 /*
 unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, FunctionStatisticsInput &input) {
-	auto &child_stats = input.child_stats;
-	auto &expr = input.expr;
-	auto list_stats = ListStats::CreateEmpty(expr.return_type);
-	auto &list_child_stats = ListStats::GetChildStats(list_stats);
-	for (idx_t i = 0; i < child_stats.size(); i++) {
-		list_child_stats.Merge(child_stats[i]);
-	}
-	return list_stats.ToUnique();
+    auto &child_stats = input.child_stats;
+    auto &expr = input.expr;
+    auto list_stats = ListStats::CreateEmpty(expr.return_type);
+    auto &list_child_stats = ListStats::GetChildStats(list_stats);
+    for (idx_t i = 0; i < child_stats.size(); i++) {
+        list_child_stats.Merge(child_stats[i]);
+    }
+    return list_stats.ToUnique();
 }
 */
 

@@ -2,7 +2,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
 
-
 namespace duckdb {
 
 struct ArrayBoundCastData : public BoundCastData {
@@ -10,6 +9,7 @@ struct ArrayBoundCastData : public BoundCastData {
 	}
 
 	BoundCastInfo child_cast_info;
+
 public:
 	unique_ptr<BoundCastData> Copy() const override {
 		return make_uniq<ListBoundCastData>(child_cast_info.Copy());
@@ -17,14 +17,13 @@ public:
 };
 
 static unique_ptr<BoundCastData> BindArrayToArrayCast(BindCastInput &input, const LogicalType &source,
-                                                                const LogicalType &target) {
+                                                      const LogicalType &target) {
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_type = ArrayType::GetChildType(source);
 	auto &result_child_type = ArrayType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
 	return make_uniq<ArrayBoundCastData>(std::move(child_cast));
 }
-
 
 static unique_ptr<FunctionLocalState> InitArrayLocalState(CastLocalStateParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
@@ -39,17 +38,17 @@ static unique_ptr<FunctionLocalState> InitArrayLocalState(CastLocalStateParamete
 // ARRAY -> ARRAY
 //------------------------------------------------------------------------------
 static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-    
+
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
 
 	// TODO: Handle mismatched sizes
-	if(ArrayType::GetSize(source.GetType()) != ArrayType::GetSize(result.GetType())) {
+	if (ArrayType::GetSize(source.GetType()) != ArrayType::GetSize(result.GetType())) {
 		return false;
 	}
 
 	// TODO: dont flatten
 	source.Flatten(count);
-	if(count == 1) {
+	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
@@ -57,7 +56,6 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto &source_cc = ArrayVector::GetEntry(source);
 	auto &result_cc = ArrayVector::GetEntry(result);
 	auto child_count = count * fixed_size;
-
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, child_count, child_parameters);
@@ -80,27 +78,27 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 	child.Flatten(count);
 	auto &child_validity = FlatVector::Validity(child);
-	
+
 	auto in_data = FlatVector::GetData<string_t>(child);
 	auto out_data = FlatVector::GetData<string_t>(result);
 
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
 
-	for(idx_t i = 0; i < count; i++) {
-		if(!validity.RowIsValid(i)) {
+	for (idx_t i = 0; i < count; i++) {
+		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
-		auto list = in_data[i];
 
 		// First pass, compute the length
 		idx_t list_varchar_length = 2;
 		for (idx_t j = 0; j < size; j++) {
+			auto elem = in_data[(i * size) + j];
 			if (j > 0) {
 				list_varchar_length += SEP_LENGTH;
 			}
-			list_varchar_length += child_validity.RowIsValid(i) ? list.GetSize() : NULL_LENGTH;
+			list_varchar_length += child_validity.RowIsValid(i) ? elem.GetSize() : NULL_LENGTH;
 		}
 
 		out_data[i] = StringVector::EmptyString(result, list_varchar_length);
@@ -110,13 +108,14 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 
 		// Second pass, write the actual data
 		for (idx_t j = 0; j < size; j++) {
+			auto elem = in_data[(i * size) + j];
 			if (j > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(i)) {
-				auto len = list.GetSize();
-				memcpy(dataptr + offset, list.GetData(), len);
+				auto len = elem.GetSize();
+				memcpy(dataptr + offset, elem.GetData(), len);
 				offset += len;
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
@@ -127,34 +126,36 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		out_data[i].Finalize();
 	}
 
-	if(is_constant) {
+	if (is_constant) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
 	return true;
 }
 
-
 //------------------------------------------------------------------------------
 // ARRAY -> LIST
 //------------------------------------------------------------------------------
 static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameter) {
-    throw NotImplementedException("Array -> List cast not implemented");
+	throw NotImplementedException("Array -> List cast not implemented");
 }
 
-BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalType &source,
+                                            const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::VARCHAR: {
 		auto size = ArrayType::GetSize(source);
-        return BoundCastInfo(ArrayToVarcharCast, BindArrayToArrayCast(input, source, LogicalType::ARRAY(LogicalType::VARCHAR, size)), InitArrayLocalState);
+		return BoundCastInfo(ArrayToVarcharCast,
+		                     BindArrayToArrayCast(input, source, LogicalType::ARRAY(LogicalType::VARCHAR, size)),
+		                     InitArrayLocalState);
 	}
-	case LogicalTypeId::ARRAY: 
-        return BoundCastInfo(ArrayToArrayCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
+	case LogicalTypeId::ARRAY:
+		return BoundCastInfo(ArrayToArrayCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
 	case LogicalTypeId::LIST:
-        return BoundCastInfo(ArrayToListCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
+		return BoundCastInfo(ArrayToListCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
 	default:
 		return DefaultCasts::TryVectorNullCast;
-    };
+	};
 }
 
-}
+} // namespace duckdb

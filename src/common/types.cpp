@@ -231,7 +231,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
 	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
 	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID, 	   LogicalTypeId::ARRAY};
+	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID,      LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -1062,7 +1062,7 @@ struct ArrayTypeInfo : public ExtraTypeInfo {
 	    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
 	}
 
-	public:
+public:
 	void Serialize(FieldWriter &writer) const override {
 		writer.WriteSerializable(child_type);
 		writer.WriteField(size);
@@ -1111,7 +1111,6 @@ LogicalType LogicalType::ARRAY(const LogicalType &child, uint32_t size) {
 	auto info = make_shared<ArrayTypeInfo>(child, size);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
-
 
 //===--------------------------------------------------------------------===//
 // Struct Type

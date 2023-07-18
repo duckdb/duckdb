@@ -1,6 +1,15 @@
+# name: test/sql/types/nested/fixedlist/fixed.test
+# group: [fixedlist]
 
-
-# conversion failure (mixed types)
 query I
-SELECT array_value(1, 2, 3)
+SELECT array_value(1, 2, 3);
 ----
+[1, 2, 3]
+
+query I
+SELECT array_value(i -1, i, i + 1)
+FROM (VALUES (1), (2), (3)) AS t(i)
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]

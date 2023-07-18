@@ -709,7 +709,6 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-
 Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 	if (values.empty()) {
 		return Value::EMPTYLIST(child_type);
@@ -745,7 +744,6 @@ Value Value::ARRAY(vector<Value> values) {
 	return result;
 }
 
-
 Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
 	if (values.empty()) {
 		return Value::EMPTYARRAY(child_type, 0);
@@ -763,7 +761,6 @@ Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
 	result.is_null = false;
 	return result;
 }
-
 
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
@@ -1515,7 +1512,7 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
 
-const vector<Value> &ArrayValue::GetChildren(const Value &value){
+const vector<Value> &ArrayValue::GetChildren(const Value &value) {
 	if (value.is_null) {
 		throw InternalException("Calling ArrayValue::GetChildren on a NULL value");
 	}

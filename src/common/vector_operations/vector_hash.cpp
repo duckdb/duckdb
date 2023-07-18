@@ -194,65 +194,11 @@ static inline void FixedSizeListLoopHash(Vector &input, Vector &hashes, const Se
 	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
-	// Reduce the number of entries to check to the non-empty ones
-	SelectionVector unprocessed(count);
-	SelectionVector cursor(HAS_RSEL ? STANDARD_VECTOR_SIZE : count);
-	idx_t remaining = 0;
-	for (idx_t i = 0; i < count; ++i) {
-		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
-		const auto lidx = idata.sel->get_index(ridx);
-		if (idata.validity.RowIsValid(lidx)) {
-			unprocessed.set_index(remaining++, ridx);
-			cursor.set_index(ridx, lidx * fixed_size); // or (i * fixed_size) ?
-		} else if (FIRST_HASH) {
-			hdata[ridx] = HashOp::NULL_HASH;
-		}
-		// Empty or NULL non-first elements have no effect.
-	}
-
-	count = remaining;
-	if (count == 0) {
-		return;
-	}
-
-	// Merge the first position hash into the main hash
-	idx_t position = 1;
-	if (FIRST_HASH) {
-		remaining = 0;
-		for (idx_t i = 0; i < count; ++i) {
-			const auto ridx = unprocessed.get_index(i);
-			const auto cidx = cursor.get_index(ridx);
-			hdata[ridx] = chdata[cidx];
-			if (fixed_size > position) {
-				// Entry still has values to hash
-				unprocessed.set_index(remaining++, ridx);
-				cursor.set_index(ridx, cidx + 1);
-			}
-		}
-		count = remaining;
-		if (count == 0) {
-			return;
-		}
-		++position;
-	}
-
-	// Combine the hashes for the remaining positions until there are none left
-	for (;; ++position) {
-		remaining = 0;
-		for (idx_t i = 0; i < count; ++i) {
-			const auto ridx = unprocessed.get_index(i);
-			const auto cidx = cursor.get_index(ridx);
-			hdata[ridx] = CombineHashScalar(hdata[ridx], chdata[cidx]);
-			if (fixed_size > position) {
-				// Entry still has values to hash
-				unprocessed.set_index(remaining++, ridx);
-				cursor.set_index(ridx, cidx + 1);
-			}
-		}
-
-		count = remaining;
-		if (count == 0) {
-			break;
+	// Combine hashes for every array
+	// TODO: Branch on FIRST_HASH and HAS_RSEL
+	for (idx_t i = 0; i < count; i++) {
+		for (idx_t j = i * fixed_size; j < (i + 1) * fixed_size; j++) {
+			hdata[i] = CombineHashScalar(hdata[i], chdata[j]);
 		}
 	}
 }

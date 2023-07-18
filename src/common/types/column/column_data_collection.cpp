@@ -626,29 +626,33 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 }
 
 void ColumnDataCopyFixedSizeList(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                          idx_t offset, idx_t copy_count) {
-	
+                                 idx_t offset, idx_t copy_count) {
+
 	auto &segment = meta_data.segment;
 
-	auto &child_vector = ListVector::GetEntry(source);
-	auto &child_type = child_vector.GetType();
+	// copy the NULL values for the main fixed size list vector (the same as for a struct vector)
+	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
+	// TODO: This function is sloppily implemented and probably not correct
+	auto &child_vector = ArrayVector::GetEntry(source);
+	auto &child_type = child_vector.GetType();
+	auto fixed_size = ArrayType::GetSize(source.GetType());
+
+	// Why is this neccessary, it isnt for structs?
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
 
+	// TODO: Ensure we copy the right amount of data
 	auto &child_function = meta_data.copy_function.child_functions[0];
-	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index, 0);
+	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
-	idx_t current_list_size = 0;
-	auto current_child_index = child_index;
-	while (current_child_index.IsValid()) {
-		auto &child_vdata = segment.GetVectorData(current_child_index);
-		current_list_size += child_vdata.count;
-		current_child_index = child_vdata.next_data;
-	}
+	UnifiedVectorFormat child_data;
+	child_vector.ToUnifiedFormat(copy_count * fixed_size, child_data);
 
+	child_function.function(child_meta_data, child_data, child_vector, offset, copy_count * fixed_size);
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
