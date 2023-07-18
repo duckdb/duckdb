@@ -127,7 +127,7 @@ idx_t GroupedAggregateHashTable::Capacity() const {
 }
 
 idx_t GroupedAggregateHashTable::ResizeThreshold() const {
-	return capacity / LOAD_FACTOR;
+	return Capacity() / LOAD_FACTOR;
 }
 
 idx_t GroupedAggregateHashTable::DataSize() const {

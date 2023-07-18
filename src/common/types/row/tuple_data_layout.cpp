@@ -5,7 +5,8 @@
 namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
-    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_size_offset(0) {
+    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_size_offset(0),
+      has_destructor(false) {
 }
 
 TupleDataLayout TupleDataLayout::Copy() const {

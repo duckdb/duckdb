@@ -317,8 +317,11 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 		}
 		partitions[actual_partition_idx]->Reset();
 	}
-
 	new_partitioned_data.FlushAppendState(append_state);
+
+	count = 0;
+	data_size = 0;
+
 	Verify();
 }
 

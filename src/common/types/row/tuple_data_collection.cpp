@@ -74,6 +74,7 @@ void TupleDataCollection::Unpin() {
 	}
 }
 
+// LCOV_EXCL_START
 void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -95,6 +96,7 @@ void VerifyAppendColumns(const TupleDataLayout &layout, const vector<column_t> &
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, TupleDataPinProperties properties) {
 	vector<column_t> column_ids;
@@ -258,6 +260,7 @@ void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkStat
 	Verify();
 }
 
+// LCOV_EXCL_START
 void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes[], const SelectionVector &append_sel,
                      const idx_t append_count, const idx_t heap_size_offset) {
 #ifdef DEBUG
@@ -268,6 +271,7 @@ void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input,
                                    const SelectionVector &append_sel, const idx_t append_count) const {
@@ -462,6 +466,7 @@ void TupleDataCollection::ScanAtIndex(TupleDataPinState &pin_state, TupleDataChu
 	result.SetCardinality(chunk.count);
 }
 
+// LCOV_EXCL_START
 string TupleDataCollection::ToString() {
 	DataChunk chunk;
 	InitializeChunk(chunk);
@@ -508,5 +513,6 @@ void TupleDataCollection::VerifyEverythingPinned() const {
 	}
 #endif
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
