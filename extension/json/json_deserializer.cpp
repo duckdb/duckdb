@@ -43,8 +43,10 @@ void JsonDeserializer::ThrowTypeError(yyjson_val *val, const char *expected) {
 	if (yyjson_is_obj(parent.val)) {
 		auto msg =
 		    StringUtil::Format("property '%s' expected type '%s', but got type: '%s'", current_tag, expected, actual);
+		throw ParserException(msg);
 	} else if (yyjson_is_arr(parent.val)) {
 		auto msg = StringUtil::Format("Sequence expect child of type '%s', but got type: %s", expected, actual);
+		throw ParserException(msg);
 	} else {
 		// unreachable?
 		throw InternalException("cannot get nested value from non object or array-type");
