@@ -1018,9 +1018,10 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
                                         TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
 		// make sure that child is not a nullptr
-		if (child) {
-			child->InitializeRead(row_group_idx_p, columns, protocol_p);
+		if (!child) {
+			continue;
 		}
+		child->InitializeRead(row_group_idx_p, columns, protocol_p);
 	}
 }
 
