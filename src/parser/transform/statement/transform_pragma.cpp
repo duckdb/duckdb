@@ -1,11 +1,12 @@
-#include "duckdb/parser/statement/pragma_statement.hpp"
-#include "duckdb/parser/transformer.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/parser/statement/set_statement.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/pragma_statement.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -22,15 +23,17 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragm
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
 				auto &comp = expr->Cast<ComparisonExpression>();
-				if (comp.right->type != ExpressionType::VALUE_CONSTANT) {
-					throw ParserException("Named parameter requires a constant on the RHS");
-				}
 				if (comp.left->type != ExpressionType::COLUMN_REF) {
 					throw ParserException("Named parameter requires a column reference on the LHS");
 				}
 				auto &columnref = comp.left->Cast<ColumnRefExpression>();
-				auto &constant = comp.right->Cast<ConstantExpression>();
-				info.named_parameters[columnref.GetName()] = constant.value;
+
+				Value rhs_value;
+				if (!Transformer::ConstructConstantFromExpression(*comp.right, rhs_value)) {
+					throw ParserException("Named parameter requires a constant on the RHS");
+				}
+
+				info.named_parameters[columnref.GetName()] = rhs_value;
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
 				auto constant = TransformConstant(*PGPointerCast<duckdb_libpgquery::PGAConst>(node.get()));
 				info.parameters.push_back((constant->Cast<ConstantExpression>()).value);

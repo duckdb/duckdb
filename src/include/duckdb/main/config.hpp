@@ -28,6 +28,7 @@
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
+#include "duckdb/common/arrow/arrow_options.hpp"
 
 namespace duckdb {
 class BufferPool;
@@ -135,6 +136,8 @@ struct DBConfigOptions {
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 	//! Whether or not preserving insertion order should be preserved
 	bool preserve_insertion_order = true;
+	//! Whether Arrow Arrays use Large or Regular buffers
+	ArrowOffsetSize arrow_offset_size = ArrowOffsetSize::REGULAR;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 	//! Database configuration variable default values;
@@ -155,6 +158,8 @@ struct DBConfigOptions {
 	bool lock_configuration = false;
 	//! Whether to print bindings when printing the plan (debug mode only)
 	static bool debug_print_bindings;
+	//! The peak allocation threshold at which to flush the allocator after completing a task (1 << 27, ~128MB)
+	idx_t allocator_flush_threshold = 134217728;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

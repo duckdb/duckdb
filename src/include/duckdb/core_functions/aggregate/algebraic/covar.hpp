@@ -5,6 +5,7 @@
 //
 //
 //===----------------------------------------------------------------------===//
+// COVAR_POP(y,x)
 
 #pragma once
 
@@ -29,7 +30,7 @@ struct CovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		// update running mean and d^2
 		const uint64_t n = ++(state.count);
 
@@ -39,6 +40,7 @@ struct CovarOperation {
 		const double dy = (y - state.meany);
 		const double meany = state.meany + dy / n;
 
+		//  Schubert and Gertz SSDBM 2018 (4.3)
 		const double C = state.co_moment + dx * (y - meany);
 
 		state.meanx = meanx;

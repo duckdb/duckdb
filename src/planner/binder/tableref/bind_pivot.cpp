@@ -18,6 +18,7 @@
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -300,9 +301,8 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	auto &aggregates = result->bound_pivot.aggregates;
 	ExtractPivotAggregates(*result->child, aggregates);
 	if (aggregates.size() != ref.bound_aggregate_names.size()) {
-		throw BinderException("Pivot aggregate count mismatch. Expected %llu aggregates but found %llu. Are all pivot "
-		                      "expressions aggregate functions?",
-		                      ref.bound_aggregate_names.size(), aggregates.size());
+		throw InternalException("Pivot aggregate count mismatch (expected %llu, found %llu)",
+		                        ref.bound_aggregate_names.size(), aggregates.size());
 	}
 
 	vector<string> child_names;
@@ -363,9 +363,12 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		if (aggr->IsWindow()) {
 			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
 		}
+		// bind the function as an aggregate to ensure it is an aggregate and not a scalar function
+		auto &aggr_function = aggr->Cast<FunctionExpression>();
+		(void)Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, aggr_function.catalog, aggr_function.schema,
+		                                                       aggr_function.function_name);
 		ExtractPivotExpressions(*aggr, handled_columns);
 	}
-	value_set_t pivots;
 
 	// first add all pivots to the set of handled columns, and check for duplicates
 	idx_t total_pivots = 1;
@@ -609,6 +612,9 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
+	if (ref.source->type == TableReferenceType::SUBQUERY && ref.source->alias.empty()) {
+		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex());
+	}
 	auto copied_source = ref.source->Copy();
 	auto star_binder = Binder::CreateBinder(context, this);
 	star_binder->Bind(*copied_source);

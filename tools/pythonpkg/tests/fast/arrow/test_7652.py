@@ -3,8 +3,8 @@ import os
 import pytest
 import tempfile
 
-pa = pytest.importorskip("pyarrow")
-pq = pytest.importorskip("pyarrow.parquet")
+pa = pytest.importorskip("pyarrow", minversion="11")
+pq = pytest.importorskip("pyarrow.parquet", minversion="11")
 
 class Test7652(object):
     def test_7652(self):

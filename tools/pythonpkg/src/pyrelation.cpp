@@ -15,6 +15,8 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb/main/relation/filter_relation.hpp"
 
 namespace duckdb {
 
@@ -22,6 +24,7 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation created without a relation");
 	}
+	this->executed = false;
 	auto &columns = rel->Columns();
 	for (auto &col : columns) {
 		names.push_back(col.GetName());
@@ -33,6 +36,7 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
+	this->executed = true;
 	this->types = result->GetTypes();
 	this->names = result->GetNames();
 }
@@ -96,6 +100,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 		throw InvalidInputException("None of the columns matched the provided type filter!");
 	}
 	return ProjectFromExpression(projection);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr<ClientContext> &context,
+                                                           const vector<LogicalType> &types, vector<string> names) {
+	vector<Value> dummy_values;
+	D_ASSERT(types.size() == names.size());
+	dummy_values.reserve(types.size());
+	D_ASSERT(!types.empty());
+	for (auto &type : types) {
+		dummy_values.emplace_back(type);
+	}
+	vector<vector<Value>> single_row(1, dummy_values);
+	auto values_relation =
+	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
+	// Add a filter on an impossible condition
+	return values_relation->Filter("true = false");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -401,6 +421,7 @@ static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel
 }
 
 unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
+	this->executed = true;
 	return PyExecuteRelation(rel, stream_result);
 }
 
@@ -572,14 +593,17 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 }
 
 void DuckDBPyRelation::Close() {
-	if (!result) {
+	// We always want to execute the query at least once, for side-effect purposes.
+	// if it has already been executed, we don't need to do it again.
+	if (!executed && !result) {
 		if (!rel) {
 			return;
 		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
-	result->Close();
+	if (result) {
+		result->Close();
+	}
 }
 
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
@@ -638,6 +662,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		dtype = JoinType::LEFT;
 	} else {
 		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
+	}
+	auto alias = GetAlias();
+	auto other_alias = other->GetAlias();
+	if (StringUtil::CIEquals(alias, other_alias)) {
+		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
+		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }

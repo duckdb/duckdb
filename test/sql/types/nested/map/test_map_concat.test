@@ -151,12 +151,12 @@ select map(range(i, i+2), range(i, i+2)) from (
 ----
 
 query I nosort result3
-select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[], false) tbl(c1) where c1 != [] and c1 != [NULL]
+select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[]) tbl(c1) where c1 != [] and c1 != [NULL]
 ----
 
 query I nosort result3
 select map_concat(val, val, val) from (
-	select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[], false) tbl(c1) where c1 != [] and c1 != [NULL]
+	select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[]) tbl(c1) where c1 != [] and c1 != [NULL]
 )
 ----
 

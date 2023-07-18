@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -66,6 +67,21 @@ void VersionNode::SetStart(idx_t start) {
 	}
 }
 
+idx_t VersionNode::GetCommittedDeletedCount(idx_t count) {
+	idx_t deleted_count = 0;
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		if (!info[i]) {
+			continue;
+		}
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (max_count == 0) {
+			break;
+		}
+		deleted_count += info[i]->GetCommittedDeletedCount(max_count);
+	}
+	return deleted_count;
+}
+
 RowGroup::~RowGroup() {
 }
 
@@ -109,10 +125,6 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
 	is_loaded[c] = true;
 	return *columns[c];
-}
-
-DatabaseInstance &RowGroup::GetDatabase() {
-	return GetCollection().GetDatabase();
 }
 
 BlockManager &RowGroup::GetBlockManager() {
@@ -269,7 +281,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -284,10 +296,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			if (default_value) {
-				dummy_chunk.SetCardinality(rows_in_this_vector);
-				executor.ExecuteExpression(dummy_chunk, result);
-			}
+			dummy_chunk.SetCardinality(rows_in_this_vector);
+			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 	}
@@ -795,6 +805,13 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
+bool RowGroup::AllDeleted() {
+	if (!version_info) {
+		return false;
+	}
+	return version_info->GetCommittedDeletedCount(count) == count;
+}
+
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
@@ -912,12 +929,12 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetStorageInfo(idx_t row_group_index, TableStorageInfo &result) {
+void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetStorageInfo(row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(row_group_index, {col_idx}, result);
 	}
 }
 

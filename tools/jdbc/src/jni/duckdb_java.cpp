@@ -1071,10 +1071,18 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+		return 0;
 	}
 
-	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
-	return (jlong)&wrapper->stream;
+	try {
+		auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
+		return (jlong)&wrapper->stream;
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return 0;
+	}
+	//	Unreachable
+	return 0;
 }
 
 class JavaArrowTabularStreamFactory {
@@ -1095,11 +1103,15 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-		if (!factory->stream_ptr->release) {
+		auto stream_ptr = factory->stream_ptr;
+		if (!stream_ptr->release) {
 			throw InvalidInputException("This stream has been released");
 		}
-		factory->stream_ptr->get_schema(factory->stream_ptr, &schema.arrow_schema);
-		return;
+		stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
+		auto error = stream_ptr->get_last_error(stream_ptr);
+		if (error != nullptr) {
+			throw InvalidInputException(error);
+		}
 	}
 
 	ArrowArrayStream *stream_ptr;
@@ -1111,16 +1123,23 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
                                                                                   jbyteArray name_j) {
 
 	auto conn = get_connection(env, conn_ref_buf);
+	if (conn == nullptr) {
+		return;
+	}
 	auto name = byte_array_to_string(env, name_j);
 
 	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
 
-	auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
-	duckdb::vector<Value> parameters;
-	parameters.push_back(Value::POINTER((uintptr_t)factory));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	try {
+		auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
+		duckdb::vector<Value> parameters;
+		parameters.push_back(Value::POINTER((uintptr_t)factory));
+		parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
+		parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
+		conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv *env, jclass,

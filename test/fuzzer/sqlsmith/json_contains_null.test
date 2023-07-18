@@ -1,0 +1,13 @@
+# name: test/fuzzer/sqlsmith/json_contains_null.test
+# description: JSON Contains with NULL varchar parameters
+# group: [sqlsmith]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT json_contains(NULL::VARCHAR, NULL::VARCHAR);
+----
+NULL

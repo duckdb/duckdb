@@ -104,8 +104,10 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock
 	void Vacuum();
 
-	//! Returns the string representation of an index
-	virtual string ToString() = 0;
+	//! Returns the string representation of an index, or only traverses and verifies the index
+	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;
+	//! Obtains a lock and calls VerifyAndToString while holding that lock
+	string VerifyAndToString(const bool only_verify);
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;

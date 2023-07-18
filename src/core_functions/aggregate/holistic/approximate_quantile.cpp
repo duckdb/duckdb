@@ -42,7 +42,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 		writer.WriteList<float>(bind_data.quantiles);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<float>();
 		return make_uniq<ApproximateQuantileBindData>(std::move(quantiles));

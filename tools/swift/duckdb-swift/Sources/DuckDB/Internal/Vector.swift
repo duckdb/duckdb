@@ -51,15 +51,13 @@ private extension Vector {
   func unwrapNull(at index: Int) -> Bool {
     precondition(index < count, "vector index out of bounds")
     let offsetIndex = offset + index
-    let validityMasks = duckdb_vector_get_validity(cvector)
-    guard let validityMasks else { return false }
-    let validityMasksBuffer = UnsafeBufferPointer(
-      start: validityMasks, count: Int(duckdb_vector_size() / 64))
-    let validityEntryIndex = offsetIndex / 64
+    let validityMasksPtr = duckdb_vector_get_validity(cvector)
+    guard let validityMasksPtr else { return false }
+    let validityMaskEntryIndex = offsetIndex / 64
+    let validityMaskEntryPtr = (validityMasksPtr + validityMaskEntryIndex)
     let validityBitIndex = offsetIndex % 64
-    let validityMask = validityMasksBuffer[Int(validityEntryIndex)]
     let validityBit = (DBInt(1) << validityBitIndex)
-    return validityMask & validityBit == 0
+    return validityMaskEntryPtr.pointee & validityBit == 0
   }
   
   func unwrap(_ type: Int.Type, at index: Int) throws -> Int {

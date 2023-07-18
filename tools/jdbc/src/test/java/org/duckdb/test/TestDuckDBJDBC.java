@@ -509,6 +509,29 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+	
+	public static void test_timestamptz_as_long() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+
+		stmt.execute("SET CALENDAR='gregorian'");
+		stmt.execute("SET TIMEZONE='America/Los_Angeles'");
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10Z')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:11Z')");
+
+		rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039070000000L);
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039071000000L);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
 
     public static void test_consecutive_timestamps() throws Exception {
     	long expected = 986860800000L;
@@ -535,7 +558,7 @@ public class TestDuckDBJDBC {
 		rs.next();
 
 		try {
-			rs.getTimestamp(2);
+			rs.getShort(2);
 			fail();
 		} catch (IllegalArgumentException e) {
 		}
@@ -3499,6 +3522,7 @@ public class TestDuckDBJDBC {
 		correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
 		correct_answer_map.put("struct", asList("{'a': NULL, 'b': NULL}", "{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}", null));
 		correct_answer_map.put("map", asList("{}", "{key1=🦆🦆🦆🦆🦆🦆, key2=goose}", null));
+		correct_answer_map.put("union", asList("Frank", "5", null));
 		correct_answer_map.put("time_tz", asList(OffsetTime.parse("00:00+00:00"), OffsetTime.parse("23:59:59.999999+00:00"), null));
 		correct_answer_map.put("interval", asList("00:00:00", "83 years 3 months 999 days 00:16:39.999999", null));
 		correct_answer_map.put("timestamp", asList(DuckDBTimestamp.toSqlTimestamp(-9223372022400000000L), DuckDBTimestamp.toSqlTimestamp(9223372036854775807L), null));

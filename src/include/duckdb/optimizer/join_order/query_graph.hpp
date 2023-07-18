@@ -75,6 +75,9 @@ private:
 	//! Get the QueryEdge of a specific node
 	QueryEdge &GetQueryEdge(JoinRelationSet &left);
 
+	void EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
+	                           const std::function<bool(NeighborInfo &)> &callback);
+
 	QueryEdge root;
 };
 

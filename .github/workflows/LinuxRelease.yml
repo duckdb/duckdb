@@ -12,13 +12,18 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/uncovered_files.csv'
@@ -32,9 +37,10 @@ env:
 
 jobs:
  linux-release-64:
-    name: Linux (64 Bit)
+    # Builds binaries for linux_amd64_gcc4
+    name: Linux (x64)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
       BUILD_BENCHMARK: 1
@@ -48,25 +54,26 @@ jobs:
       BUILD_JEMALLOC: 1
       DEBUG_STACKTRACE: 1
       BUILD_AUTOCOMPLETE: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      STATIC_LIBCPP: 1
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        ninja-build: 1
+        ccache: 1
+        odbc: 1
 
     - name: Build
       shell: bash
       run: make
+
+    - name: Print platform
+      shell: bash
+      run: ./build/release/duckdb -c "PRAGMA platform;"
 
     - name: Test
       shell: bash
@@ -90,7 +97,7 @@ jobs:
       run: |
         python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
@@ -102,12 +109,13 @@ jobs:
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
 
-
  linux-release-aarch64:
-   name: Linux (AARCH64)
+   # Builds binaries for linux_arm64
+   name: Linux (aarch64)
+   if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb'
    runs-on: ubuntu-latest
    needs: linux-release-64
-   container: ubuntu:18.04 # cross compiler not available in 16
+   container: ubuntu:18.04
    env:
      GEN: ninja
      BUILD_BENCHMARK: 1
@@ -120,7 +128,6 @@ jobs:
      BUILD_JEMALLOC: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
-     STATIC_LIBCPP: 1
      BUILD_ODBC: 1
      ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 
@@ -129,19 +136,10 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/ubuntu_16_setup
-
-     - name: Setup Ccache
-       uses: hendrikmuhs/ccache-action@main
+     - uses: ./.github/actions/ubuntu_18_setup
        with:
-         key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-     - name: Install Stuff
-       shell: bash
-       run: |
-         apt-get update -y -qq
-         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        ccache: 1
+        aarch64_cross_compile: 1
 
      - name: Install unixODBC
        shell: bash
@@ -162,7 +160,7 @@ jobs:
          python3.7 scripts/amalgamation.py
          zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
          zip -j duckdb_odbc-linux-aarch64.zip build/release/tools/odbc/libduckdb_odbc.so
-         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
      - uses: actions/upload-artifact@v3
@@ -173,29 +171,31 @@ jobs:
            duckdb_odbc-linux-aarch64.zip
            duckdb_cli-linux-aarch64.zip
 
+ # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
+ # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
  linux-extensions-64:
-    name: Linux Extensions (64 Bit)
+    # Builds extensions for linux_amd64
+    name: Linux Extensions (x64)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: ubuntu:18.04
     needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
+
+    - uses: ./.github/actions/ubuntu_18_setup
       with:
+        vcpkg: 1
         openssl: 1
 
-    - name: Configure OpenSSL path
-      shell: bash
-      run: |
-        echo "OPENSSL_ROOT_DIR=/usr/local/ssl" >> $GITHUB_ENV
-  
     - uses: ./.github/actions/build_extensions
       with:
+        vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
+        treat_warn_as_error: 0
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -207,9 +207,11 @@ jobs:
           build/release/extension/*/*.duckdb_extension
 
  linux-extensions-64-aarch64:
-    name: Linux Extensions (AARCH64)
+    # Builds extensions for linux_arm64
+    name: Linux Extensions (aarch64)
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    container: ubuntu:18.04 # cross compiler not available in 16
+    container: ubuntu:18.04
     needs: linux-release-64
 
     steps:
@@ -217,20 +219,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/ubuntu_16_setup
+      - uses: ./.github/actions/ubuntu_18_setup
         with:
+          vcpkg: 1
           openssl: 1
           aarch64_cross_compile: 1
 
-      - name: Configure OpenSSL path
-        shell: bash
-        run: |
-          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
-          echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
-
       - uses: ./.github/actions/build_extensions
         with:
-          openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
+          vcpkg_target_triplet: arm64-linux
+          build_vcpkg_extensions: 0 # Disabled for now: don't properly work & we want to switch to manylinux image anyway before next release
           deploy_as: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
@@ -249,7 +247,6 @@ jobs:
     name: Checks extension functions
     runs-on: ubuntu-20.04
     needs: linux-extensions-64
-
     env:
       CC: gcc-10
       CXX: g++-10
@@ -276,11 +273,10 @@ jobs:
 
     - name: Build
       shell: bash
+      env:
+        DISABLE_BUILTIN_EXTENSIONS: 1
       run: |
-        mkdir -p build/release
-        cd build/release
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../..
-        cmake --build . --config Release
+        make
 
     - uses: actions/download-artifact@v3
       with:
@@ -289,259 +285,11 @@ jobs:
 
     - name: Check if extension_functions.hpp is up to date
       shell: bash
+      env:
+        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/vcpkg_extensions.cmake'
       run: |
+        make extension_configuration
         python scripts/generate_extensions_function.py --validate
-
- linux-release-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
-    needs: linux-release-64
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-    - name: Test
-      shell: bash
-      run: build/release/test/unittest "*"
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python3.7 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-i386.zip build/release/duckdb
-        zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-linux-32bit
-        path: |
-          libduckdb-linux-i386.zip
-          duckdb_cli-linux-i386.zip
-
- linux-rpi:
-    name: Linux (Raspberry Pi)
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        export TOOLCHAIN=`pwd`/rpi-tools
-        mkdir -p build/release
-        cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
-        cmake --build .
-        file duckdb
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
-        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-rpi
-        path: |
-          libduckdb-linux-rpi.zip
-          duckdb_cli-linux-rpi.zip
-
-
- linux-clang:
-    name: Clang 14
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-
-    env:
-      CC: /home/runner/work/llvm/bin/clang
-      CPP: /home/runner/work/llvm/bin/clang-cpp
-      CXX: /home/runner/work/llvm/bin/clang++
-      LD: /home/runner/work/llvm/bin/ld.lld
-      EXTENSION_STATIC_BUILD: 1
-      BUILD_JSON: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
-        directory: '/home/runner/work/llvm'
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make release
-
-    - name: Test
-      shell: bash
-      run: make allunit
-
- old-gcc:
-    name: GCC 4.8
-    runs-on: ubuntu-20.04
-    container: ubuntu:16.04
-    needs: linux-release-64
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make release
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
-
-
-    - name: Test
-      shell: bash
-      run: make allunit
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
-
- release-assert:
-    name: Release Assertions
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_EXCEL: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_JEMALLOC: 1
-      DISABLE_SANITIZER: 1
-      CRASH_ON_ASSERT: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make relassert
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
-
-
- vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
 
  symbol-leakage:
     name: Symbol Leakage
@@ -570,41 +318,6 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
- linux-memory-leaks:
-    name: Linux Memory Leaks
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Test
-      shell: bash
-      run: |
-        python3 test/memoryleak/test_memory_leaks.py
 
  linux-httpfs:
     name: Linux HTTPFS

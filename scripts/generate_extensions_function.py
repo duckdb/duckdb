@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 parser = argparse.ArgumentParser(description='Generates/Validates extension_functions.hpp file')
 
 parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
-                    help='If set  will validate that extension_functions.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
+                    help='If set  will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
 
 
 args = parser.parse_args()
@@ -26,12 +26,20 @@ stored_settings = {
 }
 
 functions = {}
-ext_dir = os.path.join('..', '.github', 'config', 'extensions.csv')
-ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
-reader = csv.reader(open(ext_dir))
-# This skips the first row (i.e., the header) of the CSV file.
-next(reader)
 
+# Parses the extension config files for which extension names there are to be expected
+def parse_extension_txt():
+    extensions_file = os.path.join("..", "build","extension_configuration","extensions.txt")
+    with open(extensions_file) as f:
+        return [line.rstrip() for line in f]
+
+extension_names = parse_extension_txt()
+
+# Add exception for jemalloc as it doesn't produce a loadable extension but is in the config
+if "jemalloc" in extension_names:
+    extension_names.remove("jemalloc")
+
+ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
 get_functions_query = "select distinct function_name from duckdb_functions();"
 get_settings_query = "select distinct name from duckdb_settings();"
 duckdb_path = os.path.join("..",'build', 'release', 'duckdb')
@@ -68,8 +76,7 @@ def update_extensions(extension_name, function_list, settings_list):
     })
 
 
-for extension in reader:
-    extension_name = extension[0]
+for extension_name in extension_names:
     if extension_name not in extension_path:
         if extension_name not in stored_functions or extension_name not in stored_settings:
             print(f"Missing extension {extension_name} and not found in stored_functions/stored_settings")
@@ -88,7 +95,7 @@ for extension in reader:
 
 if args.validate:
     file = open(ext_hpp,'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
     cur_function_map = dict(pattern.findall(file.read()))
     function_map.update(settings_map)
     print("Cur Function + Settings Map: ")

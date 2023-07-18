@@ -66,7 +66,7 @@ public:
 				throw SerializationException("Function requires deserialization but no deserialization function for %s",
 				                             function.name);
 			}
-			bind_info = function.deserialize(context, reader, function);
+			bind_info = function.deserialize(state, reader, function);
 		} else {
 			D_ASSERT(!function.serialize);
 			D_ASSERT(!function.deserialize);

@@ -1,0 +1,16 @@
+# name: test/sql/types/list/big_unnest.test_slow
+# description: Test large unnests
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT COUNT(k), MIN(k), MAX(k) FROM (SELECT UNNEST(l) FROM (SELECT LIST(i) l FROM RANGE(20000) tbl(i)) tbl2(l)) tbl3(k)
+----
+20000	0	19999
+
+query III
+SELECT COUNT(k), MIN(k), MAX(k) FROM (SELECT UNNEST(l) FROM (SELECT LIST(i::VARCHAR || '0abcdefghijklmnopqrstuvwxyz') l FROM RANGE(20000) tbl(i)) tbl2(l)) tbl3(k)
+----
+20000	00abcdefghijklmnopqrstuvwxyz	99990abcdefghijklmnopqrstuvwxyz

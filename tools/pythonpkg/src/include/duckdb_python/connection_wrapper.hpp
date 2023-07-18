@@ -35,7 +35,7 @@ public:
 	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
-	                  shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                  bool side_effects = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name,
 	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -112,6 +112,8 @@ public:
 	static shared_ptr<DuckDBPyConnection> Rollback(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static void Close(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static void Interrupt(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 

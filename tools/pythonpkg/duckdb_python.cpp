@@ -76,7 +76,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0, py::arg("connection") = py::none());
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false, py::arg("connection") = py::none());
 
 	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"), py::arg("connection") = py::none());
@@ -107,6 +107,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("close", &PyConnectionWrapper::Close, "Close the connection", py::arg("connection") = py::none())
+	    .def("interrupt", &PyConnectionWrapper::Interrupt, "Interrupt pending operations",
+	         py::arg("connection") = py::none())
 	    .def("fetchone", &PyConnectionWrapper::FetchOne, "Fetch a single row from a result following execute",
 	         py::arg("connection") = py::none())
 	    .def("fetchmany", &PyConnectionWrapper::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -150,11 +152,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
 	m.def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
-	m.def("query", &PyConnectionWrapper::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	      py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
@@ -229,7 +227,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	             py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 
 	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
 	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),

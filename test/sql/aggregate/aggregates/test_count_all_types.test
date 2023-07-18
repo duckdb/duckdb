@@ -8,27 +8,27 @@ PRAGMA enable_verification
 foreach flatten false true
 
 query I nosort count_int
-SELECT COUNT(n) FROM test_vector_types(NULL::INT, ${flatten}) t(n);
+SELECT COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n);
 ----
 
 query I nosort count_int_list
-SELECT list_aggr(n, 'count') FROM test_vector_types(NULL::INT[], ${flatten}) t(n);
+SELECT list_aggr(n, 'count') FROM test_vector_types(NULL::INT[], all_flat=${flatten}) t(n);
 ----
 
 query I nosort count_varchar
-SELECT COUNT(n) FROM test_vector_types(NULL::VARCHAR, ${flatten}) t(n);
+SELECT COUNT(n) FROM test_vector_types(NULL::VARCHAR, all_flat=${flatten}) t(n);
 ----
 
 query I nosort count_distinct_int
-SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::INT, ${flatten}) t(n);
+SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n);
 ----
 
 query I nosort count_distinct_varchar
-SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::VARCHAR, ${flatten}) t(n);
+SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::VARCHAR, all_flat=${flatten}) t(n);
 ----
 
 query I nosort count_int_grouped
-SELECT n, COUNT(n) FROM test_vector_types(NULL::INT, ${flatten}) t(n) GROUP BY n;
+SELECT n, COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n) GROUP BY n;
 ----
 
 endloop

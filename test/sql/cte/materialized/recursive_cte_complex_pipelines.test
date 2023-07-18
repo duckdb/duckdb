@@ -1,0 +1,133 @@
+# name: test/sql/cte/materialized/recursive_cte_complex_pipelines.test
+# description: Recursive CTEs with complex pipelines
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+# recursive CTE with various cross products
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT t1.x + t2.x + t3.x AS x
+	FROM t t1, t t2, t t3
+	WHERE t1.x < 100
+)
+SELECT * FROM t ORDER BY 1;
+----
+1
+3
+9
+27
+81
+243
+
+# what if we have different types?
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT (t1.x + t2.x + t3.x)::HUGEINT AS x
+	FROM t t1, t t2, t t3
+	WHERE t1.x < 100
+)
+SELECT * FROM t ORDER BY 1;
+----
+1
+3
+9
+27
+81
+243
+
+statement ok
+CREATE TABLE a AS SELECT * FROM range(100) t1(i)
+
+# recursive CTE with aggregates
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT SUM(x) AS x
+	FROM t, a
+	WHERE x < 1000000
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+100
+10000
+1000000
+NULL
+
+# the same but with a hash join
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT SUM(x) AS x
+	FROM t, a
+	WHERE x < 1000000 AND t.x=a.i
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+
+# nested aggregates
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT SUM(x)
+	FROM
+		(SELECT SUM(x) FROM t) t1(x), a
+	WHERE x < 1000
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+100
+10000
+NULL
+
+# non-correlated subqueries
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT (SELECT x + 1 FROM t) AS x
+	FROM t
+	WHERE x < 5
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+2
+3
+4
+5
+
+# correlated subqueries
+query I
+WITH RECURSIVE t AS MATERIALIZED
+(
+	SELECT 1 AS x
+UNION
+	SELECT (SELECT t.x+t2.x FROM t t2 LIMIT 1) AS x
+	FROM t
+	WHERE x < 10
+)
+SELECT * FROM t ORDER BY 1 NULLS LAST;
+----
+1
+2
+4
+8
+16

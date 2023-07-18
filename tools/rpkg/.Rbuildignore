@@ -16,3 +16,4 @@ deploy-*
 CMakeLists.txt
 NEWS.md
 tests/regression
+duckdb_extension_config.cmake

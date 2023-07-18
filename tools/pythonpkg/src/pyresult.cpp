@@ -46,26 +46,28 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
 	return FetchNext(*result);
 }
 
-unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !result.Cast<StreamQueryResult>().IsOpen()) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &query_result) {
+	if (!result_closed && query_result.type == QueryResultType::STREAM_RESULT &&
+	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
 	}
-	auto chunk = result.Fetch();
-	if (result.HasError()) {
-		result.ThrowError();
+	auto chunk = query_result.Fetch();
+	if (query_result.HasError()) {
+		query_result.ThrowError();
 	}
 	return chunk;
 }
 
-unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !result.Cast<StreamQueryResult>().IsOpen()) {
+unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &query_result) {
+	if (!result_closed && query_result.type == QueryResultType::STREAM_RESULT &&
+	    !query_result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
 	}
-	auto chunk = result.FetchRaw();
-	if (result.HasError()) {
-		result.ThrowError();
+	auto chunk = query_result.FetchRaw();
+	if (query_result.HasError()) {
+		query_result.ThrowError();
 	}
 	return chunk;
 }
@@ -285,19 +287,19 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch) {
+bool DuckDBPyResult::FetchArrowChunk(QueryResult *query_result, py::list &batches, idx_t rows_per_batch) {
 	ArrowArray data;
 	idx_t count;
 	{
 		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(result, rows_per_batch, &data);
+		count = ArrowUtil::FetchChunk(query_result, rows_per_batch, &data);
 	}
 	if (count == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result->types, query_result->names,
+	                              QueryResult::GetArrowOptions(*query_result));
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
@@ -319,9 +321,8 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	timezone_config = QueryResult::GetConfigTimezone(*result);
-
-	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, FetchAllArrowChunks(rows_per_batch));
+	return pyarrow::ToArrowTable(result->types, result->names, FetchAllArrowChunks(rows_per_batch),
+	                             QueryResult::GetArrowOptions(*result));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
@@ -386,12 +387,8 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UUID: {
 		return py::str("UUID");
 	}
-	case LogicalTypeId::USER:
-	case LogicalTypeId::ENUM: {
-		return py::str(type.ToString());
-	}
 	default:
-		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
+		return py::str(type.ToString());
 	}
 }
 

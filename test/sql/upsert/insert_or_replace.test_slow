@@ -1,0 +1,40 @@
+# name: test/sql/upsert/insert_or_replace.test_slow
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (a integer, b integer unique, c integer default 10);
+
+statement ok
+insert into tbl(a,b) values (1,2), (2,1);
+
+statement ok
+insert or replace into tbl(a,b,c) values (5,2,20), (10,1,30);
+
+query III
+select a,b,c from tbl;
+----
+5	2	20
+10	1	30
+
+# This should not overwrite the existing value of 'c', as it is explicitly not inserted into
+statement ok
+insert or replace into tbl (a,b) values (5,2);
+
+query I
+select c from tbl;
+----
+20
+30
+
+# This should also work when the table is aliased
+statement ok
+insert or replace into tbl AS not_tbl (a,b) values (5,2);
+
+query I
+select c from tbl;
+----
+20
+30

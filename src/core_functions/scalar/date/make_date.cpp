@@ -47,6 +47,9 @@ struct MakeTimeOperator {
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
 		int64_t secs = ss;
 		int64_t micros = std::round((ss - secs) * Interval::MICROS_PER_SEC);
+		if (!Time::IsValidTime(hh, mm, secs, micros)) {
+			throw ConversionException("Time out of range: %d:%d:%d.%d", hh, mm, secs, micros);
+		}
 		return Time::FromTime(hh, mm, secs, micros);
 	}
 };

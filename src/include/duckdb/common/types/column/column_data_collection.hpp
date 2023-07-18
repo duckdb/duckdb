@@ -61,6 +61,9 @@ public:
 		return types.size();
 	}
 
+	//! The size (in bytes) of this ColumnDataCollection
+	idx_t SizeInBytes() const;
+
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
 
@@ -143,7 +146,12 @@ public:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
 
-	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
+	//! Get references to the string heaps in this ColumnDataCollection
+	vector<shared_ptr<StringHeap>> GetHeapReferences();
+	//! Get the allocator type of this ColumnDataCollection
+	ColumnDataAllocatorType GetAllocatorType() const;
+
+	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
 private:

@@ -1,0 +1,74 @@
+# name: test/sql/index/art/test_art_coverage_leaf.test
+# description: ART coverage tests for leaf code coverage
+# group: [art]
+
+# test deserialization of leaf segments
+
+load __TEST_DIR__/art_vacuum.db
+
+statement ok
+CREATE TABLE duplicates (id UBIGINT);
+
+statement ok
+INSERT INTO duplicates SELECT range + 500 FROM range(500);
+
+loop i 0 16
+
+statement ok
+INSERT INTO duplicates SELECT range FROM range(500);
+
+endloop
+
+statement ok
+INSERT INTO duplicates SELECT range + 1000 FROM range(500);
+
+statement ok
+CREATE INDEX idx_duplicates ON duplicates(id);
+
+restart
+
+query I
+SELECT id FROM duplicates WHERE id = 255;
+----
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+255
+
+# test different paths in the Leaf::Merge functionality
+
+statement ok
+CREATE TABLE leaf_merge_1 (id UINT32, id2 INT64);
+
+statement ok
+INSERT INTO leaf_merge_1 SELECT range, range FROM range (0, 2048, 1);
+
+statement ok
+INSERT INTO leaf_merge_1 SELECT 2047, 2047 FROM range (10);
+
+statement ok
+CREATE INDEX idx_merge_1 ON leaf_merge_1(id, id2);
+
+statement ok
+CREATE TABLE leaf_merge_2 (id UINT32, id2 INT64);
+
+statement ok
+INSERT INTO leaf_merge_2 SELECT range, range FROM range (0, 2048, 1);
+
+statement ok
+INSERT INTO leaf_merge_2 VALUES (2047, 2047)
+
+statement ok
+CREATE INDEX idx_merge_2 ON leaf_merge_2(id, id2);

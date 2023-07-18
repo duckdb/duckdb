@@ -1,0 +1,61 @@
+# name: test/sql/index/art/create_drop/test_art_create_many_duplicates_deletes.test
+# description: Test ART creation with many duplicates in leaves and deletions
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+INSERT INTO integers SELECT * FROM repeat(1, 1500) t1(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM repeat(2, 1500) t1(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM repeat(3, 1500) t1(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM repeat(4, 1500) t1(i)
+
+statement ok
+INSERT INTO integers SELECT * FROM repeat(5, 1500) t1(i)
+
+statement ok
+COMMIT
+
+statement ok
+DELETE FROM integers WHERE i = 5
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+query I
+SELECT count(i) FROM integers WHERE i > 1 AND i < 3
+----
+1500
+
+query I
+SELECT count(i) FROM integers WHERE i >= 1 AND i < 3
+----
+3000
+
+query I
+SELECT count(i) FROM integers WHERE i > 1
+----
+4500
+
+query I
+SELECT count(i) FROM integers WHERE i < 4
+----
+4500
+
+query I
+SELECT count(i) FROM integers WHERE i < 5
+----
+6000

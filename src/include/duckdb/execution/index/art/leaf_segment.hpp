@@ -26,6 +26,8 @@ public:
 	static inline LeafSegment &Get(const ART &art, const Node ptr) {
 		return *Node::GetAllocator(art, NType::LEAF_SEGMENT).Get<LeafSegment>(ptr);
 	}
+	//! Free the leaf segment and any subsequent ones
+	static void Free(ART &art, Node &node);
 
 	//! Append a row ID to the current segment, or create a new segment containing that row ID
 	LeafSegment &Append(ART &art, uint32_t &count, const row_t row_id);

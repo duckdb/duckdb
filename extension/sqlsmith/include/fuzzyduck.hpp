@@ -25,11 +25,16 @@ public:
 	string complete_log;
 	string log;
 	bool verbose_output = false;
+	idx_t timeout = 30;
 
 public:
 	void Fuzz();
+	void FuzzAllFunctions();
 
 private:
+	void BeginFuzzing();
+	void EndFuzzing();
+
 	string GenerateQuery();
 	void RunQuery(string query);
 

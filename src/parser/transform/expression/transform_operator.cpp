@@ -82,6 +82,9 @@ unique_ptr<ParsedExpression> Transformer::TransformAExprInternal(duckdb_libpgque
 		subquery_expr->child = std::move(left_expr);
 		subquery_expr->comparison_type = OperatorToExpressionType(name);
 		subquery_expr->query_location = root.location;
+		if (subquery_expr->comparison_type == ExpressionType::INVALID) {
+			throw ParserException("Unsupported comparison \"%s\" for ANY/ALL subquery", name);
+		}
 
 		if (root.kind == duckdb_libpgquery::PG_AEXPR_OP_ALL) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison

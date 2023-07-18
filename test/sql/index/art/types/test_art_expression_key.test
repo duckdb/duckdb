@@ -1,0 +1,54 @@
+# name: test/sql/index/art/types/test_art_expression_key.test
+# description: Test an ART index with an expression containing multiple columns as its key type
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i BIGINT, j INTEGER, k VARCHAR, l BIGINT)
+
+statement ok
+CREATE INDEX i_index ON integers using art((j+l))
+
+statement ok
+INSERT INTO integers VALUES (10, 1, 'hello', 4), (11, 2, 'world', 6)
+
+query IITI
+SELECT * FROM integers WHERE j+l=5
+----
+10	1	hello	4
+
+query IITI
+SELECT * FROM integers WHERE k='hello'
+----
+10	1	hello	4
+
+# update that uses both columns in the index
+statement ok
+UPDATE integers SET j=5, l=l WHERE j=1
+
+# update that only uses one of the columns
+statement ok
+UPDATE integers SET j=5 WHERE j=5
+
+query IITI
+SELECT * FROM integers WHERE j+l=9
+----
+10	5	hello	4
+
+statement ok
+DELETE FROM integers WHERE j+l=8
+
+statement ok
+DELETE FROM integers WHERE j+l=9
+
+query I
+SELECT COUNT(*) FROM integers
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers WHERE j+l>0
+----
+0

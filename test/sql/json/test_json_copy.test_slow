@@ -264,8 +264,9 @@ set memory_limit='1gb'
 statement ok
 COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
 
+# 4gb should be enough for the rest
 statement ok
-reset memory_limit
+set memory_limit='4gb'
 
 query I
 PRAGMA tpch(1)

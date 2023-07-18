@@ -56,7 +56,7 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 		idx_t child_offset;
 		if (offsets_entry < 0) {
-			if ((idx_t)-offsets_entry > list_entry.length) {
+			if (offsets_entry < -int64_t(list_entry.length)) {
 				result_mask.SetInvalid(i);
 				continue;
 			}

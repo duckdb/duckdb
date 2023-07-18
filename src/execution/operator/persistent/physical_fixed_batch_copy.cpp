@@ -116,7 +116,7 @@ public:
 	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), op.children[0]->types);
 		collection->InitializeAppend(append_state);
 	}
 };
@@ -353,7 +353,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
+				current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
 			}
 			if (current_collection) {
 				current_collection->InitializeAppend(append_state);
@@ -373,7 +373,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			}
 			// the collection is full - move it to the result and create a new one
 			gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
-			current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
+			current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
 			current_collection->InitializeAppend(append_state);
 		}
 	}

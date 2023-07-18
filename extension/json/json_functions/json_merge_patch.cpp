@@ -59,11 +59,11 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	const auto count = args.size();
 
 	// Read the first json arg
-	auto origs = (yyjson_mut_val **)alc->malloc(alc->ctx, sizeof(yyjson_mut_val *) * count);
+	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	ReadObjects(doc, args.data[0], origs, count);
 
 	// Read the next json args one by one and merge them into the first json arg
-	auto patches = (yyjson_mut_val **)alc->malloc(alc->ctx, sizeof(yyjson_mut_val *) * count);
+	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
 		ReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {

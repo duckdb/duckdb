@@ -15,8 +15,8 @@ struct LogicalType;
 
 struct ParquetStatisticsUtils {
 
-	static duckdb::unique_ptr<BaseStatistics>
-	TransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type, const ColumnChunk &column_chunk);
+	static unique_ptr<BaseStatistics> TransformColumnStatistics(const SchemaElement &s_ele, const LogicalType &type,
+	                                                            const ColumnChunk &column_chunk);
 
 	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::format::SchemaElement &schema_ele,
 	                          const std::string &stats);

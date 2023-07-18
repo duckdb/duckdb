@@ -14,6 +14,13 @@ namespace duckdb {
 
 class PhysicalRecursiveCTE;
 
+struct PipelineFinishGroup {
+	explicit PipelineFinishGroup(Pipeline *group_base_p) : group_base(group_base_p) {
+	}
+	Pipeline *group_base;
+	unordered_set<Pipeline *> group_members;
+};
+
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//! We follow these rules when building:
@@ -57,7 +64,9 @@ public:
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline *pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
-	bool HasFinishEvent(Pipeline *pipeline);
+	bool HasFinishEvent(Pipeline *pipeline) const;
+	//! Whether this pipeline is part of a PipelineFinishEvent
+	optional_ptr<Pipeline> GetFinishGroup(Pipeline *pipeline) const;
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
@@ -86,8 +95,6 @@ private:
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! The pipelines that must finish before the MetaPipeline is finished
-	vector<Pipeline *> final_pipelines;
 	//! Dependencies within this MetaPipeline
 	unordered_map<Pipeline *, vector<Pipeline *>> dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
@@ -96,6 +103,8 @@ private:
 	idx_t next_batch_index;
 	//! Pipelines (other than the base pipeline) that need their own PipelineFinishEvent (e.g., for IEJoin)
 	unordered_set<Pipeline *> finish_pipelines;
+	//! Mapping from pipeline (e.g., child or union) to finish pipeline
+	unordered_map<Pipeline *, Pipeline *> finish_map;
 };
 
 } // namespace duckdb

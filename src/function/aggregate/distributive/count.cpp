@@ -221,7 +221,7 @@ AggregateFunction CountFun::GetFunction() {
 static void CountStarSerialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
 }
 
-static unique_ptr<FunctionData> CountStarDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> CountStarDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                      AggregateFunction &function) {
 	return nullptr;
 }

@@ -14,6 +14,7 @@ namespace          = 'duckdb_libpgquery'
 
 counterexamples = False
 run_update = False
+verbose = False
 for arg in sys.argv[1:]:
     if arg.startswith("--bison="):
         bison_location = arg.replace("--bison=", "")
@@ -27,8 +28,10 @@ for arg in sys.argv[1:]:
         pg_dir = arg.split("=")[1] + pg_dir
     elif arg.startswith("--namespace"):
         namespace = arg.split("=")[1]
+    elif arg.startswith("--verbose"):
+        verbose = True
     else:
-        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples, --bison=/loc/to/bison, --custom_dir_prefix, --namespace")
+        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples, --bison=/loc/to/bison, --custom_dir_prefix, --namespace, --verbose")
 
 template_file      = os.path.join(base_dir, 'grammar.y')
 target_file        = os.path.join(base_dir, 'grammar.y.tmp')
@@ -246,10 +249,12 @@ if counterexamples:
     cmd += ["-Wcounterexamples"]
 if run_update:
     cmd += ["--update"]
+if verbose:
+    cmd += ["--verbose"]
 cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
 proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-res = proc.wait()
+res = proc.wait(timeout=10) # ensure CI does not hang as was seen when running with Bison 3.x release.
 
 if res != 0:
     text = proc.stderr.read().decode('utf8')

@@ -4,6 +4,8 @@
 
 require json
 
+require notwindows
+
 statement ok
 PRAGMA enable_verification
 
@@ -372,22 +374,22 @@ select * from roundtrip
 foreach all_flat true false
 
 query I nosort q1
-select v from test_vector_types(null::int[], ${all_flat}) tbl(v)
+select v from test_vector_types(null::int[], all_flat=${all_flat}) tbl(v)
 ----
 
 
 query I nosort q1
-select v::JSON::INT[] from test_vector_types(null::int[], ${all_flat}) tbl(v)
+select v::JSON::INT[] from test_vector_types(null::int[], all_flat=${all_flat}) tbl(v)
 ----
 
 
 query I nosort q2
-select v from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), ${all_flat}) tbl(v)
+select v from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) tbl(v)
 ----
 
 
 query I nosort q2
-select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), ${all_flat}) tbl(v)
+select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), all_flat=${all_flat}) tbl(v)
 ----
 
 

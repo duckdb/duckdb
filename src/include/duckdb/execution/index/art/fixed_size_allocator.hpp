@@ -100,6 +100,9 @@ public:
 	//! Vacuums a pointer
 	SwizzleablePointer VacuumPointer(const SwizzleablePointer ptr);
 
+	//! Verify that the allocation counts match the existing positions on the buffers
+	void Verify() const;
+
 private:
 	//! Returns the data_ptr_t of a pointer
 	inline data_ptr_t Get(const SwizzleablePointer ptr) const {

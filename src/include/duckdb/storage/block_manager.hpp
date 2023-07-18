@@ -65,6 +65,9 @@ public:
 	//! Returns the number of free blocks
 	virtual idx_t FreeBlocks() = 0;
 
+	//! Truncate the underlying database file after a checkpoint
+	virtual void Truncate();
+
 	//! Register a block with the given block id in the base file
 	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block = false);
 	//! Clear cached handles for meta blocks
@@ -73,9 +76,6 @@ public:
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
-
-	static BlockManager &GetBlockManager(ClientContext &context);
-	static BlockManager &GetBlockManager(DatabaseInstance &db);
 
 private:
 	//! The lock for the set of blocks

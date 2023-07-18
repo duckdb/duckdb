@@ -1,0 +1,41 @@
+# name: test/fuzzer/duckfuzz/invalid_make_time.test
+# description: Invalid make time
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT make_time(64, 64, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(-1, 64, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 64, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, -1, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 1, -1);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 1, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 1, 9999999);
+----
+Time out of range

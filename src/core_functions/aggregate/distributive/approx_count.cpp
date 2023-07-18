@@ -138,6 +138,7 @@ AggregateFunctionSet ApproxCountDistinctFun::GetFunctions() {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::VARCHAR));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TIMESTAMP_TZ));
+	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::BLOB));
 	return approx_count;
 }
 

@@ -43,5 +43,8 @@ public:
 		return "(" + entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " +
 		       entry.upper->ToString() + ")";
 	}
+
+private:
+	BetweenExpression();
 };
 } // namespace duckdb

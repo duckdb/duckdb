@@ -1502,7 +1502,7 @@ struct StructDatePart {
 		writer.WriteList<DatePartSpecifier>(info.part_codes);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
 	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
@@ -1591,7 +1591,7 @@ ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
 }
 
-ScalarFunctionSet EpochNanosecondsFun::GetFunctions() {
+ScalarFunctionSet EpochNsFun::GetFunctions() {
 	using OP = DatePart::EpochNanosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
 
@@ -1603,7 +1603,7 @@ ScalarFunctionSet EpochNanosecondsFun::GetFunctions() {
 	return operator_set;
 }
 
-ScalarFunctionSet EpochMicrosecondsFun::GetFunctions() {
+ScalarFunctionSet EpochUsFun::GetFunctions() {
 	using OP = DatePart::EpochMicrosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
 

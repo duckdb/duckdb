@@ -21,8 +21,10 @@ struct ReservoirQuantileState {
 		if (new_len <= len) {
 			return;
 		}
+		T *old_v = v;
 		v = (T *)realloc(v, new_len * sizeof(T));
 		if (!v) {
+			free(old_v);
 			throw InternalException("Memory allocation failure");
 		}
 		len = new_len;
@@ -71,7 +73,7 @@ struct ReservoirQuantileBindData : public FunctionData {
 		writer.WriteField<int32_t>(bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<double>();
 		auto sample_size = reader.ReadRequired<int32_t>();

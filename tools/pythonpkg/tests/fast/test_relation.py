@@ -252,6 +252,31 @@ class TestRelation(object):
             # invalid conversion of negative integer to UINTEGER
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
+    def test_close(self):
+        def counter():
+            counter.count += 1
+            return 42
+
+        counter.count = 0
+        conn = duckdb.connect()
+        conn.create_function('my_counter', counter, [], BIGINT)
+
+        # Create a relation
+        rel = conn.sql('select my_counter()')
+        # Execute the relation once
+        rel.fetchall()
+        assert counter.count == 1
+        # Close the result
+        rel.close()
+        # Verify that the query was not run again
+        assert counter.count == 1
+        rel.fetchall()
+        assert counter.count == 2
+
+        # Verify that the query is run at least once if it's closed before it was executed.
+        rel = conn.sql('select my_counter()')
+        rel.close()
+        assert counter.count == 3
 
     def test_relation_print(self, duckdb_cursor):
         con = duckdb.connect()

@@ -171,13 +171,14 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	// initialize the database
+	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
 	auto unrecognized_options_iter = unrecognized_options.begin();
 	string unrecognized_option_keys = unrecognized_options_iter->first;
-	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+	while (++unrecognized_options_iter != unrecognized_options.end()) {
 		unrecognized_option_keys = "," + unrecognized_options_iter->first;
 	}
 	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);

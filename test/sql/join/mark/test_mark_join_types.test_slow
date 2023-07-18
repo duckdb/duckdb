@@ -1,0 +1,118 @@
+# name: test/sql/join/mark/test_mark_join_types.test_slow
+# description: Test mark join with different types
+# group: [mark]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma verify_external
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+# numeric types
+statement ok
+begin transaction
+
+statement ok
+create table a as select i::${type} AS i from range(1, 101, 1) t1(i) order by random()
+
+# range joins
+query I
+select count(*) from a WHERE i > ANY((SELECT 1::${type}))
+----
+99
+
+query I
+select count(*) from a WHERE i >= ANY((SELECT 1::${type}))
+----
+100
+
+query I
+select count(*) from a WHERE i < ANY((SELECT 100::${type}))
+----
+99
+
+query I
+select count(*) from a WHERE i <= ANY((SELECT 100::${type}))
+----
+100
+
+query I
+select count(*) from a WHERE i = ANY((SELECT 1::${type}))
+----
+1
+
+query I
+select count(*) from a WHERE i <> ANY((SELECT 1::${type}))
+----
+99
+
+# now with a filter
+query I
+select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::${type}))
+----
+49
+
+query I
+select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::${type}))
+----
+50
+
+query I
+select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::${type}))
+----
+49
+
+query I
+select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::${type}))
+----
+50
+
+query I
+select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::${type}))
+----
+2
+
+query I
+select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::${type}))
+----
+49
+
+# now select the actual values, instead of only the count
+query I
+select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::${type})) ORDER BY 1
+----
+2
+4
+6
+8
+10
+
+query I
+select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::${type})) ORDER BY 1
+----
+90
+92
+94
+96
+98
+100
+
+query I
+select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::${type})) ORDER BY 1
+----
+91
+92
+93
+94
+95
+97
+98
+99
+100
+
+statement ok
+rollback
+
+endloop

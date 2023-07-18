@@ -18,5 +18,10 @@ test-command = "python -m pytest {project}/tests/fast"
 select = "*i686*"
 test-command = "python -m pytest {project}/tests/fast"
 
+# For aarch64 we don't build extensions
+[[tool.cibuildwheel.overrides]]
+select = "*aarch64*"
+test-command = "python -m pytest {project}/tests/fast"
+
 [tool.cibuildwheel.windows]
 test-command = "python -m pytest {project}/tests/fast"

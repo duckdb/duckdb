@@ -156,6 +156,9 @@ public:
 	//! The maximum amount of memory the operator should use per thread.
 	static idx_t GetMaxThreadMemory(ClientContext &context);
 
+	//! Whether operator caching is allowed in the current execution context
+	static bool OperatorCachingAllowed(ExecutionContext &context);
+
 	virtual bool IsSink() const {
 		return false;
 	}

@@ -31,7 +31,7 @@ class RowGroupCollection;
 class RowGroupWriter;
 class UpdateSegment;
 class TableStatistics;
-class TableStorageInfo;
+struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
@@ -74,7 +74,6 @@ public:
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
-	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager();
 	DataTableInfo &GetTableInfo();
 
@@ -82,7 +81,7 @@ public:
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
 	                               DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(RowGroupCollection &collection, ColumnDefinition &new_column,
-	                               ExpressionExecutor &executor, Expression *default_value, Vector &intermediate);
+	                               ExpressionExecutor &executor, Expression &default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
@@ -123,6 +122,7 @@ public:
 	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
+	bool AllDeleted();
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
@@ -141,7 +141,7 @@ public:
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
+	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 
 	void Verify();
 
@@ -170,6 +170,7 @@ struct VersionNode {
 	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
 
 	void SetStart(idx_t start);
+	idx_t GetCommittedDeletedCount(idx_t count);
 };
 
 } // namespace duckdb

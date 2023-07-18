@@ -258,7 +258,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 			string hint =
 			    gstate.bind_data.auto_detect
 			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
-			          "'records' manually, or setting 'ignore_errors' to true."
+			          "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
+			          "reading multiple files with a different structure."
 			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
 			          "'ignore_errors' to true.";
 			lstate.ThrowTransformError(lstate.transform_options.object_index,

@@ -15,7 +15,7 @@ namespace duckdb {
 
 // classes
 enum class NType : uint8_t {
-	PREFIX_SEGMENT = 1,
+	PREFIX = 1,
 	LEAF_SEGMENT = 2,
 	LEAF = 3,
 	NODE_4 = 4,
@@ -38,11 +38,6 @@ struct ARTFlags;
 //! The remaining bytes are the position in the respective ART buffer.
 class Node : public SwizzleablePointer {
 public:
-	// constants (this allows testing performance with different ART node sizes)
-
-	//! Node prefixes (NOTE: this should always hold: PREFIX_SEGMENT_SIZE >= PREFIX_INLINE_BYTES)
-	static constexpr uint32_t PREFIX_INLINE_BYTES = 8;
-	static constexpr uint32_t PREFIX_SEGMENT_SIZE = 32;
 	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
 	static constexpr uint8_t NODE_256_SHRINK_THRESHOLD = 36;
@@ -54,6 +49,7 @@ public:
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
+	static constexpr uint8_t PREFIX_SIZE = 15;
 
 public:
 	//! Constructs an empty ARTNode
@@ -65,13 +61,23 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
+	inline bool operator==(const Node &node) const {
+		return swizzle_flag == node.swizzle_flag && type == node.type && offset == node.offset &&
+		       buffer_id == node.buffer_id;
+	}
+
 	//! Retrieve the node type from the leftmost byte
 	inline NType DecodeARTNodeType() const {
+		D_ASSERT(!IsSwizzled());
+		D_ASSERT(type >= (uint8_t)NType::PREFIX);
+		D_ASSERT(type <= (uint8_t)NType::NODE_256);
 		return NType(type);
 	}
 
 	//! Set the pointer
 	inline void SetPtr(const SwizzleablePointer ptr) {
+		swizzle_flag = ptr.swizzle_flag;
+		type = ptr.type;
 		offset = ptr.offset;
 		buffer_id = ptr.buffer_id;
 	}
@@ -81,24 +87,22 @@ public:
 	//! Insert the child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child node at the respective byte
-	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Get the child for the respective byte in the node
 	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
+	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte, const bool deserialize = true) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize the node
 	void Deserialize(ART &art);
 
-	//! Returns the string representation of the node
-	string ToString(ART &art) const;
+	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
+	string VerifyAndToString(ART &art, const bool only_verify);
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
-	//! Returns a pointer to the prefix of the node
-	Prefix &GetPrefix(ART &art);
 	//! Returns the matching node type for a given count
 	static NType GetARTNodeTypeByCount(const idx_t count);
 	//! Get references to the different allocators

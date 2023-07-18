@@ -432,7 +432,7 @@ struct ICUDatePart : public ICUDateFunc {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static duckdb::unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
 	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}

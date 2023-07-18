@@ -349,12 +349,13 @@ void ListColumnData::DeserializeColumn(Deserializer &source) {
 	child_column->DeserializeColumn(source);
 }
 
-void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
-	ColumnData::GetStorageInfo(row_group_index, col_path, result);
+void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+                                          vector<duckdb::ColumnSegmentInfo> &result) {
+	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetStorageInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetStorageInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
 }
 
 } // namespace duckdb

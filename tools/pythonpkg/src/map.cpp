@@ -131,8 +131,8 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 
 	auto data_uptr = make_uniq<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = reinterpret_cast<PyObject *>(input.inputs[0].GetPointer());
-	auto explicit_schema = reinterpret_cast<PyObject *>(input.inputs[1].GetPointer());
+	data.function = reinterpret_cast<PyObject *>(input.inputs[1].GetPointer());
+	auto explicit_schema = reinterpret_cast<PyObject *>(input.inputs[2].GetPointer());
 
 	data.in_names = input.input_table_names;
 	data.in_types = input.input_table_types;

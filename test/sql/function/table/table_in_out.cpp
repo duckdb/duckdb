@@ -11,25 +11,35 @@ using namespace std;
 // - during flushing of caching operators still emits only 1 row sum per call, meaning that multiple flushes are
 // required to correctly process this operator
 struct ThrottlingSum {
-	struct CustomFunctionData : public TableFunctionData {
-		CustomFunctionData() {
+	struct ThrottlingSumLocalData : public LocalTableFunctionState {
+		ThrottlingSumLocalData() {
 		}
 		duckdb::vector<int> row_sums;
 		idx_t current_idx = 0;
 	};
 
+	static duckdb::unique_ptr<GlobalTableFunctionState> ThrottlingSumGlobalInit(ClientContext &context,
+	                                                                            TableFunctionInitInput &input) {
+		return make_uniq<GlobalTableFunctionState>();
+	}
+
+	static duckdb::unique_ptr<LocalTableFunctionState> ThrottlingSumLocalInit(ExecutionContext &context,
+	                                                                          TableFunctionInitInput &input,
+	                                                                          GlobalTableFunctionState *global_state) {
+		return make_uniq<ThrottlingSumLocalData>();
+	}
+
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                             duckdb::vector<LogicalType> &return_types,
 	                                             duckdb::vector<string> &names) {
-		auto result = make_uniq<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
-		return std::move(result);
+		return make_uniq<TableFunctionData>();
 	}
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
 	                                   DataChunk &output) {
-		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
+		auto &local_state = data_p.local_state->Cast<ThrottlingSum::ThrottlingSumLocalData>();
 
 		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 			int sum = 0;
@@ -38,14 +48,25 @@ struct ThrottlingSum {
 					sum += input.data[col_idx].GetValue(row_idx).GetValue<int>();
 				}
 			}
-			state.row_sums.push_back(sum);
+			local_state.row_sums.push_back(sum);
 		}
 
-		if (state.current_idx < state.row_sums.size()) {
-			output.SetCardinality(1);
-			output.SetValue(0, 0, Value(state.row_sums[state.current_idx++]));
+		if (PhysicalOperator::OperatorCachingAllowed(context)) {
+			// Caching is allowed
+			if (local_state.current_idx < local_state.row_sums.size()) {
+				output.SetCardinality(1);
+				output.SetValue(0, 0, Value(local_state.row_sums[local_state.current_idx++]));
+			} else {
+				output.SetCardinality(0);
+			}
 		} else {
-			output.SetCardinality(0);
+			// Caching is not allowed, we should emit everything!
+			auto to_emit = local_state.row_sums.size() - local_state.current_idx;
+			for (idx_t i = 0; i < to_emit; i++) {
+				output.SetValue(0, i, Value(local_state.row_sums[local_state.current_idx + i]));
+			}
+			local_state.current_idx += to_emit;
+			output.SetCardinality(to_emit);
 		}
 
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -53,14 +74,13 @@ struct ThrottlingSum {
 
 	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
 	                                           DataChunk &output) {
-		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
+		auto &local_state = data_p.local_state->Cast<ThrottlingSum::ThrottlingSumLocalData>();
 
-		if (state.current_idx < state.row_sums.size()) {
+		if (local_state.current_idx < local_state.row_sums.size()) {
 			output.SetCardinality(1);
-			output.SetValue(0, 0, Value(state.row_sums[state.current_idx++]));
+			output.SetValue(0, 0, Value(local_state.row_sums[local_state.current_idx++]));
 			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
 		} else {
-			output.SetCardinality(0);
 			return OperatorFinalizeResultType::FINISHED;
 		}
 	}
@@ -70,7 +90,9 @@ struct ThrottlingSum {
 		con.BeginTransaction();
 		auto &client_context = *con.context;
 		auto &catalog = Catalog::GetSystemCatalog(client_context);
-		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind);
+		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind,
+		                                   ThrottlingSum::ThrottlingSumGlobalInit,
+		                                   ThrottlingSum::ThrottlingSumLocalInit);
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;
 		CreateTableFunctionInfo caching_table_in_out_info(caching_table_in_out);
@@ -98,4 +120,18 @@ TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	    "SELECT sum(total) FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,130000) tbl(i)));");
 	REQUIRE(result3->ColumnCount() == 1);
 	REQUIRE(CHECK_COLUMN(result3, 0, {Value::BIGINT(16900000000)}));
+}
+
+TEST_CASE("Parallel execution with caching table in out functions", "[filter][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	ThrottlingSum::Register(con);
+
+	auto result = con.Query("CREATE TABLE test_data as select i::INTEGER from range(0,200000) tbl(i);");
+	auto result2 = con.Query("SELECT * FROM throttling_sum((select * from test_data));");
+
+	REQUIRE(result2->ColumnCount() == 1);
+	REQUIRE(result2->RowCount() == 200000);
+	REQUIRE(CHECK_COLUMN(result2, 0, {0, 1, 2, 3, 4, 5}));
 }

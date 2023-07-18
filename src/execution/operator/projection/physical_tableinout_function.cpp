@@ -70,6 +70,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 		// we are processing a new row: fetch the data for the current row
+		state.input_chunk.Reset();
 		D_ASSERT(input.ColumnCount() == state.input_chunk.ColumnCount());
 		// set up the input data to the table in-out function
 		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {

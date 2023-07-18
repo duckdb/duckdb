@@ -171,6 +171,63 @@ export class Database {
   ): Promise<void>;
 }
 
+export type GenericTypeInfo = {
+  id: string,
+  sql_type: string,
+  alias?: string,
+}
+
+export type StructTypeInfo = {
+  id: "STRUCT",
+  alias?: string,
+  sql_type: string,
+  children: TypeInfoChildren,
+}
+
+export type ListTypeInfo = {
+  id: "LIST",
+  alias?: string,
+  sql_type: string,
+  child: TypeInfo,
+}
+
+export type MapTypeInfo = {
+  id: "MAP",
+  alias?: string,
+  sql_type: string,
+  key: TypeInfo,
+  value: TypeInfo,
+}
+
+export type UnionTypeInfo = {
+  id: "UNION",
+  alias?: string,
+  sql_type: string,
+  children: TypeInfoChildren,
+}
+
+export type DecimalTypeInfo = {
+  id: "DECIMAL",
+  alias?: string,
+  sql_type: string,
+  width: number,
+  scale: number,
+}
+
+export type EnumTypeInfo = {
+  id: "ENUM",
+  alias?: string,
+  sql_type: string,
+  name: string,
+  values: string[],
+}
+
+export type TypeInfoChildren = { name: string, type: TypeInfo }[];
+
+export type TypeInfo = GenericTypeInfo | StructTypeInfo | ListTypeInfo | MapTypeInfo | UnionTypeInfo | DecimalTypeInfo | EnumTypeInfo;
+
+export type ColumnInfo = { name: string, type: TypeInfo };
+
 export class Statement {
   sql: string;
 
@@ -185,6 +242,8 @@ export class Statement {
   finalize(callback?: Callback<void>): void;
 
   run(...args: [...any, Callback<void>] | any[]): Statement;
+
+  columns(): ColumnInfo[];
 }
 
 export const ERROR: number;

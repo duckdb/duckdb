@@ -79,6 +79,8 @@ with recursive t as (select 1 as x union select x+(SELECT 1) from t where x < 3)
 2
 3
 
+require noalternativeverify
+
 # hash join
 query I
 with recursive t as (select 1 as x union all select * from (select x from t where x < 5) tbl(i) join (select 1) tbl2(i) using (i)) select * from t limit 3;

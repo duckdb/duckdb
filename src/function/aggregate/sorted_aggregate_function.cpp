@@ -374,7 +374,8 @@ struct SortedAggregateFunction {
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
-		AggregateInputData aggr_bind_info(bind_info, Allocator::DefaultAllocator());
+		ArenaAllocator allocator(Allocator::DefaultAllocator());
+		AggregateInputData aggr_bind_info(bind_info, allocator);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind.function.initialize;
@@ -519,7 +520,7 @@ struct SortedAggregateFunction {
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
 		throw NotImplementedException("FIXME: serialize sorted aggregate not supported");
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            AggregateFunction &function) {
 		throw NotImplementedException("FIXME: deserialize sorted aggregate not supported");
 	}

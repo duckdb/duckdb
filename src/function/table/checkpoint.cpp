@@ -32,6 +32,9 @@ static unique_ptr<FunctionData> CheckpointBind(ClientContext &context, TableFunc
 	optional_ptr<AttachedDatabase> db;
 	auto &db_manager = DatabaseManager::Get(context);
 	if (!input.inputs.empty()) {
+		if (input.inputs[0].IsNull()) {
+			throw BinderException("Database cannot be NULL");
+		}
 		auto &db_name = StringValue::Get(input.inputs[0]);
 		db = db_manager.GetDatabase(context, db_name);
 		if (!db) {

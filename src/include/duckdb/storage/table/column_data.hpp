@@ -130,7 +130,7 @@ public:
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
 	                                          optional_ptr<ColumnData> parent);
 
-	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
+	virtual void GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path, vector<ColumnSegmentInfo> &result);
 	virtual void Verify(RowGroup &parent);
 
 	bool CheckZonemap(TableFilter &filter);

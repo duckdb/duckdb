@@ -30,8 +30,20 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * When maintaining a branch, merge frequently with the master.
 * When maintaining a branch, submit pull requests to the master frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
-* Please do not use "Draft" pull requests, they clutter our world view. Rather, use issues or discussion topics to discuss whatever needs discussing.
+* Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
+
+## CI for pull requests
+
+* Pull requests will need to be pass all continuous integration checks before merging.
+* For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
+* Submitting changes to a open pull requests will move it to 'draft' state.
+* Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
+
+## Nightly CI
+
+* Packages creation and long running tests will be performed during a nightly run
+* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
 
 ## Building
 
