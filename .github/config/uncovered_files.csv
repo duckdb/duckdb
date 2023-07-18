@@ -189,7 +189,7 @@ execution/operator/persistent/base_csv_reader.cpp	35
 execution/operator/persistent/buffered_csv_reader.cpp	83
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/persistent/csv_file_handle.cpp	10
-execution/operator/persistent/csv_reader_options.cpp	14
+execution/operator/persistent/csv_reader_options.cpp	19
 execution/operator/persistent/parallel_csv_reader.cpp	75
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
