@@ -1,6 +1,6 @@
-# name: test/sql/index/art/test_art_coverage_types.test
+# name: test/sql/index/art/types/test_art_coverage_types.test
 # description: ART coverage tests with different key types
-# group: [art]
+# group: [types]
 
 # aborting merge due to constraint violation
 
