@@ -1,5 +1,5 @@
 # name: test/sql/cte/test_issue_5673.test
-# description: Issue #5673 and #4987: CTE and Table name are name shadowing 
+# description: Issue #5673 and #4987: CTE and Table name are name shadowing
 # group: [cte]
 
 statement ok
@@ -44,3 +44,14 @@ some_more_logic as (
 select * from some_more_logic;
 ----
 1
+
+with
+orders as (
+    select * from stg_orders
+    where ordered_at >= (select max(ordered_at) from main.orders)
+),
+some_more_logic as (
+    select *
+    from orders
+)
+select * from some_more_logic;

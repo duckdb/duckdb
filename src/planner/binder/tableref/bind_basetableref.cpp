@@ -32,7 +32,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
 				    "use recursive CTEs. \n2. If "
 				    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
-				    "\"SCHEMA\" befrome table name. You can try \"main.%s\" (main is the duckdb default schema)",
+				    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
 				    ref.table_name, ref.table_name, ref.table_name);
 			}
 			// Move CTE to subquery and bind recursively
