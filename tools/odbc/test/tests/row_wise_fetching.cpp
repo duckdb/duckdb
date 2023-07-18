@@ -163,7 +163,6 @@ TEST_CASE("Test Row Wise Testing and SQLFetchScroll", "[odbc]") {
 
 	TestManySQLTypes(hstmt);
 
-
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
