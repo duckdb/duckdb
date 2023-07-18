@@ -74,6 +74,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
 		result = LogicalLimitPercent::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		result = LogicalMaterializedCTE::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::FormatDeserialize(deserializer);
 		break;
@@ -82,6 +85,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+		result = LogicalRecursiveCTE::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		result = LogicalSample::FormatDeserialize(deserializer);
@@ -370,6 +376,21 @@ unique_ptr<LogicalOperator> LogicalLimitPercent::FormatDeserialize(FormatDeseria
 	return std::move(result);
 }
 
+void LogicalMaterializedCTE::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("column_count", column_count);
+	serializer.WriteProperty("ctename", ctename);
+}
+
+unique_ptr<LogicalOperator> LogicalMaterializedCTE::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalMaterializedCTE>(new LogicalMaterializedCTE());
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("column_count", result->column_count);
+	deserializer.ReadProperty("ctename", result->ctename);
+	return std::move(result);
+}
+
 void LogicalOrder::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("orders", orders);
@@ -402,6 +423,23 @@ unique_ptr<LogicalOperator> LogicalProjection::FormatDeserialize(FormatDeseriali
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto result = duckdb::unique_ptr<LogicalProjection>(new LogicalProjection(table_index, std::move(expressions)));
+	return std::move(result);
+}
+
+void LogicalRecursiveCTE::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("union_all", union_all);
+	serializer.WriteProperty("ctename", ctename);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("column_count", column_count);
+}
+
+unique_ptr<LogicalOperator> LogicalRecursiveCTE::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE());
+	deserializer.ReadProperty("union_all", result->union_all);
+	deserializer.ReadProperty("ctename", result->ctename);
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("column_count", result->column_count);
 	return std::move(result);
 }
 

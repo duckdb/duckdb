@@ -506,5 +506,47 @@
       }
     ],
     "constructor": ["table_index", "column_count", "type"]
+  },
+  {
+    "class": "LogicalRecursiveCTE",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_RECURSIVE_CTE",
+    "members": [
+      {
+        "name": "union_all",
+        "type": "bool"
+      },
+      {
+        "name": "ctename",
+        "type": "string"
+      },
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "column_count",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "LogicalMaterializedCTE",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_MATERIALIZED_CTE",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "column_count",
+        "type": "idx_t"
+      },
+      {
+        "name": "ctename",
+        "type": "string"
+      }
+    ]
   }
 ]
