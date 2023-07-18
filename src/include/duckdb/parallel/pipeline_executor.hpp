@@ -48,8 +48,8 @@ public:
 	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
 	OperatorResultType ExecutePush(DataChunk &input);
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
-	//! This should only be called once per PipelineExecutor
-	void PushFinalize();
+	//! This should only be called once per PipelineExecutor.
+	PipelineExecuteResult PushFinalize();
 
 	//! Initializes a chunk with the types that will flow out of ExecutePull
 	void InitializeChunk(DataChunk &chunk);
