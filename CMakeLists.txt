@@ -692,6 +692,14 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+function(build_static_extension NAME PARAMETERS)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+  add_library(${NAME}_extension STATIC ${FILES})
+  target_link_libraries(${NAME}_extension duckdb_static)
+endfunction()
+
 # Internal extension register function
 function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
@@ -807,11 +815,11 @@ function(duckdb_extension_load NAME)
   elseif(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extension_external'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/test/sql")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/src/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension_external/${NAME}/test/sql")
   else()
     # Local extension, default path
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_SOURCE_DIR}/extension/${NAME}/test/sql")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql")
   endif()
 
   # Propagate variables set by register_extension

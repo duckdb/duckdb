@@ -275,6 +275,15 @@ struct StructConvert {
 	}
 };
 
+struct UnionConvert {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset) {
+		auto val = input.GetValue(chunk_offset);
+		auto value = UnionValue::GetValue(val);
+
+		return PythonObject::FromValue(value, UnionValue::GetType(val));
+	}
+};
+
 struct MapConvert {
 	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
 		auto val = input.GetValue(chunk_offset);
@@ -527,6 +536,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 		type_width = sizeof(PyObject *);
 		break;
@@ -578,6 +588,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 		return "object";
 	case LogicalTypeId::ENUM: {
@@ -738,6 +749,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
 		                                                                       idata, count);
+		break;
+	case LogicalTypeId::UNION:
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(current_offset, dataptr, maskptr,
+		                                                                           input, idata, count);
 		break;
 	case LogicalTypeId::STRUCT:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
