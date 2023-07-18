@@ -21,6 +21,20 @@ public:
 		InterruptState interrupt_state(shared_from_this());
 		OperatorSinkFinalizeInput finalize_input {*sink->sink_state, interrupt_state};
 
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+		if (debug_blocked_count < debug_blocked_target_count) {
+			debug_blocked_count++;
+
+			auto &callback_state = interrupt_state;
+			std::thread rewake_thread([callback_state] {
+				std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				callback_state.Callback();
+			});
+			rewake_thread.detach();
+
+			return TaskExecutionResult::TASK_BLOCKED;
+		}
+#endif
 		auto sink_state = sink->Finalize(pipeline, *event, executor.context, finalize_input);
 
 		if (sink_state == SinkFinalizeType::BLOCKED) {
@@ -31,6 +45,14 @@ public:
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
+
+private:
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	//! Debugging state: number of times blocked
+	int debug_blocked_count = 0;
+	//! Number of times the Finalize will block before actually returning data
+	int debug_blocked_target_count = 1;
+#endif
 };
 
 PipelineFinishEvent::PipelineFinishEvent(shared_ptr<Pipeline> pipeline_p) : BasePipelineEvent(std::move(pipeline_p)) {

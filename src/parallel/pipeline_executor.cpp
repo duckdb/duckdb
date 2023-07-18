@@ -246,8 +246,6 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	// Run the combine for the sink
 	OperatorSinkCombineInput combine_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
 
-	SinkCombineResultType result;
-
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	if (debug_blocked_combine_count < debug_blocked_target_count) {
 		debug_blocked_combine_count++;
@@ -259,13 +257,10 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 		});
 		rewake_thread.detach();
 
-		result = SinkCombineResultType::BLOCKED;
-	} else {
-		result = pipeline.sink->Combine(context, combine_input);
+		return PipelineExecuteResult::INTERRUPTED;
 	}
-#else
-	result = pipeline.sink->Combine(context, combine_input);
 #endif
+	auto result = pipeline.sink->Combine(context, combine_input);
 
 	if (result == SinkCombineResultType::BLOCKED) {
 		return PipelineExecuteResult::INTERRUPTED;
