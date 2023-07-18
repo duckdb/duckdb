@@ -13,6 +13,11 @@ namespace duckdb {
 // Arrow append data
 //===--------------------------------------------------------------------===//
 typedef void (*initialize_t)(ArrowAppendData &result, const LogicalType &type, idx_t capacity);
+// append_data: The arrow array we're appending into
+// input: The data we're appending
+// from: The offset into the input we're scanning
+// to: The last index of the input we're scanning
+// input_size: The total size of the 'input' Vector.
 typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size);
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 

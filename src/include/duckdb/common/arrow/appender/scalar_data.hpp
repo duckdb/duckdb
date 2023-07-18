@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 namespace duckdb {
 
