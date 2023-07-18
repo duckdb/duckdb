@@ -382,6 +382,38 @@
     "constructor": ["join_type", "type"]
   },
   {
+    "class": "LogicalAsOfJoin",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ASOF_JOIN",
+    "members": [
+      {
+        "name": "join_type",
+        "type": "JoinType"
+      },
+      {
+        "name": "mark_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "left_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "right_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "conditions",
+        "type": "vector<JoinCondition>"
+      },
+      {
+        "name": "mark_types",
+        "type": "vector<LogicalType>"
+      }
+    ],
+    "constructor": ["join_type"]
+  },
+  {
     "class": "LogicalDelimJoin",
     "base": "LogicalOperator",
     "enum": "LOGICAL_DELIM_JOIN",
@@ -416,5 +448,63 @@
       }
     ],
     "constructor": ["join_type"]
+  },
+  {
+    "class": "LogicalAnyJoin",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_ANY_JOIN",
+    "members": [
+      {
+        "name": "join_type",
+        "type": "JoinType"
+      },
+      {
+        "name": "mark_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "left_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "right_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "condition",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["join_type"]
+  },
+  {
+    "class": "LogicalCrossProduct",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CROSS_PRODUCT",
+    "members": [
+    ]
+  },
+  {
+    "class": "LogicalPositionalJoin",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_POSITIONAL_JOIN",
+    "members": [
+    ]
+  },
+  {
+    "class": "LogicalSetOperation",
+    "base": "LogicalOperator",
+    "enum": ["LOGICAL_UNION", "LOGICAL_EXCEPT", "LOGICAL_INTERSECT"],
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "column_count",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["table_index", "column_count", "type"]
   }
 ]

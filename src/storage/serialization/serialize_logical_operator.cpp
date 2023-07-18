@@ -23,11 +23,20 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = LogicalAggregate::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+		result = LogicalAnyJoin::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		result = LogicalAsOfJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		result = LogicalColumnDataGet::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+		result = LogicalCrossProduct::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		result = LogicalCTERef::FormatDeserialize(deserializer);
@@ -47,11 +56,17 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
 		result = LogicalEmptyResult::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+		result = LogicalSetOperation::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+		result = LogicalSetOperation::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		result = LogicalLimit::FormatDeserialize(deserializer);
@@ -62,6 +77,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		result = LogicalPositionalJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::FormatDeserialize(deserializer);
 		break;
@@ -70,6 +88,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		result = LogicalTopN::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_UNION:
+		result = LogicalSetOperation::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_UNNEST:
 		result = LogicalUnnest::FormatDeserialize(deserializer);
@@ -105,6 +126,46 @@ unique_ptr<LogicalOperator> LogicalAggregate::FormatDeserialize(FormatDeserializ
 	deserializer.ReadProperty("groups", result->groups);
 	deserializer.ReadProperty("grouping_sets", result->grouping_sets);
 	deserializer.ReadProperty("grouping_functions", result->grouping_functions);
+	return std::move(result);
+}
+
+void LogicalAnyJoin::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("join_type", join_type);
+	serializer.WriteProperty("mark_index", mark_index);
+	serializer.WriteProperty("left_projection_map", left_projection_map);
+	serializer.WriteProperty("right_projection_map", right_projection_map);
+	serializer.WriteProperty("condition", *condition);
+}
+
+unique_ptr<LogicalOperator> LogicalAnyJoin::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto join_type = deserializer.ReadProperty<JoinType>("join_type");
+	auto result = duckdb::unique_ptr<LogicalAnyJoin>(new LogicalAnyJoin(join_type));
+	deserializer.ReadProperty("mark_index", result->mark_index);
+	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
+	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
+	deserializer.ReadProperty("condition", result->condition);
+	return std::move(result);
+}
+
+void LogicalAsOfJoin::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("join_type", join_type);
+	serializer.WriteProperty("mark_index", mark_index);
+	serializer.WriteProperty("left_projection_map", left_projection_map);
+	serializer.WriteProperty("right_projection_map", right_projection_map);
+	serializer.WriteProperty("conditions", conditions);
+	serializer.WriteProperty("mark_types", mark_types);
+}
+
+unique_ptr<LogicalOperator> LogicalAsOfJoin::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto join_type = deserializer.ReadProperty<JoinType>("join_type");
+	auto result = duckdb::unique_ptr<LogicalAsOfJoin>(new LogicalAsOfJoin(join_type));
+	deserializer.ReadProperty("mark_index", result->mark_index);
+	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
+	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
+	deserializer.ReadProperty("conditions", result->conditions);
+	deserializer.ReadProperty("mark_types", result->mark_types);
 	return std::move(result);
 }
 
@@ -160,6 +221,15 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
 	deserializer.ReadProperty("mark_types", result->mark_types);
+	return std::move(result);
+}
+
+void LogicalCrossProduct::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+}
+
+unique_ptr<LogicalOperator> LogicalCrossProduct::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalCrossProduct>(new LogicalCrossProduct());
 	return std::move(result);
 }
 
@@ -313,6 +383,15 @@ unique_ptr<LogicalOperator> LogicalOrder::FormatDeserialize(FormatDeserializer &
 	return std::move(result);
 }
 
+void LogicalPositionalJoin::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+}
+
+unique_ptr<LogicalOperator> LogicalPositionalJoin::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalPositionalJoin>(new LogicalPositionalJoin());
+	return std::move(result);
+}
+
 void LogicalProjection::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("table_index", table_index);
@@ -334,6 +413,19 @@ void LogicalSample::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalSample::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalSample>(new LogicalSample());
 	deserializer.ReadProperty("sample_options", result->sample_options);
+	return std::move(result);
+}
+
+void LogicalSetOperation::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("column_count", column_count);
+}
+
+unique_ptr<LogicalOperator> LogicalSetOperation::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
+	auto column_count = deserializer.ReadProperty<idx_t>("column_count");
+	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>()));
 	return std::move(result);
 }
 
