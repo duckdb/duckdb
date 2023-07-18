@@ -247,7 +247,7 @@ void PipelineExecutor::PushFinalize() {
 
 	finalized = true;
 
-	// run the combine for the sink
+	// run the combine for the sink TODO: make api return blocked or finished
 	OperatorSinkCombineInput combine_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
 	pipeline.sink->Combine(context, combine_input);
 
