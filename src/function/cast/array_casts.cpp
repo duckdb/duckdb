@@ -12,7 +12,7 @@ struct ArrayBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_uniq<ListBoundCastData>(child_cast_info.Copy());
+		return make_uniq<ArrayBoundCastData>(child_cast_info.Copy());
 	}
 };
 
@@ -21,6 +21,18 @@ static unique_ptr<BoundCastData> BindArrayToArrayCast(BindCastInput &input, cons
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_type = ArrayType::GetChildType(source);
 	auto &result_child_type = ArrayType::GetChildType(target);
+	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
+	return make_uniq<ArrayBoundCastData>(std::move(child_cast));
+}
+
+static unique_ptr<BoundCastData> BindArrayToListCast(BindCastInput &input, const LogicalType &source,
+                                                     const LogicalType &target) {
+	D_ASSERT(source.id() == LogicalTypeId::ARRAY);
+	D_ASSERT(target.id() == LogicalTypeId::LIST);
+
+	vector<BoundCastInfo> child_cast_info;
+	auto &source_child_type = ArrayType::GetChildType(source);
+	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
 	return make_uniq<ArrayBoundCastData>(std::move(child_cast));
 }
@@ -126,18 +138,52 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		out_data[i].Finalize();
 	}
 
-	if (is_constant) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	return true;
 }
 
 //------------------------------------------------------------------------------
 // ARRAY -> LIST
 //------------------------------------------------------------------------------
-static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameter) {
-	throw NotImplementedException("Array -> List cast not implemented");
+static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
+
+	// TODO: dont flatten
+	source.Flatten(count);
+	if (count == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	auto fixed_size = ArrayType::GetSize(source.GetType());
+	auto child_count = count * fixed_size;
+
+	ListVector::Reserve(result, child_count);
+	ListVector::SetListSize(result, child_count);
+
+	auto &source_child = ArrayVector::GetEntry(source);
+	auto &result_child = ListVector::GetEntry(result);
+
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+	bool all_ok = cast_data.child_cast_info.function(source_child, result_child, child_count, child_parameters);
+
+	if (!all_ok) {
+		return false;
+	}
+
+	auto list_data = ListVector::GetData(result);
+	for (idx_t i = 0; i < count; i++) {
+		if (FlatVector::IsNull(source, i)) {
+			FlatVector::SetNull(result, i, true);
+			continue;
+		}
+
+		list_data[i].offset = i * fixed_size;
+		list_data[i].length = fixed_size;
+	}
+
+	if (count == 1) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+
+	return true;
 }
 
 BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalType &source,
@@ -152,7 +198,8 @@ BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalT
 	case LogicalTypeId::ARRAY:
 		return BoundCastInfo(ArrayToArrayCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
 	case LogicalTypeId::LIST:
-		return BoundCastInfo(ArrayToListCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
+		// TODO: This works, but it doesnt seem like the list functions will invoke this?
+		return BoundCastInfo(ArrayToListCast, BindArrayToListCast(input, source, target), InitArrayLocalState);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	};
