@@ -758,5 +758,80 @@
       }
     ],
     "constructor": ["type", "$ClientContext", "info"]
+  },
+  {
+    "class": "LogicalExplain",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPLAIN",
+    "members": [
+      {
+        "name": "explain_type",
+        "type": "ExplainType"
+      },
+      {
+        "name": "physical_plan",
+        "type": "string"
+      },
+      {
+        "name": "logical_plan_unopt",
+        "type": "string"
+      },
+      {
+        "name": "logical_plan_opt",
+        "type": "string"
+      }
+    ],
+    "constructor": ["explain_type"]
+  },
+  {
+    "class": "LogicalShow",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SHOW",
+    "members": [
+      {
+        "name": "types_select",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "LogicalSet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SET",
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "name": "scope",
+        "type": "SetScope"
+      }
+    ],
+    "constructor": ["name", "value", "scope"]
+  },
+  {
+    "class": "LogicalReset",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_RESET",
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "scope",
+        "type": "SetScope"
+      }
+    ],
+    "constructor": ["name", "scope"]
   }
 ]

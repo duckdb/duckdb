@@ -82,6 +82,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 		result = LogicalSetOperation::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXPLAIN:
+		result = LogicalExplain::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::FormatDeserialize(deserializer);
 		break;
@@ -115,8 +118,17 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		result = LogicalRecursiveCTE::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		result = LogicalReset::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		result = LogicalSample::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_SET:
+		result = LogicalSet::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_SHOW:
+		result = LogicalShow::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		result = LogicalTopN::FormatDeserialize(deserializer);
@@ -390,6 +402,23 @@ unique_ptr<LogicalOperator> LogicalEmptyResult::FormatDeserialize(FormatDeserial
 	return std::move(result);
 }
 
+void LogicalExplain::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("explain_type", explain_type);
+	serializer.WriteProperty("physical_plan", physical_plan);
+	serializer.WriteProperty("logical_plan_unopt", logical_plan_unopt);
+	serializer.WriteProperty("logical_plan_opt", logical_plan_opt);
+}
+
+unique_ptr<LogicalOperator> LogicalExplain::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto explain_type = deserializer.ReadProperty<ExplainType>("explain_type");
+	auto result = duckdb::unique_ptr<LogicalExplain>(new LogicalExplain(explain_type));
+	deserializer.ReadProperty("physical_plan", result->physical_plan);
+	deserializer.ReadProperty("logical_plan_unopt", result->logical_plan_unopt);
+	deserializer.ReadProperty("logical_plan_opt", result->logical_plan_opt);
+	return std::move(result);
+}
+
 void LogicalExpressionGet::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("table_index", table_index);
@@ -566,6 +595,19 @@ unique_ptr<LogicalOperator> LogicalRecursiveCTE::FormatDeserialize(FormatDeseria
 	return std::move(result);
 }
 
+void LogicalReset::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("scope", scope);
+}
+
+unique_ptr<LogicalOperator> LogicalReset::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto name = deserializer.ReadProperty<string>("name");
+	auto scope = deserializer.ReadProperty<SetScope>("scope");
+	auto result = duckdb::unique_ptr<LogicalReset>(new LogicalReset(std::move(name), scope));
+	return std::move(result);
+}
+
 void LogicalSample::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("sample_options", sample_options);
@@ -574,6 +616,21 @@ void LogicalSample::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalSample::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalSample>(new LogicalSample());
 	deserializer.ReadProperty("sample_options", result->sample_options);
+	return std::move(result);
+}
+
+void LogicalSet::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("value", value);
+	serializer.WriteProperty("scope", scope);
+}
+
+unique_ptr<LogicalOperator> LogicalSet::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto name = deserializer.ReadProperty<string>("name");
+	auto value = deserializer.ReadProperty<Value>("value");
+	auto scope = deserializer.ReadProperty<SetScope>("scope");
+	auto result = duckdb::unique_ptr<LogicalSet>(new LogicalSet(std::move(name), value, scope));
 	return std::move(result);
 }
 
@@ -587,6 +644,19 @@ unique_ptr<LogicalOperator> LogicalSetOperation::FormatDeserialize(FormatDeseria
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto column_count = deserializer.ReadProperty<idx_t>("column_count");
 	auto result = duckdb::unique_ptr<LogicalSetOperation>(new LogicalSetOperation(table_index, column_count, deserializer.Get<LogicalOperatorType>()));
+	return std::move(result);
+}
+
+void LogicalShow::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("types_select", types_select);
+	serializer.WriteProperty("aliases", aliases);
+}
+
+unique_ptr<LogicalOperator> LogicalShow::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalShow>(new LogicalShow());
+	deserializer.ReadProperty("types_select", result->types_select);
+	deserializer.ReadProperty("aliases", result->aliases);
 	return std::move(result);
 }
 
