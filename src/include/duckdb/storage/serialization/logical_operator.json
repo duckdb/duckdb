@@ -746,5 +746,17 @@
       }
     ],
     "constructor": ["$ClientContext", "catalog", "schema", "info"]
+  },
+  {
+    "class": "LogicalCreate",
+    "base": "LogicalOperator",
+    "enum": ["LOGICAL_CREATE_SEQUENCE", "LOGICAL_CREATE_VIEW", "LOGICAL_CREATE_SCHEMA", "LOGICAL_CREATE_MACRO", "LOGICAL_CREATE_TYPE"],
+    "members": [
+      {
+        "name": "info",
+        "type": "CreateInfo*"
+      }
+    ],
+    "constructor": ["type", "$ClientContext", "info"]
   }
 ]

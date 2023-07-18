@@ -37,8 +37,23 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+		result = LogicalCreate::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
+		result = LogicalCreate::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
+		result = LogicalCreate::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
+		result = LogicalCreate::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
+		result = LogicalCreate::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = LogicalCrossProduct::FormatDeserialize(deserializer);
@@ -241,6 +256,17 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
 	deserializer.ReadProperty("mark_types", result->mark_types);
+	return std::move(result);
+}
+
+void LogicalCreate::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("info", *info);
+}
+
+unique_ptr<LogicalOperator> LogicalCreate::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
+	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<LogicalOperatorType>(), deserializer.Get<ClientContext &>(), std::move(info)));
 	return std::move(result);
 }
 
