@@ -418,7 +418,7 @@ jobs:
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-20.04
-#    needs: linux-memory-leaks
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
