@@ -11,6 +11,11 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
       return_chunk(false) {
 }
 
+LogicalDelete::LogicalDelete(ClientContext &context, string catalog, string schema, string table)
+	: LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
+{
+}
+
 void LogicalDelete::Serialize(FieldWriter &writer) const {
 	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);

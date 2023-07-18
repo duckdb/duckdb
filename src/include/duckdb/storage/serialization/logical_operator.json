@@ -641,5 +641,40 @@
       }
     ],
     "constructor": ["$ClientContext", "catalog", "schema", "table"]
+  },
+  {
+    "class": "LogicalDelete",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_DELETE",
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string",
+        "serialize_property": "table.ParentCatalog().GetName()"
+      },
+      {
+        "name": "schema",
+        "type": "string",
+        "serialize_property": "table.ParentSchema().name"
+      },
+      {
+        "name": "table",
+        "type": "string",
+        "serialize_property": "table.name"
+      },
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "return_chunk",
+        "type": "bool"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["$ClientContext", "catalog", "schema", "table"]
   }
 ]

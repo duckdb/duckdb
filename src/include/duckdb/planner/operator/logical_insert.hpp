@@ -77,7 +77,5 @@ protected:
 private:
 	LogicalInsert(ClientContext &context, string catalog, string schema, string table);
 
-	TableCatalogEntry &GetTable(ClientContext &context, string catalog, string schema, string table);
-
 };
 } // namespace duckdb

@@ -43,6 +43,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		result = LogicalCTERef::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_DELETE:
+		result = LogicalDelete::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		result = LogicalDelimGet::FormatDeserialize(deserializer);
 		break;
@@ -241,6 +244,27 @@ void LogicalCrossProduct::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalCrossProduct::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LogicalCrossProduct>(new LogicalCrossProduct());
+	return std::move(result);
+}
+
+void LogicalDelete::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("catalog", table.ParentCatalog().GetName());
+	serializer.WriteProperty("schema", table.ParentSchema().name);
+	serializer.WriteProperty("table", table.name);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("return_chunk", return_chunk);
+	serializer.WriteProperty("expressions", expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalDelete::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto table = deserializer.ReadProperty<string>("table");
+	auto result = duckdb::unique_ptr<LogicalDelete>(new LogicalDelete(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("return_chunk", result->return_chunk);
+	deserializer.ReadProperty("expressions", result->expressions);
 	return std::move(result);
 }
 
