@@ -12,7 +12,9 @@ BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
       parameter_nr(parameter_nr) {
 }
 
-BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set, idx_t parameter_nr, LogicalType return_type, shared_ptr<BoundParameterData> parameter_data)
+BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set, idx_t parameter_nr,
+                                                   LogicalType return_type,
+                                                   shared_ptr<BoundParameterData> parameter_data)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
       parameter_nr(parameter_nr) {
 	// check if we have already deserialized a parameter with this number
@@ -92,7 +94,8 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
 	auto parameter_nr = reader.ReadRequired<idx_t>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
-	auto result = unique_ptr<BoundParameterExpression>(new BoundParameterExpression(global_parameter_set, parameter_nr, std::move(return_type), std::move(parameter_data)));
+	auto result = unique_ptr<BoundParameterExpression>(new BoundParameterExpression(
+	    global_parameter_set, parameter_nr, std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 

@@ -723,5 +723,28 @@
       }
     ],
     "constructor": ["$ClientContext", "catalog", "schema", "table"]
+  },
+  {
+    "class": "LogicalCreateTable",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CREATE_TABLE",
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string",
+        "serialize_property": "schema.ParentCatalog().GetName()"
+      },
+      {
+        "name": "schema",
+        "type": "string",
+        "serialize_property": "schema.name"
+      },
+      {
+        "name": "info",
+        "type": "CreateInfo*",
+        "serialize_property": "info->base"
+      }
+    ],
+    "constructor": ["$ClientContext", "catalog", "schema", "info"]
   }
 ]

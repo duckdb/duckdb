@@ -13,8 +13,7 @@
 namespace duckdb {
 
 class LogicalRecursiveCTE : public LogicalOperator {
-	LogicalRecursiveCTE()
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
+	LogicalRecursiveCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 	}
 
 public:

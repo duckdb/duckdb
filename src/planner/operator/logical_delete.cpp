@@ -12,8 +12,8 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
 }
 
 LogicalDelete::LogicalDelete(ClientContext &context, string catalog, string schema, string table)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_DELETE), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
-{
+    : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }
 
 void LogicalDelete::Serialize(FieldWriter &writer) const {

@@ -11,8 +11,8 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
 }
 
 LogicalUpdate::LogicalUpdate(ClientContext &context, string catalog, string schema, string table)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
-{
+    : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }
 
 void LogicalUpdate::Serialize(FieldWriter &writer) const {

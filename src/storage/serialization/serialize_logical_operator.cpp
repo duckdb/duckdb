@@ -37,6 +37,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
+		result = LogicalCreateTable::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = LogicalCrossProduct::FormatDeserialize(deserializer);
 		break;
@@ -238,6 +241,21 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
 	deserializer.ReadProperty("mark_types", result->mark_types);
+	return std::move(result);
+}
+
+void LogicalCreateTable::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("catalog", schema.ParentCatalog().GetName());
+	serializer.WriteProperty("schema", schema.name);
+	serializer.WriteProperty("info", *info->base);
+}
+
+unique_ptr<LogicalOperator> LogicalCreateTable::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
+	auto result = duckdb::unique_ptr<LogicalCreateTable>(new LogicalCreateTable(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(info)));
 	return std::move(result);
 }
 

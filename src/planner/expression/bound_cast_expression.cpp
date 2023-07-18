@@ -20,9 +20,11 @@ BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, Logical
       child(std::move(child_p)), try_cast(try_cast_p), bound_cast(std::move(bound_cast_p)) {
 }
 
-BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expression> child_p, LogicalType target_type_p)
+BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expression> child_p,
+                                         LogicalType target_type_p)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, std::move(target_type_p)),
-      child(std::move(child_p)), try_cast(false), bound_cast(BindCastFunction(context, child->return_type, return_type)) {
+      child(std::move(child_p)), try_cast(false),
+      bound_cast(BindCastFunction(context, child->return_type, return_type)) {
 }
 
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,

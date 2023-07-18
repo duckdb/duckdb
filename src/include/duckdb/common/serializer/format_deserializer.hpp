@@ -110,19 +110,19 @@ public:
 	}
 
 	//! Set a serialization property
-	template<class T>
+	template <class T>
 	void Set(T entry) {
 		return data.Set<T>(entry);
 	}
 
 	//! Retrieve the last set serialization property of this type
-	template<class T>
+	template <class T>
 	T Get() {
 		return data.Get<T>();
 	}
 
 	//! Unset a serialization property
-	template<class T>
+	template <class T>
 	void Unset() {
 		return data.Unset<T>();
 	}

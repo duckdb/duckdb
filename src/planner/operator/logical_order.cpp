@@ -5,7 +5,7 @@
 namespace duckdb {
 
 LogicalOrder::LogicalOrder(vector<BoundOrderByNode> orders)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
 }
 
 vector<ColumnBinding> LogicalOrder::GetColumnBindings() {

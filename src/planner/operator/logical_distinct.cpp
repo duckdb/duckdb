@@ -5,11 +5,11 @@
 namespace duckdb {
 
 LogicalDistinct::LogicalDistinct(DistinctType distinct_type)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type) {
 }
 LogicalDistinct::LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type),
-	  distinct_targets(std::move(targets)) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type),
+      distinct_targets(std::move(targets)) {
 }
 
 string LogicalDistinct::ParamsToString() const {

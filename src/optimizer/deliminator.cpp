@@ -15,7 +15,8 @@ namespace duckdb {
 
 struct DelimCandidate {
 public:
-	explicit DelimCandidate(unique_ptr<LogicalOperator> &op, LogicalDelimJoin &delim_join) : op(op), delim_join(delim_join), delim_get_count(0) {
+	explicit DelimCandidate(unique_ptr<LogicalOperator> &op, LogicalDelimJoin &delim_join)
+	    : op(op), delim_join(delim_join), delim_get_count(0) {
 	}
 
 public:

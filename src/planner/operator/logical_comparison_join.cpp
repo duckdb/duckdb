@@ -55,5 +55,4 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FromDelimJoin(LogicalDelimJoi
 	return new_join;
 }
 
-
 } // namespace duckdb

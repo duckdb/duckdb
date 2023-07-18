@@ -3,8 +3,7 @@
 
 namespace duckdb {
 
-LogicalSample::LogicalSample()
-    : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE) {
+LogicalSample::LogicalSample() : LogicalOperator(LogicalOperatorType::LOGICAL_SAMPLE) {
 }
 
 LogicalSample::LogicalSample(unique_ptr<SampleOptions> sample_options_p, unique_ptr<LogicalOperator> child)

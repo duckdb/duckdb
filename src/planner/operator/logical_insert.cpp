@@ -13,8 +13,8 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
 }
 
 LogicalInsert::LogicalInsert(ClientContext &context, string catalog, string schema, string table)
-	: LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table))
-{
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }
 
 void LogicalInsert::Serialize(FieldWriter &writer) const {

@@ -13,8 +13,7 @@
 namespace duckdb {
 
 class LogicalMaterializedCTE : public LogicalOperator {
-	explicit LogicalMaterializedCTE()
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
+	explicit LogicalMaterializedCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 	}
 
 public:

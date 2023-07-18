@@ -1055,8 +1055,8 @@ void ColumnDataCollection::FormatSerialize(FormatSerializer &serializer) const {
 	vector<vector<Value>> values;
 	values.resize(ColumnCount());
 	for (auto &chunk : Chunks()) {
-		for(idx_t c = 0; c < chunk.ColumnCount(); c++) {
-			for(idx_t r = 0; r < chunk.size(); r++) {
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
 				values[c].push_back(chunk.GetValue(c, r));
 			}
 		}
@@ -1077,17 +1077,17 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(FormatD
 	chunk.Initialize(Allocator::DefaultAllocator(), types);
 
 	idx_t chunk_idx = 0;
-	for(idx_t r = 0; r < values[0].size(); r++) {
-		for(idx_t c = 0; c < types.size(); c++) {
+	for (idx_t r = 0; r < values[0].size(); r++) {
+		for (idx_t c = 0; c < types.size(); c++) {
 			chunk.SetValue(c, chunk_idx, values[c][r]);
 		}
 		chunk.SetCardinality(chunk.size() + 1);
-		if (chunk.size() == STANDARD_VECTOR_SIZE)  {
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
 			collection->Append(chunk);
 			chunk.Reset();
 		}
 	}
-	if (chunk.size() > 0)  {
+	if (chunk.size() > 0) {
 		collection->Append(chunk);
 	}
 	return collection;
