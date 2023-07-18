@@ -4719,12 +4719,37 @@ SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value) {
+	switch(value) {
+	case SinkCombineResultType::FINISHED:
+		return "FINISHED";
+	case SinkCombineResultType::BLOCKED:
+		return "BLOCKED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *value) {
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return SinkCombineResultType::FINISHED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkCombineResultType::BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value) {
 	switch(value) {
 	case SinkFinalizeType::READY:
 		return "READY";
 	case SinkFinalizeType::NO_OUTPUT_POSSIBLE:
 		return "NO_OUTPUT_POSSIBLE";
+	case SinkFinalizeType::BLOCKED:
+		return "BLOCKED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4737,6 +4762,9 @@ SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "NO_OUTPUT_POSSIBLE")) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkFinalizeType::BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
