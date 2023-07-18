@@ -67,7 +67,6 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBuffe
 	}
 	transition_array[escape_state][static_cast<uint8_t>(options.quote)] = quoted_state;
 	transition_array[escape_state][static_cast<uint8_t>(options.escape)] = quoted_state;
-	current_char = csv_buffer_iterator.GetNextChar();
 }
 
 void CSVStateMachine::Reset() {

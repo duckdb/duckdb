@@ -47,6 +47,7 @@ idx_t CSVFileHandle::SeekPosition() {
 void CSVFileHandle::Reset() {
 	requested_bytes = 0;
 	read_position = 0;
+	finished = false;
 	if (can_seek) {
 		// we can seek - reset the file handle
 		file_handle->Reset();

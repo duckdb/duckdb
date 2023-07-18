@@ -196,6 +196,7 @@ void CSVSniffer::DetectDialect() {
 	                                escape_candidates_map);
 	// Step 3: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
+		state_machine->Reset();
 		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count);
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks

@@ -20,7 +20,8 @@ class CSVBuffer;
 //! Otherwise they are not cached and just returned
 class CSVBufferManager {
 public:
-	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, CSVReaderOptions &options);
+	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, CSVReaderOptions &options,
+	                 bool cache_buffers = false);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	shared_ptr<CSVBuffer> GetBuffer(idx_t pos, bool auto_detection);
@@ -28,8 +29,12 @@ public:
 	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing
 	unique_ptr<CSVFileHandle> file_handle;
+	//! Initializes the buffer manager, during it's construction/reset
+	void Initialize();
 
 	ClientContext &context;
+	idx_t skip_rows = 0;
+	bool cache_buffers;
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
