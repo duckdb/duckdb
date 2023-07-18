@@ -343,7 +343,7 @@ public:
 			line_info.lines_read[0][0]++;
 		}
 	}
-	ParallelCSVGlobalState(idx_t system_threads_p)
+	explicit ParallelCSVGlobalState(idx_t system_threads_p)
 	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
 	}
