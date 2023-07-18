@@ -253,7 +253,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
                                                               idx_t &next_schema_idx, idx_t &next_file_idx,
-                                                              unordered_set<string> *used_columns, bool is_needed) {
+                                                              optional_ptr<case_insensitive_set_t> used_columns, bool is_needed) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
@@ -282,7 +282,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			bool child_needed = is_needed;
 
 			if (used_columns && depth == 0) {
-				child_needed = (used_columns->find(StringUtil::Lower(child_ele.name)) != used_columns->end());
+				child_needed = (used_columns->find(child_ele.name) != used_columns->end());
 			}
 
 			auto child_reader = CreateReaderRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx,
@@ -368,7 +368,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	}
 }
 
-unique_ptr<ColumnReader> ParquetReader::CreateReader(unordered_set<string> *used_columns) {
+unique_ptr<ColumnReader> ParquetReader::CreateReader(case_insensitive_set_t *used_columns) {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -620,7 +620,7 @@ idx_t ParquetReader::NumRowGroups() {
 }
 
 void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read,
-                                   unordered_set<string> *used_columns) {
+                                   case_insensitive_set_t *used_columns) {
 	state.current_group = -1;
 	state.finished = false;
 	state.group_offset = 0;
