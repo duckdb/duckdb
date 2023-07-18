@@ -118,7 +118,8 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context,
+                                                          OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);

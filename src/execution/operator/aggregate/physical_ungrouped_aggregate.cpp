@@ -318,7 +318,8 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Oper
 	}
 }
 
-SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &context,
+                                                          OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalState>();
 	auto &source = input.local_state.Cast<UngroupedAggregateLocalState>();
 	D_ASSERT(!gstate.finished);
@@ -328,11 +329,7 @@ SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &cont
 	// use the combine method to combine the partial aggregates
 	lock_guard<mutex> glock(gstate.lock);
 
-	OperatorSinkCombineInput distinct_input {
-	    gstate,
-	    source,
-	    input.interrupt_state
-	};
+	OperatorSinkCombineInput distinct_input {gstate, source, input.interrupt_state};
 	CombineDistinct(context, distinct_input);
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {

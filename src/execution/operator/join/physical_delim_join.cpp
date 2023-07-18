@@ -103,11 +103,8 @@ SinkCombineResultType PhysicalDelimJoin::Combine(ExecutionContext &context, Oper
 	auto &gstate = input.global_state.Cast<DelimJoinGlobalState>();
 	gstate.Merge(lstate.lhs_data);
 
-	OperatorSinkCombineInput distinct_combine_input {
-	    *distinct->sink_state,
-	    *lstate.distinct_state,
-	    input.interrupt_state
-	};
+	OperatorSinkCombineInput distinct_combine_input {*distinct->sink_state, *lstate.distinct_state,
+	                                                 input.interrupt_state};
 	distinct->Combine(context, distinct_combine_input);
 
 	return SinkCombineResultType::FINISHED;
@@ -119,7 +116,7 @@ SinkFinalizeType PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, C
 	D_ASSERT(distinct);
 
 	OperatorSinkFinalizeInput finalize_input {*distinct->sink_state, input.interrupt_state};
-	distinct->Finalize(pipeline, event, client, finalize_input );
+	distinct->Finalize(pipeline, event, client, finalize_input);
 	return SinkFinalizeType::READY;
 }
 

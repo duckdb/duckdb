@@ -32,7 +32,8 @@ SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, Da
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalMaterializedCollector::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalMaterializedCollector::Combine(ExecutionContext &context,
+                                                             OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<MaterializedCollectorGlobalState>();
 	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {

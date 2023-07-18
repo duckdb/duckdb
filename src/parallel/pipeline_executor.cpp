@@ -244,7 +244,7 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	D_ASSERT(local_sink_state);
 
 	// Run the combine for the sink
-	OperatorSinkCombineInput combine_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
+	OperatorSinkCombineInput combine_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	if (debug_blocked_combine_count < debug_blocked_target_count) {

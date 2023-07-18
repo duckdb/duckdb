@@ -429,12 +429,8 @@ SinkCombineResultType PhysicalHashAggregate::Combine(ExecutionContext &context, 
 	auto &gstate = input.global_state.Cast<HashAggregateGlobalState>();
 	auto &llstate = input.local_state.Cast<HashAggregateLocalState>();
 
-	OperatorSinkCombineInput combine_distinct_input {
-	    gstate,
-	    llstate,
-	    input.interrupt_state
-	};
-	CombineDistinct(context,combine_distinct_input);
+	OperatorSinkCombineInput combine_distinct_input {gstate, llstate, input.interrupt_state};
+	CombineDistinct(context, combine_distinct_input);
 
 	if (CanSkipRegularSink()) {
 		return SinkCombineResultType::FINISHED;

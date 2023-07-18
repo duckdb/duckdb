@@ -89,7 +89,8 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context,
+                                                       OperatorSinkCombineInput &input) const {
 	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
 	auto &gstate = input.global_state.Cast<BatchCopyToGlobalState>();
 	gstate.rows_copied += state.rows_copied;

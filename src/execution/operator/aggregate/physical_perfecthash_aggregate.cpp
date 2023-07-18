@@ -159,7 +159,8 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-SinkCombineResultType PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalPerfectHashAggregate::Combine(ExecutionContext &context,
+                                                            OperatorSinkCombineInput &input) const {
 	auto &lstate = input.local_state.Cast<PerfectHashAggregateLocalState>();
 	auto &gstate = input.global_state.Cast<PerfectHashAggregateGlobalState>();
 

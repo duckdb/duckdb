@@ -37,7 +37,8 @@ SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkCombineResultType PhysicalBatchCollector::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalBatchCollector::Combine(ExecutionContext &context,
+                                                      OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto &state = input.local_state.Cast<BatchCollectorLocalState>();
 
