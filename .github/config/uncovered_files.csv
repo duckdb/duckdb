@@ -61,6 +61,7 @@ common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
 common/tree_renderer.cpp	9
 common/types.cpp	88
+common/extra_type_info.cpp	34
 common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
@@ -68,7 +69,7 @@ common/types/blob.cpp	3
 common/types/chunk_collection.cpp	94
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	50
-common/types/column/partitioned_column_data.cpp	6
+common/types/column/partitioned_column_data.cpp	8
 common/types/conflict_info.cpp	2
 common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
@@ -151,11 +152,12 @@ execution/expression_executor/execute_comparison.cpp	5
 execution/expression_executor/execute_conjunction.cpp	3
 execution/expression_executor/execute_operator.cpp	3
 execution/expression_executor_state.cpp	2
-execution/index/art/art.cpp	4
-execution/index/art/art_key.cpp	13
-execution/index/art/iterator.cpp	4
-execution/index/art/node.cpp	5
+execution/index/art/art.cpp	3
+execution/index/art/art_key.cpp	6
+execution/index/art/iterator.cpp	2
+execution/index/art/node.cpp	6
 execution/index/art/node256.cpp	1
+execution/index/art/prefix.cpp	1
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
@@ -341,7 +343,7 @@ include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
 include/duckdb/common/pipe_file_system.hpp	3
 include/duckdb/common/radix.hpp	2
-include/duckdb/common/radix_partitioning.hpp	3
+include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
 include/duckdb/common/serializer.hpp	4
 include/duckdb/common/serializer/format_deserializer.hpp	37
