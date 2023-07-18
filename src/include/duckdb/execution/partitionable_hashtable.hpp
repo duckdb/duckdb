@@ -33,13 +33,17 @@ public:
 	                       vector<BoundAggregateExpression *> bindings_p);
 
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition, const unsafe_vector<idx_t> &filter);
-	void Partition();
+	void Partition(bool sink_done);
 	bool IsPartitioned();
 
 	HashTableList GetPartition(idx_t partition);
 	HashTableList GetUnpartitioned();
+	idx_t GetPartitionCount(idx_t partition) const;
+	idx_t GetPartitionSize(idx_t partition) const;
 
 	void Finalize();
+
+	void Append(GroupedAggregateHashTable &ht);
 
 private:
 	ClientContext &context;

@@ -76,42 +76,32 @@ select * from parquet_scan('data/parquet-testing/hive-partitioning/mismatching_n
 ----
 Hive partition mismatch
 
-# Verify that no filters remain, both pushed-down or as operators
+# Verify that filters are pushed down into the parquet scan (Only file with the filter are read)
 query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2012-01-01';
+EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2013-01-01';
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(date = '2013.*-01.*-01'\).*
 
 query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01';
+EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2018-01-01';
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(date = '2018.*-01.*-01'\).*
 
-query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2018-01-01';
-----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
-
+# No Parquet Scan Filters should be applied here
 query II
 EXPLAIN select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where part='a' OR part='b' order by id;
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<!REGEX>:.*PARQUET_SCAN.*File Filters:.*
 
 query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2012-01-01' and id < 10;
+EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2012-01-01' and id < 10;
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:.*2012\-01\-01|FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(date = '2012.*-01.*-01'\).*
 
 query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01' and id < 10;
+EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where date = '2013-01-01' and id < 10;
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:.*2013\-01\-01|FILTER).*
-
-# There should still not be a date filter though
-query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01' and id < 10;
-----
-physical_plan	<!REGEX>:.*(2013\-01\-01).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(date = '2013.*-01.*-01'\).*
 
 # Complex filter filtering first file
 query IIII
@@ -121,9 +111,9 @@ select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/
 
 # Complex filter filtering first file, filter should be pruned completely
 query II
-explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where concat(date_cast::VARCHAR, part) == '2013-01-01b';
+explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where concat(date_cast::VARCHAR, part) == '2013-01-01b';
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(concat\(CAST.*\(CAST.*\(date AS DATE\) AS.*VARCHAR\),.*part\) = '20.*
 
 # Complex filter filtering second file
 query IIII
@@ -133,22 +123,22 @@ select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/
 
 # Complex filter filtering second file, filter should be pruned completely
 query II
-explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where concat(date_cast::VARCHAR, part) == '2012-01-01a';
+explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where concat(date_cast::VARCHAR, part) == '2012-01-01a';
 ----
-physical_plan	<!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(concat\(CAST.*\(CAST.*\(date AS DATE\) AS.*VARCHAR\),.*part\) = '20.*
 
 # Currently, complex fiters combining hive columns and regular columns, can prevent filter pushdown for some situations
 # TODO: we want to support filter pushdown here too
 query II
-explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where (date_cast=CAST('2013-01-01' as DATE) AND (value='value1' OR concat(date_cast::VARCHAR, part) == '2013-01-01b'));
+explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where (date_cast=CAST('2013-01-01' as DATE) AND (value='value1' OR concat(date_cast::VARCHAR, part) == '2013-01-01b'));
 ----
-physical_plan	<REGEX>:.*(FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(CAST\(date AS.*DATE.*\) = '2013-01-01'::DATE.*
 
 # Idem
 query II
-explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where (date_cast=CAST('2012-01-01' as DATE) AND (value='value2' OR concat(date_cast::VARCHAR, part) == '2012-01-01a'));
+explain select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where (date_cast=CAST('2012-01-01' as DATE) AND (value='value2' OR concat(date_cast::VARCHAR, part) == '2012-01-01a'));
 ----
-physical_plan	<REGEX>:.*(FILTER).*
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(CAST\(date AS.*DATE.*\) = '2012-01-01'::DATE.*
 
 # Confirm that hive partitions override existing columns
 
@@ -174,3 +164,33 @@ order by id
 ----
 3	value3	c	2014-01-01
 4	value4	d	2015-01-01
+
+
+# check cases where there are file filters AND table filters
+statement ok
+Create table t1 (a int, b int, c int);
+
+foreach i 0 1 2 3 4 5 6 7 8 9
+
+statement ok
+insert into t1 (select range, ${i}*10, ${i}*100 from range(0,10));
+
+endloop
+
+statement ok
+COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
+
+statement ok
+COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters_2' (FORMAT PARQUET, PARTITION_BY (c, b));
+
+# There should be Table Filters (id < 50) and regular filters
+query II
+EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c=500 and a < 4;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*
+
+# unsatisfiable file filters also show up
+query II
+EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c > 500 and c < 500;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(CAST\(c AS.*INTEGER\).*BETWEEN 500.*

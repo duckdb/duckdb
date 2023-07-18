@@ -54,7 +54,7 @@ duckdb::vector<Match> RegexFindAll(const std::string &input, const Regex &regex)
 	Match match;
 	while (RegexSearchInternal(input.c_str(), match, regex, RE2::UNANCHORED, position, input.size())) {
 		position += match.position(0) + match.length(0);
-		matches.emplace_back(std::move(match));
+		matches.emplace_back(match);
 	}
 	return matches;
 }

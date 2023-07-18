@@ -31,8 +31,8 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_uniq<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
-		                                          vector<BoundAggregateExpression *>());
+		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
+		                                          vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;

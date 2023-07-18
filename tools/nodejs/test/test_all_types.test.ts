@@ -157,6 +157,7 @@ const correct_answer_map: Record<string, any[]> = {
     null,
   ],
   map: ["{}", "{key1=🦆🦆🦆🦆🦆🦆, key2=goose}", null],
+  union: ['Frank', '5', null],
 
   time_tz: ["00:00:00+00", "23:59:59.999999+00", null],
   interval: [

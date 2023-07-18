@@ -14,7 +14,8 @@ namespace duckdb {
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
-      bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)) {
+      bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
+      extra_info() {
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
@@ -22,7 +23,7 @@ optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 }
 
 string LogicalGet::ParamsToString() const {
-	string result;
+	string result = "";
 	for (auto &kv : table_filters.filters) {
 		auto &column_index = kv.first;
 		auto &filter = kv.second;
@@ -31,10 +32,14 @@ string LogicalGet::ParamsToString() const {
 		}
 		result += "\n";
 	}
-	if (!function.to_string) {
-		return string();
+	if (!extra_info.file_filters.empty()) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "File Filters: " + extra_info.file_filters;
 	}
-	return function.to_string(bind_data.get());
+	if (!function.to_string) {
+		return result;
+	}
+	return result + "\n" + function.to_string(bind_data.get());
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {

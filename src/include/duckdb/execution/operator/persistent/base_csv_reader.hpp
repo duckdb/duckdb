@@ -37,7 +37,7 @@ class BaseCSVReader {
 public:
 	BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	              const vector<LogicalType> &requested_types = vector<LogicalType>());
-	~BaseCSVReader();
+	virtual ~BaseCSVReader();
 
 	ClientContext &context;
 	FileSystem &fs;

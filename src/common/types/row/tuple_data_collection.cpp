@@ -220,6 +220,8 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
 	vector.ToUnifiedFormat(count, format.data);
+	format.original_sel = format.data.sel;
+	format.original_owned_sel.Initialize(format.data.owned_sel);
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);

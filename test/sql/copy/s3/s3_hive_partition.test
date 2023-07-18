@@ -68,3 +68,33 @@ query II
 select min(id), max(id) from read_csv_auto('s3://test-bucket/hive-partitioning/medium/*/*/test.csv', HIVE_PARTITIONING=1) where part2=1
 ----
 0	9999
+
+# check cases where there are file filters AND table filters
+statement ok
+Create table t1 (a int, b int, c int);
+
+foreach i 0 1 2 3 4 5 6 7 8 9
+
+statement ok
+insert into t1 (select range, ${i}*10, ${i}*100 from range(0,10));
+
+endloop
+
+statement ok
+COPY (SELECT * FROM t1) TO 's3://test-bucket/hive-partitioning/filter-test-parquet' (FORMAT PARQUET, PARTITION_BY c, OVERWRITE_OR_IGNORE);
+
+statement ok
+COPY (SELECT * FROM t1) TO 's3://test-bucket/hive-partitioning/filter-test-csv' (FORMAT CSV, PARTITION_BY c, OVERWRITE_OR_IGNORE);
+
+# There should be Table Filters (id < 50) and file filters (c = 500)
+query II
+EXPLAIN select a from parquet_scan('s3://test-bucket/hive-partitioning/filter-test-parquet/*/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where c=500 and a < 4;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*
+
+# There should be Table Filters (id < 50) and file filters (c = 500)
+query II
+EXPLAIN select a from read_csv_auto('s3://test-bucket/hive-partitioning/filter-test-csv/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0, columns={'a': 'INT', 'b':'INT', 'c':'INT'}) where c=500 and a < 4;
+----
+physical_plan	<REGEX>:.*FILTER.*(a < 4).*READ_CSV_AUTO.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*
+

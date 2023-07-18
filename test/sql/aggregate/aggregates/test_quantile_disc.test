@@ -9,6 +9,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE quantile as
 SELECT range r, random() AS q
 FROM range(10000)
