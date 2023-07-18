@@ -243,9 +243,29 @@ PipelineExecuteResult PipelineExecutor::PushFinalize() {
 
 	D_ASSERT(local_sink_state);
 
-	// run the combine for the sink TODO: make api return blocked or finished
+	// Run the combine for the sink
 	OperatorSinkCombineInput combine_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
-	auto result = pipeline.sink->Combine(context, combine_input);
+
+	SinkCombineResultType result;
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (debug_blocked_combine_count < debug_blocked_target_count) {
+		debug_blocked_combine_count++;
+
+		auto &callback_state = combine_input.interrupt_state;
+		std::thread rewake_thread([callback_state] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			callback_state.Callback();
+		});
+		rewake_thread.detach();
+
+		result = SinkCombineResultType::BLOCKED;
+	} else {
+		result = pipeline.sink->Combine(context, combine_input);
+	}
+#else
+	result = pipeline.sink->Combine(context, combine_input);
+#endif
 
 	if (result == SinkCombineResultType::BLOCKED) {
 		return PipelineExecuteResult::INTERRUPTED;

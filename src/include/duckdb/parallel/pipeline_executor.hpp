@@ -142,6 +142,7 @@ private:
 	//! Debugging state: number of times blocked
 	int debug_blocked_sink_count = 0;
 	int debug_blocked_source_count = 0;
+	int debug_blocked_combine_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif
