@@ -7,6 +7,10 @@ PRAGMA enable_verification
 
 statement error
 SELECT ([1, 2, 3])[0:-9223372036854775808];
+----
+Parser Error: The lower and/or upper bound of a slice cannot be a numeric limit. Consider leaving it empty or using a different value.
 
 statement error
 SELECT ([1, 2, 3])[-9223372036854775808:0];
+----
+Parser Error: The lower and/or upper bound of a slice cannot be a numeric limit. Consider leaving it empty or using a different value.
