@@ -33,4 +33,13 @@ struct ArrayFromListFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ArrayCosineSimilarityFun {
+	static constexpr const char *Name = "array_cosine_similarity";
+	static constexpr const char *Parameters = "array, array";
+	static constexpr const char *Description = "Compute the cosine similarity between two arrays.";
+	static constexpr const char *Example = "array_cosine_similarity([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

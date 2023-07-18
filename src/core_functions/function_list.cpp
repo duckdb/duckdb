@@ -70,6 +70,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggrFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayAggregateFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayApplyFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ArrayCosineSimilarityFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayDistinctFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayFilterFun),
 	DUCKDB_SCALAR_FUNCTION(ArrayFromListFun),
