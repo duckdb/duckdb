@@ -69,7 +69,7 @@ common/types/blob.cpp	3
 common/types/chunk_collection.cpp	94
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	50
-common/types/column/partitioned_column_data.cpp	6
+common/types/column/partitioned_column_data.cpp	8
 common/types/conflict_info.cpp	2
 common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
@@ -342,7 +342,7 @@ include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
 include/duckdb/common/pipe_file_system.hpp	3
 include/duckdb/common/radix.hpp	2
-include/duckdb/common/radix_partitioning.hpp	3
+include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
 include/duckdb/common/serializer.hpp	4
 include/duckdb/common/serializer/format_deserializer.hpp	37

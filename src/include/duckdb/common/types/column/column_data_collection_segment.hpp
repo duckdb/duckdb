@@ -126,6 +126,8 @@ public:
 	}
 
 	idx_t ChunkCount() const;
+	idx_t SizeInBytes() const;
+
 	void FetchChunk(idx_t chunk_idx, DataChunk &result);
 	void FetchChunk(idx_t chunk_idx, DataChunk &result, const vector<column_t> &column_ids);
 
