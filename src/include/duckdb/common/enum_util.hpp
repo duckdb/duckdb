@@ -40,6 +40,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AlterForeignKeyType : uint8_t;
+
 enum class AlterScalarFunctionType : uint8_t;
 
 enum class AlterTableFunctionType : uint8_t;
@@ -176,6 +178,8 @@ enum class OrderType : uint8_t;
 
 enum class OutputStream : uint8_t;
 
+enum class ParseInfoType : uint8_t;
+
 enum class ParserExtensionResultType : uint8_t;
 
 enum class ParserMode : uint8_t;
@@ -284,6 +288,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
@@ -490,6 +497,9 @@ template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
 
 template<>
+const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
+
+template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
 
 template<>
@@ -645,6 +655,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
@@ -849,6 +862,9 @@ OrderType EnumUtil::FromString<OrderType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
+
+template<>
+ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);

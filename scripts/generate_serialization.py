@@ -70,7 +70,7 @@ deserialize_element_class = '\tdeserializer.ReadProperty("${PROPERTY_KEY}", resu
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>("${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = [
-    'string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType'
+    'string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition'
 ]
 
 reference_list = [
@@ -278,7 +278,10 @@ def generate_base_class_code(base_class):
             base_class_deserialize+= f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
     base_class_deserialize += '\treturn result;'
     base_class_generation = ''
-    base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_serialize)
+    serialization = ''
+    if base_class.base is not None:
+        serialization += base_serialize.replace('${BASE_CLASS_NAME}', base_class.base)
+    base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', serialization + base_class_serialize)
     base_class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_deserialize)
     return base_class_generation
 
@@ -396,16 +399,16 @@ for entry in file_list:
             base_classes.append(new_class)
         else:
             classes.append(new_class)
-            if new_class.base is not None:
-                # this class inherits from a base class - add the enum value
-                if new_class.base not in base_class_data:
-                    raise Exception(f"Unknown base class \"{new_class.base}\" for entry \"{new_class.name}\"")
-                base_class_object = base_class_data[new_class.base]
-                new_class.inherit(base_class_object)
-                for enum_entry in new_class.enum_entries:
-                    if enum_entry in base_class_object.children:
-                        raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
-                    base_class_object.children[enum_entry] = new_class
+        if new_class.base is not None:
+            # this class inherits from a base class - add the enum value
+            if new_class.base not in base_class_data:
+                raise Exception(f"Unknown base class \"{new_class.base}\" for entry \"{new_class.name}\"")
+            base_class_object = base_class_data[new_class.base]
+            new_class.inherit(base_class_object)
+            for enum_entry in new_class.enum_entries:
+                if enum_entry in base_class_object.children:
+                    raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
+                base_class_object.children[enum_entry] = new_class
 
     with open(target_path, 'w+') as f:
         f.write(header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in include_list])))

@@ -16,7 +16,11 @@
 namespace duckdb {
 
 struct AttachInfo : public ParseInfo {
-	AttachInfo() {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::ATTACH_INFO;
+
+public:
+	AttachInfo() : ParseInfo(TYPE) {
 	}
 
 	//! The alias of the attached database

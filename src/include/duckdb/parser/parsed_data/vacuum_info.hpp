@@ -26,6 +26,9 @@ struct VacuumOptions {
 
 struct VacuumInfo : public ParseInfo {
 public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::VACUUM_INFO;
+
+public:
 	explicit VacuumInfo(VacuumOptions options);
 
 	const VacuumOptions options;

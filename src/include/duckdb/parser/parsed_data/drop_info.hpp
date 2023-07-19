@@ -15,6 +15,10 @@
 namespace duckdb {
 
 struct DropInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::DROP_INFO;
+
+public:
 	DropInfo();
 
 	//! The catalog type to drop

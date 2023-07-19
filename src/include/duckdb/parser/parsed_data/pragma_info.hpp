@@ -18,6 +18,12 @@ namespace duckdb {
 enum class PragmaType : uint8_t { PRAGMA_STATEMENT, PRAGMA_CALL };
 
 struct PragmaInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::PRAGMA_INFO;
+
+public:
+	PragmaInfo() : ParseInfo(TYPE) {}
+
 	//! Name of the PRAGMA statement
 	string name;
 	//! Parameter list (if any)

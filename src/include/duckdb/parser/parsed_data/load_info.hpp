@@ -16,6 +16,12 @@ namespace duckdb {
 enum class LoadType { LOAD, INSTALL, FORCE_INSTALL };
 
 struct LoadInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::LOAD_INFO;
+
+public:
+	LoadInfo() : ParseInfo(TYPE) {}
+
 	std::string filename;
 	LoadType load_type;
 
