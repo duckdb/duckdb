@@ -192,6 +192,15 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		}
 		break;
 	}
+	case PhysicalType::ARRAY: {
+		D_ASSERT(target.GetType().InternalType() == PhysicalType::ARRAY);
+		D_ASSERT(ArrayType::GetSize(source->GetType()) == ArrayType::GetSize(target.GetType()));
+
+		auto &source_child = ArrayVector::GetEntry(*source);
+		auto &target_child = ArrayVector::GetEntry(target);
+		VectorOperations::Copy(source_child, target_child, sel_p, source_count, source_offset, target_offset);
+		break;
+	}
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
 

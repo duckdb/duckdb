@@ -123,7 +123,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::MAP:
 		return PhysicalType::LIST;
 	case LogicalTypeId::ARRAY:
-		return PhysicalType::FIXED_SIZE_LIST;
+		return PhysicalType::ARRAY;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -269,8 +269,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT";
 	case PhysicalType::LIST:
 		return "LIST";
-	case PhysicalType::FIXED_SIZE_LIST:
-		return "FIXED_SIZE_LIST";
+	case PhysicalType::ARRAY:
+		return "ARRAY";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -315,7 +315,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
 	case PhysicalType::UNKNOWN:
-	case PhysicalType::FIXED_SIZE_LIST:
+	case PhysicalType::ARRAY:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len

@@ -634,8 +634,8 @@ void ColumnDataCopyStruct(ColumnDataMetaData &meta_data, const UnifiedVectorForm
 	}
 }
 
-void ColumnDataCopyFixedSizeList(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
-                                 idx_t offset, idx_t copy_count) {
+void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorFormat &source_data, Vector &source,
+                         idx_t offset, idx_t copy_count) {
 
 	auto &segment = meta_data.segment;
 
@@ -645,7 +645,7 @@ void ColumnDataCopyFixedSizeList(ColumnDataMetaData &meta_data, const UnifiedVec
 	// TODO: This function is sloppily implemented and probably not correct
 	auto &child_vector = ArrayVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
-	auto fixed_size = ArrayType::GetSize(source.GetType());
+	auto array_size = ArrayType::GetSize(source.GetType());
 
 	// Why is this neccessary, it isnt for structs?
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
@@ -659,9 +659,9 @@ void ColumnDataCopyFixedSizeList(ColumnDataMetaData &meta_data, const UnifiedVec
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
 	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(copy_count * fixed_size, child_data);
+	child_vector.ToUnifiedFormat(copy_count * array_size, child_data);
 
-	child_function.function(child_meta_data, child_data, child_vector, offset, copy_count * fixed_size);
+	child_function.function(child_meta_data, child_data, child_vector, offset, copy_count * array_size);
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {
@@ -724,8 +724,8 @@ ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &
 		result.child_functions.push_back(child_function);
 		break;
 	}
-	case PhysicalType::FIXED_SIZE_LIST: {
-		function = ColumnDataCopyFixedSizeList;
+	case PhysicalType::ARRAY: {
+		function = ColumnDataCopyArray;
 		auto child_function = GetCopyFunction(ArrayType::GetChildType(type));
 		result.child_functions.push_back(child_function);
 		break;
@@ -741,7 +741,7 @@ static bool IsComplexType(const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-	case PhysicalType::FIXED_SIZE_LIST:
+	case PhysicalType::ARRAY:
 		return true;
 	default:
 		return false;

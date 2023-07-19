@@ -53,21 +53,24 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
 
-	// TODO: Handle mismatched sizes
-	if (ArrayType::GetSize(source.GetType()) != ArrayType::GetSize(result.GetType())) {
-		return false;
-	}
-
-	// TODO: dont flatten
-	source.Flatten(count);
 	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	auto fixed_size = ArrayType::GetSize(source.GetType());
+	// TODO: Handle mismatched sizes
+	// We should be able to cast between arrays of different sizes if the child fits in the target
+	// OR maybe we shouldnt? I dont know
+	if (ArrayType::GetSize(source.GetType()) != ArrayType::GetSize(result.GetType())) {
+		throw NotImplementedException("Array to array cast with mismatched sizes");
+	}
+
+	// TODO: dont flatten
+	source.Flatten(count);
+
+	auto array_size = ArrayType::GetSize(source.GetType());
 	auto &source_cc = ArrayVector::GetEntry(source);
 	auto &result_cc = ArrayVector::GetEntry(result);
-	auto child_count = count * fixed_size;
+	auto child_count = count * array_size;
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, child_count, child_parameters);
@@ -138,6 +141,10 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		out_data[i].Finalize();
 	}
 
+	if (is_constant) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+
 	return true;
 }
 
@@ -152,8 +159,8 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-	auto fixed_size = ArrayType::GetSize(source.GetType());
-	auto child_count = count * fixed_size;
+	auto array_size = ArrayType::GetSize(source.GetType());
+	auto child_count = count * array_size;
 
 	ListVector::Reserve(result, child_count);
 	ListVector::SetListSize(result, child_count);
@@ -175,8 +182,8 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 			continue;
 		}
 
-		list_data[i].offset = i * fixed_size;
-		list_data[i].length = fixed_size;
+		list_data[i].offset = i * array_size;
+		list_data[i].length = array_size;
 	}
 
 	if (count == 1) {

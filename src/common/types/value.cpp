@@ -1516,7 +1516,7 @@ const vector<Value> &ArrayValue::GetChildren(const Value &value) {
 	if (value.is_null) {
 		throw InternalException("Calling ArrayValue::GetChildren on a NULL value");
 	}
-	D_ASSERT(value.type().InternalType() == PhysicalType::FIXED_SIZE_LIST);
+	D_ASSERT(value.type().InternalType() == PhysicalType::ARRAY);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }

@@ -1,0 +1,28 @@
+# name: test/sql/types/nested/array/array.test
+# group: [array]
+
+query I
+SELECT array_value(1, 2, 3);
+----
+[1, 2, 3]
+
+query I
+SELECT array_value(i -1, i, i + 1)
+FROM (VALUES (1), (2), (3)) AS t(i)
+----
+[0, 1, 2]
+[1, 2, 3]
+[2, 3, 4]
+
+
+# Storage
+statement ok
+CREATE TABLE t1 (c INT[2])
+
+statement ok
+INSERT INTO t1 VALUES (array_value(1, 2))
+
+query I
+SELECT * FROM t1
+----
+[1, 2]

@@ -170,7 +170,7 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		}
 		return false;
 	}
-	case PhysicalType::FIXED_SIZE_LIST: {
+	case PhysicalType::ARRAY: {
 		auto &left_children = ArrayValue::GetChildren(left);
 		auto &right_children = ArrayValue::GetChildren(right);
 

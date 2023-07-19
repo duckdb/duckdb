@@ -92,7 +92,7 @@ void Vector::Reference(const Value &value) {
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		data = buffer->GetData();
 		SetValue(0, value);
-	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
+	} else if (internal_type == PhysicalType::ARRAY) {
 		auto array_buffer = make_uniq<VectorArrayBuffer>(value.type());
 		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
 		SetValue(0, value);
@@ -228,7 +228,7 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	} else if (internal_type == PhysicalType::LIST) {
 		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
-	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
+	} else if (internal_type == PhysicalType::ARRAY) {
 		auto array_buffer = make_uniq<VectorArrayBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
 	}
@@ -414,7 +414,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		entry.offset = offset;
 		break;
 	}
-	case PhysicalType::FIXED_SIZE_LIST: {
+	case PhysicalType::ARRAY: {
 		auto &val_children = ArrayValue::GetChildren(val);
 		auto stride = ArrayType::GetSize(GetType());
 		auto &entry = ArrayVector::GetEntry(*this);
@@ -820,18 +820,18 @@ void Vector::Flatten(idx_t count) {
 			TemplatedFlattenConstantVector<list_entry_t>(data, old_data, count);
 			break;
 		}
-		case PhysicalType::FIXED_SIZE_LIST: {
+		case PhysicalType::ARRAY: {
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 
 			auto &child = ArrayVector::GetEntry(*this);
-			auto fixed_size = ArrayType::GetSize(GetType());
+			auto array_size = ArrayType::GetSize(GetType());
 
 			// TODO: This should be set?
 			// D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
 			auto vector = make_uniq<Vector>(child);
-			vector->Flatten(count * fixed_size);
+			vector->Flatten(count * array_size);
 
-			VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * fixed_size, 0, 0);
+			VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * array_size, 0, 0);
 			// flattened_buffer->GetChild() = vector;
 
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
@@ -1007,7 +1007,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			child.Serialize(list_size, serializer);
 			break;
 		}
-		case PhysicalType::FIXED_SIZE_LIST: {
+		case PhysicalType::ARRAY: {
 			// TODO: Technically, fixed size lists are constant size types,
 			// but we cant get the actual size from just the physical type.
 			// Maybe there is a better way to do this?
@@ -1256,7 +1256,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 			break;
 		}
-		case PhysicalType::FIXED_SIZE_LIST: {
+		case PhysicalType::ARRAY: {
 			auto fixed_list_size = source.Read<idx_t>();
 			auto &child = ArrayVector::GetEntry(*this);
 			child.Deserialize(count * fixed_list_size, source);
@@ -1582,7 +1582,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		break;
 	}
-	case PhysicalType::FIXED_SIZE_LIST: {
+	case PhysicalType::ARRAY: {
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
 

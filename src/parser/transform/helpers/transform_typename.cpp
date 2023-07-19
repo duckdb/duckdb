@@ -209,7 +209,17 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;
 		for (auto cell = type_name.arrayBounds->head; cell != nullptr; cell = cell->next) {
-			result_type = LogicalType::LIST(result_type);
+			auto val = (duckdb_libpgquery::PGValue *)cell->data.ptr_value;
+			if (val->type != duckdb_libpgquery::T_PGInteger) {
+				throw ParserException("Expected integer value as array bound");
+			}
+			auto array_size = val->val.ival;
+			if (array_size < 0) {
+				// -1 if bounds are empty
+				result_type = LogicalType::LIST(result_type);
+			} else {
+				result_type = LogicalType::ARRAY(result_type, array_size);
+			}
 			StackCheck(extra_stack++);
 		}
 	}

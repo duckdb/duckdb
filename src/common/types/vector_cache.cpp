@@ -21,7 +21,7 @@ public:
 			auxiliary = make_shared<VectorListBuffer>(std::move(child_vector));
 			break;
 		}
-		case PhysicalType::FIXED_SIZE_LIST: {
+		case PhysicalType::ARRAY: {
 			auto &child_type = ArrayType::GetChildType(type);
 			auto size = ArrayType::GetSize(type);
 			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, size * capacity));
@@ -65,7 +65,7 @@ public:
 			child_cache.ResetFromCache(list_child, child_caches[0]);
 			break;
 		}
-		case PhysicalType::FIXED_SIZE_LIST: {
+		case PhysicalType::ARRAY: {
 			// fixed size list does not have own data
 			result.data = nullptr;
 			// reinitialize the VectorArrayBuffer

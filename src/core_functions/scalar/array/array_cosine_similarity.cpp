@@ -11,7 +11,7 @@ static void ArrayCosineSimilarityFunction(DataChunk &args, ExpressionState &stat
 	auto &lhs = args.data[0];
 	auto &rhs = args.data[1];
 
-	auto fixed_size = ArrayType::GetSize(lhs.GetType());
+	auto array_size = ArrayType::GetSize(lhs.GetType());
 
 	auto &lhs_child = ArrayVector::GetEntry(lhs);
 	auto &rhs_child = ArrayVector::GetEntry(rhs);
@@ -24,7 +24,7 @@ static void ArrayCosineSimilarityFunction(DataChunk &args, ExpressionState &stat
 		double dot = 0;
 		double denom_l = 0;
 		double denom_r = 0;
-		for (idx_t j = i * fixed_size; j < (i + 1) * fixed_size; j++) {
+		for (idx_t j = i * array_size; j < (i + 1) * array_size; j++) {
 			auto x = lhs_data[j];
 			auto y = rhs_data[j];
 			denom_l += x * x;

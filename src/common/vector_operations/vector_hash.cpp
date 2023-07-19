@@ -177,7 +177,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 }
 
 template <bool HAS_RSEL, bool FIRST_HASH>
-static inline void FixedSizeListLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
+static inline void ArrayLoopHash(Vector &input, Vector &hashes, const SelectionVector *rsel, idx_t count) {
 	auto hdata = FlatVector::GetData<hash_t>(hashes);
 
 	UnifiedVectorFormat idata;
@@ -185,8 +185,8 @@ static inline void FixedSizeListLoopHash(Vector &input, Vector &hashes, const Se
 
 	// Hash the children into a temporary
 	auto &child = ArrayVector::GetEntry(input);
-	auto fixed_size = ArrayType::GetSize(input.GetType());
-	auto child_count = fixed_size * count;
+	auto array_size = ArrayType::GetSize(input.GetType());
+	auto child_count = array_size * count;
 
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
@@ -197,7 +197,7 @@ static inline void FixedSizeListLoopHash(Vector &input, Vector &hashes, const Se
 	// Combine hashes for every array
 	// TODO: Branch on FIRST_HASH and HAS_RSEL
 	for (idx_t i = 0; i < count; i++) {
-		for (idx_t j = i * fixed_size; j < (i + 1) * fixed_size; j++) {
+		for (idx_t j = i * array_size; j < (i + 1) * array_size; j++) {
 			hdata[i] = CombineHashScalar(hdata[i], chdata[j]);
 		}
 	}
@@ -253,8 +253,8 @@ static inline void HashTypeSwitch(Vector &input, Vector &result, const Selection
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
-	case PhysicalType::FIXED_SIZE_LIST:
-		FixedSizeListLoopHash<HAS_RSEL, true>(input, result, rsel, count);
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, true>(input, result, rsel, count);
 		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");

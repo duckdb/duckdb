@@ -155,7 +155,7 @@ enum class PhysicalType : uint8_t {
 	//EXTENSION = 28,
 
 	///// Fixed size list of some logical type
-	FIXED_SIZE_LIST = 29,
+	ARRAY = 29,
 
 	///// Measure of elapsed time in either seconds, milliseconds, microseconds
 	///// or nanoseconds.

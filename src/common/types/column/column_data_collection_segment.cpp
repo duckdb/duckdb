@@ -24,7 +24,7 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	meta_data.count = 0;
 
 	auto internal_type = type.InternalType();
-	auto type_size = ((internal_type == PhysicalType::STRUCT) || (internal_type == PhysicalType::FIXED_SIZE_LIST))
+	auto type_size = ((internal_type == PhysicalType::STRUCT) || (internal_type == PhysicalType::ARRAY))
 	                     ? 0
 	                     : GetTypeIdSize(internal_type);
 	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
@@ -196,7 +196,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		auto &child_vector = ListVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
-	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
+	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		if (child_count != vcount * ArrayType::GetSize(vector_type)) {

@@ -159,6 +159,10 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 		// validity + list child
 		child_states.resize(2);
 		child_states[1].Initialize(ListType::GetChildType(type));
+	} else if (type.InternalType() == PhysicalType::ARRAY) {
+		// validity + array child
+		child_states.resize(2);
+		child_states[1].Initialize(ArrayType::GetChildType(type));
 	} else {
 		// validity
 		child_states.resize(1);
