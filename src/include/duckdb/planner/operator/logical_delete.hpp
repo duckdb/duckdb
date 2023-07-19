@@ -40,6 +40,6 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalDelete(ClientContext &context, string catalog, string schema, string table);
+	LogicalDelete(ClientContext &context, const string &catalog, const string &schema, const string &table);
 };
 } // namespace duckdb

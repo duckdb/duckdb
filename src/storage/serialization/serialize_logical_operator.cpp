@@ -31,9 +31,6 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		result = LogicalAnyJoin::FormatDeserialize(deserializer);
 		break;
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		result = LogicalAsOfJoin::FormatDeserialize(deserializer);
-		break;
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
@@ -72,9 +69,6 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		result = LogicalDelimGet::FormatDeserialize(deserializer);
-		break;
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		result = LogicalDelimJoin::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
@@ -219,27 +213,6 @@ unique_ptr<LogicalOperator> LogicalAnyJoin::FormatDeserialize(FormatDeserializer
 	return std::move(result);
 }
 
-void LogicalAsOfJoin::FormatSerialize(FormatSerializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty("join_type", join_type);
-	serializer.WriteProperty("mark_index", mark_index);
-	serializer.WriteProperty("left_projection_map", left_projection_map);
-	serializer.WriteProperty("right_projection_map", right_projection_map);
-	serializer.WriteProperty("conditions", conditions);
-	serializer.WriteProperty("mark_types", mark_types);
-}
-
-unique_ptr<LogicalOperator> LogicalAsOfJoin::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto join_type = deserializer.ReadProperty<JoinType>("join_type");
-	auto result = duckdb::unique_ptr<LogicalAsOfJoin>(new LogicalAsOfJoin(join_type));
-	deserializer.ReadProperty("mark_index", result->mark_index);
-	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
-	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
-	deserializer.ReadProperty("conditions", result->conditions);
-	deserializer.ReadProperty("mark_types", result->mark_types);
-	return std::move(result);
-}
-
 void LogicalCTERef::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("table_index", table_index);
@@ -361,29 +334,6 @@ unique_ptr<LogicalOperator> LogicalDelimGet::FormatDeserialize(FormatDeserialize
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto chunk_types = deserializer.ReadProperty<vector<LogicalType>>("chunk_types");
 	auto result = duckdb::unique_ptr<LogicalDelimGet>(new LogicalDelimGet(table_index, std::move(chunk_types)));
-	return std::move(result);
-}
-
-void LogicalDelimJoin::FormatSerialize(FormatSerializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty("join_type", join_type);
-	serializer.WriteProperty("mark_index", mark_index);
-	serializer.WriteProperty("left_projection_map", left_projection_map);
-	serializer.WriteProperty("right_projection_map", right_projection_map);
-	serializer.WriteProperty("conditions", conditions);
-	serializer.WriteProperty("mark_types", mark_types);
-	serializer.WriteProperty("duplicate_eliminated_columns", duplicate_eliminated_columns);
-}
-
-unique_ptr<LogicalOperator> LogicalDelimJoin::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto join_type = deserializer.ReadProperty<JoinType>("join_type");
-	auto result = duckdb::unique_ptr<LogicalDelimJoin>(new LogicalDelimJoin(join_type));
-	deserializer.ReadProperty("mark_index", result->mark_index);
-	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
-	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
-	deserializer.ReadProperty("conditions", result->conditions);
-	deserializer.ReadProperty("mark_types", result->mark_types);
-	deserializer.ReadProperty("duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	return std::move(result);
 }
 

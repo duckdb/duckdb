@@ -38,6 +38,6 @@ protected:
 	void ResolveTypes() override;
 
 private:
-	LogicalCreateTable(ClientContext &context, string catalog, string schema, unique_ptr<CreateInfo> info);
+	LogicalCreateTable(ClientContext &context, const string &catalog, const string &schema, unique_ptr<CreateInfo> info);
 };
 } // namespace duckdb

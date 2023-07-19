@@ -12,7 +12,7 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
       action_type(OnConflictAction::THROW) {
 }
 
-LogicalInsert::LogicalInsert(ClientContext &context, string catalog, string schema, string table)
+LogicalInsert::LogicalInsert(ClientContext &context, const string &catalog, const string &schema, const string &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
       table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }

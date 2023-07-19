@@ -75,6 +75,6 @@ protected:
 	string GetName() const override;
 
 private:
-	LogicalInsert(ClientContext &context, string catalog, string schema, string table);
+	LogicalInsert(ClientContext &context, const string &catalog, const string &schema, const string &table);
 };
 } // namespace duckdb

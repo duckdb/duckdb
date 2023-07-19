@@ -6,7 +6,7 @@ LogicalCreateTable::LogicalCreateTable(SchemaCatalogEntry &schema, unique_ptr<Bo
     : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_TABLE), schema(schema), info(std::move(info)) {
 }
 
-LogicalCreateTable::LogicalCreateTable(ClientContext &context, string catalog, string schema,
+LogicalCreateTable::LogicalCreateTable(ClientContext &context, const string &catalog, const string &schema,
                                        unique_ptr<CreateInfo> unbound_info)
     : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_TABLE), schema(Catalog::GetSchema(context, catalog, schema)) {
 	D_ASSERT(unbound_info->type == CatalogType::TABLE_ENTRY);

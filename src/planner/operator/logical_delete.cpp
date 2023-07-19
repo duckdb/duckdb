@@ -11,7 +11,7 @@ LogicalDelete::LogicalDelete(TableCatalogEntry &table, idx_t table_index)
       return_chunk(false) {
 }
 
-LogicalDelete::LogicalDelete(ClientContext &context, string catalog, string schema, string table)
+LogicalDelete::LogicalDelete(ClientContext &context, const string &catalog, const string &schema, const string &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_DELETE),
       table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }
