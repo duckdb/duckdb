@@ -10,7 +10,7 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
-LogicalUpdate::LogicalUpdate(ClientContext &context, string catalog, string schema, string table)
+LogicalUpdate::LogicalUpdate(ClientContext &context, const string &catalog, const string &schema, const string &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
       table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }

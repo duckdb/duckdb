@@ -304,7 +304,13 @@ def generate_class_code(class_entry):
     if class_entry.constructor is not None:
         if type(class_entry.constructor) != type([]):
             raise Exception(f"constructor must be of type [], but is of type {str(type(class_entry.constructor))}")
-        for constructor_entry in class_entry.constructor:
+        for constructor_entry_ in class_entry.constructor:
+            if constructor_entry_.endswith('&'):
+                constructor_entry = constructor_entry_[:-1]
+                is_reference = True
+            else:
+                constructor_entry = constructor_entry_
+                is_reference = False
             constructor_entries[constructor_entry] = True
             found = False
             for entry_idx in range(len(class_entry.members)):
@@ -315,7 +321,7 @@ def generate_class_code(class_entry):
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
-                    if requires_move(type_name):
+                    if requires_move(type_name) and not is_reference:
                         constructor_parameters += 'std::move(' + entry.name + ')'
                     else:
                         constructor_parameters += entry.name

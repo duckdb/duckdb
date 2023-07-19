@@ -290,7 +290,7 @@ unique_ptr<LogicalOperator> LogicalCreateTable::FormatDeserialize(FormatDeserial
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
-	auto result = duckdb::unique_ptr<LogicalCreateTable>(new LogicalCreateTable(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(info)));
+	auto result = duckdb::unique_ptr<LogicalCreateTable>(new LogicalCreateTable(deserializer.Get<ClientContext &>(), catalog, schema, std::move(info)));
 	return std::move(result);
 }
 
@@ -317,7 +317,7 @@ unique_ptr<LogicalOperator> LogicalDelete::FormatDeserialize(FormatDeserializer 
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto table = deserializer.ReadProperty<string>("table");
-	auto result = duckdb::unique_ptr<LogicalDelete>(new LogicalDelete(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	auto result = duckdb::unique_ptr<LogicalDelete>(new LogicalDelete(deserializer.Get<ClientContext &>(), catalog, schema, table));
 	deserializer.ReadProperty("table_index", result->table_index);
 	deserializer.ReadProperty("return_chunk", result->return_chunk);
 	deserializer.ReadProperty("expressions", result->expressions);
@@ -448,7 +448,7 @@ unique_ptr<LogicalOperator> LogicalInsert::FormatDeserialize(FormatDeserializer 
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto table = deserializer.ReadProperty<string>("table");
-	auto result = duckdb::unique_ptr<LogicalInsert>(new LogicalInsert(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	auto result = duckdb::unique_ptr<LogicalInsert>(new LogicalInsert(deserializer.Get<ClientContext &>(), catalog, schema, table));
 	deserializer.ReadProperty("insert_values", result->insert_values);
 	deserializer.ReadProperty("column_index_map", result->column_index_map);
 	deserializer.ReadProperty("expected_types", result->expected_types);
@@ -703,7 +703,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::FormatDeserialize(FormatDeserializer 
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto table = deserializer.ReadProperty<string>("table");
-	auto result = duckdb::unique_ptr<LogicalUpdate>(new LogicalUpdate(deserializer.Get<ClientContext &>(), std::move(catalog), std::move(schema), std::move(table)));
+	auto result = duckdb::unique_ptr<LogicalUpdate>(new LogicalUpdate(deserializer.Get<ClientContext &>(), catalog, schema, table));
 	deserializer.ReadProperty("table_index", result->table_index);
 	deserializer.ReadProperty("return_chunk", result->return_chunk);
 	deserializer.ReadProperty("expressions", result->expressions);

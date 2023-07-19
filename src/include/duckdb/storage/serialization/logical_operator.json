@@ -572,7 +572,7 @@
         "type": "vector<column_t>"
       }
     ],
-    "constructor": ["$ClientContext", "catalog", "schema", "table"]
+    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
   },
   {
     "class": "LogicalDelete",
@@ -607,7 +607,7 @@
         "type": "vector<Expression*>"
       }
     ],
-    "constructor": ["$ClientContext", "catalog", "schema", "table"]
+    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
   },
   {
     "class": "LogicalUpdate",
@@ -654,7 +654,7 @@
         "type": "bool"
       }
     ],
-    "constructor": ["$ClientContext", "catalog", "schema", "table"]
+    "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
   },
   {
     "class": "LogicalCreateTable",
@@ -677,7 +677,7 @@
         "serialize_property": "info->base"
       }
     ],
-    "constructor": ["$ClientContext", "catalog", "schema", "info"]
+    "constructor": ["$ClientContext", "catalog&", "schema&", "info"]
   },
   {
     "class": "LogicalCreate",
