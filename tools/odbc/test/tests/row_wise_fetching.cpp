@@ -16,7 +16,7 @@ typedef struct s_order_info {
 
 // This test is taken from
 // https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/row-wise-binding?view=sql-server-ver15
-static void TestMicrosoftExample(HSTMT &hstmt) {
+static void TestRowWiseExampleTable(HSTMT &hstmt) {
 	t_order_info order_info[ROW_ARRAY_SIZE];
 	SQLULEN rows_fetched;
 	SQLUSMALLINT row_array_status[ROW_ARRAY_SIZE];
@@ -171,7 +171,7 @@ TEST_CASE("Test Row Wise Testing and SQLFetchScroll", "[odbc]") {
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 	// Test taken from ODBC documentation
-	TestMicrosoftExample(hstmt);
+	TestRowWiseExampleTable(hstmt);
 
 	TestManySQLTypes(hstmt);
 
