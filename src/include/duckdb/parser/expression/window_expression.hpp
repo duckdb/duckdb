@@ -25,6 +25,9 @@ enum class WindowBoundary : uint8_t {
 	EXPR_FOLLOWING_RANGE = 8
 };
 
+//! Represents the window exclusion mode
+enum class WindowExclusion : uint8_t { NO_OTHER = 0, CURRENT_ROW = 1, GROUP = 2, TIES = 3 };
+
 const char *ToString(WindowBoundary value);
 
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
@@ -55,6 +58,8 @@ public:
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExclusion exclude_clause;
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;
@@ -204,6 +209,23 @@ public:
 		} else if (!to.empty()) {
 			result += " ";
 			result += to;
+		}
+
+		if (entry.exclude_clause != WindowExclusion::NO_OTHER) {
+			result += " EXCLUDE ";
+		}
+		switch (entry.exclude_clause) {
+		case WindowExclusion::CURRENT_ROW:
+			result += "CURRENT ROW";
+			break;
+		case WindowExclusion::GROUP:
+			result += "GROUP";
+			break;
+		case WindowExclusion::TIES:
+			result += "TIES";
+			break;
+		default:
+			break;
 		}
 
 		result += ")";

@@ -33,6 +33,9 @@ bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (start != other.start || end != other.end) {
 		return false;
 	}
+	if (exclude_clause != other.exclude_clause) {
+		return false;
+	}
 	// check if the child expressions are equivalent
 	if (!Expression::ListEquals(children, other.children)) {
 		return false;
@@ -102,6 +105,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 
 	new_window->start = start;
 	new_window->end = end;
+	new_window->exclude_clause = exclude_clause;
 	new_window->start_expr = start_expr ? start_expr->Copy() : nullptr;
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
@@ -128,6 +132,7 @@ void BoundWindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
+	writer.WriteField<WindowExclusion>(exclude_clause);
 	writer.WriteOptional(start_expr);
 	writer.WriteOptional(end_expr);
 	writer.WriteOptional(offset_expr);
@@ -157,6 +162,7 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->ignore_nulls = reader.ReadRequired<bool>();
 	result->start = reader.ReadRequired<WindowBoundary>();
 	result->end = reader.ReadRequired<WindowBoundary>();
+	result->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	result->start_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);

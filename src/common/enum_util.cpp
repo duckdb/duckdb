@@ -6077,5 +6077,38 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value) {
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
+template<>
+const char* EnumUtil::ToChars<WindowExclusion>(WindowExclusion value) {
+	switch(value) {
+	case WindowExclusion::NO_OTHER:
+		return "NO_OTHER";
+	case WindowExclusion::CURRENT_ROW:
+		return "CURRENT_ROW";
+	case WindowExclusion::GROUP:
+		return "GROUP";
+	case WindowExclusion::TIES:
+		return "TIES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+WindowExclusion EnumUtil::FromString<WindowExclusion>(const char *value) {
+	if (StringUtil::Equals(value, "NO_OTHER")) {
+		return WindowExclusion::NO_OTHER;
+	}
+	if (StringUtil::Equals(value, "CURRENT_ROW")) {
+		return WindowExclusion::CURRENT_ROW;
+	}
+	if (StringUtil::Equals(value, "GROUP")) {
+		return WindowExclusion::GROUP;
+	}
+	if (StringUtil::Equals(value, "TIES")) {
+		return WindowExclusion::TIES;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
 }
 

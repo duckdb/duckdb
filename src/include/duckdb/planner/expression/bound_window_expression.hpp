@@ -43,6 +43,8 @@ public:
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
+	//! The EXCLUDE clause
+	WindowExclusion exclude_clause;
 
 	unique_ptr<Expression> start_expr;
 	unique_ptr<Expression> end_expr;
