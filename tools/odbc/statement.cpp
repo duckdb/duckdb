@@ -27,8 +27,8 @@ using std::string;
  * 					\n- ODBC descriptor handle
  * 					\n- SQLUINTEGER value
  * 					\n- SQLULEN value
- * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN, or
- * SQLUSMALLINT, a driver-defined value
+ * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN,
+ * or SQLUSMALLINT, a driver-defined value
  * @param string_length The length of the value_ptr parameter.  See
  * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function for details.
  * @return SQL return code
