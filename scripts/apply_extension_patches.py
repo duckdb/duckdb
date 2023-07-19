@@ -22,4 +22,5 @@ if not patches:
 
 # Apply each patch file using git apply
 for patch in patches:
-  subprocess.run(["git", "apply", patch])
+  print(f"Applying patch: {patch}")
+  subprocess.run(["git", "apply", "--ignore-space-change", "--ignore-whitespace", patch])
