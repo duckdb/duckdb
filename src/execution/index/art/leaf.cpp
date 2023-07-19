@@ -42,20 +42,16 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 void Leaf::Free(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet() && !node.IsSerialized());
-	auto &child = Leaf::Get(art, node).ptr;
-	Node::Free(art, child);
-}
+	Node current_node = node;
+	Node next_node;
+	while (current_node.IsSet() && !current_node.IsSerialized()) {
+		next_node = Leaf::Get(art, current_node).ptr;
+		Node::GetAllocator(art, NType::LEAF).Free(current_node);
+		current_node = next_node;
+	}
 
-// Node current_node = node;
-// Node next_node;
-// while (current_node.IsSet() && !current_node.IsSerialized()) {
-//	next_node = Leaf::Get(art, current_node).ptr;
-//	Node::GetAllocator(art, NType::LEAF).Free(current_node);
-//	current_node = next_node;
-//}
-//
-// node.Reset();
+	node.Reset();
+}
 
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
