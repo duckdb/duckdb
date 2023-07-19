@@ -40,10 +40,10 @@ class TestFetchNested(object):
         compare_results("SELECT list (lllle)  as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t) as t1) as t2) as t3",[[[[[[0, 2, 4], [1, 3]]]]] ])
 
         compare_results('''SELECT grp,lst,a FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as a
-                         from (SELECT a_1%4 as grp, list(a_1) as lst FROM range(7) tbl(a_1) group by grp) as lst_tbl) as T;''',[[None],[None],[2, 6],[3]])
+                         from (SELECT a_1%4 as grp, list(a_1) as lst FROM range(7) tbl(a_1) group by grp order by all) as lst_tbl) as T;''',[[None],[None],[2, 6],[3]])
 
         #Tests for converting multiple lists to/from Pandas with NULL values and/or strings
-        compare_results("SELECT list(st) as a from (select i, case when i%5 then NULL else i::VARCHAR end as st from range(10) tbl(i)) as t group by i%2",[['0', None, None, None, None],[None, None, '5', None, None]])
+        compare_results("SELECT list(st) as a from (select i, case when i%5 then NULL else i::VARCHAR end as st from range(10) tbl(i)) as t group by i%2 order by all",[['0', None, None, None, None],[None, None, '5', None, None]])
 
     def test_struct_df(self,duckdb_cursor):
         compare_results("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t",[{'a': 42, 'b': 43}])
@@ -78,7 +78,7 @@ class TestFetchNested(object):
         
         compare_results("SELECT m as a from (select MAP(list_value(1), list_value(2)) from range(5) tbl(i)) tbl(m)", [{'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}, {'key': [1], 'value': [2]}])
 
-        compare_results("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5) as lst_tbl) as T", [{'key': [0, 5], 'value': [0, 5]}, {'key': [1, 6], 'value': [1, 6]}, {'key': [2, 7], 'value': [2, 7]}, {'key': [3, 8], 'value': [3, 8]}, {'key': [4, 9], 'value': [4, 9]}])
+        compare_results("SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T", [{'key': [0, 5], 'value': [0, 5]}, {'key': [1, 6], 'value': [1, 6]}, {'key': [2, 7], 'value': [2, 7]}, {'key': [3, 8], 'value': [3, 8]}, {'key': [4, 9], 'value': [4, 9]}])
 
     def test_nested_mix(self,duckdb_cursor):
         # List of structs W/ Struct that is NULL entirely

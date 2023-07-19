@@ -13,5 +13,5 @@ class TestLimitPandas(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_aggregate_df(self, duckdb_cursor, pandas):
         df_in = pandas.DataFrame({'numbers': [1,2,2,2],})
-        aggregate_df = duckdb.aggregate(df_in,'count(numbers)','numbers')
+        aggregate_df = duckdb.aggregate(df_in,'count(numbers)','numbers').order('all')
         assert aggregate_df.execute().fetchall() == [(1,), (3,)]

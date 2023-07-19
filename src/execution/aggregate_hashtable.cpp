@@ -149,6 +149,7 @@ idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 }
 
 void GroupedAggregateHashTable::Verify() {
+#ifdef DEBUG
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		const auto &entry = entries[i];
@@ -160,6 +161,7 @@ void GroupedAggregateHashTable::Verify() {
 		count++;
 	}
 	D_ASSERT(count == Count());
+#endif
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
