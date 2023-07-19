@@ -167,18 +167,13 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t batch_size, ArrowArray *out,
                               idx_t &count, PreservedError &error) {
 	count = 0;
-	if (!scan_state.ScanStarted()) {
-		if (!scan_state.LoadNextChunk(error)) {
-			return false;
-		}
-	}
-	auto &current_chunk = scan_state.CurrentChunk();
-	ArrowAppender appender(current_chunk.GetTypes(), batch_size, options);
+	ArrowAppender appender(scan_state.Types(), batch_size, options);
 	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
 	if (remaining_tuples_in_chunk) {
 		// We start by scanning the non-finished current chunk
 		idx_t cur_consumption = MinValue(remaining_tuples_in_chunk, batch_size);
 		count += cur_consumption;
+		auto &current_chunk = scan_state.CurrentChunk();
 		appender.Append(current_chunk, scan_state.CurrentOffset(), scan_state.CurrentOffset() + cur_consumption,
 		                current_chunk.size());
 		scan_state.IncreaseOffset(cur_consumption);

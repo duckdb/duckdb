@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/common/vector.hpp"
+
 namespace duckdb {
 
 class QueryResult;
@@ -17,6 +19,7 @@ public:
 	virtual bool LoadNextChunk(PreservedError &error) = 0;
 	virtual bool HasError() const = 0;
 	virtual PreservedError &GetError() = 0;
+	virtual vector<LogicalType> &Types() = 0;
 	idx_t CurrentOffset() const;
 	idx_t RemainingInChunk() const;
 	DataChunk &CurrentChunk();
@@ -39,6 +42,7 @@ public:
 	bool LoadNextChunk(PreservedError &error) override;
 	bool HasError() const override;
 	PreservedError &GetError() override;
+	vector<LogicalType> &Types();
 
 private:
 	bool InternalLoad(PreservedError &error);

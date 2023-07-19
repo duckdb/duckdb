@@ -66,6 +66,10 @@ PreservedError &QueryResultChunkScanState::GetError() {
 	return result.GetErrorObject();
 }
 
+vector<LogicalType> &QueryResultChunkScanState::Types() {
+	return result.types;
+}
+
 bool QueryResultChunkScanState::LoadNextChunk(PreservedError &error) {
 	if (finished) {
 		return !finished;
