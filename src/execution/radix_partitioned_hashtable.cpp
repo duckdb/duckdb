@@ -146,7 +146,7 @@ public:
 
 	//! Destroys aggregate states (if multi-scan)
 	void Destroy();
-	~RadixHTGlobalSinkState();
+	~RadixHTGlobalSinkState() override;
 
 public:
 	mutex lock;
