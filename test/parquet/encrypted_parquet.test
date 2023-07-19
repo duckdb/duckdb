@@ -1,0 +1,15 @@
+# name: test/parquet/encrypted_parquet.test
+# description: Test Parquet reader on data/parquet-testing/encrypted.parquet
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT * FROM parquet_scan('data/parquet-testing/encrypted.parquet') limit 50;
+----
+Invalid Error: Failed to read Parquet file "data/parquet-testing/encrypted.parquet": Encrypted Parquet files are not supported
+
+
