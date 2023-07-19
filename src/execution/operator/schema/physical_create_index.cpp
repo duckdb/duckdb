@@ -100,7 +100,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	auto &storage = table.GetStorage();
 	auto art = make_uniq<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
 	                          lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db,
-	                          &lstate.local_index->Cast<ART>().allocators);
+	                          lstate.local_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
