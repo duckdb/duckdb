@@ -25,6 +25,7 @@ bool QueryGraphManager::ExtractBindings(Expression &expression, unordered_set<id
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
+		// TODO: what is the relation mapping and why is it important?
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		auto catalog_table = relation_mapping[colref.binding.table_index];
 		auto column_index = colref.binding.column_index;
@@ -49,7 +50,7 @@ bool QueryGraphManager::ExtractBindings(Expression &expression, unordered_set<id
 //
 //
 //
-//void JoinOrderOptimizer::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
+//void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
 //	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 //		// Here you have a filter on a single column in a table. Return a binding for the column
 //		// being filtered on so the filter estimator knows what HLL count to pull
@@ -310,7 +311,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 	throw Exception("Could not find relation in parent node (?)");
 }
 
-GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
+GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                        JoinNode &node) {
 	optional_ptr<JoinRelationSet> left_node;
 	optional_ptr<JoinRelationSet> right_node;
@@ -361,7 +362,7 @@ GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<Logical
 		left_node = &left.set;
 		right_node = &right.set;
 		right_node = &right.set;
-		result_relation = &set_manager.Union(*left_node, *right_node);
+		result_relation = set_manager.Union(*left_node, *right_node);
 	} else {
 		// base node, get the entry from the list of extracted relations
 		D_ASSERT(node.set.count == 1);
@@ -369,6 +370,9 @@ GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<Logical
 		result_relation = &node.set;
 		result_operator = std::move(extracted_relations[node.set.relations[0]]);
 	}
+	// TODO: this is where estimated properties start coming into play.
+	//  when creating the result operator, we should ask the cost model and cardinality estimator what
+	//  the cost and cardinality are
 	result_operator->estimated_props = node.estimated_props->Copy();
 	result_operator->estimated_cardinality = result_operator->estimated_props->GetCardinality<idx_t>();
 	result_operator->has_estimated_cardinality = true;
@@ -460,13 +464,13 @@ GenerateJoinRelation JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<Logical
 	return GenerateJoinRelation(*result_relation, std::move(result_operator));
 }
 
-unique_ptr<LogicalOperator> JoinOrderOptimizer::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node) {
+unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node) {
 	// now we have to rewrite the plan
 	bool root_is_join = plan->children.size() > 1;
 
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
-	extracted_relations.reserve(relations.size());
+	extracted_relations.reserve(relation_manager.NumRelations());
 	for (auto &relation : relations) {
 		extracted_relations.push_back(ExtractJoinRelation(*relation));
 	}

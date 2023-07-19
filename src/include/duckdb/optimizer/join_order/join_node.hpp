@@ -29,38 +29,24 @@ public:
 	optional_ptr<NeighborInfo> info;
 	//! If the JoinNode is a base table, then base_cardinality is the cardinality before filters
 	//! estimated_props.cardinality will be the cardinality after filters. With no filters, the two are equal
-	bool has_filter;
 	optional_ptr<JoinNode> left;
 	optional_ptr<JoinNode> right;
-
-	unique_ptr<EstimatedProperties> estimated_props;
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet &set, const double base_cardinality);
+	JoinNode(JoinRelationSet &set);
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right,
-	         const double base_cardinality, double cost);
+	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right);
 
 	bool operator==(const JoinNode &other) {
 		return other.set.ToString().compare(set.ToString()) == 0;
 	}
 
 private:
-	double base_cardinality;
 
 public:
-	template <class CARDINALITY_TYPE>
-	CARDINALITY_TYPE GetCardinality() const {
-		return estimated_props->GetCardinality<CARDINALITY_TYPE>();
-	}
-	double GetCost();
-	void SetCost(double cost);
-	double GetBaseTableCardinality();
-	void SetBaseTableCardinality(double base_card);
-	void SetEstimatedCardinality(double estimated_card);
 	void PrintJoinNode();
 	string ToString();
 };

@@ -29,6 +29,13 @@ class LogicalOperator;
 class JoinNode;
 class RelationManager;
 
+struct GenerateJoinRelation {
+	GenerateJoinRelation(JoinRelationSet &set, unique_ptr<LogicalOperator> op_p) : set(set), op(std::move(op_p)) {
+	}
+
+	JoinRelationSet &set;
+	unique_ptr<LogicalOperator> op;
+};
 
 //! The QueryGraph contains edges between relations and allows edges to be created/queried
 class QueryGraphManager {
@@ -61,6 +68,11 @@ private:
 	                          optional_ptr<LogicalOperator> parent);
 	bool ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &filter_operators);
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+
+	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
+	              JoinNode &node);
+
+	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
 
 	ClientContext &context;
 };

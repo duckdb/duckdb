@@ -23,6 +23,9 @@ struct RelationAttributes {
 	double cardinality;
 };
 
+class JoinNode;
+class FilterInfo;
+
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
 	//! if you have A.x = B.y and B.y = C.z, then one set is {A.x, B.y, C.z}.
@@ -53,6 +56,11 @@ struct Subgraph2Denominator {
 	Subgraph2Denominator() : relations(), denom(1) {};
 };
 
+struct CardinalityHelper {
+	idx_t cardinality_before_filters;
+	double filter_strength;
+};
+
 class CardinalityEstimator {
 public:
 	explicit CardinalityEstimator() : {
@@ -66,6 +74,7 @@ private:
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 
 	vector<RelationsToTDom> relations_to_tdoms;
+	unordered_map<idx_t, CardinalityHelper>;
 
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
