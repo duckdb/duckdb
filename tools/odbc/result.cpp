@@ -39,6 +39,12 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Fetches the next rowset of data from the result set and returns data for all bound columns.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfetch-function?view=sql-server-ver16
+ * @param statement_handle
+ * @return
+ */
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {

@@ -41,17 +41,18 @@ static void TestMicrosoftExample(HSTMT &hstmt) {
 
 	// Bind elements of the first structure in the array to the OrderID,
 	// SalesPerson, and Status columns.
-	EXECUTE_AND_CHECK("SQLBindCol (OrderID)", SQLBindCol, hstmt, 1, SQL_C_ULONG, &order_info[0].order_id,
-	                  0, &order_info[0].order_id_ind);
+	EXECUTE_AND_CHECK("SQLBindCol (OrderID)", SQLBindCol, hstmt, 1, SQL_C_ULONG, &order_info[0].order_id, 0,
+	                  &order_info[0].order_id_ind);
 	EXECUTE_AND_CHECK("SQLBindCol (SalesPerson)", SQLBindCol, hstmt, 2, SQL_C_CHAR, order_info[0].sales_person,
-	                  sizeof(order_info[0].sales_person),
-	                  &order_info[0].sales_person_len_or_ind);
+	                  sizeof(order_info[0].sales_person), &order_info[0].sales_person_len_or_ind);
 	EXECUTE_AND_CHECK("SQLBindCol (Status)", SQLBindCol, hstmt, 3, SQL_C_CHAR, order_info[0].status,
 	                  sizeof(order_info[0].status), &order_info[0].status_len_or_ind);
 
 	// Execute a statement to retrieve rows from the Orders table.
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt,
-	                  ConvertToSQLCHAR("SELECT i AS OrderID, i::VARCHAR || 'SalesPerson' AS SalesPerson, i::VARCHAR || 'Status' AS Status FROM range(10) t(i)"), SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT i AS OrderID, i::VARCHAR || 'SalesPerson' AS SalesPerson, i::VARCHAR || "
+	                                   "'Status' AS Status FROM range(10) t(i)"),
+	                  SQL_NTS);
 
 	EXECUTE_AND_CHECK("SQLFetchScroll", SQLFetchScroll, hstmt, SQL_FETCH_NEXT, 0);
 	REQUIRE(rows_fetched == ROW_ARRAY_SIZE);
@@ -70,20 +71,20 @@ static void TestMicrosoftExample(HSTMT &hstmt) {
 }
 
 typedef struct s_many_sql_types {
-	SQLCHAR             b[2]; // boolean (2 chars because of \0)
-	SQLLEN              b_ind; // boolean indicator
-	SQLUINTEGER         u_i; // unsigned integer
-	SQLLEN              u_i_ind; // unsigned integer indicator
-	SQLINTEGER          i; // integer
-	SQLLEN              i_ind; // integer indicator
-	SQLDOUBLE           d; // double
-	SQLLEN              d_ind; // double indicator
-	SQL_NUMERIC_STRUCT  n; // numeric
-	SQLLEN              n_ind; // numeric indicator
-	SQLCHAR             vchar[16]; // varchar (16 chars)
-	SQLLEN              vchar_len_or_ind; // varchar len or indicator
-	SQLDATE             date[10]; //data (10 chars)
-	SQLLEN              date_len_or_ind; // date len or indicator
+	SQLCHAR b[2];            // boolean (2 chars because of \0)
+	SQLLEN b_ind;            // boolean indicator
+	SQLUINTEGER u_i;         // unsigned integer
+	SQLLEN u_i_ind;          // unsigned integer indicator
+	SQLINTEGER i;            // integer
+	SQLLEN i_ind;            // integer indicator
+	SQLDOUBLE d;             // double
+	SQLLEN d_ind;            // double indicator
+	SQL_NUMERIC_STRUCT n;    // numeric
+	SQLLEN n_ind;            // numeric indicator
+	SQLCHAR vchar[16];       // varchar (16 chars)
+	SQLLEN vchar_len_or_ind; // varchar len or indicator
+	SQLDATE date[10];        // data (10 chars)
+	SQLLEN date_len_or_ind;  // date len or indicator
 } t_many_sql_types;
 
 void TestManySQLTypes(HSTMT &hstmt) {
@@ -104,7 +105,8 @@ void TestManySQLTypes(HSTMT &hstmt) {
 	// Specify the address of the array of row status pointers with the SQL_ATTR_ROW_STATUS_PTR
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROW_STATUS_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_STATUS_PTR,
 	                  row_array_status, 0);
-	// Specify the address of the variable that will receive the number of rows fetched with the SQL_ATTR_ROWS_FETCHED_PTR
+	// Specify the address of the variable that will receive the number of rows fetched with the
+	// SQL_ATTR_ROWS_FETCHED_PTR
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR,
 	                  &rows_fetched, 0);
 
@@ -124,8 +126,11 @@ void TestManySQLTypes(HSTMT &hstmt) {
 	EXECUTE_AND_CHECK("SQLBindCol (date)", SQLBindCol, hstmt, 7, SQL_C_TYPE_DATE, many_sql_types[0].date,
 	                  sizeof(many_sql_types[0].date), &many_sql_types[0].date_len_or_ind);
 
-	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT i::bool::char, i::uint8, i::int8, i::double, i::numeric, i::varchar || '-Varchar'," \
-	                                                                          "('200' || i::char || '-10-1' || i::char )::date FROM range(10) t(i)"), SQL_NTS);
+	EXECUTE_AND_CHECK(
+	    "SQLExecDirect", SQLExecDirect, hstmt,
+	    ConvertToSQLCHAR("SELECT i::bool::char, i::uint8, i::int8, i::double, i::numeric, i::varchar || '-Varchar',"
+	                     "('200' || i::char || '-10-1' || i::char )::date FROM range(10) t(i)"),
+	    SQL_NTS);
 
 	// Fetch the data using SQLFetchScroll which fetches the next rowset of data from the result set.
 	EXECUTE_AND_CHECK("SQLFetchScroll", SQLFetchScroll, hstmt, SQL_FETCH_NEXT, 0);
@@ -146,7 +151,7 @@ void TestManySQLTypes(HSTMT &hstmt) {
 		REQUIRE(ConvertToString(many_sql_types[i].vchar) == (std::to_string(i) + "-Varchar"));
 		REQUIRE(many_sql_types[i].date_len_or_ind != SQL_NO_DATA);
 
-		DATE_STRUCT *date = (DATE_STRUCT *) many_sql_types[i].date;
+		DATE_STRUCT *date = (DATE_STRUCT *)many_sql_types[i].date;
 		REQUIRE(date->year == 2000 + i);
 		REQUIRE(date->day == 10 + i);
 	}
