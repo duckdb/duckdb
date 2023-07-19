@@ -18,6 +18,7 @@ add_library_unity(
   client_context.cpp
   client_data.cpp
   client_verify.cpp
+  chunk_scan_state.cpp
   config.cpp
   connection.cpp
   database.cpp
