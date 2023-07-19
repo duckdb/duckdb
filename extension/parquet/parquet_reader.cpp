@@ -71,6 +71,9 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(file_size - 8);
 	transport.read((uint8_t *)buf.ptr, 8);
 
+	if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+		throw InvalidInputException("Encrypted Parquet files are not supported", file_handle.path);
+	}
 	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
