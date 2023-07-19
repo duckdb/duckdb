@@ -185,6 +185,10 @@ bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, 
 			}
 			return false;
 		}
+		if (scan_state.ChunkIsEmpty()) {
+			// The scan was successful, but an empty chunk was returned
+			break;
+		}
 		auto &current_chunk = scan_state.CurrentChunk();
 		if (scan_state.Finished() || current_chunk.size() == 0) {
 			break;

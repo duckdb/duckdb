@@ -14,26 +14,28 @@ void ChunkScanState::IncreaseOffset(idx_t increment) {
 	offset += increment;
 }
 
+bool ChunkScanState::ChunkIsEmpty() const {
+	return !current_chunk || current_chunk->size() == 0;
+}
+
 bool ChunkScanState::Finished() const {
 	return finished;
 }
 
 bool ChunkScanState::ScanStarted() const {
-	return current_chunk != nullptr;
+	return !ChunkIsEmpty();
 }
 
 DataChunk &ChunkScanState::CurrentChunk() {
 	// Scan must already be started
 	D_ASSERT(current_chunk);
-	if (!current_chunk) {
-		// Scan is not started yet
-		PreservedError ignored;
-		D_ASSERT(LoadNextChunk(ignored));
-	}
 	return *current_chunk;
 }
 
 idx_t ChunkScanState::RemainingInChunk() const {
+	if (ChunkIsEmpty()) {
+		return 0;
+	}
 	D_ASSERT(current_chunk);
 	D_ASSERT(offset <= current_chunk->size());
 	return current_chunk->size() - offset;

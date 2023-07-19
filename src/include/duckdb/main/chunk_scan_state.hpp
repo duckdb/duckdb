@@ -23,6 +23,7 @@ public:
 	idx_t CurrentOffset() const;
 	idx_t RemainingInChunk() const;
 	DataChunk &CurrentChunk();
+	bool ChunkIsEmpty() const;
 	bool Finished() const;
 	bool ScanStarted() const;
 	void IncreaseOffset(idx_t increment);
