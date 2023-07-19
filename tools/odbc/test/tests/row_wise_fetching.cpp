@@ -92,12 +92,19 @@ void TestManySQLTypes(HSTMT &hstmt) {
 	SQLUSMALLINT row_array_status[ROW_ARRAY_SIZE];
 
 	auto row_size = sizeof(t_many_sql_types);
+
+	// SQLSetStmtAttr is used to set attributes that govern the behavior of a statement.
+
+	// Specify the size of the structure with the SQL_ATTR_ROW_BIND_TYPE
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROW_BIND_TYPE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_BIND_TYPE,
 	                  reinterpret_cast<SQLPOINTER>(row_size), 0);
+	// Specify the number of rows to be fetched with the SQL_ATTR_ROW_ARRAY_SIZE
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROW_ARRAY_SIZE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE,
 	                  reinterpret_cast<SQLPOINTER>(ROW_ARRAY_SIZE), 0);
+	// Specify the address of the array of row status pointers with the SQL_ATTR_ROW_STATUS_PTR
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROW_STATUS_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_STATUS_PTR,
 	                  row_array_status, 0);
+	// Specify the address of the variable that will receive the number of rows fetched with the SQL_ATTR_ROWS_FETCHED_PTR
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR,
 	                  &rows_fetched, 0);
 
@@ -120,6 +127,7 @@ void TestManySQLTypes(HSTMT &hstmt) {
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT i::bool::char, i::uint8, i::int8, i::double, i::numeric, i::varchar || '-Varchar'," \
 	                                                                          "('200' || i::char || '-10-1' || i::char )::date FROM range(10) t(i)"), SQL_NTS);
 
+	// Fetch the data using SQLFetchScroll which fetches the next rowset of data from the result set.
 	EXECUTE_AND_CHECK("SQLFetchScroll", SQLFetchScroll, hstmt, SQL_FETCH_NEXT, 0);
 	REQUIRE(rows_fetched == ROW_ARRAY_SIZE);
 

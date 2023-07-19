@@ -18,6 +18,18 @@ using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using std::string;
 
+/**
+ * @brief SQLSetStmtAttr sets attributes that govern aspects of a statement.
+ * @param statement_handle
+ * @param attribute The attribute to set. See https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function
+ * @param value_ptr The value to set the attribute to.  Depending of the value of attribute, it can be:
+ * 					\n- ODBC descriptor handle
+ * 					\n- SQLUINTEGER value
+ * 					\n- SQLULEN value
+ * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN, or SQLUSMALLINT, a driver-defined value
+ * @param string_length The length of the value_ptr parameter.  See https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function for details.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;

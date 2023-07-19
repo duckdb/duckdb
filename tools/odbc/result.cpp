@@ -57,6 +57,14 @@ SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	return duckdb::FetchStmtResult(hstmt);
 }
 
+/**
+ * @brief Fetches the next rowset of data from the result set and returns data for all bound columns.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfetchscroll-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param fetch_orientation Type of fetch operation to be performed.
+ * @param fetch_offset Number of the row to be fetched. Depending on the value of the fetch_orientation argument.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	switch (fetch_orientation) {
 	case SQL_FETCH_FIRST:

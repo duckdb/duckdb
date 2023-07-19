@@ -68,6 +68,17 @@ SQLRETURN SQL_API SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Binds a buffer to a column in the result set.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function?view=sql-server-ver16#row-wise-binding
+ * @param statement_handle
+ * @param column_number
+ * @param target_type The C data type of the application data buffer (SQL_C_CHAR, SQL_C_LONG, etc.) (see Data Types https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types?view=sql-server-ver16)
+ * @param target_value_ptr A pointer to the data buffer to bind the column to, that is filled with the data from the column when SQLFetch or SQLFetchScroll is called. The data type of the buffer must be the same as the data type of the column
+ * @param buffer_length Length of the buffer in bytes
+ * @param str_len_or_ind_ptr A pointer to the length/indicator buffer to bind to the column.  Can be filled with the length of the data in the column, or potentially other values depending on which function is called.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
