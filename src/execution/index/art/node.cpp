@@ -68,17 +68,13 @@ void Node::Free(ART &art, Node &node) {
 	if (!node.IsSerialized()) {
 
 		// iterative
-		//		return Prefix::Free(art, node);
-
-		// iterative
 		//		return Leaf::Free(art, node);
 
 		// free the children of the nodes
 		auto type = node.GetType();
 		switch (type) {
 		case NType::PREFIX:
-			Prefix::Free(art, node);
-			break;
+			return Prefix::Free(art, node);
 		case NType::LEAF:
 			Leaf::Free(art, node);
 			break;

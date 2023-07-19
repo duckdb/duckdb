@@ -55,22 +55,17 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 
 void Prefix::Free(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet() && !node.IsSerialized());
-	auto &child = Prefix::Get(art, node).ptr;
-	Node::Free(art, child);
-}
+	Node current_node = node;
+	Node next_node;
+	while (current_node.IsSet() && !current_node.IsSerialized() && current_node.GetType() == NType::PREFIX) {
+		next_node = Prefix::Get(art, current_node).ptr;
+		Node::GetAllocator(art, NType::PREFIX).Free(current_node);
+		current_node = next_node;
+	}
 
-// Node current_node = node;
-// Node next_node;
-// while (current_node.IsSet() && !current_node.IsSerialized() && current_node.GetType() ==
-//                                                                   NType::PREFIX) {
-//	next_node = Prefix::Get(art, current_node).ptr;
-//	Node::GetAllocator(art, NType::PREFIX).Free(current_node);
-//	current_node = next_node;
-//}
-//
-// Node::Free(art, current_node);
-// node.Reset();
+	Node::Free(art, current_node);
+	node.Reset();
+}
 
 void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
