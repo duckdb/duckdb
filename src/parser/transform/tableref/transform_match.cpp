@@ -49,9 +49,9 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 	result->lower = root->lower;
 	result->upper = root->upper;
 	result->single_bind = root->single_bind;
-    if (root->path_var) {
-        result->path_variable = root->path_var;
-    }
+	if (root->path_var) {
+		result->path_variable = root->path_var;
+	}
 	switch (root->mode) {
 	case duckdb_libpgquery::PG_PATHMODE_NONE:
 		result->path_mode = PGQPathMode::NONE;
@@ -92,19 +92,19 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 
 unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPattern *root) {
 	auto result = make_uniq<PathPattern>();
-    result->all = root->all;
-    result->shortest = root->shortest;
-    result->group = root->group;
-    result->topk = root->topk;
-    if (result->all && result->shortest) {
-        throw NotImplementedException("ALL SHORTEST has not been implemented yet.");
-    }
-    if (result->topk > 1) {
-        throw NotImplementedException("TopK has not been implemented yet.");
-    }
-    if (result->group) {
-        throw NotImplementedException("GROUP has not been implemented yet.");
-    }
+	result->all = root->all;
+	result->shortest = root->shortest;
+	result->group = root->group;
+	result->topk = root->topk;
+	if (result->all && result->shortest) {
+		throw NotImplementedException("ALL SHORTEST has not been implemented yet.");
+	}
+	if (result->topk > 1) {
+		throw NotImplementedException("TopK has not been implemented yet.");
+	}
+	if (result->group) {
+		throw NotImplementedException("GROUP has not been implemented yet.");
+	}
 	//! Path sequence
 	for (auto node = root->path->head; node != nullptr; node = lnext(node)) {
 		// Parse path element

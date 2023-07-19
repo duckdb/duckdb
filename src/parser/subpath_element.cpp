@@ -18,7 +18,7 @@ unique_ptr<PathReference> SubPath::Copy() {
 	result->upper = upper;
 	result->single_bind = single_bind;
 
-    result->path_variable = path_variable;
+	result->path_variable = path_variable;
 
 	return std::move(result);
 }
@@ -58,9 +58,9 @@ bool SubPath::Equals(const PathReference *other_p) const {
 	if (single_bind != other->single_bind) {
 		return false;
 	}
-    if(path_variable != other->path_variable) {
-        return false;
-    }
+	if (path_variable != other->path_variable) {
+		return false;
+	}
 	return true;
 }
 void SubPath::Serialize(FieldWriter &writer) const {
@@ -70,7 +70,7 @@ void SubPath::Serialize(FieldWriter &writer) const {
 	writer.WriteField<int64_t>(lower);
 	writer.WriteField<int64_t>(upper);
 	writer.WriteOptional(where_clause);
-    writer.WriteString(path_variable);
+	writer.WriteString(path_variable);
 }
 
 unique_ptr<PathReference> SubPath::Deserialize(FieldReader &reader) {
@@ -82,12 +82,12 @@ unique_ptr<PathReference> SubPath::Deserialize(FieldReader &reader) {
 	result->lower = reader.ReadRequired<int64_t>();
 	result->upper = reader.ReadRequired<int64_t>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-    result->path_variable = reader.ReadRequired<string>();
+	result->path_variable = reader.ReadRequired<string>();
 	return std::move(result);
 }
 string SubPath::ToString() const {
 	string result;
-    path_variable.empty() ? result += "" : result += path_variable + " = ";
+	path_variable.empty() ? result += "" : result += path_variable + " = ";
 	if (path_list.size() == 1) {
 		switch (path_list[0]->path_reference_type) {
 		case PGQPathReferenceType::PATH_ELEMENT: {

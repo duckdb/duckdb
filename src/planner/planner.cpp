@@ -53,8 +53,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->plan = nullptr;
 		parameters_resolved = false;
 	} catch (const BinderException &ex) {
-        throw;
-    } catch (const Exception &ex) {
+		throw;
+	} catch (const Exception &ex) {
 		auto &config = DBConfig::GetConfig(context);
 
 		this->plan = nullptr;
