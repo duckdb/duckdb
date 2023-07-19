@@ -1084,10 +1084,9 @@ unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(FormatD
 	DataChunk chunk;
 	chunk.Initialize(Allocator::DefaultAllocator(), types);
 
-	idx_t chunk_idx = 0;
 	for (idx_t r = 0; r < values[0].size(); r++) {
 		for (idx_t c = 0; c < types.size(); c++) {
-			chunk.SetValue(c, chunk_idx, values[c][r]);
+			chunk.SetValue(c, chunk.size(), values[c][r]);
 		}
 		chunk.SetCardinality(chunk.size() + 1);
 		if (chunk.size() == STANDARD_VECTOR_SIZE) {

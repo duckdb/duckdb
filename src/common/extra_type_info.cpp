@@ -321,13 +321,13 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	}
 
 	static shared_ptr<EnumTypeInfoTemplated> Deserialize(FieldReader &reader, uint32_t size, string enum_name) {
-
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.Deserialize(size, reader.GetSource());
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
 	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
+		source.ReadProperty<idx_t>("dict_size");
 		auto enum_name = source.ReadProperty<string>("enum_name");
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.FormatDeserialize(source, size);
