@@ -73,16 +73,10 @@ public:
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
-	//	//! Serialize this node and all subsequent prefix nodes
-	//	static BlockPointer Serialize(ART &art, Node &node, MetaBlockWriter &writer);
-	//	//! Deserialize this node and all subsequent prefix nodes
-	//	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
-	//
-
-	//! Serialize this node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
-	//! Deserialize this node
-	void Deserialize(MetaBlockReader &reader);
+	//! Serialize this node and all subsequent nodes
+	static BlockPointer Serialize(ART &art, Node &node, MetaBlockWriter &writer);
+	//! Deserialize this node and all subsequent prefix nodes
+	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
 
 	//! Vacuum the child of the node
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);

@@ -238,12 +238,10 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 		Deserialize(art);
 	}
 
-	// iterative
-	//	return Prefix::Serialize(art, *this, writer);
-
 	switch (GetType()) {
 	case NType::PREFIX:
-		return Prefix::Get(art, *this).Serialize(art, writer);
+		// iterative
+		return Prefix::Serialize(art, *this, writer);
 	case NType::LEAF:
 		// iterative
 		return Leaf::Serialize(art, *this, writer);
@@ -261,11 +259,6 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 	throw InternalException("Invalid node type for Serialize.");
 }
 
-//// iterative functions
-// if (decoded_type == NType::PREFIX) {
-//	return Prefix::Deserialize(art, *this, reader);
-//}
-
 void Node::Deserialize(ART &art) {
 
 	D_ASSERT(IsSet() && IsSerialized());
@@ -277,6 +270,10 @@ void Node::Deserialize(ART &art) {
 
 	auto decoded_type = GetType();
 
+	// iterative functions
+	if (decoded_type == NType::PREFIX) {
+		return Prefix::Deserialize(art, *this, reader);
+	}
 	if (decoded_type == NType::LEAF_INLINED) {
 		return SetRowId(reader.Read<row_t>());
 	}
@@ -289,8 +286,6 @@ void Node::Deserialize(ART &art) {
 
 	// recursive functions
 	switch (decoded_type) {
-	case NType::PREFIX:
-		return Prefix::Get(art, *this).Deserialize(reader);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Deserialize(reader);
 	case NType::NODE_16:

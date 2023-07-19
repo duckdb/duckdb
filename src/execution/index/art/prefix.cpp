@@ -311,21 +311,28 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 	return str + node_ref.get().VerifyAndToString(art, only_verify);
 }
 
-BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
+BlockPointer Prefix::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 
-	// FIXME: we might want to do this iteratively instead of recursively to decrease the function-call overhead
-
-	// recurse into the child and retrieve its block pointer
-	auto child_block_pointer = ptr.Serialize(art, writer);
+	reference<Node> first_non_prefix(node);
+	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
+	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::PREFIX);
-	writer.Write<uint8_t>(data[Node::PREFIX_SIZE]);
+	writer.Write<idx_t>(total_count);
 
-	// write prefix bytes
-	for (idx_t i = 0; i < data[Node::PREFIX_SIZE]; i++) {
-		writer.Write(data[i]);
+	reference<Node> current_node(node);
+	while (current_node.get().GetType() == NType::PREFIX) {
+
+		// write prefix bytes
+		D_ASSERT(!current_node.get().IsSerialized());
+		auto &prefix = Prefix::Get(art, current_node);
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			writer.Write(prefix.data[i]);
+		}
+
+		current_node = prefix.ptr;
 	}
 
 	// write child block pointer
@@ -334,78 +341,32 @@ BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	return block_pointer;
 }
-//
-// BlockPointer Prefix::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
-//
-//	reference<Node> first_non_prefix (node);
-//	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
-//	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
-//
-//	// get pointer and write fields
-//	auto block_pointer = writer.GetBlockPointer();
-//	writer.Write(NType::PREFIX);
-//	writer.Write<idx_t>(total_count);
-//
-//	first_non_prefix = node;
-//	while (first_non_prefix.get().GetType() == NType::PREFIX) {
-//
-//		// write prefix bytes
-//		D_ASSERT(!first_non_prefix.get().IsSerialized());
-//		auto &prefix = Prefix::Get(art, first_non_prefix);
-//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-//			writer.Write(prefix.data[i]);
-//		}
-//
-//		first_non_prefix = prefix.ptr;
-//	}
-//
-//	// write child block pointer
-//	writer.Write(child_block_pointer.block_id);
-//	writer.Write(child_block_pointer.offset);
-//
-//	return block_pointer;
-//}
 
-void Prefix::Deserialize(MetaBlockReader &reader) {
+void Prefix::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
 
-	// FIXME: we might want to do this iteratively instead of recursively to decrease the function-call overhead
+	auto total_count = reader.Read<idx_t>();
+	reference<Node> current_node(node);
 
-	data[Node::PREFIX_SIZE] = reader.Read<uint8_t>();
+	while (total_count) {
+		current_node.get() = Node::GetAllocator(art, NType::PREFIX).New();
+		current_node.get().SetType((uint8_t)NType::PREFIX);
 
-	// read bytes
-	for (idx_t i = 0; i < data[Node::PREFIX_SIZE]; i++) {
-		data[i] = reader.Read<uint8_t>();
+		auto &prefix = Prefix::Get(art, current_node);
+		prefix.data[Node::PREFIX_SIZE] = MinValue((idx_t)Node::PREFIX_SIZE, total_count);
+
+		// read bytes
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			prefix.data[i] = reader.Read<uint8_t>();
+		}
+
+		total_count -= prefix.data[Node::PREFIX_SIZE];
+		current_node = prefix.ptr;
+		prefix.ptr.Reset();
 	}
 
 	// read child block pointer
-	ptr = Node(reader);
+	current_node.get() = Node(reader);
 }
-
-// void Prefix::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
-//
-//	auto total_count = reader.Read<idx_t>();
-//	reference<Node> ref_node(node);
-//
-//	while (total_count) {
-//		ref_node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-//		ref_node.get().SetType((uint8_t)NType::PREFIX);
-//
-//		auto &prefix = Prefix::Get(art, node);
-//		prefix.data[Node::PREFIX_SIZE] = MinValue((idx_t)Node::PREFIX_SIZE, total_count);
-//
-//		// read bytes
-//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-//			prefix.data[i] = reader.Read<uint8_t>();
-//		}
-//
-//		total_count -= prefix.data[Node::PREFIX_SIZE];
-//		ref_node = prefix.ptr;
-//		prefix.ptr.Reset();
-//	}
-//
-//	// read child block pointer
-//	ref_node.get() = Node(reader);
-//}
 
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 
