@@ -262,6 +262,11 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	SetNotNullInfo();
 };
 
 //===--------------------------------------------------------------------===//
@@ -278,6 +283,11 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	DropNotNullInfo();
 };
 
 //===--------------------------------------------------------------------===//
@@ -296,6 +306,11 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	virtual void SerializeAlterView(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<AlterInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+protected:
+	AlterViewInfo(AlterViewType type);
 };
 
 //===--------------------------------------------------------------------===//
@@ -312,6 +327,11 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterView(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<AlterViewInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	RenameViewInfo();
 };
 
 } // namespace duckdb

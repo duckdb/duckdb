@@ -187,5 +187,50 @@
         "type": "AlterForeignKeyType"
       }
     ]
+  },
+  {
+    "class": "SetNotNullInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_NOT_NULL",
+    "members": [
+      {
+        "name": "column_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "DropNotNullInfo",
+    "base": "AlterTableInfo",
+    "enum": "DROP_NOT_NULL",
+    "members": [
+      {
+        "name": "column_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "AlterViewInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_VIEW",
+    "class_type": "alter_view_type",
+    "members": [
+      {
+        "name": "alter_view_type",
+        "type": "AlterViewType"
+      }
+    ]
+  },
+  {
+    "class": "RenameViewInfo",
+    "base": "AlterViewInfo",
+    "enum": "RENAME_VIEW",
+    "members": [
+      {
+        "name": "new_view_name",
+        "type": "string"
+      }
+    ]
   }
 ]

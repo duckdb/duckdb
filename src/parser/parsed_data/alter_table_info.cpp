@@ -269,6 +269,9 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, AlterEntr
 //===--------------------------------------------------------------------===//
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
+SetNotNullInfo::SetNotNullInfo() :
+	AlterTableInfo(AlterTableType::SET_NOT_NULL) {}
+
 SetNotNullInfo::SetNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::SET_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -291,6 +294,9 @@ unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, AlterEntr
 //===--------------------------------------------------------------------===//
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
+DropNotNullInfo::DropNotNullInfo() :
+	AlterTableInfo(AlterTableType::DROP_NOT_NULL) {}
+
 DropNotNullInfo::DropNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::DROP_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -354,6 +360,9 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, Alte
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
+AlterViewInfo::AlterViewInfo(AlterViewType type) :
+	AlterInfo(AlterType::ALTER_VIEW) {}
+
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
@@ -394,6 +403,8 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(FieldReader &reader) {
 //===--------------------------------------------------------------------===//
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
+RenameViewInfo::RenameViewInfo() :
+	AlterViewInfo(AlterViewType::RENAME_VIEW) {}
 RenameViewInfo::RenameViewInfo(AlterEntryData data, string new_name_p)
     : AlterViewInfo(AlterViewType::RENAME_VIEW, std::move(data)), new_view_name(std::move(new_name_p)) {
 }
