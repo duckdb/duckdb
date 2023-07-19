@@ -25,11 +25,17 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = LogicalAggregate::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_ALTER:
+		result = LogicalSimple::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		result = LogicalAnyJoin::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		result = LogicalAsOfJoin::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_ATTACH:
+		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		result = LogicalColumnDataGet::FormatDeserialize(deserializer);
@@ -70,8 +76,14 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = LogicalDelimJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_DETACH:
+		result = LogicalSimple::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		result = LogicalDistinct::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_DROP:
+		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 		result = LogicalDummyScan::FormatDeserialize(deserializer);
@@ -103,6 +115,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
 		result = LogicalLimitPercent::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_LOAD:
+		result = LogicalSimple::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
 		result = LogicalMaterializedCTE::FormatDeserialize(deserializer);
 		break;
@@ -133,6 +148,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		result = LogicalTopN::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+		result = LogicalSimple::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::FormatDeserialize(deserializer);
 		break;
@@ -141,6 +159,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_VACUUM:
+		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 		result = LogicalWindow::FormatDeserialize(deserializer);
@@ -657,6 +678,17 @@ unique_ptr<LogicalOperator> LogicalShow::FormatDeserialize(FormatDeserializer &d
 	auto result = duckdb::unique_ptr<LogicalShow>(new LogicalShow());
 	deserializer.ReadProperty("types_select", result->types_select);
 	deserializer.ReadProperty("aliases", result->aliases);
+	return std::move(result);
+}
+
+void LogicalSimple::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("info", *info);
+}
+
+unique_ptr<LogicalOperator> LogicalSimple::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<ParseInfo>>("info");
+	auto result = duckdb::unique_ptr<LogicalSimple>(new LogicalSimple(deserializer.Get<LogicalOperatorType>(), std::move(info)));
 	return std::move(result);
 }
 

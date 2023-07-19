@@ -833,5 +833,17 @@
       }
     ],
     "constructor": ["name", "scope"]
+  },
+  {
+    "class": "LogicalSimple",
+    "base": "LogicalOperator",
+    "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
+    "members": [
+      {
+        "name": "info",
+        "type": "ParseInfo*"
+      }
+    ],
+    "constructor": ["type", "info"]
   }
 ]
