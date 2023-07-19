@@ -527,6 +527,7 @@ parallel/interrupt.cpp	22
 parallel/pipeline.cpp	14
 parallel/pipeline_event.cpp	5
 parallel/pipeline_executor.cpp	22
+parallel/pipeline_finish_event.cpp	1
 parallel/task_scheduler.cpp	42
 parser/base_expression.cpp	3
 parser/column_list.cpp	13
