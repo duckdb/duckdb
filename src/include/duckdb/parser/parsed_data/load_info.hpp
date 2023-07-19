@@ -20,7 +20,8 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::LOAD_INFO;
 
 public:
-	LoadInfo() : ParseInfo(TYPE) {}
+	LoadInfo() : ParseInfo(TYPE) {
+	}
 
 	std::string filename;
 	LoadType load_type;

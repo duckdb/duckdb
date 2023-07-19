@@ -181,6 +181,31 @@
     "pointer_type": "none"
   },
   {
+    "class": "BoundPivotInfo",
+    "includes": [
+      "duckdb/planner/tableref/bound_pivotref.hpp"
+    ],
+    "members": [
+      {
+        "name": "group_count",
+        "type": "idx_t"
+      },
+      {
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "pivot_values",
+        "type": "vector<string>"
+      },
+      {
+        "name": "aggregates",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "ColumnDefinition",
     "includes": [
       "duckdb/parser/column_definition.hpp"

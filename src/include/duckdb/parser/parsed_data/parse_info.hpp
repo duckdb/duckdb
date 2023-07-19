@@ -28,7 +28,8 @@ enum class ParseInfoType : uint8_t {
 };
 
 struct ParseInfo {
-	explicit ParseInfo(ParseInfoType info_type) : info_type(info_type) {}
+	explicit ParseInfo(ParseInfoType info_type) : info_type(info_type) {
+	}
 	virtual ~ParseInfo() {
 	}
 

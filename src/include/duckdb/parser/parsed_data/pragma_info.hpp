@@ -22,7 +22,8 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::PRAGMA_INFO;
 
 public:
-	PragmaInfo() : ParseInfo(TYPE) {}
+	PragmaInfo() : ParseInfo(TYPE) {
+	}
 
 	//! Name of the PRAGMA statement
 	string name;

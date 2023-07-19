@@ -3,12 +3,12 @@
 namespace duckdb {
 
 LogicalCreate::LogicalCreate(LogicalOperatorType type, unique_ptr<CreateInfo> info,
-			  optional_ptr<SchemaCatalogEntry> schema)
-	: LogicalOperator(type), schema(schema), info(std::move(info)) {
+                             optional_ptr<SchemaCatalogEntry> schema)
+    : LogicalOperator(type), schema(schema), info(std::move(info)) {
 }
 
-LogicalCreate::LogicalCreate(LogicalOperatorType type, ClientContext &context, unique_ptr<CreateInfo> info_p) :
-	LogicalOperator(type), info(std::move(info_p)) {
+LogicalCreate::LogicalCreate(LogicalOperatorType type, ClientContext &context, unique_ptr<CreateInfo> info_p)
+    : LogicalOperator(type), info(std::move(info_p)) {
 	this->schema = Catalog::GetSchema(context, info->catalog, info->schema, OnEntryNotFound::RETURN_NULL);
 }
 

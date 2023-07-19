@@ -42,7 +42,8 @@ public:
 	static constexpr const ParseInfoType TYPE = ParseInfoType::BOUND_EXPORT_DATA;
 
 public:
-	BoundExportData() : ParseInfo(TYPE) {}
+	BoundExportData() : ParseInfo(TYPE) {
+	}
 
 	vector<ExportedTableInfo> data;
 };

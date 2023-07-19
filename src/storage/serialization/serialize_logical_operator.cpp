@@ -124,6 +124,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		result = LogicalPivot::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
 		result = LogicalPositionalJoin::FormatDeserialize(deserializer);
 		break;
@@ -574,6 +577,19 @@ unique_ptr<LogicalOperator> LogicalOrder::FormatDeserialize(FormatDeserializer &
 	auto orders = deserializer.ReadProperty<vector<BoundOrderByNode>>("orders");
 	auto result = duckdb::unique_ptr<LogicalOrder>(new LogicalOrder(std::move(orders)));
 	deserializer.ReadProperty("projections", result->projections);
+	return std::move(result);
+}
+
+void LogicalPivot::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("pivot_index", pivot_index);
+	serializer.WriteProperty("bound_pivot", bound_pivot);
+}
+
+unique_ptr<LogicalOperator> LogicalPivot::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalPivot>(new LogicalPivot());
+	deserializer.ReadProperty("pivot_index", result->pivot_index);
+	deserializer.ReadProperty("bound_pivot", result->bound_pivot);
 	return std::move(result);
 }
 

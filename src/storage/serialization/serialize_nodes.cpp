@@ -14,6 +14,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/planner/column_binding.hpp"
@@ -57,6 +58,22 @@ shared_ptr<BoundParameterData> BoundParameterData::FormatDeserialize(FormatDeser
 	auto value = deserializer.ReadProperty<Value>("value");
 	auto result = duckdb::shared_ptr<BoundParameterData>(new BoundParameterData(value));
 	deserializer.ReadProperty("return_type", result->return_type);
+	return result;
+}
+
+void BoundPivotInfo::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("group_count", group_count);
+	serializer.WriteProperty("types", types);
+	serializer.WriteProperty("pivot_values", pivot_values);
+	serializer.WriteProperty("aggregates", aggregates);
+}
+
+BoundPivotInfo BoundPivotInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	BoundPivotInfo result;
+	deserializer.ReadProperty("group_count", result.group_count);
+	deserializer.ReadProperty("types", result.types);
+	deserializer.ReadProperty("pivot_values", result.pivot_values);
+	deserializer.ReadProperty("aggregates", result.aggregates);
 	return result;
 }
 

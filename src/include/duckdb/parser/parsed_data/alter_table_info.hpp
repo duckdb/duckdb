@@ -218,6 +218,7 @@ public:
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<AlterTableInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 private:
 	SetDefaultInfo();
 };

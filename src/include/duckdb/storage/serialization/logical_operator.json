@@ -845,5 +845,20 @@
       }
     ],
     "constructor": ["type", "info"]
+  },
+  {
+    "class": "LogicalPivot",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_PIVOT",
+    "members": [
+      {
+        "name": "pivot_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "bound_pivot",
+        "type": "BoundPivotInfo"
+      }
+    ]
   }
 ]
