@@ -868,7 +868,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 #ifdef DEBUG
 		// overflow check
 		T result;
-		bool multiply = TryMultiplyOperator::Operation(static_cast<T>(scan_state.current_group_offset), scan_state.current_constant, result);
+		bool multiply = TryMultiplyOperator::Operation(static_cast<T>(scan_state.current_group_offset),
+		                                               scan_state.current_constant, result);
 		bool add = TryAddOperator::Operation(result, scan_state.current_frame_of_reference, result);
 		D_ASSERT(multiply && add);
 #endif

@@ -1,6 +1,6 @@
-# name: benchmark/micro/compression/bitpacking/bitpacking_hugeint_read_constant.benchmark
+# name: benchmark/micro/compression/bitpacking_hugeint/bitpacking_hugeint_read_constant.benchmark
 # description: Scanning hugeints compressed mostly with the CONSTANT bitpacking mode
-# group: [bitpacking]
+# group: [bitpacking_hugeint]
 
 name Bitpacking Scan Constant Mode Hugeint
 group bitpacking
