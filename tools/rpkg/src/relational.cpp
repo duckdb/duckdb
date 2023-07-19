@@ -298,6 +298,8 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		window_expr->default_expr = default_expr->Copy();
 	}
 
+	window_expr->exclude_clause = WindowExclusion::NO_OTHER;
+
 	return window_expr;
 }
 
