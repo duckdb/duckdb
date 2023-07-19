@@ -310,6 +310,7 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("orders", orders);
 	serializer.WriteProperty("start", start);
 	serializer.WriteProperty("end", end);
+	serializer.WriteProperty("exclude", exclude_clause);
 	serializer.WriteOptionalProperty("start_expr", start_expr);
 	serializer.WriteOptionalProperty("end_expr", end_expr);
 	serializer.WriteOptionalProperty("offset_expr", offset_expr);
@@ -328,6 +329,7 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
 	deserializer.ReadProperty("orders", result->orders);
 	deserializer.ReadProperty("start", result->start);
 	deserializer.ReadProperty("end", result->end);
+	deserializer.ReadProperty("exclude", result->exclude_clause);
 	deserializer.ReadOptionalProperty("start_expr", result->start_expr);
 	deserializer.ReadOptionalProperty("end_expr", result->end_expr);
 	deserializer.ReadOptionalProperty("offset_expr", result->offset_expr);
