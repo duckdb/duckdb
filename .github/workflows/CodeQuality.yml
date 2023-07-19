@@ -14,6 +14,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/CodeQuality.yml'
+      - '!.github/workflows/lcov_exclude'
 
   pull_request:
     types: [opened, reopened, ready_for_review]
@@ -22,6 +23,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/CodeQuality.yml'
+      - '!.github/workflows/lcov_exclude'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}

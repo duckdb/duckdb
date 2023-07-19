@@ -3169,8 +3169,6 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 	switch(value) {
 	case NType::PREFIX:
 		return "PREFIX";
-	case NType::LEAF_SEGMENT:
-		return "LEAF_SEGMENT";
 	case NType::LEAF:
 		return "LEAF";
 	case NType::NODE_4:
@@ -3181,6 +3179,8 @@ const char* EnumUtil::ToChars<NType>(NType value) {
 		return "NODE_48";
 	case NType::NODE_256:
 		return "NODE_256";
+	case NType::LEAF_INLINED:
+		return "LEAF_INLINED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3190,9 +3190,6 @@ template<>
 NType EnumUtil::FromString<NType>(const char *value) {
 	if (StringUtil::Equals(value, "PREFIX")) {
 		return NType::PREFIX;
-	}
-	if (StringUtil::Equals(value, "LEAF_SEGMENT")) {
-		return NType::LEAF_SEGMENT;
 	}
 	if (StringUtil::Equals(value, "LEAF")) {
 		return NType::LEAF;
@@ -3208,6 +3205,9 @@ NType EnumUtil::FromString<NType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "NODE_256")) {
 		return NType::NODE_256;
+	}
+	if (StringUtil::Equals(value, "LEAF_INLINED")) {
+		return NType::LEAF_INLINED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

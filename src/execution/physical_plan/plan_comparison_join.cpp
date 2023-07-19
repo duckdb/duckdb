@@ -278,8 +278,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 	}
 
+	bool can_merge = has_range > 0;
+	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
+	switch (op.join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::MARK:
+		can_merge = can_merge && op.conditions.size() == 1;
+		can_iejoin = false;
+		break;
+	default:
+		break;
+	}
+
+	//	TODO: Extend PWMJ to handle all comparisons and projection maps
+	const auto prefer_range_joins = (ClientConfig::GetConfig(context).prefer_range_joins && can_iejoin);
+
 	unique_ptr<PhysicalOperator> plan;
-	if (has_equality) {
+	if (has_equality && !prefer_range_joins) {
 		// check if we can use an index join
 		if (PlanIndexJoin(context, op, plan, left, right)) {
 			return plan;
@@ -293,18 +309,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		bool can_merge = has_range > 0;
-		bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
-		switch (op.join_type) {
-		case JoinType::SEMI:
-		case JoinType::ANTI:
-		case JoinType::MARK:
-			can_merge = can_merge && op.conditions.size() == 1;
-			can_iejoin = false;
-			break;
-		default:
-			break;
-		}
 		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
 		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
 			can_iejoin = false;

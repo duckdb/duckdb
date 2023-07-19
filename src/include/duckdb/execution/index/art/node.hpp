@@ -1,30 +1,32 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/index/art/art_node.hpp
+// duckdb/execution/index/art/node.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
 // classes
 enum class NType : uint8_t {
 	PREFIX = 1,
-	LEAF_SEGMENT = 2,
-	LEAF = 3,
-	NODE_4 = 4,
-	NODE_16 = 5,
-	NODE_48 = 6,
-	NODE_256 = 7
+	LEAF = 2,
+	NODE_4 = 3,
+	NODE_16 = 4,
+	NODE_48 = 5,
+	NODE_256 = 6,
+	LEAF_INLINED = 7,
 };
+class FixedSizeAllocator;
 class ART;
-class Node;
 class Prefix;
 class MetaBlockReader;
 class MetaBlockWriter;
@@ -33,10 +35,10 @@ class MetaBlockWriter;
 struct BlockPointer;
 struct ARTFlags;
 
-//! The ARTNode is the swizzleable pointer class of the ART index.
-//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the NType.
-//! The remaining bytes are the position in the respective ART buffer.
-class Node : public SwizzleablePointer {
+//! The Node is the pointer class of the ART index.
+//! If the node is serialized, then the pointer points to a storage address (and has no type),
+//! otherwise the pointer has a type and stores other information (e.g., a buffer location or a row ID).
+class Node {
 public:
 	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
@@ -46,41 +48,39 @@ public:
 	static constexpr uint8_t NODE_16_CAPACITY = 16;
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
+	//! Bit-shifting
+	static constexpr uint64_t SHIFT_OFFSET = 32;
+	static constexpr uint64_t SHIFT_TYPE = 56;
+	static constexpr uint64_t SHIFT_SERIALIZED_FLAG = 63;
+	//! AND operations
+	static constexpr uint64_t AND_OFFSET = 0x0000000000FFFFFF;
+	static constexpr uint64_t AND_BUFFER_ID = 0x00000000FFFFFFFF;
+	static constexpr uint64_t AND_IS_SET = 0xFF00000000000000;
+	static constexpr uint64_t AND_RESET = 0x00FFFFFFFFFFFFFF;
+	//! OR operations
+	static constexpr uint64_t SET_SERIALIZED_FLAG = 0x8000000000000000;
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
-	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
+	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
 
 public:
-	//! Constructs an empty ARTNode
-	Node();
-	//! Constructs a swizzled pointer from a block ID and an offset
+	//! Constructors
+
+	//! Constructs an empty Node
+	Node() : data(0) {};
+	//! Constructs a serialized Node pointer from a block ID and an offset
 	explicit Node(MetaBlockReader &reader);
+	//! Constructs an in-memory Node from a buffer ID and an offset
+	Node(const uint32_t buffer_id, const uint32_t offset) : data(0) {
+		SetPtr(buffer_id, offset);
+	};
+
+public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
 	static void New(ART &art, Node &node, const NType type);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
-
-	inline bool operator==(const Node &node) const {
-		return swizzle_flag == node.swizzle_flag && type == node.type && offset == node.offset &&
-		       buffer_id == node.buffer_id;
-	}
-
-	//! Retrieve the node type from the leftmost byte
-	inline NType DecodeARTNodeType() const {
-		D_ASSERT(!IsSwizzled());
-		D_ASSERT(type >= (uint8_t)NType::PREFIX);
-		D_ASSERT(type <= (uint8_t)NType::NODE_256);
-		return NType(type);
-	}
-
-	//! Set the pointer
-	inline void SetPtr(const SwizzleablePointer ptr) {
-		swizzle_flag = ptr.swizzle_flag;
-		type = ptr.type;
-		offset = ptr.offset;
-		buffer_id = ptr.buffer_id;
-	}
 
 	//! Replace the child node at the respective byte
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child);
@@ -118,7 +118,86 @@ public:
 	bool MergeInternal(ART &art, Node &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
+	void Vacuum(ART &art, const ARTFlags &flags);
+
+	// Getters and Setters
+
+	//! Returns whether the node is serialized or not (zero bit)
+	inline bool IsSerialized() const {
+		return data >> Node::SHIFT_SERIALIZED_FLAG;
+	}
+	//! Get the type (1st to 7th bit)
+	inline NType GetType() const {
+		D_ASSERT(!IsSerialized());
+		auto type = data >> Node::SHIFT_TYPE;
+		D_ASSERT(type >= (uint8_t)NType::PREFIX);
+		D_ASSERT(type <= (uint8_t)NType::LEAF_INLINED);
+		return NType(type);
+	}
+	//! Get the offset (8th to 23rd bit)
+	inline idx_t GetOffset() const {
+		auto offset = data >> Node::SHIFT_OFFSET;
+		return offset & Node::AND_OFFSET;
+	}
+	//! Get the block/buffer ID (24th to 63rd bit)
+	inline idx_t GetBufferId() const {
+		return data & Node::AND_BUFFER_ID;
+	}
+	//! Get the row ID (8th to 63rd bit)
+	inline row_t GetRowId() const {
+		return data & Node::AND_RESET;
+	}
+
+	//! Set the serialized flag (zero bit)
+	inline void SetSerialized() {
+		data &= Node::AND_RESET;
+		data |= Node::SET_SERIALIZED_FLAG;
+	}
+	//! Set the type (1st to 7th bit)
+	inline void SetType(const uint8_t type) {
+		D_ASSERT(!IsSerialized());
+		data += (uint64_t)type << Node::SHIFT_TYPE;
+	}
+	//! Set the block/buffer ID (24th to 63rd bit) and offset (8th to 23rd bit)
+	inline void SetPtr(const uint32_t buffer_id, const uint32_t offset) {
+		D_ASSERT(!(data & Node::AND_RESET));
+		auto shifted_offset = ((uint64_t)offset) << Node::SHIFT_OFFSET;
+		data += shifted_offset;
+		data += buffer_id;
+	}
+	//! Set the row ID (8th to 63rd bit)
+	inline void SetRowId(const row_t row_id) {
+		D_ASSERT(!(data & Node::AND_RESET));
+		data += row_id;
+	}
+
+	//! Returns true, if neither the serialized flag is set nor the type
+	inline bool IsSet() const {
+		return data & Node::AND_IS_SET;
+	}
+	//! Reset the Node pointer by setting the node info to zero
+	inline void Reset() {
+		data = 0;
+	}
+
+	//! Comparison operator
+	inline bool operator==(const Node &node) const {
+		return data == node.data;
+	}
+
+private:
+	//! Data holds all the information contained in a Node pointer
+	//! [0: serialized flag, 1 - 7: type,
+	//! 8 - 23: offset, 24 - 63: buffer/block ID OR
+	//! 8 - 63: row ID]
+	//! NOTE: a Node pointer can be either serialized OR have a type
+	//! NOTE: we do not use bit fields because when using bit fields Windows compiles
+	//! the Node class into 16 bytes instead of the intended 8 bytes, doubling the
+	//! space requirements
+	//! https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
+	uint64_t data;
 };
+
+static_assert(sizeof(Node) == sizeof(uint64_t), "Invalid size for Node type.");
 
 } // namespace duckdb

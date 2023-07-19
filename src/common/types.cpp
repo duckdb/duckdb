@@ -948,7 +948,7 @@ LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
-	members.insert(members.begin(), {"", LogicalType::TINYINT});
+	members.insert(members.begin(), {"", LogicalType::UTINYINT});
 	auto info = make_shared<StructTypeInfo>(std::move(members));
 	return LogicalType(LogicalTypeId::UNION, std::move(info));
 }
