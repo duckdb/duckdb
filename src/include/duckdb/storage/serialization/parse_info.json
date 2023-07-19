@@ -232,5 +232,69 @@
         "type": "string"
       }
     ]
+  },
+  {
+    "class": "AttachInfo",
+    "base": "ParseInfo",
+    "enum": "ATTACH_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/attach_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "path",
+        "type": "string"
+      },
+      {
+        "name": "options",
+        "type": "unordered_map<string, Value>"
+      }
+    ]
+  },
+  {
+    "class": "CopyInfo",
+    "base": "ParseInfo",
+    "enum": "COPY_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/copy_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "name": "select_list",
+        "type": "vector<string>"
+      },
+      {
+        "name": "is_from",
+        "type": "bool"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "name": "file_path",
+        "type": "string"
+      },
+      {
+        "name": "options",
+        "type": "unordered_map<vector<Value>>"
+      }
+    ]
   }
 ]

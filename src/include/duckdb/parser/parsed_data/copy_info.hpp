@@ -54,6 +54,9 @@ public:
 		result->options = options;
 		return result;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

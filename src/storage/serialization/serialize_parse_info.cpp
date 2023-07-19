@@ -8,6 +8,8 @@
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/parser/parsed_data/copy_info.hpp"
 
 namespace duckdb {
 
@@ -21,6 +23,12 @@ unique_ptr<ParseInfo> ParseInfo::FormatDeserialize(FormatDeserializer &deseriali
 	switch (info_type) {
 	case ParseInfoType::ALTER_INFO:
 		result = AlterInfo::FormatDeserialize(deserializer);
+		break;
+	case ParseInfoType::ATTACH_INFO:
+		result = AttachInfo::FormatDeserialize(deserializer);
+		break;
+	case ParseInfoType::COPY_INFO:
+		result = CopyInfo::FormatDeserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ParseInfo!");
@@ -158,6 +166,21 @@ unique_ptr<AlterTableInfo> AlterForeignKeyInfo::FormatDeserialize(FormatDeserial
 	return std::move(result);
 }
 
+void AttachInfo::FormatSerialize(FormatSerializer &serializer) const {
+	ParseInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("path", path);
+	serializer.WriteProperty("options", options);
+}
+
+unique_ptr<ParseInfo> AttachInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<AttachInfo>(new AttachInfo());
+	deserializer.ReadProperty("name", result->name);
+	deserializer.ReadProperty("path", result->path);
+	deserializer.ReadProperty("options", result->options);
+	return std::move(result);
+}
+
 void ChangeColumnTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	AlterTableInfo::FormatSerialize(serializer);
 	serializer.WriteProperty("column_name", column_name);
@@ -170,6 +193,31 @@ unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::FormatDeserialize(FormatDeseria
 	deserializer.ReadProperty("column_name", result->column_name);
 	deserializer.ReadProperty("target_type", result->target_type);
 	deserializer.ReadProperty("expression", result->expression);
+	return std::move(result);
+}
+
+void CopyInfo::FormatSerialize(FormatSerializer &serializer) const {
+	ParseInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("catalog", catalog);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("table", table);
+	serializer.WriteProperty("select_list", select_list);
+	serializer.WriteProperty("is_from", is_from);
+	serializer.WriteProperty("format", format);
+	serializer.WriteProperty("file_path", file_path);
+	serializer.WriteProperty("options", options);
+}
+
+unique_ptr<ParseInfo> CopyInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CopyInfo>(new CopyInfo());
+	deserializer.ReadProperty("catalog", result->catalog);
+	deserializer.ReadProperty("schema", result->schema);
+	deserializer.ReadProperty("table", result->table);
+	deserializer.ReadProperty("select_list", result->select_list);
+	deserializer.ReadProperty("is_from", result->is_from);
+	deserializer.ReadProperty("format", result->format);
+	deserializer.ReadProperty("file_path", result->file_path);
+	deserializer.ReadProperty("options", result->options);
 	return std::move(result);
 }
 

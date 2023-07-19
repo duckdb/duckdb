@@ -5,7 +5,7 @@ import os
 import subprocess
 from python_helpers import open_utf8
 
-shell_proc = os.path.join('build', 'debug', 'duckdb')
+shell_proc = os.path.join('build', 'reldebug', 'duckdb')
 
 gen_storage_script = os.path.join('test', 'sql', 'storage_version', 'generate_storage_version.sql')
 gen_storage_target = os.path.join('test', 'sql', 'storage_version', 'storage_version.db')
