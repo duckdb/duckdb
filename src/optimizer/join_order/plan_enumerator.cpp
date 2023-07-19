@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 
 namespace duckdb {
 
@@ -7,10 +8,10 @@ bool PlanEnumerator::NodeInFullPlan(JoinNode &node) {
 }
 
 void PlanEnumerator::UpdateJoinNodesInFullPlan(JoinNode &node) {
-	if (node.set.count == relations.size()) {
+	if (node.set.count == query_graph_manager.relation_manager.NumRelations()) {
 		join_nodes_in_full_plan.clear();
 	}
-	if (node.set.count < relations.size()) {
+	if (node.set.count < query_graph_manager.relation_manager.NumRelations()) {
 		join_nodes_in_full_plan.insert(node.set.ToString());
 	}
 	if (node.left) {
@@ -91,11 +92,11 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 void PlanEnumerator::GenerateCrossProducts() {
 	// generate a set of cross products to combine the currently available plans into a full join plan
 	// we create edges between every relation with a high cost
-	for (idx_t i = 0; i < relations.size(); i++) {
-		auto &left = set_manager.GetJoinRelation(i);
-		for (idx_t j = 0; j < relations.size(); j++) {
+	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
+		auto &left = query_graph_manager.set_manager.GetJoinRelation(i);
+		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
 			if (i != j) {
-				auto &right = set_manager.GetJoinRelation(j);
+				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
 				query_graph.CreateEdge(left, right, nullptr);
 				query_graph.CreateEdge(right, left, nullptr);
 			}
@@ -149,7 +150,7 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 	if (!left_plan || !right_plan) {
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
-	auto &new_set = set_manager.Union(left, right);
+	auto &new_set = query_graph_manager.set_manager.Union(left, right);
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan, *right_plan);
 	// check if this plan is the optimal plan we found for this set of relations
@@ -166,7 +167,7 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 		    join_nodes_in_full_plan.find(new_plan->set.ToString()) != join_nodes_in_full_plan.end()) {
 			must_update_full_plan = true;
 		}
-		if (new_set.count == relations.size()) {
+		if (new_set.count == query_graph_manager.relation_manager.NumRelations()) {
 			full_plan_found = true;
 			// If we find a full plan, we need to keep track of which nodes are in the full plan.
 			// It's possible the DP algorithm updates one of these nodes, then goes on to solve
@@ -205,7 +206,7 @@ bool PlanEnumerator::TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
 }
 
 bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
-	if (node.count == relations.size()) {
+	if (node.count == query_graph_manager.relation_manager.NumRelations()) {
 		return true;
 	}
 	// create the exclusion set as everything inside the subgraph AND anything with members BELOW it
@@ -239,7 +240,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	for (auto neighbor : neighbors) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
-		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
+		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
 		auto connections = query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
@@ -268,9 +269,9 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 	vector<reference<JoinRelationSet>> union_sets;
 	union_sets.reserve(all_subset.size());
 	for (const auto &rel_set : all_subset) {
-		auto &neighbor = set_manager.GetJoinRelation(rel_set);
+		auto &neighbor = query_graph_manager.set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
-		auto &combined_set = set_manager.Union(right, neighbor);
+		auto &combined_set = query_graph_manager.set_manager.Union(right, neighbor);
 		// If combined_set.count == right.count, This means we found a neighbor that has been present before
 		// This means we didn't set exclusion_set correctly.
 		D_ASSERT(combined_set.count > right.count);
@@ -311,9 +312,9 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 	vector<reference<JoinRelationSet>> union_sets;
 	union_sets.reserve(all_subset.size());
 	for (const auto &rel_set : all_subset) {
-		auto &neighbor = set_manager.GetJoinRelation(rel_set);
+		auto &neighbor = query_graph_manager.set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
-		auto &new_set = set_manager.Union(node, neighbor);
+		auto &new_set = query_graph_manager.set_manager.Union(node, neighbor);
 		D_ASSERT(new_set.count > node.count);
 		if (plans.find(&new_set) != plans.end()) {
 			if (!EmitCSG(new_set)) {
@@ -341,9 +342,9 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 bool PlanEnumerator::SolveJoinOrderExactly() {
 	// now we perform the actual dynamic programming to compute the final result
 	// we enumerate over all the possible pairs in the neighborhood
-	for (idx_t i = relations.size(); i > 0; i--) {
+	for (idx_t i = query_graph_manager.relation_manager.NumRelations(); i > 0; i--) {
 		// for every node in the set, we consider it as the start node once
-		auto &start_node = set_manager.GetJoinRelation(i - 1);
+		auto &start_node = query_graph_manager.set_manager.GetJoinRelation(i - 1);
 		// emit the start node
 		if (!EmitCSG(start_node)) {
 			return false;
@@ -376,8 +377,8 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
 	auto all_neighbors = GetAllNeighborSets(neighbors);
 	for (const auto &neighbor : all_neighbors) {
-		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
-		auto &combined_set = set_manager.Union(new_set, neighbor_relation);
+		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
+		auto &combined_set = query_graph_manager.set_manager.Union(new_set, neighbor_relation);
 
 		auto combined_set_plan = plans.find(&combined_set);
 		if (combined_set_plan == plans.end()) {
@@ -406,8 +407,8 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
 	vector<reference<JoinRelationSet>> join_relations; // T in the paper
-	for (idx_t i = 0; i < relations.size(); i++) {
-		join_relations.push_back(set_manager.GetJoinRelation(i));
+	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
+		join_relations.push_back(query_graph_manager.set_manager.GetJoinRelation(i));
 	}
 	while (join_relations.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
@@ -420,7 +421,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
 				auto right = join_relations[j];
 				// check if we can connect these two relations
-				auto connection = query_graph.GetConnections(left, right);
+				auto connection = query_graph_manager.GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
 					auto &node = EmitPair(left, right, connection);

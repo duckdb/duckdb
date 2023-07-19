@@ -13,6 +13,7 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
+#include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -45,19 +46,10 @@ public:
 
 private:
 	ClientContext &context;
-	//! The total amount of join pairs that have been considered
-	idx_t pairs = 0;
-	//! Set of all relations considered in the join optimizer
-	vector<unique_ptr<SingleJoinRelation>> relations;
-	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<idx_t, idx_t> relation_mapping;
-	//! A structure holding all the created JoinRelationSet objects
-	JoinRelationSetManager set_manager;
 
 	//! manages the query graph, relations, and edges between relations
 	QueryGraphManager query_graph_manager;
-	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
+
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 

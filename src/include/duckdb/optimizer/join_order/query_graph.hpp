@@ -85,27 +85,4 @@ private:
 	QueryEdge root;
 };
 
-//! The QueryGraph contains edges between relations and allows edges to be created/queried
-class QueryGraphManager {
-public:
-	QueryGraphManager(ClientContext &context) : context(context), has_query_graph(false) {
-	}
-
-	//! manage relations and the logical operators they represent
-	RelationManager relation_manager;
-
-	//! Extract the join relations, optimizing non-reoderable relations when encountered
-	void Build(LogicalOperator *op);
-
-	unique_ptr<LogicalOperator> Reconstruct(JoinNode *root);
-
-	bool HasQueryGraph();
-
-private:
-	bool has_query_graph;
-	void ExtractNode(LogicalOperator &op);
-	void ExtractEdges(LogicalOperator &op);
-	ClientContext &context;
-};
-
 } // namespace duckdb

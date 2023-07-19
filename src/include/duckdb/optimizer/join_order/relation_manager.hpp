@@ -21,13 +21,22 @@
 
 namespace duckdb {
 
+//! Represents a single relation and any metadata accompanying that relation
+struct SingleJoinRelation {
+	LogicalOperator &op;
+	optional_ptr<LogicalOperator> parent;
+
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
+	}
+};
+
 class RelationManager {
 public:
 	explicit RelationManager(){}
 
 	idx_t NumRelations();
 	SingleJoinRelation GetRelation(idx_t relation_id);
-	void AddRelation(idx_t relation_id, LogicalOperator &op, stats stats);
+	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent);
 
 private:
 

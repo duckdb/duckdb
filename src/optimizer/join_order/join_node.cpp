@@ -11,11 +11,11 @@ JoinNode::JoinNode(JoinRelationSet &set, const double base_cardinality)
 	estimated_props = make_uniq<EstimatedProperties>(base_cardinality, 0);
 }
 
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right,
-                   const double base_cardinality, double cost)
-    : set(set), info(info), has_filter(false), left(&left), right(&right), base_cardinality(base_cardinality) {
-	estimated_props = make_uniq<EstimatedProperties>(base_cardinality, cost);
-}
+//JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right,
+//                   const double base_cardinality, double cost)
+//    : set(set), info(info), has_filter(false), left(&left), right(&right), base_cardinality(base_cardinality) {
+//	estimated_props = make_uniq<EstimatedProperties>(base_cardinality, cost);
+//}
 
 unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 	auto result = make_uniq<EstimatedProperties>(cardinality, cost);

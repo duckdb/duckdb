@@ -40,7 +40,7 @@ private:
 	QueryGraphManager query_graph_manager;
 	//! Cost model to evaluate cost of joins
 	CostModel cost_model;
-	//! The optimal join plan found for the specific JoinRelationSet*
+	//! A map to store the optimal join plan found for a specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
 
 	bool full_plan_found;
