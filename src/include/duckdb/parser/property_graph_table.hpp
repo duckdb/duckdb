@@ -64,6 +64,6 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 
-	static unique_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
+	static shared_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

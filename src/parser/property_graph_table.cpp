@@ -231,7 +231,7 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
+shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
 	auto pg_table = make_uniq<PropertyGraphTable>();
 	FieldReader reader(deserializer);
 	pg_table->table_name = reader.ReadRequired<string>();
