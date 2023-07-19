@@ -21,6 +21,7 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/planner/joinside.hpp"
+#include "duckdb/parser/parsed_data/vacuum_info.hpp"
 
 namespace duckdb {
 
@@ -223,6 +224,18 @@ unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &d
 	deserializer.ReadProperty("is_percentage", result->is_percentage);
 	deserializer.ReadProperty("method", result->method);
 	deserializer.ReadProperty("seed", result->seed);
+	return result;
+}
+
+void VacuumOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("vacuum", vacuum);
+	serializer.WriteProperty("analyze", analyze);
+}
+
+VacuumOptions VacuumOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	VacuumOptions result;
+	deserializer.ReadProperty("vacuum", result.vacuum);
+	deserializer.ReadProperty("analyze", result.analyze);
 	return result;
 }
 

@@ -306,5 +306,22 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "VacuumOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/vacuum_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "vacuum",
+        "type": "bool"
+      },
+      {
+        "name": "analyze",
+        "type": "bool"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

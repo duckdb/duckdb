@@ -88,6 +88,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/load_info.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
@@ -2535,6 +2536,34 @@ KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "KEYWORD_COL_NAME")) {
 		return KeywordCategory::KEYWORD_COL_NAME;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<LoadType>(LoadType value) {
+	switch(value) {
+	case LoadType::LOAD:
+		return "LOAD";
+	case LoadType::INSTALL:
+		return "INSTALL";
+	case LoadType::FORCE_INSTALL:
+		return "FORCE_INSTALL";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+LoadType EnumUtil::FromString<LoadType>(const char *value) {
+	if (StringUtil::Equals(value, "LOAD")) {
+		return LoadType::LOAD;
+	}
+	if (StringUtil::Equals(value, "INSTALL")) {
+		return LoadType::INSTALL;
+	}
+	if (StringUtil::Equals(value, "FORCE_INSTALL")) {
+		return LoadType::FORCE_INSTALL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

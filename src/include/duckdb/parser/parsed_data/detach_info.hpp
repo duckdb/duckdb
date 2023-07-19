@@ -29,5 +29,8 @@ public:
 	unique_ptr<DetachInfo> Copy() const;
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 } // namespace duckdb

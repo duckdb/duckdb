@@ -302,6 +302,8 @@ def generate_class_code(class_entry):
     constructor_entries = {}
     last_constructor_index = -1
     if class_entry.constructor is not None:
+        if type(class_entry.constructor) != type([]):
+            raise Exception(f"constructor must be of type [], but is of type {str(type(class_entry.constructor))}")
         for constructor_entry in class_entry.constructor:
             constructor_entries[constructor_entry] = True
             found = False

@@ -296,5 +296,130 @@
         "type": "unordered_map<vector<Value>>"
       }
     ]
+  },
+  {
+    "class": "DetachInfo",
+    "base": "ParseInfo",
+    "enum": "DETACH_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/detach_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "if_not_found",
+        "type": "OnEntryNotFound"
+      }
+    ]
+  },
+  {
+    "class": "DropInfo",
+    "base": "ParseInfo",
+    "enum": "DROP_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/drop_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "if_not_found",
+        "type": "OnEntryNotFound"
+      },
+      {
+        "name": "cascade",
+        "type": "bool"
+      },
+      {
+        "name": "allow_drop_internal",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "LoadInfo",
+    "base": "ParseInfo",
+    "enum": "LOAD_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/load_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "filename",
+        "type": "string"
+      },
+      {
+        "name": "load_type",
+        "type": "LoadType"
+      }
+    ]
+  },
+  {
+    "class": "PragmaInfo",
+    "base": "ParseInfo",
+    "enum": "PRAGMA_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/pragma_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "parameters",
+        "type": "vector<Value>"
+      },
+      {
+        "name": "named_parameters",
+        "type": "unordered_map<string, Value>"
+      }
+    ]
+  },
+  {
+    "class": "TransactionInfo",
+    "base": "ParseInfo",
+    "enum": "TRANSACTION_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/transaction_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "TransactionType"
+      }
+    ]
+  },
+  {
+    "class": "VacuumInfo",
+    "base": "ParseInfo",
+    "enum": "VACUUM_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/vacuum_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "options",
+        "type": "VacuumOptions"
+      }
+    ],
+    "constructor": ["options"]
   }
 ]

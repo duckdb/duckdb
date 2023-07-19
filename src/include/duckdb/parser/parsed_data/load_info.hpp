@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/vacuum_info.hpp
+// duckdb/parser/parsed_data/load_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-enum class LoadType { LOAD, INSTALL, FORCE_INSTALL };
+enum class LoadType : uint8_t { LOAD, INSTALL, FORCE_INSTALL };
 
 struct LoadInfo : public ParseInfo {
 public:
@@ -23,7 +23,7 @@ public:
 	LoadInfo() : ParseInfo(TYPE) {
 	}
 
-	std::string filename;
+	string filename;
 	LoadType load_type;
 
 public:
@@ -49,6 +49,9 @@ public:
 		reader.Finalize();
 		return std::move(load_info);
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

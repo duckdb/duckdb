@@ -144,6 +144,8 @@ enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
 
+enum class LoadType : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -444,6 +446,9 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
+
+template<>
+const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -811,6 +816,9 @@ JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
+
+template<>
+LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);

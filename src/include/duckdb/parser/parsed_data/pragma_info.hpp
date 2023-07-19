@@ -40,6 +40,9 @@ public:
 		result->named_parameters = named_parameters;
 		return result;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb
