@@ -2,7 +2,8 @@
   {
     "class": "LogicalType",
     "includes": [
-      "duckdb/common/types.hpp"
+      "duckdb/common/types.hpp",
+      "duckdb/common/extra_type_info.hpp"
     ],
     "members": [
       {

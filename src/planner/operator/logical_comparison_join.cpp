@@ -52,7 +52,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FromDelimJoin(LogicalDelimJoi
 	new_join->left_projection_map = std::move(delim_join.left_projection_map);
 	new_join->right_projection_map = std::move(delim_join.right_projection_map);
 	new_join->join_stats = std::move(delim_join.join_stats);
-	return new_join;
+	return std::move(new_join);
 }
 
 } // namespace duckdb

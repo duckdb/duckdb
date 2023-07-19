@@ -61,7 +61,7 @@ unique_ptr<ParseInfo> AlterInfo::FormatDeserialize(FormatDeserializer &deseriali
 	result->name = std::move(name);
 	result->if_not_found = if_not_found;
 	result->allow_internal = allow_internal;
-	return result;
+	return std::move(result);
 }
 
 void AlterTableInfo::FormatSerialize(FormatSerializer &serializer) const {
@@ -103,7 +103,7 @@ unique_ptr<AlterInfo> AlterTableInfo::FormatDeserialize(FormatDeserializer &dese
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
 	}
-	return result;
+	return std::move(result);
 }
 
 void AlterViewInfo::FormatSerialize(FormatSerializer &serializer) const {
@@ -121,7 +121,7 @@ unique_ptr<AlterInfo> AlterViewInfo::FormatDeserialize(FormatDeserializer &deser
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterViewInfo!");
 	}
-	return result;
+	return std::move(result);
 }
 
 void AddColumnInfo::FormatSerialize(FormatSerializer &serializer) const {

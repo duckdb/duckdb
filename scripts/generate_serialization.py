@@ -124,6 +124,12 @@ def generate_constructor(pointer_type, class_name, constructor_parameters):
         return f'\t{class_name} result{params};\n'
     return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
 
+def generate_return(class_entry):
+    if class_entry.base is None:
+        return '\treturn result;'
+    else:
+        return '\treturn std::move(result);'
+
 supported_member_entries = [
     'name', 'type', 'property', 'serialize_property', 'deserialize_property', 'optional', 'base'
 ]
@@ -276,7 +282,7 @@ def generate_base_class_code(base_class):
             base_class_deserialize+= f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
         else:
             base_class_deserialize+= f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
-    base_class_deserialize += '\treturn result;'
+    base_class_deserialize += generate_return(base_class)
     base_class_generation = ''
     serialization = ''
     if base_class.base is not None:
@@ -363,10 +369,7 @@ def generate_class_code(class_entry):
         elif entry.name not in constructor_entries:
             class_deserialize += get_deserialize_assignment(entry.name, entry.type, class_entry.pointer_type)
 
-    if class_entry.base is None:
-        class_deserialize += '\treturn result;'
-    else:
-        class_deserialize += '\treturn std::move(result);'
+    class_deserialize += generate_return(class_entry)
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
     class_generation = ''

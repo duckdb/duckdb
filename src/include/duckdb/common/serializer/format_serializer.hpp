@@ -121,7 +121,7 @@ protected:
 	// UnorderedSet
 	// Serialized the same way as a list/vector
 	template <class T, class HASH, class CMP>
-	void WriteValue(const unordered_set<T, HASH, CMP> &set) {
+	void WriteValue(const duckdb::unordered_set<T, HASH, CMP> &set) {
 		auto count = set.size();
 		OnListBegin(count);
 		for (auto &item : set) {
@@ -133,7 +133,7 @@ protected:
 	// Set
 	// Serialized the same way as a list/vector
 	template <class T, class HASH, class CMP>
-	void WriteValue(const set<T, HASH, CMP> &set) {
+	void WriteValue(const duckdb::set<T, HASH, CMP> &set) {
 		auto count = set.size();
 		OnListBegin(count);
 		for (auto &item : set) {
@@ -144,7 +144,7 @@ protected:
 
 	// Map
 	template <class K, class V, class HASH, class CMP>
-	void WriteValue(const std::unordered_map<K, V, HASH, CMP> &map) {
+	void WriteValue(const duckdb::unordered_map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
 		OnMapBegin(count);
 		for (auto &item : map) {
