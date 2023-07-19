@@ -204,7 +204,7 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState() cons
 }
 
 void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
-                                        Vector &target, idx_t count) const {
+                                        Vector &target, idx_t count, idx_t row_idx) const {
 	//	Chunk up the constants and copy them one at a time
 	auto &lcstate = lstate.Cast<WindowConstantAggregatorState>();
 	idx_t matched = 0;
@@ -278,7 +278,7 @@ unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const 
 }
 
 void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
-                                      Vector &result, idx_t count) const {
+                                      Vector &result, idx_t count, idx_t row_idx) const {
 	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frame = lcstate.frame;
@@ -307,8 +307,10 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count,
-                                     WindowAggregationMode mode_p)
-    : WindowAggregator(std::move(aggr), result_type, count), internal_nodes(0), mode(mode_p) {
+                                     WindowAggregationMode mode_p, FramePart frame_part_p,
+                                     WindowExclusion exclude_mode_p)
+    : WindowAggregator(std::move(aggr), result_type, count), internal_nodes(0), mode(mode_p), frame_part(frame_part_p),
+      exclude_mode(exclude_mode_p) {
 }
 
 void WindowSegmentTree::Finalize() {
@@ -341,42 +343,6 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggr.function.destructor(addresses, aggr_input_data, count);
 	}
 }
-
-class WindowSegmentTreeState : public WindowAggregatorState {
-public:
-	WindowSegmentTreeState(const AggregateObject &aggr, DataChunk &inputs, const ValidityMask &filter_mask);
-	~WindowSegmentTreeState() override;
-
-	void FlushStates(bool combining);
-	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
-	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
-	                        data_ptr_t current_state);
-	void Finalize(Vector &result, idx_t count);
-
-public:
-	//! The aggregate function
-	const AggregateObject &aggr;
-	//! The aggregate function
-	DataChunk &inputs;
-	//! The filtered rows in inputs
-	const ValidityMask &filter_mask;
-	//! The size of a single aggregate state
-	const idx_t state_size;
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
-	vector<data_t> state;
-	//! Input data chunk, used for leaf segment aggregation
-	DataChunk leaves;
-	//! The filtered rows in inputs.
-	SelectionVector filter_sel;
-	//! A vector of pointers to "state", used for intermediate window segment aggregation
-	Vector statep;
-	//! Reused state pointers for combining segment tree levels
-	Vector statel;
-	//! Reused result state container for the window functions
-	Vector statef;
-	//! Count of buffered values
-	idx_t flush_count;
-};
 
 WindowSegmentTreeState::WindowSegmentTreeState(const AggregateObject &aggr, DataChunk &inputs,
                                                const ValidityMask &filter_mask)
@@ -423,6 +389,11 @@ void WindowSegmentTreeState::FlushStates(bool combining) {
 	}
 
 	flush_count = 0;
+}
+
+void WindowSegmentTreeState::Combine(WindowSegmentTreeState &other, Vector &result, idx_t count) {
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
+	aggr.function.combine(other.statef, statef, aggr_input_data, count);
 }
 
 void WindowSegmentTreeState::ExtractFrame(idx_t begin, idx_t end, data_ptr_t state_ptr) {
@@ -479,10 +450,12 @@ void WindowSegmentTreeState::WindowSegmentValue(const WindowSegmentTree &tree, i
 		}
 	}
 }
-void WindowSegmentTreeState::Finalize(Vector &result, idx_t count) {
-	//	Finalise the result aggregates
+void WindowSegmentTreeState::Finalize(Vector &result, idx_t count, bool writeResult) {
+	//	Finalise the result aggregates and write to result if writeResult is set
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
+	if (writeResult) {
+		aggr.function.finalize(statef, aggr_input_data, result, count, 0);
+	}
 
 	//	Destruct the result aggregates
 	if (aggr.function.destructor) {
@@ -534,10 +507,16 @@ void WindowSegmentTree::ConstructTree() {
 }
 
 void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-                                 idx_t count) const {
+                                 idx_t count, idx_t row_idx) const {
 	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
 	const auto cant_combine = (!aggr.function.combine || !UseCombineAPI());
 	auto fdata = FlatVector::GetData<data_ptr_t>(ltstate.statef);
+
+	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExclusion::CURRENT_ROW;
+	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExclusion::CURRENT_ROW;
+	// with EXCLUDE TIES, in addition to the frame part right of the peer group's end, we also need to consider the
+	// current row
+	const bool add_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExclusion::TIES;
 
 	//	First pass: aggregate the segment tree nodes
 	//	Share adjacent identical states
@@ -547,7 +526,7 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *beg
 	auto ldata = FlatVector::GetData<data_ptr_t>(ltstate.statel);
 	auto pdata = FlatVector::GetData<data_ptr_t>(ltstate.statep);
 	data_ptr_t prev_state = nullptr;
-	for (idx_t rid = 0; rid < count; ++rid) {
+	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
 		aggr.function.initialize(state_ptr);
 
@@ -556,8 +535,8 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *beg
 			continue;
 		}
 
-		auto begin = begins[rid];
-		auto end = ends[rid];
+		auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
+		auto end = end_on_curr_row ? cur_row : ends[rid];
 		if (begin >= end) {
 			continue;
 		}
@@ -610,11 +589,14 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *beg
 
 	//	Second pass: aggregate the ragged leaves
 	//	(or everything if we can't combine)
-	for (idx_t rid = 0; rid < count; ++rid) {
+	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
 
-		const auto begin = begins[rid];
-		const auto end = ends[rid];
+		const auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
+		const auto end = end_on_curr_row ? cur_row : ends[rid];
+		if (add_curr_row) {
+			ltstate.WindowSegmentValue(*this, 0, cur_row, cur_row + 1, state_ptr);
+		}
 		if (begin >= end) {
 			continue;
 		}
@@ -639,16 +621,35 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *beg
 	}
 	ltstate.FlushStates(false);
 
-	ltstate.Finalize(result, count);
+	// without EXCLUDE, finalize and write result right here
+	if (frame_part == FramePart::FULL) {
+		ltstate.Finalize(result, count, true);
+	}
 
 	//	Set the validity mask on  the invalid rows
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t rid = 0; rid < count; ++rid) {
-		const auto begin = begins[rid];
-		const auto end = ends[rid];
 
-		if (begin >= end) {
-			rmask.SetInvalid(rid);
+	auto &rmask = FlatVector::Validity(result);
+	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
+		const auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
+		const auto end = end_on_curr_row ? cur_row : ends[rid];
+
+		switch (frame_part) {
+		case FramePart::FULL:
+		case FramePart::LEFT:
+			// first, set all the invalid bits with respect to the left half
+			if (begin >= end) {
+				rmask.SetInvalid(rid);
+			}
+			break;
+		case FramePart::RIGHT:
+			// then, set all the valid bits from the right half
+			// (result corrseponds to left || right)
+			if (begin < end || add_curr_row) {
+				rmask.SetValid(rid);
+			}
+			break;
+		default:
+			break;
 		}
 	}
 }

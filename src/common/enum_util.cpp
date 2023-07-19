@@ -66,6 +66,7 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/execution/window_segment_tree.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -2224,6 +2225,34 @@ ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FK_TYPE_SELF_REFERENCE_TABLE")) {
 		return ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<FramePart>(FramePart value) {
+	switch(value) {
+	case FramePart::FULL:
+		return "FULL";
+	case FramePart::LEFT:
+		return "LEFT";
+	case FramePart::RIGHT:
+		return "RIGHT";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+FramePart EnumUtil::FromString<FramePart>(const char *value) {
+	if (StringUtil::Equals(value, "FULL")) {
+		return FramePart::FULL;
+	}
+	if (StringUtil::Equals(value, "LEFT")) {
+		return FramePart::LEFT;
+	}
+	if (StringUtil::Equals(value, "RIGHT")) {
+		return FramePart::RIGHT;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

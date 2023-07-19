@@ -124,6 +124,8 @@ enum class FilterPropagateResult : uint8_t;
 
 enum class ForeignKeyType : uint8_t;
 
+enum class FramePart : uint8_t;
+
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
@@ -410,6 +412,9 @@ const char* EnumUtil::ToChars<FilterPropagateResult>(FilterPropagateResult value
 
 template<>
 const char* EnumUtil::ToChars<ForeignKeyType>(ForeignKeyType value);
+
+template<>
+const char* EnumUtil::ToChars<FramePart>(FramePart value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
@@ -771,6 +776,9 @@ FilterPropagateResult EnumUtil::FromString<FilterPropagateResult>(const char *va
 
 template<>
 ForeignKeyType EnumUtil::FromString<ForeignKeyType>(const char *value);
+
+template<>
+FramePart EnumUtil::FromString<FramePart>(const char *value);
 
 template<>
 FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *value);

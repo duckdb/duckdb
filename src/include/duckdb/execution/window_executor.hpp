@@ -192,8 +192,10 @@ protected:
 	ExpressionExecutor filter_executor;
 	SelectionVector filter_sel;
 
-	// aggregate computation algorithm
+	// aggregate computation algorithm (with exclusion: only for left frame part)
 	unique_ptr<WindowAggregator> aggregator;
+	// optional segment tree for the frame part right of the exclude
+	unique_ptr<WindowSegmentTree> post_exclude_tree;
 
 	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
@@ -257,6 +259,7 @@ public:
 	                    const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
 	// IGNORE NULLS

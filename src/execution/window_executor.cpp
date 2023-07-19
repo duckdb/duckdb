@@ -524,7 +524,9 @@ WindowBoundariesState::WindowBoundariesState(BoundWindowExpression &wexpr, const
       partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
       range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)),
-      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
+      // if we have EXCLUDE GROUP / TIES, we also need peer boundaries
+      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST ||
+                 wexpr.exclude_clause >= WindowExclusion::GROUP) {
 }
 
 void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,
@@ -643,6 +645,10 @@ bool WindowAggregateExecutor::IsConstantAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
 	}
+	// window exclusion cannot be handled by constant aggregates
+	if (wexpr.exclude_clause != WindowExclusion::NO_OTHER) {
+		return false;
+	}
 
 	//	COUNT(*) is already handled efficiently by segment trees.
 	if (wexpr.children.empty()) {
@@ -719,7 +725,8 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  const idx_t count, const ValidityMask &partition_mask,
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
+    : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context),
+      post_exclude_tree(nullptr) {
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
@@ -731,7 +738,15 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 	} else if (wexpr.aggregate) {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode);
+		if (ExclusionIgnored(wexpr)) {
+			aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
+			                                          FramePart::FULL, wexpr.exclude_clause);
+		} else {
+			aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
+			                                          FramePart::LEFT, wexpr.exclude_clause);
+			post_exclude_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
+			                                                 FramePart::RIGHT, wexpr.exclude_clause);
+		}
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -760,6 +775,9 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 
 	D_ASSERT(aggregator);
 	aggregator->Sink(payload_chunk, filtering, filtered);
+	if (post_exclude_tree) {
+		post_exclude_tree->Sink(payload_chunk, filtering, filtered);
+	}
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count);
 }
@@ -767,6 +785,9 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
 	aggregator->Finalize();
+	if (post_exclude_tree) {
+		post_exclude_tree->Finalize();
+	}
 }
 
 class WindowAggregateState : public WindowExecutorBoundsState {
@@ -775,17 +796,24 @@ public:
 	                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
 	                     const WindowAggregator &aggregator)
 	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask),
-	      aggregator_state(aggregator.GetLocalState()) {
+	      aggregator_state(aggregator.GetLocalState()), post_exclude_tree_state(nullptr) {
 	}
 
 public:
+	// state of aggregator (with exclusion: left frame part)
 	unique_ptr<WindowAggregatorState> aggregator_state;
+	// optional state of segment tree right of the exclusion
+	unique_ptr<WindowAggregatorState> post_exclude_tree_state;
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 };
 
 unique_ptr<WindowExecutorState> WindowAggregateExecutor::GetExecutorState() const {
-	return make_uniq<WindowAggregateState>(wexpr, context, payload_count, partition_mask, order_mask, *aggregator);
+	auto res = make_uniq<WindowAggregateState>(wexpr, context, payload_count, partition_mask, order_mask, *aggregator);
+	if (post_exclude_tree) {
+		res->post_exclude_tree_state = post_exclude_tree->GetLocalState();
+	}
+	return std::move(res);
 }
 
 void WindowAggregateExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
@@ -794,7 +822,28 @@ void WindowAggregateExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	D_ASSERT(aggregator);
 	auto window_begin = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_END]);
-	aggregator->Evaluate(*lastate.aggregator_state, window_begin, window_end, result, count);
+
+	auto &agg_state = *lastate.aggregator_state;
+
+	if (post_exclude_tree) {
+		// if we have an EXCLUDE:
+		auto peer_begin = FlatVector::GetData<const idx_t>(lastate.bounds.data[PEER_BEGIN]);
+		auto peer_end = FlatVector::GetData<const idx_t>(lastate.bounds.data[PEER_END]);
+		auto &pre_ex_tree_state = agg_state.Cast<WindowSegmentTreeState>();
+		auto &post_ex_tree_state = (*lastate.post_exclude_tree_state).Cast<WindowSegmentTreeState>();
+
+		// 1. evaluate the tree left of the excluded part
+		aggregator->Evaluate(pre_ex_tree_state, window_begin, peer_begin, result, count, row_idx);
+		// 2. evaluate the tree right of the excluded part
+		post_exclude_tree->Evaluate(post_ex_tree_state, peer_end, window_end, result, count, row_idx);
+		// 3. combine the right into the left part
+		pre_ex_tree_state.Combine(post_ex_tree_state, result, count);
+		// 4. write the left tree's result to the result vector
+		post_ex_tree_state.Finalize(result, count, false);
+		pre_ex_tree_state.Finalize(result, count, true);
+	} else {
+		aggregator->Evaluate(agg_state, window_begin, window_end, result, count, row_idx);
+	}
 }
 
 //===--------------------------------------------------------------------===//
