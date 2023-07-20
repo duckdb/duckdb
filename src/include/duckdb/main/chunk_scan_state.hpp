@@ -20,6 +20,7 @@ public:
 	virtual bool HasError() const = 0;
 	virtual PreservedError &GetError() = 0;
 	virtual vector<LogicalType> &Types() = 0;
+	virtual vector<string> &Names() = 0;
 	idx_t CurrentOffset() const;
 	idx_t RemainingInChunk() const;
 	DataChunk &CurrentChunk();
@@ -43,7 +44,8 @@ public:
 	bool LoadNextChunk(PreservedError &error) override;
 	bool HasError() const override;
 	PreservedError &GetError() override;
-	vector<LogicalType> &Types();
+	vector<LogicalType> &Types() override;
+	vector<string> &Names() override;
 
 private:
 	bool InternalLoad(PreservedError &error);

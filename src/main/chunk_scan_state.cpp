@@ -72,6 +72,10 @@ vector<LogicalType> &QueryResultChunkScanState::Types() {
 	return result.types;
 }
 
+vector<string> &QueryResultChunkScanState::Names() {
+	return result.names;
+}
+
 bool QueryResultChunkScanState::LoadNextChunk(PreservedError &error) {
 	if (finished) {
 		return !finished;
