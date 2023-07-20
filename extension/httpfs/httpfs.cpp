@@ -229,14 +229,14 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		D_ASSERT(hfs.state);
-		auto cached_file = hfs.state->GetFile(hfs.path);
-		if (!cached_file) {
+		auto &cached_file = hfs.state->cached_files[hfs.path];
+		if (!cached_file.finished) {
 			hfs.state->get_count++;
 		}
 		return hfs.http_client->Get(
@@ -254,38 +254,36 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 		    },
 		    [&](const char *data, size_t data_length) {
 			    D_ASSERT(hfs.state);
-			    auto cached_file = hfs.state->GetFile(hfs.path);
-			    if (cached_file) {
+			    auto &cached_file = hfs.state->cached_files[hfs.path];
+			    if (cached_file.finished) {
 				    return true;
 			    }
-			    auto new_cached_file = make_uniq<CachedFile>();
 			    if (hfs.state) {
 				    hfs.state->total_bytes_received += data_length;
 			    }
-			    if (!new_cached_file->data) {
-				    new_cached_file->data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
+			    if (!cached_file.data) {
+				    cached_file.data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
 				    hfs.length = data_length;
-				    new_cached_file->capacity = data_length;
-				    memcpy(new_cached_file->data.get(), data, data_length);
+				    cached_file.capacity = data_length;
+				    memcpy(cached_file.data.get(), data, data_length);
 			    } else {
-				    auto new_capacity = new_cached_file->capacity;
+				    auto new_capacity = cached_file.capacity;
 				    while (new_capacity < hfs.length + data_length) {
 					    new_capacity *= 2;
 				    }
 				    // Gotta eat your beans
-				    if (new_capacity != new_cached_file->capacity) {
+				    if (new_capacity != cached_file.capacity) {
 					    auto new_hfs_data =
 					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
 					    // copy the old data
-					    memcpy(new_hfs_data.get(), new_cached_file->data.get(), hfs.length);
-					    new_cached_file->capacity = new_capacity;
-					    new_cached_file->data = new_hfs_data;
+					    memcpy(new_hfs_data.get(), cached_file.data.get(), hfs.length);
+					    cached_file.capacity = new_capacity;
+					    cached_file.data = new_hfs_data;
 				    }
 				    // We can just copy stuff
-				    memcpy(new_cached_file->data.get() + hfs.length, data, data_length);
+				    memcpy(cached_file.data.get() + hfs.length, data, data_length);
 				    hfs.length += data_length;
 			    }
-			    hfs.state->SetCachedFile(hfs.path, std::move(new_cached_file));
 			    return true;
 		    });
 	});
@@ -298,7 +296,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -377,12 +375,12 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
+	auto &hfh = (HTTPFileHandle &)handle;
 
 	D_ASSERT(hfh.state);
-	auto cached_file = hfh.state->GetFile(hfh.path);
-	if (cached_file && cached_file->data) {
-		memcpy(buffer, cached_file->data.get() + location, nr_bytes);
+	auto &cached_file = hfh.state->cached_files[hfh.path];
+	if (cached_file.data) {
+		memcpy(buffer, cached_file.data.get() + location, nr_bytes);
 		hfh.file_offset = location + nr_bytes;
 		return;
 	}
@@ -392,7 +390,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 	// Don't buffer when DirectIO is set.
 	if (hfh.flags & FileFlags::FILE_FLAGS_DIRECT_IO && to_read > 0) {
-		GetRangeRequest(hfh, hfh.path, {}, location, char_ptr_cast(buffer), to_read);
+		GetRangeRequest(hfh, hfh.path, {}, location, (char *)buffer, to_read);
 		hfh.buffer_available = 0;
 		hfh.buffer_idx = 0;
 		hfh.file_offset = location + nr_bytes;
@@ -413,7 +411,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		auto buffer_read_len = MinValue<idx_t>(hfh.buffer_available, to_read);
 		if (buffer_read_len > 0) {
 			D_ASSERT(hfh.buffer_start + hfh.buffer_idx + buffer_read_len <= hfh.buffer_end);
-			memcpy(char_ptr_cast(buffer) + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
+			memcpy((char *)buffer + buffer_offset, hfh.read_buffer.get() + hfh.buffer_idx, buffer_read_len);
 
 			buffer_offset += buffer_read_len;
 			to_read -= buffer_read_len;
@@ -428,14 +426,13 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 
 			// Bypass buffer if we read more than buffer size
 			if (to_read > new_buffer_available) {
-				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, char_ptr_cast(buffer) + buffer_offset,
-				                to_read);
+				GetRangeRequest(hfh, hfh.path, {}, location + buffer_offset, (char *)buffer + buffer_offset, to_read);
 				hfh.buffer_available = 0;
 				hfh.buffer_idx = 0;
 				hfh.file_offset += to_read;
 				break;
 			} else {
-				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, char_ptr_cast(hfh.read_buffer.get()),
+				GetRangeRequest(hfh, hfh.path, {}, hfh.file_offset, (char *)hfh.read_buffer.get(),
 				                new_buffer_available);
 				hfh.buffer_available = new_buffer_available;
 				hfh.buffer_idx = 0;
@@ -447,7 +444,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 }
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
+	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t max_read = hfh.length - hfh.file_offset;
 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 	Read(handle, buffer, nr_bytes, hfh.file_offset);
@@ -459,7 +456,7 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
+	auto &hfh = (HTTPFileHandle &)handle;
 	Write(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
 }
@@ -469,20 +466,20 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
-	return hfh.length;
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
-	return hfh.last_modified;
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.last_modified;
 }
 
 bool HTTPFileSystem::FileExists(const string &filename) {
 	try {
 		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-		auto &hfh = handle->Cast<HTTPFileHandle>();
-		if (hfh.length == 0) {
+		auto &sfh = (HTTPFileHandle &)*handle;
+		if (sfh.length == 0) {
 			return false;
 		}
 		return true;
@@ -496,8 +493,8 @@ bool HTTPFileSystem::CanHandleFile(const string &fpath) {
 }
 
 void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
-	hfh.file_offset = location;
+	auto &sfh = (HTTPFileHandle &)handle;
+	sfh.file_offset = location;
 }
 
 // Get either the local, global, or no cache depending on settings
@@ -625,11 +622,13 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		}
 	}
 	if (state && (length == 0 || http_params.force_download)) {
-		auto cached_file = state->GetFile(path);
+		lock_guard<mutex> lock(state->cached_files_mutex);
+		auto &cached_file = state->cached_files[path];
 
-		if (!cached_file) {
+		if (!cached_file.finished) {
 			// Try to fully download the file first
 			hfs.GetRequest(*this, path, {});
+			cached_file.finished = true;
 		}
 	}
 

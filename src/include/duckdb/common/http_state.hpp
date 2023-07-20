@@ -21,6 +21,8 @@ struct CachedFile {
 	shared_ptr<char> data;
 	//! Data capacity
 	uint64_t capacity = 0;
+	//! If we finished downloading the file
+	bool finished = false;
 };
 
 class HTTPState {
@@ -31,6 +33,10 @@ public:
 	atomic<idx_t> post_count {0};
 	atomic<idx_t> total_bytes_received {0};
 	atomic<idx_t> total_bytes_sent {0};
+	//! Mutex to lock when getting the cached file(Parallel Only)
+	mutex cached_files_mutex;
+	//! In case of fully downloading the file, the cached files of this query
+	unordered_map<string, CachedFile> cached_files;
 
 	void Reset() {
 		head_count = 0;
@@ -55,26 +61,6 @@ public:
 		return head_count == 0 && get_count == 0 && put_count == 0 && post_count == 0 && total_bytes_received == 0 &&
 		       total_bytes_sent == 0;
 	}
-
-	optional_ptr<CachedFile> GetFile(const string &path) {
-		lock_guard<mutex> l(cached_files_mutex);
-		auto entry = cached_files.find(path);
-		if (entry == cached_files.end()) {
-			return nullptr;
-		}
-		return entry->second.get();
-	}
-
-	void SetCachedFile(const string &path, unique_ptr<CachedFile> file) {
-		lock_guard<mutex> l(cached_files_mutex);
-		cached_files.insert(make_pair(path, std::move(file)));
-	}
-
-private:
-	//! Mutex to lock when getting the cached file(Parallel Only)
-	mutex cached_files_mutex;
-	//! In case of fully downloading the file, the cached files of this query
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
 };
 
 } // namespace duckdb
