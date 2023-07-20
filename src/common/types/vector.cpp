@@ -418,7 +418,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &val_children = ArrayValue::GetChildren(val);
 		auto stride = ArrayType::GetSize(GetType());
 		auto &entry = ArrayVector::GetEntry(*this);
-		for (idx_t i = 0; i < val_children.size(); i++) {
+		for (idx_t i = 0; i < stride; i++) {
 			entry.SetValue((index * stride) + i, val_children[i]);
 		}
 		break;

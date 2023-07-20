@@ -198,7 +198,8 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 
 		auto &source_child = ArrayVector::GetEntry(*source);
 		auto &target_child = ArrayVector::GetEntry(target);
-		VectorOperations::Copy(source_child, target_child, sel_p, source_count, source_offset, target_offset);
+		auto array_size = ArrayType::GetSize(source->GetType());
+		VectorOperations::Copy(source_child, target_child, sel_p, source_count * array_size, source_offset * array_size, target_offset * array_size);
 		break;
 	}
 	case PhysicalType::LIST: {
