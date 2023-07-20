@@ -343,7 +343,8 @@ public:
 			line_info.lines_read[0][0]++;
 		}
 	}
-	ParallelCSVGlobalState() : line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	explicit ParallelCSVGlobalState(idx_t system_threads_p)
+	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
 	}
 
@@ -405,7 +406,7 @@ private:
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
 	//! Size of first file
-	idx_t first_file_size;
+	idx_t first_file_size = 0;
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 	//! Basically max number of threads in DuckDB
@@ -691,7 +692,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return make_uniq<ParallelCSVGlobalState>();
+		return make_uniq<ParallelCSVGlobalState>(context.db->NumberOfThreads());
 	}
 	unique_ptr<CSVFileHandle> file_handle;
 

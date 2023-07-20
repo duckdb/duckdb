@@ -2,8 +2,6 @@
 # description: Test the memory usage of the ART for various workloads
 # group: [memory]
 
-# FIXME: once we inline leaves, these numbers should all go down
-
 statement ok
 PRAGMA enable_verification;
 
@@ -38,12 +36,12 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 12 blocks for prefixes, 10 blocks for leaves, 7 blocks for Node16
-# 29 blocks * 256KB = 7424KB
-# WITHOUT the index, our database size is already approximately 2MB here
+# 10 blocks for prefixes, 6 blocks for Node16
+# 16 blocks * 256KB = 4096KB
+# WITHOUT the index, our database size is already approximately 2.1MB here
 
 query I
-SELECT mem_to_bytes(memory_usage) < 11000000 FROM pragma_database_size();
+SELECT mem_to_bytes(memory_usage) < 7000000 FROM pragma_database_size();
 ----
 true
 
@@ -68,12 +66,12 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 1 block for prefixes, 10 blocks for 100K distinct leaves, 3 blocks for Node4, 7 blocks for Node16,
-# 21 blocks * 256KB = 5376KB
+# 11 blocks for prefixes, 2 blocks for Node4, 6 blocks for Node16,
+# 19 blocks * 256KB = 4864KB
 # WITHOUT the index, our database size is already approximately 17MB here
 
 query I
-SELECT mem_to_bytes(memory_usage) < 25000000 FROM pragma_database_size();
+SELECT mem_to_bytes(memory_usage) < 23000000 FROM pragma_database_size();
 ----
 true
 
@@ -88,11 +86,11 @@ CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 10 blocks for approx. 100K distinct leaves, 8 blocks for Node4, 2 blocks for Node256
-# 20 blocks * 256KB = 5120KB
+# 1 block for prefixes, 6 blocks for Node4, 2 blocks for Node256
+# 8 blocks * 256KB = 2048KB
 
 query I
-SELECT mem_to_bytes(memory_usage) < 7000000 FROM pragma_database_size();
+SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
 ----
 true
 
@@ -107,8 +105,7 @@ CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 1000)::INT64 AS id F
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 1 block for prefixes, 4 blocks for leaf segments, 1 block for leaves,
-# 1 block for Node4, 1 block for Node256
+# 1 block for prefixes, 5 blocks for leaves, 1 block for Node4, 1 block for Node256
 # 8 blocks * 256KB = 2048KB
 
 query I
