@@ -450,10 +450,10 @@ void WindowSegmentTreeState::WindowSegmentValue(const WindowSegmentTree &tree, i
 		}
 	}
 }
-void WindowSegmentTreeState::Finalize(Vector &result, idx_t count, bool writeResult) {
-	//	Finalise the result aggregates and write to result if writeResult is set
+void WindowSegmentTreeState::Finalize(Vector &result, idx_t count, bool write_result) {
+	//	Finalise the result aggregates and write to result if write_result is set
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	if (writeResult) {
+	if (write_result) {
 		aggr.function.finalize(statef, aggr_input_data, result, count, 0);
 	}
 

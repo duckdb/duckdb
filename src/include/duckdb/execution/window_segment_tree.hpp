@@ -168,7 +168,7 @@ public:
 	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
 	                        data_ptr_t current_state);
 	//! optionally writes result and calls destructors
-	void Finalize(Vector &result, idx_t count, bool writeResult);
+	void Finalize(Vector &result, idx_t count, bool write_result);
 
 	void Combine(WindowSegmentTreeState &other, Vector &result, idx_t count);
 
