@@ -444,7 +444,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	std::unordered_set<string> partitions;
 	auto &fs = FileSystem::GetFileSystem(context);
 
-	auto splits_first_file = StringUtil::Split(files.front(), fs.PathSeparator());
+	auto splits_first_file = StringUtil::Split(files.front(), fs.PathSeparator(files.front()));
 	if (splits_first_file.size() < 2) {
 		return false;
 	}
@@ -458,7 +458,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 		return false;
 	}
 	for (auto &file : files) {
-		auto splits = StringUtil::Split(file, fs.PathSeparator());
+		auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 		if (splits.size() != splits_first_file.size()) {
 			return false;
 		}
@@ -478,7 +478,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 	auto &fs = FileSystem::GetFileSystem(context);
 
 	std::map<string, string> partitions;
-	auto splits = StringUtil::Split(file, fs.PathSeparator());
+	auto splits = StringUtil::Split(file, fs.PathSeparator(file));
 	if (splits.size() < 2) {
 		return;
 	}

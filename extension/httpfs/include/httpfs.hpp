@@ -135,7 +135,7 @@ public:
 	string GetName() const override {
 		return "HTTPFileSystem";
 	}
-	string PathSeparator() const override {
+	string PathSeparator(const string &path) override {
 		return "/";
 	}
 	static void Verify();

@@ -185,8 +185,8 @@ public:
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
-	//! Path separator for the current file system
-	DUCKDB_API virtual string PathSeparator() const;
+	//! Path separator for path
+	DUCKDB_API virtual string PathSeparator(const string& path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
 	DUCKDB_API bool IsPathAbsolute(const string &path);
 	//! Normalize an absolute path - the goal of normalizing is converting "\test.db" and "C:/test.db" into "C:\test.db"
