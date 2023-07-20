@@ -327,7 +327,6 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	}
 
 	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
-		source.ReadProperty<idx_t>("dict_size");
 		auto enum_name = source.ReadProperty<string>("enum_name");
 		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.FormatDeserialize(source, size);
@@ -451,7 +450,7 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(FieldReader &reader) {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto enum_size = deserializer.ReadProperty<uint32_t>("enum_size");
+	auto enum_size = deserializer.ReadProperty<idx_t>("enum_size");
 	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
