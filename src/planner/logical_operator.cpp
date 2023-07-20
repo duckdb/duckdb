@@ -102,15 +102,6 @@ string LogicalOperator::ToString() const {
 
 void LogicalOperator::Verify(ClientContext &context) {
 #ifdef DEBUG
-	// format (de)serialization of this operator
-	try {
-		auto blob = BinarySerializer::Serialize(*this);
-		bound_parameter_map_t parameters;
-		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(), blob.size());
-	} catch (SerializationException &ex) {
-		// pass
-	}
-
 	// verify expressions
 	for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 		auto str = expressions[expr_idx]->ToString();
