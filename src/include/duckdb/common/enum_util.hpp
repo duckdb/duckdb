@@ -214,6 +214,8 @@ enum class SetType : uint8_t;
 
 enum class SimplifiedTokenType : uint8_t;
 
+enum class SinkCombineResultType : uint8_t;
+
 enum class SinkFinalizeType : uint8_t;
 
 enum class SinkResultType : uint8_t;
@@ -543,6 +545,9 @@ const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value);
+
+template<>
+const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value);
@@ -901,6 +906,9 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value);
+
+template<>
+SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *value);
 
 template<>
 SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value);
