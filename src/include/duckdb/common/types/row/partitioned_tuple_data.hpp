@@ -52,6 +52,8 @@ public:
 	virtual ~PartitionedTupleData();
 
 public:
+	//! Get the layout of this PartitionedTupleData
+	const TupleDataLayout &GetLayout() const;
 	//! Get the partitioning type of this PartitionedTupleData
 	PartitionedTupleDataType GetType() const;
 	//! Initializes a local state for parallel partitioning that can be merged into this PartitionedTupleData

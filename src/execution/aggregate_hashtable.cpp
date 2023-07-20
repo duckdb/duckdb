@@ -61,6 +61,11 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 		partitioned_data =
 		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 	}
+
+	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());
+	D_ASSERT(GetLayout().GetDataWidth() == layout.GetDataWidth());
+	D_ASSERT(GetLayout().GetRowWidth() == layout.GetRowWidth());
+
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	sink_count = 0;
 }
@@ -94,6 +99,8 @@ void GroupedAggregateHashTable::Destroy() {
 	}
 
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
+	// Currently does not happen because aggregate destructors are called while scanning in RadixPartitionedHashTable
+	// LCOV_EXCL_START
 	RowOperationsState row_state(*aggregate_allocator);
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
@@ -103,6 +110,11 @@ void GroupedAggregateHashTable::Destroy() {
 		} while (iterator.Next());
 		data_collection->Reset();
 	}
+	// LCOV_EXCL_STOP
+}
+
+const TupleDataLayout &GroupedAggregateHashTable::GetLayout() const {
+	return partitioned_data->GetLayout();
 }
 
 idx_t GroupedAggregateHashTable::Count() const {

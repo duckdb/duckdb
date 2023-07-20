@@ -19,6 +19,10 @@ PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
 PartitionedTupleData::~PartitionedTupleData() {
 }
 
+const TupleDataLayout &PartitionedTupleData::GetLayout() const {
+	return layout;
+}
+
 PartitionedTupleDataType PartitionedTupleData::GetType() const {
 	return type;
 }

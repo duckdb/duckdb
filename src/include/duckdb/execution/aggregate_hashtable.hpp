@@ -105,6 +105,8 @@ public:
 	//! The hash table load factor, when a resize is triggered
 	constexpr static float LOAD_FACTOR = 1.5;
 
+	//! Get the layout of this HT
+	const TupleDataLayout &GetLayout() const;
 	//! Number of groups in the HT
 	idx_t Count() const;
 	//! Returns the number of tuples sunk into the HT

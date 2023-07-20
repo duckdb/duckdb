@@ -320,7 +320,7 @@ static idx_t SingleHTMemoryLimit(ClientContext &context) {
 	auto hts_in_memory = TaskScheduler::GetScheduler(context).NumberOfThreads() + RadixHTConfig::SinkPartitionCount();
 	const auto limit = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory() / hts_in_memory;
 	if (context.config.force_external) {
-		return MinValue<double>(Storage::BLOCK_SIZE * RadixHTConfig::SinkPartitionCount() * 1.5, limit);
+		return MinValue<double>(Storage::BLOCK_SIZE * RadixHTConfig::SinkPartitionCount() * 1.8, limit);
 	}
 	return limit;
 }
@@ -806,7 +806,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 }
 
 RadixHTLocalSourceState::RadixHTLocalSourceState(ExecutionContext &context, const RadixPartitionedHashTable &radix_ht_p)
-    : task(RadixHTSourceTaskType::NO_TASK), radix_ht(radix_ht_p),
+    : task(RadixHTSourceTaskType::NO_TASK), scan_status(RadixHTScanStatus::DONE), radix_ht(radix_ht_p),
       aggregate_allocator(BufferAllocator::Get(context.client)) {
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto scan_chunk_types = radix_ht.group_types;
