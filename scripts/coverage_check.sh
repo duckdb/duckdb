@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # prepare coverage file
 lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
 lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
