@@ -1,6 +1,8 @@
 #include "duckdb/catalog/catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -67,6 +69,16 @@ unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(FormatDeserializer &deser
 }
 
 void CatalogEntry::Verify(Catalog &catalog_p) {
+#ifdef DEBUG
+	// verify that we can FormatSerialize catalog entries
+	try {
+		auto blob = BinarySerializer::Serialize(*this);
+		bound_parameter_map_t parameters;
+		auto result = BinaryDeserializer::Deserialize<Expression>(blob.data(), blob.size());
+	} catch (SerializationException &ex) {
+		// pass
+	}
+#endif
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
