@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -70,11 +71,11 @@ public:
 
 public:
 	//! The parts of this chunk
-	vector<TupleDataChunkPart> parts;
+	unsafe_vector<TupleDataChunkPart> parts;
 	//! The row block ids referenced by the chunk
-	unordered_set<uint32_t> row_block_ids;
+	perfect_set_t row_block_ids;
 	//! The heap block ids referenced by the chunk
-	unordered_set<uint32_t> heap_block_ids;
+	perfect_set_t heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
 };
@@ -118,9 +119,9 @@ public:
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;
 	//! Where handles to row blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-	vector<BufferHandle> pinned_row_handles;
+	unsafe_vector<BufferHandle> pinned_row_handles;
 	//! Where handles to heap blocks will be stored with TupleDataPinProperties::KEEP_EVERYTHING_PINNED
-	vector<BufferHandle> pinned_heap_handles;
+	unsafe_vector<BufferHandle> pinned_heap_handles;
 };
 
 } // namespace duckdb

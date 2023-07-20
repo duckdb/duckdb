@@ -87,12 +87,12 @@ private:
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,
-	                                  vector<TupleDataChunkPart *> &parts);
+	                                  unsafe_vector<TupleDataChunkPart *> &parts);
 	//! Internal function for ReleaseOrStoreHandles
-	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_row_handles,
-	                                          unordered_map<uint32_t, BufferHandle> &handles,
-	                                          const unordered_set<uint32_t> &block_ids, vector<TupleDataBlock> &blocks,
-	                                          TupleDataPinProperties properties);
+	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
+	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
+	                                          perfect_map_t<BufferHandle> &handles, const perfect_set_t &block_ids,
+	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
 	//! Pins the given heap block
@@ -108,9 +108,9 @@ private:
 	//! The layout of the data
 	const TupleDataLayout layout;
 	//! Blocks storing the fixed-size rows
-	vector<TupleDataBlock> row_blocks;
+	unsafe_vector<TupleDataBlock> row_blocks;
 	//! Blocks storing the variable-size data of the fixed-size rows (e.g., string, list)
-	vector<TupleDataBlock> heap_blocks;
+	unsafe_vector<TupleDataBlock> heap_blocks;
 };
 
 } // namespace duckdb

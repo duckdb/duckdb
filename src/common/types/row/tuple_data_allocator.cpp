@@ -58,7 +58,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 	}
 
 	// Build the chunk parts for the incoming data
-	vector<pair<idx_t, idx_t>> chunk_part_indices;
+	unsafe_vector<pair<idx_t, idx_t>> chunk_part_indices;
 	idx_t offset = 0;
 	while (offset != append_count) {
 		if (chunks.empty() || chunks.back().count == STANDARD_VECTOR_SIZE) {
@@ -86,7 +86,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 	}
 
 	// Now initialize the pointers to write the data to
-	vector<TupleDataChunkPart *> parts;
+	unsafe_vector<TupleDataChunkPart *> parts;
 	parts.reserve(chunk_part_indices.size());
 	for (auto &indices : chunk_part_indices) {
 		parts.emplace_back(&segment.chunks[indices.first].parts[indices.second]);
@@ -183,7 +183,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	// when chunk 0 needs heap block 0, chunk 1 does not need any heap blocks, and chunk 2 needs heap block 0 again
 	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.empty());
 
-	vector<TupleDataChunkPart *> parts;
+	unsafe_vector<TupleDataChunkPart *> parts;
 	parts.reserve(chunk.parts.size());
 	for (auto &part : chunk.parts) {
 		parts.emplace_back(&part);
@@ -213,7 +213,8 @@ static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t h
 
 void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                                       idx_t offset, bool recompute, bool init_heap_pointers,
-                                                      bool init_heap_sizes, vector<TupleDataChunkPart *> &parts) {
+                                                      bool init_heap_sizes,
+                                                      unsafe_vector<TupleDataChunkPart *> &parts) {
 	auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 	auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
@@ -394,11 +395,9 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK, true);
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment, vector<BufferHandle> &pinned_handles,
-                                                       unordered_map<uint32_t, BufferHandle> &handles,
-                                                       const unordered_set<uint32_t> &block_ids,
-                                                       vector<TupleDataBlock> &blocks,
-                                                       TupleDataPinProperties properties) {
+void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
+    TupleDataSegment &segment, unsafe_vector<BufferHandle> &pinned_handles, perfect_map_t<BufferHandle> &handles,
+    const perfect_set_t &block_ids, unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties) {
 	bool found_handle;
 	do {
 		found_handle = false;
