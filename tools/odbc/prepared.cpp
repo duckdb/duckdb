@@ -6,8 +6,6 @@
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
-#include <string.h>
-
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;

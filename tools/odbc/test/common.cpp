@@ -225,6 +225,10 @@ const char *ConvertToCString(SQLCHAR *str) {
 	return reinterpret_cast<const char *>(str);
 }
 
+const char *ConvertToCString(int i) {
+	return std::to_string(i).c_str();
+}
+
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr) {
 	return reinterpret_cast<SQLPOINTER>(static_cast<uintptr_t>(ptr));
 }

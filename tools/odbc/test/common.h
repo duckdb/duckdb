@@ -119,6 +119,7 @@ std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
 SQLCHAR *ConvertToSQLCHAR(const char *str);
 std::string ConvertToString(SQLCHAR *str);
 const char *ConvertToCString(SQLCHAR *str);
+const char *ConvertToCString(int i);
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr);
 
 } // namespace odbc_test
