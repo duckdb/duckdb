@@ -2252,4 +2252,10 @@ Vector &ArrayVector::GetEntry(Vector &vector) {
 	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
 }
 
+idx_t ArrayVector::GetTotalSize(Vector &vector) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
+	D_ASSERT(vector.auxiliary);
+	return vector.auxiliary->Cast<VectorArrayBuffer>().GetCapacity();
+}
+
 } // namespace duckdb

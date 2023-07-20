@@ -2,6 +2,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include <cmath>
 
 namespace duckdb {
 
@@ -22,17 +23,16 @@ static void ArrayCosineSimilarityFunction(DataChunk &args, ExpressionState &stat
 
 	for (idx_t i = 0; i < count; i++) {
 		double dot = 0;
-		double denom_l = 0;
-		double denom_r = 0;
+		double d_l = 0;
+		double d_r = 0;
 		for (idx_t j = i * array_size; j < (i + 1) * array_size; j++) {
 			auto x = lhs_data[j];
 			auto y = rhs_data[j];
-			denom_l += x * x;
-			denom_r += y * y;
+			d_l += x * x;
+			d_r += y * y;
 			dot += x * y;
 		}
-		auto res = dot / (std::sqrt(denom_l) * std::sqrt(denom_r));
-		res_data[i] = res;
+		res_data[i] = (dot / (std::sqrt(d_l * d_r)));
 	}
 
 	if (count == 1) {

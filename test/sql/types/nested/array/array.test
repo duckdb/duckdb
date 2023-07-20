@@ -26,3 +26,12 @@ query I
 SELECT * FROM t1
 ----
 [1, 2]
+
+statement ok
+INSERT INTO t1 VALUES (array_value(3, 4))
+
+query I
+SELECT * FROM t1 ORDER BY c DESC
+----
+[3, 4]
+[1, 2]

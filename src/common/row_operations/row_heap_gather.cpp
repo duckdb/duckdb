@@ -133,6 +133,56 @@ static void HeapGatherListVector(Vector &v, const idx_t vcount, const SelectionV
 	}
 }
 
+static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const SelectionVector &sel, data_ptr_t *key_locations) {
+	// Setup
+	auto &validity = FlatVector::Validity(v);
+	auto &child_type = ArrayType::GetChildType(v.GetType());
+	auto array_size = ArrayType::GetSize(v.GetType());
+	auto child_vector = ArrayVector::GetEntry(v);
+	auto child_type_size = GetTypeIdSize(child_type.InternalType());
+	
+	data_ptr_t array_validitymask_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
+
+	// array must have a validitymask for its elements
+	auto array_validitymask_size = (array_size + 7) / 8;
+	
+
+	for (idx_t i = 0; i < vcount; i++) {
+		// row idx
+		const auto col_idx = sel.get_index(i);
+		if (!validity.RowIsValid(col_idx)) {
+			continue;
+		}
+		// Setup validity mask
+		array_validitymask_locations[i] = key_locations[i];
+		key_locations[i] += array_validitymask_size;
+		
+		
+		auto array_start = i * array_size; // TODO: is it i or col_idx here?
+		auto elem_remaining = array_size;
+
+		while (elem_remaining > 0) {
+			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
+		
+			SelectionVector array_sel(array_size);
+
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				array_entry_locations[elem_idx] = key_locations[i];
+				key_locations[i] += child_type_size;
+				array_sel.set_index(elem_idx, array_start + elem_idx);
+			}
+
+			RowOperations::HeapGather(child_vector, chunk_size, array_sel, 0,
+								array_entry_locations, nullptr);
+		
+			elem_remaining -= chunk_size;
+			array_start += chunk_size;
+		}
+	}
+}
+
+
 void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_no,
                                data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
 	v.SetVectorType(VectorType::FLAT_VECTOR);
@@ -199,6 +249,9 @@ void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVe
 		break;
 	case PhysicalType::LIST:
 		HeapGatherListVector(v, vcount, sel, key_locations);
+		break;
+	case PhysicalType::ARRAY:
+		HeapGatherArrayVector(v, vcount, sel, key_locations);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented deserialize from row-format");
