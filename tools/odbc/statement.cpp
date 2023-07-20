@@ -331,7 +331,7 @@ SQLRETURN SQL_API SQLCancel(SQLHSTMT statement_handle) {
 
 /**
  *@brief  Executes a prepared statement
- *
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlexecdirect-function?view=sql-server-ver15
  * @param statement_handle A handle to a statement object. Stores information about the statement and the results of a
  *query.
  * @param statement_text The text of the query to execute.

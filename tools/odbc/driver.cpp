@@ -49,10 +49,25 @@ SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	}
 }
 
+/**
+ * @brief Frees a handle
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfreehandle-function?view=sql-server-ver15
+ * @param handle_type
+ * @param handle
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	return duckdb::FreeHandle(handle_type, handle);
 }
 
+/**
+ * @brief Allocates a handle
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function?view=sql-server-ver15
+ * @param handle_type Can be SQL_HANDLE_ENV, SQL_HANDLE_DBC, SQL_HANDLE_STMT, SQL_HANDLE_DESC
+ * @param input_handle Handle to associate with the new handle, if applicable
+ * @param output_handle_ptr The new handle
+ * @return
+ */
 SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr) {
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
