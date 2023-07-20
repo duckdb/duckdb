@@ -10,7 +10,7 @@ class DataChunk;
 //! Abstract chunk fetcher
 class ChunkScanState {
 public:
-	ChunkScanState(idx_t position) {
+	explicit ChunkScanState() {
 	}
 	virtual ~ChunkScanState() {
 	}

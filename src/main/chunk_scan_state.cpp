@@ -43,7 +43,7 @@ idx_t ChunkScanState::RemainingInChunk() const {
 
 // QueryResult ChunkScanState
 
-QueryResultChunkScanState::QueryResultChunkScanState(QueryResult &result) : ChunkScanState(0), result(result) {
+QueryResultChunkScanState::QueryResultChunkScanState(QueryResult &result) : ChunkScanState(), result(result) {
 }
 
 QueryResultChunkScanState::~QueryResultChunkScanState() {

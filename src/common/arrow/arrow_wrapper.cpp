@@ -167,7 +167,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t batch_size, ArrowArray *out,
                               idx_t &count, PreservedError &error) {
 	count = 0;
-	ArrowAppender appender(scan_state.Types(), batch_size, options);
+	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
 	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
 	if (remaining_tuples_in_chunk) {
 		// We start by scanning the non-finished current chunk
