@@ -69,16 +69,6 @@ unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(FormatDeserializer &deser
 }
 
 void CatalogEntry::Verify(Catalog &catalog_p) {
-#ifdef DEBUG
-	// verify that we can FormatSerialize catalog entries
-	try {
-		auto blob = BinarySerializer::Serialize(*this);
-		bound_parameter_map_t parameters;
-		auto result = BinaryDeserializer::Deserialize<Expression>(blob.data(), blob.size());
-	} catch (SerializationException &ex) {
-		// pass
-	}
-#endif
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)
