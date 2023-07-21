@@ -79,36 +79,12 @@ struct timestamp_t { // NOLINT
 };
 
 struct timestamp_tz_t : public timestamp_t { // NOLINT
-	static constexpr timestamp_t infinity() {
-		return timestamp_t::infinity();
-	}
-	static constexpr timestamp_t ninfinity() {
-		return timestamp_t::ninfinity();
-	}
 };
 struct timestamp_ns_t : public timestamp_t { // NOLINT
-	static constexpr timestamp_t infinity() {
-		return timestamp_t::infinity();
-	}
-	static constexpr timestamp_t ninfinity() {
-		return timestamp_t::ninfinity();
-	}
 };
 struct timestamp_ms_t : public timestamp_t { // NOLINT
-	static constexpr timestamp_t infinity() {
-		return timestamp_t(int64_t(NumericLimits<int64_t>::Maximum() / 1000) * 1000);
-	}
-	static constexpr timestamp_t ninfinity() {
-		return timestamp_t(int64_t(-NumericLimits<int64_t>::Maximum() / 1000) * 1000);
-	}
 };
 struct timestamp_sec_t : public timestamp_t { // NOLINT
-	static constexpr timestamp_t infinity() {
-		return timestamp_t(int64_t(NumericLimits<int64_t>::Maximum() / 1000000) * 1000000);
-	}
-	static constexpr timestamp_t ninfinity() {
-		return timestamp_t(int64_t(-NumericLimits<int64_t>::Maximum() / 1000000) * 1000000);
-	}
 };
 
 enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };

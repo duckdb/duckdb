@@ -389,12 +389,11 @@ void PythonObject::Initialize() {
 
 enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
 
-template <class TIMESTAMP_TYPE>
 InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
-	if (timestamp == TIMESTAMP_TYPE::infinity()) {
+	if (timestamp == timestamp_t::infinity()) {
 		return InfinityType::POSITIVE;
 	}
-	if (timestamp == TIMESTAMP_TYPE::ninfinity()) {
+	if (timestamp == timestamp_t::ninfinity()) {
 		return InfinityType::NEGATIVE;
 	}
 	return InfinityType::NONE;
@@ -452,24 +451,20 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		InfinityType infinity = InfinityType::NONE;
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
-			infinity = GetTimestampInfinityType<timestamp_ms_t>(timestamp);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
 			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
-			infinity = GetTimestampInfinityType<timestamp_ns_t>(timestamp);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
-			infinity = GetTimestampInfinityType<timestamp_sec_t>(timestamp);
-		} else {
-			infinity = GetTimestampInfinityType<timestamp_t>(timestamp);
 		}
+		infinity = GetTimestampInfinityType(timestamp);
 
 		// Deal with infinity
 		switch (infinity) {
 		case InfinityType::POSITIVE: {
-			return py::module::import("datetime").attr("datetime").attr("max");
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.max());
 		}
 		case InfinityType::NEGATIVE: {
-			return py::module::import("datetime").attr("datetime").attr("min");
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.min());
 		}
 		case InfinityType::NONE:
 			break;
@@ -498,9 +493,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		int32_t year, month, day;
 		if (!duckdb::Date::IsFinite(date)) {
 			if (date == date_t::infinity()) {
-				return py::module::import("datetime").attr("date").attr("max");
+				return py::reinterpret_borrow<py::object>(import_cache.datetime().date.max());
 			}
-			return py::module::import("datetime").attr("date").attr("min");
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().date.min());
 		}
 		duckdb::Date::Convert(date, year, month, day);
 		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
