@@ -769,12 +769,14 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
 		                                                                       idata, count);
 		break;
-	case LogicalTypeId::UNION:
+	}
+	case LogicalTypeId::UNION: {
 		py::gil_scoped_acquire gil;
 		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(current_offset, dataptr, maskptr,
 		                                                                           input, idata, count);
 		break;
-	case LogicalTypeId::STRUCT:
+	}
+	case LogicalTypeId::STRUCT: {
 		py::gil_scoped_acquire gil;
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
 		                                                                          input, idata, count);
@@ -846,8 +848,8 @@ py::list &NumpyResultConversion::InsertCategory(idx_t col_idx) {
 	auto &categories_list = EnumType::GetValuesInsertOrder(type);
 	auto categories_size = EnumType::GetSize(type);
 	auto result = categories.insert(std::make_pair(col_idx, py::list()));
-	D_ASSERT(result.first);
-	auto &list = result.second.second;
+	D_ASSERT(result.second);
+	auto &list = result.first->second;
 	for (idx_t i = 0; i < categories_size; i++) {
 		list.append(py::cast(categories_list.GetValue(i).ToString()));
 	}

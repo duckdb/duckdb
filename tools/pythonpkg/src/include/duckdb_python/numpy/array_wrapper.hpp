@@ -98,7 +98,7 @@ public:
 		D_ASSERT(type.id() == LogicalTypeId::ENUM);
 		auto category_entry = categories.find(col_idx);
 		if (category_entry != categories.end()) {
-			return category_entry.second;
+			return category_entry->second;
 		}
 		return InsertCategory(col_idx);
 	}
