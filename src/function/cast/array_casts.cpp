@@ -107,28 +107,30 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		}
 
 		// First pass, compute the length
-		idx_t list_varchar_length = 2;
+		idx_t array_varchar_length = 2;
 		for (idx_t j = 0; j < size; j++) {
-			auto elem = in_data[(i * size) + j];
+			auto elem_idx = (i * size) + j;
+			auto elem = in_data[elem_idx];
 			if (j > 0) {
-				list_varchar_length += SEP_LENGTH;
+				array_varchar_length += SEP_LENGTH;
 			}
-			list_varchar_length += child_validity.RowIsValid(i) ? elem.GetSize() : NULL_LENGTH;
+			array_varchar_length += child_validity.RowIsValid(elem_idx) ? elem.GetSize() : NULL_LENGTH;
 		}
 
-		out_data[i] = StringVector::EmptyString(result, list_varchar_length);
+		out_data[i] = StringVector::EmptyString(result, array_varchar_length);
 		auto dataptr = out_data[i].GetDataWriteable();
 		auto offset = 0;
 		dataptr[offset++] = '[';
 
 		// Second pass, write the actual data
 		for (idx_t j = 0; j < size; j++) {
-			auto elem = in_data[(i * size) + j];
+			auto elem_idx = (i * size) + j;
+			auto elem = in_data[elem_idx];
 			if (j > 0) {
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			if (child_validity.RowIsValid(i)) {
+			if (child_validity.RowIsValid(elem_idx)) {
 				auto len = elem.GetSize();
 				memcpy(dataptr + offset, elem.GetData(), len);
 				offset += len;

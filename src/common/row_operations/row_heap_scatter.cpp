@@ -391,6 +391,9 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
 
+	UnifiedVectorFormat child_vdata;
+	child_vector.ToUnifiedFormat(ArrayVector::GetTotalSize(v), child_vdata);
+
 	//idx_t array_entry_sizes[STANDARD_VECTOR_SIZE];
 	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
 	data_ptr_t array_validitymask_locations[STANDARD_VECTOR_SIZE];
@@ -409,19 +412,33 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 		}
 
 		// Now we can serialize the array itself
+		
 		// Every entry starts with a validity mask
 		array_validitymask_locations[i] = key_locations[i];
 		memset(array_validitymask_locations[i], -1, (array_size + 7) / 8);
 		key_locations[i] += (array_size + 7) / 8;
 
 		// Then comes the elements
-
 		auto array_start = source_idx * array_size;
 		auto elem_remaining = array_size;
+
+		idx_t offset_in_byte = 0;
 
 		while (elem_remaining > 0) {
 			// the array elements can span multiple vectors
 			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
+
+			// serialize list validity
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				auto idx_in_array = child_vdata.sel->get_index(array_start + elem_idx);
+				if (!child_vdata.validity.RowIsValid(idx_in_array)) {
+					*(array_validitymask_locations[i]) &= ~(1UL << offset_in_byte);
+				}
+				if (++offset_in_byte == 8) {
+					array_validitymask_locations[i]++;
+					offset_in_byte = 0;
+				}
+			}
 
 			// Setup the locations for the elements
 			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {

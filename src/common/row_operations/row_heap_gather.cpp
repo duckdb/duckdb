@@ -138,7 +138,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 	auto &validity = FlatVector::Validity(v);
 	auto &child_type = ArrayType::GetChildType(v.GetType());
 	auto array_size = ArrayType::GetSize(v.GetType());
-	auto child_vector = ArrayVector::GetEntry(v);
+	auto &child_vector = ArrayVector::GetEntry(v);
 	auto child_type_size = GetTypeIdSize(child_type.InternalType());
 	
 	data_ptr_t array_validitymask_locations[STANDARD_VECTOR_SIZE];
@@ -157,15 +157,29 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 		// Setup validity mask
 		array_validitymask_locations[i] = key_locations[i];
 		key_locations[i] += array_validitymask_size;
-		
+
+		//data_ptr_t validitymask_location = key_locations[i];
 		
 		auto array_start = i * array_size; // TODO: is it i or col_idx here?
 		auto elem_remaining = array_size;
 
+		idx_t offset_in_byte = 0;
+
 		while (elem_remaining > 0) {
 			auto chunk_size = MinValue((uint32_t)STANDARD_VECTOR_SIZE, elem_remaining);
 		
-			SelectionVector array_sel(array_size);
+
+			auto &child_validity = FlatVector::Validity(child_vector);
+			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+				child_validity.Set(array_start + elem_idx, *(array_validitymask_locations[i]) & (1 << offset_in_byte));
+				if (++offset_in_byte == 8) {
+					array_validitymask_locations[i]++;
+					offset_in_byte = 0;
+				}
+			}
+
+
+			SelectionVector array_sel(chunk_size);
 
 			for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
 				array_entry_locations[elem_idx] = key_locations[i];
