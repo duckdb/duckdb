@@ -46,6 +46,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	case ExpressionClass::BOUND_DEFAULT:
 		result = BoundDefaultExpression::FormatDeserialize(deserializer);
 		break;
+	case ExpressionClass::BOUND_FUNCTION:
+		result = BoundFunctionExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_LAMBDA:
 		result = BoundLambdaExpression::FormatDeserialize(deserializer);
 		break;

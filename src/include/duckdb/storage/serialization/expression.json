@@ -277,5 +277,11 @@
       }
     ],
     "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundFunctionExpression",
+    "base": "Expression",
+    "enum": "BOUND_FUNCTION",
+    "custom_implementation": true
   }
 ]

@@ -127,6 +127,16 @@ public:
 		return data.Unset<T>();
 	}
 
+	// Manually begin an object - should be followed by EndObject
+	void BeginObject(const char *tag) {
+		SetTag(tag);
+		OnObjectBegin();
+	}
+
+	void EndObject() {
+		OnObjectEnd();
+	}
+
 private:
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>

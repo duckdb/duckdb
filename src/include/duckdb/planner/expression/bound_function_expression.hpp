@@ -12,6 +12,7 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
+struct SerializeFunctionData;
 class ScalarFunctionCatalogEntry;
 
 //! Represents a function call that has been bound to a base function
@@ -46,5 +47,9 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
 };
+
 } // namespace duckdb
