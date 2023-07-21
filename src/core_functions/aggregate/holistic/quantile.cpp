@@ -475,6 +475,11 @@ struct QuantileBindData : public FunctionData {
 		return std::move(result);
 	}
 
+	static void FormatSerializeDecimal(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const AggregateFunction &function) {
+		throw SerializationException("FIXME: quantile serialize for decimal");
+	}
+
 	vector<Value> quantiles;
 	vector<idx_t> order;
 	bool desc;
@@ -1208,7 +1213,7 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 	function.name = "median";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
-	function.format_serialize = QuantileBindData::FormatSerialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
 	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
@@ -1266,7 +1271,7 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, Agg
 	function.name = "quantile_disc";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
-	function.format_serialize = QuantileBindData::FormatSerialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
 	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
@@ -1279,7 +1284,7 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context,
 	function.name = "quantile_disc";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
-	function.format_serialize = QuantileBindData::FormatSerialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
 	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
@@ -1292,7 +1297,7 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, A
 	function.name = "quantile_cont";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
-	function.format_serialize = QuantileBindData::FormatSerialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
 	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
@@ -1305,7 +1310,7 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	function.name = "quantile_cont";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
-	function.format_serialize = QuantileBindData::FormatSerialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
 	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;

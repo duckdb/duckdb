@@ -28,23 +28,9 @@ protected:
 public:
 	// Serialize a value
 	template <class T>
-	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, const T &value) {
+	void WriteProperty(const char *tag, const T &value) {
 		SetTag(tag);
 		WriteValue(value);
-	}
-
-	// Serialize an enum
-	template <class T>
-	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value) {
-		SetTag(tag);
-		if (serialize_enum_as_string) {
-			// Use the enum serializer to lookup tostring function
-			auto str = EnumUtil::ToChars(value);
-			WriteValue(str);
-		} else {
-			// Use the underlying type
-			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
-		}
 	}
 
 	// Optional pointer
@@ -78,6 +64,18 @@ public:
 	}
 
 protected:
+	template <typename T>
+	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
+		if (serialize_enum_as_string) {
+			// Use the enum serializer to lookup tostring function
+			auto str = EnumUtil::ToChars(value);
+			WriteValue(str);
+		} else {
+			// Use the underlying type
+			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
+		}
+	}
+
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
@@ -117,6 +115,18 @@ protected:
 		}
 		OnListEnd(count);
 	}
+
+	// We need to special case vector<bool> because elements of vector<bool> cannot be referenced
+	template <>
+	void WriteValue(const vector<bool> &vec) {
+		auto count = vec.size();
+		OnListBegin(count);
+		for (auto item : vec) {
+			WriteValue(item);
+		}
+		OnListEnd(count);
+	}
+
 
 	template <class T>
 	void WriteValue(const unsafe_vector<T> &vec) {
