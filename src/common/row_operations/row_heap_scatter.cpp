@@ -79,7 +79,7 @@ static void ComputeListEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t e
 }
 
 static void ComputeArrayEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t entry_sizes[], idx_t ser_count,
-                                  const SelectionVector &sel, idx_t offset) {
+                                   const SelectionVector &sel, idx_t offset) {
 
 	auto array_size = ArrayType::GetSize(v.GetType());
 	auto child_vector = ArrayVector::GetEntry(v);
@@ -111,7 +111,7 @@ static void ComputeArrayEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t 
 			// compute and add to the total
 			std::fill_n(array_entry_sizes, chunk_size, 0);
 			RowOperations::ComputeEntrySizes(child_vector, array_entry_sizes, chunk_size, chunk_size,
-												*FlatVector::IncrementalSelectionVector(), array_start);
+			                                 *FlatVector::IncrementalSelectionVector(), array_start);
 			for (idx_t elem_idx = 0; elem_idx < chunk_size; elem_idx++) {
 				entry_sizes[i] += array_entry_sizes[elem_idx];
 			}
@@ -378,7 +378,7 @@ static void HeapScatterListVector(Vector &v, idx_t vcount, const SelectionVector
 }
 
 static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-                                  data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
+                                   data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
 
 	auto &child_vector = ArrayVector::GetEntry(v);
 	auto array_size = ArrayType::GetSize(v.GetType());
@@ -386,13 +386,11 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 	auto child_type_size = GetTypeIdSize(child_type.InternalType());
 	auto child_type_is_var_size = !TypeIsConstantSize(child_type.InternalType());
 
-
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(vcount, vdata);
 
 	UnifiedVectorFormat child_vdata;
 	child_vector.ToUnifiedFormat(ArrayVector::GetTotalSize(v), child_vdata);
-
 
 	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
 	idx_t array_entry_sizes[STANDARD_VECTOR_SIZE];
@@ -405,9 +403,9 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 	const auto bit = ~(1UL << idx_in_entry);
 
-	for(idx_t i = 0; i < ser_count; i++) {
+	for (idx_t i = 0; i < ser_count; i++) {
 		auto source_idx = vdata.sel->get_index(sel.get_index(i) + offset);
-		
+
 		// First off, set the validity of the mask itself in the parent entry
 		if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
 			*(validitymask_locations[i] + entry_idx) &= bit;
@@ -449,7 +447,7 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 			}
 
 			// Setup the locations for the elements
-			if(child_type_is_var_size) {
+			if (child_type_is_var_size) {
 				// The elements are variable sized
 				std::fill_n(array_entry_sizes, chunk_size, 0);
 				RowOperations::ComputeEntrySizes(child_vector, array_entry_sizes, chunk_size, chunk_size,
@@ -469,18 +467,17 @@ static void HeapScatterArrayVector(Vector &v, idx_t vcount, const SelectionVecto
 					key_locations[i] += child_type_size;
 				}
 			}
-			
+
 			RowOperations::HeapScatter(child_vector, ArrayVector::GetTotalSize(v),
-								*FlatVector::IncrementalSelectionVector(), chunk_size, 0, array_entry_locations,
-								nullptr, array_start);
-	
+			                           *FlatVector::IncrementalSelectionVector(), chunk_size, 0, array_entry_locations,
+			                           nullptr, array_start);
+
 			// update for next iteration
 			elem_remaining -= chunk_size;
 			array_start += chunk_size;
 		}
 	}
 }
-
 
 void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
                                 data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {

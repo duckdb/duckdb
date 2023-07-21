@@ -22,7 +22,7 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
-	
+
 	for (idx_t i = 0; i < num_rows; i++) {
 		for (idx_t j = 0; j < num_columns; j++) {
 			auto val = args.GetValue(j, i).DefaultCastAs(child_type);

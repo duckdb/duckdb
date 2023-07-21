@@ -174,8 +174,8 @@ void RadixScatterListVector(Vector &v, UnifiedVectorFormat &vdata, const Selecti
 }
 
 void RadixScatterArrayVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
-                              idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
-                              const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
+                             idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
+                             const bool nulls_first, const idx_t prefix_len, idx_t width, const idx_t offset) {
 	// serialize null values
 	if (has_null) {
 		auto &validity = vdata.validity;
@@ -206,8 +206,7 @@ void RadixScatterArrayVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount
 		data_ptr_t key_location = key_locations[i];
 
 		RowOperations::RadixScatter(child_vector, array_size, *FlatVector::IncrementalSelectionVector(), 1,
-									key_locations + i, false, true, false, prefix_len, width - 1,
-									array_offset);
+		                            key_locations + i, false, true, false, prefix_len, width - 1, array_offset);
 		// invert bits if desc
 		if (desc) {
 			for (idx_t s = 0; s < width; s++) {
@@ -216,7 +215,6 @@ void RadixScatterArrayVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount
 		}
 	}
 }
-
 
 void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcount, const SelectionVector &sel,
                               idx_t add_count, data_ptr_t *key_locations, const bool desc, const bool has_null,
@@ -253,9 +251,6 @@ void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcoun
 		}
 	}
 }
-
-
-
 
 void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
                                  data_ptr_t *key_locations, bool desc, bool has_null, bool nulls_first,
@@ -313,7 +308,7 @@ void RowOperations::RadixScatter(Vector &v, idx_t vcount, const SelectionVector 
 		break;
 	case PhysicalType::ARRAY:
 		RadixScatterArrayVector(v, vdata, vcount, sel, ser_count, key_locations, desc, has_null, nulls_first,
-		                         prefix_len, width, offset);
+		                        prefix_len, width, offset);
 		break;
 	default:
 		throw NotImplementedException("Cannot ORDER BY column with type %s", v.GetType().ToString());

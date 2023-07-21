@@ -133,7 +133,8 @@ static void HeapGatherListVector(Vector &v, const idx_t vcount, const SelectionV
 	}
 }
 
-static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const SelectionVector &sel, data_ptr_t *key_locations) {
+static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const SelectionVector &sel,
+                                  data_ptr_t *key_locations) {
 	// Setup
 	auto &validity = FlatVector::Validity(v);
 	auto &child_type = ArrayType::GetChildType(v.GetType());
@@ -141,7 +142,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 	auto &child_vector = ArrayVector::GetEntry(v);
 	auto child_type_size = GetTypeIdSize(child_type.InternalType());
 	auto child_type_is_var_size = !TypeIsConstantSize(child_type.InternalType());
-	
+
 	data_ptr_t array_entry_locations[STANDARD_VECTOR_SIZE];
 
 	// array must have a validitymask for its elements
@@ -157,7 +158,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 		// Setup validity mask
 		data_ptr_t array_validitymask_location = key_locations[i];
 		key_locations[i] += array_validitymask_size;
-		
+
 		// The size of each variable size entry is stored after the validity mask
 		// (if the child type is variable size)
 		data_ptr_t var_entry_size_ptr = nullptr;
@@ -202,15 +203,13 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 				}
 			}
 
-			RowOperations::HeapGather(child_vector, chunk_size, array_sel, 0,
-								array_entry_locations, nullptr);
-		
+			RowOperations::HeapGather(child_vector, chunk_size, array_sel, 0, array_entry_locations, nullptr);
+
 			elem_remaining -= chunk_size;
 			array_start += chunk_size;
 		}
 	}
 }
-
 
 void RowOperations::HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_no,
                                data_ptr_t *key_locations, data_ptr_t *validitymask_locations) {
