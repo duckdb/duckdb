@@ -8,6 +8,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 #include "duckdb/parser/statement/relation_statement.hpp"
 
