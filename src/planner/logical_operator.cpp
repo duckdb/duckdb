@@ -9,6 +9,8 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -134,7 +136,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 			expressions[expr_idx]->Serialize(serializer);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
-			return;
+			continue;
 		}
 
 		auto data = serializer.GetData();
@@ -142,6 +144,16 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 		PlanDeserializationState state(context);
 		auto deserialized_expression = Expression::Deserialize(deserializer, state);
+
+		// format (de)serialization of expressions
+		try {
+			auto blob = BinarySerializer::Serialize(*expressions[expr_idx]);
+			bound_parameter_map_t parameters;
+			auto result = BinaryDeserializer::Deserialize<Expression>(context, parameters, blob.data(), blob.size());
+			result->Hash();
+		} catch (SerializationException &ex) {
+			// pass
+		}
 		// FIXME: expressions might not be equal yet because of statistics propagation
 		continue;
 		D_ASSERT(Expression::Equals(expressions[expr_idx], deserialized_expression));

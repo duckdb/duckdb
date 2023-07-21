@@ -56,42 +56,16 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-CreateTableInfo TableCatalogEntry::GetTableInfoForSerialization() const {
-	CreateTableInfo result;
-	result.catalog = catalog.GetName();
-	result.schema = schema.name;
-	result.table = name;
-	result.columns = columns.Copy();
-	result.constraints.reserve(constraints.size());
+unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateTableInfo>();
+	result->catalog = catalog.GetName();
+	result->schema = schema.name;
+	result->table = name;
+	result->columns = columns.Copy();
+	result->constraints.reserve(constraints.size());
 	std::for_each(constraints.begin(), constraints.end(),
-	              [&result](const unique_ptr<Constraint> &c) { result.constraints.emplace_back(c->Copy()); });
-	return result;
-}
-
-void TableCatalogEntry::Serialize(Serializer &serializer) const {
-	D_ASSERT(!internal);
-	const auto info = GetTableInfoForSerialization();
-	FieldWriter writer(serializer);
-	writer.WriteString(info.catalog);
-	writer.WriteString(info.schema);
-	writer.WriteString(info.table);
-	info.columns.Serialize(writer);
-	writer.WriteSerializableList(info.constraints);
-	writer.Finalize();
-}
-
-unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_uniq<CreateTableInfo>();
-
-	FieldReader reader(source);
-	info->catalog = reader.ReadRequired<string>();
-	info->schema = reader.ReadRequired<string>();
-	info->table = reader.ReadRequired<string>();
-	info->columns = ColumnList::Deserialize(reader);
-	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
-	reader.Finalize();
-
-	return info;
+	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	return std::move(result);
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
@@ -162,11 +136,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
 		}
-		if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
-		}
 		if (column.Generated()) {
 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+		} else if (column.DefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed

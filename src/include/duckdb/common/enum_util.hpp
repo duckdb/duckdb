@@ -40,6 +40,8 @@ enum class AggregateOrderDependent : uint8_t;
 
 enum class AggregateType : uint8_t;
 
+enum class AlterForeignKeyType : uint8_t;
+
 enum class AlterScalarFunctionType : uint8_t;
 
 enum class AlterTableFunctionType : uint8_t;
@@ -128,6 +130,8 @@ enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
 
+enum class IndexConstraintType : uint8_t;
+
 enum class IndexType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
@@ -139,6 +143,8 @@ enum class JoinRefType : uint8_t;
 enum class JoinType : uint8_t;
 
 enum class KeywordCategory : uint8_t;
+
+enum class LoadType : uint8_t;
 
 enum class LogicalOperatorType : uint8_t;
 
@@ -173,6 +179,8 @@ enum class OrderPreservationType : uint8_t;
 enum class OrderType : uint8_t;
 
 enum class OutputStream : uint8_t;
+
+enum class ParseInfoType : uint8_t;
 
 enum class ParserExtensionResultType : uint8_t;
 
@@ -213,6 +221,8 @@ enum class SetScope : uint8_t;
 enum class SetType : uint8_t;
 
 enum class SimplifiedTokenType : uint8_t;
+
+enum class SinkCombineResultType : uint8_t;
 
 enum class SinkFinalizeType : uint8_t;
 
@@ -282,6 +292,9 @@ const char* EnumUtil::ToChars<AggregateOrderDependent>(AggregateOrderDependent v
 
 template<>
 const char* EnumUtil::ToChars<AggregateType>(AggregateType value);
+
+template<>
+const char* EnumUtil::ToChars<AlterForeignKeyType>(AlterForeignKeyType value);
 
 template<>
 const char* EnumUtil::ToChars<AlterScalarFunctionType>(AlterScalarFunctionType value);
@@ -416,6 +429,9 @@ template<>
 const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
 
 template<>
+const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
+
+template<>
 const char* EnumUtil::ToChars<IndexType>(IndexType value);
 
 template<>
@@ -432,6 +448,9 @@ const char* EnumUtil::ToChars<JoinType>(JoinType value);
 
 template<>
 const char* EnumUtil::ToChars<KeywordCategory>(KeywordCategory value);
+
+template<>
+const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
@@ -483,6 +502,9 @@ const char* EnumUtil::ToChars<OrderType>(OrderType value);
 
 template<>
 const char* EnumUtil::ToChars<OutputStream>(OutputStream value);
+
+template<>
+const char* EnumUtil::ToChars<ParseInfoType>(ParseInfoType value);
 
 template<>
 const char* EnumUtil::ToChars<ParserExtensionResultType>(ParserExtensionResultType value);
@@ -543,6 +565,9 @@ const char* EnumUtil::ToChars<SetType>(SetType value);
 
 template<>
 const char* EnumUtil::ToChars<SimplifiedTokenType>(SimplifiedTokenType value);
+
+template<>
+const char* EnumUtil::ToChars<SinkCombineResultType>(SinkCombineResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SinkFinalizeType>(SinkFinalizeType value);
@@ -640,6 +665,9 @@ AggregateOrderDependent EnumUtil::FromString<AggregateOrderDependent>(const char
 
 template<>
 AggregateType EnumUtil::FromString<AggregateType>(const char *value);
+
+template<>
+AlterForeignKeyType EnumUtil::FromString<AlterForeignKeyType>(const char *value);
 
 template<>
 AlterScalarFunctionType EnumUtil::FromString<AlterScalarFunctionType>(const char *value);
@@ -774,6 +802,9 @@ template<>
 FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
 
 template<>
+IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
+
+template<>
 IndexType EnumUtil::FromString<IndexType>(const char *value);
 
 template<>
@@ -790,6 +821,9 @@ JoinType EnumUtil::FromString<JoinType>(const char *value);
 
 template<>
 KeywordCategory EnumUtil::FromString<KeywordCategory>(const char *value);
+
+template<>
+LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
@@ -841,6 +875,9 @@ OrderType EnumUtil::FromString<OrderType>(const char *value);
 
 template<>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);
+
+template<>
+ParseInfoType EnumUtil::FromString<ParseInfoType>(const char *value);
 
 template<>
 ParserExtensionResultType EnumUtil::FromString<ParserExtensionResultType>(const char *value);
@@ -901,6 +938,9 @@ SetType EnumUtil::FromString<SetType>(const char *value);
 
 template<>
 SimplifiedTokenType EnumUtil::FromString<SimplifiedTokenType>(const char *value);
+
+template<>
+SinkCombineResultType EnumUtil::FromString<SinkCombineResultType>(const char *value);
 
 template<>
 SinkFinalizeType EnumUtil::FromString<SinkFinalizeType>(const char *value);
