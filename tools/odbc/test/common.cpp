@@ -217,6 +217,10 @@ SQLCHAR *ConvertToSQLCHAR(const char *str) {
 	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str));
 }
 
+SQLCHAR *ConvertToSQLCHAR(const std::string &str) {
+	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str.c_str()));
+}
+
 std::string ConvertToString(SQLCHAR *str) {
 	return std::string(reinterpret_cast<char *>(str));
 }

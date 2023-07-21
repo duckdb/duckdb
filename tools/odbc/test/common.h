@@ -117,6 +117,7 @@ std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
 
 // Converters
 SQLCHAR *ConvertToSQLCHAR(const char *str);
+SQLCHAR *ConvertToSQLCHAR(const std::string &str);
 std::string ConvertToString(SQLCHAR *str);
 const char *ConvertToCString(SQLCHAR *str);
 const char *ConvertToCString(int i);

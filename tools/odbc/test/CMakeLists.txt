@@ -16,6 +16,6 @@ add_executable(
   tests/select.cpp
   tests/row_wise_fetching.cpp
   tests/set_attr.cpp
-  tests/cte.cpp tests/cursor_commit.cpp)
+  tests/cte.cpp tests/cursor_commit.cpp tests/declare_fetch_block.cpp)
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
