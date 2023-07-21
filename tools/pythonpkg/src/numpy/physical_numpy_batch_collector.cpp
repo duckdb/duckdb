@@ -11,8 +11,8 @@ unique_ptr<GlobalSinkState> PhysicalNumpyBatchCollector::GetGlobalSinkState(Clie
 }
 
 SinkFinalizeType PhysicalNumpyBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                       GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<NumpyBatchGlobalState>();
+                                                       OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<NumpyBatchGlobalState>();
 
 	// Pre-allocate the conversion result
 	unique_ptr<NumpyResultConversion> result;

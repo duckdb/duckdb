@@ -31,19 +31,20 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 	}
 }
 
-void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                     LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
-	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
+SinkCombineResultType PhysicalNumpyCollector::Combine(ExecutionContext &context,
+                                                      OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<NumpyCollectorGlobalState>();
+	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
 		py::gil_scoped_acquire gil;
 		lstate.collection.reset();
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	// Collect all the collections
 	lock_guard<mutex> l(gstate.glock);
 	gstate.batches[gstate.batch_index++] = std::move(lstate.collection);
+	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state_p) {
@@ -56,8 +57,8 @@ unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientCon
 }
 
 SinkFinalizeType PhysicalNumpyCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<NumpyCollectorGlobalState>();
 	D_ASSERT(gstate.collection == nullptr);
 
 	gstate.collection = make_uniq<BatchedDataCollection>(context, types, std::move(gstate.batches), true);

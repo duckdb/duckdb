@@ -95,7 +95,7 @@ public:
 	}
 
 	py::list &GetCategory(idx_t col_idx) {
-		D_ASSERT(type.id() == LogicalTypeId::ENUM);
+		D_ASSERT(Type(col_idx).id() == LogicalTypeId::ENUM);
 		auto category_entry = categories.find(col_idx);
 		if (category_entry != categories.end()) {
 			return category_entry->second;
