@@ -693,14 +693,15 @@ jobs:
     - name: Setup
       shell: bash
       run: |
-        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        git clone https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
-        git submodule update
         shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
           git apply $filename
         done
+        git submodule init
+        git submodule update
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
