@@ -28,7 +28,7 @@ protected:
 public:
 	// Serialize a value
 	template <class T>
-	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T &value) {
+	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, const T &value) {
 		SetTag(tag);
 		WriteValue(value);
 	}
@@ -48,22 +48,8 @@ public:
 	}
 
 	// Optional pointer
-	template <class T>
-	void WriteOptionalProperty(const char *tag, T *ptr) {
-		SetTag(tag);
-		if (ptr == nullptr) {
-			OnOptionalBegin(false);
-			OnOptionalEnd(false);
-		} else {
-			OnOptionalBegin(true);
-			WriteValue(*ptr);
-			OnOptionalEnd(true);
-		}
-	}
-
-	// Optional unique_ptr
-	template <class T>
-	void WriteOptionalProperty(const char *tag, const unique_ptr<T> &ptr) {
+	template <class POINTER>
+	void WriteOptionalProperty(const char *tag, POINTER &&ptr) {
 		SetTag(tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);
@@ -122,10 +108,20 @@ protected:
 		OnListEnd(count);
 	}
 
+	template <class T>
+	void WriteValue(const unsafe_vector<T> &vec) {
+		auto count = vec.size();
+		OnListBegin(count);
+		for (auto &item : vec) {
+			WriteValue(item);
+		}
+		OnListEnd(count);
+	}
+
 	// UnorderedSet
 	// Serialized the same way as a list/vector
 	template <class T, class HASH, class CMP>
-	void WriteValue(const unordered_set<T, HASH, CMP> &set) {
+	void WriteValue(const duckdb::unordered_set<T, HASH, CMP> &set) {
 		auto count = set.size();
 		OnListBegin(count);
 		for (auto &item : set) {
@@ -137,7 +133,7 @@ protected:
 	// Set
 	// Serialized the same way as a list/vector
 	template <class T, class HASH, class CMP>
-	void WriteValue(const set<T, HASH, CMP> &set) {
+	void WriteValue(const duckdb::set<T, HASH, CMP> &set) {
 		auto count = set.size();
 		OnListBegin(count);
 		for (auto &item : set) {
@@ -148,7 +144,7 @@ protected:
 
 	// Map
 	template <class K, class V, class HASH, class CMP>
-	void WriteValue(const std::unordered_map<K, V, HASH, CMP> &map) {
+	void WriteValue(const duckdb::unordered_map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
 		OnMapBegin(count);
 		for (auto &item : map) {
@@ -166,7 +162,7 @@ protected:
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
-	typename std::enable_if<has_serialize<T>::value>::type WriteValue(T &value) {
+	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
 		// Else, we defer to the .FormatSerialize method
 		OnObjectBegin();
 		value.FormatSerialize(*this);
@@ -243,6 +239,12 @@ protected:
 	virtual void WriteValue(const char *str) = 0;
 	virtual void WriteValue(interval_t value) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
+	void WriteValue(LogicalIndex value) {
+		WriteValue(value.index);
+	}
+	void WriteValue(PhysicalIndex value) {
+		WriteValue(value.index);
+	}
 };
 
 } // namespace duckdb

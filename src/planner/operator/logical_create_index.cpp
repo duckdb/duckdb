@@ -6,6 +6,22 @@
 
 namespace duckdb {
 
+LogicalCreateIndex::LogicalCreateIndex(unique_ptr<FunctionData> bind_data_p, unique_ptr<CreateIndexInfo> info_p,
+                                       vector<unique_ptr<Expression>> expressions_p, TableCatalogEntry &table_p,
+                                       TableFunction function_p)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_INDEX), bind_data(std::move(bind_data_p)),
+      info(std::move(info_p)), table(table_p), function(std::move(function_p)) {
+
+	for (auto &expr : expressions_p) {
+		this->unbound_expressions.push_back(expr->Copy());
+	}
+	this->expressions = std::move(expressions_p);
+
+	if (info->column_ids.empty()) {
+		throw BinderException("CREATE INDEX does not refer to any columns in the base table!");
+	}
+}
+
 void LogicalCreateIndex::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(info);
 	writer.WriteString(table.catalog.GetName());
@@ -35,6 +51,10 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
 	return make_uniq<LogicalCreateIndex>(std::move(bind_data), std::move(index_info), std::move(unbound_expressions),
 	                                     table, std::move(function));
+}
+
+void LogicalCreateIndex::ResolveTypes() {
+	types.emplace_back(LogicalType::BIGINT);
 }
 
 } // namespace duckdb

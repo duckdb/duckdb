@@ -46,10 +46,14 @@ enum class SourceResultType : uint8_t { HAVE_MORE_OUTPUT, FINISHED, BLOCKED };
 //! BLOCKED means the sink is currently blocked, e.g. by some async I/O.
 enum class SinkResultType : uint8_t { NEED_MORE_INPUT, FINISHED, BLOCKED };
 
+// todo comment
+enum class SinkCombineResultType : uint8_t { FINISHED, BLOCKED };
+
 //! The SinkFinalizeType is used to indicate the result of a Finalize call on a sink
 //! There are two possible results:
 //! READY means the sink is ready for further processing
 //! NO_OUTPUT_POSSIBLE means the sink will never provide output, and any pipelines involving the sink can be skipped
-enum class SinkFinalizeType : uint8_t { READY, NO_OUTPUT_POSSIBLE };
+//! BLOCKED means the finalize call to the sink is currently blocked, e.g. by some async I/O.
+enum class SinkFinalizeType : uint8_t { READY, NO_OUTPUT_POSSIBLE, BLOCKED };
 
 } // namespace duckdb

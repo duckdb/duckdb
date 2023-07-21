@@ -28,9 +28,13 @@ enum class OnCreateConflict : uint8_t {
 };
 
 struct CreateInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::CREATE_INFO;
+
+public:
 	explicit CreateInfo(CatalogType type, string schema = DEFAULT_SCHEMA, string catalog_p = INVALID_CATALOG)
-	    : type(type), catalog(std::move(catalog_p)), schema(schema), on_conflict(OnCreateConflict::ERROR_ON_CONFLICT),
-	      temporary(false), internal(false) {
+	    : ParseInfo(TYPE), type(type), catalog(std::move(catalog_p)), schema(schema),
+	      on_conflict(OnCreateConflict::ERROR_ON_CONFLICT), temporary(false), internal(false) {
 	}
 	~CreateInfo() override {
 	}
@@ -60,6 +64,9 @@ public:
 
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 
