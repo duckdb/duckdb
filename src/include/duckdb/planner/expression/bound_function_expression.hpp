@@ -12,7 +12,6 @@
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
-struct SerializeFunctionData;
 class ScalarFunctionCatalogEntry;
 
 //! Represents a function call that has been bound to a base function
