@@ -26,6 +26,7 @@ bool QueryResultChunkScanState::HasError() const {
 }
 
 PreservedError &QueryResultChunkScanState::GetError() {
+	D_ASSERT(result.HasError());
 	return result.GetErrorObject();
 }
 
