@@ -75,16 +75,6 @@ string CommonTableExpressionMap::ToString() const {
 	return result;
 }
 
-void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("map", map);
-}
-
-CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = CommonTableExpressionMap();
-	deserializer.ReadProperty("map", result.map);
-	return result;
-}
-
 string QueryNode::ResultModifiersToString() const {
 	string result;
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
@@ -189,45 +179,6 @@ void QueryNode::Serialize(Serializer &main_serializer) const {
 	Serialize(writer);
 
 	writer.Finalize();
-}
-
-// Children should call the base method before their own.
-void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("modifiers", modifiers);
-	serializer.WriteProperty("cte_map", cte_map);
-}
-
-unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
-
-	auto type = deserializer.ReadProperty<QueryNodeType>("type");
-
-	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
-	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
-
-	unique_ptr<QueryNode> result;
-
-	switch (type) {
-	case QueryNodeType::SELECT_NODE:
-		result = SelectNode::FormatDeserialize(deserializer);
-		break;
-	case QueryNodeType::SET_OPERATION_NODE:
-		result = SetOperationNode::FormatDeserialize(deserializer);
-		break;
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = RecursiveCTENode::FormatDeserialize(deserializer);
-		break;
-	case QueryNodeType::CTE_NODE:
-		result = CTENode::FormatDeserialize(deserializer);
-		break;
-	default:
-		throw SerializationException("Could not deserialize Query Node: unknown type!");
-	}
-
-	result->type = type;
-	result->modifiers = std::move(modifiers);
-	result->cte_map = std::move(cte_map);
-	return result;
 }
 
 unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {

@@ -26,7 +26,7 @@ char *duckdb_get_varchar(duckdb_value value) {
 	auto str_val = val->DefaultCastAs(duckdb::LogicalType::VARCHAR);
 	auto &str = duckdb::StringValue::Get(str_val);
 
-	auto result = reinterpret_cast<char *>(malloc(sizeof(char *) * (str.size() + 1)));
+	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
 	memcpy(result, str.c_str(), str.size());
 	result[str.size()] = '\0';
 	return result;

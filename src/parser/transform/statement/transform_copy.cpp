@@ -11,35 +11,6 @@
 
 namespace duckdb {
 
-static Value ConstructValueFromFunction(const ParsedExpression &expr) {
-	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
-	switch (expr.type) {
-	case ExpressionType::FUNCTION: {
-		auto &function = expr.Cast<FunctionExpression>();
-		if (function.function_name == "struct_pack") {
-			unordered_set<string> unique_names;
-			child_list_t<Value> values;
-			values.reserve(function.children.size());
-			for (const auto &child : function.children) {
-				if (!unique_names.insert(child->alias).second) {
-					throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
-				}
-				values.emplace_back(child->alias, ConstructValueFromFunction(*child));
-			}
-			return Value::STRUCT(std::move(values));
-		} else {
-			throw ParserException("Unsupported function in COPY options: %s", function.function_name);
-		}
-	}
-	case ExpressionType::VALUE_CONSTANT: {
-		auto &constant = expr.Cast<ConstantExpression>();
-		return constant.value;
-	}
-	default:
-		throw ParserException("Unsupported expression in COPY options: %s", expr.ToString());
-	}
-}
-
 void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpgquery::PGList> options) {
 	if (!options) {
 		return;
@@ -81,7 +52,12 @@ void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpg
 		case duckdb_libpgquery::T_PGFuncCall: {
 			auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(def_elem->arg);
 			auto func_expr = TransformFuncCall(*func_call);
-			info.options[def_elem->defname].push_back(ConstructValueFromFunction(*func_expr));
+
+			Value value;
+			if (!Transformer::ConstructConstantFromExpression(*func_expr, value)) {
+				throw ParserException("Unsupported expression in COPY options: %s", func_expr->ToString());
+			}
+			info.options[def_elem->defname].push_back(std::move(value));
 			break;
 		}
 		default: {

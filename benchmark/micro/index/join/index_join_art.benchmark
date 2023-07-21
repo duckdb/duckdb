@@ -1,0 +1,17 @@
+# name: benchmark/micro/index/join/index_join_art.benchmark
+# description: Perform an index nested loop join between two tables using an ART
+# group: [join]
+
+name Index Join ART
+group art
+
+load
+PRAGMA force_index_join;
+CREATE TABLE person (id BIGINT PRIMARY KEY);
+CREATE TABLE person_knows_person (p1id BIGINT, p2id BIGINT);
+INSERT INTO person SELECT range AS id FROM range(100000);
+INSERT INTO person_knows_person SELECT range AS p1id, range + 1 AS p2id FROM range(99999);
+INSERT INTO person_knows_person SELECT range AS p1id, range + 5 AS p2id FROM range(99995);
+
+run
+SELECT p1.id FROM person_knows_person pkp JOIN person p1 ON p1.id = pkp.p1id;

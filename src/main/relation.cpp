@@ -113,7 +113,8 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 	return make_shared<OrderRelation>(shared_from_this(), std::move(order_list));
 }
 
-shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type) {
+shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type,
+                                    JoinRefType ref_type) {
 	auto expression_list = Parser::ParseExpressionList(condition, context.GetContext()->GetParserOptions());
 	D_ASSERT(!expression_list.empty());
 
@@ -130,15 +131,15 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 			}
 			using_columns.push_back(colref.column_names[0]);
 		}
-		return make_shared<JoinRelation>(shared_from_this(), other, std::move(using_columns), type);
+		return make_shared<JoinRelation>(shared_from_this(), other, std::move(using_columns), type, ref_type);
 	} else {
 		// single expression that is not a column reference: use the expression as a join condition
-		return make_shared<JoinRelation>(shared_from_this(), other, std::move(expression_list[0]), type);
+		return make_shared<JoinRelation>(shared_from_this(), other, std::move(expression_list[0]), type, ref_type);
 	}
 }
 
-shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other) {
-	return make_shared<CrossProductRelation>(shared_from_this(), other);
+shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other, JoinRefType join_ref_type) {
+	return make_shared<CrossProductRelation>(shared_from_this(), other, join_ref_type);
 }
 
 shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {

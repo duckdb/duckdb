@@ -216,7 +216,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(lib_name + '.duckdb',
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -234,7 +234,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(lib_name + '.duckdb',
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -277,6 +277,24 @@ def setup_data_files(data_files):
 
 data_files = setup_data_files(extra_files + header_files)
 
+packages = [
+    lib_name,
+    'duckdb.typing',
+    'duckdb.functional',
+    'pyduckdb',
+    'pyduckdb.value',
+    'duckdb-stubs',
+    'duckdb-stubs.functional',
+    'duckdb-stubs.typing'
+]
+
+spark_packages = [
+    'pyduckdb.spark',
+    'pyduckdb.spark.sql'
+]
+
+packages.extend(spark_packages)
+
 setup(
     name = lib_name,
     description = 'DuckDB embedded database',
@@ -285,10 +303,7 @@ setup(
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files = data_files,
-    packages=[
-        'pyduckdb',
-        'duckdb-stubs'
-    ],
+    packages=packages,
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,

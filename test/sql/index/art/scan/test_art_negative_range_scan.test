@@ -1,0 +1,36 @@
+# name: test/sql/index/art/scan/test_art_negative_range_scan.test
+# description: Test negative range scans on an ART
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i integer)
+
+statement ok
+INSERT INTO integers SELECT * FROM range(-500, 500, 1)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+query R
+SELECT sum(i) FROM integers WHERE i >= -500 AND i <= -498
+----
+-1497.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i >= -10 AND i <= 5
+----
+-40.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i >= 10 AND i <= 15
+----
+75.000000
+
+statement ok
+DROP INDEX i_index
+
+statement ok
+DROP TABLE integers

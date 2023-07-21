@@ -14,7 +14,6 @@ rm -rf	$SCRIPTPATH/.eggs \
 		$SCRIPTPATH/duckdb.hpp \
 		$SCRIPTPATH/parquet_extension.cpp \
 		$SCRIPTPATH/parquet_extension.hpp \
-		$SCRIPTPATH/duckdb \
 		$SCRIPTPATH/duckdb_tarball
 
 rm -f	$SCRIPTPATH/sources.list \

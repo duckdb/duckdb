@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA verify_external
+
 # List slicing
 statement ok
 create table lists as select array[i] l from generate_series(0,5,1) tbl(i);

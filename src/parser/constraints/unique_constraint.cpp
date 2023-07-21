@@ -6,6 +6,9 @@
 
 namespace duckdb {
 
+UniqueConstraint::UniqueConstraint() : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX) {
+}
+
 UniqueConstraint::UniqueConstraint(LogicalIndex index, bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 }

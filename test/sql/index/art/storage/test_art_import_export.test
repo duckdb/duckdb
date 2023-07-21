@@ -1,0 +1,39 @@
+# name: test/sql/index/art/storage/test_art_import_export.test
+# description: Test the export and import of the ART
+# group: [storage]
+
+statement ok
+PRAGMA enable_verification
+
+# issue 4126
+
+load __TEST_DIR__/test_art_export.db
+
+statement ok
+CREATE TABLE raw(
+    "year" SMALLINT,
+    "month" TINYINT,
+    "day" TINYINT,
+    "customer_ID" BIGINT
+);
+
+statement ok
+INSERT INTO raw VALUES (1, 1, 1, 1);
+
+statement ok
+CREATE UNIQUE INDEX customer_year_month_idx ON raw (customer_ID, year, month);
+
+restart
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_index_db' (FORMAT CSV)
+
+load __TEST_DIR__/test_art_import.db
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_index_db'
+
+statement error
+INSERT INTO raw VALUES (1, 1, 1, 1);
+----
+Constraint Error: Duplicate key "customer_ID: 1, year: 1, month: 1" violates unique constraint

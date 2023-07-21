@@ -19,13 +19,8 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DISTINCT;
 
 public:
-	explicit LogicalDistinct(DistinctType distinct_type)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type) {
-	}
-	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DISTINCT), distinct_type(distinct_type),
-	      distinct_targets(std::move(targets)) {
-	}
+	explicit LogicalDistinct(DistinctType distinct_type);
+	explicit LogicalDistinct(vector<unique_ptr<Expression>> targets, DistinctType distinct_type);
 
 	//! Whether or not this is a DISTINCT or DISTINCT ON
 	DistinctType distinct_type;
@@ -43,9 +38,10 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
-	void ResolveTypes() override {
-		types = children[0]->types;
-	}
+	void ResolveTypes() override;
 };
 } // namespace duckdb

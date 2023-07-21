@@ -42,6 +42,13 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, idx_t parameter_nr, LogicalType return_type,
+	                         shared_ptr<BoundParameterData> parameter_data);
 };
 
 } // namespace duckdb

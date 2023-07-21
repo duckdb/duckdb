@@ -1,0 +1,21 @@
+# name: test/sql/index/art/types/test_art_boolean.test
+# description: Test ART BOOLEAN key type
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 BOOLEAN, c1 INT)
+
+statement ok
+CREATE INDEX i0 ON t0(c1, c0)
+
+statement ok
+INSERT INTO t0(c1) VALUES (0)
+
+query TI
+SELECT * FROM t0
+----
+NULL	0
+

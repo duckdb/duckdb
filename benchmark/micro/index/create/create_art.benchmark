@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/create/create_art.benchmark
+# description: Create ART on 10M integers, 2.5M distinct values
+# group: [create]
+
+name Create ART
+group art
+
+load
+CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS id FROM range(10000000);
+
+run
+CREATE INDEX idx ON art USING ART(id);
+
+cleanup
+DROP INDEX idx;
