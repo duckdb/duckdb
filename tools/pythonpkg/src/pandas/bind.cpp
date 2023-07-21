@@ -9,13 +9,13 @@ namespace {
 
 struct PandasBindColumn {
 public:
-	PandasBindColumn(py::handle name, py::handle type, py::handle column) : name(name), type(type), handle(column) {
+	PandasBindColumn(py::handle name, py::handle type, py::object column) : name(name), type(type), handle(column) {
 	}
 
 public:
 	py::handle name;
 	py::handle type;
-	py::handle handle;
+	py::object handle;
 };
 
 struct PandasDataFrameBind {
@@ -27,7 +27,7 @@ public:
 	}
 	PandasBindColumn operator[](idx_t index) const {
 		D_ASSERT(index < names.size());
-		auto column = getter(names[index]);
+		auto column = py::reinterpret_borrow<py::object>(getter(names[index]));
 		auto type = types[index];
 		auto name = names[index];
 		return PandasBindColumn(name, type, column);
