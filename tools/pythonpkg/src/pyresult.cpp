@@ -16,6 +16,7 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 namespace duckdb {
 
