@@ -6,13 +6,12 @@
 
 namespace duckdb {
 
-JoinNode::JoinNode(JoinRelationSet &set)
-    : set(set), info(nullptr), left(nullptr), right(nullptr) {}
+JoinNode::JoinNode(optional_ptr<JoinRelationSet> set) : set(set), info(nullptr), left(nullptr), right(nullptr) {
+}
 
-
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left, optional_ptr<JoinNode> right)
-    : set(set), info(info), left(left), right(right) {
-
+JoinNode::JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
+                   optional_ptr<JoinNode> right, idx_t cost)
+    : set(set), info(info), left(left), right(right), cost(cost) {
 }
 
 unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
@@ -20,17 +19,10 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 	return result;
 }
 
-
 string JoinNode::ToString() {
 	string result = "-------------------------------\n";
-	result += set.ToString() + "\n";
-//	result += "card = " + to_string(GetCardinality<double>()) + "\n";
-	bool is_cartesian = false;
-//	if (left && right) {
-//		is_cartesian = (GetCardinality<double>() == left->GetCardinality<double>() * right->GetCardinality<double>());
-//	}
-//	result += "cartesian = " + to_string(is_cartesian) + "\n";
-//	result += "cost = " + to_string(estimated_props->GetCost<double>()) + "\n";
+	result += set->ToString() + "\n";
+	result += "cost = " + to_string(cost) + "\n";
 	result += "left = \n";
 	if (left) {
 		result += left->ToString();

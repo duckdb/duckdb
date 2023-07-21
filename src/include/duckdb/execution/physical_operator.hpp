@@ -36,7 +36,6 @@ public:
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
-		estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
 	}
 
 	virtual ~PhysicalOperator() {
@@ -50,7 +49,6 @@ public:
 	vector<LogicalType> types;
 	//! The estimated cardinality of this physical operator
 	idx_t estimated_cardinality;
-	unique_ptr<EstimatedProperties> estimated_props;
 
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;

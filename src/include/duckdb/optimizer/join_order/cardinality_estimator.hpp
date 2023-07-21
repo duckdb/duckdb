@@ -21,11 +21,11 @@ struct RelationAttributes {
 	// the relation columns used in join filters
 	// Needed when iterating over columns and initializing total domain values.
 	unordered_set<idx_t> columns;
-	double cardinality;
+	idx_t cardinality;
 };
 
 class JoinNode;
-class FilterInfo;
+struct FilterInfo;
 struct SingleJoinRelation;
 
 struct RelationsToTDom {
@@ -62,8 +62,8 @@ class CardinalityHelper {
 public:
 	CardinalityHelper() {
 	}
-	CardinalityHelper(idx_t cardinality_before_filters, double filter_string) :
-	      cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
+	CardinalityHelper(idx_t cardinality_before_filters, double filter_string)
+	    : cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
 
 public:
 	idx_t cardinality_before_filters;
@@ -75,7 +75,6 @@ public:
 	explicit CardinalityEstimator() {};
 
 private:
-
 	//! A mapping of relation id -> RelationAttributes
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
@@ -83,32 +82,24 @@ private:
 
 	vector<RelationsToTDom> relations_to_tdoms;
 	unordered_map<JoinRelationSet *, CardinalityHelper> relation_set_2_cardinality;
+	JoinRelationSetManager set_manager;
 
 public:
-
-	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
-
 	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
 	//! Add the key value entry into the relation_column_to_original_column
 	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
 	//! Add a column to the relation_to_columns map.
 	void AddColumnToRelationMap(idx_t table_index, idx_t column_index);
-	//! Dump all bindings in relation_column_to_original_column into the child_binding_map
-	// If you have a non-reorderable join, this function is used to keep track of bindings
-	// in the child join plan.
-	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
-	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
-//	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
+
+	//	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(JoinRelationSet *set, SingleJoinRelation &rel);
+	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, reference<SingleJoinRelation> rel);
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps(JoinRelationSet *set, SingleJoinRelation &rel);
+	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, SingleJoinRelation &rel);
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
 	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
-	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);
-	static double ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality);
 
 private:
 	bool SingleColumnFilter(FilterInfo &filter_info);
@@ -121,16 +112,17 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
+	//	optional_ptr<TableFilterSet> GetTableFilters(LogicalOperator &op, idx_t table_index);
 
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
 
-	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &fil,
-	                            unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &fil,
-	                           unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t table_index);
+	//	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &fil,
+	//	                            unique_ptr<BaseStatistics> base_stats);
+	//	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &fil,
+	//	                           unique_ptr<BaseStatistics> base_stats);
+	//	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t
+	//table_index);
 };
 
 } // namespace duckdb

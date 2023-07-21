@@ -155,7 +155,7 @@ string PhysicalTableScan::ParamsToString() const {
 		result += "File Filters: " + extra_info.file_filters;
 	}
 	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;
 }
 

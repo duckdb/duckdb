@@ -23,22 +23,13 @@
 
 namespace duckdb {
 
-struct GenerateJoinRelation {
-	GenerateJoinRelation(JoinRelationSet &set, unique_ptr<LogicalOperator> op_p) : set(set), op(std::move(op_p)) {
-	}
-
-	JoinRelationSet &set;
-	unique_ptr<LogicalOperator> op;
-};
-
 class JoinOrderOptimizer {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), query_graph_manager(context) {
+	explicit JoinOrderOptimizer(ClientContext &context) : context(context), query_graph_manager(context) {
 	}
 
 	//! Perform join reordering inside a plan
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,

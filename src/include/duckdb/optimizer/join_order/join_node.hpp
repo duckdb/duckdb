@@ -9,39 +9,44 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_relation.hpp"
-#include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
+#include "duckdb/optimizer/join_order/query_graph.hpp"
 
 namespace duckdb {
 
 class JoinOrderOptimizer;
+struct NeighborInfo;
 
 class JoinNode {
 public:
 	//! Represents a node in the join plan
-	JoinRelationSet &set;
+	optional_ptr<JoinRelationSet> set;
+	//! information on how left and right are connected
 	optional_ptr<NeighborInfo> info;
-	//! If the JoinNode is a base table, then base_cardinality is the cardinality before filters
-	//! estimated_props.cardinality will be the cardinality after filters. With no filters, the two are equal
+	//! left and right plans
 	optional_ptr<JoinNode> left;
 	optional_ptr<JoinNode> right;
 
+	//! The cost of the join node. The cost is stored here so that the cost of
+	//! a join node stays in sync with how the join node is constructed. Storing the cost in an unordered_set
+	//! in the cost model is error prone. If the plan enumerator join node is updated and not the cost model
+	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
+	idx_t cost;
+
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left, optional_ptr<JoinNode> right);
+	JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
+	         optional_ptr<JoinNode> right, idx_t cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(JoinRelationSet &set);
-
-
+	JoinNode(optional_ptr<JoinRelationSet> set);
 
 	bool operator==(const JoinNode &other) {
-		return other.set.ToString().compare(set.ToString()) == 0;
+		return other.set->ToString().compare(set->ToString()) == 0;
 	}
 
 private:
-
 public:
 	void PrintJoinNode();
 	string ToString();

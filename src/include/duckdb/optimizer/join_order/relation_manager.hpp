@@ -18,7 +18,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
-
 namespace duckdb {
 
 struct RelationStats {
@@ -34,30 +33,39 @@ struct SingleJoinRelation {
 	optional_ptr<LogicalOperator> parent;
 	RelationStats stats;
 
-
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) : op(op), parent(parent), stats(stats) {
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
+	}
+	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats)
+	    : op(op), parent(parent), stats(stats) {
 	}
 };
 
-
-
 class RelationManager {
 public:
-	explicit RelationManager(){}
+	explicit RelationManager(ClientContext &context) : context(context) {
+	}
 
 	idx_t NumRelations();
 	SingleJoinRelation GetRelation(idx_t relation_id);
+
+	bool ExtractJoinRelations(LogicalOperator &input_op,
+	                          vector<reference<LogicalOperator>> &filter_operators,
+	                          optional_ptr<LogicalOperator> parent = nullptr);
+
+	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
+	                  vector<reference<LogicalOperator>> &filter_operators,
+	                  JoinRelationSetManager &set_manager);
+
+	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
 	vector<SingleJoinRelation> GetRelations();
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
-private:
 
+private:
+	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
 	vector<SingleJoinRelation> relations;
-
-
-
 };
 
 } // namespace duckdb
