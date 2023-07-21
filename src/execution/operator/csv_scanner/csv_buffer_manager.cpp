@@ -12,7 +12,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	}
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
-		buffer_size = file_size;
+		buffer_size = CSV_MINIMUM_BUFFER_SIZE;
 	}
 	Initialize();
 }
