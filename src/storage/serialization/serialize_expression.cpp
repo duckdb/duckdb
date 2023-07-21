@@ -70,6 +70,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	case ExpressionClass::BOUND_UNNEST:
 		result = BoundUnnestExpression::FormatDeserialize(deserializer);
 		break;
+	case ExpressionClass::BOUND_WINDOW:
+		result = BoundWindowExpression::FormatDeserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of Expression!");
 	}

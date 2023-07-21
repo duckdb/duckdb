@@ -289,5 +289,11 @@
     "base": "Expression",
     "enum": "BOUND_AGGREGATE",
     "custom_implementation": true
+  },
+  {
+    "class": "BoundWindowExpression",
+    "base": "Expression",
+    "enum": "BOUND_WINDOW",
+    "custom_implementation": true
   }
 ]
