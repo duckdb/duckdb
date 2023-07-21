@@ -1,6 +1,7 @@
 import os
 import sys
-import importlib
+from pathlib import Path
+from tree import tree
 
 class TestExamples(object):
     def test_examples(self):
@@ -8,6 +9,12 @@ class TestExamples(object):
             '../../../../',
             ''
         ]
+        # Debug output to get folder structure in CI
+        for path in relative_paths:
+	        print("---" + path + "---")
+            for line in tree(Path(path)):
+                print(line)
+
         if 'CIBW_ROOT_DIR' in os.environ:
             # This is being called from the CI by cibuildhweel
             # the project+tests have been copied to another location, this variable contains the working dir where cibuildwheel was called from
