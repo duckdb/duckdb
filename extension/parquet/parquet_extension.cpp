@@ -35,6 +35,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -150,6 +152,20 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 }
 
+void ParquetOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("binary_as_string", binary_as_string);
+	serializer.WriteProperty("file_row_number", file_row_number);
+	serializer.WriteProperty("file_options", file_options);
+}
+
+ParquetOptions ParquetOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	ParquetOptions result;
+	deserializer.ReadProperty("binary_as_string", result.binary_as_string);
+	deserializer.ReadProperty("file_row_number", result.file_row_number);
+	deserializer.ReadProperty("file_options", result.file_options);
+	return result;
+}
+
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
@@ -181,6 +197,8 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
+		table_function.format_serialize = ParquetScanFormatSerialize;
+		table_function.format_deserialize = ParquetScanFormatDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -428,6 +446,23 @@ public:
 		options.Deserialize(reader);
 
 		return ParquetScanBindInternal(context, files, types, names, options);
+	}
+
+	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		serializer.WriteProperty("files", bind_data.files);
+		serializer.WriteProperty("types", bind_data.types);
+		serializer.WriteProperty("names", bind_data.names);
+		serializer.WriteProperty("parquet_options", bind_data.parquet_options);
+	}
+
+	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+		auto &context = deserializer.Get<ClientContext &>();
+		auto files = deserializer.ReadProperty<vector<string>>("files");
+		auto types = deserializer.ReadProperty<vector<LogicalType>>("types");
+		auto names = deserializer.ReadProperty<vector<string>>("names");
+		auto parquet_options = deserializer.ReadProperty<ParquetOptions>("parquet_options");
+		return ParquetScanBindInternal(context, files, types, names, parquet_options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

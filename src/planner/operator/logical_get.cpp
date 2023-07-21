@@ -248,7 +248,7 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
 		if (!function.bind) {
-			throw InternalException("Table function %s has neither bind nor (de)serialize", function.name);
+			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
 		if (result->returned_types != bind_return_types) {

@@ -336,5 +336,38 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "MultiFileReaderOptions",
+    "includes": [
+      "duckdb/common/multi_file_reader_options.hpp"
+    ],
+    "members": [
+      {
+        "name": "filename",
+        "type": "bool"
+      },
+      {
+        "name": "hive_partitioning",
+        "type": "bool"
+      },
+      {
+        "name": "auto_detect_hive_partitioning",
+        "type": "bool"
+      },
+      {
+        "name": "union_by_name",
+        "type": "bool"
+      },
+      {
+        "name": "hive_types_autocast",
+        "type": "bool"
+      },
+      {
+        "name": "hive_types_schema",
+        "type": "unordered_map<string, LogicalType>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

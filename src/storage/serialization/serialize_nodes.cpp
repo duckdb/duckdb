@@ -23,6 +23,7 @@
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 
 namespace duckdb {
 
@@ -179,6 +180,26 @@ LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
 	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 	LogicalType result(id, std::move(type_info));
+	return result;
+}
+
+void MultiFileReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("filename", filename);
+	serializer.WriteProperty("hive_partitioning", hive_partitioning);
+	serializer.WriteProperty("auto_detect_hive_partitioning", auto_detect_hive_partitioning);
+	serializer.WriteProperty("union_by_name", union_by_name);
+	serializer.WriteProperty("hive_types_autocast", hive_types_autocast);
+	serializer.WriteProperty("hive_types_schema", hive_types_schema);
+}
+
+MultiFileReaderOptions MultiFileReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	MultiFileReaderOptions result;
+	deserializer.ReadProperty("filename", result.filename);
+	deserializer.ReadProperty("hive_partitioning", result.hive_partitioning);
+	deserializer.ReadProperty("auto_detect_hive_partitioning", result.auto_detect_hive_partitioning);
+	deserializer.ReadProperty("union_by_name", result.union_by_name);
+	deserializer.ReadProperty("hive_types_autocast", result.hive_types_autocast);
+	deserializer.ReadProperty("hive_types_schema", result.hive_types_schema);
 	return result;
 }
 
