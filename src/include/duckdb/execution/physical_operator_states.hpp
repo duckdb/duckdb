@@ -165,6 +165,17 @@ struct OperatorSourceInput {
 	InterruptState &interrupt_state;
 };
 
+struct OperatorSinkCombineInput {
+	GlobalSinkState &global_state;
+	LocalSinkState &local_state;
+	InterruptState &interrupt_state;
+};
+
+struct OperatorSinkFinalizeInput {
+	GlobalSinkState &global_state;
+	InterruptState &interrupt_state;
+};
+
 // LCOV_EXCL_STOP
 
 } // namespace duckdb
