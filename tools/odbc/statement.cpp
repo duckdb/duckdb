@@ -679,6 +679,12 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	return SQL_ERROR;
 }
 
+/**
+ * @brief Determines whether more results are available on a statement, and, if so, prepares the next result set.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlmoreresults-function?view=sql-server-ver15
+ * @param statement_handle
+ * @return
+ */
 SQLRETURN SQL_API SQLMoreResults(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
