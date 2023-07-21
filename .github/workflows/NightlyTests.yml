@@ -26,7 +26,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: "a8f2c38"
+  DUCKDB_WASM_VERSION: "687bab9a"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
 
 jobs:
@@ -696,6 +696,7 @@ jobs:
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        git submodule update
         shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
           git apply $filename
