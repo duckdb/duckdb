@@ -81,6 +81,6 @@ void ArrowMapData::Finalize(ArrowAppendData &append_data, const LogicalType &typ
 	if (struct_data.child_pointers[0]->null_count > 0) {
 		throw std::runtime_error("Arrow doesn't accept NULL keys on Maps");
 	}
-};
+}
 
 } // namespace duckdb
