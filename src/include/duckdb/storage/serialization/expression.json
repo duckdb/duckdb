@@ -283,5 +283,11 @@
     "base": "Expression",
     "enum": "BOUND_FUNCTION",
     "custom_implementation": true
+  },
+  {
+    "class": "BoundAggregateExpression",
+    "base": "Expression",
+    "enum": "BOUND_AGGREGATE",
+    "custom_implementation": true
   }
 ]

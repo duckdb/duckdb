@@ -22,6 +22,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
+	case ExpressionClass::BOUND_AGGREGATE:
+		result = BoundAggregateExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_BETWEEN:
 		result = BoundBetweenExpression::FormatDeserialize(deserializer);
 		break;

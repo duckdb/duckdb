@@ -286,6 +286,15 @@ static unique_ptr<FunctionData> ExportStateAggregateDeserialize(PlanDeserializat
 	throw NotImplementedException("FIXME: export state deserialize");
 }
 
+static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const AggregateFunction &function)  {
+	throw SerializationException("FIXME: export state serialize");
+}
+
+static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+	throw SerializationException("FIXME: export state deserialize");
+}
+
 static void ExportStateScalarSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
                                        const ScalarFunction &function) {
 	throw NotImplementedException("FIXME: export state serialize");
@@ -293,6 +302,15 @@ static void ExportStateScalarSerialize(FieldWriter &writer, const FunctionData *
 static unique_ptr<FunctionData> ExportStateScalarDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                              ScalarFunction &bound_function) {
 	throw NotImplementedException("FIXME: export state deserialize");
+}
+
+static void ExportStateScalarFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const ScalarFunction &function)  {
+	throw SerializationException("FIXME: export state serialize");
+}
+
+static unique_ptr<FunctionData> ExportStateScalarFormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+	throw SerializationException("FIXME: export state deserialize");
 }
 
 unique_ptr<BoundAggregateExpression>
@@ -331,6 +349,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	export_function.serialize = ExportStateAggregateSerialize;
 	export_function.deserialize = ExportStateAggregateDeserialize;
+	export_function.format_serialize = ExportStateAggregateFormatSerialize;
+	export_function.format_deserialize = ExportStateAggregateFormatDeserialize;
 
 	return make_uniq<BoundAggregateExpression>(export_function, std::move(child_aggregate->children),
 	                                           std::move(child_aggregate->filter), std::move(export_bind_data),
@@ -343,6 +363,8 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
+	result.format_serialize = ExportStateScalarFormatSerialize;
+	result.format_deserialize = ExportStateScalarFormatDeserialize;
 	return result;
 }
 
@@ -353,6 +375,8 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
+	result.format_serialize = ExportStateScalarFormatSerialize;
+	result.format_deserialize = ExportStateScalarFormatDeserialize;
 	return result;
 }
 
