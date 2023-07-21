@@ -323,5 +323,18 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "TableFilterSet",
+    "includes": [
+      "duckdb/planner/table_filter.hpp"
+    ],
+    "members": [
+      {
+        "name": "filters",
+        "type": "unordered_map<idx_t, TableFilter*>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

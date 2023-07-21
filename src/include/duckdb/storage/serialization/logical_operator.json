@@ -792,5 +792,11 @@
         "type": "BoundPivotInfo"
       }
     ]
+  },
+  {
+    "class": "LogicalGet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_GET",
+    "custom_implementation": true
   }
 ]

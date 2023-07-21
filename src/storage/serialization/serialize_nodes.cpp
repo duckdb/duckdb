@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
@@ -224,6 +225,16 @@ unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &d
 	deserializer.ReadProperty("is_percentage", result->is_percentage);
 	deserializer.ReadProperty("method", result->method);
 	deserializer.ReadProperty("seed", result->seed);
+	return result;
+}
+
+void TableFilterSet::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("filters", filters);
+}
+
+TableFilterSet TableFilterSet::FormatDeserialize(FormatDeserializer &deserializer) {
+	TableFilterSet result;
+	deserializer.ReadProperty("filters", result.filters);
 	return result;
 }
 

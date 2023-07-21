@@ -133,9 +133,8 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>> FormatDeserialize(FormatDeserializer &deserializer,
-	                                                              CatalogType catalog_type,
-	                                                              vector<unique_ptr<Expression>> &children) {
+	static pair<FUNC, bool> FormatDeserializeBase(FormatDeserializer &deserializer,
+	                                                              CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>("name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>("arguments");
@@ -143,16 +142,33 @@ public:
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, name, std::move(arguments),
 		                                                         std::move(original_arguments));
 		auto has_serialize = deserializer.ReadProperty<bool>("has_serialize");
+		return make_pair(std::move(function), has_serialize);
+	}
+
+	template<class FUNC>
+	static unique_ptr<FunctionData> FunctionDeserialize(FormatDeserializer &deserializer, FUNC &function) {
+		if (!function.format_deserialize) {
+			throw SerializationException("Function requires deserialization but no deserialization function for %s",
+										 function.name);
+		}
+		deserializer.BeginObject("function_data");
+		auto result = function.format_deserialize(deserializer, function);
+		deserializer.EndObject();
+		return result;
+	}
+
+	template <class FUNC, class CATALOG_ENTRY>
+	static pair<FUNC, unique_ptr<FunctionData>> FormatDeserialize(FormatDeserializer &deserializer,
+	                                                              CatalogType catalog_type,
+	                                                              vector<unique_ptr<Expression>> &children) {
+		auto &context = deserializer.Get<ClientContext &>();
+		auto entry = FormatDeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
+		auto &function = entry.first;
+		auto has_serialize = entry.second;
 
 		unique_ptr<FunctionData> bind_data;
 		if (has_serialize) {
-			if (!function.format_deserialize) {
-				throw SerializationException("Function requires deserialization but no deserialization function for %s",
-				                             function.name);
-			}
-			deserializer.BeginObject("function_data");
-			bind_data = function.format_deserialize(deserializer, function);
-			deserializer.EndObject();
+			bind_data = FunctionDeserialize<FUNC>(deserializer, function);
 		} else if (function.bind) {
 			try {
 				bind_data = function.bind(context, function, children);
