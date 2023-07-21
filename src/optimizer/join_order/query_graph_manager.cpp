@@ -14,7 +14,12 @@ namespace duckdb {
 void QueryGraphManager::Build(LogicalOperator *op) {
 	vector<reference<LogicalOperator>> filter_operators;
 	ExtractJoinRelations(*op, filter_operators, nullptr);
+	if (relation_manager.NumRelations() <= 1) {
+		// nothing to optimize/reorder
+		return;
+	}
 	ExtractEdges(*op, filter_operators);
+	D_ASSERT(!query_graph.ToString().empty());
 }
 
 
@@ -26,11 +31,11 @@ bool QueryGraphManager::ExtractBindings(Expression &expression, unordered_set<id
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		// TODO: what is the relation mapping and why is it important?
-		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-		auto catalog_table = relation_mapping[colref.binding.table_index];
+		D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) != relation_manager.relation_mapping.end());
+		auto catalog_table = relation_manager.relation_mapping[colref.binding.table_index];
 		auto column_index = colref.binding.column_index;
 //		cardinality_estimator.AddColumnToRelationMap(catalog_table, column_index);
-		bindings.insert(relation_mapping[colref.binding.table_index]);
+		bindings.insert(relation_manager.relation_mapping[colref.binding.table_index]);
 	}
 	if (expression.type == ExpressionType::BOUND_REF) {
 		// bound expression
@@ -47,24 +52,11 @@ bool QueryGraphManager::ExtractBindings(Expression &expression, unordered_set<id
 	});
 	return can_reorder;
 }
-//
-//
-//
-//void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
-//	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-//		// Here you have a filter on a single column in a table. Return a binding for the column
-//		// being filtered on so the filter estimator knows what HLL count to pull
-//		auto &colref = expression.Cast<BoundColumnRefExpression>();
-//		D_ASSERT(colref.depth == 0);
-//		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
-//		// map the base table index to the relation index used by the JoinOrderOptimizer
-//		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
-//		binding = ColumnBinding(relation_mapping[colref.binding.table_index], colref.binding.column_index);
-//	}
-//	// TODO: handle inequality filters with functions.
-//	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
-//}
 
+
+static RelationStats GetStats(LogicalOperator &op) {
+	return RelationStats();
+}
 
 bool QueryGraphManager::ExtractJoinRelations(LogicalOperator &input_op,
                                              vector<reference<LogicalOperator>> &filter_operators,
@@ -111,60 +103,16 @@ bool QueryGraphManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-		for (auto &child : op->children) {
-			JoinOrderOptimizer optimizer(context);
-			child = optimizer.Optimize(std::move(child));
-		}
-		if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-			auto &join = op->Cast<LogicalComparisonJoin>();
-			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
-				// we convert to doing a RIGHT OUTER JOIN
-				// FIXME: for now we don't swap if the right_projection_map is not empty
-				// this can be fixed once we implement the left_projection_map properly...
-				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-				if (rhs_cardinality > lhs_cardinality * 2) {
-					join.join_type = JoinType::RIGHT;
-					std::swap(join.children[0], join.children[1]);
-					for (auto &cond : join.conditions) {
-						std::swap(cond.left, cond.right);
-						cond.comparison = FlipComparisonExpression(cond.comparison);
-					}
-				}
-			}
-		}
-	}
-	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN && non_reorderable_operation) {
-		auto &join = op->Cast<LogicalAnyJoin>();
-		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-			if (rhs_cardinality > lhs_cardinality * 2) {
-				join.join_type = JoinType::RIGHT;
-				std::swap(join.children[0], join.children[1]);
-			}
-		}
-	}
-
-	if (non_reorderable_operation) {
-		// we encountered a non-reordable operation (setop or non-inner join)
-		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
-		// non-inner joins are also tricky because we can't freely make conditions through them
-		// e.g. suppose we have (left LEFT OUTER JOIN right WHERE right IS NOT NULL), the join can generate
-		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
-		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
-		auto all_stats = {};
+		auto stats = RelationStats();
 		for (auto &child : op->children) {
 			JoinOrderOptimizer optimizer(context);
 			child = optimizer.Optimize(std::move(child));
 			// now that we have optimized the child, we get the statistics of the child
 			// and merge them together (i.e merge left and right stats)/
-			auto stats = GetStats(child);
-			merge_stats(stats, all_stats);
-
+			auto extra_stats = GetStats(*child);
+			merge_stats(stats, extra_stats);
 		}
-		relation_manager.AddRelation(input_op, parent);
+		relation_manager.AddRelation(input_op, parent, stats);
 		return true;
 	}
 
@@ -172,27 +120,31 @@ bool QueryGraphManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 		// Adding relations to the current join order optimizer
-		bool can_reorder_left = ExtractJoinRelations(*op->children[0], op);
-		bool can_reorder_right = ExtractJoinRelations(*op->children[1], op);
+		bool can_reorder_left = ExtractJoinRelations(*op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(*op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
-		// base table scan, add to set of relations
-		relation_manager.AddRelation(input_op, parent);
+		// base table scan, add to set of relations.
+		// create empty stats for dummy scan or logical expression get
+		auto stats = RelationStats();
+		relation_manager.AddRelation(input_op, parent, stats);
 		return true;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
 	// FIXME: See if we can get rid of NOP() projection first, so we can reorder more join.
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
-			relation_manager.AddRelation(input_op, parent);
+			// TODO: Get stats from a logical GET
+			auto stats = RelationStats();
+			relation_manager.AddRelation(input_op, parent, stats);
 			return true;
 		}
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]));
 		// now that we have optimized the children, we can get the statistics and add them to the relation
-		auto stats = GetStats(op->children[0]);
+		auto stats = GetStats(*op->children[0]);
 		// have to be careful here. projections can sit on joins and have more columns than
 		// the original logical get underneath. For this reason we need to copy some bindings from
 		// the optimizer just declared, so we know what columns map to
@@ -204,6 +156,26 @@ bool QueryGraphManager::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 }
 
+
+void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		// Here you have a filter on a single column in a table. Return a binding for the column
+		// being filtered on so the filter estimator knows what HLL count to pull
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
+		D_ASSERT(colref.depth == 0);
+		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
+		// map the base table index to the relation index used by the JoinOrderOptimizer
+		D_ASSERT(relation_manager.relation_mapping.find(colref.binding.table_index) != relation_manager.relation_mapping.end());
+		binding = ColumnBinding(relation_manager.relation_mapping[colref.binding.table_index], colref.binding.column_index);
+	}
+	// TODO: handle inequality filters with functions.
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) { GetColumnBinding(expr, binding); });
+}
+
+
+const vector<unique_ptr<FilterInfo>> QueryGraphManager::GetFilterBindings() {
+	return filters_and_bindings;
+}
 
 bool QueryGraphManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &filter_operators) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
@@ -222,7 +194,11 @@ bool QueryGraphManager::ExtractEdges(LogicalOperator &op, vector<reference<Logic
 				    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
 				if (filter_set.find(*comparison) == filter_set.end()) {
 					filter_set.insert(*comparison);
-					filters.push_back(std::move(comparison));
+					unordered_set<idx_t> bindings;
+					ExtractBindings(*comparison, bindings);
+					auto &set = set_manager.GetJoinRelation(bindings);
+					auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size());
+					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
 			join.conditions.clear();
@@ -230,7 +206,11 @@ bool QueryGraphManager::ExtractEdges(LogicalOperator &op, vector<reference<Logic
 			for (auto &expression : f_op.expressions) {
 				if (filter_set.find(*expression) == filter_set.end()) {
 					filter_set.insert(*expression);
-					filters.push_back(std::move(expression));
+					unordered_set<idx_t> bindings;
+					ExtractBindings(*expression, bindings);
+					auto &set = set_manager.GetJoinRelation(bindings);
+					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
+					filters_and_bindings.push_back(std::move(filter_info));
 				}
 			}
 			f_op.expressions.clear();
@@ -238,17 +218,8 @@ bool QueryGraphManager::ExtractEdges(LogicalOperator &op, vector<reference<Logic
 	}
 
 	// create potential edges from the comparisons
-	for (idx_t i = 0; i < filters.size(); i++) {
-		auto &filter = filters[i];
-		// first extract the relation set for the entire filter
-		unordered_set<idx_t> bindings;
-		ExtractBindings(*filter, bindings);
-		auto &set = set_manager.GetJoinRelation(bindings);
-
-		auto info = make_uniq<FilterInfo>(set, i);
-		auto filter_info = info.get();
-		filter_infos.push_back(std::move(info));
-
+	for (auto &filter_info: filters_and_bindings) {
+		auto &filter = filter_info->filter;
 		// now check if it can be used as a join predicate
 		if (filter->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
@@ -311,6 +282,10 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) 
 	throw Exception("Could not find relation in parent node (?)");
 }
 
+unique_ptr<LogicalOperator> QueryGraphManager::Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node) {
+    return RewritePlan(std::move(plan), node);
+}
+
 GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations,
                                                        JoinNode &node) {
 	optional_ptr<JoinRelationSet> left_node;
@@ -334,8 +309,9 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			for (auto &filter_ref : node.info->filters) {
 				auto &f = filter_ref.get();
 				// extract the filter from the operator it originally belonged to
-				D_ASSERT(filters[f.filter_index]);
-				auto condition = std::move(filters[f.filter_index]);
+				D_ASSERT(filters_and_bindings[f.filter_index]);
+				auto filter_and_binding = filters_and_bindings.at(f.filter_index);
+				auto condition = std::move(filter_and_binding);
 				// now create the actual join condition
 				D_ASSERT((JoinRelationSet::IsSubset(left.set, *f.left_set) &&
 				          JoinRelationSet::IsSubset(right.set, *f.right_set)) ||
@@ -390,10 +366,10 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
 	// hence we should push it here
-	for (auto &filter_info : filter_infos) {
+	for (auto &filter_info : filters_and_bindings) {
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
-		if (filters[info.filter_index]) {
+		if (filters_and_bindings[info.filter_index]) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.set.count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
@@ -471,18 +447,18 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	// first we will extract all relations from the main plan
 	vector<unique_ptr<LogicalOperator>> extracted_relations;
 	extracted_relations.reserve(relation_manager.NumRelations());
-	for (auto &relation : relations) {
-		extracted_relations.push_back(ExtractJoinRelation(*relation));
+	for (auto &relation : relation_manager.GetRelations()) {
+		extracted_relations.push_back(ExtractJoinRelation(relation));
 	}
 
 	// now we generate the actual joins
 	auto join_tree = GenerateJoins(extracted_relations, node);
 	// perform the final pushdown of remaining filters
-	for (auto &filter : filters) {
+	for (auto &filter : filters_and_bindings) {
 		// check if the filter has already been extracted
 		if (filter) {
 			// if not we need to push it
-			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter));
+			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter->filter));
 		}
 	}
 

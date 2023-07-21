@@ -24,7 +24,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// make sure query graph manager has not extracted a relation graph already
 
-//	D_ASSERT(!query_graph_manager.HasQueryGraph())
 	LogicalOperator *op = plan.get();
 
 	// extract the relations that go into the hyper graph.
@@ -36,20 +35,61 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		return plan;
 	}
 
-	//! QUERY GRAPH NOW HAS FILTERS AND RELATIONS KEWL
-
+	//! QUERY GRAPH NOW HAS FILTERS AND RELATIONS
 	auto cost_model = CostModel(query_graph_manager);
 
-	// Initialize a plan enumerator
+	// Initialize a plan enumerator.
 	auto plan_enumerator = PlanEnumerator(query_graph_manager, cost_model);
+
+	// Initialize the leaf/single node plans
+	plan_enumerator.InitLeafPlans();
 
 	// Ask the plan enumerator to enumerate a number of join orders
 	auto final_plan = plan_enumerator.SolveJoinOrder();
+	// TODO: add in the check that if no plan exists, you have to add a cross product.
 
 	// now reconstruct a logical plan from the query graph plan
-	auto new_logical_plan = query_graph_manager.Reconstruct(final_plan);
+	auto new_logical_plan = query_graph_manager.Reconstruct(std::move(plan), *final_plan);
 
-	// TODO: swap left and right joins based on statistics.
+	// TODO: swap left and right operators for any joins based on statistics. This is no longer handled by the enumerator.
+	//  as left and right positioning is not logic that should be in the enumerator
+	//  below code ripped from extract join relations.
+	//	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	//			auto &join = op->Cast<LogicalComparisonJoin>();
+	//			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+	//				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
+	//				// we convert to doing a RIGHT OUTER JOIN
+	//				// FIXME: for now we don't swap if the right_projection_map is not empty
+	//				// this can be fixed once we implement the left_projection_map properly...
+	//				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+	//				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+	//				if (rhs_cardinality > lhs_cardinality * 2) {
+	//					join.join_type = JoinType::RIGHT;
+	//					std::swap(join.children[0], join.children[1]);
+	//					for (auto &cond : join.conditions) {
+	//						std::swap(cond.left, cond.right);
+	//						cond.comparison = FlipComparisonExpression(cond.comparison);
+	//					}
+	//				}
+	//			}
+	//		}
+	//	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN && non_reorderable_operation) {
+	//		auto &join = op->Cast<LogicalAnyJoin>();
+	//		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+	//			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+	//			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+	//			if (rhs_cardinality > lhs_cardinality * 2) {
+	//				join.join_type = JoinType::RIGHT;
+	//				std::swap(join.children[0], join.children[1]);
+	//			}
+	//		}
+	//	}
+
+	// TODO: Porpogate up a stats object from the top of the new_logical_plan.
+	//  to get cardinality, ask cardinality_estimator for cardinality of whole join relation set
+	//  to get the distinct count of every column, call GetColumnBindings() of the top operator of the new_logical_plan
+	//  then go through all of the relations in the relation manager and get the column distinct count stats from those
+	//  relations.
 
 	return std::move(new_logical_plan);
 }

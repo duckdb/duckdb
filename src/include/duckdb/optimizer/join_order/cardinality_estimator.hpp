@@ -12,6 +12,7 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 namespace duckdb {
 
@@ -25,6 +26,7 @@ struct RelationAttributes {
 
 class JoinNode;
 class FilterInfo;
+struct SingleJoinRelation;
 
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
@@ -56,15 +58,21 @@ struct Subgraph2Denominator {
 	Subgraph2Denominator() : relations(), denom(1) {};
 };
 
-struct CardinalityHelper {
+class CardinalityHelper {
+public:
+	CardinalityHelper() {
+	}
+	CardinalityHelper(idx_t cardinality_before_filters, double filter_string) :
+	      cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
+
+public:
 	idx_t cardinality_before_filters;
 	double filter_strength;
 };
 
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator() : {
-	}
+	explicit CardinalityEstimator() {};
 
 private:
 
@@ -74,10 +82,9 @@ private:
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 
 	vector<RelationsToTDom> relations_to_tdoms;
-	unordered_map<idx_t, CardinalityHelper>;
+	unordered_map<JoinRelationSet *, CardinalityHelper> relation_set_2_cardinality;
 
 public:
-	static constexpr double DEFAULT_SELECTIVITY = 0.2;
 
 	static void VerifySymmetry(JoinNode &result, JoinNode &entry);
 
@@ -91,13 +98,13 @@ public:
 	// in the child join plan.
 	void CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map);
 	void MergeBindings(idx_t, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps);
-	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
+//	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(JoinNode &node, LogicalOperator &op);
-	void InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos);
+	void UpdateTotalDomains(JoinRelationSet *set, SingleJoinRelation &rel);
+	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps(vector<NodeOp> &node_ops, vector<unique_ptr<FilterInfo>> &filter_infos);
+	void InitCardinalityEstimatorProps(JoinRelationSet *set, SingleJoinRelation &rel);
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
 	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
 	double EstimateCrossProduct(const JoinNode &left, const JoinNode &right);

@@ -27,17 +27,6 @@ class LogicalOperator;
 class JoinNode;
 class RelationManager;
 
-struct FilterInfo {
-	FilterInfo(JoinRelationSet &set, idx_t filter_index) : set(set), filter_index(filter_index) {
-	}
-
-	JoinRelationSet &set;
-	idx_t filter_index;
-	optional_ptr<JoinRelationSet> left_set;
-	optional_ptr<JoinRelationSet> right_set;
-	ColumnBinding left_binding;
-	ColumnBinding right_binding;
-};
 
 struct FilterNode {
 	vector<reference<FilterInfo>> filters;

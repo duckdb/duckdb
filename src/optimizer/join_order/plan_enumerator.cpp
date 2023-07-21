@@ -89,20 +89,20 @@ static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) 
 }
 
 
-void PlanEnumerator::GenerateCrossProducts() {
-	// generate a set of cross products to combine the currently available plans into a full join plan
-	// we create edges between every relation with a high cost
-	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		auto &left = query_graph_manager.set_manager.GetJoinRelation(i);
-		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
-			if (i != j) {
-				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
-				query_graph.CreateEdge(left, right, nullptr);
-				query_graph.CreateEdge(right, left, nullptr);
-			}
-		}
-	}
-}
+//void PlanEnumerator::GenerateCrossProducts() {
+//	// generate a set of cross products to combine the currently available plans into a full join plan
+//	// we create edges between every relation with a high cost
+//	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
+//		auto &left = query_graph_manager.set_manager.GetJoinRelation(i);
+//		for (idx_t j = 0; j < query_graph_manager.relation_manager.NumRelations(); j++) {
+//			if (i != j) {
+//				auto &right = query_graph_manager.set_manager.GetJoinRelation(j);
+//				query_graph_manager.query_graph.CreateEdge(left, right, nullptr);
+//				query_graph_manager.query_graph.CreateEdge(right, left, nullptr);
+//			}
+//		}
+//	}
+//}
 
 
 //! Create a new JoinTree node by joining together two previous JoinTree nodes
@@ -113,32 +113,14 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 	// also just a heuristic but for now...
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
-	double expected_cardinality;
-	optional_ptr<NeighborInfo> best_connection;
+	idx_t cost;
+	optional_ptr<NeighborInfo> best_connection = nullptr;
 	auto plan = plans.find(&set);
-	// if we have already calculated an expected cardinality for this set,
-	// just re-use that cardinality
-	if (left.GetCardinality<double>() < right.GetCardinality<double>()) {
-		return CreateJoinTree(set, possible_connections, right, left);
-	}
-	if (plan != plans.end()) {
-		if (!plan->second) {
-			throw InternalException("No plan: internal error in join order optimizer");
-		}
-		expected_cardinality = plan->second->GetCardinality<double>();
-		best_connection = &possible_connections.back().get();
-	} else if (possible_connections.empty()) {
-		// cross product
-		expected_cardinality = cardinality_estimator.EstimateCrossProduct(left, right);
-	} else {
-		// normal join, expect foreign key join
-		expected_cardinality = cardinality_estimator.EstimateCardinalityWithSet(set);
+	if (possible_connections.size() > 0) {
 		best_connection = &possible_connections.back().get();
 	}
 
-	auto cost = CardinalityEstimator::ComputeCost(left, right, expected_cardinality);
-	auto result = make_uniq<JoinNode>(set, best_connection, left, right, expected_cardinality, cost);
-	D_ASSERT(cost >= expected_cardinality);
+	auto result = make_uniq<JoinNode>(set, best_connection, left, right);
 	return result;
 }
 
@@ -155,14 +137,12 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan, *right_plan);
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(&new_set);
-	if (entry == plans.end() || new_plan->GetCost() < entry->second->GetCost()) {
-		// the plan is the optimal plan, move it into the dynamic programming tree
+	auto new_cost = cost_model.ComputeCost(left, right);
+	auto old_cost = cost_model.GetCost(new_set);
+	if (entry == plans.end() || new_cost < old_cost) {
+		// the new plan costs less than the old plan. Update our DP tree and cost tree
 		auto &result = *new_plan;
 
-		//! make sure plans are symmetric for cardinality estimation
-		if (entry != plans.end()) {
-			cardinality_estimator.VerifySymmetry(result, *entry->second);
-		}
 		if (full_plan_found &&
 		    join_nodes_in_full_plan.find(new_plan->set.ToString()) != join_nodes_in_full_plan.end()) {
 			must_update_full_plan = true;
@@ -184,6 +164,7 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 
 		D_ASSERT(new_plan);
 		plans[&new_set] = std::move(new_plan);
+		cost_model.AddRelationSetCost(new_set, new_cost);
 		return result;
 	}
 	return *entry->second;
@@ -216,7 +197,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 	}
 	UpdateExclusionSet(node, exclusion_set);
 	// find the neighbors given this exclusion set
-	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
+	auto neighbors = query_graph_manager.query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -241,7 +222,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 		// since the GetNeighbors only returns the smallest element in a list, the entry might not be connected to
 		// (only!) this neighbor,  hence we have to do a connectedness check before we can emit it
 		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
-		auto connections = query_graph.GetConnections(node, neighbor_relation);
+		auto connections = query_graph_manager.query_graph.GetConnections(node, neighbor_relation);
 		if (!connections.empty()) {
 			if (!TryEmitPair(node, neighbor_relation, connections)) {
 				return false;
@@ -260,7 +241,7 @@ bool PlanEnumerator::EmitCSG(JoinRelationSet &node) {
 bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
                                            unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
-	auto neighbors = query_graph.GetNeighbors(right, exclusion_set);
+	auto neighbors = query_graph_manager.query_graph.GetNeighbors(right, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -276,7 +257,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 		// This means we didn't set exclusion_set correctly.
 		D_ASSERT(combined_set.count > right.count);
 		if (plans.find(&combined_set) != plans.end()) {
-			auto connections = query_graph.GetConnections(left, combined_set);
+			auto connections = query_graph_manager.query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
 				if (!TryEmitPair(left, combined_set, connections)) {
 					return false;
@@ -303,7 +284,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 
 bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) {
 	// find neighbors of S under the exclusion set
-	auto neighbors = query_graph.GetNeighbors(node, exclusion_set);
+	auto neighbors = query_graph_manager.query_graph.GetNeighbors(node, exclusion_set);
 	if (neighbors.empty()) {
 		return true;
 	}
@@ -374,7 +355,7 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 	for (idx_t i = 0; i < new_set.count; i++) {
 		exclusion_set.insert(new_set.relations[i]);
 	}
-	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
+	auto neighbors = query_graph_manager.query_graph.GetNeighbors(new_set, exclusion_set);
 	auto all_neighbors = GetAllNeighborSets(neighbors);
 	for (const auto &neighbor : all_neighbors) {
 		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
@@ -385,8 +366,8 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 			continue;
 		}
 
-		double combined_set_plan_cost = combined_set_plan->second->GetCost();
-		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
+		double combined_set_plan_cost = cost_model.GetCost(combined_set); // combined_set_plan->second->GetCost();
+		auto connections = query_graph_manager.query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
 		auto right_plan = plans.find(&neighbor_relation);
@@ -396,7 +377,7 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 		auto &updated_plan = EmitPair(new_set, neighbor_relation, connections);
 		// <= because the child node has already been replaced. You need to
 		// replace the parent node as well in this case
-		if (updated_plan.GetCost() < combined_set_plan_cost) {
+		if (cost_model.GetCost(updated_plan.set) < combined_set_plan_cost) {
 			UpdateDPTree(updated_plan);
 		}
 	}
@@ -421,7 +402,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
 				auto right = join_relations[j];
 				// check if we can connect these two relations
-				auto connection = query_graph_manager.GetConnections(left, right);
+				auto connection = query_graph_manager.query_graph.GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
 					auto &node = EmitPair(left, right, connection);
@@ -432,7 +413,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 					// if node in FullPath, then updateDP tree.
 					UpdateDPTree(node);
 
-					if (!best_connection || node.GetCost() < best_connection->GetCost()) {
+					if (!best_connection || cost_model.GetCost(node.set) < cost_model.GetCost(best_connection->set)) {
 						// best pair found so far
 						best_connection = &node;
 						best_left = i;
@@ -464,7 +445,8 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 				// check if the cardinality is smaller than the smallest two found so far
 				for (idx_t j = 0; j < 2; j++) {
 					if (!smallest_plans[j] ||
-					    smallest_plans[j]->GetCardinality<double>() > current_plan->GetCardinality<double>()) {
+//					    smallest_plans[j]->GetCardinality<double>() > current_plan->GetCardinality<double>()
+					    cost_model.GetLeafCost(smallest_plans[j]->set) > cost_model.GetLeafCost(current_plan->set)) {
 						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
@@ -479,9 +461,9 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			auto &left = smallest_plans[0]->set;
 			auto &right = smallest_plans[1]->set;
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
-			query_graph.CreateEdge(left, right, nullptr);
+			query_graph_manager.query_graph.CreateEdge(left, right, nullptr);
 			// now emit the pair and continue with the algorithm
-			auto connections = query_graph.GetConnections(left, right);
+			auto connections = query_graph_manager.query_graph.GetConnections(left, right);
 			D_ASSERT(!connections.empty());
 
 			best_connection = &EmitPair(left, right, connections);
@@ -506,12 +488,56 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 	}
 }
 
-void PlanEnumerator::SolveJoinOrder() {
+void PlanEnumerator::InitLeafPlans() {
+	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
+	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
+	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
+	vector<NodeOp> nodes_ops;
+	auto all_relations = query_graph_manager.relation_manager.GetRelations();
+	for (idx_t i; i < all_relations.size(); i++) {
+		auto &rel = all_relations.at(i);
+		auto &relation_set = query_graph_manager.set_manager.GetJoinRelation(i);
+		auto join_node = make_uniq<JoinNode>(relation_set);
+		plans[&relation_set] = std::move(join_node);
+
+		cost_model.AddRelationSetCost(relation_set, 0);
+		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(&relation_set, rel);
+	}
+
+}
+
+unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product) {
+	// TODO: shove the below code into the join enumerator init code.
+	// the cardinality estimator initializes the leaf join nodes with estimated cardinalities based on
+	// certain table filters.
+
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
 		SolveJoinOrderApproximately();
 	}
+
+	// now the optimal join path should have been found
+	// get it from the node
+	unordered_set<idx_t> bindings;
+	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
+		bindings.insert(i);
+	}
+	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
+	auto final_plan = plans.find(&total_relation);
+	if (final_plan == plans.end()) {
+		// could not find the final plan
+		// this should only happen in case the sets are actually disjunct
+		// in this case we need to generate cross product to connect the disjoint sets
+		if (force_no_cross_product) {
+			throw InvalidInputException(
+			    "Query requires a cross-product, but 'force_no_cross_product' PRAGMA is enabled");
+		}
+		GenerateCrossProducts();
+		//! solve the join order again, returning the final plan
+		return SolveJoinOrder(force_no_cross_product);
+	}
+	return std::move(final_plan->second);
 }
 
 }

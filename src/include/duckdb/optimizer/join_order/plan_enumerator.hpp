@@ -25,19 +25,20 @@ namespace duckdb {
 
 class PlanEnumerator {
 public:
-	explicit PlanEnumerator(QueryGraphManager query_graph_manager, CostModel cost_model) : query_graph_manager(query_graph_manager), cost_model(cost_model),
+	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel cost_model) : query_graph_manager(query_graph_manager), cost_model(cost_model),
 	      full_plan_found(false),
 	      must_update_full_plan(false) {}
 
 	//! Perform the join order solving
-	JoinNode* SolveJoinOrder();
+	unique_ptr<JoinNode> SolveJoinOrder(bool force_no_cross_product);
+	void InitLeafPlans();
 
 private:
 
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
 	//! The set of edges used in the join optimizer
-	QueryGraphManager query_graph_manager;
+	QueryGraphManager &query_graph_manager;
 	//! Cost model to evaluate cost of joins
 	CostModel cost_model;
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
@@ -46,6 +47,10 @@ private:
 	bool full_plan_found;
 	bool must_update_full_plan;
 	unordered_set<std::string> join_nodes_in_full_plan;
+
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
+	                                    const vector<reference<NeighborInfo>> &possible_connections,
+	                                    JoinNode &left, JoinNode &right);
 
 	//! Extract the bindings referred to by an Expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);

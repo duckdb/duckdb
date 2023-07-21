@@ -9,7 +9,13 @@
 
 namespace duckdb {
 
-void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) {
+
+vector<SingleJoinRelation> RelationManager::GetRelations() {
+	return relations;
+}
+
+
+void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
 
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children

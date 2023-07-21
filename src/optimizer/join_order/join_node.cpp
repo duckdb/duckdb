@@ -9,8 +9,11 @@ namespace duckdb {
 JoinNode::JoinNode(JoinRelationSet &set)
     : set(set), info(nullptr), left(nullptr), right(nullptr) {}
 
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right)
-    : set(set), info(info), left(&left), right(&right) {}
+
+JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left, optional_ptr<JoinNode> right)
+    : set(set), info(info), left(left), right(right) {
+
+}
 
 unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 	auto result = make_uniq<EstimatedProperties>(cardinality, cost);
