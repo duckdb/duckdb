@@ -3,7 +3,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 namespace duckdb {
 
 class FormatSerializer;   // Forward declare
@@ -51,11 +52,18 @@ struct is_vector<typename duckdb::vector<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
+template <typename T>
+struct is_unsafe_vector : std::false_type {};
+template <typename T>
+struct is_unsafe_vector<typename duckdb::unsafe_vector<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
 // Check if T is a unordered map, and provide access to the inner type
 template <typename T>
 struct is_unordered_map : std::false_type {};
 template <typename... Args>
-struct is_unordered_map<typename std::unordered_map<Args...>> : std::true_type {
+struct is_unordered_map<typename duckdb::unordered_map<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
@@ -90,7 +98,7 @@ struct is_pair<std::pair<T, U>> : std::true_type {
 template <typename T>
 struct is_unordered_set : std::false_type {};
 template <typename... Args>
-struct is_unordered_set<std::unordered_set<Args...>> : std::true_type {
+struct is_unordered_set<duckdb::unordered_set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
@@ -99,7 +107,7 @@ struct is_unordered_set<std::unordered_set<Args...>> : std::true_type {
 template <typename T>
 struct is_set : std::false_type {};
 template <typename... Args>
-struct is_set<std::set<Args...>> : std::true_type {
+struct is_set<duckdb::set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;

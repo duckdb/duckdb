@@ -13,8 +13,7 @@
 namespace duckdb {
 
 class LogicalMaterializedCTE : public LogicalOperator {
-	LogicalMaterializedCTE(idx_t table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE), table_index(table_index) {
+	explicit LogicalMaterializedCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 	}
 
 public:
@@ -39,6 +38,10 @@ public:
 	}
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
 	vector<idx_t> GetTableIndex() const override;
 
 protected:
