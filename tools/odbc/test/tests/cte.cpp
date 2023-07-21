@@ -5,8 +5,8 @@ using namespace odbc_test;
 static void RunDataCheckOnTable(HSTMT &hstmt, int num_rows) {
 	for (int i = 1; i <= num_rows; i++) {
 		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
-		DATA_CHECK(hstmt, 1, std::to_string(i).c_str());
-		DATA_CHECK(hstmt, 2, (std::string("foo") + std::to_string(i)).c_str());
+		DATA_CHECK(hstmt, 1, std::to_string(i));
+		DATA_CHECK(hstmt, 2, std::string("foo") + std::to_string(i));
 	}
 }
 

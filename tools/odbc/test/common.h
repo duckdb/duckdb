@@ -55,7 +55,7 @@ void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handl
  * @param col_num The number of the column in the result set
  * @param expected_content The expected content of the column
  */
-void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content);
+void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string expected_content);
 
 /**
  * @brief
@@ -71,7 +71,7 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content);
  * @param expected_col_decimal_digits
  * @param expected_col_nullable
  */
-void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
+void METADATA_CHECK(HSTMT &hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
                     SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable);
 
@@ -111,7 +111,7 @@ void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc);
  */
 void EXEC_SQL(HSTMT hstmt, const std::string &query);
 
-void InitializeDatabase(HSTMT hstmt);
+void InitializeDatabase(HSTMT &hstmt);
 
 std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
 
@@ -122,6 +122,7 @@ std::string ConvertToString(SQLCHAR *str);
 const char *ConvertToCString(SQLCHAR *str);
 const char *ConvertToCString(int i);
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr);
+SQLPOINTER ConvertToSQLPOINTER(const char *str);
 
 } // namespace odbc_test
 
