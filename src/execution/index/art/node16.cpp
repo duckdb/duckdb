@@ -4,6 +4,9 @@
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
 
 namespace duckdb {
 
@@ -151,7 +154,14 @@ void Node16::ReplaceChild(const uint8_t byte, const Node child) {
 }
 
 optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
+#ifdef __SSE2__
+	auto keys = _mm_set1_epi8(byte);
+	auto cmp = _mm_cmpeq_epi8(keys, _mm_loadu_si128(reinterpret_cast<const __m128i *>(key)));
+	int mask = (1 << count) - 1;
+	int bitfield = _mm_movemask_epi8(cmp) & mask;
 
+	return (bool)bitfield ? &children[__builtin_ctz(bitfield)] : nullptr;
+#else
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
 			D_ASSERT(children[i].IsSet());
@@ -159,6 +169,7 @@ optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
 		}
 	}
 	return nullptr;
+#endif
 }
 
 optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
