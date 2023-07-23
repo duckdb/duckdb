@@ -23,7 +23,7 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 }
 
 double JoinNode::GetCost() {
-	return estimated_props->GetCost();
+	return estimated_props->GetCost<double>();
 }
 
 void JoinNode::SetCost(double cost) {
@@ -54,7 +54,7 @@ string JoinNode::ToString() {
 		is_cartesian = (GetCardinality<double>() == left->GetCardinality<double>() * right->GetCardinality<double>());
 	}
 	result += "cartesian = " + to_string(is_cartesian) + "\n";
-	result += "cost = " + to_string(estimated_props->GetCost()) + "\n";
+	result += "cost = " + to_string(estimated_props->GetCost<double>()) + "\n";
 	result += "left = \n";
 	if (left) {
 		result += left->ToString();

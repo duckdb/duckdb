@@ -441,6 +441,15 @@ int64_t Date::EpochMicroseconds(date_t date) {
 	return result;
 }
 
+int64_t Date::EpochMilliseconds(date_t date) {
+	int64_t result;
+	const auto MILLIS_PER_DAY = Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, MILLIS_PER_DAY, result)) {
+		throw ConversionException("Could not convert DATE (%s) to milliseconds", Date::ToString(date));
+	}
+	return result;
+}
+
 int32_t Date::ExtractYear(date_t d, int32_t *last_year) {
 	auto n = d.days;
 	// cached look up: check if year of this date is the same as the last one we looked up

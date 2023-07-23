@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalPiecewiseMergeJoin::PhysicalPiecewiseMergeJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
                                                        unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
                                                        JoinType join_type, idx_t estimated_cardinality)
     : PhysicalRangeJoin(op, PhysicalOperatorType::PIECEWISE_MERGE_JOIN, std::move(left), std::move(right),
@@ -118,23 +118,25 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                         LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
+SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context,
+                                                          OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+                                                      OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (IsRightOuterJoin(join_type)) {
@@ -208,6 +210,7 @@ public:
 	idx_t right_position;
 	idx_t right_chunk_index;
 	idx_t right_base;
+	idx_t prev_left_index;
 
 	// Secondary predicate shared data
 	SelectionVector sel;
@@ -431,7 +434,8 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	}
 }
 
-static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison) {
+static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison,
+                                    idx_t &prev_left_index) {
 	const auto cmp = MergeJoinComparisonValue(comparison);
 
 	// The sort parameters should all be the same
@@ -465,6 +469,20 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 	idx_t result_count = 0;
 	while (true) {
+		if (l.entry_idx < prev_left_index) {
+			// left side smaller: found match
+			l.result.set_index(result_count, sel_t(l.entry_idx));
+			r.result.set_index(result_count, sel_t(r.entry_idx));
+			result_count++;
+			// move left side forward
+			l.entry_idx++;
+			l_ptr += entry_size;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				break;
+			}
+			continue;
+		}
 		if (l.entry_idx < l.not_null) {
 			int comp_res;
 			if (all_constant) {
@@ -474,7 +492,6 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				rread.entry_idx = r.entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
-
 			if (comp_res <= cmp) {
 				// left side smaller: found match
 				l.result.set_index(result_count, sel_t(l.entry_idx));
@@ -490,6 +507,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				continue;
 			}
 		}
+
+		prev_left_index = l.entry_idx;
 		// right side smaller or equal, or left side exhausted: move
 		// right pointer forward reset left side to start
 		r.entry_idx++;
@@ -521,6 +540,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			state.right_chunk_index = 0;
 			state.right_base = 0;
 			state.left_position = 0;
+			state.prev_left_index = 0;
 			state.right_position = 0;
 			state.first_fetch = false;
 			state.finished = false;
@@ -547,7 +567,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		BlockMergeInfo right_info(gstate.table->global_sort_state, state.right_chunk_index, state.right_position,
 		                          rhs_not_null);
 
-		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
+		idx_t result_count =
+		    MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison, state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk

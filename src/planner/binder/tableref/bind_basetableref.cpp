@@ -21,15 +21,25 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
-	auto found_cte = FindCTE(ref.table_name, ref.table_name == alias);
+
+	// CTE name should never be qualified (i.e. schema_name should be empty)
+	optional_ptr<CommonTableExpressionInfo> found_cte = nullptr;
+	if (ref.schema_name.empty()) {
+		found_cte = FindCTE(ref.table_name, ref.table_name == alias);
+	}
+
 	if (found_cte) {
 		// Check if there is a CTE binding in the BindContext
 		auto &cte = *found_cte;
 		auto ctebinding = bind_context.GetCTEBinding(ref.table_name);
 		if (!ctebinding) {
 			if (CTEIsAlreadyBound(cte)) {
-				throw BinderException("Circular reference to CTE \"%s\", use WITH RECURSIVE to use recursive CTEs",
-				                      ref.table_name);
+				throw BinderException(
+				    "Circular reference to CTE \"%s\", There are two possible solutions. \n1. use WITH RECURSIVE to "
+				    "use recursive CTEs. \n2. If "
+				    "you want to use the TABLE name \"%s\" the same as the CTE name, please explicitly add "
+				    "\"SCHEMA\" before table name. You can try \"main.%s\" (main is the duckdb default schema)",
+				    ref.table_name, ref.table_name, ref.table_name);
 			}
 			// Move CTE to subquery and bind recursively
 			SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(cte.query->Copy()));
@@ -45,9 +55,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return Bind(subquery, found_cte);
 		} else {
 			// There is a CTE binding in the BindContext.
-			// This can only be the case if there is a recursive CTE present.
+			// This can only be the case if there is a recursive CTE,
+			// or a materialized CTE present.
 			auto index = GenerateTableIndex();
-			auto result = make_uniq<BoundCTERef>(index, ctebinding->index);
+			auto materialized = cte.materialized;
+			if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+#else
+				materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+#endif
+			}
+			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
 			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);

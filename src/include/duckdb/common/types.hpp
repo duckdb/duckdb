@@ -27,19 +27,6 @@ class Vector;
 class ClientContext;
 class FieldWriter;
 
-//! Extra Type Info Type
-enum class ExtraTypeInfoType : uint8_t {
-	INVALID_TYPE_INFO = 0,
-	GENERIC_TYPE_INFO = 1,
-	DECIMAL_TYPE_INFO = 2,
-	STRING_TYPE_INFO = 3,
-	LIST_TYPE_INFO = 4,
-	STRUCT_TYPE_INFO = 5,
-	ENUM_TYPE_INFO = 6,
-	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
-};
-
 struct string_t;
 
 template <class T>
@@ -328,8 +315,6 @@ struct LogicalType {
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
 
-	DUCKDB_API static ExtraTypeInfoType GetExtraTypeInfoType(const ExtraTypeInfo &type);
-
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
 
@@ -480,6 +465,7 @@ bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
 struct aggregate_state_t {
+	aggregate_state_t() {}
 	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)), bound_argument_types(std::move(bound_argument_types_p)) {
 	}
 

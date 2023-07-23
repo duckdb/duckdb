@@ -1,0 +1,43 @@
+# name: test/sql/types/list/large_nested_lists.test_slow
+# description: Test large nested lists
+# group: [list]
+
+# list of lists with many small lists
+statement ok
+CREATE TABLE a AS SELECT case when i < 100000 then 'a' else 'b' end g, ARRAY_AGG(case when i %2 = 0 then ARRAY[i - 2, i, i + 2] else ARRAY[i, i + 2] end) l FROM generate_series(0, 199999, 1) tbl(i) GROUP BY g
+
+query IIIII
+SELECT g, COUNT(*), MIN(i::VARCHAR), MAX(i::VARCHAR), COUNT(i) FROM (SELECT g, UNNEST(l) FROM a) tbl(g, i) GROUP BY g ORDER BY g
+----
+a	100000	[-2, 0, 2]	[99999, 100001]	100000
+b	100000	[100000, 100002, 100004]	[99998, 100000, 100002]	100000
+
+# list of lists with nulls
+statement ok
+CREATE TABLE b AS SELECT case when i < 100000 then 'a' else 'b' end g, LIST(case when i %2 = 0 then [i - 2, i, i + 2, NULL] else [i, i + 2, NULL] end) l FROM range(200000) tbl(i) GROUP BY g
+
+query IIIII
+SELECT g, COUNT(*), MIN(i::VARCHAR), MAX(i::VARCHAR), COUNT(i) FROM (SELECT g, UNNEST(l) FROM b) tbl(g, i) GROUP BY g ORDER BY g
+----
+a	100000	[-2, 0, 2, NULL]	[99999, 100001, NULL]	100000
+b	100000	[100000, 100002, 100004, NULL]	[99998, 100000, 100002, NULL]	100000
+
+# list of one huge list
+statement ok
+CREATE TABLE c AS SELECT case when i < 100000 then 'a' else 'b' end g, [LIST(case when i %2 = 0 then null else i end)] l FROM range(200000) tbl(i) GROUP BY g
+
+query IIIII
+SELECT g, COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT g, UNNEST(l[1]) FROM c) tbl(g, i) GROUP BY g ORDER BY g
+----
+a	100000	1	99999	50000
+b	100000	100001	199999	50000
+
+# list of several huge lists
+statement ok
+CREATE TABLE d AS SELECT case when i < 100000 then 'a' else 'b' end g, [LIST(i), LIST(i + 1), LIST(i + 2), LIST(i + 3)] l FROM range(200000) tbl(i) GROUP BY g
+
+query IIIIIIIIII
+SELECT g, COUNT(*), MIN(i1), MAX(i1), MIN(i2), MAX(i2), MIN(i3), MAX(i3), MIN(i4), MAX(i4) FROM (SELECT g, UNNEST(l[1]) i1, UNNEST(l[2]) i2, UNNEST(l[3]) i3, UNNEST(l[4]) i4 FROM d) tbl GROUP BY g ORDER BY g
+----
+a	100000	0	99999	1	100000	2	100001	3	100002
+b	100000	100000	199999	100001	200000	100002	200001	100003	200002

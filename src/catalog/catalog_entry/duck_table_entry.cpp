@@ -298,7 +298,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
+	    make_shared<DataTable>(context, *storage, info.new_column, *bound_create_info->bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 

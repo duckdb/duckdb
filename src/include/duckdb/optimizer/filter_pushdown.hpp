@@ -19,8 +19,11 @@ class Optimizer;
 class FilterPushdown {
 public:
 	explicit FilterPushdown(Optimizer &optimizer);
+
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
+	//! Return a reference to the client context (from the optimizer)
+	ClientContext &GetContext();
 
 	struct Filter {
 		unordered_set<idx_t> bindings;

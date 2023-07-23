@@ -332,13 +332,18 @@ tools/pythonpkg/tests/userdata1.parquet
 __nvm
 
 *.vcxproj*
-*.cmake
 *.sln
 
 # Zig files
-zig-out/*
+zig-out/*gs
 zig-cache/*
 *.zig
 
 # .db files
 *.db
+
+# local cmake extension config
+extension/extension_config_local.cmake
+
+# extension_external dir
+extension_external

@@ -22,6 +22,7 @@ add_library_unity(
   sha512.cpp
   starts_with.cpp
   string_split.cpp
+  to_base.cpp
   translate.cpp
   trim.cpp
   unicode.cpp)

@@ -1,0 +1,37 @@
+# name: test/sql/storage/all_types_storage_large.test_slow
+# description: Test all types storage (large)
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/all_types_storage.db
+
+statement ok
+PRAGMA enable_verification
+
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+loop i 0 12
+
+statement ok
+INSERT INTO all_types SELECT * FROM all_types;
+
+endloop
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1
+SELECT * FROM all_types;
+
+restart
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1
+SELECT * FROM all_types;
+
+statement ok
+DROP TABLE all_types;
+
+endloop

@@ -215,6 +215,10 @@ void PyConnectionWrapper::Close(shared_ptr<DuckDBPyConnection> conn) {
 	conn->Close();
 }
 
+void PyConnectionWrapper::Interrupt(shared_ptr<DuckDBPyConnection> conn) {
+	conn->Interrupt();
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Cursor();
 }

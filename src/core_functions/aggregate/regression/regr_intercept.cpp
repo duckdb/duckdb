@@ -23,11 +23,11 @@ struct RegrInterceptOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
 		state.count++;
-		state.sum_x += y;
-		state.sum_y += x;
-		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(state.slope, x, y, idata);
+		state.sum_x += x;
+		state.sum_y += y;
+		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(state.slope, y, x, idata);
 	}
 
 	template <class STATE, class OP>

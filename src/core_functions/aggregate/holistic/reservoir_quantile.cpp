@@ -21,8 +21,10 @@ struct ReservoirQuantileState {
 		if (new_len <= len) {
 			return;
 		}
+		T *old_v = v;
 		v = (T *)realloc(v, new_len * sizeof(T));
 		if (!v) {
+			free(old_v);
 			throw InternalException("Memory allocation failure");
 		}
 		len = new_len;

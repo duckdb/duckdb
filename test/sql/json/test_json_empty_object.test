@@ -16,7 +16,7 @@ select json_structure('{}')
 statement error
 select json_transform('{}', '{}')
 ----
-Invalid Input Error: Empty object in JSON structure
+Binder Error: Empty object in JSON structure
 
 # create a JSON file with an empty struct
 statement ok

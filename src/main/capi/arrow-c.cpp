@@ -1,5 +1,6 @@
-#include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/main/capi/capi_internal.hpp"
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
@@ -107,4 +108,157 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
 	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
+}
+
+namespace arrow_array_stream_wrapper {
+namespace {
+struct PrivateData {
+	ArrowSchema *schema;
+	ArrowArray *array;
+	bool done = false;
+};
+
+// LCOV_EXCL_START
+// This function is never called, but used to set ArrowSchema's release functions to a non-null NOOP.
+void EmptySchemaRelease(ArrowSchema *) {
+}
+// LCOV_EXCL_STOP
+
+void EmptyArrayRelease(ArrowArray *) {
+}
+
+void EmptyStreamRelease(ArrowArrayStream *) {
+}
+
+void FactoryGetSchema(uintptr_t stream_factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
+	auto private_data =
+	    reinterpret_cast<PrivateData *>(reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr)->private_data);
+	schema.arrow_schema = *private_data->schema;
+
+	// Need to nullify the root schema's release function here, because streams don't allow us to set the release
+	// function. For the schema's children, we nullify the release functions in `duckdb_arrow_scan`, so we don't need to
+	// handle them again here. We set this to nullptr and not EmptySchemaRelease to prevent ArrowSchemaWrapper's
+	// destructor from destroying the schema (it's the caller's responsibility).
+	schema.arrow_schema.release = nullptr;
+}
+
+int GetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+	auto private_data = static_cast<arrow_array_stream_wrapper::PrivateData *>((stream->private_data));
+	if (private_data->schema == nullptr) {
+		return DuckDBError;
+	}
+
+	*out = *private_data->schema;
+	out->release = EmptySchemaRelease;
+	return DuckDBSuccess;
+}
+
+int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	auto private_data = static_cast<arrow_array_stream_wrapper::PrivateData *>((stream->private_data));
+	*out = *private_data->array;
+	if (private_data->done) {
+		out->release = nullptr;
+	} else {
+		out->release = EmptyArrayRelease;
+	}
+
+	private_data->done = true;
+	return DuckDBSuccess;
+}
+
+duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> FactoryGetNext(uintptr_t stream_factory_ptr,
+                                                                   duckdb::ArrowStreamParameters &parameters) {
+	auto stream = reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr);
+	auto ret = duckdb::make_uniq<duckdb::ArrowArrayStreamWrapper>();
+	ret->arrow_array_stream = *stream;
+	ret->arrow_array_stream.release = EmptyStreamRelease;
+	return ret;
+}
+
+// LCOV_EXCL_START
+// This function is never be called, because it's used to construct a stream wrapping around a caller-supplied
+// ArrowArray. Thus, the stream itself cannot produce an error.
+const char *GetLastError(struct ArrowArrayStream *stream) {
+	return nullptr;
+}
+// LCOV_EXCL_STOP
+
+void Release(struct ArrowArrayStream *stream) {
+	if (stream->private_data != nullptr) {
+		delete reinterpret_cast<PrivateData *>(stream->private_data);
+	}
+
+	stream->private_data = nullptr;
+	stream->release = nullptr;
+}
+
+duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input) {
+	try {
+		auto cconn = reinterpret_cast<duckdb::Connection *>(connection);
+		cconn
+		    ->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
+		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetNext),
+		                                   duckdb::Value::POINTER((uintptr_t)FactoryGetSchema)})
+		    ->CreateView(table_name, true, false);
+	} catch (...) { // LCOV_EXCL_START
+		// Tried covering this in tests, but it proved harder than expected. At the time of writing:
+		// - Passing any name to `CreateView` worked without throwing an exception
+		// - Passing a null Arrow array worked without throwing an exception
+		// - Passing an invalid schema (without any columns) led to an InternalException with SIGABRT, which is meant to
+		//   be un-catchable. This case likely needs to be handled gracefully within `arrow_scan`.
+		// Ref: https://discord.com/channels/909674491309850675/921100573732909107/1115230468699336785
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
+
+	return DuckDBSuccess;
+}
+} // namespace
+} // namespace arrow_array_stream_wrapper
+
+duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow) {
+	auto stream = reinterpret_cast<ArrowArrayStream *>(arrow);
+
+	// Backup release functions - we nullify children schema release functions because we don't want to release on
+	// behalf of the caller, downstream in our code. Note that Arrow releases target immediate children, but aren't
+	// recursive. So we only back up immediate children here and restore their functions.
+	ArrowSchema schema;
+	if (stream->get_schema(stream, &schema) == DuckDBError) {
+		return DuckDBError;
+	}
+
+	typedef void (*release_fn_t)(ArrowSchema *);
+	std::vector<release_fn_t> release_fns(schema.n_children);
+	for (int64_t i = 0; i < schema.n_children; i++) {
+		auto child = schema.children[i];
+		release_fns[i] = child->release;
+		child->release = arrow_array_stream_wrapper::EmptySchemaRelease;
+	}
+
+	auto ret = arrow_array_stream_wrapper::Ingest(connection, table_name, stream);
+
+	// Restore release functions.
+	for (int64_t i = 0; i < schema.n_children; i++) {
+		schema.children[i]->release = release_fns[i];
+	}
+
+	return ret;
+}
+
+duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *table_name,
+                                     duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
+                                     duckdb_arrow_stream *out_stream) {
+	auto private_data = new arrow_array_stream_wrapper::PrivateData;
+	private_data->schema = reinterpret_cast<ArrowSchema *>(arrow_schema);
+	private_data->array = reinterpret_cast<ArrowArray *>(arrow_array);
+	private_data->done = false;
+
+	ArrowArrayStream *stream = new ArrowArrayStream;
+	*out_stream = reinterpret_cast<duckdb_arrow_stream>(stream);
+	stream->get_schema = arrow_array_stream_wrapper::GetSchema;
+	stream->get_next = arrow_array_stream_wrapper::GetNext;
+	stream->get_last_error = arrow_array_stream_wrapper::GetLastError;
+	stream->release = arrow_array_stream_wrapper::Release;
+	stream->private_data = private_data;
+
+	return duckdb_arrow_scan(connection, table_name, reinterpret_cast<duckdb_arrow_stream>(stream));
 }

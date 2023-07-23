@@ -67,13 +67,13 @@ static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::un
                              int32_t &buffer_size) {
 	icu::UnicodeString unicode_string =
 	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize()));
-	int32_t string_size = collator.getSortKey(unicode_string, (uint8_t *)buffer.get(), buffer_size);
+	int32_t string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
 		buffer_size = string_size;
 		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
 
-		string_size = collator.getSortKey(unicode_string, (uint8_t *)buffer.get(), buffer_size);
+		string_size = collator.getSortKey(unicode_string, reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
 	}
 	return string_size;
 }
@@ -185,7 +185,7 @@ static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContex
 }
 
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ICUCalendarData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {

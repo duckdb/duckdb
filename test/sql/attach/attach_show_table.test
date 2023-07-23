@@ -30,6 +30,14 @@ SHOW TABLES
 ----
 
 statement ok
+USE DB1
+
+query I
+SHOW TABLES
+----
+table_in_db1
+
+statement ok
 USE db1
 
 query I
@@ -47,6 +55,15 @@ table_in_db2
 
 statement ok
 USE db2.test_schema;
+
+query I
+SHOW TABLES
+----
+table_in_db2
+table_in_db2_test_schema
+
+statement ok
+USE DB2.TEST_sChEmA;
 
 query I
 SHOW TABLES

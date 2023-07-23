@@ -1,0 +1,27 @@
+# name: test/sql/update/string_update_issue_2471.test_slow
+# description: Repeated update of string values
+# group: [update]
+
+statement ok
+CREATE VIEW test_table_view AS SELECT * FROM 'data/csv/issue2471.csv'
+
+statement ok
+create table test_table (isin VARCHAR(20), value VARCHAR(1));
+
+statement ok
+insert into test_table SELECT * FROM test_table_view;
+
+statement ok
+UPDATE test_table set value = tdv.value FROM test_table_view tdv where tdv.isin = test_table.isin;
+
+query IIIII
+select count(distinct isin), min(isin), max(isin), min(value), max(value) from test_table;
+----
+2300	XXXXAT0000A22H40	XXXXXS2366276595	1	1
+
+loop i 0 100
+
+statement ok
+UPDATE test_table set value = tdv.value FROM test_table_view tdv where tdv.isin = test_table.isin
+
+endloop

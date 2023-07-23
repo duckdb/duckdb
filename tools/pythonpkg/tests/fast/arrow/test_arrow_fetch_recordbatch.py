@@ -248,6 +248,23 @@ class TestArrowFetchRecordBatch(object):
         with pytest.raises(OSError, match='Conversion Error'):
             record_batch_reader.read_next_batch()
 
+    def test_many_list_batches(self):
+        conn = duckdb.connect()
+
+        conn.execute("""
+            create or replace table tbl as select * from (select {'a': [5,4,3,2,1]}), range(10000000)
+        """)
+
+        query = "SELECT * FROM tbl"
+        chunk_size = 1_000_000
+
+        # Because this produces multiple chunks, this caused a segfault before
+        # because we changed some data in the first batch fetch
+        batch_iter = conn.execute(query).fetch_record_batch(chunk_size)
+        for batch in batch_iter:
+            del batch
+
+
     def test_many_chunk_sizes(self):
         object_size = 1000000
         duckdb_cursor = duckdb.connect()

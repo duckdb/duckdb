@@ -105,6 +105,9 @@ SELECT CASE WHEN c>(WITH cte AS (SELECT sum(c)/count(*) FROM t1) SELECT * FROM c
 1000
 214
 
+# temporary solution until decorrelation of materialized CTEs is implemented
+require noalternativeverify
+
 # correlated subqueries
 query IR
 SELECT a, (WITH cte AS (SELECT SUM(b) FROM test tsub WHERE test.a=tsub.a) SELECT * FROM cte) FROM test

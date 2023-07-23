@@ -1,0 +1,37 @@
+# name: test/sql/copy/csv/csv_write_zstd.test_slow
+# description: Test round-trip writing of zstd CSV files
+# group: [csv]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+foreach csv_name greek_utf8.csv imdb_movie_info_escaped.csv lineitem_sample.csv ncvoter.csv nfc_normalization.csv ontime_sample.csv voter.tsv web_page.csv
+
+statement ok
+CREATE TABLE csv_data AS SELECT * FROM 'test/sql/copy/csv/data/real/${csv_name}';
+
+statement ok
+COPY csv_data TO '__TEST_DIR__/${csv_name}.zst' (COMPRESSION ZSTD);
+
+statement ok
+CREATE TABLE csv_data_zst AS SELECT * FROM '__TEST_DIR__/${csv_name}.zst';
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM csv_data EXCEPT SELECT * FROM csv_data_zst)
+----
+0
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM csv_data_zst EXCEPT SELECT * FROM csv_data)
+----
+0
+
+statement ok
+DROP TABLE csv_data;
+
+statement ok
+DROP TABLE csv_data_zst;
+
+endloop

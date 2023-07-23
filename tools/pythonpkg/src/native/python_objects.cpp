@@ -277,7 +277,7 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
-Value PyDateTime::ToDuckValue() {
+Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
 	auto timestamp = ToTimestamp();
 	if (tzone_obj != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
@@ -286,7 +286,21 @@ Value PyDateTime::ToDuckValue() {
 		timestamp = Interval::Add(timestamp, utc_offset);
 		return Value::TIMESTAMPTZ(timestamp);
 	}
-	return Value::TIMESTAMP(timestamp);
+	switch (target_type.id()) {
+	case LogicalTypeId::UNKNOWN:
+	case LogicalTypeId::TIMESTAMP: {
+		return Value::TIMESTAMP(timestamp);
+	}
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+		// Because the 'Time::FromTime' method constructs a regular (usecond) timestamp, this is not compatible with
+		// creating sec/ms/ns timestamps
+		throw NotImplementedException("Conversion from 'datetime' to type %s is not implemented yet",
+		                              target_type.ToString());
+	default:
+		throw ConversionException("Could not convert 'datetime' to type %s", target_type.ToString());
+	}
 }
 
 date_t PyDateTime::ToDate() {
@@ -378,6 +392,9 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
+	case LogicalTypeId::UNION: {
+		return PythonObject::FromValue(UnionValue::GetValue(val), UnionValue::GetType(val));
+	}
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:

@@ -179,6 +179,26 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "parallel") {
 		parallel_mode = ParseBoolean(value, loption) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
+	} else if (loption == "rejects_table") {
+		// skip, handled in SetRejectsOptions
+		auto table_name = ParseString(value, loption);
+		if (table_name.empty()) {
+			throw BinderException("REJECTS_TABLE option cannot be empty");
+		}
+		rejects_table_name = table_name;
+	} else if (loption == "rejects_recovery_columns") {
+		// Get the list of columns to use as a recovery key
+		auto &children = ListValue::GetChildren(value);
+		for (auto &child : children) {
+			auto col_name = child.GetValue<string>();
+			rejects_recovery_columns.push_back(col_name);
+		}
+	} else if (loption == "rejects_limit") {
+		int64_t limit = ParseInteger(value, loption);
+		if (limit < 0) {
+			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
+		}
+		rejects_limit = limit;
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

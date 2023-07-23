@@ -528,7 +528,12 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	auto &hfs = (HTTPFileSystem &)file_system;
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		throw InternalException("State was not defined in this HTTP File Handle");
+		if (!opener) {
+			// If opener is not available (e.g., FileExists()), we create the HTTPState here.
+			state = make_shared<HTTPState>();
+		} else {
+			throw InternalException("State was not defined in this HTTP File Handle");
+		}
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);

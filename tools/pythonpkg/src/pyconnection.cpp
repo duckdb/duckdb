@@ -152,6 +152,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
+	    .def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
@@ -202,7 +203,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation");
+	             py::arg("query"), py::arg("alias") = "");
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -334,6 +335,10 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	}
 	auto &context = *connection->context;
 
+	if (context.transaction.HasActiveTransaction()) {
+		throw InvalidInputException(
+		    "This function can not be called with an active transaction!, commit or abort the existing one first");
+	}
 	if (registered_functions.find(name) != registered_functions.end()) {
 		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
 		                              "functions with the same name is not supported yet, please remove it first",
@@ -902,9 +907,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
@@ -913,9 +921,12 @@ Use duckdb.sql to run arbitrary SQL queries.)";
 	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
@@ -953,7 +964,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 			}
 		}
 		if (values.empty()) {
-			return nullptr;
+			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
 		}
 	}
 	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));
@@ -1200,6 +1211,13 @@ void DuckDBPyConnection::Close() {
 		cur->Close();
 	}
 	cursors.clear();
+}
+
+void DuckDBPyConnection::Interrupt() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	connection->Interrupt();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {

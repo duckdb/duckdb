@@ -75,6 +75,8 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
+	//! Use range joins for inequalities, even if there are equality predicates
+	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
@@ -95,6 +97,9 @@ struct ClientConfig {
 
 	//! The maximum amount of pivot columns
 	idx_t pivot_limit = 100000;
+
+	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
+	idx_t pivot_filter_threshold = 10;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;

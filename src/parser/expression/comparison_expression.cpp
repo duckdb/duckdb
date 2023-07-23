@@ -9,6 +9,9 @@
 
 namespace duckdb {
 
+ComparisonExpression::ComparisonExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::COMPARISON) {
+}
+
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                            unique_ptr<ParsedExpression> right)
     : ParsedExpression(type, ExpressionClass::COMPARISON), left(std::move(left)), right(std::move(right)) {
@@ -43,19 +46,6 @@ unique_ptr<ParsedExpression> ComparisonExpression::Deserialize(ExpressionType ty
 	auto left_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto right_child = reader.ReadRequiredSerializable<ParsedExpression>();
 	return make_uniq<ComparisonExpression>(type, std::move(left_child), std::move(right_child));
-}
-
-void ComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-}
-
-unique_ptr<ParsedExpression> ComparisonExpression::FormatDeserialize(ExpressionType type,
-                                                                     FormatDeserializer &deserializer) {
-	auto left = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("left");
-	auto right = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("right");
-	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 } // namespace duckdb
