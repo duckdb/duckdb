@@ -3,6 +3,8 @@
 
 #include "duckdb/common/binary_util.hpp"
 
+#define MBEDTLS_ALLOW_PRIVATE_ACCESS
+
 namespace duckdb {
 
 SHA512Context::SHA512Context() {

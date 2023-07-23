@@ -8,8 +8,6 @@
 
 #pragma once
 
-#define MBEDTLS_ALLOW_PRIVATE_ACCESS
-
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "mbedtls/sha512.h"
