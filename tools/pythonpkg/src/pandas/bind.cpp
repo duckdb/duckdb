@@ -9,7 +9,8 @@ namespace {
 
 struct PandasBindColumn {
 public:
-	PandasBindColumn(py::handle name, py::handle type, py::object column) : name(name), type(type), handle(column) {
+	PandasBindColumn(py::handle name, py::handle type, py::object column)
+	    : name(name), type(type), handle(std::move(column)) {
 	}
 
 public:
@@ -43,7 +44,7 @@ private:
 
 }; // namespace
 
-static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data,
+static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &bind_data,
                               const ClientContext &context) {
 	LogicalType column_type;
 	auto &column = column_p.handle;
