@@ -116,17 +116,6 @@ protected:
 		OnListEnd(count);
 	}
 
-	// We need to special case vector<bool> because elements of vector<bool> cannot be referenced
-	template <>
-	void WriteValue(const vector<bool> &vec) {
-		auto count = vec.size();
-		OnListBegin(count);
-		for (auto item : vec) {
-			WriteValue(item);
-		}
-		OnListEnd(count);
-	}
-
 	template <class T>
 	void WriteValue(const unsafe_vector<T> &vec) {
 		auto count = vec.size();
@@ -265,5 +254,9 @@ protected:
 		WriteValue(value.index);
 	}
 };
+
+// We need to special case vector<bool> because elements of vector<bool> cannot be referenced
+template <>
+void FormatSerializer::WriteValue(const vector<bool> &vec);
 
 } // namespace duckdb
