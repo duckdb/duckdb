@@ -1,4 +1,5 @@
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/limits.hpp"
@@ -261,6 +262,17 @@ bool Uhugeint::TryCast(uhugeint_t input, uhugeint_t &result) {
 }
 
 template <>
+bool Uhugeint::TryCast(uhugeint_t input, hugeint_t &result) {
+	if (input > uhugeint_t(NumericLimits<hugeint_t>::Maximum())) {
+		return false;
+	}
+
+	result.lower = input.lower;
+	result.upper = input.upper;
+	return true;
+}
+
+template <>
 bool Uhugeint::TryCast(uhugeint_t input, float &result) {
 	double dbl_result;
 	Uhugeint::TryCast(input, dbl_result);
@@ -397,6 +409,11 @@ uhugeint_t::uhugeint_t(uint64_t value) {
 	this->upper = 0;
 }
 
+uhugeint_t::uhugeint_t(const hugeint_t &value) {
+	this->lower = value.lower;
+	this->upper = value.upper;
+}
+
 bool uhugeint_t::operator==(const uhugeint_t &rhs) const {
 	return Uhugeint::Equals(*this, rhs);
 }
@@ -439,6 +456,10 @@ uhugeint_t uhugeint_t::operator/(const uhugeint_t &rhs) const {
 
 uhugeint_t uhugeint_t::operator%(const uhugeint_t &rhs) const {
 	return Uhugeint::Modulo(*this, rhs);
+}
+
+uhugeint_t uhugeint_t::operator-() const {
+	return Uhugeint::Negate(*this);
 }
 
 uhugeint_t uhugeint_t::operator>>(const uhugeint_t &rhs) const {
@@ -547,6 +568,10 @@ uhugeint_t &uhugeint_t::operator^=(const uhugeint_t &rhs) {
 
 string uhugeint_t::ToString() const {
 	return Uhugeint::ToString(*this);
+}
+
+uhugeint_t::operator hugeint_t() const {
+	return hugeint_t(this->upper, this->lower);
 }
 
 } // namespace duckdb

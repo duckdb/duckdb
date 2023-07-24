@@ -44,6 +44,15 @@ public:
 		return result;
 	}
 
+	// "The negative of an unsigned quantity is computed by subtracting its value from 2^n, where n is the number of bits in the promoted operand."
+	static void NegateInPlace(uhugeint_t &input) {
+		input = NumericLimits<uhugeint_t>::Maximum() - input;
+	}
+	static uhugeint_t Negate(uhugeint_t input) {
+		NegateInPlace(input);
+		return input;
+	}
+
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs);

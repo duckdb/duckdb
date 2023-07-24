@@ -97,6 +97,11 @@ hugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 }
 
 template <>
+uhugeint_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
+	return v.value_.uhugeint;
+}
+
+template <>
 uint8_t GetNumericValueUnion::Operation(const NumericValueUnion &v) {
 	return v.value_.utinyint;
 }
@@ -302,7 +307,7 @@ void SetNumericValueInternal(const Value &input, const LogicalType &type, Numeri
 		val.value_.hugeint = HugeIntValue::Get(input);
 		break;
 	case PhysicalType::UINT128:
-		val.value_.hugeint = UhugeIntValue::Get(input);
+		val.value_.uhugeint = UhugeIntValue::Get(input);
 		break;
 	case PhysicalType::FLOAT:
 		val.value_.float_ = FloatValue::Get(input);
@@ -447,7 +452,7 @@ void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, 
 		writer.WriteField<hugeint_t>(val.value_.hugeint);
 		break;
 	case PhysicalType::UINT128:
-		writer.WriteField<uhugeint_t>(val.value_.hugeint);
+		writer.WriteField<uhugeint_t>(val.value_.uhugeint);
 		break;
 	case PhysicalType::FLOAT:
 		writer.WriteField<float>(val.value_.float_);

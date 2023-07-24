@@ -3,6 +3,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
@@ -178,6 +179,29 @@ idx_t BitStringAggOperation::GetRange(hugeint_t min, hugeint_t max) {
 	}
 	idx_t range;
 	if (!Hugeint::TryCast(result + 1, range)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	return range;
+}
+
+template <>
+void BitStringAggOperation::Execute(BitAggState<uhugeint_t> &state, uhugeint_t input, uhugeint_t min) {
+	idx_t val;
+	if (Uhugeint::TryCast(input - min, val)) {
+		Bit::SetBit(state.value, val, 1);
+	} else {
+		throw OutOfRangeException("Range too large for bitstring aggregation");
+	}
+}
+
+template <>
+idx_t BitStringAggOperation::GetRange(uhugeint_t min, uhugeint_t max) {
+	uhugeint_t result;
+	if (!TrySubtractOperator::Operation(max, min, result)) {
+		return NumericLimits<idx_t>::Maximum();
+	}
+	idx_t range;
+	if (!Uhugeint::TryCast(result + 1, range)) {
 		return NumericLimits<idx_t>::Maximum();
 	}
 	return range;

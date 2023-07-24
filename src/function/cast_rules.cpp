@@ -308,7 +308,7 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	case LogicalTypeId::HUGEINT:
 		return ImplicitCastHugeint(to);
 	case LogicalTypeId::UHUGEINT:
-		return ImplicitCastUhugeint(to);
+		return ImplicitCastHugeint(to);
 	case LogicalTypeId::FLOAT:
 		return ImplicitCastFloat(to);
 	case LogicalTypeId::DOUBLE:

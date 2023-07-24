@@ -6,6 +6,8 @@
 
 namespace duckdb {
 
+struct uhugeint_t;
+
 struct hugeint_t {
 public:
 	uint64_t lower;
@@ -14,6 +16,7 @@ public:
 public:
 	hugeint_t() = default;
 	DUCKDB_API hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
+	DUCKDB_API explicit hugeint_t(const uhugeint_t &value);
 	constexpr hugeint_t(int64_t upper, uint64_t lower) : lower(lower), upper(upper) {
 	}
 	constexpr hugeint_t(const hugeint_t &rhs) = default;
@@ -58,6 +61,9 @@ public:
 	DUCKDB_API hugeint_t &operator&=(const hugeint_t &rhs);
 	DUCKDB_API hugeint_t &operator|=(const hugeint_t &rhs);
 	DUCKDB_API hugeint_t &operator^=(const hugeint_t &rhs);
+
+	// cast
+	DUCKDB_API explicit operator uhugeint_t() const;
 };
 
 } // namespace duckdb

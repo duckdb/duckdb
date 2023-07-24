@@ -331,16 +331,16 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) || type == PhysicalType::INTERVAL ||
-	       type == PhysicalType::INT128 || type == PhysicalType::INT128;
+	       type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 bool TypeIsInteger(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 
 string LogicalType::ToString() const {

@@ -16,6 +16,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -308,10 +309,15 @@ private:
 		return ReadInterval();
 	}
 
-	// Deserialize a interval_t
+	// Deserialize a hugeint
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
 		return ReadHugeInt();
+	}
+
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, uhugeint_t>::value, T>::type Read() {
+		return static_cast<uhugeint_t>(ReadHugeInt());
 	}
 
 protected:

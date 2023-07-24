@@ -82,6 +82,11 @@ duckdb::string_t StringCast::Operation(hugeint_t input, Vector &vector) {
 }
 
 template <>
+duckdb::string_t StringCast::Operation(uhugeint_t input, Vector &vector) {
+	return UhugeintToStringCast::Format(input, vector);
+}
+
+template <>
 duckdb::string_t StringCast::Operation(date_t input, Vector &vector) {
 	if (input == date_t::infinity()) {
 		return StringVector::AddString(vector, Date::PINF);

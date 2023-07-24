@@ -113,6 +113,10 @@ void BinarySerializer::WriteValue(hugeint_t value) {
 	Write(value);
 }
 
+void BinarySerializer::WriteValue(uhugeint_t value) {
+	Write(value);
+}
+
 void BinarySerializer::WriteValue(float value) {
 	Write(value);
 }

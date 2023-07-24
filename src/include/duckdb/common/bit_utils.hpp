@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/hugeint.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 #ifdef _MSC_VER
 #define __restrict__
@@ -125,6 +126,35 @@ struct CountZeros<hugeint_t> {
 	}
 
 	inline static int Trailing(hugeint_t value) {
+		const uint64_t upper = (uint64_t)value.upper;
+		const uint64_t lower = value.lower;
+
+		if (lower) {
+			return __builtin_ctzll(lower);
+		} else if (upper) {
+			return 64 + __builtin_ctzll(upper);
+		} else {
+			return 128;
+		}
+	}
+};
+
+template <>
+struct CountZeros<uhugeint_t> {
+	inline static int Leading(uhugeint_t value) {
+		const uint64_t upper = (uint64_t)value.upper;
+		const uint64_t lower = value.lower;
+
+		if (upper) {
+			return __builtin_clzll(upper);
+		} else if (lower) {
+			return 64 + __builtin_clzll(lower);
+		} else {
+			return 128;
+		}
+	}
+
+	inline static int Trailing(uhugeint_t value) {
 		const uint64_t upper = (uint64_t)value.upper;
 		const uint64_t lower = value.lower;
 

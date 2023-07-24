@@ -91,6 +91,7 @@ BoundCastInfo DefaultCasts::GetDefaultCastFunction(BindCastInput &input, const L
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:

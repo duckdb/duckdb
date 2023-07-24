@@ -195,6 +195,15 @@ void JsonSerializer::WriteValue(hugeint_t value) {
 	stack.pop_back();
 }
 
+void JsonSerializer::WriteValue(uhugeint_t value) {
+	auto val = yyjson_mut_obj(doc);
+	PushValue(val);
+	stack.push_back(val);
+	WriteProperty("upper", value.upper);
+	WriteProperty("lower", value.lower);
+	stack.pop_back();
+}
+
 void JsonSerializer::WriteValue(float value) {
 	auto val = yyjson_mut_real(doc, value);
 	PushValue(val);

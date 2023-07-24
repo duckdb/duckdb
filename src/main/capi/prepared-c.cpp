@@ -2,12 +2,14 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
+using duckdb::uhugeint_t;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;

@@ -1061,6 +1061,10 @@ uint64_t Value::GetValue() const {
 	return GetValueInternal<uint64_t>();
 }
 template <>
+uhugeint_t Value::GetValue() const {
+	return GetValueInternal<uhugeint_t>();
+}
+template <>
 string Value::GetValue() const {
 	return ToString();
 }
@@ -1440,6 +1444,10 @@ uint64_t UBigIntValue::Get(const Value &value) {
 	return value.GetValueUnsafe<uint64_t>();
 }
 
+uhugeint_t UhugeIntValue::Get(const Value &value) {
+	return value.GetValueUnsafe<uhugeint_t>();
+}
+
 float FloatValue::Get(const Value &value) {
 	return value.GetValueUnsafe<float>();
 }
@@ -1532,7 +1540,7 @@ hugeint_t IntegralValue::Get(const Value &value) {
 	case PhysicalType::UINT64:
 		return UBigIntValue::Get(value);
 	case PhysicalType::UINT128:
-		return UhugeIntValue::Get(value);
+		return static_cast<hugeint_t>(UhugeIntValue::Get(value));
 	default:
 		throw InternalException("Invalid internal type \"%s\" for IntegralValue::Get", value.type().ToString());
 	}
@@ -1705,7 +1713,7 @@ void Value::Serialize(Serializer &main_serializer) const {
 			serializer.Write<hugeint_t>(value_.hugeint);
 			break;
 		case PhysicalType::UINT128:
-			serializer.Write<uhugeint_t>(value_.hugeint);
+			serializer.Write<uhugeint_t>(value_.uhugeint);
 			break;
 		case PhysicalType::FLOAT:
 			serializer.Write<float>(value_.float_);

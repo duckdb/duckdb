@@ -1,5 +1,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -106,5 +107,11 @@ template <>
 std::string NumericHelper::ToString(hugeint_t value) {
 	return Hugeint::ToString(value);
 }
+
+template <>
+std::string NumericHelper::ToString(uhugeint_t value) {
+	return Uhugeint::ToString(value);
+}
+
 
 } // namespace duckdb

@@ -24,6 +24,14 @@ struct TemplatedIntegralCompress<hugeint_t, RESULT_TYPE> {
 	}
 };
 
+template <class RESULT_TYPE>
+struct TemplatedIntegralCompress<uhugeint_t, RESULT_TYPE> {
+	static inline RESULT_TYPE Operation(const uhugeint_t &input, const uhugeint_t &min_val) {
+		D_ASSERT(min_val <= input);
+		return (input - min_val).lower;
+	}
+};
+
 template <class INPUT_TYPE, class RESULT_TYPE>
 static void IntegralCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);

@@ -296,6 +296,7 @@ private:
 		uint32_t uinteger;
 		uint64_t ubigint;
 		hugeint_t hugeint;
+		uhugeint_t uhugeint;
 		float float_;   // NOLINT
 		double double_; // NOLINT
 		uintptr_t pointer;
@@ -356,6 +357,10 @@ struct UIntegerValue {
 
 struct UBigIntValue {
 	DUCKDB_API static uint64_t Get(const Value &value);
+};
+
+struct UhugeIntValue {
+	DUCKDB_API static uhugeint_t Get(const Value &value);
 };
 
 struct FloatValue {

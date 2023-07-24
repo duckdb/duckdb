@@ -76,6 +76,7 @@ public:
 	void WriteValue(uint64_t value) final;
 	void WriteValue(int64_t value) final;
 	void WriteValue(hugeint_t value) final;
+	void WriteValue(uhugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
 	void WriteValue(interval_t value) final;
