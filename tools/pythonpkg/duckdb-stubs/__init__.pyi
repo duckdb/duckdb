@@ -39,6 +39,8 @@ ANALYZE: ExplainType
 DEFAULT: PythonExceptionHandling
 RETURN_NULL: PythonExceptionHandling
 
+__version__: str
+
 __interactive__: bool
 __jupyter__: bool
 
