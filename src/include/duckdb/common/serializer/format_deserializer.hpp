@@ -218,6 +218,28 @@ private:
 		return map;
 	}
 
+	template <typename T = void>
+	inline typename std::enable_if<is_map<T>::value, T>::type Read() {
+		using KEY_TYPE = typename is_map<T>::KEY_TYPE;
+		using VALUE_TYPE = typename is_map<T>::VALUE_TYPE;
+
+		T map;
+		auto size = OnMapBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			auto key = Read<KEY_TYPE>();
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			auto value = Read<VALUE_TYPE>();
+			OnMapValueEnd();
+			OnMapEntryEnd();
+			map[std::move(key)] = std::move(value);
+		}
+		OnMapEnd();
+		return map;
+	}
+
 	// Deserialize an unordered set
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_set<T>::value, T>::type Read() {

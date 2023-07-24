@@ -168,6 +168,24 @@ protected:
 		OnMapEnd(count);
 	}
 
+	// Map
+	template <class K, class V, class HASH, class CMP>
+	void WriteValue(const duckdb::map<K, V, HASH, CMP> &map) {
+		auto count = map.size();
+		OnMapBegin(count);
+		for (auto &item : map) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			WriteValue(item.first);
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			WriteValue(item.second);
+			OnMapValueEnd();
+			OnMapEntryEnd();
+		}
+		OnMapEnd(count);
+	}
+
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
