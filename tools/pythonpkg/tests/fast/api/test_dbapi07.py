@@ -1,7 +1,8 @@
 # timestamp ms precision
 
-import numpy 
+import numpy
 from datetime import datetime
+
 
 class TestNumpyTimestampMilliseconds(object):
     def test_numpy_timestamp(self, duckdb_cursor):

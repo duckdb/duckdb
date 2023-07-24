@@ -13,7 +13,7 @@ from python_helpers import open_utf8
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage', '.benchmark']
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage', '.benchmark', '.py']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
@@ -161,7 +161,8 @@ format_commands = {
     '.h': cpp_format_command,
     '.hh': cpp_format_command,
     '.cc': cpp_format_command,
-    '.txt': cmake_format_command
+    '.txt': cmake_format_command,
+    '.py': 'black --quiet - --skip-string-normalization --line-length 120 --stdin-filename',
 }
 
 difference_files = []
@@ -234,7 +235,7 @@ def get_formatted_text(f, full_path, directory, ext):
         header.append('\n')
         return ''.join(header + lines)
     proc_command = format_commands[ext].split(' ') + [full_path]
-    proc = subprocess.Popen(proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=open(full_path) if ext == '.py' else None)
     new_text = proc.stdout.read().decode('utf8')
     stderr = proc.stderr.read().decode('utf8')
     if len(stderr) > 0:
