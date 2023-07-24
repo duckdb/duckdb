@@ -44,7 +44,8 @@ class TestTypes(object):
 			select * EXCLUDE (
 				small_enum,
 				medium_enum,
-				large_enum
+				large_enum,
+				'union'
 			) from test_all_types()
 		"""
         )
