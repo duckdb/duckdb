@@ -178,7 +178,18 @@ for res in other_results:
     print(f"New timing: {res[2]}")
     print("")
 
-print(f"Old timing geometric mean: {geomean(complete_timings[old_runner])}")
-print(f"New timing geometric mean: {geomean(complete_timings[new_runner])}")
+time_a = geomean(complete_timings[old_runner])
+time_b = geomean(complete_timings[new_runner])
+
+print("")
+if time_a > time_b * 1.01:
+    print(f"Old timing geometric mean: {time_a}")
+    print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
+elif time_b > time_a * 1.01:
+    print(f"Old timing geometric mean: {time_a}, roughly {int((time_b - time_a) * 100.0 / time_b)}% faster")
+    print(f"New timing geometric mean: {time_b}")
+else:
+    print(f"Old timing geometric mean: {time_a}")
+    print(f"New timing geometric mean: {time_b}")
 
 exit(exit_code)
