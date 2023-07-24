@@ -121,6 +121,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(optional_ptr<JoinRelationSet
 	}
 	idx_t cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
+	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet(*set.get());
 	return result;
 }
 
@@ -138,7 +139,10 @@ JoinNode &PlanEnumerator::EmitPair(optional_ptr<JoinRelationSet> left, optional_
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set.get());
 	auto new_cost = new_plan->cost;
-	auto old_cost = entry->second->cost;
+	idx_t old_cost = NumericLimits<idx_t>::Maximum();
+	if (entry != plans.end()) {
+		old_cost = entry->second->cost;
+	}
 	if (entry == plans.end() || new_cost < old_cost) {
 		// the new plan costs less than the old plan. Update our DP tree and cost tree
 		auto &result = *new_plan;
@@ -492,17 +496,21 @@ void PlanEnumerator::InitLeafPlans() {
 	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	vector<NodeOp> nodes_ops;
-	auto all_relations = query_graph_manager.relation_manager.GetRelations();
-	for (idx_t i = 0; i < all_relations.size(); i++) {
-		auto &rel = all_relations.at(i);
+	// first initialize equivalent relations based on the filters
+	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
+
+	// then update the total domains based on the cardinalities of each relation.
+	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+	for (idx_t i = 0; i < relation_stats.size(); i++) {
 		auto relation_set = query_graph_manager.set_manager.GetJoinRelation(i);
 		auto join_node = make_uniq<JoinNode>(relation_set);
 		join_node->cost = 0;
 		plans[relation_set.get()] = std::move(join_node);
-
-		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(relation_set, rel);
+		auto stats = relation_stats.at(i);
+		stats.filter_strength = 1;
+		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(relation_set, stats);
 	}
-	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
+
 }
 
 unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product) {

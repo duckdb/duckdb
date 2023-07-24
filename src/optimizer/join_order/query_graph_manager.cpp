@@ -13,16 +13,20 @@ namespace duckdb {
 
 bool QueryGraphManager::Build(LogicalOperator *op) {
 	vector<reference<LogicalOperator>> filter_operators;
+	// have the relation manager extract the join relations and create a reference list of all the
+	// filter operators.
 	auto can_reorder = relation_manager.ExtractJoinRelations(*op, filter_operators);
-	if (relation_manager.NumRelations() <= 1 || !can_reorder) {
+	auto num_relations = relation_manager.NumRelations();
+	if (num_relations <= 1 || !can_reorder) {
 		// nothing to optimize/reorder
 		return false;
 	}
-	filters_and_bindings = std::move(relation_manager.ExtractEdges(*op, filter_operators, set_manager));
+	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
+	filters_and_bindings = relation_manager.ExtractEdges(*op, filter_operators, set_manager);
 	// Create the query_graph hyper edges
 	CreateHyperGraphEdges();
 	return true;
-	D_ASSERT(!query_graph.ToString().empty());
+//	D_ASSERT(!query_graph.ToString().empty());
 }
 
 void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
@@ -71,8 +75,8 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			auto &comparison = filter->Cast<BoundComparisonExpression>();
 			// extract the bindings that are required for the left and right side of the comparison
 			unordered_set<idx_t> left_bindings, right_bindings;
-			ExtractBindings(*comparison.left, left_bindings);
-			ExtractBindings(*comparison.right, right_bindings);
+			relation_manager.ExtractBindings(*comparison.left, left_bindings);
+			relation_manager.ExtractBindings(*comparison.right, right_bindings);
 			GetColumnBinding(*comparison.left, filter_info->left_binding);
 			GetColumnBinding(*comparison.right, filter_info->right_binding);
 			if (!left_bindings.empty() && !right_bindings.empty()) {
@@ -97,10 +101,10 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 	}
 }
 
-static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel) {
-	auto &children = rel.parent->children;
+static unique_ptr<LogicalOperator> ExtractJoinRelation(unique_ptr<SingleJoinRelation> &rel) {
+	auto &children = rel->parent->children;
 	for (idx_t i = 0; i < children.size(); i++) {
-		if (children[i].get() == &rel.op) {
+		if (children[i].get() == &rel->op) {
 			// found it! take ownership o/**/f it from the parent
 			auto result = std::move(children[i]);
 			children.erase(children.begin() + i);
@@ -137,7 +141,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			for (auto &filter_ref : node.info->filters) {
 				auto f = filter_ref.get();
 				// extract the filter from the operator it originally belonged to
-				D_ASSERT(filters_and_bindings[f->filter_index]);
+				D_ASSERT(filters_and_bindings[f->filter_index]->filter);
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);
 				auto condition = std::move(filter_and_binding->filter);
 				// now create the actual join condition
@@ -177,18 +181,18 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what
 	//  the cost and cardinality are
 	//	result_operator->estimated_props = node.estimated_props->Copy();
-	result_operator->estimated_cardinality = result_operator->estimated_props->GetCardinality<idx_t>();
+	result_operator->estimated_cardinality = node.cardinality;
 	result_operator->has_estimated_cardinality = true;
 	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
 	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 		// FILTER on top of GET, add estimated properties to both
-		auto &filter_props = *result_operator->estimated_props;
+        // auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
-		//		child_operator.estimated_props = make_uniq<EstimatedProperties>(filter_props.GetCardinality<double>() /
+		//	child_operator.estimated_props = make_uniq<EstimatedProperties>(filter_props.GetCardinality<double>() /
 		//		                                                                    CardinalityEstimator::DEFAULT_SELECTIVITY,
 		//		                                                                filter_props.GetCost<double>());
-		child_operator.estimated_cardinality = child_operator.estimated_props->GetCardinality<idx_t>();
-		child_operator.has_estimated_cardinality = true;
+		child_operator.estimated_cardinality = node.cardinality;
+//		child_operator.has_estimated_cardinality = true;
 	}
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins
@@ -196,7 +200,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	for (auto &filter_info : filters_and_bindings) {
 		// check if the filter has already been extracted
 		auto &info = *filter_info;
-		if (filters_and_bindings[info.filter_index]) {
+		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
 			if (info.set->count > 0 && JoinRelationSet::IsSubset(result_relation, info.set)) {
@@ -294,7 +298,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	// perform the final pushdown of remaining filters
 	for (auto &filter : filters_and_bindings) {
 		// check if the filter has already been extracted
-		if (filter) {
+		if (filter->filter) {
 			// if not we need to push it
 			join_tree.op = PushFilter(std::move(join_tree.op), std::move(filter->filter));
 		}

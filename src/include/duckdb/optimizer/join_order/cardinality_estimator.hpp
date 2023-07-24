@@ -27,6 +27,7 @@ struct RelationAttributes {
 class JoinNode;
 struct FilterInfo;
 struct SingleJoinRelation;
+struct RelationStats;
 
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
@@ -94,10 +95,10 @@ public:
 	//	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
 
 	void InitTotalDomains();
-	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, reference<SingleJoinRelation> rel);
+	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
-	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, SingleJoinRelation &rel);
+	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
 	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
 

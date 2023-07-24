@@ -32,6 +32,8 @@ public:
 	//! in the cost model is error prone. If the plan enumerator join node is updated and not the cost model
 	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
 	idx_t cost;
+	//! used only to populate logical operators with estimated caridnalities after the best join plan has been found.
+	idx_t cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
 	JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,

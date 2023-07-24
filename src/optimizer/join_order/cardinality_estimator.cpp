@@ -7,6 +7,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
 // The filter was made on top of a logical sample or other projection,
@@ -262,11 +264,11 @@ bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	return a.tdom_no_hll > b.tdom_no_hll;
 }
 
-void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, SingleJoinRelation &rel) {
+void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
 	// Get the join relation set
-	D_ASSERT(rel.stats.stats_initialized);
-	auto relation_cardinality = rel.stats.cardinality;
-	auto relation_filter = rel.stats.filter_strength;
+	D_ASSERT(stats.stats_initialized);
+	auto relation_cardinality = stats.cardinality;
+	auto relation_filter = stats.filter_strength;
 
 	auto card_helper = CardinalityHelper(relation_cardinality, relation_filter);
 	relation_set_2_cardinality[set.get()] = card_helper;
@@ -275,36 +277,47 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 	// Store the cardinality here locally cardinality estimator
 	// update the total domain.
 	// Then update total domains.
-	UpdateTotalDomains(set, rel);
+	UpdateTotalDomains(set, stats);
 
 	// sort relations from greatest tdom to lowest tdom.
 	std::sort(relations_to_tdoms.begin(), relations_to_tdoms.end(), SortTdoms);
 }
 
-void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, reference<SingleJoinRelation> rel) {
+void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
 	//	auto relation_id = node.set.relations[0];
-	relation_attributes[relation_id].cardinality = rel.get().stats.cardinality;
+	relation_attributes[relation_id].cardinality = stats.cardinality;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
-	D_ASSERT(rel.get().stats.column_distinct_count.size() >= 1);
+	D_ASSERT(stats.column_distinct_count.size() >= 1);
 
-	for (auto column : rel.get().stats.column_distinct_count) {
-		// for every column here, we have the distinct count
+	for (idx_t i = 0; i < stats.column_distinct_count.size(); i++) {
+		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
+		//! the cardinality
+		// Update the relation_to_tdom set with the estimated distinct count (or tdom) calculated above
+		auto key = ColumnBinding(relation_id, i);
+		for (auto &relation_to_tdom : relations_to_tdoms) {
+			column_binding_set_t i_set = relation_to_tdom.equivalent_relations;
+			if (i_set.find(key) == i_set.end()) {
+				continue;
+			}
+			auto distinct_count = stats.column_distinct_count.at(i);
+			if (relation_to_tdom.tdom_hll < distinct_count) {
+				relation_to_tdom.tdom_hll = distinct_count;
+				relation_to_tdom.has_tdom_hll = true;
+			}
+			if (relation_to_tdom.tdom_no_hll >= distinct_count) {
+				relation_to_tdom.tdom_no_hll = distinct_count;
+			}
+			break;
+		}
 
-		// Create a column binding for the columns
-		// Add the column binding and distinct count to relation2tdom.
 	}
 }
 
-// optional_ptr<TableFilterSet> CardinalityEstimator::GetTableFilters(LogicalOperator &op, idx_t table_index) {
-//	auto get = GetLogicalGet(op, table_index);
-//	return get ? &get->table_filters : nullptr;
-// }
-
-// idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter
-// &filter,
-//                                                   unique_ptr<BaseStatistics> base_stats) {
+//
+//static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter
+//&filter, unique_ptr<BaseStatistics> base_stats) {
 //	auto has_equality_filter = false;
 //	auto cardinality_after_filters = cardinality;
 //	for (auto &child_filter : filter.child_filters) {
@@ -332,10 +345,10 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 //		has_equality_filter = true;
 //	}
 //	return cardinality_after_filters;
-// }
-
-// idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-//                                                  unique_ptr<BaseStatistics> base_stats) {
+//}
+//
+//static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
+//											  unique_ptr<BaseStatistics> base_stats) {
 //	auto has_equality_filter = false;
 //	auto cardinality_after_filters = cardinality;
 //	for (auto &child_filter : filter.child_filters) {
@@ -359,29 +372,27 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 //	}
 //	D_ASSERT(cardinality_after_filters > 0);
 //	return cardinality_after_filters;
-// }
-
-// idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet
-// &table_filters,
-//                                                 idx_t table_index) {
+//}
+//
+//static idx_t InspectTableFilters(idx_t cardinality, LogicalGet &get) {
 //	idx_t cardinality_after_filters = cardinality;
-//	auto get = GetLogicalGet(op, table_index);
+//	auto table_filters = get.table_filters;
 //	unique_ptr<BaseStatistics> column_statistics;
 //	for (auto &it : table_filters.filters) {
 //		column_statistics = nullptr;
-//		if (get->bind_data && get->function.name.compare("seq_scan") == 0) {
-//			auto &table_scan_bind_data = get->bind_data->Cast<TableScanBindData>();
-//			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
+//		if (get.bind_data && get.function.name.compare("seq_scan") == 0) {
+//			auto &table_scan_bind_data = get.bind_data->Cast<TableScanBindData>();
+//			column_statistics = get.function.statistics(context, &table_scan_bind_data, it.first);
 //		}
 //		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 //			auto &filter = it.second->Cast<ConjunctionAndFilter>();
 //			idx_t cardinality_with_and_filter =
-//			    InspectConjunctionAND(cardinality, it.first, filter, std::move(column_statistics));
+//				InspectConjunctionAND(cardinality, it.first, filter, std::move(column_statistics));
 //			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 //		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 //			auto &filter = it.second->Cast<ConjunctionOrFilter>();
 //			idx_t cardinality_with_or_filter =
-//			    InspectConjunctionOR(cardinality, it.first, filter, std::move(column_statistics));
+//				InspectConjunctionOR(cardinality, it.first, filter, std::move(column_statistics));
 //			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 //		}
 //	}
@@ -392,34 +403,13 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 //		cardinality_after_filters = MaxValue<idx_t>(cardinality * DEFAULT_SELECTIVITY, 1);
 //	}
 //	return cardinality_after_filters;
-// }
-
-// void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op) {
-//	auto has_logical_filter = IsLogicalFilter(op);
-//	D_ASSERT(node.set.count == 1);
-//	auto relation_id = node.set.relations[0];
+//}
 //
-//	double lowest_card_found = node.GetBaseTableCardinality();
-//	for (auto &column : relation_attributes[relation_id].columns) {
-//		auto card_after_filters = node.GetBaseTableCardinality();
-//		ColumnBinding key = ColumnBinding(relation_id, column);
-//		optional_ptr<TableFilterSet> table_filters;
-//		auto actual_binding = relation_column_to_original_column.find(key);
-//		if (actual_binding != relation_column_to_original_column.end()) {
-//			table_filters = GetTableFilters(op, actual_binding->second.table_index);
-//		}
-//
-//		if (table_filters) {
-//			double inspect_result =
-//			    (double)InspectTableFilters(card_after_filters, op, *table_filters, actual_binding->second.table_index);
-//			card_after_filters = MinValue(inspect_result, (double)card_after_filters);
-//		}
-//		if (has_logical_filter) {
-//			card_after_filters *= DEFAULT_SELECTIVITY;
-//		}
-//		lowest_card_found = MinValue(card_after_filters, lowest_card_found);
+//static idx_t EstimateBaseTableCardinality(LogicalGet &get, idx_t lowest_card_found) {
+//	if (!get.table_filters.filters.empty()) {
+//		auto inspect_result = InspectTableFilters(lowest_card_found, get);
 //	}
-//	node.SetEstimatedCardinality(lowest_card_found);
-// }
+//	return MinValue(card_after_filters, lowest_card_found);
+//}
 
 } // namespace duckdb

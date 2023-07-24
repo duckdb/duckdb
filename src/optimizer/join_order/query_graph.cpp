@@ -3,7 +3,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 

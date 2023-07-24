@@ -22,6 +22,7 @@ namespace duckdb {
 
 struct RelationStats {
 	vector<idx_t> column_distinct_count;
+	vector<string> column_names;
 	idx_t cardinality;
 	double filter_strength;
 	bool stats_initialized = false;
@@ -46,7 +47,6 @@ public:
 	}
 
 	idx_t NumRelations();
-	SingleJoinRelation GetRelation(idx_t relation_id);
 
 	bool ExtractJoinRelations(LogicalOperator &input_op,
 	                          vector<reference<LogicalOperator>> &filter_operators,
@@ -58,14 +58,18 @@ public:
 
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
-	vector<SingleJoinRelation> GetRelations();
+	vector<unique_ptr<SingleJoinRelation>> GetRelations();
+
+	const vector<RelationStats> GetRelationStats();
 	//! A mapping of base table index -> index into relations array (relation number)
 	unordered_map<idx_t, idx_t> relation_mapping;
+
+	void PrintRelationStats();
 
 private:
 	ClientContext &context;
 	//! Set of all relations considered in the join optimizer
-	vector<SingleJoinRelation> relations;
+	vector<unique_ptr<SingleJoinRelation>> relations;
 };
 
 } // namespace duckdb

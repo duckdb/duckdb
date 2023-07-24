@@ -28,7 +28,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// We optimize and non-reorderable relations we come across.
 	bool reorderable = query_graph_manager.Build(op);
 
-	if (reorderable) {
+//	query_graph_manager.relation_manager.PrintRelationStats();
+	if (!reorderable) {
 		// at most one relation, nothing to reorder
 		return plan;
 	}
@@ -89,8 +90,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
 		vector<idx_t> distinct_column_counts;
-		for (auto &relation: query_graph_manager.relation_manager.GetRelations()) {
-			for (auto &distinct_column_count : relation.stats.column_distinct_count) {
+		for (auto &stats: query_graph_manager.relation_manager.GetRelationStats()) {
+			for (auto &distinct_column_count : stats.column_distinct_count) {
 				distinct_column_counts.push_back(distinct_column_count);
 			}
 		}

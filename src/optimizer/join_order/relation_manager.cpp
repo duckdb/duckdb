@@ -1,15 +1,28 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/optimizer/join_order/statistics_extractor.hpp"
 
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
 
+#include "iostream"
+
 namespace duckdb {
 
-vector<SingleJoinRelation> RelationManager::GetRelations() {
-	return relations;
+
+const vector<RelationStats> RelationManager::GetRelationStats() {
+	vector<RelationStats> ret;
+	for (idx_t i = 0; i < relations.size(); i++) {
+		ret.push_back(relations[i]->stats);
+	}
+	return ret;
+}
+
+vector<unique_ptr<SingleJoinRelation>> RelationManager::GetRelations() {
+//	return vector<unique_ptr<SingleJoinRelation>>();
+	return std::move(relations);
 }
 
 idx_t RelationManager::NumRelations() {
@@ -21,7 +34,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
 	D_ASSERT(!parent || parent->children.size() >= 2);
-	auto relation = make_uniq<SingleJoinRelation>(op, parent);
+	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
 	auto table_indexes = op.GetTableIndex();
@@ -43,6 +56,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 		D_ASSERT(relation_mapping.find(table_index) == relation_mapping.end());
 		relation_mapping[table_index] = relation_id;
 	}
+	relations.push_back(std::move(relation));
 	// Add binding information from the nonreorderable join to this relation.
 	//	auto relation_name = GetRelationName(op);
 }
@@ -127,25 +141,19 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			// TODO: Get stats from a logical GET
 			auto &get = op->Cast<LogicalGet>();
 
-			vector<idx_t> all_stats;
+			vector<idx_t> column_distinct_counts;
 			if (get.function.statistics) {
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
 					if (i == DConstants::INVALID_INDEX) {
-						// set distinct count to 0. row_id should not be joined on
-						// TODO: FIX THIS
-						all_stats[i] = 0;
+						// TODO: Is this correct? I imagine if row_id is joined on, this can result in a divide by 0.
+						column_distinct_counts.push_back(0);
 					}
 					auto stats =
 						get.function.statistics(context, get.bind_data.get(), get.column_ids.at(i));
-					all_stats.push_back(stats->GetDistinctCount());
+					column_distinct_counts.push_back(stats->GetDistinctCount());
 				}
 			}
-			auto card = op->EstimateCardinality(context);
-			auto stats = RelationStats();
-			stats.column_distinct_count = all_stats;
-			stats.cardinality = card;
-			stats.filter_strength = 1;
-			stats.stats_initialized = true;
+			auto stats = StatisticsExtractor::ExtractOperatorStats(get, context);
 
 			AddRelation(input_op, parent, stats);
 			return true;
@@ -238,6 +246,17 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 	}
 
 	return filters_and_bindings;
+}
+
+void RelationManager::PrintRelationStats() {
+	for(auto &relation : relations) {
+		auto &stats = relation->stats;
+		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
+		for (idx_t i = 0; i < stats.column_names.size(); i++) {
+			std::cout << stats.column_names.at(i) << " has estimated distinct count " << stats.column_distinct_count.at(i) << std::endl;
+		}
+		std::cout << "table has cardinality " << stats.cardinality << std::endl;
+	}
 }
 
 } // namespace duckdb
