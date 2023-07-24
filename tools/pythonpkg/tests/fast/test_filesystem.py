@@ -192,19 +192,13 @@ class TestPythonFilesystem:
 
         duckdb_cursor.execute("copy (select 1 as a) to 'memory://root' (partition_by (a))")
 
-        assert (
-            memory.open('/root\\a=1\\data_0.csv' if sys.platform == 'win32' else '/root/a=1/data_0.csv').read()
-            == b'1\n'
-        )
+        assert (memory.open('/root/a=1/data_0.csv').read() == b'1\n')
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
         duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a))")
 
-        if sys.platform == 'win32':
-            path = 'memory:///partition\\*\\*.csv'
-        else:
-            path = 'memory:///partition/*/*.csv'
+        path = 'memory:///partition/*/*.csv'
 
         query = "SELECT * FROM read_csv_auto('" + path + "'"
 
