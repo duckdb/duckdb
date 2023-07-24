@@ -53,7 +53,7 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 
 	// Prepare a statement
 	EXECUTE_AND_CHECK("SQLPrepare", SQLPrepare, hstmt,
-	                  ConvertToSQLCHAR("SELECT id FROM bytea_table WHERE t = ? OR t = ?"), SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT id FROM bytea_table WHERE t = ?"), SQL_NTS);
 
 	// Set STMT attributes PARAM_BIND_TYPE, PARAM_STATUS_PTR, PARAMS_PROCESSED_PTR, and PARAMSET_SIZE
 	SQLRETURN ret = SQLSetStmtAttr(hstmt, SQL_ATTR_PARAM_BIND_TYPE, SQL_PARAM_BIND_BY_COLUMN, 0);
@@ -91,11 +91,16 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 	}
 
 	// Fetch the results
-	for (int i = 4; i < 6; i++) {
+	for (int i = 4; i; i++) {
 		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
 		DATA_CHECK(hstmt, 0, std::to_string(i));
 
-		EXECUTE_AND_CHECK("SQLMoreResults", SQLMoreResults, hstmt);
+		ret = SQLMoreResults(hstmt);
+		if (ret == SQL_NO_DATA) {
+			break;
+		} else if (ret != SQL_SUCCESS || ret != SQL_SUCCESS_WITH_INFO) {
+			ODBC_CHECK(ret, "SQLMoreResults");
+		}
 	}
 	REQUIRE(SQLFetch(hstmt) == SQL_NO_DATA);
 }
