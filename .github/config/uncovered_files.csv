@@ -393,7 +393,7 @@ include/duckdb/main/capi/cast/from_decimal.hpp	2
 include/duckdb/main/capi/cast/to_decimal.hpp	38
 include/duckdb/main/client_context.hpp	2
 include/duckdb/main/client_context_file_opener.hpp	3
-include/duckdb/main/chunk_scan_state.hpp 4
+include/duckdb/main/chunk_scan_state.hpp	4
 include/duckdb/main/connection.hpp	32
 include/duckdb/main/connection_manager.hpp	3
 include/duckdb/main/database.hpp	2
@@ -446,12 +446,12 @@ include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
-main/chunk_scan_state.cpp 21
+main/chunk_scan_state.cpp	21
 main/capi/appender-c.cpp	3
 main/capi/arrow-c.cpp	5
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
-main/chunk_scan_state/query_result.cpp 28
+main/chunk_scan_state/query_result.cpp	28
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
