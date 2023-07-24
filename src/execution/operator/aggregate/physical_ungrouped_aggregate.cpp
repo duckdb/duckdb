@@ -299,10 +299,9 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataC
 // Finalize
 //===--------------------------------------------------------------------===//
 
-void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
-                                                 LocalSinkState &lstate) const {
-	auto &global_sink = state.Cast<UngroupedAggregateGlobalState>();
-	auto &source = lstate.Cast<UngroupedAggregateLocalState>();
+void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &global_sink = input.global_state.Cast<UngroupedAggregateGlobalState>();
+	auto &source = input.local_state.Cast<UngroupedAggregateLocalState>();
 
 	if (!distinct_data) {
 		return;
@@ -319,10 +318,10 @@ void PhysicalUngroupedAggregate::CombineDistinct(ExecutionContext &context, Glob
 	}
 }
 
-void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkState &state,
-                                         LocalSinkState &lstate) const {
-	auto &gstate = state.Cast<UngroupedAggregateGlobalState>();
-	auto &source = lstate.Cast<UngroupedAggregateLocalState>();
+SinkCombineResultType PhysicalUngroupedAggregate::Combine(ExecutionContext &context,
+                                                          OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalState>();
+	auto &source = input.local_state.Cast<UngroupedAggregateLocalState>();
 	D_ASSERT(!gstate.finished);
 
 	// finalize: combine the local state into the global state
@@ -330,7 +329,8 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	// use the combine method to combine the partial aggregates
 	lock_guard<mutex> glock(gstate.lock);
 
-	CombineDistinct(context, state, lstate);
+	OperatorSinkCombineInput distinct_input {gstate, source, input.interrupt_state};
+	CombineDistinct(context, distinct_input);
 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
@@ -353,6 +353,8 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, source.child_executor, "child_executor", 0);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 class UngroupedDistinctAggregateFinalizeTask : public ExecutorTask {
@@ -536,11 +538,11 @@ SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline
 }
 
 SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalState>();
+                                                      OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<UngroupedAggregateGlobalState>();
 
 	if (distinct_data) {
-		return FinalizeDistinct(pipeline, event, context, gstate_p);
+		return FinalizeDistinct(pipeline, event, context, input.global_state);
 	}
 
 	D_ASSERT(!gstate.finished);

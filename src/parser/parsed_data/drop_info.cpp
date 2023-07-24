@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-DropInfo::DropInfo() : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), cascade(false) {
+DropInfo::DropInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), cascade(false) {
 }
 
 unique_ptr<DropInfo> DropInfo::Copy() const {
