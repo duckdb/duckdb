@@ -127,7 +127,6 @@ protected:
 		OnListEnd(count);
 	}
 
-
 	template <class T>
 	void WriteValue(const unsafe_vector<T> &vec) {
 		auto count = vec.size();

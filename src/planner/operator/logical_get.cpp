@@ -13,8 +13,8 @@
 
 namespace duckdb {
 
-LogicalGet::LogicalGet() :
-	LogicalOperator(LogicalOperatorType::LOGICAL_GET) {}
+LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
+}
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)
@@ -232,7 +232,8 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("column_ids", result->column_ids);
 	deserializer.ReadProperty("projection_ids", result->projection_ids);
 	deserializer.ReadProperty("table_filters", result->table_filters);
-	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
+	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
 	auto &function = entry.first;
 	auto has_serialize = entry.second;
 
@@ -242,8 +243,8 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 		deserializer.ReadProperty("named_parameters", result->named_parameters);
 		deserializer.ReadProperty("input_table_types", result->input_table_types);
 		deserializer.ReadProperty("input_table_names", result->input_table_names);
-		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types, result->input_table_names,
-		                             function.function_info.get());
+		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
+		                             result->input_table_names, function.function_info.get());
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;

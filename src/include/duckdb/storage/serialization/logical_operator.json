@@ -798,5 +798,11 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_GET",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalCopyToFile",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COPY_TO_FILE",
+    "custom_implementation": true
   }
 ]

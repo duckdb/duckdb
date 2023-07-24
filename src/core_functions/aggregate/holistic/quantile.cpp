@@ -419,7 +419,8 @@ inline Value QuantileAbs(const Value &v) {
 }
 
 struct QuantileBindData : public FunctionData {
-	QuantileBindData() {}
+	QuantileBindData() {
+	}
 
 	explicit QuantileBindData(const Value &quantile_p)
 	    : quantiles(1, QuantileAbs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
@@ -476,7 +477,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	static void FormatSerializeDecimal(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                            const AggregateFunction &function) {
+	                                   const AggregateFunction &function) {
 		throw SerializationException("FIXME: quantile serialize for decimal");
 	}
 

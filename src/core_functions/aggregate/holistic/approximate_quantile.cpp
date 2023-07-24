@@ -19,7 +19,8 @@ struct ApproxQuantileState {
 };
 
 struct ApproximateQuantileBindData : public FunctionData {
-	ApproximateQuantileBindData() {}
+	ApproximateQuantileBindData() {
+	}
 	explicit ApproximateQuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
 	}
 

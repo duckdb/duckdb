@@ -449,7 +449,8 @@ static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &s
 	return std::move(result);
 }
 
-static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &function) {
+static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                     const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	serializer.WriteProperty("catalog", bind_data.table.schema.catalog.GetName());
 	serializer.WriteProperty("schema", bind_data.table.schema.name);
@@ -464,7 +465,8 @@ static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &d
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto table = deserializer.ReadProperty<string>("table");
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
+	auto &catalog_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}

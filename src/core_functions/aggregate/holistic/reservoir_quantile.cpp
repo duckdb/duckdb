@@ -51,7 +51,8 @@ struct ReservoirQuantileState {
 };
 
 struct ReservoirQuantileBindData : public FunctionData {
-	ReservoirQuantileBindData() {}
+	ReservoirQuantileBindData() {
+	}
 	ReservoirQuantileBindData(double quantile_p, int32_t sample_size_p)
 	    : quantiles(1, quantile_p), sample_size(sample_size_p) {
 	}

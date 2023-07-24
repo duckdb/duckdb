@@ -1238,7 +1238,7 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &s
 }
 
 static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                            const TableFunction &function) {
+                                     const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	serializer.WriteProperty("extra_info", function.extra_info);
 	serializer.WriteProperty("csv_data", bind_data);

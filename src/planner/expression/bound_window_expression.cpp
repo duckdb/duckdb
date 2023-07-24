@@ -193,11 +193,12 @@ unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializ
 	unique_ptr<FunctionData> bind_info;
 	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
 		auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
-			deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
+		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
 		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);
 	}
-	auto result = make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
+	auto result =
+	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
 	deserializer.ReadProperty("partitions", result->partitions);
 	deserializer.ReadProperty("orders", result->orders);
 	deserializer.ReadOptionalProperty("filters", result->filter_expr);

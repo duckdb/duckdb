@@ -286,12 +286,14 @@ static unique_ptr<FunctionData> ExportStateAggregateDeserialize(PlanDeserializat
 	throw NotImplementedException("FIXME: export state deserialize");
 }
 
-static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                            const AggregateFunction &function)  {
+static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer,
+                                                const optional_ptr<FunctionData> bind_data_p,
+                                                const AggregateFunction &function) {
 	throw SerializationException("FIXME: export state serialize");
 }
 
-static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(FormatDeserializer &deserializer,
+                                                                      AggregateFunction &function) {
 	throw SerializationException("FIXME: export state deserialize");
 }
 
@@ -305,11 +307,12 @@ static unique_ptr<FunctionData> ExportStateScalarDeserialize(PlanDeserialization
 }
 
 static void ExportStateScalarFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                            const ScalarFunction &function)  {
+                                             const ScalarFunction &function) {
 	throw SerializationException("FIXME: export state serialize");
 }
 
-static unique_ptr<FunctionData> ExportStateScalarFormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+static unique_ptr<FunctionData> ExportStateScalarFormatDeserialize(FormatDeserializer &deserializer,
+                                                                   ScalarFunction &function) {
 	throw SerializationException("FIXME: export state deserialize");
 }
 

@@ -13,8 +13,10 @@ namespace duckdb {
 JSONScanData::JSONScanData() {
 }
 
-JSONScanData::JSONScanData(ClientContext &context, vector<string> files_p, string date_format_p, string timestamp_format_p) :
-	files(std::move(files_p)), date_format(std::move(date_format_p)), timestamp_format(std::move(timestamp_format_p)) {
+JSONScanData::JSONScanData(ClientContext &context, vector<string> files_p, string date_format_p,
+                           string timestamp_format_p)
+    : files(std::move(files_p)), date_format(std::move(date_format_p)),
+      timestamp_format(std::move(timestamp_format_p)) {
 	InitializeReaders(context);
 	InitializeFormats();
 }
@@ -994,7 +996,8 @@ unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, 
 	return std::move(result);
 }
 
-void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &function) {
+void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
 	serializer.WriteProperty("scan_data", bind_data);
 }
@@ -1004,7 +1007,6 @@ unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.ReadProperty("scan_data", result);
 	return std::move(result);
 }
-
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	MultiFileReader::AddParameters(table_function);

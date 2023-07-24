@@ -133,8 +133,7 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, bool> FormatDeserializeBase(FormatDeserializer &deserializer,
-	                                                              CatalogType catalog_type) {
+	static pair<FUNC, bool> FormatDeserializeBase(FormatDeserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>("name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>("arguments");
@@ -145,11 +144,11 @@ public:
 		return make_pair(std::move(function), has_serialize);
 	}
 
-	template<class FUNC>
+	template <class FUNC>
 	static unique_ptr<FunctionData> FunctionDeserialize(FormatDeserializer &deserializer, FUNC &function) {
 		if (!function.format_deserialize) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
-										 function.name);
+			                             function.name);
 		}
 		deserializer.BeginObject("function_data");
 		auto result = function.format_deserialize(deserializer, function);

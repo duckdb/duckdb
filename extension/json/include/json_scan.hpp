@@ -295,7 +295,8 @@ public:
 	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            TableFunction &function);
 
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data, const TableFunction &function);
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                            const TableFunction &function);
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);

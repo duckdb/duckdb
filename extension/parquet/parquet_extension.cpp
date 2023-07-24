@@ -434,7 +434,8 @@ public:
 		return ParquetScanBindInternal(context, files, types, names, options);
 	}
 
-	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &function) {
+	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                                       const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		serializer.WriteProperty("files", bind_data.files);
 		serializer.WriteProperty("types", bind_data.types);
@@ -442,7 +443,8 @@ public:
 		serializer.WriteProperty("parquet_options", bind_data.parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,
+	                                                             TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto files = deserializer.ReadProperty<vector<string>>("files");
 		auto types = deserializer.ReadProperty<vector<LogicalType>>("types");
