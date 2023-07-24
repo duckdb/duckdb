@@ -52,7 +52,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 
 namespace duckdb_adbc {
 
-enum IngestionMode { CREATE = 0, APPEND = 1 };
+enum class IngestionMode { CREATE = 0, APPEND = 1 };
 struct DuckDBAdbcStatementWrapper {
 	::duckdb_connection connection;
 	::duckdb_arrow result;
