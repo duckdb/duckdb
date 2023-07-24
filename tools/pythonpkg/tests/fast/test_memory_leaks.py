@@ -4,6 +4,7 @@ import pytest
 import os, psutil
 import pandas as pd
 
+
 @pytest.fixture
 def check_leaks():
     process = psutil.Process(os.getpid())
@@ -17,10 +18,11 @@ def check_leaks():
     # Assert that the amount of used memory does not pass 5mb
     assert difference <= 5_000_000
 
+
 class TestMemoryLeaks(object):
     def test_fetchmany(self, check_leaks):
         datetimes = ['1985-01-30T16:41:43' for _ in range(10000)]
 
-        df = pd.DataFrame({'time' : pd.Series(data=datetimes)})
+        df = pd.DataFrame({'time': pd.Series(data=datetimes)})
         for _ in range(100):
             duckdb.sql('select time::TIMESTAMP from df').fetchmany(10000)
