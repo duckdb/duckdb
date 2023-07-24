@@ -56,8 +56,8 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 	                  SQL_NTS);
 
 	// Set STMT attributes PARAM_BIND_TYPE, PARAM_STATUS_PTR, PARAMS_PROCESSED_PTR, and PARAMSET_SIZE
-	SQLRETURN ret = SQLSetStmtAttr(hstmt, SQL_ATTR_PARAM_BIND_TYPE, SQL_PARAM_BIND_BY_COLUMN, 0);
-	ODBC_CHECK(ret, "SQLSetStmtAttr(SQL_ATTR_PARAM_BIND_TYPE)");
+	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_PARAM_BIND_TYPE)", SQLSetStmtAttr, hstmt, SQL_ATTR_PARAM_BIND_TYPE,
+	                  reinterpret_cast<SQLPOINTER>(SQL_PARAM_BIND_BY_COLUMN), 0);
 	EXECUTE_AND_CHECK("SQLSetStmtAttr(SQL_ATTR_PARAM_STATUS_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_PARAM_STATUS_PTR,
 	                  status, 0);
 	EXECUTE_AND_CHECK("SQLSetStmtAttr(SQL_ATTR_PARAMS_PROCESSED_PTR)", SQLSetStmtAttr, hstmt,
@@ -70,7 +70,7 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 	                  0, ConvertToSQLPOINTER(1), 0, str_ind);
 
 	// Execute the statement
-	ret = SQLExecute(hstmt);
+	SQLRETURN ret = SQLExecute(hstmt);
 	REQUIRE(ret == SQL_NEED_DATA);
 
 	// Set the parameter data

@@ -230,7 +230,8 @@ const char *ConvertToCString(SQLCHAR *str) {
 }
 
 const char *ConvertToCString(int i) {
-	return std::to_string(i).c_str();
+	std::string str = std::to_string(i);
+	return str.c_str();
 }
 
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr) {
