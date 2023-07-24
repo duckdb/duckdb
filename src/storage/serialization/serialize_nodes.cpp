@@ -285,9 +285,9 @@ void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
-	LogicalType result(id, std::move(type_info));
+	auto id_ = deserializer.ReadProperty<LogicalTypeId>("id");
+	auto type_info_ = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
+	LogicalType result(id_, std::move(type_info_));
 	return result;
 }
 

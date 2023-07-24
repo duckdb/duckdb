@@ -10,8 +10,11 @@ targets = [
     {
         'source': 'extension/parquet/include/',
         'target': 'extension/parquet'
+    },
+    {
+        'source': 'extension/json/include/',
+        'target': 'extension/json'
     }
-
 ]
 
 file_list = []
@@ -20,6 +23,8 @@ for target in targets:
     target_base = os.path.sep.join(target['target'].split('/'))
     for fname in os.listdir(source_base):
         if '.json' not in fname:
+            continue
+        if '_enums.json' in fname:
             continue
         file_list.append(
             {
@@ -334,9 +339,9 @@ def generate_class_code(class_entry):
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters += 'std::move(' + entry.name + ')'
+                        constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
                     else:
-                        constructor_parameters += entry.name
+                        constructor_parameters += entry.deserialize_property
                     found = True
                     break
             if constructor_entry.startswith('$'):
@@ -363,7 +368,7 @@ def generate_class_code(class_entry):
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
         type_name = replace_pointer(entry.type)
-        class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
+        class_deserialize += get_deserialize_element(entry.deserialize_property, entry.name, type_name, entry.optional, 'unique_ptr')
 
     class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.return_class, constructor_parameters)
     if class_entry.members is None:
@@ -387,7 +392,7 @@ def generate_class_code(class_entry):
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(deserialize_template_str, entry.deserialize_property, property_key, type_name, is_optional, class_entry.pointer_type)
         elif entry.name not in constructor_entries:
-            class_deserialize += get_deserialize_assignment(entry.name, entry.type, class_entry.pointer_type)
+            class_deserialize += get_deserialize_assignment(entry.deserialize_property, entry.type, class_entry.pointer_type)
 
     class_deserialize += generate_return(class_entry)
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
