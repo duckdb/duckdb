@@ -216,7 +216,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(lib_name + '.duckdb',
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -234,7 +234,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension(lib_name,
+    libduckdb = Extension(lib_name + '.duckdb',
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -278,9 +278,14 @@ def setup_data_files(data_files):
 data_files = setup_data_files(extra_files + header_files)
 
 packages = [
-    'duckdb-stubs',
+    lib_name,
+    'duckdb.typing',
+    'duckdb.functional',
     'pyduckdb',
-    'pyduckdb.value'
+    'pyduckdb.value',
+    'duckdb-stubs',
+    'duckdb-stubs.functional',
+    'duckdb-stubs.typing'
 ]
 
 spark_packages = [

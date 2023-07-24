@@ -278,7 +278,7 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, 
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
 	auto &schema = GetSchema(context, info.schema);
-	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table->table_name);
+	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
 	return schema.CreateIndex(context, info, table);
 }
 

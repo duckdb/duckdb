@@ -10,8 +10,10 @@ WARNINGS_AS_ERRORS ?=
 FORCE_WARN_UNUSED_FLAG ?=
 DISABLE_UNITY_FLAG ?=
 DISABLE_SANITIZER_FLAG ?=
-OSX_BUILD_UNIVERSAL_FLAG ?=
 FORCE_32_BIT_FLAG ?=
+
+MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+PROJ_DIR := $(dir $(MKFILE_PATH))
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -19,9 +21,6 @@ ifeq ($(GEN),ninja)
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
-endif
-ifeq (${OSX_BUILD_UNIVERSAL}, 1)
-	OSX_BUILD_UNIVERSAL_FLAG=-DOSX_BUILD_UNIVERSAL=1
 endif
 ifeq (${FORCE_32_BIT}, 1)
 	FORCE_32_BIT_FLAG=-DFORCE_32_BIT=1
@@ -53,7 +52,6 @@ endif
 
 CMAKE_VARS ?=
 SKIP_EXTENSIONS ?=
-
 BUILD_EXTENSIONS ?=
 ifneq (${DUCKDB_EXTENSIONS}, )
 	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
@@ -197,6 +195,24 @@ endif
 ifeq (${DISABLE_EXTENSION_LOAD}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
 endif
+ifneq (${OSX_BUILD_ARCH}, )
+	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_ARCH=${OSX_BUILD_ARCH}
+endif
+ifeq (${OSX_BUILD_UNIVERSAL}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
+endif
+
+# Enable VCPKG for this build
+ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}' -DVCPKG_BUILD=1
+endif
+ifneq ("${VCPKG_TARGET_TRIPLET}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
+endif
+ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
+endif
+
 
 clean:
 	rm -rf build
@@ -214,7 +230,7 @@ debug:
 release:
 	mkdir -p ./build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
 cldebug:
@@ -227,6 +243,12 @@ clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build . --config RelWithDebInfo
+
+extension_configuration:
+	mkdir -p ./build/extension_configuration && \
+	cd build/extension_configuration && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
@@ -266,7 +288,7 @@ relassert:
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
 amaldebug:

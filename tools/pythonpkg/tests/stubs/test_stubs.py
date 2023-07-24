@@ -4,7 +4,6 @@ from mypy import stubtest
 
 MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), 'mypy.ini')
 
-
 def test_generated_stubs():
 	skip_stubs_errors = ['pybind11', 'git_revision', 'is inconsistent, metaclass differs']
 

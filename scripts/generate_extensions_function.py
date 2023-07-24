@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 parser = argparse.ArgumentParser(description='Generates/Validates extension_functions.hpp file')
 
 parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
-                    help='If set  will validate that extension_functions.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
+                    help='If set  will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
 
 
 args = parser.parse_args()
@@ -28,20 +28,17 @@ stored_settings = {
 functions = {}
 
 # Parses the extension config files for which extension names there are to be expected
-def parse_extension_configs():
-    ext_configs = [
-        os.path.join('..', '.github', 'config', 'out_of_tree_extensions.cmake'),
-        os.path.join('..', '.github', 'config', 'in_tree_extensions.cmake')
-    ]
-    extension_names = []
-    for file in ext_configs:
-        with open(file, 'r') as file:
-            data = file.read().replace('\n', '')
-        pattern = re.compile(r"duckdb_extension_load\s*\(\s*([A-z\_0-9]*)\s")
-        extension_names += [match.group(1) for match in pattern.finditer(data)]
-    return extension_names
+def parse_extension_txt():
+    extensions_file = os.path.join("..", "build","extension_configuration","extensions.txt")
+    with open(extensions_file) as f:
+        return [line.rstrip() for line in f]
 
-extension_names = parse_extension_configs()
+extension_names = parse_extension_txt()
+
+# Add exception for jemalloc as it doesn't produce a loadable extension but is in the config
+if "jemalloc" in extension_names:
+    extension_names.remove("jemalloc")
+
 ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
 get_functions_query = "select distinct function_name from duckdb_functions();"
 get_settings_query = "select distinct name from duckdb_settings();"

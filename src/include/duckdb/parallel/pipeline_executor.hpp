@@ -48,8 +48,8 @@ public:
 	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
 	OperatorResultType ExecutePush(DataChunk &input);
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
-	//! This should only be called once per PipelineExecutor
-	void PushFinalize();
+	//! This should only be called once per PipelineExecutor.
+	PipelineExecuteResult PushFinalize();
 
 	//! Initializes a chunk with the types that will flow out of ExecutePull
 	void InitializeChunk(DataChunk &chunk);
@@ -142,6 +142,7 @@ private:
 	//! Debugging state: number of times blocked
 	int debug_blocked_sink_count = 0;
 	int debug_blocked_source_count = 0;
+	int debug_blocked_combine_count = 0;
 	//! Number of times the Sink/Source will block before actually returning data
 	int debug_blocked_target_count = 1;
 #endif
