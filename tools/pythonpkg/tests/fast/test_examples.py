@@ -11,7 +11,7 @@ class TestExamples(object):
         ]
         # Debug output to get folder structure in CI
         for path in relative_paths:
-	        print("---" + path + "---")
+            print("---" + path + "---")
             for line in tree(Path(path)):
                 print(line)
 
