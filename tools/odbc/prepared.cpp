@@ -243,7 +243,8 @@ SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_
  * @brief Allows the application to set data for a parameter or column at execution time.
  * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlputdata-function?view=sql-server-ver15
  * @param statement_handle
- * @param data_ptr Pointer to a buffer containing the data to be sent to the data source.  Must be in the C data type specified in SQLBindParameter or SQLBindCol.
+ * @param data_ptr Pointer to a buffer containing the data to be sent to the data source.  Must be in the C data type
+ * specified in SQLBindParameter or SQLBindCol.
  * @param str_len_or_ind_ptr Length of data_ptr.
  * @return
  */

@@ -217,7 +217,7 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 	std::vector<std::array<std::string, 4>> expected_data = {
 	    {"bool_table", "id", "13", "INTEGER"},      {"bool_table", "t", "25", "VARCHAR"},
 	    {"bool_table", "b", "10", "BOOLEAN"},       {"bytea_table", "id", "13", "INTEGER"},
-	    {"bytea_table", "t", "26", "BLOB"},          {"interval_table", "id", "13", "INTEGER"},
+	    {"bytea_table", "t", "26", "BLOB"},         {"interval_table", "id", "13", "INTEGER"},
 	    {"interval_table", "iv", "27", "INTERVAL"}, {"interval_table", "d", "25", "VARCHAR"},
 	    {"lo_test_table", "id", "13", "INTEGER"},   {"lo_test_table", "large_data", "26", "BLOB"},
 	    {"test_table_1", "id", "13", "INTEGER"},    {"test_table_1", "t", "25", "VARCHAR"},

@@ -5,14 +5,14 @@
 
 using namespace odbc_test;
 
-
 const int TABLE_SIZE[] = {120, 4096};
 const int ARRAY_SIZE[] = {84, 512};
 
 enum ESize { SMALL, LARGE };
 
 static void TemporaryTable(HSTMT &hstmt, ESize S) {
-    EXECUTE_AND_CHECK("SQLExecDirect (CREATE TABLE)", SQLExecDirect, hstmt, ConvertToSQLCHAR("CREATE TEMPORARY TABLE test (id int4 primary key)"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect (CREATE TABLE)", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("CREATE TEMPORARY TABLE test (id int4 primary key)"), SQL_NTS);
 
 	// Insert S size rows
 	for (int i = 0; i < TABLE_SIZE[S]; i++) {
@@ -27,9 +27,11 @@ static void BlockCursor(HSTMT &hstmt, ESize S, SQLINTEGER *&id, SQLLEN *&id_ind)
 	SQLULEN rows_fetched;
 
 	// Set array S to ARRAY_SIZE[S]
-	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROW_ARRAY_SIZE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE, ConvertToSQLPOINTER(ARRAY_SIZE[S]), 0);
+	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROW_ARRAY_SIZE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE,
+	                  ConvertToSQLPOINTER(ARRAY_SIZE[S]), 0);
 	// Set ROWS_FETCHED_PTR to rows_fetched
-	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR, &rows_fetched, 0);
+	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR,
+	                  &rows_fetched, 0);
 
 	// Bind Column
 	EXECUTE_AND_CHECK("SQLBindCol (id)", SQLBindCol, hstmt, 1, SQL_C_SLONG, id, 0, id_ind);
@@ -75,13 +77,17 @@ static void FetchRows(HSTMT &hstmt, SQLULEN &rows_fetched, SQLSMALLINT scroll_or
 static void ScrollNext(HSTMT &hstmt, ESize S) {
 	SQLULEN rows_fetched;
 
-    // Set array size to 1,
-	EXECUTE_AND_CHECK("SQLSetStmtAttr(ROW_ARRAY_SIZE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE, ConvertToSQLPOINTER(1), SQL_IS_INTEGER);
+	// Set array size to 1,
+	EXECUTE_AND_CHECK("SQLSetStmtAttr(ROW_ARRAY_SIZE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE,
+	                  ConvertToSQLPOINTER(1), SQL_IS_INTEGER);
 	// Set rows fetched ptr
-	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR, &rows_fetched, 0);
+	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR,
+	                  &rows_fetched, 0);
 	// Cursor Type to Static: which means data in the result set is static
-	EXECUTE_AND_CHECK("SQLSetStmtAttr(CURSOR_TYPE)", SQLSetStmtAttr, hstmt, SQL_ATTR_CURSOR_TYPE, ConvertToSQLPOINTER(SQL_CURSOR_STATIC), 0);
-	// and Concurrency to Rowver: Cursor uses optimistic concurrency control, comparing row versions such as SQLBase ROWID or Sybase TIMESTAMP.
+	EXECUTE_AND_CHECK("SQLSetStmtAttr(CURSOR_TYPE)", SQLSetStmtAttr, hstmt, SQL_ATTR_CURSOR_TYPE,
+	                  ConvertToSQLPOINTER(SQL_CURSOR_STATIC), 0);
+	// and Concurrency to Rowver: Cursor uses optimistic concurrency control, comparing row versions such as SQLBase
+	// ROWID or Sybase TIMESTAMP.
 	SQLRETURN ret = SQLSetStmtAttr(hstmt, SQL_ATTR_CONCURRENCY, ConvertToSQLPOINTER(SQL_CONCUR_ROWVER), 0);
 	REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
 
@@ -106,9 +112,10 @@ static void ScrollNext(HSTMT &hstmt, ESize S) {
 static void FetchAbsolute(HSTMT &hstmt, ESize S) {
 	SQLULEN rows_fetched;
 	// Set rows fetched ptr
-	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR, &rows_fetched, 0);
+	EXECUTE_AND_CHECK("SQLSetStmtAttr (ROWS_FETCHED_PTR)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROWS_FETCHED_PTR,
+	                  &rows_fetched, 0);
 
-    EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM test"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM test"), SQL_NTS);
 
 	// Fetch beyond the last row, should return SQL_NO_DATA
 	SQLRETURN ret = SQLFetchScroll(hstmt, SQL_FETCH_ABSOLUTE, TABLE_SIZE[S] + 1);
@@ -147,8 +154,8 @@ TEST_CASE("Test Declare Fetch Block", "[odbc]") {
 		// Create a temporary table and insert size[i] rows
 		TemporaryTable(hstmt, size[i]);
 
-		SQLINTEGER* id = new SQLINTEGER[TABLE_SIZE[size[i]]];
-		SQLLEN* id_ind = new SQLLEN[TABLE_SIZE[size[i]]];
+		SQLINTEGER *id = new SQLINTEGER[TABLE_SIZE[size[i]]];
+		SQLLEN *id_ind = new SQLLEN[TABLE_SIZE[size[i]]];
 		// Block cursor, fetch rows in blocks of size[i]
 		BlockCursor(hstmt, size[i], id, id_ind);
 

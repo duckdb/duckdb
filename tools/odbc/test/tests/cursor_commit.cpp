@@ -5,7 +5,7 @@
 using namespace odbc_test;
 
 /**
-	 * Execute a query that generates a result set
+ * Execute a query that generates a result set
  */
 static void SimpleCursorCommitTest(SQLHANDLE dbc) {
 	HSTMT hstmt = SQL_NULL_HSTMT;
@@ -13,11 +13,11 @@ static void SimpleCursorCommitTest(SQLHANDLE dbc) {
 	// Allocate a statement handle
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
-	EXECUTE_AND_CHECK("SQLSetStmtAttr", SQLSetStmtAttr, hstmt, SQL_ATTR_CURSOR_TYPE, ConvertToSQLPOINTER(SQL_CURSOR_STATIC), SQL_IS_UINTEGER);
+	EXECUTE_AND_CHECK("SQLSetStmtAttr", SQLSetStmtAttr, hstmt, SQL_ATTR_CURSOR_TYPE,
+	                  ConvertToSQLPOINTER(SQL_CURSOR_STATIC), SQL_IS_UINTEGER);
 
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt,
-	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"),
-	                  SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"), SQL_NTS);
 
 	char buf[1024];
 	SQLLEN buf_len;
@@ -68,11 +68,9 @@ static void MultipleHSTMTTest(SQLHANDLE dbc) {
 
 	// Execute queries on both statement handles
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt1,
-	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"),
-	                  SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"), SQL_NTS);
 	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt2,
-	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"),
-	                  SQL_NTS);
+	                  ConvertToSQLCHAR("SELECT g FROM generate_series(1,3) g(g)"), SQL_NTS);
 
 	// Free first statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt1, SQL_CLOSE);
@@ -81,7 +79,7 @@ static void MultipleHSTMTTest(SQLHANDLE dbc) {
 	// Commit test after the first handle is released
 	EXECUTE_AND_CHECK("SQLEndTran", SQLEndTran, SQL_HANDLE_DBC, dbc, SQL_COMMIT);
 
-	SQLINTEGER  buf;
+	SQLINTEGER buf;
 	SQLLEN buf_len;
 
 	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt2, 1, SQL_C_SLONG, &buf, sizeof(buf), &buf_len);
@@ -108,7 +106,8 @@ TEST_CASE("Test Cursor Commit", "[odbc]") {
 	// Connect to the database using SQLConnect
 	CONNECT_TO_DATABASE(env, dbc);
 
-	EXECUTE_AND_CHECK("SQLSetConnectAttr", SQLSetConnectAttr, dbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF, SQL_IS_INTEGER);
+	EXECUTE_AND_CHECK("SQLSetConnectAttr", SQLSetConnectAttr, dbc, SQL_ATTR_AUTOCOMMIT, (SQLPOINTER)SQL_AUTOCOMMIT_OFF,
+	                  SQL_IS_INTEGER);
 
 	SimpleCursorCommitTest(dbc);
 	PreparedCursorCommitTest(dbc);

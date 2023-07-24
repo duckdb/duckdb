@@ -12,9 +12,10 @@ static void RunDataCheckOnTable(HSTMT &hstmt, int num_rows) {
 
 // Test Simple With Query
 static void SimpleWithTest(HSTMT &hstmt) {
-    EXECUTE_AND_CHECK("SQLExectDirect(WITH)", SQLExecDirect, hstmt,
-					  ConvertToSQLCHAR("with recursive cte as (select g, 'foo' || g as foocol from generate_series(1,10) as g(g)) select * from cte;"),
-					  SQL_NTS);
+	EXECUTE_AND_CHECK("SQLExectDirect(WITH)", SQLExecDirect, hstmt,
+	                  ConvertToSQLCHAR("with recursive cte as (select g, 'foo' || g as foocol from "
+	                                   "generate_series(1,10) as g(g)) select * from cte;"),
+	                  SQL_NTS);
 
 	RunDataCheckOnTable(hstmt, 10);
 
@@ -24,13 +25,14 @@ static void SimpleWithTest(HSTMT &hstmt) {
 // Test With Query with Prepare and Execute
 static void PreparedWithTest(HSTMT &hstmt) {
 	EXECUTE_AND_CHECK("SQLPrepare(WITH)", SQLPrepare, hstmt,
-					  ConvertToSQLCHAR("with cte as (select g, 'foo' || g as foocol from generate_series(1,10) as g(g)) select * from cte WHERE g < ?"),
-					  SQL_NTS);
+	                  ConvertToSQLCHAR("with cte as (select g, 'foo' || g as foocol from generate_series(1,10) as "
+	                                   "g(g)) select * from cte WHERE g < ?"),
+	                  SQL_NTS);
 
 	SQLINTEGER param = 3;
 	SQLLEN param_len = sizeof(param);
-	EXECUTE_AND_CHECK("SQLBindParameter", SQLBindParameter, hstmt, 1, SQL_PARAM_INPUT,
-					  SQL_INTEGER, SQL_INTEGER, 0, 0, &param, sizeof(param), &param_len);
+	EXECUTE_AND_CHECK("SQLBindParameter", SQLBindParameter, hstmt, 1, SQL_PARAM_INPUT, SQL_INTEGER, SQL_INTEGER, 0, 0,
+	                  &param, sizeof(param), &param_len);
 
 	EXECUTE_AND_CHECK("SQLExecute", SQLExecute, hstmt);
 
@@ -39,8 +41,7 @@ static void PreparedWithTest(HSTMT &hstmt) {
 	EXECUTE_AND_CHECK("SQLFreeStmt(CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
-
-static void TestCTEandSetFetchEnv(const char* extra_params) {
+static void TestCTEandSetFetchEnv(const char *extra_params) {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
