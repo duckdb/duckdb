@@ -1,0 +1,14 @@
+[
+  {
+    "class": "SelectStatement",
+    "includes": [
+      "duckdb/parser/statement/select_statement.hpp"
+    ],
+    "members": [
+      {
+        "name": "node",
+        "type": "QueryNode*"
+      }
+    ]
+  }
+]

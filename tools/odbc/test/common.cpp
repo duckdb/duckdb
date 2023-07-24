@@ -169,18 +169,21 @@ void EXEC_SQL(HSTMT hstmt, const std::string &query) {
 }
 
 void InitializeDatabase(HSTMT hstmt) {
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS test_table_1;");
 	EXEC_SQL(hstmt, "CREATE TABLE test_table_1 (id integer PRIMARY KEY, t varchar(20));");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (1, 'foo');");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (2, 'bar');");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (3, 'foobar');");
 
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS bool_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE bool_table (id integer, t varchar(5), b boolean);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (1, 'yeah', true);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (2, 'yes', true);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (3, 'true', true);");
-	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (4, 'false', false)");
+	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (4, 'false', false);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (5, 'not', false);");
 
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS byte_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE byte_table (id integer, t blob);");
 	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (1, '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x10'::blob);");
 	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (2, 'bar');");
@@ -188,6 +191,7 @@ void InitializeDatabase(HSTMT hstmt) {
 	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (4, 'foo');");
 	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (5, 'barf');");
 
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS interval_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE interval_table(id integer, iv interval, d varchar(100));");
 	EXEC_SQL(hstmt, "INSERT INTO interval_table VALUES (1, '1 day', 'one day');");
 	EXEC_SQL(hstmt, "INSERT INTO interval_table VALUES (2, '10 seconds', 'ten secs');");
@@ -202,6 +206,7 @@ std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
 	std::map<SQLSMALLINT, SQLULEN> types_map;
 
 	types_map[SQL_VARCHAR] = 256;
+	types_map[SQL_CHAR] = 0;
 	types_map[SQL_BIGINT] = 20;
 	types_map[SQL_INTEGER] = 11;
 	types_map[SQL_SMALLINT] = 5;

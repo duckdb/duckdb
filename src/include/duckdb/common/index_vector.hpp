@@ -10,6 +10,8 @@
 
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -57,6 +59,16 @@ public:
 	}
 	typename vector<T>::const_iterator end() const {
 		return internal_vector.end();
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const {
+		serializer.WriteProperty("internal_vector", internal_vector);
+	}
+
+	static IndexVector<T, INDEX_TYPE> FormatDeserialize(FormatDeserializer &deserializer) {
+		IndexVector<T, INDEX_TYPE> result;
+		deserializer.ReadProperty("internal_vector", result.internal_vector);
+		return result;
 	}
 
 private:
