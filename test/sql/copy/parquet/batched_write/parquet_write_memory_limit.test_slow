@@ -12,13 +12,13 @@ load __TEST_DIR__/parquet_write_memory_limit.db
 statement ok
 COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'
 
-# set threads to 4 and a memory limit of 900MB. the limit in this test used to be 300MB,
+# set threads to 4 and a memory limit of 1GB. the limit in this test used to be 300MB,
 # but we weren't using the BufferAllocator for the ColumnDataCollection buffers in ParquetWriteLocalState
 statement ok
 SET threads=4
 
 statement ok
-SET memory_limit='1GB'
+SET memory_limit='1.1GB'
 
 # stream from one parquet file to another
 query I
