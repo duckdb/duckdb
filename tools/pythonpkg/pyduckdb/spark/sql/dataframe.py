@@ -1,9 +1,6 @@
 from ..exception import ContributionsAcceptedError
 
-from typing import (
-    TYPE_CHECKING,
-    List
-)
+from typing import TYPE_CHECKING, List
 
 from .readwriter import DataFrameWriter
 from .types import Row, StructType
@@ -12,6 +9,7 @@ import duckdb
 
 if TYPE_CHECKING:
     from .session import SparkSession
+
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
@@ -41,7 +39,6 @@ class DataFrame:
                     StructField('name', StringType(), True)])
         """
         return self._schema
-
 
     @property
     def write(self) -> DataFrameWriter:
@@ -74,6 +71,5 @@ class DataFrame:
         rows = [Row(**dict(zip(columns, x))) for x in result]
         return rows
 
-__all__ = [
-    "DataFrame"
-]
+
+__all__ = ["DataFrame"]

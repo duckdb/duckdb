@@ -3,7 +3,7 @@ import re
 import json
 
 aggregate_functions = ['algebraic', 'distributive', 'holistic', 'nested', 'regression']
-scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'struct', 'union']
+scalar_functions = ['bit', 'blob', 'date', 'enum', 'generic', 'list', 'map', 'math', 'operators', 'random', 'string', 'debug', 'struct', 'union']
 
 header = '''//===----------------------------------------------------------------------===//
 //                         DuckDB
@@ -37,7 +37,7 @@ def get_struct_name(function_name):
     return function_name.replace('_', ' ').title().replace(' ', '') + 'Fun'
 
 def sanitize_string(text):
-    return text.replace('"', '\\"')
+    return text.replace('\\', '\\\\').replace('"', '\\"')
 
 all_function_types = []
 all_function_types += [f'aggregate/{x}' for x in aggregate_functions]

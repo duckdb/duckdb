@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from pyduckdb.spark.sql.dataframe import DataFrame
     from pyduckdb.spark.sql.session import SparkSession
 
+
 class DataFrameWriter:
     def __init__(self, dataframe: "DataFrame"):
         self.dataframe = dataframe
@@ -17,17 +18,25 @@ class DataFrameWriter:
         relation = self.dataframe.relation
         relation.create(table_name)
 
+
 class DataFrameReader:
     def __init__(self, session: "SparkSession"):
         self.session = session
 
-    def load(self, path: Optional[Union[str, List[str]]] = None, format: Optional[str] = None, schema: Optional[Union[StructType, str]] = None, **options: OptionalPrimitiveType) -> "DataFrame":
+    def load(
+        self,
+        path: Optional[Union[str, List[str]]] = None,
+        format: Optional[str] = None,
+        schema: Optional[Union[StructType, str]] = None,
+        **options: OptionalPrimitiveType,
+    ) -> "DataFrame":
         from pyduckdb.spark.sql.dataframe import DataFrame
+
         if not isinstance(path, str):
             raise ImportError
         if options:
             raise ContributionsAcceptedError
-        
+
         rel = None
         if format:
             format = format.lower()
@@ -50,7 +59,7 @@ class DataFrameReader:
             df = df._cast_types(types)
             df = df.toDF(names)
         raise NotImplementedError
-    
+
     def csv(
         self,
         path: Union[str, List[str]],
@@ -141,7 +150,7 @@ class DataFrameReader:
         if unescapedQuoteHandling:
             raise ContributionsAcceptedError
         if lineSep:
-	        # We have support for custom newline, just needs to be ported to 'read_csv'
+            # We have support for custom newline, just needs to be ported to 'read_csv'
             raise NotImplementedError
 
         dtype = None
@@ -160,14 +169,12 @@ class DataFrameReader:
             escapechar=escape,
             encoding=encoding,
             date_format=dateFormat,
-            timestamp_format=timestampFormat
+            timestamp_format=timestampFormat,
         )
         df = DataFrame(rel, self.session)
         if names:
             df = df.toDF(*names)
         return df
 
-__all__ = [
-    "DataFrameWriter",
-    "DataFrameReader"
-]
+
+__all__ = ["DataFrameWriter", "DataFrameReader"]

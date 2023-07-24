@@ -125,9 +125,7 @@ class DataTypeSingleton(type):
 
     def __call__(cls: Type[T]) -> T:  # type: ignore[override]
         if cls not in cls._instances:  # type: ignore[attr-defined]
-            cls._instances[cls] = super(  # type: ignore[misc, attr-defined]
-                DataTypeSingleton, cls
-            ).__call__()
+            cls._instances[cls] = super(DataTypeSingleton, cls).__call__()  # type: ignore[misc, attr-defined]
         return cls._instances[cls]  # type: ignore[attr-defined]
 
 
@@ -232,19 +230,13 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
 
     def toInternal(self, dt: datetime.datetime) -> int:
         if dt is not None:
-            seconds = (
-                calendar.timegm(dt.utctimetuple())
-                if dt.tzinfo
-                else time.mktime(dt.timetuple())
-            )
+            seconds = calendar.timegm(dt.utctimetuple()) if dt.tzinfo else time.mktime(dt.timetuple())
             return int(seconds) * 1000000 + dt.microsecond
 
     def fromInternal(self, ts: int) -> datetime.datetime:
         if ts is not None:
             # using int to avoid precision loss in float
-            return datetime.datetime.fromtimestamp(ts // 1000000).replace(
-                microsecond=ts % 1000000
-            )
+            return datetime.datetime.fromtimestamp(ts // 1000000).replace(microsecond=ts % 1000000)
 
 
 class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
@@ -268,9 +260,7 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
     def fromInternal(self, ts: int) -> datetime.datetime:
         if ts is not None:
             # using int to avoid precision loss in float
-            return datetime.datetime.utcfromtimestamp(ts // 1000000).replace(
-                microsecond=ts % 1000000
-            )
+            return datetime.datetime.utcfromtimestamp(ts // 1000000).replace(microsecond=ts % 1000000)
 
 
 class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
@@ -519,9 +509,7 @@ class DayTimeIntervalType(AtomicType):
 
     _inverted_fields = dict(zip(_fields.values(), _fields.keys()))
 
-    def __init__(
-        self, startField: Optional[int] = None, endField: Optional[int] = None
-    ):
+    def __init__(self, startField: Optional[int] = None, endField: Optional[int] = None):
         super().__init__(DuckDBPyType("INTERVAL"))
         if startField is None and endField is None:
             # Default matched to scala side.
@@ -582,9 +570,7 @@ class ArrayType(DataType):
 
     def __init__(self, elementType: DataType, containsNull: bool = True):
         super().__init__(duckdb.list_type(elementType.duckdb_type))
-        assert isinstance(
-            elementType, DataType
-        ), "elementType %s should be an instance of %s" % (
+        assert isinstance(elementType, DataType), "elementType %s should be an instance of %s" % (
             elementType,
             DataType,
         )
@@ -637,19 +623,13 @@ class MapType(DataType):
     False
     """
 
-    def __init__(
-        self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True
-    ):
+    def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True):
         super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
-        assert isinstance(
-            keyType, DataType
-        ), "keyType %s should be an instance of %s" % (
+        assert isinstance(keyType, DataType), "keyType %s should be an instance of %s" % (
             keyType,
             DataType,
         )
-        assert isinstance(
-            valueType, DataType
-        ), "valueType %s should be an instance of %s" % (
+        assert isinstance(valueType, DataType), "valueType %s should be an instance of %s" % (
             valueType,
             DataType,
         )
@@ -676,18 +656,12 @@ class MapType(DataType):
     def toInternal(self, obj: Dict[T, Optional[U]]) -> Dict[T, Optional[U]]:
         if not self.needConversion():
             return obj
-        return obj and dict(
-            (self.keyType.toInternal(k), self.valueType.toInternal(v))
-            for k, v in obj.items()
-        )
+        return obj and dict((self.keyType.toInternal(k), self.valueType.toInternal(v)) for k, v in obj.items())
 
     def fromInternal(self, obj: Dict[T, Optional[U]]) -> Dict[T, Optional[U]]:
         if not self.needConversion():
             return obj
-        return obj and dict(
-            (self.keyType.fromInternal(k), self.valueType.fromInternal(v))
-            for k, v in obj.items()
-        )
+        return obj and dict((self.keyType.fromInternal(k), self.valueType.fromInternal(v)) for k, v in obj.items())
 
 
 class StructField(DataType):
@@ -722,9 +696,7 @@ class StructField(DataType):
         metadata: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(dataType.duckdb_type)
-        assert isinstance(
-            dataType, DataType
-        ), "dataType %s should be an instance of %s" % (
+        assert isinstance(dataType, DataType), "dataType %s should be an instance of %s" % (
             dataType,
             DataType,
         )
@@ -754,10 +726,7 @@ class StructField(DataType):
         return self.dataType.fromInternal(obj)
 
     def typeName(self) -> str:  # type: ignore[override]
-        raise TypeError(
-            "StructField does not have typeName. "
-            "Use typeName on its type explicitly instead."
-        )
+        raise TypeError("StructField does not have typeName. " "Use typeName on its type explicitly instead.")
 
 
 class StructType(DataType):
@@ -788,9 +757,7 @@ class StructType(DataType):
     """
 
     def _update_internal_duckdb_type(self):
-        self.duckdb_type = duckdb.struct_type(
-            dict(zip(self.names, [x.duckdb_type for x in self.fields]))
-        )
+        self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
     def __init__(self, fields: Optional[List[StructField]] = None):
         if not fields:
@@ -799,17 +766,11 @@ class StructType(DataType):
         else:
             self.fields = fields
             self.names = [f.name for f in fields]
-            assert all(
-                isinstance(f, StructField) for f in fields
-            ), "fields should be a list of StructField"
+            assert all(isinstance(f, StructField) for f in fields), "fields should be a list of StructField"
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
-        super().__init__(
-            duckdb.struct_type(
-                dict(zip(self.names, [x.duckdb_type for x in self.fields]))
-            )
-        )
+        super().__init__(duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields]))))
 
     @overload
     def add(
@@ -877,9 +838,7 @@ class StructType(DataType):
             self.names.append(field.name)
         else:
             if isinstance(field, str) and data_type is None:
-                raise ValueError(
-                    "Must specify DataType if passing name of struct_field to create."
-                )
+                raise ValueError("Must specify DataType if passing name of struct_field to create.")
             else:
                 data_type_f = data_type
             self.fields.append(StructField(field, data_type_f, nullable, metadata))
@@ -957,10 +916,7 @@ class StructType(DataType):
                     for n, f, c in zip(self.names, self.fields, self._needConversion)
                 )
             elif isinstance(obj, (tuple, list)):
-                return tuple(
-                    f.toInternal(v) if c else v
-                    for f, v, c in zip(self.fields, obj, self._needConversion)
-                )
+                return tuple(f.toInternal(v) if c else v for f, v, c in zip(self.fields, obj, self._needConversion))
             elif hasattr(obj, "__dict__"):
                 d = obj.__dict__
                 return tuple(
@@ -990,10 +946,7 @@ class StructType(DataType):
         values: Union[Tuple, List]
         if self._needSerializeAnyField:
             # Only calling fromInternal function for fields that need conversion
-            values = [
-                f.fromInternal(v) if c else v
-                for f, v, c in zip(self.fields, obj, self._needConversion)
-            ]
+            values = [f.fromInternal(v) if c else v for f, v, c in zip(self.fields, obj, self._needConversion)]
         else:
             values = obj
         return _create_row(self.names, values)
@@ -1095,9 +1048,7 @@ _atomic_types: List[Type[DataType]] = [
     TimestampNTZType,
     NullType,
 ]
-_all_atomic_types: Dict[str, Type[DataType]] = dict(
-    (t.typeName(), t) for t in _atomic_types
-)
+_all_atomic_types: Dict[str, Type[DataType]] = dict((t.typeName(), t) for t in _atomic_types)
 
 _complex_types: List[Type[Union[ArrayType, MapType, StructType]]] = [
     ArrayType,
@@ -1111,14 +1062,10 @@ _all_complex_types: Dict[str, Type[Union[ArrayType, MapType, StructType]]] = dic
 import re
 
 _FIXED_DECIMAL = re.compile(r"decimal\(\s*(\d+)\s*,\s*(-?\d+)\s*\)")
-_INTERVAL_DAYTIME = re.compile(
-    r"interval (day|hour|minute|second)( to (day|hour|minute|second))?"
-)
+_INTERVAL_DAYTIME = re.compile(r"interval (day|hour|minute|second)( to (day|hour|minute|second))?")
 
 
-def _create_row(
-    fields: Union["Row", List[str]], values: Union[Tuple[Any, ...], List[Any]]
-) -> "Row":
+def _create_row(fields: Union["Row", List[str]], values: Union[Tuple[Any, ...], List[Any]]) -> "Row":
     row = Row(*values)
     row.__fields__ = fields
     return row
@@ -1257,8 +1204,7 @@ class Row(tuple):
         """create new Row object"""
         if len(args) > len(self):
             raise ValueError(
-                "Can not create Row with fields %s, expected %d values "
-                "but got %s" % (self, len(self), args)
+                "Can not create Row with fields %s, expected %d values " "but got %s" % (self, len(self), args)
             )
         return _create_row(self, args)
 
@@ -1305,8 +1251,6 @@ class Row(tuple):
     def __repr__(self) -> str:
         """Printable representation of Row used in Python REPL."""
         if hasattr(self, "__fields__"):
-            return "Row(%s)" % ", ".join(
-                "%s=%r" % (k, v) for k, v in zip(self.__fields__, tuple(self))
-            )
+            return "Row(%s)" % ", ".join("%s=%r" % (k, v) for k, v in zip(self.__fields__, tuple(self)))
         else:
             return "<Row(%s)>" % ", ".join("%r" % field for field in self)

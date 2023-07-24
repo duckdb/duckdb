@@ -273,7 +273,7 @@ test_that("ASOF join works", {
     test_df1 <- duckdb:::rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
     test_df2 <- duckdb:::rel_from_df(con, data.frame(event_ts=c(1, 3, 6, 8), event_id=c(0, 1, 2, 3)))
     cond <- list(duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts"))))
-    rel <- duckdb:::rel_join(test_df1, test_df2, cond, ref_type="asof")
+    rel <- duckdb:::rel_join(test_df1, test_df2, cond, join_ref_type="asof")
     rel_proj <- duckdb:::rel_project(rel, list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_id")))
     rel_df <- duckdb:::rel_to_altrep(rel_proj)
     expected_result <- data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9), event_id=c(0, 0, 1, 1, 1, 2, 2, 3, 3))
@@ -285,7 +285,7 @@ test_that("LEFT ASOF join works", {
     test_df1 <- duckdb:::rel_from_df(con, data.frame(ts=c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)))
     test_df2 <- duckdb:::rel_from_df(con, data.frame(event_ts=c(2, 4, 6, 8), event_id=c(0, 1, 2, 3)))
     cond <- list(duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts"))))
-    rel <- duckdb:::rel_join(test_df1, test_df2, cond, join="left", ref_type="asof")
+    rel <- duckdb:::rel_join(test_df1, test_df2, cond, join="left", join_ref_type="asof")
     rel_proj <- duckdb:::rel_project(rel, list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts"), duckdb:::expr_reference("event_id")))
     order <- duckdb:::rel_order(rel_proj, list(duckdb:::expr_reference("ts")))
     rel_df <- duckdb:::rel_to_altrep(order)
@@ -296,7 +296,7 @@ test_that("LEFT ASOF join works", {
 test_that("Positional cross join works", {
     test_df1 <- duckdb:::rel_from_df(con, data.frame(a=c(11, 12, 13), b=c(1, 2, 3)))
     test_df2 <- duckdb:::rel_from_df(con, data.frame(c=c(11, 12), d=c(1, 2)))
-    rel <- duckdb:::rel_join(test_df1, test_df2, list(), join="cross", ref_type="positional")
+    rel <- duckdb:::rel_join(test_df1, test_df2, list(), join="cross", join_ref_type="positional")
     rel_df <- duckdb:::rel_to_altrep(rel)
     expected_result <- data.frame(a=c(11, 12, 13), b=c(1, 2, 3), c=c(11, 12, NA), d=c(1, 2, NA))
     expect_equal(expected_result, rel_df)
@@ -307,7 +307,7 @@ test_that("regular positional join works", {
     test_df1 <- duckdb:::rel_from_df(con, data.frame(a=c(11, 12, 13), b=c(1, 2, 3)))
     test_df2 <- duckdb:::rel_from_df(con, data.frame(c=c(11, 12, 14, 11), d=c(4, 5, 6, 8)))
     cond <- duckdb:::expr_function("eq", list(duckdb:::expr_reference("a"), duckdb:::expr_reference("c")))
-    rel <- duckdb:::rel_join(test_df1, test_df2, list(cond), ref_type="positional")
+    rel <- duckdb:::rel_join(test_df1, test_df2, list(cond), join_ref_type="positional")
     rel_df <- duckdb:::rel_to_altrep(rel)
     expected_result <- data.frame(a=c(11, 12), b=c(1, 2), c=c(11, 12), d=c(4, 5))
     expect_equal(expected_result, rel_df)
@@ -318,7 +318,7 @@ test_that("Invalid asof join condition throws error", {
     test_df1 <- rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
     test_df2 <- rel_from_df(con, data.frame(begin=c(1, 3, 6, 8), value=c(0, 1, 2, 3)))
     cond <- list(expr_function("neq", list(expr_reference("ts"), expr_reference("begin"))))
-    expect_error(rel_join(test_df1, test_df2, cond, ref_type="asof"), "Binder Error")
+    expect_error(rel_join(test_df1, test_df2, cond, join_ref_type="asof"), "Binder Error")
 })
 
 test_that("multiple inequality conditions for asof join throws error", {
@@ -328,7 +328,7 @@ test_that("multiple inequality conditions for asof join throws error", {
     cond1 <- duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("begin")))
     cond2 <- duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("value")))
     conds <- list(cond1, cond2)
-    expect_error(rel_join(test_df1, test_df2, conds, ref_type="asof"), "Binder Error")
+    expect_error(rel_join(test_df1, test_df2, conds, join_ref_type="asof"), "Binder Error")
 })
 
 

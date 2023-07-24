@@ -52,6 +52,9 @@ public:
 public:
 	DUCKDB_API static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &deserializer);
 
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	void SerializeInternal(Serializer &) const override;
 };

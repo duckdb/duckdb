@@ -20,7 +20,8 @@ namespace duckdb {
 PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
-                             op.estimated_cardinality) {
+                             op.estimated_cardinality),
+      comparison_type(ExpressionType::INVALID) {
 
 	// Convert the conditions partitions and sorts
 	for (auto &cond : conditions) {
@@ -31,9 +32,19 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 		auto right = cond.right->Copy();
 		switch (cond.comparison) {
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		case ExpressionType::COMPARE_GREATERTHAN:
 			null_sensitive.emplace_back(lhs_orders.size());
 			lhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(left));
 			rhs_orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			comparison_type = cond.comparison;
+			break;
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		case ExpressionType::COMPARE_LESSTHAN:
+			//	Always put NULLS LAST so they can be ignored.
+			null_sensitive.emplace_back(lhs_orders.size());
+			lhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(left));
+			rhs_orders.emplace_back(OrderType::DESCENDING, OrderByNullType::NULLS_LAST, std::move(right));
+			comparison_type = cond.comparison;
 			break;
 		case ExpressionType::COMPARE_EQUAL:
 			null_sensitive.emplace_back(lhs_orders.size());
@@ -132,17 +143,18 @@ SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, DataChunk &chun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalAsOfJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &lstate = lstate_p.Cast<AsOfLocalSinkState>();
+SinkCombineResultType PhysicalAsOfJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &lstate = input.local_state.Cast<AsOfLocalSinkState>();
 	lstate.Combine();
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                            GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<AsOfGlobalSinkState>();
+                                            OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<AsOfGlobalSinkState>();
 
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
@@ -401,10 +413,28 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 		return;
 	}
 
+	auto iterator_comp = ExpressionType::INVALID;
+	switch (op.comparison_type) {
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		iterator_comp = ExpressionType::COMPARE_LESSTHANOREQUALTO;
+		break;
+	case ExpressionType::COMPARE_GREATERTHAN:
+		iterator_comp = ExpressionType::COMPARE_LESSTHAN;
+		break;
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		iterator_comp = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		break;
+	case ExpressionType::COMPARE_LESSTHAN:
+		iterator_comp = ExpressionType::COMPARE_GREATERTHAN;
+		break;
+	default:
+		throw NotImplementedException("Unsupported comparison type for ASOF join");
+	}
+
 	left_hash = lhs_sink.hash_groups[left_group].get();
 	auto &left_sort = *(left_hash->global_sort);
 	lhs_scanner = make_uniq<PayloadScanner>(left_sort, false);
-	left_itr = make_uniq<SBIterator>(left_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	left_itr = make_uniq<SBIterator>(left_sort, iterator_comp);
 
 	// We are only probing the corresponding right side bin, which may be empty
 	// If they are empty, we leave the iterator as null so we can emit left matches
@@ -414,7 +444,7 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 		right_hash = rhs_sink.hash_groups[right_group].get();
 		right_outer = gsink.right_outers.data() + right_group;
 		auto &right_sort = *(right_hash->global_sort);
-		right_itr = make_uniq<SBIterator>(right_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		right_itr = make_uniq<SBIterator>(right_sort, iterator_comp);
 		rhs_scanner = make_uniq<PayloadScanner>(right_sort, false);
 	}
 }

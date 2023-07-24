@@ -29,6 +29,9 @@ bool ExtensionHelper::IsRelease(const string &version_tag) {
 }
 
 const string ExtensionHelper::GetVersionDirectoryName() {
+#ifdef DUCKDB_WASM_VERSION
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_WASM_VERSION);
+#endif
 	if (IsRelease(DuckDB::LibraryVersion())) {
 		return NormalizeVersionTag(DuckDB::LibraryVersion());
 	} else {

@@ -218,6 +218,10 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 
 private:
+	//! Get the root binder (binder with no parent)
+	Binder *GetRootBinder();
+	//! Determine the depth of the binder
+	idx_t GetBinderDepth() const;
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table

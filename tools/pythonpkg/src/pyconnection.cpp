@@ -335,6 +335,10 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	}
 	auto &context = *connection->context;
 
+	if (context.transaction.HasActiveTransaction()) {
+		throw InvalidInputException(
+		    "This function can not be called with an active transaction!, commit or abort the existing one first");
+	}
 	if (registered_functions.find(name) != registered_functions.end()) {
 		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
 		                              "functions with the same name is not supported yet, please remove it first",
