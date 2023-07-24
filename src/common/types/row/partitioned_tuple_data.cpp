@@ -47,6 +47,10 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, DataCh
 	AppendUnified(state, input, append_sel, append_count);
 }
 
+bool PartitionedTupleData::UseFixedSizeMap() const {
+	return MaxPartitionIndex() < PartitionedTupleDataAppendState::MAP_THRESHOLD;
+}
+
 void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state, DataChunk &input,
                                          const SelectionVector &append_sel, const idx_t append_count) {
 	const idx_t actual_append_count = append_count == DConstants::INVALID_INDEX ? input.size() : append_count;
@@ -58,11 +62,19 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 	BuildPartitionSel(state, append_sel, actual_append_count);
 
 	// Early out: check if everything belongs to a single partition
-	const auto &partition_entries = state.partition_entries;
-	if (partition_entries.size() == 1) {
-		const auto &partition_index = partition_entries.begin()->first;
-		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+	optional_idx partition_index;
+	if (UseFixedSizeMap()) {
+		if (state.fixed_partition_entries.size() == 1) {
+			partition_index = state.fixed_partition_entries.begin()->first;
+		}
+	} else {
+		if (state.partition_entries.size() == 1) {
+			partition_index = state.partition_entries.begin()->first;
+		}
+	}
+	if (partition_index.IsValid()) {
+		auto &partition = *partitions[partition_index.GetIndex()];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
 
 		const auto size_before = partition.SizeInBytes();
 		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
@@ -122,33 +134,30 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
                                              const idx_t append_count) {
-	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
-	auto &partition_entries = state.partition_entries;
-	auto &partition_entries_arr = state.partition_entries_arr;
-	partition_entries.clear();
+	if (UseFixedSizeMap()) {
+		BuildPartitionSel<fixed_size_map_t<list_entry_t>>(state, state.fixed_partition_entries, append_sel,
+		                                                  append_count);
+	} else {
+		BuildPartitionSel<perfect_map_t<list_entry_t>>(state, state.partition_entries, append_sel, append_count);
+	}
+}
 
-	const auto max_partition_index = MaxPartitionIndex();
-	const auto use_arr = max_partition_index < PartitionedTupleDataAppendState::MAP_THRESHOLD;
+template <class MAP_TYPE>
+void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
+                                             const SelectionVector &append_sel, const idx_t append_count) {
+	const auto partition_indices = FlatVector::GetData<idx_t>(state.partition_indices);
+	partition_entries.clear();
 
 	switch (state.partition_indices.GetVectorType()) {
 	case VectorType::FLAT_VECTOR:
-		if (use_arr) {
-			std::fill_n(partition_entries_arr, max_partition_index + 1, list_entry_t(0, 0));
-			for (idx_t i = 0; i < append_count; i++) {
-				const auto index = append_sel.get_index(i);
-				const auto &partition_index = partition_indices[index];
-				partition_entries_arr[partition_index].length++;
-			}
-		} else {
-			for (idx_t i = 0; i < append_count; i++) {
-				const auto index = append_sel.get_index(i);
-				const auto &partition_index = partition_indices[index];
-				auto partition_entry = partition_entries.find(partition_index);
-				if (partition_entry == partition_entries.end()) {
-					partition_entries.emplace(partition_index, list_entry_t(0, 1));
-				} else {
-					partition_entry->second.length++;
-				}
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto index = append_sel.get_index(i);
+			const auto &partition_index = partition_indices[index];
+			auto partition_entry = partition_entries.find(partition_index);
+			if (partition_entry == partition_entries.end()) {
+				partition_entries[partition_index] = list_entry_t(0, 1);
+			} else {
+				partition_entry->second.length++;
 			}
 		}
 		break;
@@ -171,51 +180,35 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 	// Compute offsets from the counts
 	idx_t offset = 0;
-	if (use_arr) {
-		for (idx_t partition_index = 0; partition_index <= max_partition_index; partition_index++) {
-			auto &partition_entry = partition_entries_arr[partition_index];
-			partition_entry.offset = offset;
-			offset += partition_entry.length;
-		}
-	} else {
-		for (auto &pc : partition_entries) {
-			auto &partition_entry = pc.second;
-			partition_entry.offset = offset;
-			offset += partition_entry.length;
-		}
+	for (auto &pc : partition_entries) {
+		auto &partition_entry = pc.second;
+		partition_entry.offset = offset;
+		offset += partition_entry.length;
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
 	auto &partition_sel = state.partition_sel;
 	auto &reverse_partition_sel = state.reverse_partition_sel;
-	if (use_arr) {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto index = append_sel.get_index(i);
-			const auto &partition_index = partition_indices[index];
-			auto &partition_offset = partition_entries_arr[partition_index].offset;
-			reverse_partition_sel[index] = partition_offset;
-			partition_sel[partition_offset++] = index;
-		}
-		// Now just add it to the map anyway so the rest of the functionality is shared
-		for (idx_t partition_index = 0; partition_index <= max_partition_index; partition_index++) {
-			const auto &partition_entry = partition_entries_arr[partition_index];
-			if (partition_entry.length != 0) {
-				partition_entries.emplace(partition_index, partition_entry);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < append_count; i++) {
-			const auto index = append_sel.get_index(i);
-			const auto &partition_index = partition_indices[index];
-			auto &partition_offset = partition_entries[partition_index].offset;
-			reverse_partition_sel[index] = partition_offset;
-			partition_sel[partition_offset++] = index;
-		}
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto index = append_sel.get_index(i);
+		const auto &partition_index = partition_indices[index];
+		auto &partition_offset = partition_entries[partition_index].offset;
+		reverse_partition_sel[index] = partition_offset;
+		partition_sel[partition_offset++] = index;
 	}
 }
 
 void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state) {
-	for (auto &pc : state.partition_entries) {
+	if (UseFixedSizeMap()) {
+		BuildBufferSpace<fixed_size_map_t<list_entry_t>>(state, state.fixed_partition_entries);
+	} else {
+		BuildBufferSpace<perfect_map_t<list_entry_t>>(state, state.partition_entries);
+	}
+}
+
+template <class MAP_TYPE>
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries) {
+	for (auto &pc : partition_entries) {
 		const auto &partition_index = pc.first;
 
 		// Partition, pin state for this partition index

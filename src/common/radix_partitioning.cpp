@@ -26,7 +26,7 @@ public:
 };
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 0:
@@ -187,6 +187,9 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 		column_ids.emplace_back(col_idx);
 	}
 	partitions[0]->InitializeAppend(state.chunk_state, std::move(column_ids));
+
+	// Initialize fixed-size map
+	state.fixed_partition_entries.resize(RadixPartitioning::NumberOfPartitions(radix_bits));
 }
 
 void RadixPartitionedTupleData::ComputePartitionIndices(PartitionedTupleDataAppendState &state, DataChunk &input) {

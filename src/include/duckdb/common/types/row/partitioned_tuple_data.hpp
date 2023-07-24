@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/fixed_size_map.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
@@ -27,7 +28,7 @@ public:
 
 	static constexpr idx_t MAP_THRESHOLD = 32;
 	perfect_map_t<list_entry_t> partition_entries;
-	list_entry_t partition_entries_arr[MAP_THRESHOLD];
+	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
 	vector<unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
@@ -134,12 +135,19 @@ protected:
 
 	//! Create a new shared allocator
 	void CreateAllocator();
+	//! Whether to use fixed size map or regular marp
+	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                       const idx_t append_count);
+	template <class MAP_TYPE>
+	void BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
+	                       const SelectionVector &append_sel, const idx_t append_count);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
+	template <class MAP_TYPE>
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		if (allocators) {
