@@ -2,19 +2,31 @@ import os
 import json
 import re
 
-source_base = os.path.sep.join('src/include/duckdb/storage/serialization'.split('/'))
-target_base = os.path.sep.join('src/storage/serialization'.split('/'))
+targets = [
+    {
+        'source': 'src/include/duckdb/storage/serialization',
+        'target': 'src/storage/serialization'
+    },
+    {
+        'source': 'extension/parquet/include/',
+        'target': 'extension/parquet'
+    }
+
+]
 
 file_list = []
-for fname in os.listdir(source_base):
-    if '.json' not in fname:
-        continue
-    file_list.append(
-        {
-            'source': os.path.join(source_base, fname),
-            'target': os.path.join(target_base, 'serialize_' + fname.replace('.json', '.cpp'))
-        }
-    )
+for target in targets:
+    source_base = os.path.sep.join(target['source'].split('/'))
+    target_base = os.path.sep.join(target['target'].split('/'))
+    for fname in os.listdir(source_base):
+        if '.json' not in fname:
+            continue
+        file_list.append(
+            {
+                'source': os.path.join(source_base, fname),
+                'target': os.path.join(target_base, 'serialize_' + fname.replace('.json', '.cpp'))
+            }
+        )
 
 
 include_base = '#include "${FILENAME}"\n'

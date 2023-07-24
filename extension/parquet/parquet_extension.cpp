@@ -152,20 +152,6 @@ void ParquetOptions::Deserialize(FieldReader &reader) {
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 }
 
-void ParquetOptions::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("binary_as_string", binary_as_string);
-	serializer.WriteProperty("file_row_number", file_row_number);
-	serializer.WriteProperty("file_options", file_options);
-}
-
-ParquetOptions ParquetOptions::FormatDeserialize(FormatDeserializer &deserializer) {
-	ParquetOptions result;
-	deserializer.ReadProperty("binary_as_string", result.binary_as_string);
-	deserializer.ReadProperty("file_row_number", result.file_row_number);
-	deserializer.ReadProperty("file_options", result.file_options);
-	return result;
-}
-
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
