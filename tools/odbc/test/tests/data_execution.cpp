@@ -52,8 +52,8 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 	SQLULEN num_processed;
 
 	// Prepare a statement
-	EXECUTE_AND_CHECK("SQLPrepare", SQLPrepare, hstmt,
-	                  ConvertToSQLCHAR("SELECT id FROM bytea_table WHERE t = ?"), SQL_NTS);
+	EXECUTE_AND_CHECK("SQLPrepare", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT id FROM bytea_table WHERE t = ?"),
+	                  SQL_NTS);
 
 	// Set STMT attributes PARAM_BIND_TYPE, PARAM_STATUS_PTR, PARAMS_PROCESSED_PTR, and PARAMSET_SIZE
 	SQLRETURN ret = SQLSetStmtAttr(hstmt, SQL_ATTR_PARAM_BIND_TYPE, SQL_PARAM_BIND_BY_COLUMN, 0);
@@ -98,7 +98,7 @@ static void ArrayBindingDataAtExecution(HSTMT &hstmt) {
 		ret = SQLMoreResults(hstmt);
 		if (ret == SQL_NO_DATA) {
 			break;
-		} else if (ret != SQL_SUCCESS || ret != SQL_SUCCESS_WITH_INFO) {
+		} else if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 			ODBC_CHECK(ret, "SQLMoreResults");
 		}
 	}
