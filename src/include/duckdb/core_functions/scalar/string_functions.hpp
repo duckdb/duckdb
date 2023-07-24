@@ -453,4 +453,13 @@ struct OrdFun {
 	static constexpr const char *Name = "ord";
 };
 
+struct ToBaseFun {
+	static constexpr const char *Name = "to_base";
+	static constexpr const char *Parameters = "number,radix,min_length";
+	static constexpr const char *Description = "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length";
+	static constexpr const char *Example = "to_base(42, 16)";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

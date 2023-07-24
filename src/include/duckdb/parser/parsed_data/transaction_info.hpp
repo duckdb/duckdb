@@ -15,6 +15,10 @@ namespace duckdb {
 enum class TransactionType : uint8_t { INVALID, BEGIN_TRANSACTION, COMMIT, ROLLBACK };
 
 struct TransactionInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::TRANSACTION_INFO;
+
+public:
 	explicit TransactionInfo(TransactionType type);
 
 	//! The type of transaction statement
@@ -23,6 +27,12 @@ struct TransactionInfo : public ParseInfo {
 public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	TransactionInfo();
 };
 
 } // namespace duckdb

@@ -8,16 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/constants.hpp"
-#include "duckdb/common/vector.hpp"
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
+// structs
 struct BufferEntry {
 	BufferEntry(const data_ptr_t &ptr, const idx_t &allocation_count) : ptr(ptr), allocation_count(allocation_count) {
 	}
@@ -26,7 +24,7 @@ struct BufferEntry {
 };
 
 //! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory buffers.
-//! The pointers are SwizzleablePointers, and the leftmost byte (swizzle flag and type) must always be zero.
+//! The pointers are Node pointers, and the leftmost byte (serialize flag and type) must always be zero.
 class FixedSizeAllocator {
 public:
 	//! Fixed size of the buffers
@@ -65,17 +63,17 @@ public:
 	Allocator &allocator;
 
 public:
-	//! Get a new pointer to data, might cause a new buffer allocation
-	SwizzleablePointer New();
-	//! Free the data of the pointer
-	void Free(const SwizzleablePointer ptr);
-	//! Get the data of the pointer
+	//! Get a new Node pointer to data, might cause a new buffer allocation
+	Node New();
+	//! Free the data of the Node pointer
+	void Free(const Node ptr);
+	//! Get the data of the Node pointer
 	template <class T>
-	inline T *Get(const SwizzleablePointer ptr) const {
+	inline T *Get(const Node ptr) const {
 		return (T *)Get(ptr);
 	}
 
-	//! Resets the allocator, which e.g. becomes necessary during DELETE FROM table
+	//! Resets the allocator, e.g., becomes necessary during DELETE FROM table
 	void Reset();
 
 	//! Returns the allocated memory size in bytes
@@ -83,32 +81,32 @@ public:
 		return buffers.size() * BUFFER_ALLOC_SIZE;
 	}
 
-	//! Merge another FixedSizeAllocator with this allocator. Both must have the same allocation size
+	//! Merge another FixedSizeAllocator into this allocator. Both must have the same allocation size
 	void Merge(FixedSizeAllocator &other);
 
 	//! Initialize a vacuum operation, and return true, if the allocator needs a vacuum
 	bool InitializeVacuum();
 	//! Finalize a vacuum operation by freeing all buffers exceeding the min_vacuum_buffer_id
 	void FinalizeVacuum();
-	//! Returns true, if a pointer qualifies for a vacuum operation, and false otherwise
-	inline bool NeedsVacuum(const SwizzleablePointer ptr) const {
-		if (ptr.buffer_id >= min_vacuum_buffer_id) {
+	//! Returns true, if a Node pointer qualifies for a vacuum operation, and false otherwise
+	inline bool NeedsVacuum(const Node ptr) const {
+		if (ptr.GetBufferId() >= min_vacuum_buffer_id) {
 			return true;
 		}
 		return false;
 	}
-	//! Vacuums a pointer
-	SwizzleablePointer VacuumPointer(const SwizzleablePointer ptr);
+	//! Vacuums a Node pointer
+	Node VacuumPointer(const Node ptr);
 
 	//! Verify that the allocation counts match the existing positions on the buffers
 	void Verify() const;
 
 private:
-	//! Returns the data_ptr_t of a pointer
-	inline data_ptr_t Get(const SwizzleablePointer ptr) const {
-		D_ASSERT(ptr.buffer_id < buffers.size());
-		D_ASSERT(ptr.offset < allocations_per_buffer);
-		return buffers[ptr.buffer_id].ptr + ptr.offset * allocation_size + allocation_offset;
+	//! Returns the data_ptr_t of a Node pointer
+	inline data_ptr_t Get(const Node ptr) const {
+		D_ASSERT(ptr.GetBufferId() < buffers.size());
+		D_ASSERT(ptr.GetOffset() < allocations_per_buffer);
+		return buffers[ptr.GetBufferId()].ptr + ptr.GetOffset() * allocation_size + allocation_offset;
 	}
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t allocation_count);

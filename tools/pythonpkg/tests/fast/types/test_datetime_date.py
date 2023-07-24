@@ -1,6 +1,7 @@
 import duckdb
 import datetime
 
+
 class TestDateTimeDate(object):
     def test_date_infinity(self):
         con = duckdb.connect()

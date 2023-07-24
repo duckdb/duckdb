@@ -948,7 +948,7 @@ LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
 	// union types always have a hidden "tag" field in front
-	members.insert(members.begin(), {"", LogicalType::TINYINT});
+	members.insert(members.begin(), {"", LogicalType::UTINYINT});
 	auto info = make_shared<StructTypeInfo>(std::move(members));
 	return LogicalType(LogicalTypeId::UNION, std::move(info));
 }
@@ -1104,18 +1104,6 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto id = reader.ReadRequired<LogicalTypeId>();
 	auto info = ExtraTypeInfo::Deserialize(reader);
 	reader.Finalize();
-
-	return LogicalType(id, std::move(info));
-}
-
-void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("id", id_);
-	serializer.WriteOptionalProperty("type_info", type_info_.get());
-}
-
-LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 
 	return LogicalType(id, std::move(info));
 }

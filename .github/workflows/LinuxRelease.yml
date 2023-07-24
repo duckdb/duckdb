@@ -138,7 +138,7 @@ jobs:
 
      - uses: ./.github/actions/ubuntu_18_setup
        with:
-        cccache: 1
+        ccache: 1
         aarch64_cross_compile: 1
 
      - name: Install unixODBC
@@ -192,14 +192,13 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
+        vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         treat_warn_as_error: 0
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
 
     - uses: actions/upload-artifact@v3
       with:
@@ -228,6 +227,8 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
+          vcpkg_target_triplet: arm64-linux
+          build_vcpkg_extensions: 0 # Disabled for now: don't properly work & we want to switch to manylinux image anyway before next release
           deploy_as: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
@@ -235,7 +236,6 @@ jobs:
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
-          openssl_path: ${{ env.VCPKG_ROOT }}/installed/arm64-linux
 
       - uses: actions/upload-artifact@v3
         with:
@@ -285,7 +285,10 @@ jobs:
 
     - name: Check if extension_functions.hpp is up to date
       shell: bash
+      env:
+        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/vcpkg_extensions.cmake'
       run: |
+        make extension_configuration
         python scripts/generate_extensions_function.py --validate
 
  symbol-leakage:

@@ -28,7 +28,7 @@ struct BitwiseOrFun {
 	static constexpr const char *Name = "|";
 	static constexpr const char *Parameters = "left,right";
 	static constexpr const char *Description = "Bitwise OR";
-	static constexpr const char *Example = "32 & 3";
+	static constexpr const char *Example = "32 | 3";
 
 	static ScalarFunctionSet GetFunctions();
 };

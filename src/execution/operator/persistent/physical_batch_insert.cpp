@@ -344,16 +344,15 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
-	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
 	if (!lstate.current_collection) {
-		return;
+		return SinkCombineResultType::FINISHED;
 	}
 
 	if (lstate.current_collection->GetTotalRows() > 0) {
@@ -366,11 +365,13 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 		lock_guard<mutex> l(gstate.lock);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
+                                               OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 
 	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
 	// together

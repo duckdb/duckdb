@@ -33,6 +33,9 @@ void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
 //===--------------------------------------------------------------------===//
 // AlterTableInfo
 //===--------------------------------------------------------------------===//
+AlterTableInfo::AlterTableInfo(AlterTableType type) : AlterInfo(AlterType::ALTER_TABLE), alter_table_type(type) {
+}
+
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
@@ -94,6 +97,10 @@ RenameColumnInfo::RenameColumnInfo(AlterEntryData data, string old_name_p, strin
     : AlterTableInfo(AlterTableType::RENAME_COLUMN, std::move(data)), old_name(std::move(old_name_p)),
       new_name(std::move(new_name_p)) {
 }
+
+RenameColumnInfo::RenameColumnInfo() : AlterTableInfo(AlterTableType::RENAME_COLUMN) {
+}
+
 RenameColumnInfo::~RenameColumnInfo() {
 }
 
@@ -115,9 +122,13 @@ unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(FieldReader &reader, AlterEn
 //===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
+RenameTableInfo::RenameTableInfo() : AlterTableInfo(AlterTableType::RENAME_TABLE) {
+}
+
 RenameTableInfo::RenameTableInfo(AlterEntryData data, string new_name_p)
     : AlterTableInfo(AlterTableType::RENAME_TABLE, std::move(data)), new_table_name(std::move(new_name_p)) {
 }
+
 RenameTableInfo::~RenameTableInfo() {
 }
 
@@ -137,6 +148,10 @@ unique_ptr<AlterInfo> RenameTableInfo::Deserialize(FieldReader &reader, AlterEnt
 //===--------------------------------------------------------------------===//
 // AddColumnInfo
 //===--------------------------------------------------------------------===//
+AddColumnInfo::AddColumnInfo(ColumnDefinition new_column_p)
+    : AlterTableInfo(AlterTableType::ADD_COLUMN), new_column(std::move(new_column_p)) {
+}
+
 AddColumnInfo::AddColumnInfo(AlterEntryData data, ColumnDefinition new_column, bool if_column_not_exists)
     : AlterTableInfo(AlterTableType::ADD_COLUMN, std::move(data)), new_column(std::move(new_column)),
       if_column_not_exists(if_column_not_exists) {
@@ -163,6 +178,9 @@ unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, AlterEntry
 //===--------------------------------------------------------------------===//
 // RemoveColumnInfo
 //===--------------------------------------------------------------------===//
+RemoveColumnInfo::RemoveColumnInfo() : AlterTableInfo(AlterTableType::REMOVE_COLUMN) {
+}
+
 RemoveColumnInfo::RemoveColumnInfo(AlterEntryData data, string removed_column, bool if_column_exists, bool cascade)
     : AlterTableInfo(AlterTableType::REMOVE_COLUMN, std::move(data)), removed_column(std::move(removed_column)),
       if_column_exists(if_column_exists), cascade(cascade) {
@@ -190,6 +208,9 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(FieldReader &reader, AlterEn
 //===--------------------------------------------------------------------===//
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
+ChangeColumnTypeInfo::ChangeColumnTypeInfo() : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE) {
+}
+
 ChangeColumnTypeInfo::ChangeColumnTypeInfo(AlterEntryData data, string column_name, LogicalType target_type,
                                            unique_ptr<ParsedExpression> expression)
     : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE, std::move(data)), column_name(std::move(column_name)),
@@ -220,6 +241,9 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, Alt
 //===--------------------------------------------------------------------===//
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
+SetDefaultInfo::SetDefaultInfo() : AlterTableInfo(AlterTableType::SET_DEFAULT) {
+}
+
 SetDefaultInfo::SetDefaultInfo(AlterEntryData data, string column_name_p, unique_ptr<ParsedExpression> new_default)
     : AlterTableInfo(AlterTableType::SET_DEFAULT, std::move(data)), column_name(std::move(column_name_p)),
       expression(std::move(new_default)) {
@@ -246,6 +270,9 @@ unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, AlterEntr
 //===--------------------------------------------------------------------===//
 // SetNotNullInfo
 //===--------------------------------------------------------------------===//
+SetNotNullInfo::SetNotNullInfo() : AlterTableInfo(AlterTableType::SET_NOT_NULL) {
+}
+
 SetNotNullInfo::SetNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::SET_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -268,6 +295,9 @@ unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, AlterEntr
 //===--------------------------------------------------------------------===//
 // DropNotNullInfo
 //===--------------------------------------------------------------------===//
+DropNotNullInfo::DropNotNullInfo() : AlterTableInfo(AlterTableType::DROP_NOT_NULL) {
+}
+
 DropNotNullInfo::DropNotNullInfo(AlterEntryData data, string column_name_p)
     : AlterTableInfo(AlterTableType::DROP_NOT_NULL, std::move(data)), column_name(std::move(column_name_p)) {
 }
@@ -290,6 +320,9 @@ unique_ptr<AlterInfo> DropNotNullInfo::Deserialize(FieldReader &reader, AlterEnt
 //===--------------------------------------------------------------------===//
 // AlterForeignKeyInfo
 //===--------------------------------------------------------------------===//
+AlterForeignKeyInfo::AlterForeignKeyInfo() : AlterTableInfo(AlterTableType::FOREIGN_KEY_CONSTRAINT) {
+}
+
 AlterForeignKeyInfo::AlterForeignKeyInfo(AlterEntryData data, string fk_table, vector<string> pk_columns,
                                          vector<string> fk_columns, vector<PhysicalIndex> pk_keys,
                                          vector<PhysicalIndex> fk_keys, AlterForeignKeyType type_p)
@@ -328,6 +361,9 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, Alte
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
+AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VIEW) {
+}
+
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
                 data.if_not_found),
@@ -368,6 +404,8 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(FieldReader &reader) {
 //===--------------------------------------------------------------------===//
 // RenameViewInfo
 //===--------------------------------------------------------------------===//
+RenameViewInfo::RenameViewInfo() : AlterViewInfo(AlterViewType::RENAME_VIEW) {
+}
 RenameViewInfo::RenameViewInfo(AlterEntryData data, string new_name_p)
     : AlterViewInfo(AlterViewType::RENAME_VIEW, std::move(data)), new_view_name(std::move(new_name_p)) {
 }
