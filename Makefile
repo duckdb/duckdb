@@ -51,6 +51,7 @@ ifeq (${STATIC_LIBCPP}, 1)
 endif
 
 CMAKE_VARS ?=
+CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 ifneq (${DUCKDB_EXTENSIONS}, )
@@ -215,6 +216,9 @@ endif
 
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
+endif
+ifneq ("${CMAKE_LLVM_PATH}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
 endif
 
 clean:
