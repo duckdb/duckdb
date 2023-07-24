@@ -54,7 +54,6 @@ private:
 	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value);
 
 	SQLLEN *GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescOctetLengthPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 
 private:
 	OdbcHandleStmt *stmt;
