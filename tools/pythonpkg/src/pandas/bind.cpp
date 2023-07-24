@@ -133,7 +133,8 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df.names[col_idx]));
-		auto column_type = BindColumn(df[col_idx], bind_data, context);
+		auto column = df[col_idx];
+		auto column_type = BindColumn(column, bind_data, context);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));
