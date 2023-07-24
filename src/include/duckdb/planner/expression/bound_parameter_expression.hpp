@@ -47,7 +47,7 @@ public:
 	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
 
 private:
-	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, const string &identifier,
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier,
 	                         LogicalType return_type, shared_ptr<BoundParameterData> parameter_data);
 };
 

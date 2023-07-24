@@ -13,10 +13,10 @@ BoundParameterExpression::BoundParameterExpression(const string &identifier)
 }
 
 BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set,
-                                                   const string &identifier, LogicalType return_type,
+                                                   string identifier, LogicalType return_type,
                                                    shared_ptr<BoundParameterData> parameter_data)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
-      identifier(identifier) {
+      identifier(std::move(identifier)) {
 	// check if we have already deserialized a parameter with this number
 	auto entry = global_parameter_set.find(identifier);
 	if (entry == global_parameter_set.end()) {
@@ -91,11 +91,11 @@ void BoundParameterExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeserializationState &state,
                                                              FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
-	auto parameter_nr = reader.ReadRequired<string>();
+	auto identifier = reader.ReadRequired<string>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
 	auto result = unique_ptr<BoundParameterExpression>(new BoundParameterExpression(
-	    global_parameter_set, parameter_nr, std::move(return_type), std::move(parameter_data)));
+	    global_parameter_set, std::move(identifier), std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 
