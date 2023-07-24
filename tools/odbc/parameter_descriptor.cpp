@@ -417,14 +417,6 @@ SQLLEN *ParameterDescriptor::GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_
 	return apd_record.sql_desc_indicator_ptr + set_idx;
 }
 
-void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr) {
-	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
-	if (cur_apd->header.sql_desc_bind_offset_ptr) {
-		sql_ind_ptr += *cur_apd->header.sql_desc_bind_offset_ptr;
-	}
-	sql_ind_ptr = ind_ptr;
-}
-
 void ParameterDescriptor::SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value) {
 	auto sql_ind_ptr = apd_record.sql_desc_indicator_ptr;
 	if (cur_apd->header.sql_desc_bind_offset_ptr) {

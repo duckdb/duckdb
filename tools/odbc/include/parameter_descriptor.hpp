@@ -51,7 +51,6 @@ private:
 	void SetSQLDescDataPtr(DescRecord &apd_record, SQLPOINTER data_ptr);
 
 	SQLLEN *GetSQLDescIndicatorPtr(DescRecord &apd_record, idx_t set_idx = 0);
-	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN *ind_ptr);
 	void SetSQLDescIndicatorPtr(DescRecord &apd_record, SQLLEN value);
 
 	SQLLEN *GetSQLDescOctetLengthPtr(DescRecord &apd_record, idx_t set_idx = 0);
