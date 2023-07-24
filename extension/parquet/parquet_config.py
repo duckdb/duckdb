@@ -12,7 +12,21 @@ include_directories = [
     ]
 ]
 # source files
-source_files = [os.path.sep.join(x.split('/')) for x in ['extension/parquet/parquet_extension.cpp', 'extension/parquet/column_writer.cpp', 'extension/parquet/serialize_parquet.cpp', 'third_party/parquet/parquet_constants.cpp',  'third_party/parquet/parquet_types.cpp',  'third_party/thrift/thrift/protocol/TProtocol.cpp',  'third_party/thrift/thrift/transport/TTransportException.cpp',  'third_party/thrift/thrift/transport/TBufferTransports.cpp',  'third_party/snappy/snappy.cc',  'third_party/snappy/snappy-sinksource.cc']]
+source_files = [
+    os.path.sep.join(x.split('/'))
+    for x in [
+        'extension/parquet/parquet_extension.cpp',
+        'extension/parquet/column_writer.cpp',
+        'extension/parquet/serialize_parquet.cpp',
+        'third_party/parquet/parquet_constants.cpp',
+        'third_party/parquet/parquet_types.cpp',
+        'third_party/thrift/thrift/protocol/TProtocol.cpp',
+        'third_party/thrift/thrift/transport/TTransportException.cpp',
+        'third_party/thrift/thrift/transport/TBufferTransports.cpp',
+        'third_party/snappy/snappy.cc',
+        'third_party/snappy/snappy-sinksource.cc',
+    ]
+]
 # zstd
 source_files += [
     os.path.sep.join(x.split('/'))
