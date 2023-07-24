@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
@@ -37,6 +38,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the prefix
 	static inline Prefix &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
 	}
 
@@ -71,7 +73,7 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(ART &art, const bool only_verify);
+	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -80,7 +82,7 @@ public:
 
 	//! Vacuum the child of the node
 	inline void Vacuum(ART &art, const ARTFlags &flags) {
-		Node::Vacuum(art, ptr, flags);
+		ptr.Vacuum(art, flags);
 	}
 
 private:

@@ -31,10 +31,16 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 
 protected:
 	void ResolveTypes() override;
+
+private:
+	LogicalPivot();
 };
 } // namespace duckdb

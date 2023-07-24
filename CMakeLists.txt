@@ -295,7 +295,7 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
-if(WIN32)
+if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
@@ -648,6 +648,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
         set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+      elseif (ZOS)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
       else()
         # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -918,6 +920,7 @@ endforeach()
 set(LINKED_EXTENSIONS "")
 set(NONLINKED_EXTENSIONS "")
 set(SKIPPED_EXTENSIONS "")
+set(TEST_LOADED_EXTENSIONS "")
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD})
@@ -926,6 +929,10 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     list(APPEND LINKED_EXTENSIONS ${EXT_NAME})
   else()
     list(APPEND NONLINKED_EXTENSIONS ${EXT_NAME})
+  endif()
+
+  if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+    list(APPEND TEST_LOADED_EXTENSIONS ${EXT_NAME})
   endif()
 endforeach()
 
@@ -940,6 +947,10 @@ endif()
 if(NOT "${SKIPPED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${SKIPPED_EXTENSIONS}")
   message(STATUS "Extensions explicitly skipped: ${EXT_LIST_DEBUG_MESSAGE}")
+endif()
+if(NOT "${TEST_LOADED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${TEST_LOADED_EXTENSIONS}")
+  message(STATUS "Tests loaded from extensions: ${EXT_LIST_DEBUG_MESSAGE}")
 endif()
 
 # Special build where instead of building duckdb, we produce several artifact that require parsing the

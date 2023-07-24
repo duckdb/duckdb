@@ -1,0 +1,327 @@
+[
+  {
+    "class": "LogicalType",
+    "includes": [
+      "duckdb/common/types.hpp",
+      "duckdb/common/extra_type_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "id",
+        "type": "LogicalTypeId",
+        "property": "id_"
+      },
+      {
+        "name": "type_info",
+        "type": "shared_ptr<ExtraTypeInfo>",
+        "property": "type_info_",
+        "optional": true
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["id", "type_info"]
+  },
+  {
+    "class": "CommonTableExpressionInfo",
+    "includes": [
+      "duckdb/parser/common_table_expression_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*"
+      },
+      {
+        "name": "materialized",
+        "type": "CTEMaterialize"
+      }
+    ]
+  },
+  {
+    "class": "CommonTableExpressionMap",
+    "includes": [
+      "duckdb/parser/query_node.hpp"
+    ],
+    "members": [
+      {
+        "name": "map",
+        "type": "unordered_map<string, CommonTableExpressionInfo*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "OrderByNode",
+    "includes": [
+      "duckdb/parser/result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
+  },
+  {
+    "class": "BoundOrderByNode",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "name": "expression",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
+  },
+  {
+    "class": "CaseCheck",
+    "includes": [
+      "duckdb/parser/expression/case_expression.hpp"
+    ],
+    "members": [
+      {
+        "name": "when_expr",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "then_expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundCaseCheck",
+    "includes": [
+      "duckdb/planner/expression/bound_case_expression.hpp"
+    ],
+    "members": [
+      {
+        "name": "when_expr",
+        "type": "Expression*"
+      },
+      {
+        "name": "then_expr",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "SampleOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/sample_options.hpp"
+    ],
+    "members": [
+      {
+        "name": "sample_size",
+        "type": "Value"
+      },
+      {
+        "name": "is_percentage",
+        "type": "bool"
+      },
+      {
+        "name": "method",
+        "type": "SampleMethod"
+      },
+      {
+        "name": "seed",
+        "type": "int64_t"
+      }
+    ]
+  },
+  {
+    "class": "PivotColumn",
+    "includes": [
+      "duckdb/parser/tableref/pivotref.hpp"
+    ],
+    "members": [
+      {
+        "name": "pivot_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "unpivot_names",
+        "type": "vector<string>"
+      },
+      {
+        "name": "entries",
+        "type": "vector<PivotColumnEntry>"
+      },
+      {
+        "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundPivotInfo",
+    "includes": [
+      "duckdb/planner/tableref/bound_pivotref.hpp"
+    ],
+    "members": [
+      {
+        "name": "group_count",
+        "type": "idx_t"
+      },
+      {
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "pivot_values",
+        "type": "vector<string>"
+      },
+      {
+        "name": "aggregates",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnDefinition",
+    "includes": [
+      "duckdb/parser/column_definition.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "expression",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "category",
+        "type": "TableColumnType"
+      },
+      {
+        "name": "compression_type",
+        "type": "CompressionType"
+      }
+    ],
+    "constructor": ["name", "type", "expression", "category"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnList",
+    "includes": [
+      "duckdb/parser/column_list.hpp"
+    ],
+    "members": [
+      {
+        "name": "columns",
+        "type": "vector<ColumnDefinition>"
+      }
+    ],
+    "constructor": ["columns"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnBinding",
+    "includes": [
+      "duckdb/planner/column_binding.hpp"
+    ],
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "column_index",
+        "type": "idx_t"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "BoundParameterData",
+    "includes": [
+      "duckdb/planner/expression/bound_parameter_data.hpp"
+    ],
+    "members": [
+      {
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "constructor": ["value"],
+    "pointer_type": "shared_ptr"
+  },
+  {
+    "class": "JoinCondition",
+    "includes": [
+      "duckdb/planner/joinside.hpp"
+    ],
+    "members": [
+      {
+        "name": "left",
+        "type": "Expression*"
+      },
+      {
+        "name": "right",
+        "type": "Expression*"
+      },
+      {
+        "name": "comparison",
+        "type": "ExpressionType"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "VacuumOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/vacuum_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "vacuum",
+        "type": "bool"
+      },
+      {
+        "name": "analyze",
+        "type": "bool"
+      }
+    ],
+    "pointer_type": "none"
+  }
+]

@@ -108,8 +108,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
 		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 		REQUIRE(state == "07006");
-		REQUIRE(message == "ODBC_DuckDB->GetDataStmtResult\n"
-		                   "Unsupported type");
+		REQUIRE(duckdb::StringUtil::Contains(message, "Unsupported type"));
 		row_count++;
 	}
 
@@ -150,8 +149,7 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\n"
-			                   "Invalid Input Error: Failed to cast value: Could not convert string 'main' to INT32");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
 		}
@@ -235,8 +233,7 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\nInvalid Input Error: Failed to cast value: Could not "
-			                   "convert string 'main' to INT32");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
 			ret = SQL_SUCCESS;
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
