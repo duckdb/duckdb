@@ -243,6 +243,7 @@ void RadixHTGlobalSinkState::AddToFinal(MaterializedAggregateData &&data) {
 
 void RadixHTGlobalSinkState::Destroy() {
 	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
+		// Already destroyed
 		return;
 	}
 
