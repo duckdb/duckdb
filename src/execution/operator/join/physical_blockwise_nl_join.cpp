@@ -62,8 +62,8 @@ SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, DataChun
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BlockwiseNLJoinGlobalState>();
+                                                   OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalState>();
 	gstate.right_outer.Initialize(gstate.right_chunks.Count());
 
 	if (gstate.right_chunks.Count() == 0 && EmptyResultIfRHSIsEmpty()) {

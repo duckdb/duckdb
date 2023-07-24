@@ -12,6 +12,11 @@ LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
       action_type(OnConflictAction::THROW) {
 }
 
+LogicalInsert::LogicalInsert(ClientContext &context, const string &catalog, const string &schema, const string &table)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
+}
+
 void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField<idx_t>(insert_values.size());
 	for (auto &entry : insert_values) {
@@ -47,7 +52,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 
 	auto column_index_map = reader.ReadRequiredList<idx_t, physical_index_vector_t<idx_t>>();
 	auto expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
@@ -65,7 +70,8 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 
 	auto &catalog = Catalog::GetCatalog(context, info->catalog);
 
-	auto &table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
+	auto &table_catalog_entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->Cast<CreateTableInfo>().table);
 	auto result = make_uniq<LogicalInsert>(table_catalog_entry, table_index);
 	result->type = state.type;
 	result->return_chunk = return_chunk;

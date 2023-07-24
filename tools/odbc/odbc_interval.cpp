@@ -9,7 +9,7 @@ using duckdb::OdbcInterval;
 using duckdb::SQLStateType;
 using duckdb::Value;
 
-bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcHandleStmt *stmt) {
+bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcHandleStmt *hstmt) {
 	switch (value.type().id()) {
 	case LogicalTypeId::INTERVAL:
 		interval = IntervalValue::Get(value);
@@ -19,10 +19,10 @@ bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcH
 		auto &val_str = StringValue::Get(value);
 		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
 			error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));
-			auto data_source = stmt->dbc->GetDataSourceName();
+			auto data_source = hstmt->dbc->GetDataSourceName();
 			duckdb::DiagRecord diag_rec(error_message, SQLStateType::INVALID_DATATIME_FORMAT, data_source);
-			stmt->odbc_diagnostic->FormatDiagnosticMessage(diag_rec, data_source, "OdbcInterval::GetInterval");
-			stmt->odbc_diagnostic->AddDiagRecord(diag_rec);
+			hstmt->odbc_diagnostic->FormatDiagnosticMessage(diag_rec, data_source, "OdbcInterval::GetInterval");
+			hstmt->odbc_diagnostic->AddDiagRecord(diag_rec);
 			return false;
 		}
 		return true;

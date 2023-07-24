@@ -89,11 +89,13 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                      LocalSinkState &lstate) const {
-	auto &state = lstate.Cast<BatchCopyToLocalState>();
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context,
+                                                       OperatorSinkCombineInput &input) const {
+	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
+	auto &gstate = input.global_state.Cast<BatchCopyToGlobalState>();
 	gstate.rows_copied += state.rows_copied;
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -114,8 +116,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 }
 
 SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	FinalFlush(context, gstate_p);
+                                                   OperatorSinkFinalizeInput &input) const {
+	FinalFlush(context, input.global_state);
 	return SinkFinalizeType::READY;
 }
 

@@ -123,11 +123,10 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
+SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 
-	auto &gstate = gstate_p.Cast<CreateIndexGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
@@ -136,14 +135,16 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 	// vacuum excess memory
 	gstate.global_index->Vacuum();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
+                                               OperatorSinkFinalizeInput &input) const {
 
 	// here, we just set the resulting global index as the newly created index of the table
 
-	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	auto &storage = table.GetStorage();

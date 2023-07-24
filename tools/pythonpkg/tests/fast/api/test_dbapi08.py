@@ -4,6 +4,7 @@ import pytest
 import duckdb
 from conftest import NumpyPandas, ArrowPandas
 
+
 class TestType(object):
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_fetchdf(self, pandas):

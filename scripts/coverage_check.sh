@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # prepare coverage file
 lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
 lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
@@ -15,7 +17,6 @@ build/coverage/test/unittest "[intraquery]"
 build/coverage/test/unittest "[interquery]"
 build/coverage/test/unittest "[detailed_profiler]"
 build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
-build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 python3 tools/shell/shell-test.py build/coverage/duckdb
 
 # finalize coverage file

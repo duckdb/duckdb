@@ -61,10 +61,7 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other
 		return false;
 	}
 	for (idx_t i = 0; i < orders.size(); i++) {
-		if (orders[i].type != other.orders[i].type) {
-			return false;
-		}
-		if (!Expression::Equals(*orders[i].expression, *other.orders[i].expression)) {
+		if (!orders[i].Equals(other.orders[i])) {
 			return false;
 		}
 	}
