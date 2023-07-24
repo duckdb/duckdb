@@ -3,6 +3,7 @@ import pytest
 import pandas
 import datetime
 
+
 # Make sure the variable get's properly reset even in case of error
 @pytest.fixture(autouse=True)
 def scoped_copy_on_write_setting():
@@ -13,21 +14,30 @@ def scoped_copy_on_write_setting():
     pandas.options.mode.copy_on_write = old_value
     return
 
+
 def convert_to_result(col):
-	return [(x,) for x in col]
+    return [(x,) for x in col]
+
 
 class TestCopyOnWrite(object):
-    @pytest.mark.parametrize('col', [
-        ['a', 'b', 'this is a long string'],
-        [1.2334, None, 234.12],
-        [123234, -213123, 2324234],
-        [datetime.date(1990, 12, 7), None, datetime.date(1940, 1, 13)],
-        [datetime.datetime(2012, 6, 21, 13, 23, 45, 328), None]
-    ])
+    @pytest.mark.parametrize(
+        'col',
+        [
+            ['a', 'b', 'this is a long string'],
+            [1.2334, None, 234.12],
+            [123234, -213123, 2324234],
+            [datetime.date(1990, 12, 7), None, datetime.date(1940, 1, 13)],
+            [datetime.datetime(2012, 6, 21, 13, 23, 45, 328), None],
+        ],
+    )
     def test_copy_on_write(self, col):
         assert pandas.options.mode.copy_on_write == True
         con = duckdb.connect()
-        df_in = pandas.DataFrame({'numbers': col,})
+        df_in = pandas.DataFrame(
+            {
+                'numbers': col,
+            }
+        )
         rel = con.sql('select * from df_in')
         res = rel.fetchall()
         expected = convert_to_result(col)
