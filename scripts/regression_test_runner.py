@@ -4,6 +4,11 @@ import subprocess
 from io import StringIO
 import csv
 import statistics
+import math
+
+# Geometric mean of an array of numbers
+def geomean(xs):
+    return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
 
 # how many times we will run the experiment, to be sure of the regression
 number_repetitions = 5
@@ -43,6 +48,10 @@ if not os.path.isfile(new_runner):
     print(f"Failed to find new runner {new_runner}")
     exit(1)
 
+complete_timings = {
+    old_runner : [],
+    new_runner : []
+}
 
 def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
@@ -84,6 +93,7 @@ def run_benchmark(runner, benchmark):
                 header = False
             else:
                 timings.append(row[2])
+                complete_timings[runner].append(row[2])
         return float(statistics.median(timings))
     except:
         print("Failed to run benchmark " + benchmark)
@@ -167,5 +177,8 @@ for res in other_results:
     print(f"Old timing: {res[1]}")
     print(f"New timing: {res[2]}")
     print("")
+
+print(f"Old timing geometric mean: {geomean(complete_timings[old_runner])}")
+print(f"New timing geometric mean: {geomean(complete_timings[new_runner])}")
 
 exit(exit_code)
