@@ -43,7 +43,7 @@ struct CreateIndexInfo : public CreateInfo {
 	vector<column_t> column_ids;
 
 	//! Options values (WITH ...)
-	unordered_map<string, Value> options;
+	case_insensitive_map_t<Value> options;
 
 protected:
 	void SerializeInternal(Serializer &serializer) const override;

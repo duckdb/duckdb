@@ -31,7 +31,7 @@ public:
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	unordered_map<string, Value> options;
+	case_insensitive_map_t<Value> options;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
