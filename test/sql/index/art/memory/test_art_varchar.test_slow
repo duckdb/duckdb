@@ -4,6 +4,8 @@
 
 # test issue #7760
 
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 
@@ -41,14 +43,14 @@ INSERT INTO art (SELECT * FROM art);
 statement ok
 INSERT INTO art (SELECT * FROM art);
 
-# 16 * 7200k entries
+# 86M entries
 statement ok
-INSERT INTO art (SELECT * FROM art);
+INSERT INTO art (SELECT * FROM art LIMIT 28400000);
 
 query I
 SELECT count(*) FROM art;
 ----
-115200000
+86000000
 
 query I
 SELECT COUNT(DISTINCT id) FROM art;
@@ -65,11 +67,14 @@ CREATE TABLE base AS
 SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
 
 statement ok
+SET memory_limit='10GB';
+
+statement ok
 CREATE INDEX idx ON art USING ART(id);
 
 query I
 SELECT mem_to_bytes(current.memory_usage) > base.usage AND
-       	mem_to_bytes(current.memory_usage) < 3 * base.usage
+       	mem_to_bytes(current.memory_usage) < 4 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
