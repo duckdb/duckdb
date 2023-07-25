@@ -135,8 +135,16 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		} else {
 			// we have filters, create a join node
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
+			// Here we optimize build side probe side. Our build side is the right side
+			// So the right plans should have lower cardinalities.
+			if (node.left->cardinality < node.right->cardinality) {
+				idx_t a = 0;
+				std::swap(left, right);
+				std::swap(node.left, node.right);
+			}
 			join->children.push_back(std::move(left.op));
 			join->children.push_back(std::move(right.op));
+
 			// set the join conditions from the join node
 			for (auto &filter_ref : node.info->filters) {
 				auto f = filter_ref.get();
@@ -152,6 +160,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = condition->Cast<BoundComparisonExpression>();
+
 				// we need to figure out which side is which by looking at the relations available to us
 				bool invert = !JoinRelationSet::IsSubset(left.set, f->left_set);
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
@@ -192,7 +201,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		//		                                                                    CardinalityEstimator::DEFAULT_SELECTIVITY,
 		//		                                                                filter_props.GetCost<double>());
 		child_operator.estimated_cardinality = node.cardinality;
-//		child_operator.has_estimated_cardinality = true;
+		child_operator.has_estimated_cardinality = true;
 	}
 	// check if we should do a pushdown on this node
 	// basically, any remaining filter that is a subset of the current relation will no longer be used in joins

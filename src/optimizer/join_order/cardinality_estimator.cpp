@@ -302,10 +302,11 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 				continue;
 			}
 			auto distinct_count = stats.column_distinct_count.at(i);
-			if (relation_to_tdom.tdom_hll < distinct_count) {
-				relation_to_tdom.tdom_hll = distinct_count;
-				relation_to_tdom.has_tdom_hll = true;
-			}
+			relation_to_tdom.has_tdom_hll = false;
+//			if (relation_to_tdom.tdom_hll < distinct_count) {
+//				relation_to_tdom.tdom_hll = distinct_count;
+//				relation_to_tdom.has_tdom_hll = false;
+//			}
 			if (relation_to_tdom.tdom_no_hll >= distinct_count) {
 				relation_to_tdom.tdom_no_hll = distinct_count;
 			}

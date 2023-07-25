@@ -52,41 +52,6 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// now reconstruct a logical plan from the query graph plan
 	auto new_logical_plan = query_graph_manager.Reconstruct(std::move(plan), *final_plan);
 
-	// TODO: swap left and right operators for any joins based on statistics. This is no longer handled by the
-	// enumerator.
-	//  as left and right positioning is not logic that should be in the enumerator
-	//  below code ripped from extract join relations.
-	//	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-	//			auto &join = op->Cast<LogicalComparisonJoin>();
-	//			if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-	//				// for left joins; if the RHS cardinality is significantly larger than the LHS (2x)
-	//				// we convert to doing a RIGHT OUTER JOIN
-	//				// FIXME: for now we don't swap if the right_projection_map is not empty
-	//				// this can be fixed once we implement the left_projection_map properly...
-	//				auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-	//				auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-	//				if (rhs_cardinality > lhs_cardinality * 2) {
-	//					join.join_type = JoinType::RIGHT;
-	//					std::swap(join.children[0], join.children[1]);
-	//					for (auto &cond : join.conditions) {
-	//						std::swap(cond.left, cond.right);
-	//						cond.comparison = FlipComparisonExpression(cond.comparison);
-	//					}
-	//				}
-	//			}
-	//		}
-	//	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN && non_reorderable_operation) {
-	//		auto &join = op->Cast<LogicalAnyJoin>();
-	//		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
-	//			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
-	//			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-	//			if (rhs_cardinality > lhs_cardinality * 2) {
-	//				join.join_type = JoinType::RIGHT;
-	//				std::swap(join.children[0], join.children[1]);
-	//			}
-	//		}
-	//	}
-
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
 		vector<idx_t> distinct_column_counts;
@@ -100,7 +65,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		stats->cardinality = cardinality;
 		stats->filter_strength = 1;
 		stats->stats_initialized = true;
-		// TODO: some verification logic.
+		// TODO: some verification logic. make sure column names are the same
+		//  combine table names.
 	}
 
 	return new_logical_plan;

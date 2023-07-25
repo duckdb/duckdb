@@ -34,6 +34,8 @@ public:
 	unique_ptr<JoinNode> SolveJoinOrder(bool force_no_cross_product);
 	void InitLeafPlans();
 
+	static unique_ptr<LogicalOperator> BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan);
+
 private:
 	QueryGraph const &query_graph;
 	//! The total amount of join pairs that have been considered
