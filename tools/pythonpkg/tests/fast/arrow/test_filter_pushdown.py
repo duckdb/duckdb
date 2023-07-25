@@ -15,8 +15,24 @@ duckdb_conn = duckdb.connect()
 
 
 def numeric_operators(data_type, tbl_name):
-    duckdb_conn.execute("CREATE TABLE " + tbl_name + " (a " + data_type + ", b " + data_type + ", c " + data_type + ")")
-    duckdb_conn.execute("INSERT INTO  " + tbl_name + " VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
+    duckdb_conn.execute(
+        f"""
+        CREATE TABLE {tbl_name} (
+            a {data_type},
+            b {data_type},
+            c {data_type}
+        )
+    """
+    )
+    duckdb_conn.execute(
+        f"""
+        INSERT INTO {tbl_name} VALUES
+            (1,1,1),
+            (10,10,10),
+            (100,10,100),
+            (NULL,NULL,NULL)
+        """
+    )
     duck_tbl = duckdb_conn.table(tbl_name)
     arrow_table = duck_tbl.arrow()
     print(arrow_table)
@@ -124,8 +140,9 @@ def string_check_or_pushdown(tbl_name):
 
 
 class TestArrowFilterPushdown(object):
-    def test_filter_pushdown_numeric(self, duckdb_cursor):
-        numeric_types = [
+    @pytest.mark.parametrize(
+        'data_type',
+        [
             'TINYINT',
             'SMALLINT',
             'INTEGER',
@@ -137,28 +154,45 @@ class TestArrowFilterPushdown(object):
             'FLOAT',
             'DOUBLE',
             'HUGEINT',
-        ]
-        for data_type in numeric_types:
-            tbl_name = "test_" + data_type
-            numeric_operators(data_type, tbl_name)
-            numeric_check_or_pushdown(tbl_name)
+        ],
+    )
+    def test_filter_pushdown_numeric(self, data_type):
+        tbl_name = "test_" + data_type
+        numeric_operators(data_type, tbl_name)
+        numeric_check_or_pushdown(tbl_name)
 
-    def test_filter_pushdown_decimal(self, duckdb_cursor):
-        numeric_types = {
-            'DECIMAL(4,1)': 'test_decimal_4_1',
-            'DECIMAL(9,1)': 'test_decimal_9_1',
-            'DECIMAL(18,4)': 'test_decimal_18_4',
-            'DECIMAL(30,12)': 'test_decimal_30_12',
-        }
-        for data_type in numeric_types:
-            tbl_name = numeric_types[data_type]
-            numeric_operators(data_type, tbl_name)
-            numeric_check_or_pushdown(tbl_name)
+    @pytest.mark.parametrize(
+        'type_and_name',
+        [
+            ('DECIMAL(4,1)', 'test_decimal_4_1'),
+            ('DECIMAL(9,1)', 'test_decimal_9_1'),
+            ('DECIMAL(18,4)', 'test_decimal_18_4'),
+            ('DECIMAL(30,12)', 'test_decimal_30_12'),
+        ],
+    )
+    def test_filter_pushdown_decimal(self, type_and_name):
+        data_type, tbl_name = type_and_name
+        numeric_operators(data_type, tbl_name)
+        numeric_check_or_pushdown(tbl_name)
 
-    def test_filter_pushdown_varchar(self, duckdb_cursor):
-        duckdb_conn.execute("CREATE TABLE test_varchar (a  VARCHAR, b VARCHAR, c VARCHAR)")
+    def test_filter_pushdown_varchar(self):
         duckdb_conn.execute(
-            "INSERT INTO  test_varchar VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)"
+            """
+            CREATE TABLE test_varchar (
+                a VARCHAR,
+                b VARCHAR,
+                c VARCHAR
+            )
+        """
+        )
+        duckdb_conn.execute(
+            """
+            INSERT INTO test_varchar VALUES
+                ('1','1','1'),
+                ('10','10','10'),
+                ('100','10','100'),
+                (NULL,NULL,NULL)
+        """
         )
         duck_tbl = duckdb_conn.table("test_varchar")
         arrow_table = duck_tbl.arrow()
@@ -194,7 +228,7 @@ class TestArrowFilterPushdown(object):
         # More complex tests for OR pushed down on string
         string_check_or_pushdown("test_varchar")
 
-    def test_filter_pushdown_bool(self, duckdb_cursor):
+    def test_filter_pushdown_bool(self):
         duckdb_conn.execute("CREATE TABLE test_bool (a  BOOL, b BOOL)")
         duckdb_conn.execute("INSERT INTO  test_bool VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
         duck_tbl = duckdb_conn.table("test_bool")
