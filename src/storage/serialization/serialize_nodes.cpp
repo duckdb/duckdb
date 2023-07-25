@@ -403,7 +403,7 @@ void StrpTimeFormat::FormatSerialize(FormatSerializer &serializer) const {
 
 StrpTimeFormat StrpTimeFormat::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto format_specifier = deserializer.ReadProperty<string>("format_specifier");
-	StrpTimeFormat result(std::move(format_specifier));
+	StrpTimeFormat result(format_specifier);
 	return result;
 }
 

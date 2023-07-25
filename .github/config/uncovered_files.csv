@@ -257,7 +257,7 @@ function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
 function/scalar/struct/struct_extract.cpp	3
-function/scalar/system/aggregate_export.cpp	8
+function/scalar/system/aggregate_export.cpp	10
 function/scalar_function.cpp	7
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	229
@@ -689,7 +689,7 @@ planner/joinside.cpp	12
 planner/logical_operator.cpp	30
 planner/operator/logical_aggregate.cpp	3
 planner/operator/logical_column_data_get.cpp	2
-planner/operator/logical_copy_to_file.cpp	36
+planner/operator/logical_copy_to_file.cpp	37
 planner/operator/logical_create_index.cpp	2
 planner/operator/logical_cross_product.cpp	2
 planner/operator/logical_cteref.cpp	2

@@ -566,7 +566,7 @@
         "type": "string"
       }
     ],
-    "constructor": ["format_specifier"],
+    "constructor": ["format_specifier&"],
     "pointer_type": "none"
   },
   {
