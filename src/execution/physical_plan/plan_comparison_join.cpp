@@ -339,7 +339,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
-	switch(op.type) {
+	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 		return PlanAsOfJoin(op);
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
