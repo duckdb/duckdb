@@ -182,7 +182,8 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
 	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, extension)) {
 		Connection con(db);
-		auto result = con.Query((string)"LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension + ".duckdb_extension'");
+		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
+		                        ".duckdb_extension'");
 		if (result->HasError()) {
 			result->Print();
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
