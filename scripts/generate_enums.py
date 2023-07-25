@@ -2,12 +2,7 @@ import os
 import json
 import re
 
-targets = [
-    {
-        'source': 'extension/json/include/',
-        'target': 'extension/json'
-    }
-]
+targets = [{'source': 'extension/json/include/', 'target': 'extension/json'}]
 
 file_list = []
 for target in targets:
@@ -21,7 +16,7 @@ for target in targets:
                 'source': os.path.join(source_base, fname),
                 'include_path': fname.replace('.json', '.hpp'),
                 'target_hpp': os.path.join(source_base, fname.replace('.json', '.hpp')),
-                'target_cpp': os.path.join(target_base, fname.replace('.json', '.cpp'))
+                'target_cpp': os.path.join(target_base, fname.replace('.json', '.cpp')),
             }
         )
 
@@ -82,6 +77,7 @@ from_string_end = '''   throw NotImplementedException(StringUtil::Format("Enum v
 }
 '''
 
+
 class EnumMember:
     def __init__(self, entry, index):
         self.comment = None
@@ -95,6 +91,7 @@ class EnumMember:
             if 'index' in entry:
                 self.index = int(entry['index'])
 
+
 class EnumClass:
     def __init__(self, entry):
         self.name = entry['name']
@@ -104,6 +101,7 @@ class EnumClass:
         for value_entry in entry['values']:
             self.values.append(EnumMember(value_entry, index))
             index += 1
+
 
 for entry in file_list:
     source_path = entry['source']
@@ -143,7 +141,11 @@ for entry in file_list:
 
     with open(target_source, 'w+') as f:
         source_include_list = [include_path, 'duckdb/common/string_util.hpp']
-        f.write(header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in source_include_list])))
+        f.write(
+            header.replace(
+                '${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in source_include_list])
+            )
+        )
 
         for enum in enums:
             f.write(enum_util_conversion_begin.replace('${ENUM_NAME}', enum.name))
