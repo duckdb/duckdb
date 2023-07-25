@@ -21,11 +21,14 @@
 namespace duckdb {
 
 struct RelationStats {
+	idx_t relation_id;
 	vector<idx_t> column_distinct_count;
-	vector<string> column_names;
 	idx_t cardinality;
 	double filter_strength;
 	bool stats_initialized = false;
+
+	vector<string> column_names;
+	string table_name;
 };
 
 //! Represents a single relation and any metadata accompanying that relation

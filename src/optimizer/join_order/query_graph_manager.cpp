@@ -138,7 +138,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
 			if (node.left->cardinality < node.right->cardinality) {
-				idx_t a = 0;
 				std::swap(left, right);
 				std::swap(node.left, node.right);
 			}

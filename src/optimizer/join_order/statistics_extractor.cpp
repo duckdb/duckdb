@@ -20,6 +20,7 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 	auto name = string("some table");
 	if (table_thing) {
 		name = table_thing->name;
+		return_stats.table_name = name;
 	}
 	// first push back basic distinct counts for each column (if we have them).
 	for (idx_t i = 0; i < get.column_ids.size(); i++ ) {

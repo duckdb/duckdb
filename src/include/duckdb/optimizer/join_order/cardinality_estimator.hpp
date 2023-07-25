@@ -40,8 +40,11 @@ struct RelationsToTDom {
 	bool has_tdom_hll;
 	vector<FilterInfo *> filters;
 
+	vector<string> column_names;
+
 	RelationsToTDom(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
+	    : equivalent_relations(column_binding_set),
+	      tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
 };
 
@@ -69,6 +72,9 @@ public:
 public:
 	idx_t cardinality_before_filters;
 	double filter_strength;
+
+	vector<string> table_names_joined;
+	vector<string> column_names;
 };
 
 class CardinalityEstimator {
@@ -84,17 +90,17 @@ private:
 	vector<RelationsToTDom> relations_to_tdoms;
 	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;
+	vector<RelationStats> relation_stats;
 
 public:
-	//! given a binding of (relation, column) used for DP, and a (table, column) in that catalog
-	//! Add the key value entry into the relation_column_to_original_column
-	void AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value);
-	//! Add a column to the relation_to_columns map.
-	void AddColumnToRelationMap(idx_t table_index, idx_t column_index);
+
+	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
+	void PrintRelationToTdomInfo();
 
 	//	void AddRelationColumnMapping(LogicalGet &get, idx_t relation_id);
 
 	void InitTotalDomains();
+	void InitStats(vector<RelationStats> relation_stats);
 	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 

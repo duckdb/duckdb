@@ -45,6 +45,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	//  enumerator. The enumerator
 	plan_enumerator.InitLeafPlans();
 
+	cost_model.cardinality_estimator.PrintRelationToTdomInfo();
+
 	// Ask the plan enumerator to enumerate a number of join orders
 	auto final_plan = plan_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
 	// TODO: add in the check that if no plan exists, you have to add a cross product.

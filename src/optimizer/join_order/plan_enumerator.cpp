@@ -497,10 +497,12 @@ void PlanEnumerator::InitLeafPlans() {
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
 	vector<NodeOp> nodes_ops;
 	// first initialize equivalent relations based on the filters
+	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+
 	cost_model.cardinality_estimator.InitEquivalentRelations(query_graph_manager.GetFilterBindings());
+	cost_model.cardinality_estimator.AddRelationNamesToTdoms(relation_stats);
 
 	// then update the total domains based on the cardinalities of each relation.
-	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 	for (idx_t i = 0; i < relation_stats.size(); i++) {
 		auto stats = relation_stats.at(i);
 		auto relation_set = query_graph_manager.set_manager.GetJoinRelation(i);

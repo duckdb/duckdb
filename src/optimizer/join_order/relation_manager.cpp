@@ -36,6 +36,7 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
+	relation->stats.relation_id = relation_id;
 
 	auto table_indexes = op.GetTableIndex();
 	if (table_indexes.empty()) {

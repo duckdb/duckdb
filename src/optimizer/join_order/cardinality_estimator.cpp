@@ -29,8 +29,11 @@ void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
 			return;
 		}
 	}
+
 	auto key = ColumnBinding(filter_info.left_binding.table_index, filter_info.left_binding.column_index);
-	relations_to_tdoms.emplace_back(column_binding_set_t({key}));
+	RelationsToTDom new_r2tdom(column_binding_set_t({key}));
+
+	relations_to_tdoms.emplace_back(new_r2tdom);
 }
 
 bool CardinalityEstimator::SingleColumnFilter(FilterInfo &filter_info) {
@@ -65,13 +68,17 @@ vector<idx_t> CardinalityEstimator::DetermineMatchingEquivalentSets(FilterInfo *
 void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets) {
 	D_ASSERT(matching_equivalent_sets.size() <= 2);
 	if (matching_equivalent_sets.size() > 1) {
-		// an equivalence relation is connecting to sets of equivalence relations
+		// an equivalence relation is connecting two sets of equivalence relations
 		// so push all relations from the second set into the first. Later we will delete
 		// the second set.
 		for (ColumnBinding i : relations_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations) {
 			relations_to_tdoms.at(matching_equivalent_sets[0]).equivalent_relations.insert(i);
 		}
+		for (auto &column_name : relations_to_tdoms.at(matching_equivalent_sets[1]).column_names) {
+			relations_to_tdoms.at(matching_equivalent_sets[0]).column_names.push_back(column_name);
+		}
 		relations_to_tdoms.at(matching_equivalent_sets[1]).equivalent_relations.clear();
+		relations_to_tdoms.at(matching_equivalent_sets[1]).column_names.clear();
 		relations_to_tdoms.at(matching_equivalent_sets[0]).filters.push_back(filter_info);
 		// add all values of one set to the other, delete the empty one
 	} else if (matching_equivalent_sets.size() == 1) {
@@ -109,6 +116,30 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	InitTotalDomains();
 }
 
+void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
+#ifdef DEBUG
+	for (auto &total_domain : relations_to_tdoms) {
+		for (auto &binding : total_domain.equivalent_relations) {
+			D_ASSERT(binding.table_index <= stats.size());
+			string table_name = stats.at(binding.table_index).table_name;
+			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
+			total_domain.column_names.push_back(table_name + "." + column_name);
+		}
+	}
+#endif
+}
+
+void CardinalityEstimator::PrintRelationToTdomInfo() {
+	for (auto &total_domain : relations_to_tdoms) {
+		string domain = "Following columns have the same distinct count: ";
+		for (auto &column_name : total_domain.column_names) {
+			domain += column_name + ", ";
+		}
+		domain += "\n TOTAL DOMAIN = " + to_string(total_domain.tdom_no_hll);
+		std::cout << domain << std::endl;
+	}
+}
+
 void CardinalityEstimator::InitTotalDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
@@ -140,19 +171,15 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	}
 	idx_t numerator = 1;
 	unordered_set<idx_t> actual_set;
-	idx_t relation_id;
-	double filter_strength = 1;
+
 	for (idx_t i = 0; i < new_set.count; i++) {
 		auto single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
 		auto card_helper = relation_set_2_cardinality[single_node_set.get()->ToString()];
 		numerator *= card_helper.cardinality_before_filters;
-		filter_strength *= card_helper.filter_strength;
+//		filter_strength *= card_helper.filter_strength;
 		actual_set.insert(new_set.relations[i]);
 	}
-	// TODO: handle filters properly
-//	if (filter_strength * numerator >= 1) {
-//		numerator *= filter_strength;
-//	}
+
 	vector<Subgraph2Denominator> subgraphs;
 	bool done = false;
 	bool found_match = false;
@@ -293,7 +320,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
-	//	auto relation_id = node.set.relations[0];
 	relation_attributes[relation_id].cardinality = stats.cardinality;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	D_ASSERT(stats.column_distinct_count.size() >= 1);
