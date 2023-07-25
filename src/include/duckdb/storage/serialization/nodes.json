@@ -9,12 +9,12 @@
       {
         "name": "id",
         "type": "LogicalTypeId",
-        "property": "id_"
+        "serialize_property": "id_"
       },
       {
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "property": "type_info_",
+        "serialize_property": "type_info_",
         "optional": true
       }
     ],
@@ -566,7 +566,7 @@
         "type": "string"
       }
     ],
-    "constructor": ["format_specifier"],
+    "constructor": ["format_specifier&"],
     "pointer_type": "none"
   },
   {

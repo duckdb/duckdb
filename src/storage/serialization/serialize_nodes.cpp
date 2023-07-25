@@ -285,9 +285,9 @@ void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto id_ = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto type_info_ = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
-	LogicalType result(id_, std::move(type_info_));
+	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
+	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
+	LogicalType result(id, std::move(type_info));
 	return result;
 }
 
@@ -403,7 +403,7 @@ void StrpTimeFormat::FormatSerialize(FormatSerializer &serializer) const {
 
 StrpTimeFormat StrpTimeFormat::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto format_specifier = deserializer.ReadProperty<string>("format_specifier");
-	StrpTimeFormat result(std::move(format_specifier));
+	StrpTimeFormat result(format_specifier);
 	return result;
 }
 
