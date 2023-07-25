@@ -90,8 +90,12 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 		}
 	}
 	return_stats.cardinality = cardinality_after_filters;
+	// update the estimated cardinality of the get as well.
+	// This is not updated during plan reconstruction.
+	get.estimated_cardinality = cardinality_after_filters;
+	get.has_estimated_cardinality = true;
 	D_ASSERT(base_table_cardinality >= cardinality_after_filters);
-	return_stats.filter_strength = ((double)base_table_cardinality / cardinality_after_filters);
+	return_stats.filter_strength = 1;//((double)base_table_cardinality / cardinality_after_filters);
 	return_stats.stats_initialized = true;
 	return return_stats;
 

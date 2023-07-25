@@ -82,7 +82,7 @@ private:
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 
 	vector<RelationsToTDom> relations_to_tdoms;
-	unordered_map<JoinRelationSet *, CardinalityHelper> relation_set_2_cardinality;
+	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;
 
 public:

@@ -121,7 +121,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(optional_ptr<JoinRelationSet
 	}
 	idx_t cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
-	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet(*set.get());
+	result->cardinality = (idx_t)cost_model.cardinality_estimator.EstimateCardinalityWithSet(*set.get());
 	return result;
 }
 
@@ -502,11 +502,12 @@ void PlanEnumerator::InitLeafPlans() {
 	// then update the total domains based on the cardinalities of each relation.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 	for (idx_t i = 0; i < relation_stats.size(); i++) {
+		auto stats = relation_stats.at(i);
 		auto relation_set = query_graph_manager.set_manager.GetJoinRelation(i);
 		auto join_node = make_uniq<JoinNode>(relation_set);
 		join_node->cost = 0;
+		join_node->cardinality = stats.cardinality;
 		plans[relation_set.get()] = std::move(join_node);
-		auto stats = relation_stats.at(i);
 		stats.filter_strength = 1;
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(relation_set, stats);
 	}

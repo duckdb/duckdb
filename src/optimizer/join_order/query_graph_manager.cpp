@@ -278,7 +278,8 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			}
 		}
 	}
-	return GenerateJoinRelation(result_relation, std::move(result_operator));
+	auto result = GenerateJoinRelation(result_relation, std::move(result_operator));
+	return result;
 }
 
 const QueryGraph &QueryGraphManager::GetQueryGraph() const {
