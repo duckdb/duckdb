@@ -45,7 +45,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	//  enumerator. The enumerator
 	plan_enumerator.InitLeafPlans();
 
-	cost_model.cardinality_estimator.PrintRelationToTdomInfo();
+//	cost_model.cardinality_estimator.PrintRelationToTdomInfo();
 
 	// Ask the plan enumerator to enumerate a number of join orders
 	auto final_plan = plan_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
@@ -56,7 +56,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		vector<idx_t> distinct_column_counts;
+		vector<DistinctCount> distinct_column_counts;
 		for (auto &stats: query_graph_manager.relation_manager.GetRelationStats()) {
 			for (auto &distinct_column_count : stats.column_distinct_count) {
 				distinct_column_counts.push_back(distinct_column_count);

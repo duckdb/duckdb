@@ -16,13 +16,6 @@
 
 namespace duckdb {
 
-struct RelationAttributes {
-	string original_name;
-	// the relation columns used in join filters
-	// Needed when iterating over columns and initializing total domain values.
-	unordered_set<idx_t> columns;
-	idx_t cardinality;
-};
 
 class JoinNode;
 struct FilterInfo;
@@ -39,7 +32,6 @@ struct RelationsToTDom {
 	idx_t tdom_no_hll;
 	bool has_tdom_hll;
 	vector<FilterInfo *> filters;
-
 	vector<string> column_names;
 
 	RelationsToTDom(const column_binding_set_t &column_binding_set)
@@ -82,8 +74,6 @@ public:
 	explicit CardinalityEstimator() {};
 
 private:
-	//! A mapping of relation id -> RelationAttributes
-	unordered_map<idx_t, RelationAttributes> relation_attributes;
 	//! A mapping of (relation, bound_column) -> (actual table, actual column)
 	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 

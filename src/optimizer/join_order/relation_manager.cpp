@@ -36,7 +36,6 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
-	relation->stats.relation_id = relation_id;
 
 	auto table_indexes = op.GetTableIndex();
 	if (table_indexes.empty()) {
@@ -254,7 +253,7 @@ void RelationManager::PrintRelationStats() {
 		auto &stats = relation->stats;
 		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
 		for (idx_t i = 0; i < stats.column_names.size(); i++) {
-			std::cout << stats.column_names.at(i) << " has estimated distinct count " << stats.column_distinct_count.at(i) << std::endl;
+			std::cout << stats.column_names.at(i) << " has estimated distinct count " << stats.column_distinct_count.at(i).distinct_count << std::endl;
 		}
 		std::cout << "table has cardinality " << stats.cardinality << std::endl;
 	}

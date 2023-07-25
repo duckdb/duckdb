@@ -9,6 +9,8 @@
 
 namespace duckdb {
 
+struct DistinctCount;
+
 RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientContext &context) {
 	auto return_stats = RelationStats();
 
@@ -27,14 +29,17 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 		if (get.function.statistics) {
 
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
-			return_stats.column_distinct_count.push_back(column_statistics->GetDistinctCount());
+			auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
+			return_stats.column_distinct_count.push_back(column_distinct_count);
 			return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
 		} else {
 			// TODO: currently treating the cardinality as the distinct count.
 			//  the cardinality estimator will update these distinct counts based
 			//  on the extra columns that are joined on.
 			// TODO: Should this be changed?
-			return_stats.column_distinct_count.push_back(cardinality_after_filters);
+			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
+			return_stats.column_distinct_count.push_back(column_distinct_count);
+			// TODO: we can still get parquet column names right?
 			return_stats.column_names.push_back(get.GetName() + ".some_column");
 		}
 	}
@@ -59,7 +64,7 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
 						auto column_id = get.column_ids.at(i);
 						if (column_id == it.first) {
-							return_stats.column_distinct_count[i] = 1;
+							return_stats.column_distinct_count[i].distinct_count = 1;
 							break;
 						}
 					}
@@ -76,7 +81,7 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
 						auto column_id = get.column_ids.at(i);
 						if (column_id == it.first) {
-							return_stats.column_distinct_count[i] = filter.child_filters.size();
+							return_stats.column_distinct_count[i].distinct_count = filter.child_filters.size();
 							break;
 						}
 					}

@@ -117,16 +117,16 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 }
 
 void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
-#ifdef DEBUG
+//#ifdef DEBUG
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
-			D_ASSERT(binding.table_index <= stats.size());
-			string table_name = stats.at(binding.table_index).table_name;
+			D_ASSERT(binding.table_index < stats.size());
+			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
 			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
-			total_domain.column_names.push_back(table_name + "." + column_name);
+			total_domain.column_names.push_back(column_name);
 		}
 	}
-#endif
+//#endif
 }
 
 void CardinalityEstimator::PrintRelationToTdomInfo() {
@@ -135,7 +135,8 @@ void CardinalityEstimator::PrintRelationToTdomInfo() {
 		for (auto &column_name : total_domain.column_names) {
 			domain += column_name + ", ";
 		}
-		domain += "\n TOTAL DOMAIN = " + to_string(total_domain.tdom_no_hll);
+		bool have_hll = total_domain.has_tdom_hll;
+		domain += "\n TOTAL DOMAIN = " + to_string(have_hll ? total_domain.tdom_hll : total_domain.tdom_no_hll);
 		std::cout << domain << std::endl;
 	}
 }
@@ -320,7 +321,6 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats) {
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
-	relation_attributes[relation_id].cardinality = stats.cardinality;
 	//! Initialize the distinct count for all columns used in joins with the current relation.
 	D_ASSERT(stats.column_distinct_count.size() >= 1);
 
@@ -335,9 +335,14 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 				continue;
 			}
 			auto distinct_count = stats.column_distinct_count.at(i);
-			relation_to_tdom.has_tdom_hll = false;
-			if (relation_to_tdom.tdom_no_hll >= distinct_count) {
-				relation_to_tdom.tdom_no_hll = distinct_count;
+			if (distinct_count.from_hll && relation_to_tdom.has_tdom_hll) {
+				relation_to_tdom.tdom_hll = MaxValue(relation_to_tdom.tdom_hll, distinct_count.distinct_count);
+			} else if (distinct_count.from_hll && !relation_to_tdom.has_tdom_hll) {
+				relation_to_tdom.has_tdom_hll = true;
+				relation_to_tdom.tdom_hll = distinct_count.distinct_count;
+			}
+			else {
+				relation_to_tdom.tdom_no_hll = MinValue(distinct_count.distinct_count, relation_to_tdom.tdom_no_hll);
 			}
 			break;
 		}
