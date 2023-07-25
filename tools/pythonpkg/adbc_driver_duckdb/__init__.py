@@ -40,4 +40,4 @@ def connect(uri: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabas
 @functools.cache
 def _driver_path() -> str:
 	import duckdb
-	return duckdb.__file__
+	return duckdb.duckdb.__file__
