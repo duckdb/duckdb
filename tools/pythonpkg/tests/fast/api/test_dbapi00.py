@@ -5,6 +5,7 @@ import pytest
 import duckdb
 from conftest import NumpyPandas, ArrowPandas
 
+
 def assert_result_equal(result):
     assert result == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,), (None,)], "Incorrect result returned"
 
@@ -23,18 +24,18 @@ class TestSimpleDBAPI(object):
         # by default 'size' is 1
         arraysize = 1
         list_of_results = []
-        while (True):
+        while True:
             res = duckdb_cursor.fetchmany()
-            assert(isinstance(res, list))
+            assert isinstance(res, list)
             list_of_results.extend(res)
-            if (len(res) == 0):
+            if len(res) == 0:
                 break
-        assert(len(list_of_results) == truth_value)
+        assert len(list_of_results) == truth_value
         assert_result_equal(list_of_results)
         res = duckdb_cursor.fetchmany(2)
-        assert(len(res) == 0)
+        assert len(res) == 0
         res = duckdb_cursor.fetchmany(3)
-        assert(len(res) == 0)
+        assert len(res) == 0
 
     def test_fetchmany(self, duckdb_cursor):
         # Get truth value
@@ -44,33 +45,33 @@ class TestSimpleDBAPI(object):
         arraysize = 3
         expected_iteration_count = 1 + (int)(truth_value / arraysize) + (1 if truth_value % arraysize else 0)
         iteration_count = 0
-        print("truth_value:",truth_value)
-        print("expected_iteration_count:",expected_iteration_count)
-        while (True):
+        print("truth_value:", truth_value)
+        print("expected_iteration_count:", expected_iteration_count)
+        while True:
             print(iteration_count)
             res = duckdb_cursor.fetchmany(3)
             print(res)
             iteration_count += 1
-            assert(isinstance(res, list))
+            assert isinstance(res, list)
             list_of_results.extend(res)
-            if (len(res) == 0):
+            if len(res) == 0:
                 break
-        assert(iteration_count == expected_iteration_count)
-        assert(len(list_of_results) == truth_value)
+        assert iteration_count == expected_iteration_count
+        assert len(list_of_results) == truth_value
         assert_result_equal(list_of_results)
         res = duckdb_cursor.fetchmany(3)
-        assert(len(res) == 0)
+        assert len(res) == 0
 
     def test_fetchmany_too_many(self, duckdb_cursor):
         truth_value = len(duckdb_cursor.execute('select * from integers').fetchall())
         duckdb_cursor.execute('select * from integers')
         res = duckdb_cursor.fetchmany(truth_value * 5)
-        assert(len(res) == truth_value)
+        assert len(res) == truth_value
         assert_result_equal(res)
         res = duckdb_cursor.fetchmany(2)
-        assert(len(res) == 0)
+        assert len(res) == 0
         res = duckdb_cursor.fetchmany(3)
-        assert(len(res) == 0)
+        assert len(res) == 0
 
     def test_numpy_selection(self, duckdb_cursor):
         duckdb_cursor.execute('SELECT * FROM integers')
@@ -97,9 +98,7 @@ class TestSimpleDBAPI(object):
 
         duckdb_cursor.execute('SELECT * FROM timestamps')
         result = duckdb_cursor.fetchdf()
-        df = pandas.DataFrame({
-            't': pandas.to_datetime(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None])
-        })
+        df = pandas.DataFrame({'t': pandas.to_datetime(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None])})
         pandas.testing.assert_frame_equal(result, df)
 
     # def test_numpy_creation(self, duckdb_cursor):

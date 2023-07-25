@@ -529,7 +529,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 		// visit the table reference
-		auto bound_table = Bind(*base.table);
+		auto table_ref = make_uniq<BaseTableRef>();
+		table_ref->catalog_name = base.catalog;
+		table_ref->schema_name = base.schema;
+		table_ref->table_name = base.table;
+
+		auto bound_table = Bind(*table_ref);
 		if (bound_table->type != TableReferenceType::BASE_TABLE) {
 			throw BinderException("Can only create an index over a base table!");
 		}

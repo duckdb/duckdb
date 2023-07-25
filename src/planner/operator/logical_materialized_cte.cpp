@@ -10,8 +10,9 @@ void LogicalMaterializedCTE::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalMaterializedCTE::Deserialize(LogicalDeserializationState &state,
                                                                 FieldReader &reader) {
-	auto table_index = reader.ReadRequired<idx_t>();
-	return unique_ptr<LogicalMaterializedCTE>(new LogicalMaterializedCTE(table_index));
+	auto result = unique_ptr<LogicalMaterializedCTE>(new LogicalMaterializedCTE());
+	result->table_index = reader.ReadRequired<idx_t>();
+	return std::move(result);
 }
 
 vector<idx_t> LogicalMaterializedCTE::GetTableIndex() const {

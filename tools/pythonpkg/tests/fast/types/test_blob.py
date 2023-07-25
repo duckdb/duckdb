@@ -1,6 +1,7 @@
 import duckdb
 import numpy
 
+
 class TestBlob(object):
     def test_blob(self, duckdb_cursor):
         duckdb_cursor.execute("SELECT BLOB 'hello'")

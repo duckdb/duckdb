@@ -36,6 +36,9 @@ public:
 
 	static unique_ptr<MacroFunction> Deserialize(FieldReader &reader);
 
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<MacroFunction> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	void SerializeInternal(FieldWriter &writer) const override;
 };
