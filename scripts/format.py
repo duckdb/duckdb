@@ -14,7 +14,7 @@ from python_helpers import open_utf8
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage', '.benchmark', '.py']
-formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
+formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension', 'scripts']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
                  'termcolor.hpp', 'test_insert_invalid.test', 'httplib.hpp', 'os_win.c', 'glob.c', 'printf.c',
@@ -258,13 +258,14 @@ def format_file(f, full_path, directory, ext):
     with open_utf8(full_path, 'r') as f:
         old_text = f.read()
     # do not format auto-generated files
-    if file_is_generated(old_text):
+    if file_is_generated(old_text) and ext != '.py':
         return
     old_lines = old_text.split('\n')
 
 
     new_text = get_formatted_text(f, full_path, directory, ext)
-    new_text = new_text.replace('ARGS &&...args', 'ARGS &&... args')
+    if ext in ('.cpp', '.hpp'):
+        new_text = new_text.replace('ARGS &&...args', 'ARGS &&... args')
     if check_only:
         new_lines = new_text.split('\n')
         old_lines = [x for x in old_lines if '...' not in x]
@@ -311,12 +312,9 @@ if format_all:
         os.system(cmake_format_command.replace("${FILE}", "CMakeLists.txt"))
     except:
         pass
-    format_directory('src')
-    format_directory('benchmark')
-    format_directory('test')
-    format_directory('tools')
-    format_directory('examples')
-    format_directory('extension')
+
+    for direct in formatted_directories:
+        format_directory(direct)
 
 else:
     for full_path in changed_files:
