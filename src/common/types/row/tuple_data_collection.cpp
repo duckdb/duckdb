@@ -254,7 +254,7 @@ void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkStat
                                 const idx_t append_offset, const idx_t append_count) {
 	auto &segment = segments.back();
 	const auto size_before = segment.SizeInBytes();
-	segment.allocator->Build(segments.back(), pin_state, chunk_state, append_offset, append_count);
+	segment.allocator->Build(segment, pin_state, chunk_state, append_offset, append_count);
 	data_size += segment.SizeInBytes() - size_before;
 	count += append_count;
 	Verify();

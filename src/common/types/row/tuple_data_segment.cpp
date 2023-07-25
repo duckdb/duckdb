@@ -28,6 +28,7 @@ TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) no
 }
 
 TupleDataChunk::TupleDataChunk() : count(0) {
+	parts.reserve(2);
 }
 
 static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noexcept {

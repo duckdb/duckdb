@@ -141,12 +141,12 @@ protected:
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
 	                       const idx_t append_count);
-	template <class MAP_TYPE>
+	template <class MAP_TYPE, class GETTER>
 	void BuildPartitionSel(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries,
 	                       const SelectionVector &append_sel, const idx_t append_count);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
-	template <class MAP_TYPE>
+	template <class MAP_TYPE, class GETTER>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {

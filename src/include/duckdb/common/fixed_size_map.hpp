@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
@@ -21,6 +22,11 @@ class fixed_size_map_t {
 	friend struct fixed_size_map_iterator_t<T>;
 
 public:
+	using key_type = idx_t;
+	using mapped_type = T;
+	using iterator = fixed_size_map_iterator_t<T>;
+
+public:
 	explicit fixed_size_map_t(idx_t capacity_p = 0) : capacity(capacity_p) {
 		resize(capacity);
 	}
@@ -30,10 +36,9 @@ public:
 	}
 
 	void resize(idx_t capacity_p) {
-		D_ASSERT(capacity_p % 8 == 0);
 		capacity = capacity_p;
 		occupied = ValidityMask(capacity);
-		values = make_unsafe_uniq_array<T>(capacity);
+		values = make_unsafe_uniq_array<T>(capacity + 1);
 		clear();
 	}
 
@@ -68,7 +73,7 @@ public:
 		return fixed_size_map_iterator_t<T>(capacity, *this);
 	}
 
-	fixed_size_map_iterator_t<T> find(idx_t index) {
+	fixed_size_map_iterator_t<T> find(const idx_t &index) {
 		if (occupied.RowIsValid(index)) {
 			return fixed_size_map_iterator_t<T>(index, *this);
 		} else {
@@ -87,13 +92,12 @@ private:
 template <typename T>
 struct fixed_size_map_iterator_t {
 public:
-	fixed_size_map_iterator_t(idx_t index_p, fixed_size_map_t<T> &map_p) : map(map_p), current(index_p, map[0]) {
+	fixed_size_map_iterator_t(idx_t index_p, fixed_size_map_t<T> &map_p) : map(map_p), current(index_p) {
 	}
 
 	fixed_size_map_iterator_t<T> &operator++() {
-		for (current.first++; current.first < map.capacity; current.first++) {
-			if (map.occupied.RowIsValid(current.first)) {
-				current.second = map[index()];
+		for (current++; current < map.capacity; current++) {
+			if (map.occupied.RowIsValid(current)) {
 				break;
 			}
 		}
@@ -106,16 +110,16 @@ public:
 		return tmp;
 	}
 
-	std::pair<idx_t, T &> *operator->() {
-		return &current;
-	}
-
-	std::pair<idx_t, T &> &operator*() {
+	const idx_t &GetKey() const {
 		return current;
 	}
 
+	T &GetValue() {
+		return map.values[current];
+	}
+
 	friend bool operator==(const fixed_size_map_iterator_t<T> &a, const fixed_size_map_iterator_t<T> &b) {
-		return a.index() == b.index();
+		return a.current == b.current;
 	}
 
 	friend bool operator!=(const fixed_size_map_iterator_t<T> &a, const fixed_size_map_iterator_t<T> &b) {
@@ -123,17 +127,8 @@ public:
 	}
 
 private:
-	idx_t &index() {
-		return current.first;
-	}
-
-	const idx_t &index() const {
-		return current.first;
-	}
-
-private:
 	fixed_size_map_t<T> &map;
-	std::pair<idx_t, T &> current;
+	idx_t current;
 };
 
 } // namespace duckdb
