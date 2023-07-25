@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class ColumnBindingResolver;
+
 struct LogicalExtensionOperator : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
@@ -27,5 +29,7 @@ public:
 	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
+
+	virtual void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings);
 };
 } // namespace duckdb
