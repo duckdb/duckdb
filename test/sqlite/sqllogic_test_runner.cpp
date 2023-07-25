@@ -199,12 +199,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	SQLLogicParser parser;
 	idx_t skip_level = 0;
 
-	// for the original SQLite tests we convert floating point numbers to integers
-	// for our own tests this is undesirable since it hides certain errors
-	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
-		original_sqlite_test = true;
-	}
-
 	if (!dbpath.empty()) {
 		// delete the target database file, if it exists
 		DeleteDatabase(dbpath);
