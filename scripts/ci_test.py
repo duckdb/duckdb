@@ -7,6 +7,6 @@ for i in range(len(sys.argv)):
 
 if fail:
     print("Sorry man")
-    assert(0)
+    assert 0
 else:
     print("Yeah man")
