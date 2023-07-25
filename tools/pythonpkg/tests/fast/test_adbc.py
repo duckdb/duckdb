@@ -9,7 +9,7 @@ adbc_driver_manager_lib = pytest.importorskip('adbc_driver_manager._lib')
 pyarrow = pytest.importorskip('pyarrow')
 
 def test_insertion(): 
-    con = adbc_driver_manager.connect(driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib', entrypoint="duckdb_adbc_init")
+    con = adbc_driver_manager.connect(driver=duckdb.duckdb.__file__, entrypoint="duckdb_adbc_init")
 
     table = pyarrow.table(
             [
