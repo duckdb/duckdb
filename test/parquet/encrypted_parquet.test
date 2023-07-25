@@ -16,5 +16,3 @@ statement error
 SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_column.parquet') limit 50;
 ----
 Invalid Error: Failed to read Parquet file "data/parquet-testing/encryption/encrypted_column.parquet": Encrypted Parquet files are not supported
-
-
