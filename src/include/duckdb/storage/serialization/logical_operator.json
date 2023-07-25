@@ -352,7 +352,7 @@
   {
     "class": "LogicalComparisonJoin",
     "base": "LogicalOperator",
-    "enum": "LOGICAL_COMPARISON_JOIN",
+    "enum": ["LOGICAL_COMPARISON_JOIN", "LOGICAL_DELIM_JOIN"],
     "members": [
       {
         "name": "join_type",
@@ -377,6 +377,10 @@
       {
         "name": "mark_types",
         "type": "vector<LogicalType>"
+      },
+      {
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<Expression*>"
       }
     ],
     "constructor": ["join_type", "type"]

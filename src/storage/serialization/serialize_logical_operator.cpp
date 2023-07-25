@@ -73,6 +73,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		result = LogicalDelimGet::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
@@ -261,6 +264,7 @@ void LogicalComparisonJoin::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WriteProperty("right_projection_map", right_projection_map);
 	serializer.WriteProperty("conditions", conditions);
 	serializer.WriteProperty("mark_types", mark_types);
+	serializer.WriteProperty("duplicate_eliminated_columns", duplicate_eliminated_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -271,6 +275,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
 	deserializer.ReadProperty("mark_types", result->mark_types);
+	deserializer.ReadProperty("duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	return std::move(result);
 }
 
