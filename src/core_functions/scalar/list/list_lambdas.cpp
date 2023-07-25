@@ -50,12 +50,12 @@ ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Ex
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_uniq<ListLambdaBindData>(stype, lambda_expr->Copy());
+	return make_uniq<ListLambdaBindData>(stype, lambda_expr ? lambda_expr->Copy() : nullptr);
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
-	return lambda_expr->Equals(*other.lambda_expr) && stype == other.stype;
+	return Expression::Equals(lambda_expr, other.lambda_expr) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {
