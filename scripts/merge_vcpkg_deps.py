@@ -16,7 +16,7 @@ merged_overlay_ports = []
 
 def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
     def prefix_overlay_port(overlay_port):
-        vcpkg_prefix_path = path_to_vcpkg_json[0:path_to_vcpkg_json.find("/vcpkg.json")]
+        vcpkg_prefix_path = path_to_vcpkg_json[0 : path_to_vcpkg_json.find("/vcpkg.json")]
         return vcpkg_prefix_path + overlay_port
 
     return map(prefix_overlay_port, overlay_ports)
@@ -57,18 +57,11 @@ data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
     "builtin-baseline": "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1",
     "dependencies": final_deduplicated_deps,
-    "overrides": [
-        {
-            "name": "openssl",
-            "version": "3.0.8"
-        }
-    ]
+    "overrides": [{"name": "openssl", "version": "3.0.8"}],
 }
 
 if merged_overlay_ports:
-    data['vcpkg-configuration'] = {
-        'overlay-ports': merged_overlay_ports
-    }
+    data['vcpkg-configuration'] = {'overlay-ports': merged_overlay_ports}
 
 # Print output
 print("Writing to 'build/extension_configuration/vcpkg.json': ")
