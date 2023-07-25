@@ -1,4 +1,6 @@
 #include "../common.h"
+#include <sstream>
+#include <iomanip>
 
 using namespace odbc_test;
 
@@ -16,13 +18,11 @@ static unsigned char HexToInt(char c) {
 }
 
 static void BuildNumericStruct(SQL_NUMERIC_STRUCT *numeric, unsigned char sign, const char *hexval,
-	unsigned char precision, unsigned char scale)
-{
+                               unsigned char precision, unsigned char scale) {
+	memset(numeric, 0, sizeof(SQL_NUMERIC_STRUCT));
 	numeric->sign = sign;
 	numeric->precision = precision;
 	numeric->scale = scale;
-
-	memset(numeric, 0, sizeof(SQL_NUMERIC_STRUCT));
 
 	// Convert hexval to binary
 	int len = 0;
@@ -40,19 +40,46 @@ static void BuildNumericStruct(SQL_NUMERIC_STRUCT *numeric, unsigned char sign, 
 	}
 }
 
-static void TestNumericParams(HSTMT &hstmt, unsigned char sign, const char *hexval,
-	unsigned char precision, unsigned char scale)
-{
+static void TestNumericParams(HSTMT &hstmt, unsigned char sign, const char *hexval, unsigned char precision,
+                              unsigned char scale, const std::string &expected) {
 	SQL_NUMERIC_STRUCT numeric;
 	BuildNumericStruct(&numeric, sign, hexval, precision, scale);
 
 	SQLLEN numeric_len = sizeof(numeric);
-	EXECUTE_AND_CHECK("SQLBindParameter (numeric)", SQLBindParameter, hstmt, 1, SQL_PARAM_INPUT, SQL_C_NUMERIC, SQL_NUMERIC, precision, scale, &numeric, numeric_len, &numeric_len);
+	EXECUTE_AND_CHECK("SQLBindParameter (numeric)", SQLBindParameter, hstmt, 1, SQL_PARAM_INPUT, SQL_C_NUMERIC,
+	                  SQL_NUMERIC, precision, scale, &numeric, numeric_len, &numeric_len);
 
 	EXECUTE_AND_CHECK("SQLExecute", SQLExecute, hstmt);
 
-	DATA_CHECK(hstmt, 1, ConvertToString(numeric.val));
+	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+	DATA_CHECK(hstmt, 1, expected);
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+}
+
+static std::string ExtractVal(SQL_NUMERIC_STRUCT &numeric) {
+	std::stringstream ss;
+	ss << std::hex << std::uppercase << std::setfill('0');
+	for (int i = 0; i < SQL_MAX_NUMERIC_LEN; i++) {
+		ss << std::setw(2) << static_cast<unsigned int>(numeric.val[i]);
+	}
+	return ss.str();
+}
+
+static void TestNumericResult(HSTMT &hstmt, const char *num_str, const std::string &expected_result,
+                              unsigned char expected_precision = 18, unsigned char expected_scale = 3,
+                              unsigned int precision = 18, unsigned int scale = 3) {
+	SQL_NUMERIC_STRUCT numeric;
+
+	std::string query = "SELECT '" + std::string(num_str) + "'::numeric(" + std::to_string(precision) + "," +
+	                    std::to_string(scale) + ")";
+	EXECUTE_AND_CHECK("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR(query), SQL_NTS);
+
+	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+	EXECUTE_AND_CHECK("SQLGetData", SQLGetData, hstmt, 1, SQL_C_NUMERIC, &numeric, sizeof(numeric), nullptr);
+	REQUIRE(numeric.precision == expected_precision);
+	REQUIRE(numeric.scale == expected_scale);
+	REQUIRE(numeric.sign == 1);
+	REQUIRE(ExtractVal(numeric) == expected_result);
 }
 
 TEST_CASE("Test numeric limits and conversion", "[odbc]") {
@@ -67,9 +94,36 @@ TEST_CASE("Test numeric limits and conversion", "[odbc]") {
 	// Allocate a statement handle
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
-	EXECUTE_AND_CHECK("SQLPrepare", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT ?::numeric"), SQL_NTS);
+	// Test 25.212 with default precision and scale
+	EXECUTE_AND_CHECK("SQLPrepare (?::numeric)", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT ?::numeric"), SQL_NTS);
+	TestNumericParams(hstmt, 1, "7C62", 5, 3, "25.212");
 
-	TestNumericParams(hstmt, 1, "7C62", 5, 3);
+	// Test 0 (negative and positive) with precision 1 and scale 0
+	EXECUTE_AND_CHECK("SQLPrepare (?::numeric(1,0))", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT ?::numeric(1,0)"),
+	                  SQL_NTS);
+	TestNumericParams(hstmt, 1, "00", 1, 0, "0");
+	TestNumericParams(hstmt, 0, "00", 1, 0, "0");
+
+	// Test 7.70 with precision 3 and scale 2
+	EXECUTE_AND_CHECK("SQLPrepare (?::numeric(3,2))", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT ?::numeric(3,2)"),
+	                  SQL_NTS);
+	TestNumericParams(hstmt, 1, "0203", 3, 2, "7.70");
+
+	// Test 12345678901234567890123456789012345678 with precision 38 and scale 0
+	EXECUTE_AND_CHECK("SQLPrepare (?::numeric(38,0))", SQLPrepare, hstmt, ConvertToSQLCHAR("SELECT ?::numeric(38,0)"),
+	                  SQL_NTS);
+	TestNumericParams(hstmt, 1, "4EF338DE509049C4133302F0F6B04909", 38, 0, "12345678901234567890123456789012345678");
+
+	// Test setting numeric struct within the application
+	TestNumericResult(hstmt, "25.212", "7C620000000000000000000000000000", 5, 3);
+	TestNumericResult(hstmt, "24197857161011715162171839636988778104", "78563412785634127856341278563412", 38, 0, 38,
+	                  0);
+	TestNumericResult(hstmt, "12345678901234567890123456789012345678", "4EF338DE509049C4133302F0F6B04909", 38, 0, 38,
+	                  0);
+	TestNumericResult(hstmt, "-0", "00000000000000000000000000000000", 1, 3);
+	TestNumericResult(hstmt, "0", "00000000000000000000000000000000", 1, 3);
+	TestNumericResult(hstmt, "7.70", "02030000000000000000000000000000", 3, 2, 3, 2);
+	TestNumericResult(hstmt, "999999999999", "FF0FA5D4E80000000000000000000000", 12, 3);
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
