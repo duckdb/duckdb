@@ -1,11 +1,8 @@
 # name: test/sql/copy/partitioned/hive_file_filter.test
-# description: use filters to prune branches in file partitions, IT COULD BE SLOW!
+# description: use filters to prune partitions
 # group: [partitioned]
 
 require parquet
-
-# statement ok
-# PRAGMA enable_verification
 
 # create a table
 statement ok
@@ -30,13 +27,39 @@ endloop
 statement ok
 COPY t TO '__TEST_DIR__/partition' (FORMAT PARQUET, PARTITION_BY(year,month,day));
 
-# count amount of files (_year * _month * _day)
+# check amount of files (_year * 12 * 30)
 query I
-SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**');
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**', hive_filter=1);
 ----
 720
 
 query I
-SELECT val FROM read_parquet('__TEST_DIR__/partition/**', hive_partitioning=1) where year=1 and month=10 and day=16;
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**', hive_filter=1) where year=1 and month>0 and month < 13;
+----
+360
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**', hive_filter=1) where year=1 and month=10 and day=16;
+----
+1
+
+query I
+SELECT val FROM read_parquet('__TEST_DIR__/partition/**', hive_filter=1) where year=1 and month=10 and day=16;
 ----
 160
+
+# check pattern matching
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/year=*/month=*/day=*/*.parquet', hive_filter=1);
+----
+720
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_filter=1);
+----
+720
+
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/*/mon?h=1?/day=?/*.parquet', hive_filter=1);
+----
+54

@@ -201,7 +201,6 @@ public:
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
 		}
-
 		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet", parquet_options.file_options);
 		return ParquetScanBindInternal(context, std::move(files), expected_types, expected_names, parquet_options);
 	}
@@ -522,6 +521,7 @@ public:
 
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
 		                                                           data.parquet_options.file_options, get, filters);
+		data.parquet_options.file_options.hive_file_filter = false;
 		if (reset_reader) {
 			MultiFileReader::PruneReaders(data);
 		}

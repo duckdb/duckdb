@@ -9,15 +9,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 
-/*	includes */
-#include <iostream>
-#include <iomanip>
-
-/*	debug */
-#define LINE std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
-#define VAR(var) std::cerr << std::boolalpha << __FUNCTION__ << ":" << __LINE__ << ":\t" << (#var) << " = [" << (var) << "]" << std::noboolalpha << std::endl;
-
-
 namespace duckdb {
 
 void MultiFileReader::AddParameters(TableFunction &table_function) {
@@ -26,6 +17,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_filter"] = LogicalType::BOOLEAN;
 }
 
 static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
@@ -46,10 +38,10 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 				}
 				key++;
 			}
-			return false;
+			break;
 		}
 		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
-			return false;
+			break;
 		}
 		key++;
 		pattern++;
@@ -61,8 +53,8 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 }
 
 static bool Match(const string& key, const vector<string>& pattern, const bool partial_match_allowed = false) {
-	const vector<string> splits = StringUtil::Split(key, FileSystem::PathSeparator());
-	return Match(splits.begin(), splits.end(), pattern.begin(), pattern.end(), partial_match_allowed);
+	const vector<string> key_splits = StringUtil::Split(key, FileSystem::PathSeparator());
+	return Match(key_splits.begin(), key_splits.end(), pattern.begin(), pattern.end(), partial_match_allowed);
 }
 
 static string GetOneFile(FileSystem& fs, const string& path, MultiFileReaderOptions &mfr_options){
@@ -108,18 +100,16 @@ static string GetOneFile(FileSystem& fs, const string& path, MultiFileReaderOpti
 	return files.front();
 }
 
-static void FindFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                              vector<string> &result) {
+static void FindFiles(FileSystem &fs, const string &path, const vector<string> &pattern, bool match_directory,
+                              vector<string> &result, bool partial_match_allowed) {
 
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
 		}
-		// if (Match) {
-			//do something
-		// }
-		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
-			result.push_back(fs.JoinPath(path, fname));
+		const string full_path = fs.JoinPath(path, fname);
+		if (Match(full_path, pattern, partial_match_allowed)) {
+			result.push_back(full_path);
 		}
 	});
 }
@@ -129,9 +119,9 @@ static vector<string> GetHivePartitions(const string& path) {
 	
 	vector<string> partitions;
 	for (auto& chunk : chunks){
-		const vector<string> partition = StringUtil::Split(chunk, "=");
-		if (partition.size() == 2){
-			partitions.push_back(partition.front());
+		const vector<string> part = StringUtil::Split(chunk, "=");
+		if (part.size() == 2){
+			partitions.push_back(part.front());
 		}
 	}
 	return partitions;
@@ -168,7 +158,7 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	vector<string> files;
 	if (input.type().id() == LogicalTypeId::VARCHAR) { 
 		const string path = StringValue::Get(input);
-		if (mfr_options.hive_partitioning && mfr_options.hive_file_filter) {
+		if (mfr_options.hive_file_filter) {
 			files = {GetOneFile(fs, path, mfr_options)};
 		} else {
 			files = fs.GlobFiles(path, context, options);
@@ -201,6 +191,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
+	} else if (loption == "hive_filter") {
+		options.hive_file_filter = BooleanValue::Get(val);
+		options.hive_partitioning = options.hive_file_filter;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
@@ -246,9 +239,10 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		column_map.insert({get.names[get.column_ids[i]], i});
 	}
 
-	if (options.hive_partitioning && options.hive_file_filter && files.size() == 1) {
+	if (options.hive_file_filter) {
 		D_ASSERT(files.size() == 1);
 		FileSystem& fs = FileSystem::GetFileSystem(context);
+
 		const string partition_root = GetHivePartitionRoot(fs, files.front());
 		const vector<string> partitions = GetHivePartitions(files.front());
 		const vector<string> pattern = StringUtil::Split(options.input_file_pattern, FileSystem::PathSeparator());
@@ -256,25 +250,26 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		//filter directories
 		files.clear();
 		files.push_back(partition_root);
+		bool pruned_files = false;
 		vector<string> result;
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			for (auto& file : files) {
-				if (true) {	//Match() the pattern
-					FindFiles(fs, file, "*", true, result);
-				}
+				FindFiles(fs, file, pattern, true, result, true);
 			}
+			const size_t start_files = result.size();
 			HivePartitioning::ApplyFiltersToFileList(context, result, filters, column_map, get, options.hive_partitioning, options.filename);
+			if (!pruned_files) {
+				pruned_files = result.size() < start_files;
+			}
 			files = std::move(result);
 		}
 
 		//find files in remaining directories
 		for (auto& file : files) {
-			if (true) {	//Match() the pattern
-				FindFiles(fs, file, "*", false, result);
-			}
+			FindFiles(fs, file, pattern, false, result, false);
 		}
 		files = std::move(result);
-		return true;	//TODO: check if filters were used
+		return pruned_files;
 	}
 
 	auto start_files = files.size();
