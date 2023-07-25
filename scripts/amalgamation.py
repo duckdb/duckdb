@@ -18,7 +18,8 @@ src_dir = 'src'
 include_dir = os.path.join('src', 'include')
 
 # files included in the amalgamated "duckdb.hpp" file
-main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
+main_header_files = [
+    os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb.h'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'adbc', 'adbc.h'),
@@ -40,58 +41,73 @@ main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'table_function.hpp'),
     os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_table_function_info.hpp'),
-    os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp')]
+    os.path.join(include_dir, 'duckdb', 'parser', 'parsed_data', 'create_copy_function_info.hpp'),
+]
 extended_amalgamation = False
 if '--extended' in sys.argv:
+
     def add_include_dir(dirpath):
         return [os.path.join(dirpath, x) for x in os.listdir(dirpath)]
 
     extended_amalgamation = True
-    main_header_files += [os.path.join(include_dir, x) for x in [
-        'duckdb/planner/expression/bound_constant_expression.hpp',
-        'duckdb/planner/expression/bound_function_expression.hpp',
-        'duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp',
-        'duckdb/parser/parsed_data/create_table_info.hpp',
-        'duckdb/planner/parsed_data/bound_create_table_info.hpp',
-        'duckdb/parser/constraints/not_null_constraint.hpp',
-        'duckdb/storage/data_table.hpp',
-        'duckdb/function/pragma_function.hpp',
-        'duckdb/parser/qualified_name.hpp',
-        'duckdb/parser/parser.hpp',
-        'duckdb/planner/binder.hpp',
-        'duckdb/storage/object_cache.hpp',
-        'duckdb/planner/table_filter.hpp',
-        "duckdb/storage/statistics/base_statistics.hpp",
-        "duckdb/planner/filter/conjunction_filter.hpp",
-        "duckdb/planner/filter/constant_filter.hpp",
-        "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
-        "duckdb/common/types/vector_cache.hpp",
-        "duckdb/common/string_map_set.hpp",
-        "duckdb/planner/filter/null_filter.hpp",
-        "duckdb/common/arrow/arrow_wrapper.hpp",
-        "duckdb/common/hive_partitioning.hpp",
-        "duckdb/common/union_by_name.hpp",
-        "duckdb/planner/operator/logical_get.hpp",
-        "duckdb/common/compressed_file_system.hpp"]]
+    main_header_files += [
+        os.path.join(include_dir, x)
+        for x in [
+            'duckdb/planner/expression/bound_constant_expression.hpp',
+            'duckdb/planner/expression/bound_function_expression.hpp',
+            'duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp',
+            'duckdb/parser/parsed_data/create_table_info.hpp',
+            'duckdb/planner/parsed_data/bound_create_table_info.hpp',
+            'duckdb/parser/constraints/not_null_constraint.hpp',
+            'duckdb/storage/data_table.hpp',
+            'duckdb/function/pragma_function.hpp',
+            'duckdb/parser/qualified_name.hpp',
+            'duckdb/parser/parser.hpp',
+            'duckdb/planner/binder.hpp',
+            'duckdb/storage/object_cache.hpp',
+            'duckdb/planner/table_filter.hpp',
+            "duckdb/storage/statistics/base_statistics.hpp",
+            "duckdb/planner/filter/conjunction_filter.hpp",
+            "duckdb/planner/filter/constant_filter.hpp",
+            "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
+            "duckdb/common/types/vector_cache.hpp",
+            "duckdb/common/string_map_set.hpp",
+            "duckdb/planner/filter/null_filter.hpp",
+            "duckdb/common/arrow/arrow_wrapper.hpp",
+            "duckdb/common/hive_partitioning.hpp",
+            "duckdb/common/union_by_name.hpp",
+            "duckdb/planner/operator/logical_get.hpp",
+            "duckdb/common/compressed_file_system.hpp",
+        ]
+    ]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
     main_header_files = normalize_path(main_header_files)
 
 import package_build
+
 # include paths for where to search for include files during amalgamation
 include_paths = [include_dir] + package_build.third_party_includes()
 # paths of where to look for files to compile and include to the final amalgamation
 compile_directories = [src_dir] + package_build.third_party_sources()
 
 # files always excluded
-always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])
+always_excluded = normalize_path(
+    [
+        'src/amalgamation/duckdb.cpp',
+        'src/amalgamation/duckdb.hpp',
+        'src/amalgamation/parquet-amalgamation.cpp',
+        'src/amalgamation/parquet-amalgamation.hpp',
+    ]
+)
 # files excluded from the amalgamation
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
 
 linenumbers = False
+
 
 def get_includes(fpath, text):
     # find all the includes referred to in the directory
@@ -103,7 +119,12 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
-        if ('extension_helper.cpp' in fpath and (included_file.endswith('_extension.hpp')) or included_file == 'generated_extension_loader.hpp' or included_file == 'generated_extension_headers.hpp'):
+        if (
+            'extension_helper.cpp' in fpath
+            and (included_file.endswith('_extension.hpp'))
+            or included_file == 'generated_extension_loader.hpp'
+            or included_file == 'generated_extension_headers.hpp'
+        ):
             continue
         if 'allocator.cpp' in fpath and included_file.endswith('jemalloc_extension.hpp'):
             continue
@@ -122,18 +143,21 @@ def get_includes(fpath, text):
             raise Exception('Could not find include file "' + included_file + '", included from file "' + fpath + '"')
     return (include_statements, include_files)
 
+
 def cleanup_file(text):
     # remove all "#pragma once" notifications
     text = re.sub('#pragma once', '', text)
     return text
 
+
 # recursively get all includes and write them
 written_files = {}
 
-#licenses
+# licenses
 licenses = []
 
-def need_to_write_file(current_file, ignore_excluded = False):
+
+def need_to_write_file(current_file, ignore_excluded=False):
     if amal_dir in current_file:
         return False
     if current_file in always_excluded:
@@ -145,6 +169,7 @@ def need_to_write_file(current_file, ignore_excluded = False):
         # file is already written
         return False
     return True
+
 
 def find_license(original_file):
     global licenses
@@ -166,7 +191,7 @@ def find_license(original_file):
     return licenses.index(license)
 
 
-def write_file(current_file, ignore_excluded = False):
+def write_file(current_file, ignore_excluded=False):
     global linenumbers
     global written_files
     if not need_to_write_file(current_file, ignore_excluded):
@@ -179,7 +204,12 @@ def write_file(current_file, ignore_excluded = False):
 
     if current_file.startswith("third_party") and not current_file.endswith("LICENSE"):
         lic_idx = find_license(current_file)
-        text = "\n\n// LICENSE_CHANGE_BEGIN\n// The following code up to LICENSE_CHANGE_END is subject to THIRD PARTY LICENSE #%s\n// See the end of this file for a list\n\n" % str(lic_idx + 1) + text + "\n\n// LICENSE_CHANGE_END\n"
+        text = (
+            "\n\n// LICENSE_CHANGE_BEGIN\n// The following code up to LICENSE_CHANGE_END is subject to THIRD PARTY LICENSE #%s\n// See the end of this file for a list\n\n"
+            % str(lic_idx + 1)
+            + text
+            + "\n\n// LICENSE_CHANGE_END\n"
+        )
 
     (statements, includes) = get_includes(current_file, text)
     # find the linenr of the final #include statement we parsed
@@ -202,6 +232,7 @@ def write_file(current_file, ignore_excluded = False):
     # now read the header and write it
     return cleanup_file(text)
 
+
 def write_dir(dir):
     files = os.listdir(dir)
     files.sort()
@@ -217,6 +248,7 @@ def write_dir(dir):
             text += write_file(fpath)
     return text
 
+
 def copy_if_different(src, dest):
     if os.path.isfile(dest):
         # dest exists, check if the files are different
@@ -230,13 +262,15 @@ def copy_if_different(src, dest):
     # print("Copying " + src + " to " + dest)
     shutil.copyfile(src, dest)
 
+
 def git_commit_hash():
-    return subprocess.check_output(['git','log','-1','--format=%h']).strip().decode('utf8')
+    return subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+
 
 def git_dev_version():
     try:
-        version = subprocess.check_output(['git','describe','--tags','--abbrev=0']).strip().decode('utf8')
-        long_version = subprocess.check_output(['git','describe','--tags','--long']).strip().decode('utf8')
+        version = subprocess.check_output(['git', 'describe', '--tags', '--abbrev=0']).strip().decode('utf8')
+        long_version = subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
         version_splits = version.split('.')
         dev_version = long_version.split('-')[1]
         if int(dev_version) == 0:
@@ -248,6 +282,7 @@ def git_dev_version():
             return '.'.join(version_splits) + "-dev" + dev_version
     except:
         return "0.0.0"
+
 
 def generate_duckdb_hpp(header_file):
     print("-----------------------")
@@ -267,6 +302,7 @@ def generate_duckdb_hpp(header_file):
 
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
+
 
 def generate_amalgamation(source_file, header_file):
     # construct duckdb.hpp from these headers
@@ -291,9 +327,8 @@ def generate_amalgamation(source_file, header_file):
         for license in licenses:
             sfile.write("\n\n\n### THIRD PARTY LICENSE #%s ###\n\n" % str(license_idx + 1))
             sfile.write(write_file(license))
-            license_idx+=1
+            license_idx += 1
         sfile.write('\n\n*/\n')
-
 
     copy_if_different(temp_header, header_file)
     copy_if_different(temp_source, source_file)
@@ -302,6 +337,7 @@ def generate_amalgamation(source_file, header_file):
         os.remove(temp_source)
     except:
         pass
+
 
 def list_files(dname, file_list):
     files = os.listdir(dname)
@@ -316,11 +352,13 @@ def list_files(dname, file_list):
             if need_to_write_file(fpath):
                 file_list.append(fpath)
 
+
 def list_sources():
     file_list = []
     for compile_dir in compile_directories:
         list_files(compile_dir, file_list)
     return file_list
+
 
 def list_include_files_recursive(dname, file_list):
     files = os.listdir(dname)
@@ -334,14 +372,17 @@ def list_include_files_recursive(dname, file_list):
         elif fname.endswith(('.hpp', '.h', '.hh', '.tcc', '.inc')):
             file_list.append(fpath)
 
+
 def list_includes_files(include_dirs):
     file_list = []
     for include_dir in include_dirs:
         list_include_files_recursive(include_dir, file_list)
     return file_list
 
+
 def list_includes():
     return list_includes_files(include_paths)
+
 
 def gather_file(current_file, source_files, header_files):
     global linenumbers
@@ -379,6 +420,7 @@ def gather_file(current_file, source_files, header_files):
         text = '\n#line 1 "%s"\n' % (current_file,) + text
     source_files.append(cleanup_file(text))
 
+
 def gather_files(dir, source_files, header_files):
     files = os.listdir(dir)
     files.sort()
@@ -391,8 +433,10 @@ def gather_files(dir, source_files, header_files):
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
             gather_file(fpath, source_files, header_files)
 
+
 def write_license(hfile):
     hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
+
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):
     # construct duckdb.hpp from these headers
@@ -466,11 +510,13 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
         with open_utf8(temp_partition_name, 'w+') as f:
             write_license(f)
             f.write('#include "%s"\n#include "%s"' % (header_file_name, internal_header_file_name))
-            f.write('''
+            f.write(
+                '''
 #ifndef DUCKDB_AMALGAMATION
 #error header mismatch
 #endif
-''')
+'''
+            )
             for sfile in partition:
                 f.write(sfile)
         current_partition += 1
@@ -488,8 +534,11 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
             os.remove(p[1])
         except:
             pass
+
+
 def list_include_dirs():
     return include_paths
+
 
 if __name__ == "__main__":
     nsplits = 1
@@ -528,4 +577,3 @@ if __name__ == "__main__":
         generate_amalgamation_splits(source_file, header_file, nsplits)
     else:
         generate_amalgamation(source_file, header_file)
-
