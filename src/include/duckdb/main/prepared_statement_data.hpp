@@ -31,8 +31,6 @@ public:
 	unique_ptr<SQLStatement> unbound_statement;
 	//! The fully prepared physical plan of the prepared statement
 	unique_ptr<PhysicalOperator> plan;
-	//! The map of parameter index to the actual value entry
-	bound_parameter_map_t value_map;
 
 	//! The result names of the transaction
 	vector<string> names;
@@ -45,6 +43,8 @@ public:
 	//! The catalog version of when the prepared statement was bound
 	//! If this version is lower than the current catalog version, we have to rebind the prepared statement
 	idx_t catalog_version;
+	//! The map of parameter index to the actual value entry
+	bound_parameter_map_t value_map;
 
 public:
 	void CheckParameterCount(idx_t parameter_count);
