@@ -80,6 +80,7 @@ void CreateIndexInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("parsed_expressions", parsed_expressions);
 	serializer.WriteProperty("names", names);
 	serializer.WriteProperty("column_ids", column_ids);
+	serializer.WriteProperty("options", options);
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -90,6 +91,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("parsed_expressions", result->parsed_expressions);
 	deserializer.ReadProperty("names", result->names);
 	deserializer.ReadProperty("column_ids", result->column_ids);
+	deserializer.ReadProperty("options", result->options);
 	return std::move(result);
 }
 
