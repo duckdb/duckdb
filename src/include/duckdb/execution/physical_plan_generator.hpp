@@ -50,7 +50,6 @@ protected:
 
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAggregate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalAsOfJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalColumnDataGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
@@ -93,6 +92,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPivot &op);
 
 
+	unique_ptr<PhysicalOperator> PlanAsOfJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanComparisonJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanDelimJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,

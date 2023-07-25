@@ -31,6 +31,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		result = LogicalAnyJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
