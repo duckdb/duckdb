@@ -77,10 +77,7 @@ static void ListCombineFunction(Vector &states_vector, Vector &combined, Aggrega
 	for (idx_t i = 0; i < count; i++) {
 
 		auto &state = *states_ptr[states_data.sel->get_index(i)];
-		if (state.linked_list.total_capacity == 0) {
-			// NULL, no need to append
-			continue;
-		}
+		D_ASSERT(state.linked_list.total_capacity != 0);
 
 		if (combined_ptr[i]->linked_list.total_capacity == 0) {
 			combined_ptr[i]->linked_list = state.linked_list;
@@ -168,17 +165,13 @@ static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, Aggrega
 	// FINALIZE step
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto &mask = FlatVector::Validity(result);
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	size_t total_len = ListVector::GetListSize(result);
 
 	// set the length and offset of this list in the result vector
 	result_data[rid].offset = total_len;
 	result_data[rid].length = linked_list.total_capacity;
-	if (linked_list.total_capacity == 0) {
-		mask.SetInvalid(rid);
-		return;
-	}
+	D_ASSERT(linked_list.total_capacity != 0);
 	total_len += linked_list.total_capacity;
 
 	// reserve capacity, then copy over the data to the child vector
