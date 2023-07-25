@@ -107,7 +107,7 @@ runs:
         cd $VCPKG_ROOT
         mkdir -p downloads
         cd downloads
-        wget https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
+        curl -O -L https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
         ls -al
         pwd
 
