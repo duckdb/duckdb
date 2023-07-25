@@ -26,9 +26,10 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
-	return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency &&
-	       statistics == rhs.statistics;
+	return name == rhs.name && arguments == rhs.arguments && return_type == rhs.return_type && varargs == rhs.varargs &&
+	       bind == rhs.bind && dependency == rhs.dependency && statistics == rhs.statistics;
 }
+
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 	return !(*this == rhs);
 }
@@ -54,23 +55,6 @@ bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 	}
 
 	return true; // they are equal
-}
-
-bool ScalarFunction::CompareScalarFunctionT(const scalar_function_t &other) const {
-	typedef void(scalar_function_ptr_t)(DataChunk &, ExpressionState &, Vector &);
-
-	auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>(); // NOLINT
-	auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>();   // NOLINT
-
-	// Case the functions were created from lambdas the target will return a nullptr
-	if (!func_ptr && !other_ptr) {
-		return true;
-	}
-	if (func_ptr == nullptr || other_ptr == nullptr) {
-		// scalar_function_t (std::functions) from lambdas cannot be compared
-		return false;
-	}
-	return CastPointerToValue(*func_ptr) == CastPointerToValue(*other_ptr);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
