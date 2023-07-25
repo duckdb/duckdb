@@ -243,7 +243,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 		if (recompute && pin_state.properties != TupleDataPinProperties::ALREADY_PINNED) {
 			const auto new_base_heap_ptr = GetBaseHeapPointer(pin_state, part);
 			if (part.base_heap_ptr != new_base_heap_ptr) {
-				lock_guard<mutex> guard(part.lock);
+				lock_guard<mutex> guard(*part.lock);
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
 					Vector old_heap_ptrs(

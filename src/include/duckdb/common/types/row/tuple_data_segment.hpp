@@ -46,8 +46,8 @@ public:
 	uint32_t total_heap_size;
 	//! Tuple count for this chunk part
 	uint32_t count;
-	//! Lock for recomputing heap pointers
-	mutex lock;
+	//! Lock for recomputing heap pointers (owned by TupleDataChunk)
+	mutex *lock;
 };
 
 struct TupleDataChunk {
@@ -78,6 +78,8 @@ public:
 	perfect_set_t heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
+	//! Lock for recomputing heap pointers
+	unsafe_unique_ptr<mutex> lock;
 };
 
 struct TupleDataSegment {

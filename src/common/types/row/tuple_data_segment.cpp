@@ -15,7 +15,7 @@ void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
 	std::swap(a.base_heap_ptr, b.base_heap_ptr);
 	std::swap(a.total_heap_size, b.total_heap_size);
 	std::swap(a.count, b.count);
-	// Cannot swap the lock, but not needed as move constructor only happens during append, lock only needed for scans
+	std::swap(a.lock, b.lock);
 }
 
 TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept {
@@ -27,7 +27,7 @@ TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) no
 	return *this;
 }
 
-TupleDataChunk::TupleDataChunk() : count(0) {
+TupleDataChunk::TupleDataChunk() : count(0), lock(make_unsafe_uniq<mutex>()) {
 	parts.reserve(2);
 }
 
@@ -36,6 +36,7 @@ static inline void SwapTupleDataChunk(TupleDataChunk &a, TupleDataChunk &b) noex
 	std::swap(a.row_block_ids, b.row_block_ids);
 	std::swap(a.heap_block_ids, b.heap_block_ids);
 	std::swap(a.count, b.count);
+	std::swap(a.lock, b.lock);
 }
 
 TupleDataChunk::TupleDataChunk(TupleDataChunk &&other) noexcept {
@@ -53,6 +54,7 @@ void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &l
 	if (!layout.AllConstant() && part.total_heap_size > 0) {
 		heap_block_ids.insert(part.heap_block_index);
 	}
+	part.lock = lock.get();
 	parts.emplace_back(std::move(part));
 }
 
