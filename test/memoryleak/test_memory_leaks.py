@@ -5,18 +5,36 @@ import os
 
 parser = argparse.ArgumentParser(description='Runs the memory leak tests')
 
-parser.add_argument('--unittest', dest='unittest',
-                    action='store', help='Path to unittest executable', default='build/release/test/unittest')
-parser.add_argument('--test', dest='test',
-                    action='store', help='The name of the tests to run (* is all)', default='*')
-parser.add_argument('--timeout', dest='timeout',
-                    action='store', help='The maximum time to run the test and measure memory usage (in seconds)', default=60)
-parser.add_argument('--threshold-percentage', dest='threshold_percentage',
-                    action='store', help='The percentage threshold before we consider an increase a regression', default=0.01)
-parser.add_argument('--threshold-absolute', dest='threshold_absolute',
-                    action='store', help='The absolute threshold before we consider an increase a regression', default=1000)
-parser.add_argument('--verbose', dest='verbose',
-                    action='store', help='Verbose output', default=True)
+parser.add_argument(
+    '--unittest',
+    dest='unittest',
+    action='store',
+    help='Path to unittest executable',
+    default='build/release/test/unittest',
+)
+parser.add_argument('--test', dest='test', action='store', help='The name of the tests to run (* is all)', default='*')
+parser.add_argument(
+    '--timeout',
+    dest='timeout',
+    action='store',
+    help='The maximum time to run the test and measure memory usage (in seconds)',
+    default=60,
+)
+parser.add_argument(
+    '--threshold-percentage',
+    dest='threshold_percentage',
+    action='store',
+    help='The percentage threshold before we consider an increase a regression',
+    default=0.01,
+)
+parser.add_argument(
+    '--threshold-absolute',
+    dest='threshold_absolute',
+    action='store',
+    help='The absolute threshold before we consider an increase a regression',
+    default=1000,
+)
+parser.add_argument('--verbose', dest='verbose', action='store', help='Verbose output', default=True)
 
 args = parser.parse_args()
 
@@ -53,6 +71,7 @@ if len(test_cases) == 0:
     print(f"No tests matching filter \"{test_filter}\" found")
     exit(0)
 
+
 def sizeof_fmt(num, suffix="B"):
     for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
         if abs(num) < 1000.0:
@@ -60,9 +79,12 @@ def sizeof_fmt(num, suffix="B"):
         num /= 1000.0
     return f"{num:.1f}Yi{suffix}"
 
+
 def run_test(test_case):
     # launch the unittest program
-    proc = subprocess.Popen([unittest_program, test_case, '--memory-leak-tests'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(
+        [unittest_program, test_case, '--memory-leak-tests'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     pid = proc.pid
 
     # capture the memory output for the duration of the program running
@@ -124,6 +146,7 @@ def has_memory_leak(rss):
     max_memory = max(rss)
     sum_differences = sum(differences[-measurement_count:])
     return sum_differences > (max_memory * args.threshold_percentage + args.threshold_absolute)
+
 
 try:
     for index, test in enumerate(test_cases):
