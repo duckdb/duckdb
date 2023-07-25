@@ -84,7 +84,8 @@ struct MultiFileReader {
 	//! Add the parameters for multi-file readers (e.g. union_by_name, filename) to a table function
 	DUCKDB_API static void AddParameters(TableFunction &table_function);
 	//! Performs any globbing for the multi-file reader and returns a list of files to be read
-	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name, MultiFileReaderOptions &mfr_options,
+	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name,
+	                                             MultiFileReaderOptions &mfr_options,
 	                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Parse the named parameters of a multi-file reader
 	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
