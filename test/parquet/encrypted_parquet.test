@@ -10,7 +10,7 @@ PRAGMA enable_verification
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_footer.parquet') limit 50;
 ----
-Invalid Input Error: Encrypted Parquet files are not supported 'data/parquet-testing/encryption/encrypted_footer.parquet'
+Invalid Input Error: Encrypted Parquet files are not supported for file 'data/parquet-testing/encryption/encrypted_footer.parquet'
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/encryption/encrypted_column.parquet') limit 50;
