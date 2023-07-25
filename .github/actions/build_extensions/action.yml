@@ -99,6 +99,17 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+        
+    - name: workaround for https://github.com/duckdb/duckdb/issues/8360
+      if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT
+        mkdir -p downloads
+        cd downloads
+        wget https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
+        ls -al
+        pwd
 
     # Todo: remove this after spatial no longer depends on it
     - name: Globally install OpenSSL (Spatial still depends on it to be available)
