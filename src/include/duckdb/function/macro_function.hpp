@@ -48,6 +48,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<MacroFunction> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	virtual void SerializeInternal(FieldWriter &writer) const = 0;
 

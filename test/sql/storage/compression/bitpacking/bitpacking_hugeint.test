@@ -1,0 +1,252 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_hugeint.test
+# description: Test hugeint bitpacking at multiple bitwidths
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+statement ok
+PRAGMA force_bitpacking_mode='constant'
+
+#             bit-width < 32
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+0
+1
+2
+3
+4
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#             bit-width == 32
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 3000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+3000000000
+3000000001
+3000000002
+3000000003
+3000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#           32 < bit-width < 64
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 200000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+200000000000
+200000000001
+200000000002
+200000000003
+200000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#             bit-width == 64
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 10000000000000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+10000000000000000000
+10000000000000000001
+10000000000000000002
+10000000000000000003
+10000000000000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#           64 < bit-width < 96
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 500000000000000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+500000000000000000000
+500000000000000000001
+500000000000000000002
+500000000000000000003
+500000000000000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#             bit-width == 96
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 50000000000000000000000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+50000000000000000000000000000
+50000000000000000000000000001
+50000000000000000000000000002
+50000000000000000000000000003
+50000000000000000000000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#          96 < bit-width < 128
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 300000000000000000000000000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+300000000000000000000000000000000
+300000000000000000000000000000001
+300000000000000000000000000000002
+300000000000000000000000000000003
+300000000000000000000000000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;
+
+#          bit-width == 128
+# ----------------------------------------
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 20000000000000000000000000000000000000 FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0, 16) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+select a from test limit 5;
+----
+20000000000000000000000000000000000000
+20000000000000000000000000000000000001
+20000000000000000000000000000000000002
+20000000000000000000000000000000000003
+20000000000000000000000000000000000004
+
+# make sure compression is being used
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+statement ok
+DROP TABLE test;

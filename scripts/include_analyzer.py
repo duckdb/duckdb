@@ -9,7 +9,8 @@ include_counts = {}
 include_chains = {}
 cached_includes = {}
 
-def analyze_include_file(fpath, already_included_files, prev_include = ""):
+
+def analyze_include_file(fpath, already_included_files, prev_include=""):
     if fpath in already_included_files:
         return
     if fpath in amalgamation.always_excluded:
@@ -40,6 +41,7 @@ def analyze_include_file(fpath, already_included_files, prev_include = ""):
     for include in includes:
         analyze_include_file(include, already_included_files, prev_include)
 
+
 def analyze_includes(dir):
     files = os.listdir(dir)
     files.sort()
@@ -52,6 +54,7 @@ def analyze_includes(dir):
         elif fname.endswith('.cpp') or fname.endswith('.c') or fname.endswith('.cc'):
             analyze_include_file(fpath, [])
 
+
 for compile_dir in amalgamation.compile_directories:
     analyze_includes(compile_dir)
 
@@ -59,7 +62,7 @@ kws = []
 for entry in include_counts.keys():
     kws.append([entry, include_counts[entry]])
 
-kws.sort(key = lambda tup: -tup[1])
+kws.sort(key=lambda tup: -tup[1])
 for k in range(0, len(kws)):
     include_file = kws[k][0]
     include_count = kws[k][1]
@@ -70,7 +73,6 @@ for k in range(0, len(kws)):
     chainkws = []
     for chain in include_chains[include_file]:
         chainkws.append([chain, include_chains[include_file][chain]])
-        chainkws.sort(key = lambda tup: -tup[1])
+        chainkws.sort(key=lambda tup: -tup[1])
     for l in range(0, min(5, len(chainkws))):
         print(chainkws[l])
-
