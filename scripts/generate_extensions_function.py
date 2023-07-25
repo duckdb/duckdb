@@ -8,8 +8,11 @@ os.chdir(os.path.dirname(__file__))
 
 parser = argparse.ArgumentParser(description='Generates/Validates extension_functions.hpp file')
 
-parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
-                    help='If set  will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
+parser.add_argument(
+    '--validate',
+    action=argparse.BooleanOptionalAction,
+    help='If set  will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.',
+)
 
 
 args = parser.parse_args()
@@ -17,21 +20,19 @@ args = parser.parse_args()
 stored_functions = {
     'substrait': ["from_substrait", "get_substrait", "get_substrait_json", "from_substrait_json"],
     'arrow': ["scan_arrow_ipc", "to_arrow_ipc"],
-    'spatial': []
+    'spatial': [],
 }
-stored_settings = {
-    'substrait': [],
-    'arrow': [],
-    'spatial': []
-}
+stored_settings = {'substrait': [], 'arrow': [], 'spatial': []}
 
 functions = {}
 
+
 # Parses the extension config files for which extension names there are to be expected
 def parse_extension_txt():
-    extensions_file = os.path.join("..", "build","extension_configuration","extensions.txt")
+    extensions_file = os.path.join("..", "build", "extension_configuration", "extensions.txt")
     with open(extensions_file) as f:
         return [line.rstrip() for line in f]
+
 
 extension_names = parse_extension_txt()
 
@@ -39,19 +40,23 @@ extension_names = parse_extension_txt()
 if "jemalloc" in extension_names:
     extension_names.remove("jemalloc")
 
-ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
+ext_hpp = os.path.join("..", "src", "include", "duckdb", "main", "extension_entries.hpp")
 get_functions_query = "select distinct function_name from duckdb_functions();"
 get_settings_query = "select distinct name from duckdb_settings();"
-duckdb_path = os.path.join("..",'build', 'release', 'duckdb')
+duckdb_path = os.path.join("..", 'build', 'release', 'duckdb')
+
 
 def get_query(sql_query, load_query):
     return os.popen(f'{duckdb_path} -csv -unsigned -c "{load_query}{sql_query}" ').read().split("\n")[1:-1]
 
-def get_functions(load = ""):
+
+def get_functions(load=""):
     return set(get_query(get_functions_query, load))
 
-def get_settings(load = ""):
+
+def get_settings(load=""):
     return set(get_query(get_settings_query, load))
+
 
 base_functions = get_functions()
 base_settings = get_settings()
@@ -64,16 +69,21 @@ extension_path = {}
 for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
     extension_path[os.path.splitext(os.path.basename(filename))[0]] = filename
 
+
 def update_extensions(extension_name, function_list, settings_list):
     global function_map, settings_map
-    function_map.update({
-        extension_function.lower(): extension_name.lower()
-        for extension_function in (set(function_list) - base_functions)
-    })
-    settings_map.update({
-        extension_setting.lower(): extension_name.lower()
-        for extension_setting in (set(settings_list) - base_settings)
-    })
+    function_map.update(
+        {
+            extension_function.lower(): extension_name.lower()
+            for extension_function in (set(function_list) - base_functions)
+        }
+    )
+    settings_map.update(
+        {
+            extension_setting.lower(): extension_name.lower()
+            for extension_setting in (set(settings_list) - base_settings)
+        }
+    )
 
 
 for extension_name in extension_names:
@@ -94,7 +104,7 @@ for extension_name in extension_names:
     update_extensions(extension_name, extension_functions, extension_settings)
 
 if args.validate:
-    file = open(ext_hpp,'r')
+    file = open(ext_hpp, 'r')
     pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
     cur_function_map = dict(pattern.findall(file.read()))
     function_map.update(settings_map)
@@ -118,7 +128,7 @@ if args.validate:
         exit(1)
 else:
     # extension_functions
-    file = open(ext_hpp,'w')
+    file = open(ext_hpp, 'w')
     header = """//===----------------------------------------------------------------------===//
 //                         DuckDB
 //
