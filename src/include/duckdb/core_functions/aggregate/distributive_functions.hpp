@@ -199,7 +199,7 @@ struct StringAggFun {
 	static constexpr const char *Name = "string_agg";
 	static constexpr const char *Parameters = "str,arg";
 	static constexpr const char *Description = "Concatenates the column string values with an optional separator.";
-	static constexpr const char *Example = "string_agg(A, '-)";
+	static constexpr const char *Example = "string_agg(A, '-')";
 
 	static AggregateFunctionSet GetFunctions();
 };

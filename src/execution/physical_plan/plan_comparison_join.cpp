@@ -305,7 +305,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		CheckForPerfectJoinOpt(op, perfect_join_stats);
 		plan = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
 		                                   op.join_type, op.left_projection_map, op.right_projection_map,
-		                                   std::move(op.delim_types), op.estimated_cardinality, perfect_join_stats);
+		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;

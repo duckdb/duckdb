@@ -193,48 +193,53 @@ void Parser::ParseQuery(const string &query) {
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			auto stmt_loc = 0;
 			for (auto const &query_statement : query_statements) {
-				PostgresParser another_parser;
-				another_parser.Parse(query_statement);
-				// LCOV_EXCL_START
-				// first see if DuckDB can parse this individual query statement
-				if (another_parser.success) {
-					if (!another_parser.parse_tree) {
-						// empty statement
-						continue;
-					}
-					transformer.TransformParseTree(another_parser.parse_tree, statements);
-					// important to set in the case of a mixture of DDB and parser ext statements
-					statements.back()->stmt_length = query_statement.size() - 1;
-					statements.back()->stmt_location = stmt_loc;
-					stmt_loc += query_statement.size();
-				} else {
-					// let extensions parse the statement which DuckDB failed to parse
-					bool parsed_single_statement = false;
-					for (auto &ext : *options.extensions) {
-						D_ASSERT(!parsed_single_statement);
-						D_ASSERT(ext.parse_function);
-						auto result = ext.parse_function(ext.parser_info.get(), query_statement);
-						if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-							auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-							statement->stmt_length = query_statement.size() - 1;
-							statement->stmt_location = stmt_loc;
-							stmt_loc += query_statement.size();
-							statements.push_back(std::move(statement));
-							parsed_single_statement = true;
-							break;
-						} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-							throw ParserException(result.error);
-						} else {
-							// We move to the next one!
+				string another_parser_error;
+				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
+				{
+					PostgresParser another_parser;
+					another_parser.Parse(query_statement);
+					// LCOV_EXCL_START
+					// first see if DuckDB can parse this individual query statement
+					if (another_parser.success) {
+						if (!another_parser.parse_tree) {
+							// empty statement
+							continue;
 						}
+						transformer.TransformParseTree(another_parser.parse_tree, statements);
+						// important to set in the case of a mixture of DDB and parser ext statements
+						statements.back()->stmt_length = query_statement.size() - 1;
+						statements.back()->stmt_location = stmt_loc;
+						stmt_loc += query_statement.size();
+						continue;
+					} else {
+						another_parser_error = QueryErrorContext::Format(query, another_parser.error_message,
+						                                                 another_parser.error_location - 1);
 					}
-					if (!parsed_single_statement) {
-						parser_error = QueryErrorContext::Format(query, another_parser.error_message,
-						                                         another_parser.error_location - 1);
-						throw ParserException(parser_error);
+				} // LCOV_EXCL_STOP
+				// LCOV_EXCL_START
+				// let extensions parse the statement which DuckDB failed to parse
+				bool parsed_single_statement = false;
+				for (auto &ext : *options.extensions) {
+					D_ASSERT(!parsed_single_statement);
+					D_ASSERT(ext.parse_function);
+					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
+					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+						statement->stmt_length = query_statement.size() - 1;
+						statement->stmt_location = stmt_loc;
+						stmt_loc += query_statement.size();
+						statements.push_back(std::move(statement));
+						parsed_single_statement = true;
+						break;
+					} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						throw ParserException(result.error);
+					} else {
+						// We move to the next one!
 					}
 				}
-				// LCOV_EXCL_STOP
+				if (!parsed_single_statement) {
+					throw ParserException(parser_error);
+				} // LCOV_EXCL_STOP
 			}
 		}
 	}

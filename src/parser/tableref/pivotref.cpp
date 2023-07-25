@@ -130,13 +130,6 @@ void PivotColumn::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("pivot_expressions", pivot_expressions);
-	serializer.WriteProperty("unpivot_names", unpivot_names);
-	serializer.WriteProperty("entries", entries);
-	serializer.WriteProperty("pivot_enum", pivot_enum);
-}
-
 PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 	PivotColumn result;
 	FieldReader reader(source);
@@ -145,15 +138,6 @@ PivotColumn PivotColumn::Deserialize(Deserializer &source) {
 	result.entries = reader.ReadRequiredSerializableList<PivotColumnEntry, PivotColumnEntry>();
 	result.pivot_enum = reader.ReadRequired<string>();
 	reader.Finalize();
-	return result;
-}
-
-PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &source) {
-	PivotColumn result;
-	source.ReadProperty("pivot_expressions", result.pivot_expressions);
-	source.ReadProperty("unpivot_names", result.unpivot_names);
-	source.ReadProperty("entries", result.entries);
-	source.ReadProperty("pivot_enum", result.pivot_enum);
 	return result;
 }
 

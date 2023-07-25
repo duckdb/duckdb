@@ -2,10 +2,11 @@ import pandas as pd
 import pytest
 import duckdb
 
+
 class TestPandasEnum(object):
     def test_3480(self, duckdb_cursor):
         duckdb_cursor.execute(
-        """
+            """
         create type cat as enum ('marie', 'duchess', 'toulouse');
         create table tab (
             cat cat,
@@ -20,7 +21,7 @@ class TestPandasEnum(object):
 
     def test_3479(self, duckdb_cursor):
         duckdb_cursor.execute(
-        """
+            """
         create type cat as enum ('marie', 'duchess', 'toulouse');
         create table tab (
             cat cat,
@@ -29,12 +30,19 @@ class TestPandasEnum(object):
         """
         )
 
-        df = pd.DataFrame({"cat2": pd.Series(['duchess', 'toulouse', 'marie', None, "berlioz", "o_malley"], dtype="category"), "amt": [1, 2, 3, 4, 5, 6]})
+        df = pd.DataFrame(
+            {
+                "cat2": pd.Series(['duchess', 'toulouse', 'marie', None, "berlioz", "o_malley"], dtype="category"),
+                "amt": [1, 2, 3, 4, 5, 6],
+            }
+        )
         duckdb_cursor.register('df', df)
-        with pytest.raises(duckdb.ConversionException, match='Type UINT8 with value 0 can\'t be cast because the value is out of range for the destination type UINT8'):
+        with pytest.raises(
+            duckdb.ConversionException,
+            match='Type UINT8 with value 0 can\'t be cast because the value is out of range for the destination type UINT8',
+        ):
             duckdb_cursor.execute(f"INSERT INTO tab SELECT * FROM df;")
 
         assert duckdb_cursor.execute("select * from tab").fetchall() == []
         duckdb_cursor.execute("DROP TABLE tab")
         duckdb_cursor.execute("DROP TYPE cat")
-

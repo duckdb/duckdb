@@ -218,23 +218,6 @@ void Pipeline::Ready() {
 	std::reverse(operators.begin(), operators.end());
 }
 
-void Pipeline::Finalize(Event &event) {
-	if (executor.HasError()) {
-		return;
-	}
-	D_ASSERT(ready);
-	try {
-		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
-		sink->sink_state->state = sink_state;
-	} catch (Exception &ex) { // LCOV_EXCL_START
-		executor.PushError(PreservedError(ex));
-	} catch (std::exception &ex) {
-		executor.PushError(PreservedError(ex));
-	} catch (...) {
-		executor.PushError(PreservedError("Unknown exception in Finalize!"));
-	} // LCOV_EXCL_STOP
-}
-
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));

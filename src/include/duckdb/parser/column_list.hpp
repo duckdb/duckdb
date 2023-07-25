@@ -20,6 +20,7 @@ public:
 
 public:
 	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();
@@ -52,6 +53,9 @@ public:
 	ColumnList Copy() const;
 	void Serialize(FieldWriter &writer) const;
 	static ColumnList Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static ColumnList FormatDeserialize(FormatDeserializer &deserializer);
 
 	DUCKDB_API ColumnListIterator Logical() const;
 	DUCKDB_API ColumnListIterator Physical() const;
