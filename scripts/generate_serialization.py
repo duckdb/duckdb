@@ -12,7 +12,7 @@ for fname in os.listdir(source_base):
     file_list.append(
         {
             'source': os.path.join(source_base, fname),
-            'target': os.path.join(target_base, 'serialize_' + fname.replace('.json', '.cpp'))
+            'target': os.path.join(target_base, 'serialize_' + fname.replace('.json', '.cpp')),
         }
     )
 
@@ -61,50 +61,70 @@ get_deserialize_parameter = 'deserializer.Get<${PROPERTY_TYPE}>()'
 
 switch_header = '\tcase ${ENUM_TYPE}::${ENUM_VALUE}:\n'
 
-switch_statement = switch_header + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(deserializer);
+switch_statement = (
+    switch_header
+    + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(deserializer);
 \t\tbreak;
 '''
+)
 
 deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>("${PROPERTY_KEY}");\n'
 deserialize_element_class = '\tdeserializer.ReadProperty("${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>("${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
-move_list = [
-    'string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition'
-]
+move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
 
-reference_list = [
-    'ClientContext', 'bound_parameter_map_t'
-]
+reference_list = ['ClientContext', 'bound_parameter_map_t']
+
 
 def is_container(type):
     return '<' in type
 
+
 def is_pointer(type):
     return type.endswith('*') or type.startswith('shared_ptr<')
+
 
 def requires_move(type):
     return is_container(type) or is_pointer(type) or type in move_list
 
+
 def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
+
 
 def get_serialize_element(property_name, property_key, property_type, is_optional, pointer_type):
     write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     if is_optional:
         write_method = 'WriteOptionalProperty'
-    return serialize_element.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_KEY}', property_key).replace('WriteProperty', write_method).replace('${ASSIGNMENT}', assignment)
+    return (
+        serialize_element.replace('${PROPERTY_NAME}', property_name)
+        .replace('${PROPERTY_KEY}', property_key)
+        .replace('WriteProperty', write_method)
+        .replace('${ASSIGNMENT}', assignment)
+    )
+
 
 def get_deserialize_element_template(template, property_name, property_key, property_type, is_optional, pointer_type):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     if is_optional:
         read_method = 'ReadOptionalProperty'
-    return template.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_KEY}', property_key).replace('ReadProperty', read_method).replace('${PROPERTY_TYPE}', property_type).replace('${ASSIGNMENT}', assignment)
+    return (
+        template.replace('${PROPERTY_NAME}', property_name)
+        .replace('${PROPERTY_KEY}', property_key)
+        .replace('ReadProperty', read_method)
+        .replace('${PROPERTY_TYPE}', property_type)
+        .replace('${ASSIGNMENT}', assignment)
+    )
+
 
 def get_deserialize_element(property_name, property_key, property_type, is_optional, pointer_type):
-    return get_deserialize_element_template(deserialize_element, property_name, property_key, property_type, is_optional, pointer_type)
+    return get_deserialize_element_template(
+        deserialize_element, property_name, property_key, property_type, is_optional, pointer_type
+    )
+
 
 def get_deserialize_assignment(property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
@@ -113,10 +133,12 @@ def get_deserialize_assignment(property_name, property_type, pointer_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
 
+
 def get_return_value(pointer_type, class_name):
     if pointer_type == 'none':
         return class_name
     return pointer_return.replace('${POINTER}', pointer_type).replace('${CLASS_NAME}', class_name)
+
 
 def generate_constructor(pointer_type, class_name, constructor_parameters):
     if pointer_type == 'none':
@@ -124,15 +146,24 @@ def generate_constructor(pointer_type, class_name, constructor_parameters):
         return f'\t{class_name} result{params};\n'
     return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
 
+
 def generate_return(class_entry):
     if class_entry.base is None:
         return '\treturn result;'
     else:
         return '\treturn std::move(result);'
 
+
 supported_member_entries = [
-    'name', 'type', 'property', 'serialize_property', 'deserialize_property', 'optional', 'base'
+    'name',
+    'type',
+    'property',
+    'serialize_property',
+    'deserialize_property',
+    'optional',
+    'base',
 ]
+
 
 class MemberVariable:
     def __init__(self, entry):
@@ -156,12 +187,26 @@ class MemberVariable:
             self.base = entry['base']
         for key in entry.keys():
             if key not in supported_member_entries:
-                print(f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}")
+                print(
+                    f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_member_entries)}"
+                )
+
 
 supported_serialize_entries = [
-    'class', 'class_type', 'pointer_type', 'base', 'enum', 'constructor', 'custom_implementation', 'custom_switch_code', 'members', 'return_type', 'set_parameters',
-    'includes'
+    'class',
+    'class_type',
+    'pointer_type',
+    'base',
+    'enum',
+    'constructor',
+    'custom_implementation',
+    'custom_switch_code',
+    'members',
+    'return_type',
+    'set_parameters',
+    'includes',
 ]
+
 
 class SerializableClass:
     def __init__(self, entry):
@@ -215,7 +260,9 @@ class SerializableClass:
                     raise Exception(f'Set parameter {set_parameter_name} not found in member list')
         for key in entry.keys():
             if key not in supported_serialize_entries:
-                print(f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}")
+                print(
+                    f"Unsupported key \"{key}\" in member variable, key should be in set {str(supported_serialize_entries)}"
+                )
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -233,14 +280,20 @@ def generate_base_class_code(base_class):
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
         is_optional = entry.optional
-        base_class_serialize += get_serialize_element(entry.serialize_property, entry.name, type_name, is_optional, base_class.pointer_type)
-        base_class_deserialize += get_deserialize_element(entry.deserialize_property, entry.name, type_name, is_optional, base_class.pointer_type)
+        base_class_serialize += get_serialize_element(
+            entry.serialize_property, entry.name, type_name, is_optional, base_class.pointer_type
+        )
+        base_class_deserialize += get_deserialize_element(
+            entry.deserialize_property, entry.name, type_name, is_optional, base_class.pointer_type
+        )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
     # set parameters
     for entry in base_class.set_parameters:
-        base_class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace('${PROPERTY_NAME}', entry.name)
+        base_class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(
+            '${PROPERTY_NAME}', entry.name
+        )
 
     base_class_deserialize += f'\t{base_class.pointer_type}<{base_class.name}> result;\n'
     switch_cases = ''
@@ -248,11 +301,21 @@ def generate_base_class_code(base_class):
         enum_value = expr[0]
         child_data = expr[1]
         if child_data.custom_switch_code is not None:
-            switch_cases += switch_header.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', enum_value).replace('${CLASS_DESERIALIZE}', child_data.name)
-            switch_cases += '\n'.join(['\t\t' + x for x in child_data.custom_switch_code.replace('\\n', '\n').split('\n')])
+            switch_cases += (
+                switch_header.replace('${ENUM_TYPE}', enum_type)
+                .replace('${ENUM_VALUE}', enum_value)
+                .replace('${CLASS_DESERIALIZE}', child_data.name)
+            )
+            switch_cases += '\n'.join(
+                ['\t\t' + x for x in child_data.custom_switch_code.replace('\\n', '\n').split('\n')]
+            )
             switch_cases += '\n'
             continue
-        switch_cases += switch_statement.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', enum_value).replace('${CLASS_DESERIALIZE}', child_data.name)
+        switch_cases += (
+            switch_statement.replace('${ENUM_TYPE}', enum_type)
+            .replace('${ENUM_VALUE}', enum_value)
+            .replace('${CLASS_DESERIALIZE}', child_data.name)
+        )
 
     assign_entries = []
     for entry in base_class.members:
@@ -267,7 +330,11 @@ def generate_base_class_code(base_class):
         assign_entries.append(entry)
 
     # class switch statement
-    base_class_deserialize += switch_code.replace('${SWITCH_VARIABLE}', base_class.enum_value).replace('${CASE_STATEMENTS}', switch_cases).replace('${BASE_CLASS}', base_class.name)
+    base_class_deserialize += (
+        switch_code.replace('${SWITCH_VARIABLE}', base_class.enum_value)
+        .replace('${CASE_STATEMENTS}', switch_cases)
+        .replace('${BASE_CLASS}', base_class.name)
+    )
 
     deserialize_return = get_return_value(base_class.pointer_type, base_class.return_type)
 
@@ -279,16 +346,24 @@ def generate_base_class_code(base_class):
         if entry.type in move_list or is_container(entry.type) or is_pointer(entry.type):
             move = True
         if move:
-            base_class_deserialize+= f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
+            base_class_deserialize += (
+                f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
+            )
         else:
-            base_class_deserialize+= f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
+            base_class_deserialize += f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
     base_class_deserialize += generate_return(base_class)
     base_class_generation = ''
     serialization = ''
     if base_class.base is not None:
         serialization += base_serialize.replace('${BASE_CLASS_NAME}', base_class.base)
-    base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', serialization + base_class_serialize)
-    base_class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_deserialize)
+    base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace(
+        '${MEMBERS}', serialization + base_class_serialize
+    )
+    base_class_generation += (
+        deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return)
+        .replace('${CLASS_NAME}', base_class.name)
+        .replace('${MEMBERS}', base_class_deserialize)
+    )
     return base_class_generation
 
 
@@ -353,7 +428,9 @@ def generate_class_code(class_entry):
         type_name = replace_pointer(entry.type)
         class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
 
-    class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.return_class, constructor_parameters)
+    class_deserialize += generate_constructor(
+        class_entry.pointer_type, class_entry.return_class, constructor_parameters
+    )
     if class_entry.members is None:
         return None
     for entry_idx in range(len(class_entry.members)):
@@ -365,15 +442,28 @@ def generate_class_code(class_entry):
             if not is_optional:
                 write_property_name = '*' + entry.serialize_property
         elif is_optional:
-            raise Exception(f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})")
+            raise Exception(
+                f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})"
+            )
         deserialize_template_str = deserialize_element_class
         if entry.base:
             write_property_name = f"({entry.base} &)" + write_property_name
-            deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry.base.replace('*', '')).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
+            deserialize_template_str = deserialize_element_class_base.replace(
+                '${BASE_PROPERTY}', entry.base.replace('*', '')
+            ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
-        class_serialize += get_serialize_element(write_property_name, property_key, type_name, is_optional, class_entry.pointer_type)
+        class_serialize += get_serialize_element(
+            write_property_name, property_key, type_name, is_optional, class_entry.pointer_type
+        )
         if entry_idx > last_constructor_index:
-            class_deserialize += get_deserialize_element_template(deserialize_template_str, entry.deserialize_property, property_key, type_name, is_optional, class_entry.pointer_type)
+            class_deserialize += get_deserialize_element_template(
+                deserialize_template_str,
+                entry.deserialize_property,
+                property_key,
+                type_name,
+                is_optional,
+                class_entry.pointer_type,
+            )
         elif entry.name not in constructor_entries:
             class_deserialize += get_deserialize_assignment(entry.name, entry.type, class_entry.pointer_type)
 
@@ -382,9 +472,12 @@ def generate_class_code(class_entry):
 
     class_generation = ''
     class_generation += serialize_base.replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_serialize)
-    class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_deserialize)
+    class_generation += (
+        deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return)
+        .replace('${CLASS_NAME}', class_entry.name)
+        .replace('${MEMBERS}', class_deserialize)
+    )
     return class_generation
-
 
 
 for entry in file_list:
@@ -393,7 +486,10 @@ for entry in file_list:
     with open(source_path, 'r') as f:
         json_data = json.load(f)
 
-    include_list = ['duckdb/common/serializer/format_serializer.hpp', 'duckdb/common/serializer/format_deserializer.hpp']
+    include_list = [
+        'duckdb/common/serializer/format_serializer.hpp',
+        'duckdb/common/serializer/format_deserializer.hpp',
+    ]
     base_classes = []
     classes = []
     base_class_data = {}
@@ -422,7 +518,9 @@ for entry in file_list:
                 base_class_object.children[enum_entry] = new_class
 
     with open(target_path, 'w+') as f:
-        f.write(header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in include_list])))
+        f.write(
+            header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in include_list]))
+        )
 
         # generate the base class serialization
         for base_class in base_classes:
@@ -430,7 +528,7 @@ for entry in file_list:
             f.write(base_class_generation)
 
         # generate the class serialization
-        classes = sorted(classes, key = lambda x: x.name)
+        classes = sorted(classes, key=lambda x: x.name)
         for class_entry in classes:
             class_generation = generate_class_code(class_entry)
             if class_generation is None:
