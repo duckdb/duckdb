@@ -97,7 +97,7 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 StrpTimeFormat::StrpTimeFormat() {
 }
 
-StrpTimeFormat::StrpTimeFormat(string format_string) {
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
 	if (format_string.empty()) {
 		return;
 	}

@@ -161,7 +161,7 @@ protected:
 	                           idx_t collection_count);
 
 private:
-	explicit StrpTimeFormat(string format_string);
+	explicit StrpTimeFormat(const string &format_string);
 };
 
 } // namespace duckdb
