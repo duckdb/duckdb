@@ -138,7 +138,15 @@ struct UnorderedMapGetter {
 		return iterator->first;
 	}
 
+	static inline const typename MAP_TYPE::key_type &GetKey(const typename MAP_TYPE::const_iterator &iterator) {
+		return iterator->first;
+	}
+
 	static inline typename MAP_TYPE::mapped_type &GetValue(typename MAP_TYPE::iterator &iterator) {
+		return iterator->second;
+	}
+
+	static inline const typename MAP_TYPE::mapped_type &GetValue(const typename MAP_TYPE::const_iterator &iterator) {
 		return iterator->second;
 	}
 };
@@ -149,7 +157,15 @@ struct FixedSizeMapGetter {
 		return iterator.GetKey();
 	}
 
+	static inline const idx_t &GetKey(const const_fixed_size_map_iterator_t<T> &iterator) {
+		return iterator.GetKey();
+	}
+
 	static inline T &GetValue(fixed_size_map_iterator_t<T> &iterator) {
+		return iterator.GetValue();
+	}
+
+	static inline const T &GetValue(const const_fixed_size_map_iterator_t<T> &iterator) {
 		return iterator.GetValue();
 	}
 };
@@ -232,7 +248,7 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 }
 
 template <class MAP_TYPE, class GETTER>
-void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries) {
+void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries) {
 	for (auto it = partition_entries.begin(); it != partition_entries.end(); ++it) {
 		const auto &partition_index = GETTER::GetKey(it);
 

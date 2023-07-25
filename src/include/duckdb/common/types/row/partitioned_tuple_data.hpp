@@ -147,7 +147,7 @@ protected:
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	template <class MAP_TYPE, class GETTER>
-	void BuildBufferSpace(PartitionedTupleDataAppendState &state, MAP_TYPE &partition_entries);
+	void BuildBufferSpace(PartitionedTupleDataAppendState &state, const MAP_TYPE &partition_entries);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		if (allocators) {

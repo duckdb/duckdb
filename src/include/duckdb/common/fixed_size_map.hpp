@@ -18,13 +18,16 @@ template <typename T>
 struct fixed_size_map_iterator_t;
 
 template <typename T>
+struct const_fixed_size_map_iterator_t;
+
+template <typename T>
 class fixed_size_map_t {
 	friend struct fixed_size_map_iterator_t<T>;
+	friend struct const_fixed_size_map_iterator_t<T>;
 
 public:
 	using key_type = idx_t;
 	using mapped_type = T;
-	using iterator = fixed_size_map_iterator_t<T>;
 
 public:
 	explicit fixed_size_map_t(idx_t capacity_p = 0) : capacity(capacity_p) {
@@ -60,17 +63,19 @@ public:
 	}
 
 	fixed_size_map_iterator_t<T> begin() {
-		idx_t index;
-		for (index = 0; index < capacity; index++) {
-			if (occupied.RowIsValid(index)) {
-				break;
-			}
-		}
-		return fixed_size_map_iterator_t<T>(index, *this);
+		return fixed_size_map_iterator_t<T>(begin_internal(), *this);
+	}
+
+	const_fixed_size_map_iterator_t<T> begin() const {
+		return const_fixed_size_map_iterator_t<T>(begin_internal(), *this);
 	}
 
 	fixed_size_map_iterator_t<T> end() {
 		return fixed_size_map_iterator_t<T>(capacity, *this);
+	}
+
+	const_fixed_size_map_iterator_t<T> end() const {
+		return const_fixed_size_map_iterator_t<T>(capacity, *this);
 	}
 
 	fixed_size_map_iterator_t<T> find(const idx_t &index) {
@@ -79,6 +84,25 @@ public:
 		} else {
 			return end();
 		}
+	}
+
+	const_fixed_size_map_iterator_t<T> find(const idx_t &index) const {
+		if (occupied.RowIsValid(index)) {
+			return const_fixed_size_map_iterator_t<T>(index, *this);
+		} else {
+			return end();
+		}
+	}
+
+private:
+	idx_t begin_internal() const {
+		idx_t index;
+		for (index = 0; index < capacity; index++) {
+			if (occupied.RowIsValid(index)) {
+				break;
+			}
+		}
+		return index;
 	}
 
 private:
@@ -97,7 +121,7 @@ public:
 
 	fixed_size_map_iterator_t<T> &operator++() {
 		for (current++; current < map.capacity; current++) {
-			if (map.occupied.RowIsValid(current)) {
+			if (map.occupied.RowIsValidUnsafe(current)) {
 				break;
 			}
 		}
@@ -110,11 +134,19 @@ public:
 		return tmp;
 	}
 
+	idx_t &GetKey() {
+		return current;
+	}
+
 	const idx_t &GetKey() const {
 		return current;
 	}
 
 	T &GetValue() {
+		return map.values[current];
+	}
+
+	const T &GetValue() const {
 		return map.values[current];
 	}
 
@@ -128,6 +160,48 @@ public:
 
 private:
 	fixed_size_map_t<T> &map;
+	idx_t current;
+};
+
+template <typename T>
+struct const_fixed_size_map_iterator_t {
+public:
+	const_fixed_size_map_iterator_t(idx_t index_p, const fixed_size_map_t<T> &map_p) : map(map_p), current(index_p) {
+	}
+
+	const_fixed_size_map_iterator_t<T> &operator++() {
+		for (current++; current < map.capacity; current++) {
+			if (map.occupied.RowIsValidUnsafe(current)) {
+				break;
+			}
+		}
+		return *this;
+	}
+
+	const_fixed_size_map_iterator_t<T> operator++(int) {
+		const_fixed_size_map_iterator_t<T> tmp = *this;
+		++(*this);
+		return tmp;
+	}
+
+	const idx_t &GetKey() const {
+		return current;
+	}
+
+	const T &GetValue() const {
+		return map.values[current];
+	}
+
+	friend bool operator==(const const_fixed_size_map_iterator_t<T> &a, const const_fixed_size_map_iterator_t<T> &b) {
+		return a.current == b.current;
+	}
+
+	friend bool operator!=(const const_fixed_size_map_iterator_t<T> &a, const const_fixed_size_map_iterator_t<T> &b) {
+		return !(a == b);
+	}
+
+private:
+	const fixed_size_map_t<T> &map;
 	idx_t current;
 };
 
