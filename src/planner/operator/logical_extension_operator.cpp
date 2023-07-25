@@ -15,4 +15,25 @@ unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(Logic
 
 	throw SerializationException("No serialization method exists for extension: " + extension_name);
 }
+
+void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const  {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("extension_name", GetExtensionName());
+}
+
+unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
+	auto extension_name = deserializer.ReadProperty<string>("extension_name");
+	for (auto &extension : config.operator_extensions) {
+		if (extension->GetName() == extension_name) {
+			return extension->FormatDeserialize(deserializer);
+		}
+	}
+	throw SerializationException("No deserialization method exists for extension: " + extension_name);
+}
+
+string LogicalExtensionOperator::GetExtensionName() const {
+	throw SerializationException("LogicalExtensionOperator::GetExtensionName not implemented which is required for serializing extension operators");
+}
+
 } // namespace duckdb

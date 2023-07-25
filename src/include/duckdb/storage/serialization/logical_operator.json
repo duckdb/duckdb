@@ -824,5 +824,11 @@
       }
     ],
     "constructor": ["$ClientContext", "info", "unbound_expressions"]
+  },
+  {
+    "class": "LogicalExtensionOperator",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTENSION_OPERATOR",
+    "custom_implementation": true
   }
 ]

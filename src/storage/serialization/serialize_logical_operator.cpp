@@ -106,6 +106,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		result = LogicalExtensionOperator::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
 		break;
