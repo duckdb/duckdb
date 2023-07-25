@@ -18,26 +18,20 @@ overrides = {
         "SQLNULL": "NULL",
         "TIMESTAMP_TZ": "TIMESTAMP WITH TIME ZONE",
         "TIME_TZ": "TIME WITH TIME ZONE",
-        "TIMESTAMP_SEC": "TIMESTAMP_S", 
+        "TIMESTAMP_SEC": "TIMESTAMP_S",
     },
-    "JoinType": {
-        "OUTER": "FULL"
-    },
+    "JoinType": {"OUTER": "FULL"},
     "OrderType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
         "DESCENDING": ["DESCENDING", "DESC"],
-        "ASCENDING": ["ASCENDING", "ASC"]
+        "ASCENDING": ["ASCENDING", "ASC"],
     },
     "OrderByNullType": {
         "ORDER_DEFAULT": ["ORDER_DEFAULT", "DEFAULT"],
         "NULLS_FIRST": ["NULLS_FIRST", "NULLS FIRST"],
-        "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"]
+        "NULLS_LAST": ["NULLS_LAST", "NULLS LAST"],
     },
-    "SampleMethod": {
-        "SYSTEM_SAMPLE": "System",
-        "BERNOULLI_SAMPLE": "Bernoulli",
-        "RESERVOIR_SAMPLE": "Reservoir"
-    }
+    "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
 }
 
 
@@ -52,10 +46,12 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
         if file.endswith(".hpp"):
             hpp_files.append(os.path.join(root, file))
 
+
 def remove_prefix(str, prefix):
     if str.startswith(prefix):
-        return str[len(prefix):]
+        return str[len(prefix) :]
     return str
+
 
 # get all the enum classes
 enums = []
@@ -110,7 +106,7 @@ for hpp_file in hpp_files:
             if not file_path in enum_path_set:
                 enum_path_set.add(file_path)
                 enum_paths.append(file_path)
-                
+
             enums.append((enum_name, enum_type, enum_members))
 
 enum_paths.sort()
@@ -128,16 +124,16 @@ header = """//------------------------------------------------------------------
 
 # Write the enum util header
 with open(enum_util_header_file, "w") as f:
-
     f.write(header)
 
     f.write('#pragma once\n\n')
     f.write('#include <stdint.h>\n')
     f.write('#include "duckdb/common/string.hpp"\n\n')
-    
+
     f.write("namespace duckdb {\n\n")
-    
-    f.write("""struct EnumUtil {
+
+    f.write(
+        """struct EnumUtil {
     // String -> Enum
     template <class T>
     static T FromString(const char *value) = delete;
@@ -151,18 +147,19 @@ with open(enum_util_header_file, "w") as f:
 
     template <class T>
     static string ToString(T value) { return string(ToChars<T>(value)); }
-};\n\n""")
+};\n\n"""
+    )
 
     # Forward declare all enums
     for enum_name, enum_type, _ in enums:
         f.write(f"enum class {enum_name} : {enum_type};\n\n")
     f.write("\n")
-    
+
     # Forward declare all enum serialization functions
     for enum_name, enum_type, _ in enums:
         f.write(f"template<>\nconst char* EnumUtil::ToChars<{enum_name}>({enum_name} value);\n\n")
     f.write("\n")
-    
+
     # Forward declare all enum dserialization functions
     for enum_name, enum_type, _ in enums:
         f.write(f"template<>\n{enum_name} EnumUtil::FromString<{enum_name}>(const char *value);\n\n")
@@ -190,7 +187,9 @@ with open(enum_util_source_file, "w") as f:
         for key, strings in enum_members:
             # Always use the first string as the enum string
             f.write(f"\tcase {enum_name}::{key}:\n\t\treturn \"{strings[0]}\";\n")
-        f.write('\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format("Enum value: \'%d\' not implemented", value));\n')
+        f.write(
+            '\tdefault:\n\t\tthrow NotImplementedException(StringUtil::Format("Enum value: \'%d\' not implemented", value));\n'
+        )
         f.write("\t}\n")
         f.write("}\n\n")
 
