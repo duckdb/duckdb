@@ -24,7 +24,6 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_distinct.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
@@ -39,6 +38,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -483,10 +483,14 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
 	create_index_info->names = get.names;
 	create_index_info->column_ids = get.column_ids;
+	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
+	bind_data.is_create_index = true;
+	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
 	// the logical CREATE INDEX also needs all fields to scan the referenced table
-	return make_uniq<LogicalCreateIndex>(std::move(get.bind_data), std::move(create_index_info), std::move(expressions),
-	                                     table, std::move(get.function));
+	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table);
+	result->children.push_back(std::move(plan));
+	return std::move(result);
 }
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
@@ -548,7 +552,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		if (plan->type != LogicalOperatorType::LOGICAL_GET) {
 			throw BinderException("Cannot create index on a view!");
 		}
-
 		result.plan = table.catalog.BindCreateIndex(*this, stmt, table, std::move(plan));
 		break;
 	}

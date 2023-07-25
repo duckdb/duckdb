@@ -46,6 +46,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+		result = LogicalCreateIndex::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::FormatDeserialize(deserializer);
 		break;
@@ -290,6 +293,19 @@ void LogicalCreate::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalCreate::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
 	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<LogicalOperatorType>(), deserializer.Get<ClientContext &>(), std::move(info)));
+	return std::move(result);
+}
+
+void LogicalCreateIndex::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("info", *info);
+	serializer.WriteProperty("unbound_expressions", unbound_expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalCreateIndex::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
+	auto unbound_expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("unbound_expressions");
+	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions)));
 	return std::move(result);
 }
 

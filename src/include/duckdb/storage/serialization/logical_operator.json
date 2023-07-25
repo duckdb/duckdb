@@ -808,5 +808,21 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_COPY_TO_FILE",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalCreateIndex",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CREATE_INDEX",
+    "members": [
+      {
+        "name": "info",
+        "type": "CreateInfo*"
+      },
+      {
+        "name": "unbound_expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["$ClientContext", "info", "unbound_expressions"]
   }
 ]
