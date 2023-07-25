@@ -12,8 +12,8 @@ BoundParameterExpression::BoundParameterExpression(const string &identifier)
       identifier(identifier) {
 }
 
-BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set,
-                                                   string identifier, LogicalType return_type,
+BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier,
+                                                   LogicalType return_type,
                                                    shared_ptr<BoundParameterData> parameter_data)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
       identifier(std::move(identifier)) {

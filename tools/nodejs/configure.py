@@ -31,6 +31,7 @@ if os.environ.get('DUCKDB_NODE_BUILD_CACHE') == '1' and os.path.isfile(cache_fil
     windows_options = cache['windows_options']
     cflags = cache['cflags']
 elif 'DUCKDB_NODE_BINDIR' in os.environ:
+
     def find_library_path(libdir, libname):
         flist = os.listdir(libdir)
         for fname in flist:
@@ -38,6 +39,7 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             if os.path.isfile(fpath) and package_build.file_is_lib(fname, libname):
                 return fpath
         raise Exception(f"Failed to find library {libname} in {libdir}")
+
     # existing build
     existing_duckdb_dir = os.environ['DUCKDB_NODE_BINDIR']
     cflags = os.environ['DUCKDB_NODE_CFLAGS']
@@ -48,7 +50,7 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
 
     result_libraries = package_build.get_libraries(existing_duckdb_dir, libraries, extensions)
     libraries = []
-    for (libdir, libname) in result_libraries:
+    for libdir, libname in result_libraries:
         if libdir is None:
             continue
         libraries.append(find_library_path(libdir, libname))
@@ -72,7 +74,7 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             'include_list': include_list,
             'libraries': libraries,
             'cflags': cflags,
-            'windows_options': windows_options
+            'windows_options': windows_options,
         }
         with open(cache_file, 'wb+') as f:
             pickle.dump(cache, f)
@@ -90,8 +92,10 @@ else:
     windows_options = ['/GR']
     cflags = ['-frtti']
 
+
 def sanitize_path(x):
     return x.replace('\\', '/')
+
 
 source_list = [sanitize_path(x) for x in source_list]
 include_list = [sanitize_path(x) for x in include_list]
@@ -99,6 +103,7 @@ libraries = [sanitize_path(x) for x in libraries]
 
 with open(gyp_in, 'r') as f:
     input_json = json.load(f)
+
 
 def replace_entries(node, replacement_map):
     if type(node) == type([]):
