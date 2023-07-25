@@ -24,6 +24,7 @@ new_runner = None
 benchmark_file = None
 verbose = False
 threads = None
+no_regression_fail = False
 for arg in sys.argv:
     if arg.startswith("--old="):
         old_runner = arg.replace("--old=", "")
@@ -35,6 +36,8 @@ for arg in sys.argv:
         verbose = True
     elif arg.startswith("--threads="):
         threads = int(arg.replace("--threads=", ""))
+    elif arg.startswith("--nofail"):
+        no_regression_fail = True
 
 if old_runner is None or new_runner is None or benchmark_file is None:
     print(
@@ -136,7 +139,9 @@ for i in range(number_repetitions):
         if isinstance(old_res, str) or isinstance(new_res, str):
             # benchmark failed to run - always a regression
             error_list.append([benchmark, old_res, new_res])
-        elif (old_res + regression_threshold_seconds) * multiply_percentage < new_res:
+        elif (no_regression_fail == False) and (
+            (old_res + regression_threshold_seconds) * multiply_percentage < new_res
+        ):
             regression_list.append([benchmark, old_res, new_res])
         else:
             other_results.append([benchmark, old_res, new_res])
