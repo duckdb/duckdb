@@ -21,7 +21,7 @@ BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global
 	auto entry = global_parameter_set.find(identifier);
 	if (entry == global_parameter_set.end()) {
 		// we have not - store the entry we deserialized from this parameter expression
-		global_parameter_set[identifier] = parameter_data;
+		global_parameter_set[this->identifier] = parameter_data;
 	} else {
 		// we have! use the previously deserialized entry
 		parameter_data = entry->second;
