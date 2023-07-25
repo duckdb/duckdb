@@ -15,6 +15,10 @@
 namespace duckdb {
 
 struct DropInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::DROP_INFO;
+
+public:
 	DropInfo();
 
 	//! The catalog type to drop
@@ -38,6 +42,9 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

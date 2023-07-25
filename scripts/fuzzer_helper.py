@@ -41,13 +41,16 @@ middle = '''
 footer = '''
 ```'''
 
+
 def get_github_hash():
     proc = subprocess.Popen(['git', 'rev-parse', 'HEAD'], stdout=subprocess.PIPE)
     return proc.stdout.read().decode('utf8').strip()
 
+
 # github stuff
 def issue_url():
     return 'https://api.github.com/repos/%s/%s/issues' % (REPO_OWNER, REPO_NAME)
+
 
 def create_session():
     # Create an authenticated session to create the issue
@@ -55,14 +58,14 @@ def create_session():
     session.headers.update({'Authorization': 'token %s' % (TOKEN,)})
     return session
 
+
 def make_github_issue(title, body):
     if len(title) > 240:
         #  avoid title is too long error (maximum is 256 characters)
         title = title[:240] + '...'
     session = create_session()
     url = issue_url()
-    issue = {'title': title,
-             'body': body}
+    issue = {'title': title, 'body': body}
     r = session.post(url, json.dumps(issue))
     if r.status_code == 201:
         print('Successfully created Issue "%s"' % title)
@@ -70,6 +73,7 @@ def make_github_issue(title, body):
         print('Could not create Issue "%s"' % title)
         print('Response:', r.content.decode('utf8'))
         raise Exception("Failed to create issue")
+
 
 def get_github_issues():
     session = create_session()
@@ -80,6 +84,7 @@ def get_github_issues():
         print('Response:', r.content.decode('utf8'))
         raise Exception("Failed to get list of issues")
     return json.loads(r.content.decode('utf8'))
+
 
 def close_github_issue(number):
     session = create_session()
@@ -93,16 +98,18 @@ def close_github_issue(number):
         print('Response:', r.content.decode('utf8'))
         raise Exception("Failed to close issue")
 
+
 def extract_issue(body, nr):
     try:
         splits = body.split(middle)
         sql = splits[0].split(header)[1]
-        error = splits[1][:-len(footer)]
+        error = splits[1][: -len(footer)]
         return (sql, error)
     except:
         print(f"Failed to extract SQL/error message from issue {nr}")
         print(body)
         return None
+
 
 def run_shell_command_batch(shell, cmd):
     command = [shell, '--batch', '-init', '/dev/null']
@@ -111,6 +118,7 @@ def run_shell_command_batch(shell, cmd):
     stdout = res.stdout.decode('utf8').strip()
     stderr = res.stderr.decode('utf8').strip()
     return (stdout, stderr, res.returncode)
+
 
 def test_reproducibility(shell, issue, current_errors):
     extract = extract_issue(issue['body'], issue['number'])
@@ -128,6 +136,7 @@ def test_reproducibility(shell, issue, current_errors):
     current_errors[error] = issue
     return True
 
+
 def extract_github_issues(shell):
     current_errors = dict()
     issues = get_github_issues()
@@ -139,15 +148,22 @@ def extract_github_issues(shell):
             close_github_issue(int(issue['number']))
     return current_errors
 
+
 def file_issue(cmd, error_msg, fuzzer, seed, hash):
     # issue is new, file it
     print("Filing new issue to Github")
 
     title = error_msg
-    body = fuzzer_desc.replace("${FUZZER}", fuzzer).replace("${FULL_HASH}", hash).replace("${SHORT_HASH}", hash[:5]).replace("${SEED}", str(seed))
+    body = (
+        fuzzer_desc.replace("${FUZZER}", fuzzer)
+        .replace("${FULL_HASH}", hash)
+        .replace("${SHORT_HASH}", hash[:5])
+        .replace("${SEED}", str(seed))
+    )
     body += header + cmd + middle + error_msg + footer
     print(title, body)
     make_github_issue(title, body)
+
 
 def is_internal_error(error):
     if 'differs from original result' in error:

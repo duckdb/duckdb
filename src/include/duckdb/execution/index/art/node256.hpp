@@ -29,6 +29,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the node
 	static inline Node256 &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::NODE_256).Get<Node256>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node48 to a Node256

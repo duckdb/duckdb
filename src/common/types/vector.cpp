@@ -977,7 +977,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 	UnifiedVectorFormat vdata;
 	ToUnifiedFormat(count, vdata);
 
-	const auto all_valid = (count > 0) && !vdata.validity.AllValid();
+	const bool all_valid = (count > 0) && !vdata.validity.AllValid();
 	serializer.WriteProperty("all_valid", all_valid);
 	if (all_valid) {
 		ValidityMask flat_mask(count);

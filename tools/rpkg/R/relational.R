@@ -214,22 +214,18 @@ expr_window_ <- function (window_function, partitions=list(), order_bys=list(), 
 #' rel2 <- rel_join(left, right, cond, "outer")
 
 rel_inner_join <- function(left, right, conds) {
-  rel_join_(left, right, conds, "inner", "regular")
+  rel_join(left, right, conds, "inner", "regular")
 }
 
-rel_join <- function(left, right, conds, join = "inner", ref_type = "regular") {
-    rel_join_(left, right, conds, join, ref_type)
-}
-
-rel_join_ <- function(left, right, conds,
-                      join = c("inner", "left", "right", "outer", "cross", "semi", "anti"),
-                      join_ref_type = c("regular", "natural", "cross", "positional", "asof")) {
+rel_join <- function(left, right, conds,
+                     join = c("inner", "left", "right", "outer", "cross", "semi", "anti"),
+                     join_ref_type = c("regular", "natural", "cross", "positional", "asof")) {
   join <- match.arg(join)
   join_ref_type <- match.arg(join_ref_type)
   # the ref type is naturally regular. Users won't write rel_join(left, right, conds, "cross", "cross")
   # so we update it here.
   if (join == "cross" && join_ref_type == "regular") {
-    join_ref_type = "cross"
+    join_ref_type <- "cross"
   }
   rapi_rel_join(left, right, conds, join, join_ref_type)
 }

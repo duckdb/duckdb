@@ -9,8 +9,8 @@ namespace duckdb {
 
 Node48 &Node48::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_48).New());
-	node.type = (uint8_t)NType::NODE_48;
+	node = Node::GetAllocator(art, NType::NODE_48).New();
+	node.SetType((uint8_t)NType::NODE_48);
 	auto &n48 = Node48::Get(art, node);
 
 	n48.count = 0;
@@ -29,7 +29,7 @@ Node48 &Node48::New(ART &art, Node &node) {
 void Node48::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 
 	auto &n48 = Node48::Get(art, node);
 
@@ -109,7 +109,7 @@ void Node48::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node48::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n48 = Node48::Get(art, node);
 
 	// ensure that there is no other child at the same byte
@@ -141,7 +141,7 @@ void Node48::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n48 = Node48::Get(art, node);
 
 	// free the child and decrease the count
@@ -214,7 +214,7 @@ void Node48::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			Node::Vacuum(art, children[child_index[i]], flags);
+			children[child_index[i]].Vacuum(art, flags);
 		}
 	}
 }
