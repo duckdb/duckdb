@@ -39,20 +39,23 @@ pk_columns = '''
 select concat('const char *', '$STRUCT_NAME', '::PrimaryKeyColumns[] = {', STRING_AGG('"' || name || '"', ', ') || '};') from pragma_table_info('$NAME') where pk=true;
 '''
 
-def run_query(sql):
-	input_sql = initcode + '\n' + sql
-	res = subprocess.run(duckdb_program, input=input_sql.encode('utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-	stdout = res.stdout.decode('utf8').strip()
-	stderr = res.stderr.decode('utf8').strip()
-	if res.returncode != 0:
-		print("FAILED TO RUN QUERY")
-		print(stderr)
-		exit(1)
-	return stdout
+def run_query(sql):
+    input_sql = initcode + '\n' + sql
+    res = subprocess.run(duckdb_program, input=input_sql.encode('utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    stdout = res.stdout.decode('utf8').strip()
+    stderr = res.stderr.decode('utf8').strip()
+    if res.returncode != 0:
+        print("FAILED TO RUN QUERY")
+        print(stderr)
+        exit(1)
+    return stdout
+
 
 def prepare_query(sql, table_name, struct_name):
-	return sql.replace('$NAME', table_name).replace('$STRUCT_NAME', struct_name)
+    return sql.replace('$NAME', table_name).replace('$STRUCT_NAME', struct_name)
+
 
 header = '''
 #pragma once
@@ -86,20 +89,28 @@ print(header)
 
 table_list = run_query('show tables')
 for table_name in table_list.split('\n'):
-	table_name = table_name.strip()
-	print('''
+    table_name = table_name.strip()
+    print(
+        '''
 //===--------------------------------------------------------------------===//
 // $NAME
-//===--------------------------------------------------------------------===//'''.replace('$NAME', table_name))
-	struct_name = str(table_name.title().replace('_', '')) + 'Info'
-	column_count = int(run_query(prepare_query(column_count_query, table_name, struct_name)).strip())
-	pk_column_count = int(run_query(prepare_query(pk_column_count_query, table_name, struct_name)).strip())
-	print(prepare_query(struct_def, table_name, struct_name).replace('$COLUMN_COUNT', str(column_count)).replace('$PK_COLUMN_COUNT', str(pk_column_count)))
+//===--------------------------------------------------------------------===//'''.replace(
+            '$NAME', table_name
+        )
+    )
+    struct_name = str(table_name.title().replace('_', '')) + 'Info'
+    column_count = int(run_query(prepare_query(column_count_query, table_name, struct_name)).strip())
+    pk_column_count = int(run_query(prepare_query(pk_column_count_query, table_name, struct_name)).strip())
+    print(
+        prepare_query(struct_def, table_name, struct_name)
+        .replace('$COLUMN_COUNT', str(column_count))
+        .replace('$PK_COLUMN_COUNT', str(pk_column_count))
+    )
 
-	print(run_query(prepare_query(gen_names, table_name, struct_name)).replace('""', '"').strip('"'))
-	print("")
-	print(run_query(prepare_query(gen_types, table_name, struct_name)).strip('"'))
-	print("")
-	print(run_query(prepare_query(pk_columns, table_name, struct_name)).replace('""', '"').strip('"'))
+    print(run_query(prepare_query(gen_names, table_name, struct_name)).replace('""', '"').strip('"'))
+    print("")
+    print(run_query(prepare_query(gen_types, table_name, struct_name)).strip('"'))
+    print("")
+    print(run_query(prepare_query(pk_columns, table_name, struct_name)).replace('""', '"').strip('"'))
 
 print(footer)

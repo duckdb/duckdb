@@ -179,7 +179,8 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 	auto &current_chunk = result->current_chunk;
 	if (current_chunk.Valid()) {
 		// We start by scanning the non-finished current chunk
-		idx_t cur_consumption = current_chunk.RemainingSize() > chunk_size ? chunk_size : current_chunk.RemainingSize();
+		// Limit the amount we're fetching to the chunk_size
+		idx_t cur_consumption = MinValue<idx_t>(current_chunk.RemainingSize(), chunk_size);
 		count += cur_consumption;
 		appender.Append(*current_chunk.data_chunk, current_chunk.position, current_chunk.position + cur_consumption,
 		                current_chunk.data_chunk->size());
