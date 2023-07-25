@@ -97,6 +97,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		REQUIRE(string(prepared_schema.format) == "+s");
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, nullptr) == DuckDBError);
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
+		prepared_schema.release(&prepared_schema);
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, (duckdb_arrow_schema *)&arrow_schema) == DuckDBSuccess);
