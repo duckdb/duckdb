@@ -20,7 +20,7 @@ void Transformer::DetermineSliceBounds(duckdb_libpgquery::PGNode *idx, unique_pt
 			}
 		}
 	} else {
-		bound = make_uniq<ConstantExpression>(Value::BIGINT(limit));
+		bound = make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 	}
 }
 
