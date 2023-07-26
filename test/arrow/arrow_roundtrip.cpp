@@ -76,7 +76,7 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 #endif
 	TestArrowRoundtrip("SELECT * EXCLUDE(bit) REPLACE "
 	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
-					   "FROM test_all_types()");
+	                   "FROM test_all_types()");
 }
 
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
