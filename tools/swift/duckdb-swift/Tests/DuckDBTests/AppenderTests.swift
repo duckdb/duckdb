@@ -118,6 +118,15 @@ final class AppenderTests: XCTestCase {
       cast: { $0.cast(to: IntHuge.self) }
     )
   }
+
+  func test_uhugeint_round_trip() throws {
+    try roundTripTest(
+      dataType: "UHUGEINT",
+      expected: [UIntHuge.min, .max, nil],
+      append: { appender, item in try appender.append(item) },
+      cast: { $0.cast(to: UIntHuge.self) }
+    )
+  }
   
   func test_float_round_trip() throws {
     try roundTripTest(

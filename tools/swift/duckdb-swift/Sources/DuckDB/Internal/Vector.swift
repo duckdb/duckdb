@@ -105,6 +105,11 @@ private extension Vector {
     return unsafelyUnwrapElement(as: duckdb_hugeint.self, at: index) { $0.asIntHuge }
   }
   
+  func unwrap(_ type: UIntHuge.Type, at index: Int) throws -> UIntHuge {
+    try assertNonNullTypeMatch(of: type, at: index, withColumnType: .uhugeint)
+    return unsafelyUnwrapElement(as: duckdb_uhugeint.self, at: index) { $0.asUIntHuge }
+  }
+  
   func unwrap(_ type: UUID.Type, at index: Int) throws -> UUID {
     try assertNonNullTypeMatch(of: type, at: index, withColumnType: .uuid)
     return unsafelyUnwrapElement(as: duckdb_hugeint.self, at: index) { $0.asUUID }

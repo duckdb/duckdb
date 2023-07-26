@@ -119,6 +119,15 @@ final class PreparedStatementTests: XCTestCase {
     )
   }
   
+  func test_uhugeint_round_trip() throws {
+    try roundTripTest(
+      dataType: "UHUGEINT",
+      expected: [UIntHuge.min, .max, nil],
+      bind: { statement, item in try statement.bind(item, at: 1) },
+      cast: { $0.cast(to: UIntHuge.self) }
+    )
+  }
+  
   func test_float_round_trip() throws {
     try roundTripTest(
       dataType: "FLOAT",
