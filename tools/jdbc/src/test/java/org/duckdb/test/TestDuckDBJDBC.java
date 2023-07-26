@@ -1213,7 +1213,8 @@ public class TestDuckDBJDBC {
         Connection conn = DriverManager.getConnection("jdbc:duckdb:");
         Statement stmt = conn.createStatement();
         // Create the table
-        stmt.execute("CREATE TABLE q (id	DECIMAL(4,0),dec32 DECIMAL(9,4),dec64 DECIMAL(18,7),dec128 DECIMAL(38,10))");
+        stmt.execute(
+            "CREATE TABLE q (id	DECIMAL(4,0),dec32 DECIMAL(9,4),dec64 DECIMAL(18,7),dec128 DECIMAL(38,10))");
         stmt.close();
 
         // Create the INSERT prepared statement we will use
