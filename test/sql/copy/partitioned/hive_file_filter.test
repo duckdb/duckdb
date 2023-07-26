@@ -1,5 +1,5 @@
 # name: test/sql/copy/partitioned/hive_file_filter.test
-# description: use filters to prune partitions
+# description: use ComplexFilterPushdown() to prune partitions and find files
 # group: [partitioned]
 
 require parquet
@@ -25,7 +25,7 @@ endloop
 
 # create hive partition
 statement ok
-COPY t TO '__TEST_DIR__/partition' (FORMAT PARQUET, PARTITION_BY(year,month,day));
+COPY t TO '__TEST_DIR__/partition' (FORMAT PARQUET, PARTITION_BY(year,month,day), OVERWRITE_OR_IGNORE=1);
 
 # check amount of files (_year * 12 * 30)
 query I
