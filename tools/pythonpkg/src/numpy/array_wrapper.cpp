@@ -326,6 +326,13 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 	return result;
 }
 
+template <>
+double IntegralConvert::ConvertValue(uhugeint_t val) {
+	double result;
+	Uhugeint::TryCast(val, result);
+	return result;
+}
+
 } // namespace duckdb_py_convert
 
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
