@@ -88,7 +88,9 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_release(ByteBuffer stmt_ref);
 
-	protected static native DuckDBResultSetMetaData duckdb_jdbc_meta(ByteBuffer stmt_ref) throws SQLException;
+	protected static native DuckDBResultSetMetaData duckdb_jdbc_query_result_meta(ByteBuffer result_ref) throws SQLException;
+
+	protected static native DuckDBResultSetMetaData duckdb_jdbc_prepared_statement_meta(ByteBuffer stmt_ref) throws SQLException;
 
 	// returns res_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_execute(ByteBuffer stmt_ref, Object[] params) throws SQLException;

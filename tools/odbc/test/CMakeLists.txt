@@ -14,6 +14,7 @@ add_executable(
   tests/connect.cpp
   tests/diagnostics.cpp
   tests/select.cpp
-  tests/row_wise_fetching.cpp)
+  tests/row_wise_fetching.cpp
+  tests/set_attr.cpp)
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)

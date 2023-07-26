@@ -10,10 +10,15 @@ on:
     tags:
       - '**'
     paths-ignore:
-      - '**.md'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/NightlyTests.yml'
-      - '.github/config/uncovered_files.csv'
+      - '!.github/patches/duckdb-wasm/**'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -21,7 +26,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 7bf2a73
+  DUCKDB_WASM_VERSION: "687bab9a"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
 
 jobs:
@@ -255,7 +260,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/ubuntu_16_setup
+     - uses: ./.github/actions/ubuntu_18_setup
        with:
          openssl: 0
          python: 0
@@ -302,8 +307,7 @@ jobs:
      - name: Run Python Tests
        shell: bash
        run: |
-         cd tools/pythonpkg
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast --skiplist TestMemoryLeaks
+         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast --skiplist TestMemoryLeaks
 
   sqllogic:
      name: Sqllogic tests
@@ -683,18 +687,20 @@ jobs:
 
     - uses: mymindstorm/setup-emsdk@v12
       with:
-        version: 3.1.41
+        version: 'latest'
 
     - name: Setup
       shell: bash
       run: |
-        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        git clone https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
         shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
           git apply $filename
         done
+        git submodule init
+        git submodule update
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main

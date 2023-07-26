@@ -43,8 +43,18 @@ public:
 	void MakeShared() {
 		shared = true;
 	}
+	bool IsShared() const {
+		return shared;
+	}
 	idx_t BlockCount() const {
 		return blocks.size();
+	}
+	idx_t SizeInBytes() const {
+		idx_t total_size = 0;
+		for (const auto &block : blocks) {
+			total_size += block.size;
+		}
+		return total_size;
 	}
 
 public:

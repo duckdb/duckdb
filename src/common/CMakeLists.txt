@@ -32,6 +32,7 @@ add_library_unity(
   cycle_counter.cpp
   exception.cpp
   exception_format_value.cpp
+  extra_type_info.cpp
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp

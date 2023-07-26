@@ -1,11 +1,14 @@
 import duckdb
+
 try:
     import pyarrow
     import pyarrow.parquet
     import numpy as np
+
     can_run = True
 except:
     can_run = False
+
 
 def munge(cell):
     try:
@@ -14,7 +17,8 @@ def munge(cell):
         cell = str(cell)
     return cell
 
-def check_result(result,answers):
+
+def check_result(result, answers):
     for q_res in answers:
         db_result = result.fetchone()
         cq_results = q_res.split("|")
@@ -27,9 +31,9 @@ def check_result(result,answers):
         assert ans_result == db_result
     return True
 
-class TestTPCHArrow(object):
 
-    def test_tpch_arrow(self,duckdb_cursor):
+class TestTPCHArrow(object):
+    def test_tpch_arrow(self, duckdb_cursor):
         if not can_run:
             return
 
@@ -43,17 +47,23 @@ class TestTPCHArrow(object):
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(duck_tbl.arrow())
             duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
-            duckdb_conn.execute("DROP TABLE "+tpch_table)
+            duckdb_conn.execute("DROP TABLE " + tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        for i in range (1,23):
-            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
-            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[0].split("\n")[1:]
+        for i in range(1, 23):
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr=" + str(i)).fetchone()[0]
+            answers = (
+                duckdb_conn.execute(
+                    "select answer from tpch_answers() where scale_factor = 0.01 and query_nr=" + str(i)
+                )
+                .fetchone()[0]
+                .split("\n")[1:]
+            )
             result = duckdb_conn.execute(query)
-            assert(check_result(result,answers))
-            print ("Query " + str(i) + " works")
+            assert check_result(result, answers)
+            print("Query " + str(i) + " works")
 
-    def test_tpch_arrow_01(self,duckdb_cursor):
+    def test_tpch_arrow_01(self, duckdb_cursor):
         if not can_run:
             return
 
@@ -67,17 +77,21 @@ class TestTPCHArrow(object):
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(duck_tbl.arrow())
             duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
-            duckdb_conn.execute("DROP TABLE "+tpch_table)
+            duckdb_conn.execute("DROP TABLE " + tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        for i in range (1,23):
-            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
-            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.1 and query_nr="+str(i)).fetchone()[0].split("\n")[1:]
+        for i in range(1, 23):
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr=" + str(i)).fetchone()[0]
+            answers = (
+                duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.1 and query_nr=" + str(i))
+                .fetchone()[0]
+                .split("\n")[1:]
+            )
             result = duckdb_conn.execute(query)
-            assert(check_result(result,answers))
-            print ("Query " + str(i) + " works")
+            assert check_result(result, answers)
+            print("Query " + str(i) + " works")
 
-    def test_tpch_arrow_batch(self,duckdb_cursor):
+    def test_tpch_arrow_batch(self, duckdb_cursor):
         if not can_run:
             return
 
@@ -91,22 +105,34 @@ class TestTPCHArrow(object):
             duck_tbl = duckdb_conn.table(tpch_table)
             arrow_tables.append(pyarrow.Table.from_batches(duck_tbl.arrow().to_batches(10)))
             duck_arrow_table = duckdb_conn.from_arrow(arrow_tables[-1])
-            duckdb_conn.execute("DROP TABLE "+tpch_table)
+            duckdb_conn.execute("DROP TABLE " + tpch_table)
             duck_arrow_table.create(tpch_table)
 
-        for i in range (1,23):
-            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
-            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[0].split("\n")[1:]
+        for i in range(1, 23):
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr=" + str(i)).fetchone()[0]
+            answers = (
+                duckdb_conn.execute(
+                    "select answer from tpch_answers() where scale_factor = 0.01 and query_nr=" + str(i)
+                )
+                .fetchone()[0]
+                .split("\n")[1:]
+            )
             result = duckdb_conn.execute(query)
-            assert(check_result(result,answers))
-            print ("Query " + str(i) + " works")
+            assert check_result(result, answers)
+            print("Query " + str(i) + " works")
 
         duckdb_conn.execute("PRAGMA threads=4")
         duckdb_conn.execute("PRAGMA verify_parallelism")
 
-        for i in range (1,23):
-            query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]
-            answers = duckdb_conn.execute("select answer from tpch_answers() where scale_factor = 0.01 and query_nr="+str(i)).fetchone()[0].split("\n")[1:]
+        for i in range(1, 23):
+            query = duckdb_conn.execute("select query from tpch_queries() where query_nr=" + str(i)).fetchone()[0]
+            answers = (
+                duckdb_conn.execute(
+                    "select answer from tpch_answers() where scale_factor = 0.01 and query_nr=" + str(i)
+                )
+                .fetchone()[0]
+                .split("\n")[1:]
+            )
             result = duckdb_conn.execute(query)
-            assert(check_result(result,answers))
-            print ("Query " + str(i) + " works (Parallel)")
+            assert check_result(result, answers)
+            print("Query " + str(i) + " works (Parallel)")

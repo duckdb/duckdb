@@ -9,7 +9,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_prepared_statement stmt = nullptr;
-	duckdb_arrow arrow_result;
+	duckdb_arrow arrow_result = nullptr;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -24,9 +24,10 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	}
 
 	SECTION("test query arrow") {
-		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE", &arrow_result) == DuckDBSuccess);
+		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE, [1,2,3,4,5] AS LST", &arrow_result) ==
+		        DuckDBSuccess);
 		REQUIRE(duckdb_arrow_row_count(arrow_result) == 1);
-		REQUIRE(duckdb_arrow_column_count(arrow_result) == 1);
+		REQUIRE(duckdb_arrow_column_count(arrow_result) == 2);
 		REQUIRE(duckdb_arrow_rows_changed(arrow_result) == 0);
 
 		// query schema

@@ -261,13 +261,14 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_read = pread(fd, buffer, nr_bytes, location);
-	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
-		                  bytes_read);
+	auto read_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		if (bytes_read == -1) {
+			throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+		}
+		read_buffer += bytes_read;
+		nr_bytes -= bytes_read;
 	}
 }
 
@@ -282,13 +283,15 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
-		                  bytes_written);
+	auto write_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
+		if (bytes_written < 0) {
+			throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+		}
+		D_ASSERT(bytes_written >= 0 && bytes_written);
+		write_buffer += bytes_written;
+		nr_bytes -= bytes_written;
 	}
 }
 
@@ -559,7 +562,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t f
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
-	auto &whandle = (WindowsFileHandle &)handle;
+	auto &whandle = handle.Cast<WindowsFileHandle>();
 	whandle.position = location;
 	LARGE_INTEGER wlocation;
 	wlocation.QuadPart = location;
@@ -567,7 +570,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 }
 
 idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
-	return ((WindowsFileHandle &)handle).position;
+	return handle.Cast<WindowsFileHandle>().position;
 }
 
 static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -597,8 +600,8 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
 	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
@@ -622,7 +625,7 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
@@ -631,15 +634,15 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	LARGE_INTEGER result;
 	if (!GetFileSizeEx(hFile, &result)) {
 		return -1;
@@ -648,7 +651,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
 	FILETIME last_write;
@@ -674,7 +677,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	// seek to the location
 	SetFilePointer(handle, new_size);
 	// now set the end of file position
@@ -767,7 +770,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
@@ -782,7 +785,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = ((WindowsFileHandle &)handle).path;
+	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;

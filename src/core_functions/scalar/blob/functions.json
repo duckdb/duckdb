@@ -3,7 +3,7 @@
         "name": "decode",
         "parameters": "blob",
         "description": "Convert blob to varchar. Fails if blob is not valid utf-8.",
-        "example": "decode('\\\\xC3\\\\xBC'::BLOB)",
+        "example": "decode('\\xC3\\xBC'::BLOB)",
         "type": "scalar_function"
     },
     {

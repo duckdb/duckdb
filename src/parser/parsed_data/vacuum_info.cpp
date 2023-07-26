@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-VacuumInfo::VacuumInfo(VacuumOptions options) : options(options), has_table(false) {
+VacuumInfo::VacuumInfo(VacuumOptions options) : ParseInfo(TYPE), options(options), has_table(false) {
 }
 
 unique_ptr<VacuumInfo> VacuumInfo::Copy() {
