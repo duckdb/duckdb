@@ -4,7 +4,7 @@
 ```
 git clone https://github.com/duckdb/duckdb
 cd duckdb
-BUILD_BENCHMARK=1 BUILD_TPCH=1 make
+BUILD_BENCHMARK=1 BUILD_TPCH=1 BUILD_TPCDS=1 make
 ```
 
 #### List all available benchmarks
