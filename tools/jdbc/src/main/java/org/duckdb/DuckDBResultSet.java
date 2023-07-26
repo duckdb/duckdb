@@ -1245,6 +1245,9 @@ public class DuckDBResultSet implements ResultSet {
 			if (sqlType == DuckDBColumnType.HUGEINT) {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 				// return type.cast(getLocalDateTime(columnIndex));
+			} else if (sqlType == DuckDBColumnType.UHUGEINT) {
+				throw new SQLException("Can't convert value to BigInteger " + type.toString());
+				// return type.cast(getLocalDateTime(columnIndex));
 			} else if (sqlType == DuckDBColumnType.UBIGINT) {
 				throw new SQLException("Can't convert value to BigInteger " + type.toString());
 				// return type.cast(getLocalDateTime(columnIndex));
