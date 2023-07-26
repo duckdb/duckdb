@@ -1,6 +1,8 @@
 import duckdb
 import pytest
-import pandas
+
+# https://pandas.pydata.org/docs/dev/user_guide/copy_on_write.html
+pandas = pytest.importorskip('pandas', '1.5', reason='copy_on_write does not exist in earlier versions')
 import datetime
 
 
