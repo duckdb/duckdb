@@ -450,7 +450,7 @@ include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
 main/capi/appender-c.cpp	3
-main/capi/arrow-c.cpp	5
+main/capi/arrow-c.cpp	8
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
 main/capi/data_chunk-c.cpp	30
