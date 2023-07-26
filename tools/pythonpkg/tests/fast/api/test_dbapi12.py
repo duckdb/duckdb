@@ -3,12 +3,21 @@ import tempfile
 import os
 import pandas as pd
 
+
 class TestRelationApi(object):
     def test_readonly(self, duckdb_cursor):
-        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "j":["one", "two", "three"]})
+        test_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "j": ["one", "two", "three"]})
 
         def test_rel(rel, duckdb_cursor):
-            res = rel.filter('i < 3').order('j').project('i').union(rel.filter('i > 2').project('i')).join(rel.set_alias('a1'), 'i').project('CAST(i as BIGINT) i, j').order('i')
+            res = (
+                rel.filter('i < 3')
+                .order('j')
+                .project('i')
+                .union(rel.filter('i > 2').project('i'))
+                .join(rel.set_alias('a1'), 'i')
+                .project('CAST(i as BIGINT) i, j')
+                .order('i')
+            )
             pd.testing.assert_frame_equal(res.to_df(), test_df)
             res3 = duckdb_cursor.from_df(res.to_df()).to_df()
             pd.testing.assert_frame_equal(res3, test_df)
@@ -17,7 +26,7 @@ class TestRelationApi(object):
             pd.testing.assert_frame_equal(df_sql.df(), test_df)
 
             res2 = res.aggregate('i, count(j) as cj', 'i').order('i')
-            cmp_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "cj":[1, 1, 1]})
+            cmp_df = pd.DataFrame.from_dict({"i": [1, 2, 3], "cj": [1, 1, 1]})
             pd.testing.assert_frame_equal(res2.to_df(), cmp_df)
 
             duckdb_cursor.execute('DROP TABLE IF EXISTS a2')
@@ -40,8 +49,8 @@ class TestRelationApi(object):
 
         rel_a = duckdb_cursor.table('a')
         rel_v = duckdb_cursor.view('v')
-        #rel_at = duckdb_cursor.table('at')
-        #rel_vt = duckdb_cursor.view('vt')
+        # rel_at = duckdb_cursor.table('at')
+        # rel_vt = duckdb_cursor.view('vt')
 
         rel_df = duckdb_cursor.from_df(test_df)
 
@@ -56,7 +65,6 @@ class TestRelationApi(object):
         # assert duckdb_cursor.from_query('select 44').execute().fetchone()[0] == 44
         # assert duckdb_cursor.from_query('select 45').execute().fetchone()[0] == 45
         # assert duckdb_cursor.from_query('select 45').execute().fetchone()[0] == 45
-
 
 
 # cursor = duckdb.connect().cursor()

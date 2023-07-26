@@ -7,6 +7,8 @@
 #include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -99,6 +101,14 @@ void ColumnDataCollection::CreateSegment() {
 
 Allocator &ColumnDataCollection::GetAllocator() const {
 	return allocator->GetAllocator();
+}
+
+idx_t ColumnDataCollection::SizeInBytes() const {
+	idx_t total_size = 0;
+	for (const auto &segment : segments) {
+		total_size += segment->SizeInBytes();
+	}
+	return total_size;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1051,6 +1061,47 @@ ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
 	return segments;
+}
+
+void ColumnDataCollection::FormatSerialize(FormatSerializer &serializer) const {
+	vector<vector<Value>> values;
+	values.resize(ColumnCount());
+	for (auto &chunk : Chunks()) {
+		for (idx_t c = 0; c < chunk.ColumnCount(); c++) {
+			for (idx_t r = 0; r < chunk.size(); r++) {
+				values[c].push_back(chunk.GetValue(c, r));
+			}
+		}
+	}
+	serializer.WriteProperty("types", types);
+	serializer.WriteProperty("values", values);
+}
+
+unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto types = deserializer.ReadProperty<vector<LogicalType>>("types");
+	auto values = deserializer.ReadProperty<vector<vector<Value>>>("values");
+
+	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+	if (values.empty()) {
+		return collection;
+	}
+	DataChunk chunk;
+	chunk.Initialize(Allocator::DefaultAllocator(), types);
+
+	for (idx_t r = 0; r < values[0].size(); r++) {
+		for (idx_t c = 0; c < types.size(); c++) {
+			chunk.SetValue(c, chunk.size(), values[c][r]);
+		}
+		chunk.SetCardinality(chunk.size() + 1);
+		if (chunk.size() == STANDARD_VECTOR_SIZE) {
+			collection->Append(chunk);
+			chunk.Reset();
+		}
+	}
+	if (chunk.size() > 0) {
+		collection->Append(chunk);
+	}
+	return collection;
 }
 
 } // namespace duckdb

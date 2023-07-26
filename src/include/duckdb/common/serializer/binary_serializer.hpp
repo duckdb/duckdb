@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/serializer/binary_serializer.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/serializer/format_serializer.hpp"
@@ -5,7 +13,6 @@
 namespace duckdb {
 
 struct BinarySerializer : public FormatSerializer {
-
 private:
 	struct State {
 		// how many fields are present in the object
@@ -24,14 +31,14 @@ private:
 	template <class T>
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
-		WriteData(const_data_ptr_cast(&element), sizeof(T));
+		WriteDataInternal(const_data_ptr_cast(&element), sizeof(T));
 	}
-	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
+	void WriteDataInternal(const_data_ptr_t buffer, idx_t write_size) {
 		data.insert(data.end(), buffer, buffer + write_size);
 		stack.back().size += write_size;
 	}
-	void WriteData(const char *ptr, idx_t write_size) {
-		WriteData(const_data_ptr_cast(ptr), write_size);
+	void WriteDataInternal(const char *ptr, idx_t write_size) {
+		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
 	}
 
 	explicit BinarySerializer() {

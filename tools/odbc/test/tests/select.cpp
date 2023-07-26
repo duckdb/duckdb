@@ -50,6 +50,15 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 		DATA_CHECK(hstmt, i, std::to_string(i).c_str());
 	}
 
+	// SELECT $x; should throw error
+	SQLRETURN ret = SQLExecDirect(hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
+	REQUIRE(ret == SQL_ERROR);
+	std::string state;
+	std::string message;
+	ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+	REQUIRE(state == "42000");
+	REQUIRE(duckdb::StringUtil::Contains(message, "Not all parameters are bound"));
+
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);

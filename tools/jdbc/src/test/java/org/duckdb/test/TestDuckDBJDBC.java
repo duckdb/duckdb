@@ -3612,6 +3612,89 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_prepared_statement_metadata() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("SELECT 'hello' as world")) {
+			ResultSetMetaData metadata = stmt.getMetaData();
+			assertEquals(metadata.getColumnCount(), 1);
+			assertEquals(metadata.getColumnName(1), "world");
+			assertEquals(metadata.getColumnType(1), Types.VARCHAR);
+		}
+	}
+
+	public static void test_unbindable_query() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("SELECT ?, ?")) {
+			stmt.setString(1, "word1");
+			stmt.setInt(2, 42);
+
+			ResultSetMetaData meta = stmt.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "unknown");
+			assertEquals(meta.getColumnTypeName(1), "UNKNOWN");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+
+			try (ResultSet resultSet = stmt.executeQuery()) {
+				ResultSetMetaData metadata = resultSet.getMetaData();
+
+				assertEquals(metadata.getColumnCount(), 2);
+
+				assertEquals(metadata.getColumnName(1), "$1");
+				assertEquals(metadata.getColumnTypeName(1), "VARCHAR");
+				assertEquals(metadata.getColumnType(1), Types.VARCHAR);
+
+				assertEquals(metadata.getColumnName(2), "$2");
+				assertEquals(metadata.getColumnTypeName(2), "INTEGER");
+				assertEquals(metadata.getColumnType(2), Types.INTEGER);
+
+				resultSet.next();
+				assertEquals(resultSet.getString(1), "word1");
+				assertEquals(resultSet.getInt(2), 42);
+			}
+		}
+	}
+
+	public static void test_labels_with_prepped_statement() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (PreparedStatement stmt = conn.prepareStatement("SELECT ? as result")) {
+				stmt.setString(1, "Quack");
+				try (ResultSet rs = stmt.executeQuery()) {
+					while (rs.next()) {
+						assertEquals(rs.getObject("result"), "Quack");
+					}
+				}
+			}
+		}
+	}
+
+	public static void test_execute_updated_on_prep_stmt() throws SQLException {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement s = conn.createStatement()) {
+			s.executeUpdate("create table t (i int)");
+
+			try (PreparedStatement p = conn.prepareStatement("insert into t (i) select ?")) {
+				p.setInt(1, 1);
+				p.executeUpdate();
+			}
+		}
+	}
+
+	public static void test_invalid_execute_calls() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (Statement s = conn.createStatement()) {
+				s.execute("create table test (id int)");
+			}
+			try (PreparedStatement s = conn.prepareStatement("select 1")) {
+				String msg = assertThrows(s::executeUpdate, SQLException.class);
+				assertTrue(msg.contains("can only be used with queries that return nothing") && msg.contains("or update rows"));
+			}
+			try (PreparedStatement s = conn.prepareStatement("insert into test values (1)")) {
+				String msg = assertThrows(s::executeQuery, SQLException.class);
+				assertTrue(msg.contains("can only be used with queries that return a ResultSet"));
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

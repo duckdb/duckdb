@@ -12,11 +12,11 @@ void LogicalRecursiveCTE::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalRecursiveCTE::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto column_count = reader.ReadRequired<idx_t>();
-	auto union_all = reader.ReadRequired<bool>();
-	// TODO(stephwang): review if unique_ptr<LogicalOperator> plan is needed
-	return unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE(table_index, column_count, union_all));
+	auto result = unique_ptr<LogicalRecursiveCTE>(new LogicalRecursiveCTE());
+	result->table_index = reader.ReadRequired<idx_t>();
+	result->column_count = reader.ReadRequired<idx_t>();
+	result->union_all = reader.ReadRequired<bool>();
+	return std::move(result);
 }
 
 vector<idx_t> LogicalRecursiveCTE::GetTableIndex() const {
