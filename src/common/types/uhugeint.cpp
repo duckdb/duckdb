@@ -566,6 +566,37 @@ uhugeint_t &uhugeint_t::operator^=(const uhugeint_t &rhs) {
 	return *this;
 }
 
+template <class T>
+static T NarrowCast(const uhugeint_t &input) {
+	// NarrowCast is supposed to truncate (take lower)
+	return static_cast<T>(input.lower);
+}
+
+uhugeint_t::operator uint8_t() const {
+	return NarrowCast<uint8_t>(*this);
+}
+uhugeint_t::operator uint16_t() const {
+	return NarrowCast<uint16_t>(*this);
+}
+uhugeint_t::operator uint32_t() const {
+	return NarrowCast<uint32_t>(*this);
+}
+uhugeint_t::operator uint64_t() const {
+	return NarrowCast<uint64_t>(*this);
+}
+uhugeint_t::operator int8_t() const {
+	return NarrowCast<int8_t>(*this);
+}
+uhugeint_t::operator int16_t() const {
+	return NarrowCast<int16_t>(*this);
+}
+uhugeint_t::operator int32_t() const {
+	return NarrowCast<int32_t>(*this);
+}
+uhugeint_t::operator int64_t() const {
+	return NarrowCast<int64_t>(*this);
+}
+
 string uhugeint_t::ToString() const {
 	return Uhugeint::ToString(*this);
 }

@@ -62,6 +62,16 @@ public:
 	DUCKDB_API uhugeint_t &operator|=(const uhugeint_t &rhs);
 	DUCKDB_API uhugeint_t &operator^=(const uhugeint_t &rhs);
 
+	// cast operators
+	DUCKDB_API explicit operator uint8_t() const;
+	DUCKDB_API explicit operator uint16_t() const;
+	DUCKDB_API explicit operator uint32_t() const;
+	DUCKDB_API explicit operator uint64_t() const;
+	DUCKDB_API explicit operator int8_t() const;
+	DUCKDB_API explicit operator int16_t() const;
+	DUCKDB_API explicit operator int32_t() const;
+	DUCKDB_API explicit operator int64_t() const;
+
 };
 
 } // namespace duckdb
