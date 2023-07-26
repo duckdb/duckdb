@@ -26,13 +26,17 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 	}
 	// first push back basic distinct counts for each column (if we have them).
 	for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
+		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
-
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
-			auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
-			return_stats.column_distinct_count.push_back(column_distinct_count);
-			return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
-		} else {
+			if (column_statistics) {
+				auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
+				return_stats.column_distinct_count.push_back(column_distinct_count);
+				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
+				have_distinct_count_stats = true;
+			}
+		}
+		if (!have_distinct_count_stats) {
 			// TODO: currently treating the cardinality as the distinct count.
 			//  the cardinality estimator will update these distinct counts based
 			//  on the extra columns that are joined on.
@@ -52,7 +56,7 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 				column_statistics = get.function.statistics(context, &table_scan_bind_data, it.first);
 			}
 
-			if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
+			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 				auto &filter = it.second->Cast<ConjunctionAndFilter>();
 				idx_t cardinality_with_and_filter =
 				    StatisticsExtractor::InspectConjunctionAND(base_table_cardinality, it.first, filter, std::move(column_statistics));
@@ -60,7 +64,8 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 				// And filter has been found that is equality filter, so update the distinct count;
 				// filter pull up and push down will determine that all table scans have this distinct count
 				// before joining happens.
-
+				// TODO: Only if a pullup and pushdown filter is applied to the same column that it is being joined on
+				//  Then you can change the distinct count of the column.
 //				if (cardinality_after_filters < base_table_cardinality) {
 //					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
 //						auto column_id = get.column_ids.at(i);
@@ -70,7 +75,7 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 //						}
 //					}
 //				}
-			} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
+			} else if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 				auto &filter = it.second->Cast<ConjunctionOrFilter>();
 				idx_t cardinality_with_or_filter =
 				    StatisticsExtractor::InspectConjunctionOR(base_table_cardinality, it.first, filter, std::move(column_statistics));
@@ -78,15 +83,17 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 				// OR filter has been found that is equality filter, so update the distinct count;
 				// filter pull up and push down will determine that all table scans have this distinct count
 				// before joining happens.
-				if (cardinality_after_filters < base_table_cardinality) {
-					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
-						auto column_id = get.column_ids.at(i);
-						if (column_id == it.first) {
-							return_stats.column_distinct_count[i].distinct_count = filter.child_filters.size();
-							break;
-						}
-					}
-				}
+//				if (cardinality_after_filters < base_table_cardinality) {
+//					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
+//						auto column_id = get.column_ids.at(i);
+//						if (column_id == it.first) {
+//							return_stats.column_distinct_count[i].distinct_count = filter.child_filters.size();
+//							break;
+//						}
+//					}
+//				}
+			} else {
+
 			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
@@ -106,17 +113,6 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 	return_stats.stats_initialized = true;
 	return return_stats;
 
-	// Are their table filters?
-	// if a table filter is an equality filter, do we know the distinct count?
-	// if we know the distinct count, we assume independence and say the table cardinality is cardinality / distinct value count.
-
-
-	// based on table cardinality we calculate distinct stats
-	// distinct stats on columns with equality filters is 1
-	// distinct stats on (AND) filters, (correlation maybe?)
-	// distinct status on columns with OR filters (and equality) is the number of or filters
-
-	// distinct stats on other columns ??? (leave untouched for now?)
 }
 
 idx_t StatisticsExtractor::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,

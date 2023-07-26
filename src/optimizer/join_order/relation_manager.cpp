@@ -29,6 +29,8 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
+struct DistinctCount;
+
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
 
 	// if parent is null, then this is a root relation
@@ -133,6 +135,15 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// base table scan, add to set of relations.
 		// create empty stats for dummy scan or logical expression get
 		auto stats = RelationStats();
+		idx_t card = op->EstimateCardinality(context);
+		stats.cardinality = card;
+		for (auto &binding : op->GetColumnBindings()) {
+			stats.column_distinct_count.push_back(DistinctCount({card, false}));
+			stats.column_names.push_back("dummy_scan_column");
+		}
+		stats.filter_strength = 1;
+		stats.stats_initialized = true;
+		stats.table_name = "dummy scan/expression get";
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -142,19 +153,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
 			// TODO: Get stats from a logical GET
 			auto &get = op->Cast<LogicalGet>();
-
-			vector<idx_t> column_distinct_counts;
-			if (get.function.statistics) {
-				for (idx_t i = 0; i < get.column_ids.size(); i++) {
-					if (i == DConstants::INVALID_INDEX) {
-						// TODO: Is this correct? I imagine if row_id is joined on, this can result in a divide by 0.
-						column_distinct_counts.push_back(0);
-					}
-					auto stats =
-						get.function.statistics(context, get.bind_data.get(), get.column_ids.at(i));
-					column_distinct_counts.push_back(stats->GetDistinctCount());
-				}
-			}
 			auto stats = StatisticsExtractor::ExtractOperatorStats(get, context);
 
 			AddRelation(input_op, parent, stats);
@@ -164,9 +162,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto stats = RelationStats();
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &stats);
 
-		// have to be careful here. projections can sit on joins and have more columns than
-		// the original logical get underneath. For this reason we need to copy some bindings from
-		// the optimizer just declared, so we know what columns map to
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
