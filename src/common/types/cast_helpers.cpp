@@ -113,5 +113,4 @@ std::string NumericHelper::ToString(uhugeint_t value) {
 	return Uhugeint::ToString(value);
 }
 
-
 } // namespace duckdb

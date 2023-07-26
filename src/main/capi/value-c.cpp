@@ -14,11 +14,11 @@ using duckdb::dtime_t;
 using duckdb::FetchDefaultValue;
 using duckdb::GetInternalCValue;
 using duckdb::hugeint_t;
-using duckdb::uhugeint_t;
 using duckdb::interval_t;
 using duckdb::StringCast;
 using duckdb::timestamp_t;
 using duckdb::ToCStringCastWrapper;
+using duckdb::uhugeint_t;
 using duckdb::UnsafeFetch;
 
 bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row) {

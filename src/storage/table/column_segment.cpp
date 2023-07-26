@@ -434,7 +434,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 			auto result_flat = FlatVector::GetData<uhugeint_t>(result);
 			auto predicate = UhugeIntValue::Get(constant_filter.constant);
 			FilterSelectionSwitch<uhugeint_t>(result_flat, predicate, sel, approved_tuple_count,
-			                                 constant_filter.comparison_type, mask);
+			                                  constant_filter.comparison_type, mask);
 			break;
 		}
 		case PhysicalType::FLOAT: {

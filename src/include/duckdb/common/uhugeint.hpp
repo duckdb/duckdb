@@ -71,7 +71,6 @@ public:
 	DUCKDB_API explicit operator int16_t() const;
 	DUCKDB_API explicit operator int32_t() const;
 	DUCKDB_API explicit operator int64_t() const;
-
 };
 
 } // namespace duckdb

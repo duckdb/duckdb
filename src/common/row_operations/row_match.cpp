@@ -278,7 +278,7 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleD
 		break;
 	case PhysicalType::UINT128:
 		TemplatedMatchType<uhugeint_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
-		                                                no_match_count);
+		                                                 no_match_count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedMatchType<float, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,

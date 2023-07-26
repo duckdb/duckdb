@@ -212,7 +212,7 @@ const vector<LogicalType> LogicalType::Numeric() {
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
 	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
 	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT,
-								 LogicalType::UHUGEINT};
+	                             LogicalType::UHUGEINT};
 	return types;
 }
 
@@ -220,7 +220,7 @@ const vector<LogicalType> LogicalType::Integral() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
 	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,
-								 LogicalType::UHUGEINT};
+	                             LogicalType::UHUGEINT};
 	return types;
 }
 
@@ -334,13 +334,16 @@ bool TypeIsConstantSize(PhysicalType type) {
 	       type == PhysicalType::INT128 || type == PhysicalType::UINT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 bool TypeIsInteger(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::UINT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 ||
+	       type == PhysicalType::UINT128;
 }
 
 string LogicalType::ToString() const {

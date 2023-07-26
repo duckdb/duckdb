@@ -130,11 +130,9 @@ uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainde
 	remainder = uhugeint_t(0);
 	if (rhs == uhugeint_t(1)) {
 		return lhs;
-	}
-	else if (lhs == rhs) {
+	} else if (lhs == rhs) {
 		return uhugeint_t(1);
-	}
-	else if (lhs == uhugeint_t(0) || lhs < rhs) {
+	} else if (lhs == uhugeint_t(0) || lhs < rhs) {
 		remainder = lhs;
 		return uhugeint_t(0);
 	}

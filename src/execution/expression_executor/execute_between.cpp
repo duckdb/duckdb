@@ -68,8 +68,8 @@ static idx_t BetweenLoopTypeSwitch(Vector &input, Vector &lower, Vector &upper, 
 		return TernaryExecutor::Select<uint64_t, uint64_t, uint64_t, OP>(input, lower, upper, sel, count, true_sel,
 		                                                                 false_sel);
 	case PhysicalType::UINT128:
-		return TernaryExecutor::Select<uhugeint_t, uhugeint_t, uhugeint_t, OP>(input, lower, upper, sel, count, true_sel,
-		                                                                    false_sel);
+		return TernaryExecutor::Select<uhugeint_t, uhugeint_t, uhugeint_t, OP>(input, lower, upper, sel, count,
+		                                                                       true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return TernaryExecutor::Select<float, float, float, OP>(input, lower, upper, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:

@@ -9,12 +9,12 @@ using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::ExtractStatementsWrapper;
 using duckdb::hugeint_t;
-using duckdb::uhugeint_t;
 using duckdb::LogicalType;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
 using duckdb::timestamp_t;
+using duckdb::uhugeint_t;
 using duckdb::Value;
 
 idx_t duckdb_extract_statements(duckdb_connection connection, const char *query,
