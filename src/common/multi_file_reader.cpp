@@ -251,20 +251,21 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		files.clear();
 		files.push_back(partition_root);
 		bool pruned_files = false;
-		vector<string> result;
 		for (idx_t i = 0; i < partitions.size(); i++) {
+			vector<string> dirs;
 			for (auto &file : files) {
-				FindFiles(fs, file, pattern, true, result, true);
+				FindFiles(fs, file, pattern, true, dirs, true);
 			}
-			const size_t start_files = result.size();
-			HivePartitioning::ApplyFiltersToFileList(context, result, filters, column_map, get,
+			const size_t start_files = dirs.size();
+			HivePartitioning::ApplyFiltersToFileList(context, dirs, filters, column_map, get,
 			                                         options.hive_partitioning, options.filename);
 			if (!pruned_files) {
-				pruned_files = result.size() < start_files;
+				pruned_files = dirs.size() < start_files;
 			}
-			files = std::move(result);
+			files = std::move(dirs);
 		}
 
+		vector<string> result;
 		// find files in remaining directories
 		for (auto &file : files) {
 			FindFiles(fs, file, pattern, false, result, false);
