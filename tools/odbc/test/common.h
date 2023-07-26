@@ -120,7 +120,6 @@ SQLCHAR *ConvertToSQLCHAR(const char *str);
 SQLCHAR *ConvertToSQLCHAR(const std::string &str);
 std::string ConvertToString(SQLCHAR *str);
 const char *ConvertToCString(SQLCHAR *str);
-const char *ConvertToCString(int i);
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr);
 SQLPOINTER ConvertToSQLPOINTER(const char *str);
 std::string ConvertHexToString(SQLCHAR val[16], int precision);

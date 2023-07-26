@@ -1,8 +1,5 @@
 #include "../common.h"
 
-#include <cstddef>
-#include <iostream>
-
 using namespace odbc_test;
 
 const int TABLE_SIZE[] = {120, 4096};

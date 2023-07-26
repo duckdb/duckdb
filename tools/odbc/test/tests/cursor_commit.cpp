@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 /**
@@ -29,7 +27,7 @@ static void SimpleCursorCommitTest(SQLHANDLE dbc) {
 	for (char i = 1; i < 4; i++) {
 		EXECUTE_AND_CHECK("SQLFetchScroll", SQLFetchScroll, hstmt, SQL_FETCH_NEXT, 0);
 		REQUIRE(buf_len == 1);
-		REQUIRE(STR_EQUAL(buf, ConvertToCString(i)));
+		REQUIRE(STR_EQUAL(buf, std::to_string(i).c_str()));
 	}
 
 	SQLRETURN ret = SQLFetchScroll(hstmt, SQL_FETCH_NEXT, 0);
