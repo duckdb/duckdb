@@ -73,7 +73,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 
 	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
 		if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
-			    throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
+			throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
 		}
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
