@@ -824,8 +824,4 @@ string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
 }
 
-hugeint_t::operator uhugeint_t() const {
-	return uhugeint_t(this->upper, this->lower);
-}
-
 } // namespace duckdb

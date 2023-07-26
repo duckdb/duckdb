@@ -62,8 +62,6 @@ public:
 	DUCKDB_API uhugeint_t &operator|=(const uhugeint_t &rhs);
 	DUCKDB_API uhugeint_t &operator^=(const uhugeint_t &rhs);
 
-	// cast
-	DUCKDB_API explicit operator hugeint_t() const;
 };
 
 } // namespace duckdb
