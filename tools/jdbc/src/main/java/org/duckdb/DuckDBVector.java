@@ -458,7 +458,7 @@ class DuckDBVector {
 				buf[i] = buf[15 - i];
 				buf[15 - i] = keep;
 			}
-			return new BigInteger(buf);
+			return new BigInteger(1, buf);
 		}
 		Object o = getObject(idx);
 		return new BigInteger(o.toString());

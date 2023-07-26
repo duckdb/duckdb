@@ -284,6 +284,13 @@ public class DuckDBResultSet implements ResultSet {
 		return current_chunk[columnIndex - 1].getHugeint(chunk_idx - 1);
 	}
 
+	public BigInteger getUhugeint(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return BigInteger.ZERO;
+		}
+		return current_chunk[columnIndex - 1].getUhugeint(chunk_idx - 1);
+	}
+
 	public float getFloat(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Float.NaN;
