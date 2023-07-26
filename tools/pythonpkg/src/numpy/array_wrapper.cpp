@@ -702,7 +702,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::UHUGEINT:
 		may_have_null = ConvertColumn<uhugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
-		                                                                                     maskptr, idata, count);
+		                                                                                      maskptr, idata, count);
 		break;
 	case LogicalTypeId::FLOAT:
 		may_have_null = ConvertColumnRegular<float>(current_offset, dataptr, maskptr, idata, count);
