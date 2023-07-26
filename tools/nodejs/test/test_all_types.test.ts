@@ -193,19 +193,12 @@ const correct_answer_map: Record<string, any[]> = {
     new Date("9999-12-31T23:59:59.999Z"),
     null,
   ],
-  union: [
-    'Frank',
-    '5',
-    null
-  ]
 };
 
 const suite = describe("test_all_types", () => {
   before(async function () {
     const all_types = await get_all_types();
 
-    // FXIME: Locally these seemed to fail?
-    // "timestamptz_array", "timestamp_array", "date_array", "timestamp", "ubigint", "hugeint", "bigint"
     for (const cur_type of all_types) {
       // FIXME: these currently have too high a precision to be tested
       if (["dec_18_6", "dec38_10"].includes(cur_type)) continue;
