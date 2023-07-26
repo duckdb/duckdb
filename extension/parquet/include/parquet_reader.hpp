@@ -76,6 +76,9 @@ struct ParquetOptions {
 public:
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static ParquetOptions FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class ParquetReader {
