@@ -77,6 +77,8 @@ mode skip
 # We cant drop mood and we verify the constraint is still there after reloading the database
 statement error
 DROP TYPE mood;
+----
+Dependency
 
 query TT
 select * from person

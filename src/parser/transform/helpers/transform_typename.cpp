@@ -30,12 +30,14 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		idx_t pos = 0;
 		for (auto node = type_name.typmods->head; node; node = node->next) {
 			auto constant_value = PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
-			if (constant_value->type != duckdb_libpgquery::T_PGAConst || constant_value->val.type != duckdb_libpgquery::T_PGString) {
+			if (constant_value->type != duckdb_libpgquery::T_PGAConst ||
+			    constant_value->val.type != duckdb_libpgquery::T_PGString) {
 				throw ParserException("Enum type requires a set of strings as type modifiers");
 			}
 			string_data[pos++] = StringVector::AddString(enum_vector, constant_value->val.val.str);
 		}
-		return LogicalType::ENUM(enum_vector, type_name.typmods->length);	} else if (base_type == LogicalTypeId::STRUCT) {
+		return LogicalType::ENUM(enum_vector, type_name.typmods->length);
+	} else if (base_type == LogicalTypeId::STRUCT) {
 		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
 		}

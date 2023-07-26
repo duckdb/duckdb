@@ -38,7 +38,6 @@ public:
 	                                                         FieldReader &reader) = 0;
 	virtual unique_ptr<LogicalExtensionOperator> FormatDeserialize(FormatDeserializer &deserializer) = 0;
 
-
 	virtual ~OperatorExtension() {
 	}
 };

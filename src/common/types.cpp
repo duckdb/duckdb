@@ -396,7 +396,7 @@ string LogicalType::ToString() const {
 	}
 	case LogicalTypeId::ENUM: {
 		string ret = "ENUM(";
-		for(idx_t i = 0; i < EnumType::GetSize(*this); i++) {
+		for (idx_t i = 0; i < EnumType::GetSize(*this); i++) {
 			if (i > 0) {
 				ret += ", ";
 			}
