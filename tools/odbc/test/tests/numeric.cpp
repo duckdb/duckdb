@@ -1,6 +1,4 @@
 #include "../common.h"
-#include <sstream>
-#include <iomanip>
 
 using namespace odbc_test;
 
@@ -56,15 +54,6 @@ static void TestNumericParams(HSTMT &hstmt, unsigned char sign, const char *hexv
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
-static std::string ExtractVal(SQL_NUMERIC_STRUCT &numeric) {
-	std::stringstream ss;
-	ss << std::hex << std::uppercase << std::setfill('0');
-	for (int i = 0; i < SQL_MAX_NUMERIC_LEN; i++) {
-		ss << std::setw(2) << static_cast<unsigned int>(numeric.val[i]);
-	}
-	return ss.str();
-}
-
 static void TestNumericResult(HSTMT &hstmt, const char *num_str, const std::string &expected_result,
                               unsigned char expected_precision = 18, unsigned char expected_scale = 3,
                               unsigned int precision = 18, unsigned int scale = 3) {
@@ -79,7 +68,7 @@ static void TestNumericResult(HSTMT &hstmt, const char *num_str, const std::stri
 	REQUIRE(numeric.precision == expected_precision);
 	REQUIRE(numeric.scale == expected_scale);
 	REQUIRE(numeric.sign == 1);
-	REQUIRE(ExtractVal(numeric) == expected_result);
+	REQUIRE(ConvertHexToString(numeric.val, expected_result.length()) == expected_result);
 }
 
 TEST_CASE("Test numeric limits and conversion", "[odbc]") {
@@ -115,15 +104,13 @@ TEST_CASE("Test numeric limits and conversion", "[odbc]") {
 	TestNumericParams(hstmt, 1, "4EF338DE509049C4133302F0F6B04909", 38, 0, "12345678901234567890123456789012345678");
 
 	// Test setting numeric struct within the application
-	TestNumericResult(hstmt, "25.212", "7C620000000000000000000000000000", 5, 3);
-	TestNumericResult(hstmt, "24197857161011715162171839636988778104", "78563412785634127856341278563412", 38, 0, 38,
-	                  0);
-	TestNumericResult(hstmt, "12345678901234567890123456789012345678", "4EF338DE509049C4133302F0F6B04909", 38, 0, 38,
-	                  0);
-	TestNumericResult(hstmt, "-0", "00000000000000000000000000000000", 1, 3);
-	TestNumericResult(hstmt, "0", "00000000000000000000000000000000", 1, 3);
-	TestNumericResult(hstmt, "7.70", "02030000000000000000000000000000", 3, 2, 3, 2);
-	TestNumericResult(hstmt, "999999999999", "FF0FA5D4E80000000000000000000000", 12, 3);
+	TestNumericResult(hstmt, "25.212", "7C62000000000000", 5, 3);
+	TestNumericResult(hstmt, "24197857161011715162171839636988778104", "7856341278563412", 38, 0, 38, 0);
+	TestNumericResult(hstmt, "12345678901234567890123456789012345678", "4EF338DE509049C4", 38, 0, 38, 0);
+	TestNumericResult(hstmt, "-0", "0000000000000000", 1, 3);
+	TestNumericResult(hstmt, "0", "0000000000000000", 1, 3);
+	TestNumericResult(hstmt, "7.70", "0203000000000000", 3, 2, 3, 2);
+	TestNumericResult(hstmt, "999999999999", "FF0FA5D4E8000000", 12, 3);
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);

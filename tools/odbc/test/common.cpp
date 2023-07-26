@@ -242,4 +242,13 @@ SQLPOINTER ConvertToSQLPOINTER(const char *str) {
 	return reinterpret_cast<SQLPOINTER>(const_cast<char *>(str));
 }
 
+std::string ConvertHexToString(SQLCHAR val[16], int precision) {
+	std::stringstream ss;
+	ss << std::hex << std::uppercase << std::setfill('0');
+	for (int i = 0; i < precision; i++) {
+		ss << std::setw(2) << static_cast<unsigned int>(val[i]);
+	}
+	return ss.str().substr(0, precision);
+}
+
 } // namespace odbc_test
