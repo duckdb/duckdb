@@ -282,10 +282,6 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	return result;
 }
 
-static bool IsLogicalFilter(LogicalOperator &op) {
-	return op.type == LogicalOperatorType::LOGICAL_FILTER;
-}
-
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
 	if (a.has_tdom_hll && b.has_tdom_hll) {
 		return a.tdom_hll > b.tdom_hll;

@@ -60,15 +60,16 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 				// And filter has been found that is equality filter, so update the distinct count;
 				// filter pull up and push down will determine that all table scans have this distinct count
 				// before joining happens.
-				if (cardinality_after_filters < base_table_cardinality) {
-					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
-						auto column_id = get.column_ids.at(i);
-						if (column_id == it.first) {
-							return_stats.column_distinct_count[i].distinct_count = 1;
-							break;
-						}
-					}
-				}
+
+//				if (cardinality_after_filters < base_table_cardinality) {
+//					for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
+//						auto column_id = get.column_ids.at(i);
+//						if (column_id == it.first) {
+//							return_stats.column_distinct_count[i].distinct_count = 1;
+//							break;
+//						}
+//					}
+//				}
 			} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 				auto &filter = it.second->Cast<ConjunctionOrFilter>();
 				idx_t cardinality_with_or_filter =

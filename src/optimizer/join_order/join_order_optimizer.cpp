@@ -31,6 +31,23 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 //	query_graph_manager.relation_manager.PrintRelationStats();
 	if (!reorderable) {
 		// at most one relation, nothing to reorder
+		// copy stats
+		if (stats) {
+			for (auto &child_stats: query_graph_manager.relation_manager.GetRelationStats()) {
+				for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
+					stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
+					stats->column_names.push_back(child_stats.column_names.at(i));
+					stats->table_name += "joined with " + child_stats.table_name;
+				}
+			}
+			auto cardinality = plan->EstimateCardinality(context);
+			stats->cardinality = MaxValue(cardinality, stats->cardinality);
+			stats->filter_strength = 1;
+			stats->stats_initialized = true;
+
+			// TODO: some verification logic. make sure column names are the same
+			//  combine table names.
+		}
 		return plan;
 	}
 
@@ -56,15 +73,15 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		vector<DistinctCount> distinct_column_counts;
-		for (auto &stats: query_graph_manager.relation_manager.GetRelationStats()) {
-			for (auto &distinct_column_count : stats.column_distinct_count) {
-				distinct_column_counts.push_back(distinct_column_count);
+		for (auto &child_stats: query_graph_manager.relation_manager.GetRelationStats()) {
+			for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
+				stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
+				stats->column_names.push_back(child_stats.column_names.at(i));
+				stats->table_name += "joined with " + child_stats.table_name;
 			}
 		}
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
-		stats->column_distinct_count = distinct_column_counts;
-		stats->cardinality = cardinality;
+		stats->cardinality = MaxValue(cardinality, stats->cardinality);
 		stats->filter_strength = 1;
 		stats->stats_initialized = true;
 		// TODO: some verification logic. make sure column names are the same

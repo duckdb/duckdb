@@ -107,6 +107,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// new NULL values in the right side, so pushing this condition through the join leads to incorrect results
 		// for this reason, we just start a new JoinOptimizer pass in each of the children of the join
 		auto stats = RelationStats();
+		// stats.cardinality will be initiated to highest cardinality of the children.
+		stats.cardinality = 0;
 		for (auto &child : op->children) {
 			JoinOrderOptimizer optimizer(context);
 			// use the same stats, distinct counts are pushed at
