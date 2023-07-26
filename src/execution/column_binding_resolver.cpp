@@ -96,6 +96,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			bindings = op.GetColumnBindings();
 			return;
 		}
+		break;
 	}
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &ext_op = op.Cast<LogicalExtensionOperator>();
