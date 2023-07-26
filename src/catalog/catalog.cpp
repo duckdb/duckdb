@@ -655,17 +655,13 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 	if (!type_entry) {
 		return LogicalType::INVALID;
 	}
-	auto result_type = type_entry->user_type;
-	EnumType::SetCatalog(result_type, type_entry.get());
-	return result_type;
+	return type_entry->user_type;
 }
 
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
 	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	auto result_type = type_entry.user_type;
-	EnumType::SetCatalog(result_type, &type_entry);
-	return result_type;
+	return type_entry.user_type;
 }
 
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {

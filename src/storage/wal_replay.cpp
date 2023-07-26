@@ -284,7 +284,7 @@ void ReplayState::ReplayDropSchema() {
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateType(context, *info);
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 void ReplayState::ReplayDropType() {

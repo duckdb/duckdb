@@ -414,10 +414,7 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type) {
 
 void CheckpointReader::ReadType(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TypeCatalogEntry::Deserialize(reader);
-	auto &catalog_entry = catalog.CreateType(context, *info)->Cast<TypeCatalogEntry>();
-	if (info->type.id() == LogicalTypeId::ENUM) {
-		EnumType::SetCatalog(info->type, &catalog_entry);
-	}
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 //===--------------------------------------------------------------------===//
