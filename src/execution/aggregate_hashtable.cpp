@@ -70,25 +70,6 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	sink_count = 0;
 }
 
-vector<MaterializedAggregateData> GroupedAggregateHashTable::AcquireData(bool as_one) {
-	D_ASSERT(partitioned_data);
-	D_ASSERT(aggregate_allocator);
-	UnpinData();
-
-	vector<MaterializedAggregateData> result;
-	if (as_one) {
-		result.emplace_back(partitioned_data->GetUnpartitioned(), aggregate_allocator);
-	} else {
-		for (auto &partition : partitioned_data->GetPartitions()) {
-			result.emplace_back(std::move(partition), aggregate_allocator);
-		}
-		partitioned_data.reset();
-	}
-	InitializePartitionedData();
-
-	return result;
-}
-
 PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() {
 	return *partitioned_data;
 }

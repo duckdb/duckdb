@@ -75,21 +75,6 @@ private:
 	hash_t value;
 };
 
-struct MaterializedAggregateData {
-	explicit MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p)
-	    : data_collection(std::move(data_collection_p)) {
-		D_ASSERT(data_collection);
-	}
-	MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p, shared_ptr<ArenaAllocator> allocator)
-	    : data_collection(std::move(data_collection_p)) {
-		D_ASSERT(data_collection);
-		D_ASSERT(allocator);
-		allocators.emplace_back(std::move(allocator));
-	}
-	unique_ptr<TupleDataCollection> data_collection;
-	vector<shared_ptr<ArenaAllocator>> allocators;
-};
-
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
@@ -147,9 +132,6 @@ public:
 
 	PartitionedTupleData &GetPartitionedData();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
-
-	//! Acquires the partitioned data from this HT (or unpartitioned, if as_one is true)
-	vector<MaterializedAggregateData> AcquireData(bool as_one = false);
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);

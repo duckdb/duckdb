@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 
@@ -15,8 +16,6 @@ namespace duckdb {
 
 class GroupedAggregateHashTable;
 struct AggregatePartition;
-struct MaterializedAggregateData;
-struct RadixHTAbandonStatus;
 
 class RadixPartitionedHashTable {
 public:
@@ -51,6 +50,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
+	TupleDataLayout GetLayout() const;
 	idx_t Count(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
 

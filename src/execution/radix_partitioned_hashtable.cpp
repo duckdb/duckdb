@@ -12,24 +12,6 @@
 
 namespace duckdb {
 
-//! Config for RadixPartitionedHashTable
-struct RadixHTConfig {
-	//! Radix bits used during the Sink
-	static constexpr const idx_t SINK_RADIX_BITS = 4;
-	//! Abandon HT after crossing this threshold
-	static constexpr const idx_t SINK_ABANDON_THRESHOLD = (idx_t(1) << 17) / GroupedAggregateHashTable::LOAD_FACTOR;
-	//! Radix bits used during the finalize
-	static constexpr const idx_t FINALIZE_RADIX_BITS = 8;
-
-	//! Utility functions
-	static constexpr idx_t SinkPartitionCount() {
-		return RadixPartitioning::NumberOfPartitions(SINK_RADIX_BITS);
-	}
-	static constexpr idx_t FinalizePartitionCount() {
-		return RadixPartitioning::NumberOfPartitions(FINALIZE_RADIX_BITS);
-	}
-};
-
 RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
     : grouping_set(grouping_set_p), op(op_p) {
 	auto groups_count = op.GroupCount();
@@ -68,6 +50,14 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 	}
 }
 
+TupleDataLayout RadixPartitionedHashTable::GetLayout() const {
+	auto group_types_copy = group_types;
+	group_types_copy.emplace_back(LogicalType::HASH);
+	TupleDataLayout layout;
+	layout.Initialize(std::move(group_types_copy), AggregateObject::CreateAggregateObjects(op.bindings));
+	return layout;
+}
+
 unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context, const idx_t capacity,
                                                                           const idx_t radix_bits) const {
 	return make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), group_types, op.payload_types,
@@ -77,6 +67,24 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+//! Config for RadixPartitionedHashTable
+struct RadixHTConfig {
+	//! Radix bits used during the Sink
+	static constexpr const idx_t SINK_RADIX_BITS = 3;
+	//! Abandon HT after crossing this threshold
+	static constexpr const idx_t SINK_ABANDON_THRESHOLD = (idx_t(1) << 16) / GroupedAggregateHashTable::LOAD_FACTOR;
+	//! Radix bits used during the finalize
+	static constexpr const idx_t FINALIZE_RADIX_BITS = 6;
+
+	//! Utility functions
+	static constexpr idx_t SinkPartitionCount() {
+		return RadixPartitioning::NumberOfPartitions(SINK_RADIX_BITS);
+	}
+	static constexpr idx_t FinalizePartitionCount() {
+		return RadixPartitioning::NumberOfPartitions(FINALIZE_RADIX_BITS);
+	}
+};
+
 struct AggregatePartition {
 	AggregatePartition(ClientContext &context, const RadixPartitionedHashTable &radix_ht) {
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(RadixHTConfig::SINK_ABANDON_THRESHOLD);
@@ -118,7 +126,7 @@ public:
 	//! Pin properties when scanning
 	TupleDataPinProperties scan_pin_properties;
 	//! The final data that has to be scanned
-	vector<MaterializedAggregateData> scan_data;
+	vector<unique_ptr<TupleDataCollection>> scan_data;
 	//! Total count before combining
 	idx_t count_before_combining;
 };
@@ -128,10 +136,7 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context, const Rad
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	auto group_types = radix_ht.group_types;
-	group_types.emplace_back(LogicalType::HASH);
-	TupleDataLayout layout;
-	layout.Initialize(std::move(group_types), AggregateObject::CreateAggregateObjects(radix_ht.op.bindings));
+	auto layout = radix_ht.GetLayout();
 	overflow_data = make_uniq<RadixPartitionedTupleData>(
 	    buffer_manager, layout, idx_t(RadixHTConfig::FINALIZE_RADIX_BITS), layout.ColumnCount() - 1);
 
@@ -143,27 +148,28 @@ RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
 }
 
 void RadixHTGlobalSinkState::Destroy() {
-	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
-		// Already destroyed
+	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE || scan_data.empty()) {
+		// Already destroyed / empty
 		return;
 	}
 
-	for (auto &data : scan_data) {
+	auto layout = scan_data.back()->GetLayout().Copy();
+	RowOperationsState row_state(*stored_allocators.back());
+	for (auto &data_collection : scan_data) {
 		// There are aggregates with destructors: Call the destructor for each of the aggregates
-		RowOperationsState row_state(*data.allocators.back());
-		auto layout = data.data_collection->GetLayout().Copy();
-		TupleDataChunkIterator iterator(*data.data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
+
+		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 		auto &row_locations = iterator.GetChunkState().row_locations;
 		do {
 			RowOperations::DestroyStates(row_state, layout, row_locations, iterator.GetCurrentChunkCount());
 		} while (iterator.Next());
-		data.data_collection->Reset();
+		data_collection->Reset();
 	}
 }
 
 class RadixHTLocalSinkState : public LocalSinkState {
 public:
-	explicit RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
+	RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht);
 
 public:
 	//! Thread-local HT that is re-used after abandoning
@@ -188,7 +194,7 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &context, const Radix
 
 	// Initialize the overflow partitions
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	const auto &layout = ht->GetLayout();
+	const auto layout = radix_ht.GetLayout();
 	overflow_data = make_uniq<RadixPartitionedTupleData>(
 	    buffer_manager, layout, idx_t(RadixHTConfig::FINALIZE_RADIX_BITS), layout.ColumnCount() - 1);
 }
@@ -396,7 +402,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	if (scan_idx < sink.scan_data.size()) {
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.task_idx = scan_idx++;
-		lstate.scan_collection = sink.scan_data[lstate.task_idx.GetIndex()].data_collection.get();
+		lstate.scan_collection = sink.scan_data[lstate.task_idx.GetIndex()].get();
 		lstate.scan_status = RadixHTScanStatus::INIT;
 		return true;
 	}
@@ -493,9 +499,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		scan_status = RadixHTScanStatus::DONE;
 		if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
 			lock_guard<mutex> guard(sink.lock);
-			auto &data = sink.scan_data[task_idx.GetIndex()];
-			data.data_collection.reset();
-			data.allocators.clear();
+			sink.scan_data[task_idx.GetIndex()].reset();
 		}
 		gstate.scan_done++;
 		return;
