@@ -31,6 +31,20 @@ idx_t RelationManager::NumRelations() {
 
 struct DistinctCount;
 
+void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
+	// we have an aggregate operator we are returning that this can be reordered, but we are only returning one relation.
+	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
+	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
+	auto relation_id = relations.size();
+
+	auto table_indexes = op.GetTableIndex();
+	for (auto &index : table_indexes) {
+		D_ASSERT(relation_mapping.find(index) == relation_mapping.end());
+		relation_mapping[index] = relation_id;
+	}
+	relations.push_back(std::move(relation));
+}
+
 void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
 
 	// if parent is null, then this is a root relation
@@ -63,6 +77,54 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	//	auto relation_name = GetRelationName(op);
 }
 
+struct ExpressionBinding {
+	bool found_expression = false;
+	ColumnBinding child_binding;
+	bool expression_is_constant = false;
+};
+
+static ExpressionBinding GetChildColumnBinding(Expression *expr) {
+	auto ret = ExpressionBinding();
+	switch (expr->expression_class) {
+	case ExpressionClass::BOUND_FUNCTION: {
+		// TODO: Other expression classes that can have 0 children?
+		auto &func = expr->Cast<BoundFunctionExpression>();
+		// no children some sort of gen_random_uuid() or equivalent.
+		if (func.children.size() == 0) {
+			ret.found_expression = true;
+			ret.expression_is_constant = true;
+			return ret;
+		}
+		break;
+	}
+	case ExpressionClass::BOUND_COLUMN_REF: {
+		ret.found_expression = true;
+		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
+		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
+		return ret;
+	}
+	case ExpressionClass::BOUND_LAMBDA_REF:
+	case ExpressionClass::BOUND_CONSTANT:
+	case ExpressionClass::BOUND_DEFAULT:
+	case ExpressionClass::BOUND_PARAMETER:
+	case ExpressionClass::BOUND_REF:
+		ret.found_expression = true;
+		ret.expression_is_constant = true;
+		return ret;
+	default:
+		break;
+	}
+	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+		auto recursive_result = GetChildColumnBinding(child.get());
+		if (recursive_result.found_expression) {
+			ret = recursive_result;
+		}
+	});
+	// we didn't find a Bound Column Ref
+	return ret;
+}
+
+
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	                                             vector<reference<LogicalOperator>> &filter_operators,
 	                                             optional_ptr<LogicalOperator> parent) {
@@ -79,7 +141,15 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			op->type == LogicalOperatorType::LOGICAL_WINDOW) {
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer(context);
-			op->children[0] = optimizer.Optimize(std::move(op->children[0]));
+			RelationStats child_stats;
+			op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
+			// TODO: create new stats object based on the stats of the child.
+			//  look into the distinct count and the operators group by index.
+			// might have to add
+			AddAggregateRelation(input_op, parent, child_stats);
+			// TODO: technially you should be able to reorder aggregates.
+			//  i.e. an inner join between an aggregate operation and another operation is allowed
+			//  but to avoid some headaches, return false here.
 			return false;
 		}
 		op = op->children[0].get();
@@ -117,7 +187,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			child = optimizer.Optimize(std::move(child), &stats);
 		}
 		// TODO: update stats.cardinality to predict the cardinality of
-		//  what this non-reorderable operation will be.
+		//  what this non-reorderable operation will be. (if
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
@@ -147,22 +217,63 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
-	case LogicalOperatorType::LOGICAL_GET:
-	// FIXME: See if we can get rid of NOP() projection first, so we can reorder more join.
-	case LogicalOperatorType::LOGICAL_PROJECTION: {
-		if (op->children.empty() && op->type == LogicalOperatorType::LOGICAL_GET) {
-			// TODO: Get stats from a logical GET
-			auto &get = op->Cast<LogicalGet>();
-			auto stats = StatisticsExtractor::ExtractOperatorStats(get, context);
-
-			AddRelation(input_op, parent, stats);
-			return true;
-		}
-		JoinOrderOptimizer optimizer(context);
-		auto stats = RelationStats();
-		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &stats);
+	case LogicalOperatorType::LOGICAL_GET: {
+		// TODO: Get stats from a logical GET
+		auto &get = op->Cast<LogicalGet>();
+		auto stats = StatisticsExtractor::ExtractOperatorStats(get, context);
 
 		AddRelation(input_op, parent, stats);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_DELIM_GET: {
+		auto &get = op->Cast<LogicalDelimGet>();
+		RelationStats stats;
+		stats.table_name = get.GetName();
+		idx_t card = get.EstimateCardinality(context);
+		stats.cardinality = card;
+		for (auto &binding : get.GetColumnBindings()) {
+			stats.column_distinct_count.push_back(DistinctCount({1, false}));
+			stats.column_names.push_back("column" + to_string(binding.column_index));
+		}
+
+		AddRelation(input_op, parent, stats);
+		return true;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		auto stats = RelationStats();
+		// optimize the child
+		JoinOrderOptimizer optimizer(context);
+		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &stats);
+
+		// Projection can create columns so we need to add them here
+		auto proj_stats = RelationStats();
+		proj_stats.cardinality = stats.cardinality;
+		proj_stats.table_name = op->GetName();
+		for (auto &expr : op->expressions) {
+			proj_stats.column_names.push_back(expr->GetName());
+			auto res = GetChildColumnBinding(expr.get());
+			D_ASSERT(res.found_expression);
+			if (res.expression_is_constant) {
+				proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
+			} else {
+				auto column_index = res.child_binding.column_index;
+				if (column_index >= stats.column_distinct_count.size() && expr->ToString() == "count_star()") {
+					// only one value for a count star
+					proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));
+				} else {
+					// TODO: add this back in
+//					D_ASSERT(column_index < stats.column_distinct_count.size());
+					if (column_index < stats.column_distinct_count.size()) {
+						proj_stats.column_distinct_count.push_back(stats.column_distinct_count.at(column_index));
+					} else {
+						proj_stats.column_distinct_count.push_back(DistinctCount({proj_stats.cardinality, false}));
+					}
+				}
+			}
+		}
+		proj_stats.stats_initialized = true;
+		proj_stats.filter_strength = 1;
+		AddRelation(input_op, parent, proj_stats);
 		return true;
 	}
 	default:

@@ -289,6 +289,7 @@ void QueryGraphManager::CreateQueryGraphCrossProduct(optional_ptr<JoinRelationSe
                                                      optional_ptr<JoinRelationSet> right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
+
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node) {

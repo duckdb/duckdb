@@ -37,8 +37,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 				for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
 					stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 					stats->column_names.push_back(child_stats.column_names.at(i));
-					stats->table_name += "joined with " + child_stats.table_name;
 				}
+				stats->table_name += child_stats.table_name;
 			}
 			auto cardinality = plan->EstimateCardinality(context);
 			stats->cardinality = MaxValue(cardinality, stats->cardinality);
@@ -68,17 +68,20 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	auto final_plan = plan_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
 	// TODO: add in the check that if no plan exists, you have to add a cross product.
 
+	// get relation_stats here since the reconstruction process will move all of the relations.
+	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+
 	// now reconstruct a logical plan from the query graph plan
 	auto new_logical_plan = query_graph_manager.Reconstruct(std::move(plan), *final_plan);
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		for (auto &child_stats: query_graph_manager.relation_manager.GetRelationStats()) {
+		for (auto &child_stats: relation_stats) {
 			for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
 				stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 				stats->column_names.push_back(child_stats.column_names.at(i));
-				stats->table_name += "joined with " + child_stats.table_name;
 			}
+			stats->table_name += "joined with " + child_stats.table_name;
 		}
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
 		stats->cardinality = MaxValue(cardinality, stats->cardinality);

@@ -116,9 +116,12 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(optional_ptr<JoinRelationSet
 	// FIXME: we should probably actually benchmark that as well
 	// FIXME: should consider different join algorithms, should we pick a join algorithm here as well? (probably)
 	optional_ptr<NeighborInfo> best_connection = nullptr;
+
+	// cross products are techincally still connections, but the filter expression is a null_ptr
 	if (possible_connections.size() > 0) {
 		best_connection = &possible_connections.back().get();
 	}
+
 	idx_t cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
 	result->cardinality = (idx_t)cost_model.cardinality_estimator.EstimateCardinalityWithSet(*set.get());

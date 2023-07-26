@@ -78,7 +78,9 @@ void QueryGraph::CreateEdge(optional_ptr<JoinRelationSet> left, optional_ptr<Joi
 	}
 	// neighbor does not exist, create it
 	auto n = make_uniq<NeighborInfo>(right);
-	if (info) {
+	// if the edge represents a cross product, filter_info is null. The easiest way then to determine
+	// if an edge is for a cross product is if the filters are empty
+	if (info && filter_info) {
 		n->filters.push_back(filter_info);
 	}
 	info->neighbors.push_back(std::move(n));
