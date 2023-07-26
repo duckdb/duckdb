@@ -113,6 +113,10 @@ function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)
     return Int128(val.lower) + Int128(val.upper) << 64
 end
 
+function convert_hugeint(column_data::ColumnConversionData, val::duckdb_uhugeint)::UInt128
+    return UInt128(val.lower) + UInt128(val.upper) << 64
+end
+
 function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
     hugeint = convert_hugeint(column_data, val)
     base_value = Int128(170141183460469231731687303715884105727)

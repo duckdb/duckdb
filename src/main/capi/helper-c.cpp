@@ -146,6 +146,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(uint32_t);
 	case DUCKDB_TYPE_UBIGINT:
 		return sizeof(uint64_t);
+	case DUCKDB_TYPE_UHUGEINT:
 	case DUCKDB_TYPE_HUGEINT:
 	case DUCKDB_TYPE_UUID:
 		return sizeof(duckdb_hugeint);

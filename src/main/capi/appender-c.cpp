@@ -1,4 +1,6 @@
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/common/uhugeint.hpp"
+
 
 using duckdb::Appender;
 using duckdb::AppenderWrapper;
@@ -6,6 +8,7 @@ using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
+using duckdb::uhugeint_t;
 using duckdb::interval_t;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -145,6 +148,13 @@ duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value) {
 
 duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value) {
 	return duckdb_append_internal<uint64_t>(appender, value);
+}
+
+duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value) {
+	uhugeint_t internal;
+	internal.lower = value.lower;
+	internal.upper = value.upper;
+	return duckdb_append_internal<uhugeint_t>(appender, internal);
 }
 
 duckdb_state duckdb_append_float(duckdb_appender appender, float value) {

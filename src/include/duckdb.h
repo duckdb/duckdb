@@ -655,6 +655,11 @@ DUCKDB_API int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t ro
 DUCKDB_API duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row);
 
 /*!
+ * returns: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
+ */
+DUCKDB_API duckdb_uhugeint duckdb_value_uhugeint(duckdb_result *result, idx_t col, idx_t row);
+
+/*!
  * returns: The duckdb_decimal value at the specified location, or 0 if the value cannot be converted.
  */
 DUCKDB_API duckdb_decimal duckdb_value_decimal(duckdb_result *result, idx_t col, idx_t row);
@@ -982,6 +987,11 @@ Binds an duckdb_hugeint value to the prepared statement at the specified index.
 */
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_hugeint val);
+/*!
+Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                            duckdb_uhugeint val);
 /*!
 Binds a duckdb_decimal value to the prepared statement at the specified index.
 */
@@ -2206,6 +2216,10 @@ DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t 
 Append a uint64_t value to the appender.
 */
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
+/*!
+Append a duckdb_uhugeint value to the appender.
+*/
+DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
 
 /*!
 Append a float value to the appender.

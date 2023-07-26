@@ -124,6 +124,11 @@ struct duckdb_hugeint
     upper::Int64
 end
 
+struct duckdb_uhugeint
+    lower::UInt64
+    upper::UInt64
+end
+
 struct duckdb_string_t
     length::UInt32
     data::NTuple{12, UInt8}
