@@ -91,6 +91,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 		return Type::FLOAT;
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
