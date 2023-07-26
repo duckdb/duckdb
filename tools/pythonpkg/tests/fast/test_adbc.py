@@ -13,9 +13,7 @@ pyarrow = pytest.importorskip("pyarrow")
 def test_insertion():
     if sys.platform.startswith("win"):
         pytest.xfail("Not supported on Windows")
-    con = adbc_driver_manager.connect(
-        driver=duckdb.duckdb.__file__, entrypoint="duckdb_adbc_init"
-    )
+    con = adbc_driver_manager.connect(driver=duckdb.duckdb.__file__, entrypoint="duckdb_adbc_init")
 
     table = pyarrow.table(
         [
@@ -51,13 +49,9 @@ def test_insertion():
 def test_read():
     if sys.platform.startswith("win"):
         pytest.xfail("Not supported on Windows")
-    con = adbc_driver_manager.connect(
-        driver=duckdb.duckdb.__file__, entrypoint="duckdb_adbc_init"
-    )
+    con = adbc_driver_manager.connect(driver=duckdb.duckdb.__file__, entrypoint="duckdb_adbc_init")
     with con.cursor() as cursor:
-        filename = os.path.join(
-            os.path.dirname(os.path.realpath(__file__)), "data", "category.csv"
-        )
+        filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "data", "category.csv")
         cursor.execute(f"SELECT * FROM '{filename}'")
         assert cursor.fetch_arrow_table().to_pydict() == {
             "CATEGORY_ID": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
