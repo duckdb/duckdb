@@ -22,7 +22,7 @@ add_executable(
   tests/data_execution.cpp
   tests/multicolumn_param_bind.cpp
   tests/numeric.cpp
-        tests/quotes.cpp
-        tests/result_conversion.cpp)
+  tests/quotes.cpp
+  tests/result_conversion.cpp)
 
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
