@@ -11,6 +11,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -162,6 +164,15 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	//! SELECT only for now
 	if (!OperatorSupportsSerialization(*op)) {
 		return;
+	}
+
+	// format (de)serialization of this operator
+	try {
+		auto blob = BinarySerializer::Serialize(*op);
+		bound_parameter_map_t parameters;
+		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(), blob.size());
+	} catch (SerializationException &ex) {
+		// pass
 	}
 
 	BufferedSerializer serializer;

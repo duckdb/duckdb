@@ -27,6 +27,7 @@ unique_ptr<CreateInfo> CreateSequenceInfo::Copy() const {
 void CreateSequenceInfo::SerializeInternal(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
+	writer.WriteString(schema);
 	writer.WriteField(usage_count);
 	writer.WriteField(increment);
 	writer.WriteField(min_value);
@@ -42,6 +43,7 @@ unique_ptr<CreateSequenceInfo> CreateSequenceInfo::Deserialize(Deserializer &des
 
 	FieldReader reader(deserializer);
 	result->name = reader.ReadRequired<string>();
+	result->schema = reader.ReadRequired<string>();
 	result->usage_count = reader.ReadRequired<uint64_t>();
 	result->increment = reader.ReadRequired<int64_t>();
 	result->min_value = reader.ReadRequired<int64_t>();

@@ -17,6 +17,8 @@
 namespace duckdb {
 class Serializer;
 class Deserializer;
+class FormatSerializer;
+class FormatDeserializer;
 
 //! inline std directives that we use frequently
 #ifndef DUCKDB_DEBUG_MOVE

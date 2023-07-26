@@ -17,6 +17,11 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
+#endif
+
 using namespace duckdb;
 using namespace std;
 

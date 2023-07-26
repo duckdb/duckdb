@@ -160,7 +160,7 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 	for (idx_t i = 0; i < correlated_columns.size(); i++) {
 		auto &col = correlated_columns[i];
 		delim_join->duplicate_eliminated_columns.push_back(make_uniq<BoundColumnRefExpression>(col.type, col.binding));
-		delim_join->delim_types.push_back(col.type);
+		delim_join->mark_types.push_back(col.type);
 	}
 	return delim_join;
 }
