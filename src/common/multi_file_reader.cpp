@@ -258,7 +258,7 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 			}
 			const size_t start_files = dirs.size();
 			HivePartitioning::ApplyFiltersToFileList(context, dirs, filters, column_map, get, options.hive_partitioning,
-													 options.filename);
+			                                         options.filename);
 			if (!pruned_files) {
 				pruned_files = dirs.size() < start_files;
 			}
