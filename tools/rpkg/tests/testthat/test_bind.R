@@ -36,6 +36,7 @@ test_that("dbBind() works as expected for all types", {
   test_convert(con, "INTEGER", 42)
 
   test_convert(con, "HUGEINT", 39218390)
+  test_convert(con, "UHUGEINT", 39218390)
 
   test_convert(con, "DOUBLE", 42L)
   test_convert(con, "DOUBLE", 42.2)
