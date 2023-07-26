@@ -184,6 +184,10 @@ extension VectorElementDataDecoder {
     func decode(_ type: IntHuge.Type) throws -> IntHuge {
       try attemptDecode { try element.unwrap(type) }
     }
+
+	func decode(_ type: UIntHuge.Type) throws -> UIntHuge {
+      try attemptDecode { try element.unwrap(type) }
+    }
     
     func decode(_ type: Decimal.Type) throws -> Decimal {
       try attemptDecode { try element.unwrap(type) }
@@ -219,6 +223,8 @@ extension VectorElementDataDecoder {
       switch type {
       case is IntHuge.Type:
         return try decode(IntHuge.self) as! T
+      case is UIntHuge.Type:
+        return try decode(UIntHuge.self) as! T
       case is Decimal.Type:
         return try decode(Decimal.self) as! T
       case is Data.Type:

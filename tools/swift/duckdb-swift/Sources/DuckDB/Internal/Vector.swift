@@ -269,6 +269,7 @@ extension Vector.Element {
   func unwrap<T: PrimitiveDatabaseValue>(_ type: T.Type) throws -> T { try vector.unwrap(type, at: index) }
   func unwrap(_ type: String.Type) throws -> String { try vector.unwrap(type, at: index) }
   func unwrap(_ type: IntHuge.Type) throws -> IntHuge { try vector.unwrap(type, at: index) }
+  func unwrap(_ type: UIntHuge.Type) throws -> UIntHuge { try vector.unwrap(type, at: index) }
   func unwrap(_ type: UUID.Type) throws -> UUID { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Time.Type) throws -> Time { try vector.unwrap(type, at: index) }
   func unwrap(_ type: Date.Type) throws -> Date { try vector.unwrap(type, at: index) }
