@@ -51,6 +51,11 @@ const correct_answer_map: Record<string, any[]> = {
     BigInt("170141183460469231731687303715884105727"),
     null,
   ],
+  uhugeint: [
+    BigInt("0"),
+    BigInt("340282366920938463463374607431768211455"),
+    null,
+  ],
 
   utinyint: [0, 255, null],
   usmallint: [0, 65535, null],

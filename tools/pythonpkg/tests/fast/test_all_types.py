@@ -56,6 +56,7 @@ class TestAllTypes(object):
             , 'tinyint':[(-128,), (127,), (None,)], 'smallint': [(-32768,), (32767,), (None,)]
             , 'int':[(-2147483648,), (2147483647,), (None,)],'bigint':[(-9223372036854775808,), (9223372036854775807,), (None,)]
             , 'hugeint':[(-170141183460469231731687303715884105727,), (170141183460469231731687303715884105727,), (None,)]
+            , 'uhugeint':[(0,), (340282366920938463463374607431768211455,), (None,)]
             , 'utinyint': [(0,), (255,), (None,)], 'usmallint': [(0,), (65535,), (None,)]
             , 'uint':[(0,), (4294967295,), (None,)], 'ubigint': [(0,), (18446744073709551615,), (None,)]
             , 'time':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)]
@@ -305,6 +306,7 @@ class TestAllTypes(object):
 
         # The following types don't have a numpy equivalent, and are coerced to
         # floating point types by fetchnumpy():
+		# - 'uhugeint'
         # - 'hugeint'
         # - 'dec_4_1'
         # - 'dec_9_4'
