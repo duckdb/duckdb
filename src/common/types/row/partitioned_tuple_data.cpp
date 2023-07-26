@@ -97,7 +97,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 }
 
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input,
-                                  idx_t append_count) {
+                                  const idx_t append_count) {
 	// Compute partition indices and store them in state.partition_indices
 	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
 

@@ -26,7 +26,7 @@ public:
 	SelectionVector partition_sel;
 	SelectionVector reverse_partition_sel;
 
-	static constexpr idx_t MAP_THRESHOLD = 32;
+	static constexpr idx_t MAP_THRESHOLD = 64;
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
@@ -70,7 +70,7 @@ public:
 	                   const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	                   const idx_t append_count = DConstants::INVALID_INDEX);
 	//! Appends rows to this PartitionedTupleData
-	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, idx_t count);
+	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, const idx_t count);
 	//! Flushes any remaining data in the append state into this PartitionedTupleData
 	void FlushAppendState(PartitionedTupleDataAppendState &state);
 	//! Combine another PartitionedTupleData into this PartitionedTupleData

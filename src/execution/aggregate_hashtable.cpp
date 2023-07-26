@@ -89,6 +89,14 @@ vector<MaterializedAggregateData> GroupedAggregateHashTable::AcquireData(bool as
 	return result;
 }
 
+PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() {
+	return *partitioned_data;
+}
+
+shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
+	return aggregate_allocator;
+}
+
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 	Destroy();
 }

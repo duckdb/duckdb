@@ -57,17 +57,6 @@ public:
 private:
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
-
-	void CombineInternal(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                     const RadixHTAbandonStatus &local_status) const;
-	bool ShouldCombine(ClientContext &context, GlobalSinkState &gstate_p, const idx_t sink_partition_idx,
-	                   const RadixHTAbandonStatus &local_status) const;
-	void CombinePartition(ClientContext &context, GlobalSinkState &gstate_p, const idx_t sink_partition_idx,
-	                      vector<MaterializedAggregateData> &uncombined_data,
-	                      const RadixHTAbandonStatus &local_status) const;
-
-	static bool RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate);
-
 	idx_t CountInternal(GlobalSinkState &sink) const;
 };
 

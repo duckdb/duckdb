@@ -145,6 +145,9 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
+	PartitionedTupleData &GetPartitionedData();
+	shared_ptr<ArenaAllocator> GetAggregateAllocator();
+
 	//! Acquires the partitioned data from this HT (or unpartitioned, if as_one is true)
 	vector<MaterializedAggregateData> AcquireData(bool as_one = false);
 
@@ -152,6 +155,8 @@ public:
 	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
+	//! Initializes the PartitionedTupleData
+	void InitializePartitionedData();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
@@ -213,9 +218,6 @@ private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 	//! Destroy the HT
 	void Destroy();
-
-	//! Initializes the PartitionedTupleData
-	void InitializePartitionedData();
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
