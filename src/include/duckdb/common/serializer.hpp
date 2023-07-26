@@ -117,11 +117,6 @@ public:
 		throw InternalException("This deserializer does not have a client-context");
 	};
 
-	//! Gets the catalog for the deserializer
-	virtual optional_ptr<Catalog> GetCatalog() {
-		return nullptr;
-	};
-
 	template <class T>
 	T Read() {
 		T value;
