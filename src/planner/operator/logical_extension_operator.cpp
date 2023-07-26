@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(LogicalDeserializationState &state,
