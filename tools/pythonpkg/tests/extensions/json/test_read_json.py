@@ -5,14 +5,17 @@ import pytest
 import duckdb
 import re
 
+
 def TestFile(name):
     import os
-    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data',name)
+
+    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'data', name)
     return filename
+
 
 class TestReadJSON(object):
     def test_read_json_columns(self):
-        rel = duckdb.read_json(TestFile('example.json'), columns={'id':'integer', 'name':'varchar'})
+        rel = duckdb.read_json(TestFile('example.json'), columns={'id': 'integer', 'name': 'varchar'})
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
@@ -34,7 +37,7 @@ class TestReadJSON(object):
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
-    
+
     def test_read_json_format(self):
         # Wrong option
         with pytest.raises(duckdb.BinderException, match="format must be one of .* not 'test'"):
@@ -43,8 +46,15 @@ class TestReadJSON(object):
         rel = duckdb.read_json(TestFile('example.json'), format='unstructured')
         res = rel.fetchone()
         print(res)
-        assert res == ([{'id': 1, 'name': 'O Brother, Where Art Thou?'}, {'id': 2, 'name': 'Home for the Holidays'}, {'id': 3, 'name': 'The Firm'}, {'id': 4, 'name': 'Broadcast News'}, {'id': 5, 'name': 'Raising Arizona'}],)
-
+        assert res == (
+            [
+                {'id': 1, 'name': 'O Brother, Where Art Thou?'},
+                {'id': 2, 'name': 'Home for the Holidays'},
+                {'id': 3, 'name': 'The Firm'},
+                {'id': 4, 'name': 'Broadcast News'},
+                {'id': 5, 'name': 'Raising Arizona'},
+            ],
+        )
 
     def test_read_json_records(self):
         # Wrong option
@@ -55,5 +65,3 @@ class TestReadJSON(object):
         res = rel.fetchone()
         print(res)
         assert res == (1, 'O Brother, Where Art Thou?')
-
-

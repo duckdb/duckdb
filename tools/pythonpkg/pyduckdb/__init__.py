@@ -26,7 +26,7 @@ from .value.constant import (
     TimestampNanosecondValue,
     TimestampTimeZoneValue,
     TimeValue,
-    TimeTimeZoneValue
+    TimeTimeZoneValue,
 )
 
 __all__ = [
@@ -57,5 +57,5 @@ __all__ = [
     "TimestampNanosecondValue",
     "TimestampTimeZoneValue",
     "TimeValue",
-    "TimeTimeZoneValue"
+    "TimeTimeZoneValue",
 ]
