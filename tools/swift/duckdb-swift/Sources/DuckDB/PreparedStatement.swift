@@ -204,6 +204,21 @@ public extension PreparedStatement {
     guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
     try withThrowingCommand { duckdb_bind_hugeint(ptr.pointee, .init(index), .init(value)) }
   }
+  
+  /// Binds a value of the given type at the specified parameter index
+  ///
+  /// Sets the value that will be used for the next call to ``execute()``.
+  ///
+  /// - Important: Prepared statement parameters use one-based indexing
+  /// - Parameter value: the value to bind
+  /// - Parameter index: the one-based parameter index
+  /// - Throws: ``DatabaseError/preparedStatementFailedToBindParameter(reason:)``
+  ///   if there is a type-mismatch between the value being bound and the
+  ///   underlying column type
+  func bind(_ value: UIntHuge?, at index: Int) throws {
+    guard let value = try unwrapValueOrBindNull(value, at: index) else { return }
+    try withThrowingCommand { duckdb_bind_uhugeint(ptr.pointee, .init(index), .init(value)) }
+  }
 
   /// Binds a value of the given type at the specified parameter index
   ///
