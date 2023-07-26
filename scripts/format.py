@@ -15,15 +15,13 @@ from importlib.metadata import version
 
 try:
     import_module('black')
-except ImportError:
-    print('you need to run `pip install black`')
+except ImportError as e:
+    print('you need to run `pip install black`', e)
     exit(-1)
 
-try:
-    import_module('clang_format')
-    assert version('clang_format').startswith('10.')
-except (ImportError, AssertionError):
-    print('you need to run `pip install clang_format==10.0.1.1`')
+ver = subprocess.check_output(('clang-format', '--version'), text=True)
+if '10.' not in ver:
+    print('you need to run `pip install clang_format==10.0.1.1 - `', ver)
     exit(-1)
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
