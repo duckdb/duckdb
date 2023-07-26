@@ -469,7 +469,7 @@ end
 	duckdb_value_uhugeint(result,col,row)
  * returns: The duckdb_uhugeint value at the specified location, or 0 if the value cannot be converted.
 """
-function duckdb_value_hugeint(result, col, row)
+function duckdb_value_uhugeint(result, col, row)
     return ccall(
         (:duckdb_value_uhugeint, libduckdb),
         UInt64,
