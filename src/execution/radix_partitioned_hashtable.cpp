@@ -8,10 +8,7 @@
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/parallel/event.hpp"
-#include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-
-#include <cmath>
 
 namespace duckdb {
 
@@ -21,7 +18,7 @@ struct RadixHTConfig {
 	static constexpr const idx_t SINK_RADIX_BITS = 4;
 	//! Abandon HT after crossing this threshold
 	static constexpr const idx_t SINK_ABANDON_THRESHOLD = (idx_t(1) << 17) / GroupedAggregateHashTable::LOAD_FACTOR;
-	//! Radix bits used during the finalize (if more than SINK_RADIX_BITS are needed)
+	//! Radix bits used during the finalize
 	static constexpr const idx_t FINALIZE_RADIX_BITS = 8;
 
 	//! Utility functions
@@ -30,11 +27,6 @@ struct RadixHTConfig {
 	}
 	static constexpr idx_t FinalizePartitionCount() {
 		return RadixPartitioning::NumberOfPartitions(FINALIZE_RADIX_BITS);
-	}
-	static constexpr idx_t PartitionMultiplier() {
-		static_assert(FinalizePartitionCount() > SinkPartitionCount(),
-		              "Finalize partition count must be greater than sink partition count");
-		return FinalizePartitionCount() / SinkPartitionCount();
 	}
 };
 
@@ -256,9 +248,9 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	auto &ht = *lstate.ht;
 
 	// Abandon and repartition the data of the HT, then add to global state
-	auto &overflow_data = *lstate.overflow_data;
-	ht.GetPartitionedData().Repartition(overflow_data);
-	gstate.overflow_data->Combine(overflow_data);
+	ht.UnpinData();
+	ht.GetPartitionedData().Repartition(*lstate.overflow_data);
+	gstate.overflow_data->Combine(*lstate.overflow_data);
 
 	lock_guard<mutex> guard(gstate.lock);
 	gstate.stored_allocators.emplace_back(ht.GetAggregateAllocator());
