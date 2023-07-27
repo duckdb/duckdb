@@ -131,7 +131,6 @@ void LogicalOperator::Verify(ClientContext &context) {
 		}
 		BufferedSerializer serializer;
 		// We are serializing a query plan
-		serializer.is_query_plan = true;
 		try {
 			expressions[expr_idx]->Serialize(serializer);
 		} catch (NotImplementedException &ex) {
@@ -266,12 +265,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_JOIN:
 		throw InternalException("LogicalJoin deserialize not supported");
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		result = LogicalDelimJoin::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		result = LogicalAsOfJoin::Deserialize(state, reader);
-		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(state, reader);
 		break;

@@ -162,6 +162,8 @@ public:
 	date_t ToDate();
 	dtime_t ToDuckTime();
 	Value ToDuckValue(const LogicalType &target_type);
+	bool IsPositiveInfinity() const;
+	bool IsNegativeInfinity() const;
 
 public:
 	static int32_t GetYears(PyObject *obj);
@@ -183,6 +185,8 @@ public:
 
 public:
 	Value ToDuckValue();
+	bool IsPositiveInfinity() const;
+	bool IsNegativeInfinity() const;
 };
 
 struct PyTimezone {
