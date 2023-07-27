@@ -69,20 +69,24 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 //===--------------------------------------------------------------------===//
 //! Config for RadixPartitionedHashTable
 struct RadixHTConfig {
+public:
+	explicit RadixHTConfig(ClientContext &context)
+	    : overflow_radix_bits(NextPowerOfTwo(1.5 * TaskScheduler::GetScheduler(context).NumberOfThreads())) {
+	}
+
+public:
+	idx_t OverflowPartitionCount() const {
+		return RadixPartitioning::NumberOfPartitions(overflow_radix_bits);
+	}
+
+public:
 	//! Radix bits used during the Sink
 	static constexpr const idx_t SINK_RADIX_BITS = 3;
 	//! Abandon HT after crossing this threshold
 	static constexpr const idx_t SINK_ABANDON_THRESHOLD = (idx_t(1) << 16) / GroupedAggregateHashTable::LOAD_FACTOR;
-	//! Radix bits used during the finalize
-	static constexpr const idx_t FINALIZE_RADIX_BITS = 6;
 
-	//! Utility functions
-	static constexpr idx_t SinkPartitionCount() {
-		return RadixPartitioning::NumberOfPartitions(SINK_RADIX_BITS);
-	}
-	static constexpr idx_t FinalizePartitionCount() {
-		return RadixPartitioning::NumberOfPartitions(FINALIZE_RADIX_BITS);
-	}
+	//! Radix bits used during the finalize
+	const idx_t overflow_radix_bits;
 };
 
 struct AggregatePartition {
@@ -106,6 +110,9 @@ public:
 	void Destroy();
 
 public:
+	//! TODO
+	const RadixHTConfig config;
+
 	mutex lock;
 
 	//! Uncombined abandoned overflow data
@@ -114,7 +121,7 @@ public:
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
 	//! Partitions that data will be combined into
-	vector<unique_ptr<AggregatePartition>> partitions;
+	vector<unique_ptr<AggregatePartition>> overflow_partitions;
 
 	//! Whether we've called Finalize
 	bool finalized;
@@ -132,15 +139,15 @@ public:
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht)
-    : finalized(false), finalize_idx(0), finalize_done(0),
+    : config(context), finalized(false), finalize_idx(0), finalize_done(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto layout = radix_ht.GetLayout();
-	overflow_data = make_uniq<RadixPartitionedTupleData>(
-	    buffer_manager, layout, idx_t(RadixHTConfig::FINALIZE_RADIX_BITS), layout.ColumnCount() - 1);
+	overflow_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, idx_t(config.overflow_radix_bits),
+	                                                     layout.ColumnCount() - 1);
 
-	partitions.resize(RadixHTConfig::FinalizePartitionCount());
+	overflow_partitions.resize(config.OverflowPartitionCount());
 }
 
 RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
@@ -191,12 +198,6 @@ RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &context, const Radix
 	if (radix_ht.grouping_set.empty()) {
 		group_chunk.data[0].Reference(Value::TINYINT(42));
 	}
-
-	// Initialize the overflow partitions
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	const auto layout = radix_ht.GetLayout();
-	overflow_data = make_uniq<RadixPartitionedTupleData>(
-	    buffer_manager, layout, idx_t(RadixHTConfig::FINALIZE_RADIX_BITS), layout.ColumnCount() - 1);
 }
 
 unique_ptr<GlobalSinkState> RadixPartitionedHashTable::GetGlobalSinkState(ClientContext &context) const {
@@ -226,17 +227,23 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
                                      DataChunk &payload_input, const unsafe_vector<idx_t> &filter) const {
 	auto &gstate = input.global_state.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalSinkState>();
-	auto &ht = *lstate.ht;
+	if (!lstate.overflow_data) {
+		// Initialize the overflow data
+		const auto layout = GetLayout();
+		lstate.overflow_data =
+		    make_uniq<RadixPartitionedTupleData>(BufferManager::GetBufferManager(context.client), layout,
+		                                         gstate.config.overflow_radix_bits, layout.ColumnCount() - 1);
+	}
 
 	auto &group_chunk = lstate.group_chunk;
 	PopulateGroupChunk(group_chunk, chunk);
+
+	auto &ht = *lstate.ht;
 	ht.AddChunk(group_chunk, payload_input, filter);
 
 	if (ht.Count() + STANDARD_VECTOR_SIZE < RadixHTConfig::SINK_ABANDON_THRESHOLD) {
 		return; // We can fit another chunk
 	}
-
-	// TODO: might need to gather more data before repartitioning
 
 	// Abandon and repartition the data of the HT
 	ht.UnpinData();
@@ -268,13 +275,13 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 	// TODO: detect single-threaded case and move data directly to scan data??
 
-	auto &aggregate_partitions = gstate.partitions;
+	auto &overflow_partitions = gstate.overflow_partitions;
 	auto &data_partitions = gstate.overflow_data->GetPartitions();
-	D_ASSERT(aggregate_partitions.size() == data_partitions.size());
+	D_ASSERT(overflow_partitions.size() == data_partitions.size());
 
 	auto &count_before_combining = gstate.count_before_combining;
-	for (idx_t partition_idx = 0; partition_idx < RadixHTConfig::FinalizePartitionCount(); partition_idx++) {
-		auto &aggregate_partition = aggregate_partitions[partition_idx];
+	for (idx_t partition_idx = 0; partition_idx < gstate.config.OverflowPartitionCount(); partition_idx++) {
+		auto &aggregate_partition = overflow_partitions[partition_idx];
 		if (!aggregate_partition) {
 			aggregate_partition = make_uniq<AggregatePartition>(context, *this);
 		}
