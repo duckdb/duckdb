@@ -83,6 +83,9 @@ public:
 	//! Resets to the start and updates the flush flag
 	void Reset(bool flush = true);
 
+	//! Resets to scan a single block and updates the flush flag
+	void ResetToBlock(idx_t block_idx, bool flush = true);
+
 private:
 	//! The row data being scanned
 	RowDataCollection &rows;
@@ -93,7 +96,7 @@ private:
 	//! Read state
 	ScanState read_state;
 	//! The total count of sorted_data
-	const idx_t total_count;
+	idx_t total_count;
 	//! The number of rows scanned so far
 	idx_t total_scanned;
 	//! Addresses used to gather from the sorted data

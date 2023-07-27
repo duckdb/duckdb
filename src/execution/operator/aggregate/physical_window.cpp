@@ -222,11 +222,11 @@ public:
 	using Executors = vector<ExecutorPtr>;
 
 	WindowPartitionSourceState(ClientContext &context, WindowGlobalSourceState &gsource)
-	    : context(context), op(gsource.gsink.op), gsource(gsource) {
+	    : context(context), op(gsource.gsink.op), gsource(gsource), read_block_idx(0), completed(0) {
 		layout.Initialize(gsource.gsink.global_partition->payload_types);
 	}
 
-	unique_ptr<RowDataCollectionScanner> GetScanner() const;
+	unique_ptr<RowDataCollectionScanner> GetScanner(bool first = false) const;
 	void MaterializeSortedData();
 	void BuildPartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
 
@@ -250,8 +250,13 @@ public:
 	//! The current execution functions
 	Executors executors;
 
-	//! The read partition
+	//! The bin number
 	idx_t hash_bin;
+
+	//! The next block to read.
+	mutable atomic<idx_t> read_block_idx;
+	//! The number of completed blocks.
+	mutable atomic<idx_t> completed;
 };
 
 void WindowPartitionSourceState::MaterializeSortedData() {
@@ -293,10 +298,21 @@ void WindowPartitionSourceState::MaterializeSortedData() {
 	                              [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
 }
 
-unique_ptr<RowDataCollectionScanner> WindowPartitionSourceState::GetScanner() const {
+unique_ptr<RowDataCollectionScanner> WindowPartitionSourceState::GetScanner(bool first) const {
 	auto &gsink = *gsource.gsink.global_partition;
+	if (!first) {
+		++completed;
+	}
+
 	if ((gsink.rows && !hash_bin) || hash_bin < gsink.hash_groups.size()) {
-		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, true);
+		const auto block_idx = read_block_idx++;
+		if (block_idx >= rows->blocks.size()) {
+			return nullptr;
+		}
+		//	Second pass can flush
+		auto scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, true);
+		scanner->ResetToBlock(block_idx, true);
+		return scanner;
 	}
 	return nullptr;
 }
@@ -463,17 +479,18 @@ bool WindowLocalSourceState::NextPartition() {
 	scanner.reset();
 	read_states.clear();
 
-	partition_source = gsource.NextPartition(partition_source.get());
-	if (!partition_source) {
-		return false;
+	//	Get a partition_source that is not finished
+	while (!scanner) {
+		partition_source = gsource.NextPartition(partition_source.get());
+		if (!partition_source) {
+			return false;
+		}
+		scanner = partition_source->GetScanner(true);
 	}
 
 	for (auto &wexec : partition_source->executors) {
 		read_states.emplace_back(wexec->GetExecutorState());
 	}
-
-	//	Second pass can flush
-	scanner = partition_source->GetScanner();
 
 	return true;
 }
@@ -481,7 +498,10 @@ bool WindowLocalSourceState::NextPartition() {
 void WindowLocalSourceState::Scan(DataChunk &result) {
 	D_ASSERT(scanner);
 	if (!scanner->Remaining()) {
-		return;
+		scanner = partition_source->GetScanner();
+		if (!scanner) {
+			return;
+		}
 	}
 
 	const auto position = scanner->Scanned();
@@ -526,7 +546,7 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
 	while (chunk.size() == 0) {
 		//	Move to the next bin if we are done.
-		while (!lsource.scanner || !lsource.scanner->Remaining()) {
+		while (!lsource.scanner) {
 			if (!lsource.NextPartition()) {
 				return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 			}

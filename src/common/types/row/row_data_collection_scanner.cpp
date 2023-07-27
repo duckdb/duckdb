@@ -4,6 +4,8 @@
 #include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <numeric>
+
 namespace duckdb {
 
 void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block_collection,
@@ -278,6 +280,23 @@ void RowDataCollectionScanner::Reset(bool flush_p) {
 
 	read_state.block_idx = 0;
 	read_state.entry_idx = 0;
+}
+
+void RowDataCollectionScanner::ResetToBlock(idx_t block_idx, bool flush_p) {
+	flush = flush_p;
+	total_scanned = 0;
+
+	D_ASSERT(block_idx < rows.blocks.size());
+	read_state.block_idx = block_idx;
+	read_state.entry_idx = 0;
+
+	//	Pretend that we have scanned up to the current block
+	//	and will stop at the end
+	auto begin = rows.blocks.begin();
+	auto end = begin + block_idx;
+	total_scanned =
+	    std::accumulate(begin, end, idx_t(0), [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
+	total_count = total_scanned + (*end)->count;
 }
 
 } // namespace duckdb
