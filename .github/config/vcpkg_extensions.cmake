@@ -51,3 +51,21 @@ duckdb_extension_load(iceberg
     GIT_TAG 6481aa4dd0ab9d724a8df28a1db66800561dd5f9
     APPLY_PATCHES
 )
+
+################# ARROW
+if (NOT WIN32)
+    duckdb_extension_load(arrow
+        DONT_LINK
+        GIT_URL https://github.com/duckdblabs/arrow
+        GIT_TAG 1a43a5513b96e4c6ffd92026775ffeb648e71dac
+    )
+endif()
+
+################# SUBSTRAIT
+if (NOT WIN32)
+    duckdb_extension_load(substrait
+        DONT_LINK
+        GIT_URL https://github.com/duckdblabs/substrait
+        GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
+    )
+endif()

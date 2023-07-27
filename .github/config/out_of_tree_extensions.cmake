@@ -17,15 +17,3 @@ duckdb_extension_load(spatial
     TEST_DIR spatial/test/sql
     APPLY_PATCHES
 )
-if (NOT WIN32)
-    duckdb_extension_load(arrow
-        DONT_LINK
-        GIT_URL https://github.com/duckdblabs/arrow
-        GIT_TAG 1a43a5513b96e4c6ffd92026775ffeb648e71dac
-    )
-    duckdb_extension_load(substrait
-        DONT_LINK
-        GIT_URL https://github.com/duckdblabs/substrait
-        GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
-    )
-endif()
