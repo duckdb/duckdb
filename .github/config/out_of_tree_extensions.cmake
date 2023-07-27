@@ -15,13 +15,7 @@ duckdb_extension_load(postgres_scanner
     GIT_URL https://github.com/duckdblabs/postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
-duckdb_extension_load(spatial
-    DONT_LINK
-    GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
-    GIT_TAG 847ad88c65e3fa8484f20fd53fc1150512d1b2f9
-    INCLUDE_DIR spatial/include
-    TEST_DIR test/sql
-)
+
 if (NOT WIN32)
     duckdb_extension_load(arrow
         DONT_LINK
