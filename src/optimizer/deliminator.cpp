@@ -7,21 +7,21 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
+#include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
-#include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
 
 struct DelimCandidate {
 public:
-	explicit DelimCandidate(unique_ptr<LogicalOperator> &op, LogicalDelimJoin &delim_join)
+	explicit DelimCandidate(unique_ptr<LogicalOperator> &op, LogicalComparisonJoin &delim_join)
 	    : op(op), delim_join(delim_join), delim_get_count(0) {
 	}
 
 public:
 	unique_ptr<LogicalOperator> &op;
-	LogicalDelimJoin &delim_join;
+	LogicalComparisonJoin &delim_join;
 	vector<reference<unique_ptr<LogicalOperator>>> joins;
 	idx_t delim_get_count;
 };
@@ -55,6 +55,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 
 		// Change type if there are no more duplicate-eliminated columns
 		if (candidate.joins.size() == candidate.delim_get_count && all_removed) {
+			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 			delim_join.duplicate_eliminated_columns.clear();
 			if (all_equality_conditions) {
 				for (auto &cond : delim_join.conditions) {
@@ -63,7 +64,6 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 					}
 				}
 			}
-			candidate.op = LogicalComparisonJoin::FromDelimJoin(delim_join);
 		}
 	}
 
@@ -80,7 +80,7 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCa
 		return;
 	}
 
-	candidates.emplace_back(op, op->Cast<LogicalDelimJoin>());
+	candidates.emplace_back(op, op->Cast<LogicalComparisonJoin>());
 	auto &candidate = candidates.back();
 
 	// DelimGets are in the RHS
@@ -125,7 +125,7 @@ static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 	}
 }
 
-bool Deliminator::RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
                                          unique_ptr<LogicalOperator> &join, bool &all_equality_conditions) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	if (!ChildJoinTypeCanBeDeliminated(comparison_join.join_type)) {
@@ -218,7 +218,7 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 	return true;
 }
 
-bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
                                                    unique_ptr<LogicalOperator> &join,
                                                    const vector<ReplacementBinding> &replacement_bindings) {
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();

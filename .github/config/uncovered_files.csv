@@ -52,7 +52,7 @@ common/row_operations/row_match.cpp	4
 common/serializer/binary_deserializer.cpp	12
 common/serializer/binary_serializer.cpp	21
 common/serializer/buffered_deserializer.cpp	3
-common/serializer/buffered_file_reader.cpp	9
+common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
@@ -331,7 +331,7 @@ include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
 include/duckdb/common/enum_util.hpp	3
 include/duckdb/common/exception.hpp	22
-include/duckdb/common/field_writer.hpp	4
+include/duckdb/common/field_writer.hpp	5
 include/duckdb/common/gzip_file_system.hpp	3
 include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
@@ -705,7 +705,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	7
+planner/operator/logical_extension_operator.cpp	18
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
@@ -748,6 +748,7 @@ storage/data_table.cpp	46
 storage/index.cpp	3
 storage/local_storage.cpp	10
 storage/magic_bytes.cpp	2
+storage/meta_block_reader.cpp	3
 storage/optimistic_data_writer.cpp	4
 storage/partial_block_manager.cpp	26
 storage/single_file_block_manager.cpp	15

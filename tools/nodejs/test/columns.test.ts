@@ -48,8 +48,7 @@ describe('Column Types', function() {
               name: 'small_enum',
               type: {
                 id: 'ENUM',
-                sql_type: 'small_enum',
-                name: 'small_enum',
+                sql_type: "ENUM('DUCK_DUCK_ENUM', 'GOOSE')",
                 values: [
                   "DUCK_DUCK_ENUM",
                   "GOOSE"
