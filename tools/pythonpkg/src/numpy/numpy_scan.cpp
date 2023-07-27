@@ -319,9 +319,8 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					if (!gil) {
 						gil = make_uniq<PythonGILWrapper>();
 					}
-					bind_data.object_str_val.AssignInternal<py::handle>(
-					    [](py::str &obj, py::handle new_val) { obj = py::str(new_val); }, val);
-					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.GetPointerTop()->ptr());
+					bind_data.object_str_val.Push(std::move(py::str(val)));
+					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.LastAddedObject().ptr());
 				}
 			}
 			// Python 3 string representation:
