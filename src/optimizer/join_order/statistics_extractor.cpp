@@ -102,6 +102,9 @@ RelationStats StatisticsExtractor::ExtractOperatorStats(LogicalGet &get, ClientC
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
 			cardinality_after_filters = MaxValue<idx_t>(base_table_cardinality * StatisticsExtractor::DEFAULT_SELECTIVITY, 1);
 		}
+		if (base_table_cardinality == 0) {
+			cardinality_after_filters = 0;
+		}
 	}
 	return_stats.cardinality = cardinality_after_filters;
 	// update the estimated cardinality of the get as well.

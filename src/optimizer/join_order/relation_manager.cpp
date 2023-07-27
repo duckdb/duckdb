@@ -32,8 +32,6 @@ idx_t RelationManager::NumRelations() {
 struct DistinctCount;
 
 void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
-	// we have an aggregate operator we are returning that this can be reordered, but we are only returning one relation.
-	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
@@ -52,6 +50,9 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	D_ASSERT(!parent || parent->children.size() >= 2);
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
+	if (stats.cardinality > 0 ) {
+		auto a = 0;
+	}
 
 	auto table_indexes = op.GetTableIndex();
 	if (table_indexes.empty()) {
@@ -145,12 +146,18 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			op->children[0] = optimizer.Optimize(std::move(op->children[0]), &child_stats);
 			// TODO: create new stats object based on the stats of the child.
 			//  look into the distinct count and the operators group by index.
-			// might have to add
+			//  might have to add
+			auto num_child_columns = op->GetColumnBindings().size();
+
+			for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns; column_index++) {
+				child_stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
+				child_stats.column_names.push_back("aggregate_or_window");
+			}
 			AddAggregateRelation(input_op, parent, child_stats);
 			// TODO: technially you should be able to reorder aggregates.
 			//  i.e. an inner join between an aggregate operation and another operation is allowed
 			//  but to avoid some headaches, return false here.
-			return false;
+			return true;
 		}
 		op = op->children[0].get();
 	}
@@ -186,6 +193,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			// use the same stats, distinct counts are pushed at
 			child = optimizer.Optimize(std::move(child), &stats);
 		}
+		idx_t card = op->EstimateCardinality(context);
+		stats.stats_initialized = true;
+		stats.cardinality = card;
 		// TODO: update stats.cardinality to predict the cardinality of
 		//  what this non-reorderable operation will be. (if
 		AddRelation(input_op, parent, stats);
@@ -231,6 +241,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		stats.table_name = get.GetName();
 		idx_t card = get.EstimateCardinality(context);
 		stats.cardinality = card;
+		stats.stats_initialized = true;
 		for (auto &binding : get.GetColumnBindings()) {
 			stats.column_distinct_count.push_back(DistinctCount({1, false}));
 			stats.column_names.push_back("column" + to_string(binding.column_index));
@@ -242,8 +253,14 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		auto stats = RelationStats();
 		// optimize the child
+
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_FILTER) {
+//			op->Print();
+			auto a = 0;
+		}
 		JoinOrderOptimizer optimizer(context);
 		op->children[0] = optimizer.Optimize(std::move(op->children[0]), &stats);
+
 
 		// Projection can create columns so we need to add them here
 		auto proj_stats = RelationStats();

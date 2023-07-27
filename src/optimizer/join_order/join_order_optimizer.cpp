@@ -27,21 +27,27 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// extract the relations that go into the hyper graph.
 	// We optimize and non-reorderable relations we come across.
 	bool reorderable = query_graph_manager.Build(op);
-
-//	query_graph_manager.relation_manager.PrintRelationStats();
+	
 	if (!reorderable) {
 		// at most one relation, nothing to reorder
 		// copy stats
 		if (stats) {
-			for (auto &child_stats: query_graph_manager.relation_manager.GetRelationStats()) {
+			auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
+			// if it's non reorderable, we should have 0 or 1 relation. This is because other non-reorderable
+			// relations (like left joins), will have their children optimized, and the relation will then be the
+			// join. One relation is non-reorderable as well, then we end up here.
+			D_ASSERT(relation_stats.size() <= 1);
+			idx_t max_card = 0;
+			for (auto &child_stats: relation_stats) {
 				for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
 					stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 					stats->column_names.push_back(child_stats.column_names.at(i));
 				}
 				stats->table_name += child_stats.table_name;
+				max_card = MaxValue(max_card, child_stats.cardinality);
 			}
 			auto cardinality = plan->EstimateCardinality(context);
-			stats->cardinality = MaxValue(cardinality, stats->cardinality);
+			stats->cardinality = MaxValue(cardinality, max_card);
 			stats->filter_strength = 1;
 			stats->stats_initialized = true;
 
@@ -76,15 +82,17 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
+		idx_t max_card = 0;
 		for (auto &child_stats: relation_stats) {
 			for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
 				stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
 				stats->column_names.push_back(child_stats.column_names.at(i));
 			}
 			stats->table_name += "joined with " + child_stats.table_name;
+			max_card = MaxValue(max_card, child_stats.cardinality);
 		}
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
-		stats->cardinality = MaxValue(cardinality, stats->cardinality);
+		stats->cardinality = MaxValue(cardinality, max_card);
 		stats->filter_strength = 1;
 		stats->stats_initialized = true;
 		// TODO: some verification logic. make sure column names are the same
