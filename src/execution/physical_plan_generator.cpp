@@ -229,7 +229,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		throw InternalException("Physical plan generator - no plan generated");
 	}
 
-
 	plan->estimated_cardinality = op.estimated_cardinality;
 
 	return plan;

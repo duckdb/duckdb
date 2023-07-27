@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats) {
+unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
+                                                         optional_ptr<RelationStats> stats) {
 
 	// make sure query graph manager has not extracted a relation graph already
 	LogicalOperator *op = plan.get();
@@ -25,6 +26,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 	// get relation_stats here since the reconstruction process will move all of the relations.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 	unique_ptr<LogicalOperator> new_logical_plan = nullptr;
+
 	if (reorderable) {
 		// query graph now has filters and relations
 		auto cost_model = CostModel(query_graph_manager);
@@ -49,19 +51,11 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
 	if (stats) {
-		idx_t max_card = 0;
-		for (auto &child_stats: relation_stats) {
-			for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
-				stats->column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
-				stats->column_names.push_back(child_stats.column_names.at(i));
-			}
-			stats->table_name += "joined with " + child_stats.table_name;
-			max_card = MaxValue(max_card, child_stats.cardinality);
-		}
 		auto cardinality = new_logical_plan->EstimateCardinality(context);
-		stats->cardinality = MaxValue(cardinality, max_card);
-		stats->filter_strength = 1;
-		stats->stats_initialized = true;
+		auto bindings = new_logical_plan->GetColumnBindings();
+		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
+		new_stats.cardinality = MaxValue(cardinality, new_stats.cardinality);
+		RelationStatisticsHelper::CopyRelationStats(stats, new_stats);
 	}
 
 	return new_logical_plan;

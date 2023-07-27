@@ -17,7 +17,6 @@
 
 namespace duckdb {
 
-
 class JoinNode;
 struct FilterInfo;
 struct SingleJoinRelation;
@@ -35,8 +34,7 @@ struct RelationsToTDom {
 	vector<string> column_names;
 
 	RelationsToTDom(const column_binding_set_t &column_binding_set)
-	    : equivalent_relations(column_binding_set),
-	      tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
+	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
 };
 
@@ -83,7 +81,6 @@ private:
 	vector<RelationStats> relation_stats;
 
 public:
-
 	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
 	void PrintRelationToTdomInfo();
 
@@ -119,7 +116,7 @@ private:
 	//	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &fil,
 	//	                           unique_ptr<BaseStatistics> base_stats);
 	//	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t
-	//table_index);
+	// table_index);
 };
 
 } // namespace duckdb

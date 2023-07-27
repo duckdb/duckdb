@@ -89,7 +89,6 @@ private:
 
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
-
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 
 	void CreateHyperGraphEdges();
@@ -97,8 +96,6 @@ private:
 	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
-
-
 };
 
 } // namespace duckdb

@@ -40,13 +40,12 @@ public:
 
 	idx_t NumRelations();
 
-	bool ExtractJoinRelations(LogicalOperator &input_op,
-	                          vector<reference<LogicalOperator>> &filter_operators,
+	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
 	                          optional_ptr<LogicalOperator> parent = nullptr);
 
 	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
-	                  vector<reference<LogicalOperator>> &filter_operators,
-	                  JoinRelationSetManager &set_manager);
+	                                            vector<reference<LogicalOperator>> &filter_operators,
+	                                            JoinRelationSetManager &set_manager);
 
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);

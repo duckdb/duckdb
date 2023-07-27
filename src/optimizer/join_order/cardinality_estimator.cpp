@@ -117,7 +117,7 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 }
 
 void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
-//#ifdef DEBUG
+	//#ifdef DEBUG
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index < stats.size());
@@ -126,7 +126,7 @@ void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats)
 			total_domain.column_names.push_back(column_name);
 		}
 	}
-//#endif
+	//#endif
 }
 
 void CardinalityEstimator::PrintRelationToTdomInfo() {
@@ -177,7 +177,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		auto single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
 		auto card_helper = relation_set_2_cardinality[single_node_set.get()->ToString()];
 		numerator *= card_helper.cardinality_before_filters;
-//		filter_strength *= card_helper.filter_strength;
+		//		filter_strength *= card_helper.filter_strength;
 		actual_set.insert(new_set.relations[i]);
 	}
 
@@ -303,11 +303,11 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 
 	auto card_helper = CardinalityHelper(relation_cardinality, relation_filter);
 	relation_set_2_cardinality[set->ToString()] = card_helper;
-	//use that to initialize the cardinality estimator here
-	// if not: error
-	// Store the cardinality here locally cardinality estimator
-	// update the total domain.
-	// Then update total domains.
+	// use that to initialize the cardinality estimator here
+	//  if not: error
+	//  Store the cardinality here locally cardinality estimator
+	//  update the total domain.
+	//  Then update total domains.
 	UpdateTotalDomains(set, stats);
 
 	// sort relations from greatest tdom to lowest tdom.
@@ -318,7 +318,7 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 	D_ASSERT(set->count == 1);
 	auto relation_id = set->relations[0];
 	//! Initialize the distinct count for all columns used in joins with the current relation.
-//	D_ASSERT(stats.column_distinct_count.size() >= 1);
+	//	D_ASSERT(stats.column_distinct_count.size() >= 1);
 
 	for (idx_t i = 0; i < stats.column_distinct_count.size(); i++) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
@@ -336,14 +336,12 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 			} else if (distinct_count.from_hll && !relation_to_tdom.has_tdom_hll) {
 				relation_to_tdom.has_tdom_hll = true;
 				relation_to_tdom.tdom_hll = distinct_count.distinct_count;
-			}
-			else {
+			} else {
 				relation_to_tdom.tdom_no_hll = MinValue(distinct_count.distinct_count, relation_to_tdom.tdom_no_hll);
 			}
 			break;
 		}
 	}
 }
-
 
 } // namespace duckdb

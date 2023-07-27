@@ -35,16 +35,15 @@ struct RelationStats {
 
 	vector<string> column_names;
 	string table_name;
-
 };
 
 class RelationStatisticsHelper {
 public:
 	static constexpr double DEFAULT_SELECTIVITY = 0.2;
-public:
 
+public:
 	static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
-	                                  unique_ptr<BaseStatistics> base_stats);
+	                                   unique_ptr<BaseStatistics> base_stats);
 	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
 	                                  unique_ptr<BaseStatistics> base_stats);
 	//!
@@ -57,9 +56,13 @@ public:
 	//! All relation extractors for blocking relations
 	static RelationStats ExtractProjectionStats(LogicalProjection &proj, RelationStats &child_stats);
 	static RelationStats ExtractAggregationStats(LogicalAggregate &aggr, RelationStats &child_stats);
-	static RelationStats ExtractWindowStats(LogicalWindow &window,  RelationStats &child_stats);
-
+	static RelationStats ExtractWindowStats(LogicalWindow &window, RelationStats &child_stats);
+	//! Called after reordering a query plan with potentially 2+ relations.
+	static RelationStats CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
+	                                                       vector<RelationStats> relation_stats);
+	//! Called after reordering a query plan with potentially 2+ relations.
 	static RelationStats CombineStatsOfNonReoderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
+	static void CopyRelationStats(optional_ptr<RelationStats> to, RelationStats from);
 
 private:
 };

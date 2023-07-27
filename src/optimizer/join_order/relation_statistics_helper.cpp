@@ -67,7 +67,7 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		return_stats.table_name = name;
 	}
 	// first push back basic distinct counts for each column (if we have them).
-	for (idx_t i = 0; i < get.column_ids.size(); i++ ) {
+	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
@@ -100,23 +100,23 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 
 			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 				auto &filter = it.second->Cast<ConjunctionAndFilter>();
-				idx_t cardinality_with_and_filter =
-				    RelationStatisticsHelper::InspectConjunctionAND(base_table_cardinality, it.first, filter, std::move(column_statistics));
+				idx_t cardinality_with_and_filter = RelationStatisticsHelper::InspectConjunctionAND(
+				    base_table_cardinality, it.first, filter, std::move(column_statistics));
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 			} else if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 				auto &filter = it.second->Cast<ConjunctionOrFilter>();
-				idx_t cardinality_with_or_filter =
-				    RelationStatisticsHelper::InspectConjunctionOR(base_table_cardinality, it.first, filter, std::move(column_statistics));
+				idx_t cardinality_with_or_filter = RelationStatisticsHelper::InspectConjunctionOR(
+				    base_table_cardinality, it.first, filter, std::move(column_statistics));
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 			} else {
-
 			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
 		// and there are other table filters (i.e cost > 50), use default selectivity.
 		bool has_equality_filter = (cardinality_after_filters != base_table_cardinality);
 		if (!has_equality_filter && !get.table_filters.filters.empty()) {
-			cardinality_after_filters = MaxValue<idx_t>(base_table_cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, 1);
+			cardinality_after_filters =
+			    MaxValue<idx_t>(base_table_cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, 1);
 		}
 		if (base_table_cardinality == 0) {
 			cardinality_after_filters = 0;
@@ -128,10 +128,9 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	get.estimated_cardinality = cardinality_after_filters;
 	get.has_estimated_cardinality = true;
 	D_ASSERT(base_table_cardinality >= cardinality_after_filters);
-	return_stats.filter_strength = 1;//((double)base_table_cardinality / cardinality_after_filters);
+	return_stats.filter_strength = 1; //((double)base_table_cardinality / cardinality_after_filters);
 	return_stats.stats_initialized = true;
 	return return_stats;
-
 }
 
 RelationStats RelationStatisticsHelper::ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context) {
@@ -192,8 +191,35 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 	return stats;
 }
 
-RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(LogicalOperator &op, vector<RelationStats> child_stats) {
-    D_ASSERT(child_stats.size() == 2);
+void RelationStatisticsHelper::CopyRelationStats(optional_ptr<RelationStats> to, RelationStats from) {
+	to->column_distinct_count = from.column_distinct_count;
+	to->column_names = from.column_names;
+	to->cardinality = from.cardinality;
+	to->filter_strength = from.filter_strength;
+	to->table_name = from.table_name;
+	to->stats_initialized = from.stats_initialized;
+}
+
+RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
+                                                                          vector<RelationStats> relation_stats) {
+	RelationStats stats;
+	idx_t max_card = 0;
+	for (auto &child_stats : relation_stats) {
+		for (idx_t i = 0; i < child_stats.column_distinct_count.size(); i++) {
+			stats.column_distinct_count.push_back(child_stats.column_distinct_count.at(i));
+			stats.column_names.push_back(child_stats.column_names.at(i));
+		}
+		stats.table_name += "joined with " + child_stats.table_name;
+		max_card = MaxValue(max_card, child_stats.cardinality);
+	}
+	stats.filter_strength = 1;
+	stats.stats_initialized = true;
+	return stats;
+}
+
+RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(LogicalOperator &op,
+                                                                            vector<RelationStats> child_stats) {
+	D_ASSERT(child_stats.size() == 2);
 	RelationStats ret;
 	ret.cardinality = MaxValue(child_stats[0].cardinality, child_stats[1].cardinality);
 	ret.stats_initialized = true;
@@ -210,7 +236,8 @@ RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(Logi
 	return ret;
 }
 
-RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpressionGet &expression_get, ClientContext &context) {
+RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpressionGet &expression_get,
+                                                                  ClientContext &context) {
 	auto stats = RelationStats();
 	idx_t card = expression_get.EstimateCardinality(context);
 	stats.cardinality = card;
@@ -233,7 +260,8 @@ RelationStats RelationStatisticsHelper::ExtractWindowStats(LogicalWindow &window
 	stats.stats_initialized = true;
 	auto num_child_columns = window.GetColumnBindings().size();
 
-	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns; column_index++) {
+	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns;
+	     column_index++) {
 		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
 		stats.column_names.push_back("window");
 	}
@@ -249,15 +277,17 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();
 
-	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns; column_index++) {
+	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns;
+	     column_index++) {
 		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
 		stats.column_names.push_back("window");
 	}
 	return stats;
 }
 
-idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
-                                                  unique_ptr<BaseStatistics> base_stats) {
+idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index,
+                                                      ConjunctionAndFilter &filter,
+                                                      unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter.child_filters) {
@@ -288,7 +318,7 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 }
 
 idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-                                                 unique_ptr<BaseStatistics> base_stats) {
+                                                     unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter.child_filters) {
@@ -314,5 +344,4 @@ idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t co
 	return cardinality_after_filters;
 }
 
-}
-
+} // namespace duckdb

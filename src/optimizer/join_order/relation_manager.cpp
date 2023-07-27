@@ -10,7 +10,6 @@
 
 namespace duckdb {
 
-
 const vector<RelationStats> RelationManager::GetRelationStats() {
 	vector<RelationStats> ret;
 	for (idx_t i = 0; i < relations.size(); i++) {
@@ -29,7 +28,8 @@ idx_t RelationManager::NumRelations() {
 
 struct DistinctCount;
 
-void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
+void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+                                           RelationStats stats) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
@@ -72,14 +72,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 }
 
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
-	                                             vector<reference<LogicalOperator>> &filter_operators,
-	                                             optional_ptr<LogicalOperator> parent) {
+                                           vector<reference<LogicalOperator>> &filter_operators,
+                                           optional_ptr<LogicalOperator> parent) {
 	LogicalOperator *op = &input_op;
 	// pass through single child operators
 	while (op->children.size() == 1 &&
-		   (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
-			op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET &&
-	        op->type != LogicalOperatorType::LOGICAL_GET &&
+	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
+	        op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET && op->type != LogicalOperatorType::LOGICAL_GET &&
 	        op->type != LogicalOperatorType::LOGICAL_DELIM_GET &&
 	        op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
 	        op->type != LogicalOperatorType::LOGICAL_WINDOW)) {
@@ -91,8 +90,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 	bool non_reorderable_operation = false;
 	if (op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-		op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-		op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+	    op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
+	    op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
@@ -225,8 +224,8 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 }
 
 vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op,
-                                   vector<reference<LogicalOperator>> &filter_operators,
-                                   JoinRelationSetManager &set_manager) {
+                                                             vector<reference<LogicalOperator>> &filter_operators,
+                                                             JoinRelationSetManager &set_manager) {
 	// now that we know we are going to perform join ordering we actually extract the filters, eliminating duplicate
 	// filters in the process
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
@@ -270,11 +269,12 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 }
 
 void RelationManager::PrintRelationStats() {
-	for(auto &relation : relations) {
+	for (auto &relation : relations) {
 		auto &stats = relation->stats;
 		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
 		for (idx_t i = 0; i < stats.column_names.size(); i++) {
-			std::cout << stats.column_names.at(i) << " has estimated distinct count " << stats.column_distinct_count.at(i).distinct_count << std::endl;
+			std::cout << stats.column_names.at(i) << " has estimated distinct count "
+			          << stats.column_distinct_count.at(i).distinct_count << std::endl;
 		}
 		std::cout << "table has cardinality " << stats.cardinality << std::endl;
 	}

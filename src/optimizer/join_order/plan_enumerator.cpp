@@ -551,7 +551,7 @@ unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product)
 	return std::move(final_plan->second);
 }
 
-//unique_ptr<LogicalOperator> PlanEnumerator::BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan) {
+// unique_ptr<LogicalOperator> PlanEnumerator::BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan) {
 //	if (plan->children.size() == 1) {
 //		return BuildSideProbeSideSwaps(std::move(plan->children.at(0)));
 //	}
@@ -590,6 +590,5 @@ unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product)
 //	}
 
 //}
-
 
 } // namespace duckdb

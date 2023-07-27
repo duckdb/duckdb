@@ -26,7 +26,7 @@ bool QueryGraphManager::Build(LogicalOperator *op) {
 	// Create the query_graph hyper edges
 	CreateHyperGraphEdges();
 	return true;
-//	D_ASSERT(!query_graph.ToString().empty());
+	//	D_ASSERT(!query_graph.ToString().empty());
 }
 
 void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
@@ -194,7 +194,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	if (result_operator->type == LogicalOperatorType::LOGICAL_FILTER &&
 	    result_operator->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
 		// FILTER on top of GET, add estimated properties to both
-        // auto &filter_props = *result_operator->estimated_props;
+		// auto &filter_props = *result_operator->estimated_props;
 		auto &child_operator = *result_operator->children[0];
 		//	child_operator.estimated_props = make_uniq<EstimatedProperties>(filter_props.GetCardinality<double>() /
 		//		                                                                    CardinalityEstimator::DEFAULT_SELECTIVITY,
@@ -289,7 +289,6 @@ void QueryGraphManager::CreateQueryGraphCrossProduct(optional_ptr<JoinRelationSe
                                                      optional_ptr<JoinRelationSet> right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
-
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node) {

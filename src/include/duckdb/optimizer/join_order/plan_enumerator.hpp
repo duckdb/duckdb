@@ -25,7 +25,8 @@ namespace duckdb {
 
 class PlanEnumerator {
 public:
-	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model, const QueryGraph &query_graph)
+	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
+	                        const QueryGraph &query_graph)
 	    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model),
 	      full_plan_found(false), must_update_full_plan(false) {
 	}
