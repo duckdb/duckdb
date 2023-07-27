@@ -28,4 +28,5 @@ duckdb_extension_load(iceberg
     ${LOAD_ICEBERG_TESTS}
     GIT_URL https://github.com/duckdblabs/duckdb_iceberg
     GIT_TAG 6481aa4dd0ab9d724a8df28a1db66800561dd5f9
+    APPLY_PATCHES
 )

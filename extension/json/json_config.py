@@ -9,6 +9,7 @@ source_files = [
     os.path.sep.join(x.split('/'))
     for x in [
         'extension/json/buffered_json_reader.cpp',
+        'extension/json/json_enums.cpp',
         'extension/json/json_extension.cpp',
         'extension/json/json_common.cpp',
         'extension/json/json_functions.cpp',
@@ -30,5 +31,6 @@ source_files = [
         'extension/json/json_functions/json_serialize_sql.cpp',
         'extension/json/json_serializer.cpp',
         'extension/json/json_deserializer.cpp',
+        'extension/json/serialize_json.cpp',
     ]
 ]

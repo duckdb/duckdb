@@ -1,12 +1,11 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
-#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/schema/physical_create_index.hpp"
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/table_filter.hpp"
@@ -14,11 +13,10 @@
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
-
 	// generate a physical plan for the parallel index creation which consists of the following operators
 	// table scan - projection (for expression execution) - filter (NOT NULL) - order - create index
-
-	D_ASSERT(op.children.empty());
+	D_ASSERT(op.children.size() == 1);
+	auto table_scan = CreatePlan(*op.children[0]);
 
 	// validate that all expressions contain valid scalar functions
 	// e.g. get_current_timestamp(), random(), and sequence values are not allowed as ART keys
@@ -32,19 +30,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	}
 
 	// table scan operator for index key columns and row IDs
-
-	unique_ptr<TableFilterSet> table_filters;
-	op.info->column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
-
-	auto &bind_data = op.bind_data->Cast<TableScanBindData>();
-	bind_data.is_create_index = true;
-
-	auto table_scan =
-	    make_uniq<PhysicalTableScan>(op.info->scan_types, op.function, std::move(op.bind_data), op.info->column_ids,
-	                                 op.info->names, std::move(table_filters), op.estimated_cardinality);
-
 	dependencies.AddDependency(op.table);
-	op.info->column_ids.pop_back();
 
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->names.size());
 	D_ASSERT(op.info->scan_types.size() - 1 <= op.info->column_ids.size());

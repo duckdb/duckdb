@@ -71,8 +71,6 @@ public:
 	DUCKDB_API vector<LogicalType> GetTypes();
 	//! Returns a list of the columns of the table
 	DUCKDB_API const ColumnList &GetColumns() const;
-	//! Returns a mutable list of the columns of the table
-	DUCKDB_API ColumnList &GetColumnsMutable();
 	//! Returns the underlying storage of the table
 	virtual DataTable &GetStorage();
 	//! Returns a list of the bound constraints of the table

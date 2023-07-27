@@ -395,7 +395,15 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return KeywordHelper::WriteOptionallyQuoted(EnumType::GetTypeName(*this));
+		string ret = "ENUM(";
+		for (idx_t i = 0; i < EnumType::GetSize(*this); i++) {
+			if (i > 0) {
+				ret += ", ";
+			}
+			ret += "'" + KeywordHelper::WriteOptionallyQuoted(EnumType::GetString(*this, i).GetString(), '\'') + "'";
+		}
+		ret += ")";
+		return ret;
 	}
 	case LogicalTypeId::USER: {
 		return KeywordHelper::WriteOptionallyQuoted(UserType::GetTypeName(*this));
@@ -995,34 +1003,12 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
-void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bool serialize_internals) {
-	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
-	auto &enum_info = type_info.Cast<EnumTypeInfo>();
-	// Store Schema Name
-	writer.WriteString(enum_info.GetSchemaName());
-	// Store Enum Name
-	writer.WriteString(enum_info.GetEnumName());
-	// Store If we are serializing the internals
-	writer.WriteField<bool>(serialize_internals);
-	if (serialize_internals) {
-		// We must serialize the internals
-		auto dict_size = enum_info.GetDictSize();
-		// Store Dictionary Size
-		writer.WriteField<uint32_t>(dict_size);
-		// Store Vector Order By Insertion
-		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer()); // NOLINT - FIXME
-	}
-}
-
-const string &EnumType::GetTypeName(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return info->Cast<EnumTypeInfo>().GetEnumName();
+LogicalType LogicalType::ENUM(Vector &ordered_data, idx_t size) {
+	return EnumTypeInfo::CreateType(ordered_data, size);
 }
 
 LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
-	return EnumTypeInfo::CreateType(enum_name, ordered_data, size);
+	return LogicalType::ENUM(ordered_data, size);
 }
 
 const string EnumType::GetValue(const Value &val) {
@@ -1043,27 +1029,6 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return info->Cast<EnumTypeInfo>().GetDictSize();
-}
-
-void EnumType::SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return;
-	}
-	((ExtraTypeInfo &)*info).catalog_entry = catalog_entry;
-}
-
-optional_ptr<TypeCatalogEntry> EnumType::GetCatalog(const LogicalType &type) {
-	auto info = type.AuxInfo();
-	if (!info) {
-		return nullptr;
-	}
-	return info->catalog_entry;
-}
-
-string EnumType::GetSchemaName(const LogicalType &type) {
-	auto catalog_entry = EnumType::GetCatalog(type);
-	return catalog_entry ? catalog_entry->schema.name : "";
 }
 
 PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
@@ -1087,15 +1052,6 @@ void LogicalType::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<LogicalTypeId>(id_);
 	ExtraTypeInfo::Serialize(type_info_.get(), writer);
-	writer.Finalize();
-}
-
-void LogicalType::SerializeEnumType(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<LogicalTypeId>(id_);
-	writer.WriteField<ExtraTypeInfoType>(type_info_->type);
-	EnumType::Serialize(writer, *type_info_, true);
-	writer.WriteString(type_info_->alias);
 	writer.Finalize();
 }
 

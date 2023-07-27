@@ -8,6 +8,8 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -417,6 +419,8 @@ inline Value QuantileAbs(const Value &v) {
 }
 
 struct QuantileBindData : public FunctionData {
+	QuantileBindData() {
+	}
 
 	explicit QuantileBindData(const Value &quantile_p)
 	    : quantiles(1, QuantileAbs(quantile_p)), order(1, 0), desc(quantile_p < 0) {
@@ -454,6 +458,27 @@ struct QuantileBindData : public FunctionData {
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<QuantileBindData>();
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
+	}
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const AggregateFunction &function) {
+		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
+		serializer.WriteProperty("quantiles", bind_data.quantiles);
+		serializer.WriteProperty("order", bind_data.order);
+		serializer.WriteProperty("desc", bind_data.desc);
+	}
+
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+		auto result = make_uniq<QuantileBindData>();
+		deserializer.ReadProperty("quantiles", result->quantiles);
+		deserializer.ReadProperty("order", result->order);
+		deserializer.ReadProperty("desc", result->desc);
+		return std::move(result);
+	}
+
+	static void FormatSerializeDecimal(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                                   const AggregateFunction &function) {
+		throw SerializationException("FIXME: quantile serialize for decimal");
 	}
 
 	vector<Value> quantiles;
@@ -1189,6 +1214,8 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 	function.name = "median";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
+	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1245,6 +1272,8 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, Agg
 	function.name = "quantile_disc";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
+	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1256,6 +1285,8 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context,
 	function.name = "quantile_disc";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
+	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1267,6 +1298,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, A
 	function.name = "quantile_cont";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
+	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1278,6 +1311,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	function.name = "quantile_cont";
 	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
+	function.format_serialize = QuantileBindData::FormatSerializeDecimal;
+	function.format_deserialize = QuantileBindData::FormatDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
 }
@@ -1298,6 +1333,8 @@ AggregateFunction GetMedianAggregate(const LogicalType &type) {
 	fun.bind = BindMedian;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	return fun;
 }
 
@@ -1306,6 +1343,8 @@ AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	fun.bind = BindQuantile;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -1317,6 +1356,8 @@ AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 	fun.bind = BindQuantile;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -1329,6 +1370,8 @@ AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	fun.bind = BindQuantile;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -1340,6 +1383,8 @@ AggregateFunction GetContinuousQuantileListAggregate(const LogicalType &type) {
 	fun.bind = BindQuantile;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -1353,6 +1398,8 @@ AggregateFunction GetQuantileDecimalAggregate(const vector<LogicalType> &argumen
 	fun.bind = bind;
 	fun.serialize = QuantileSerialize;
 	fun.deserialize = QuantileDeserialize;
+	fun.format_serialize = QuantileBindData::FormatSerialize;
+	fun.format_deserialize = QuantileBindData::FormatDeserialize;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }
