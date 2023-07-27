@@ -105,6 +105,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			non_reorderable_operation = true;
 		}
 	}
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto a = 0;
+	}
 	if (non_reorderable_operation) {
 		// we encountered a non-reordable operation (setop or non-inner join)
 		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them

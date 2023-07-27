@@ -214,18 +214,36 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 	}
 	stats.filter_strength = 1;
 	stats.stats_initialized = true;
+	stats.cardinality = max_card;
 	return stats;
 }
 
 RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(LogicalOperator &op,
                                                                             vector<RelationStats> child_stats) {
 	D_ASSERT(child_stats.size() == 2);
+	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		auto &join = op.Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::MARK) {
+			auto a = 0;
+		}
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &join = op.Cast<LogicalAnyJoin>();
+		auto b = 0;
+	}
 	RelationStats ret;
-	ret.cardinality = MaxValue(child_stats[0].cardinality, child_stats[1].cardinality);
+	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
+	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
+	ret.cardinality = MaxValue(child_1_card, child_2_card);
 	ret.stats_initialized = true;
 	ret.filter_strength = 1;
 	ret.table_name = child_stats[0].table_name + " joined with " + child_stats[1].table_name;
 	for (auto &stats : child_stats) {
+		// MARK joins are nonreorderable. They won't return initialized stats
+		// continue in this case.
+		if (!stats.stats_initialized) {
+			continue;
+		}
 		for (auto &distinct_count : stats.column_distinct_count) {
 			ret.column_distinct_count.push_back(distinct_count);
 		}

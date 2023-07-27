@@ -336,9 +336,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
-	//#ifdef DEBUG
-	//	plan->Verify(*this);
-	//#endif
+	#ifdef DEBUG
+	plan->Verify(*this);
+	#endif
 	if (config.enable_optimizer && plan->RequireOptimizer()) {
 		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
@@ -346,9 +346,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		D_ASSERT(plan);
 		profiler.EndPhase();
 
-		//#ifdef DEBUG
-		//		plan->Verify(*this);
-		//#endif
+		#ifdef DEBUG
+		plan->Verify(*this);
+		#endif
 	}
 
 	profiler.StartPhase("physical_planner");

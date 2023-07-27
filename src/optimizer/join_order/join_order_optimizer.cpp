@@ -47,6 +47,9 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		new_logical_plan = query_graph_manager.Reconstruct(std::move(plan), *final_plan);
 	} else {
 		new_logical_plan = std::move(plan);
+		if (relation_stats.size() == 1) {
+			new_logical_plan->estimated_cardinality = relation_stats.at(0).cardinality;
+		}
 	}
 
 	// Propagate up a stats object from the top of the new_logical_plan if stats exist.
