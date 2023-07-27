@@ -15,6 +15,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <limits>
 
@@ -1235,6 +1237,20 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &s
 	return std::move(result_data);
 }
 
+static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                     const TableFunction &function) {
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
+	serializer.WriteProperty("extra_info", function.extra_info);
+	serializer.WriteProperty("csv_data", bind_data);
+}
+
+static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	unique_ptr<ReadCSVData> result;
+	deserializer.ReadProperty("extra_info", function.extra_info);
+	deserializer.ReadProperty("csv_data", result);
+	return std::move(result);
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);
@@ -1242,6 +1258,8 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
+	read_csv.format_serialize = CSVReaderFormatSerialize;
+	read_csv.format_deserialize = CSVReaderFormatDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;

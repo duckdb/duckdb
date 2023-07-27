@@ -40,6 +40,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
+		result = LogicalCopyToFile::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::FormatDeserialize(deserializer);
 		break;
@@ -96,6 +99,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_GET:
+		result = LogicalGet::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_INSERT:
 		result = LogicalInsert::FormatDeserialize(deserializer);
