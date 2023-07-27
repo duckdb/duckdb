@@ -277,7 +277,23 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
+bool PyDateTime::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59 && micros == 999999;
+}
+
+bool PyDateTime::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0 && micros == 0;
+}
+
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
+	if (IsPositiveInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	}
 	auto timestamp = ToTimestamp();
 	if (tzone_obj != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
@@ -350,11 +366,37 @@ PyDate::PyDate(py::handle &ele) {
 }
 
 Value PyDate::ToDuckValue() {
+	if (IsPositiveInfinity()) {
+		return Value::DATE(date_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		return Value::DATE(date_t::ninfinity());
+	}
 	return Value::DATE(year, month, day);
+}
+
+bool PyDate::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31;
+}
+
+bool PyDate::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1;
 }
 
 void PythonObject::Initialize() {
 	PyDateTime_IMPORT; // NOLINT: Python datetime initialize #2
+}
+
+enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
+
+InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
+	if (timestamp == timestamp_t::infinity()) {
+		return InfinityType::POSITIVE;
+	}
+	if (timestamp == timestamp_t::ninfinity()) {
+		return InfinityType::NEGATIVE;
+	}
+	return InfinityType::NONE;
 }
 
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
@@ -408,12 +450,27 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
+
+		InfinityType infinity = InfinityType::NONE;
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
 			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
+		}
+		infinity = GetTimestampInfinityType(timestamp);
+
+		// Deal with infinity
+		switch (infinity) {
+		case InfinityType::POSITIVE: {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.max());
+		}
+		case InfinityType::NEGATIVE: {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.min());
+		}
+		case InfinityType::NONE:
+			break;
 		}
 		int32_t year, month, day, hour, min, sec, micros;
 		date_t date;
@@ -437,6 +494,12 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
+		if (!duckdb::Date::IsFinite(date)) {
+			if (date == date_t::infinity()) {
+				return py::reinterpret_borrow<py::object>(import_cache.datetime().date.max());
+			}
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().date.min());
+		}
 		duckdb::Date::Convert(date, year, month, day);
 		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
 	}

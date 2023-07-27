@@ -56,7 +56,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
-			auto sep = fs.PathSeparator();
+			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
 			D_ASSERT(!splits.empty());
 			string extension_directory_prefix;
