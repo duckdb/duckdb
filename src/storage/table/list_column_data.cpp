@@ -92,8 +92,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	UnifiedVectorFormat offsets;
 	offset_vector.ToUnifiedFormat(scan_count, offsets);
 	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
-	auto constant_offsets = offset_vector.GetVectorType() == VectorType::CONSTANT_VECTOR;
-	auto last_entry = data[constant_offsets ? 0 : scan_count - 1];
+	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
