@@ -52,6 +52,11 @@ typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *b
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                             AggregateFunction &function);
 
+typedef void (*aggregate_format_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                             const AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_format_deserialize_t)(FormatDeserializer &deserializer,
+                                                                   AggregateFunction &function);
+
 class AggregateFunction : public BaseScalarFunction {
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -66,7 +71,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -80,7 +86,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -131,6 +138,8 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
+	aggregate_format_serialize_t format_serialize;
+	aggregate_format_deserialize_t format_deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
 

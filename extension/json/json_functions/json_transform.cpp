@@ -8,6 +8,8 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 

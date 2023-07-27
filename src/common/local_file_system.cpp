@@ -261,13 +261,14 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_read = pread(fd, buffer, nr_bytes, location);
-	if (bytes_read == -1) {
-		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_read != nr_bytes) {
-		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
-		                  bytes_read);
+	auto read_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_read = pread(fd, read_buffer, nr_bytes, location);
+		if (bytes_read == -1) {
+			throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
+		}
+		read_buffer += bytes_read;
+		nr_bytes -= bytes_read;
 	}
 }
 
@@ -282,13 +283,15 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
-	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
-	}
-	if (bytes_written != nr_bytes) {
-		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
-		                  bytes_written);
+	auto write_buffer = char_ptr_cast(buffer);
+	while (nr_bytes > 0) {
+		int64_t bytes_written = pwrite(fd, write_buffer, nr_bytes, location);
+		if (bytes_written < 0) {
+			throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+		}
+		D_ASSERT(bytes_written >= 0 && bytes_written);
+		write_buffer += bytes_written;
+		nr_bytes -= bytes_written;
 	}
 }
 

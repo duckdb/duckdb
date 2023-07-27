@@ -30,7 +30,9 @@ for arg in sys.argv:
         threads = int(arg.replace("--threads=", ""))
 
 if old_runner is None or new_runner is None or benchmark_file is None:
-    print("Expected usage: python3 scripts/regression_test_runner.py --old=/old/benchmark_runner --new=/new/benchmark_runner --benchmarks=/benchmark/list.csv")
+    print(
+        "Expected usage: python3 scripts/regression_test_runner.py --old=/old/benchmark_runner --new=/new/benchmark_runner --benchmarks=/benchmark/list.csv"
+    )
     exit(1)
 
 if not os.path.isfile(old_runner):
@@ -40,6 +42,7 @@ if not os.path.isfile(old_runner):
 if not os.path.isfile(new_runner):
     print(f"Failed to find new runner {new_runner}")
     exit(1)
+
 
 def run_benchmark(runner, benchmark):
     benchmark_args = [runner, benchmark]
@@ -51,15 +54,19 @@ def run_benchmark(runner, benchmark):
     proc.wait()
     if proc.returncode != 0:
         print("Failed to run benchmark " + benchmark)
-        print('''====================================================
+        print(
+            '''====================================================
 ==============         STDERR          =============
 ====================================================
-''')
+'''
+        )
         print(err)
-        print('''====================================================
+        print(
+            '''====================================================
 ==============         STDOUT          =============
 ====================================================
-''')
+'''
+        )
         print(out)
         return 'Failed to run benchmark ' + benchmark
     if verbose:
@@ -83,11 +90,13 @@ def run_benchmark(runner, benchmark):
         print(err)
         return 'Failed to run benchmark ' + benchmark
 
+
 def run_benchmarks(runner, benchmark_list):
     results = {}
     for benchmark in benchmark_list:
         results[benchmark] = run_benchmark(runner, benchmark)
     return results
+
 
 # read the initial benchmark list
 with open(benchmark_file, 'r') as f:
@@ -100,11 +109,13 @@ for i in range(number_repetitions):
     regression_list = []
     if len(benchmark_list) == 0:
         break
-    print(f'''====================================================
+    print(
+        f'''====================================================
 ==============      ITERATION {i}        =============
 ==============      REMAINING {len(benchmark_list)}        =============
 ====================================================
-''')
+'''
+    )
 
     old_results = run_benchmarks(old_runner, benchmark_list)
     new_results = run_benchmarks(new_runner, benchmark_list)
@@ -125,24 +136,30 @@ exit_code = 0
 regression_list += error_list
 if len(regression_list) > 0:
     exit_code = 1
-    print('''====================================================
+    print(
+        '''====================================================
 ==============  REGRESSIONS DETECTED   =============
 ====================================================
-''')
+'''
+    )
     for regression in regression_list:
         print(f"{regression[0]}")
         print(f"Old timing: {regression[1]}")
         print(f"New timing: {regression[2]}")
         print("")
-    print('''====================================================
+    print(
+        '''====================================================
 ==============     OTHER TIMINGS       =============
 ====================================================
-''')
+'''
+    )
 else:
-    print('''====================================================
+    print(
+        '''====================================================
 ============== NO REGRESSIONS DETECTED  =============
 ====================================================
-''')
+'''
+    )
 
 other_results.sort()
 for res in other_results:
