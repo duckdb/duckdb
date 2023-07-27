@@ -354,7 +354,6 @@ public:
 	static optional_ptr<T> PGPointerCast(void *ptr) {
 		return optional_ptr<T>(reinterpret_cast<T *>(ptr));
 	}
-	void DetermineSliceBounds(duckdb_libpgquery::PGNode *idx, unique_ptr<ParsedExpression> &bound, int64_t limit);
 };
 
 class StackChecker {

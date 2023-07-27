@@ -10,15 +10,15 @@
 namespace duckdb {
 
 struct ListSliceBindData : public FunctionData {
-	ListSliceBindData(const LogicalType &return_type_p, bool start_is_throw_p, bool end_is_throw_p)
-	    : return_type(return_type_p), start_is_throw(start_is_throw_p), end_is_throw(end_is_throw_p) {
+	ListSliceBindData(const LogicalType &return_type_p, bool begin_is_empty_p, bool end_is_empty_p)
+	    : return_type(return_type_p), begin_is_empty(begin_is_empty_p), end_is_empty(end_is_empty_p) {
 	}
 	~ListSliceBindData() override;
 
 	LogicalType return_type;
 
-	bool start_is_throw;
-	bool end_is_throw;
+	bool begin_is_empty;
+	bool end_is_empty;
 
 public:
 	bool Equals(const FunctionData &other_p) const override;
@@ -30,12 +30,12 @@ ListSliceBindData::~ListSliceBindData() {
 
 bool ListSliceBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListSliceBindData>();
-	return return_type == other.return_type && start_is_throw == other.start_is_throw &&
-	       end_is_throw == other.end_is_throw;
+	return return_type == other.return_type && begin_is_empty == other.begin_is_empty &&
+	       end_is_empty == other.end_is_empty;
 }
 
 unique_ptr<FunctionData> ListSliceBindData::Copy() const {
-	return make_uniq<ListSliceBindData>(return_type, start_is_throw, end_is_throw);
+	return make_uniq<ListSliceBindData>(return_type, begin_is_empty, end_is_empty);
 }
 
 template <typename INDEX_TYPE>
@@ -87,7 +87,7 @@ static void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_T
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
 	// Clamp offsets
-	begin = (begin != 0) ? begin - 1 : begin;
+	begin = (begin != 0 && begin != (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) ? begin - 1 : begin;
 
 	bool is_min = false;
 	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) {
@@ -158,28 +158,10 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void CheckBeginAndEnd(INDEX_TYPE &begin, INDEX_TYPE &end, INDEX_TYPE step, INPUT_TYPE &sliced) {
-	auto min = (INDEX_TYPE)NumericLimits<int64_t>::Minimum();
-	auto max = (INDEX_TYPE)NumericLimits<int64_t>::Maximum();
-
-	if (step < 0) {
-		swap(begin, end);
-		swap(min, max);
-	}
-
-	if (begin == min) {
-		begin = 0;
-	}
-
-	if (end == max) {
-		end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
-	}
-}
-
-template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
                                  optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel,
-                                 idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
+                                 idx_t &sel_idx, optional_ptr<Vector> result_child_vector, bool begin_is_empty,
+                                 bool end_is_empty) {
 	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
 	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
 	auto begin_data = ConstantVector::GetData<INDEX_TYPE>(begin_vector);
@@ -187,11 +169,15 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 	auto step_data = step_vector ? ConstantVector::GetData<INDEX_TYPE>(*step_vector) : nullptr;
 
 	auto str = str_data[0];
-	auto begin = begin_data[0];
-	auto end = end_data[0];
+	auto begin = begin_is_empty ? 0 : begin_data[0];
+	auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str) : end_data[0];
 	auto step = step_data ? step_data[0] : 1;
 
-	CheckBeginAndEnd(begin, end, step, str);
+	if (step < 0) {
+		swap(begin, end);
+		begin = end_is_empty ? 0 : begin;
+		end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(str) : end;
+	}
 
 	auto str_valid = !ConstantVector::IsNull(str_vector);
 	auto begin_valid = !ConstantVector::IsNull(begin_vector);
@@ -227,7 +213,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
                              optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
-                             optional_ptr<Vector> result_child_vector, bool start_is_throw, bool end_is_throw) {
+                             optional_ptr<Vector> result_child_vector, bool begin_is_empty, bool end_is_empty) {
 	UnifiedVectorFormat list_data, begin_data, end_data, step_data;
 	idx_t sel_length = 0;
 
@@ -248,18 +234,17 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 		auto end_idx = end_data.sel->get_index(i);
 		auto step_idx = step_vector ? step_data.sel->get_index(i) : 0;
 
-		auto sliced = ((INPUT_TYPE *)list_data.data)[list_idx];
-		auto begin = ((INDEX_TYPE *)begin_data.data)[begin_idx];
-		auto end = ((INDEX_TYPE *)end_data.data)[end_idx];
-		auto step = step_vector ? ((INDEX_TYPE *)step_data.data)[step_idx] : 1;
+		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
+		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
+		auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced)
+		                        : reinterpret_cast<INDEX_TYPE *>(end_data.data)[end_idx];
+		auto step = step_vector ? reinterpret_cast<INDEX_TYPE *>(step_data.data)[step_idx] : 1;
 
-		if ((start_is_throw && begin == NumericLimits<INDEX_TYPE>::Minimum()) ||
-		    (end_is_throw && end == NumericLimits<INDEX_TYPE>::Maximum())) {
-			throw InvalidInputException("The lower and/or upper bound of a slice cannot be a numeric limit. Consider "
-			                            "leaving it empty or using a different value.");
+		if (step < 0) {
+			swap(begin, end);
+			begin = end_is_empty ? 0 : begin;
+			end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced) : end;
 		}
-		CheckBeginAndEnd(begin, end, step, sliced);
-
 		auto list_valid = list_data.validity.RowIsValid(list_idx);
 		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
 		auto end_valid = end_data.validity.RowIsValid(end_idx);
@@ -296,7 +281,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vector, Vector &end_vector,
-                         optional_ptr<Vector> step_vector, const idx_t count, bool start_is_throw, bool end_is_throw) {
+                         optional_ptr<Vector> step_vector, const idx_t count, bool begin_is_empty, bool end_is_empty) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
 		result_child_vector = &ListVector::GetEntry(result);
@@ -307,11 +292,12 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		ExecuteConstantSlice<INPUT_TYPE, INDEX_TYPE>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
-		                                             count, sel, sel_idx, result_child_vector);
+		                                             count, sel, sel_idx, result_child_vector, begin_is_empty,
+		                                             end_is_empty);
 	} else {
 		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
-		                                         count, sel, sel_idx, result_child_vector, start_is_throw,
-		                                         end_is_throw);
+		                                         count, sel, sel_idx, result_child_vector, begin_is_empty,
+		                                         end_is_empty);
 	}
 	result.Verify(count);
 }
@@ -332,8 +318,8 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
-	auto start_is_throw = info.start_is_throw;
-	auto end_is_throw = info.end_is_throw;
+	auto begin_is_empty = info.begin_is_empty;
+	auto end_is_empty = info.end_is_empty;
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
@@ -345,12 +331,12 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 		ListVector::ReferenceEntry(result, list_or_str_vector);
 		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
-		                                    start_is_throw, end_is_throw);
+		                                    begin_is_empty, end_is_empty);
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
 		ExecuteSlice<string_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
-		                                start_is_throw, end_is_throw);
+		                                begin_is_empty, end_is_empty);
 		break;
 	}
 	default:
@@ -377,7 +363,9 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		}
 		bound_function.return_type = arguments[0]->return_type;
 		for (idx_t i = 1; i < 3; i++) {
-			bound_function.arguments[i] = LogicalType::BIGINT;
+			if (arguments[i]->return_type.id() != LogicalTypeId::LIST) {
+				bound_function.arguments[i] = LogicalType::BIGINT;
+			}
 		}
 		break;
 	case LogicalTypeId::SQLNULL:
@@ -389,22 +377,26 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
-	bool start_is_throw = false;
-	if (!arguments[1]->IsFoldable()) {
-		start_is_throw = true;
+	bool begin_is_empty = false;
+	if (arguments[1]->return_type.id() == LogicalTypeId::LIST) {
+		begin_is_empty = true;
+	} else {
+		bound_function.arguments[1] = LogicalType::BIGINT;
 	}
-	bool end_is_throw = false;
-	if (!arguments[2]->IsFoldable()) {
-		end_is_throw = true;
+	bool end_is_empty = false;
+	if (arguments[2]->return_type.id() == LogicalTypeId::LIST) {
+		end_is_empty = true;
+	} else {
+		bound_function.arguments[2] = LogicalType::BIGINT;
 	}
 
-	return make_uniq<ListSliceBindData>(bound_function.return_type, start_is_throw, end_is_throw);
+	return make_uniq<ListSliceBindData>(bound_function.return_type, begin_is_empty, end_is_empty);
 }
 
 ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
-	                   ArraySliceFunction, ArraySliceBind);
+	ScalarFunction fun({LogicalType::ANY, LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, ArraySliceFunction,
+	                   ArraySliceBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet set;

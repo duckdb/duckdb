@@ -6,24 +6,6 @@
 
 namespace duckdb {
 
-void Transformer::DetermineSliceBounds(duckdb_libpgquery::PGNode *idx, unique_ptr<ParsedExpression> &bound,
-                                       int64_t limit) {
-	if (idx) {
-		bound = TransformExpression(idx);
-		if (bound->type == ExpressionType::VALUE_CONSTANT) {
-			auto &const_expr_bound = bound->Cast<ConstantExpression>();
-			if (!const_expr_bound.value.IsNull() && const_expr_bound.value.type() == LogicalType::BIGINT &&
-			    (const_expr_bound.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Minimum() ||
-			     const_expr_bound.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum())) {
-				throw ParserException("The lower and/or upper bound of a slice cannot be a numeric limit. Consider "
-				                      "leaving it empty or using a different value.");
-			}
-		}
-	} else {
-		bound = make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
-	}
-}
-
 unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection &indirection_node) {
 	// transform the source expression
 	unique_ptr<ParsedExpression> result;
@@ -45,13 +27,15 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			children.push_back(std::move(result));
 			if (index->is_slice) {
 				// slice
-				// if either the lower or upper bound is not specified, we use the minimum/maximum value so that we can
+				// if either the lower or upper bound is not specified, we use an empty const list so that we can
 				// handle it in the execution
-				unique_ptr<ParsedExpression> lower;
-				DetermineSliceBounds(index->lidx, lower, NumericLimits<int64_t>::Minimum());
+				unique_ptr<ParsedExpression> lower =
+				    index->lidx ? TransformExpression(index->lidx)
+				                : make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 				children.push_back(std::move(lower));
-				unique_ptr<ParsedExpression> upper;
-				DetermineSliceBounds(index->uidx, upper, NumericLimits<int64_t>::Maximum());
+				unique_ptr<ParsedExpression> upper =
+				    index->uidx ? TransformExpression(index->uidx)
+				                : make_uniq<ConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
 				children.push_back(std::move(upper));
 				if (index->step) {
 					children.push_back(TransformExpression(index->step));
