@@ -36,6 +36,12 @@ def example_table():
 def test_connection_get_info(duck_conn):
     assert duck_conn.adbc_get_info() != {}
 
+def test_connection_get_table_types(duck_conn):
+    assert duck_conn.adbc_get_table_types() == []
+    with duck_conn.cursor() as cursor:
+        # Test Default Schema
+        cursor.execute("CREATE TABLE tableschema (ints BIGINT)")
+        assert duck_conn.adbc_get_table_types() == ['BASE TABLE'] 
 
 def test_connection_get_table_schema(duck_conn):
     with duck_conn.cursor() as cursor:
