@@ -69,6 +69,24 @@ def test_connection_get_table_schema(duck_conn):
             duck_conn.adbc_get_table_schema("tableschema", catalog_filter="bla", db_schema_filter="test")
 
 
+def test_prepared_statement(duck_conn):
+    with duck_conn.cursor() as cursor:
+        cursor.adbc_prepare("SELECT 1")
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+        assert cursor.fetchone() is None
+
+
+def test_statement_query(duck_conn):
+    with duck_conn.cursor() as cursor:
+        cursor.execute("SELECT 1")
+        assert cursor.fetchone() == (1,)
+        assert cursor.fetchone() is None
+
+        cursor.execute("SELECT 1 AS foo")
+        assert cursor.fetch_arrow_table().to_pylist() == [{"foo": 1}]
+
+
 def test_insertion(duck_conn):
     table = example_table()
     reader = table.to_reader()
