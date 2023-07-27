@@ -1,0 +1,23 @@
+[
+  {
+    "class": "ParquetOptions",
+    "includes": [
+      "parquet_reader.hpp"
+    ],
+    "members": [
+      {
+        "name": "binary_as_string",
+        "type": "bool"
+      },
+      {
+        "name": "file_row_number",
+        "type": "bool"
+      },
+      {
+        "name": "file_options",
+        "type": "MultiFileReaderOptions"
+      }
+    ],
+    "pointer_type": "none"
+  }
+]
