@@ -33,7 +33,7 @@ namespace duckdb {
 class WindowGlobalSinkState : public GlobalSinkState {
 public:
 	WindowGlobalSinkState(const PhysicalWindow &op, ClientContext &context)
-	    : mode(DBConfig::GetConfig(context).options.window_mode) {
+	    : op(op), mode(DBConfig::GetConfig(context).options.window_mode) {
 
 		D_ASSERT(op.select_list[0]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[0]->Cast<BoundWindowExpression>();
@@ -43,6 +43,7 @@ public:
 		                                        wexpr.partitions_stats, op.estimated_cardinality);
 	}
 
+	const PhysicalWindow &op;
 	unique_ptr<PartitionGlobalSinkState> global_partition;
 	WindowAggregationMode mode;
 };
@@ -172,53 +173,68 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class WindowPartitionSourceState;
+
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	explicit WindowGlobalSourceState(WindowGlobalSinkState &gsink) : gsink(*gsink.global_partition), next_bin(0) {
+	using HashGroupSourcePtr = unique_ptr<WindowPartitionSourceState>;
+
+	explicit WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
+	    : context(context_p), gsink(gsink_p), next_build(0) {
+		auto &hash_groups = gsink.global_partition->hash_groups;
+		const auto bin_count = hash_groups.empty() ? 1 : hash_groups.size();
+		built.resize(bin_count);
 	}
 
-	PartitionGlobalSinkState &gsink;
-	//! The output read position.
-	atomic<idx_t> next_bin;
+	//! Move to the next hash group
+	WindowPartitionSourceState *NextPartition(WindowPartitionSourceState *prev);
+
+	//! Context for executing computations
+	ClientContext &context;
+	//! All the sunk data
+	WindowGlobalSinkState &gsink;
+	//! The next group to build.
+	atomic<idx_t> next_build;
+	//! The built groups
+	vector<HashGroupSourcePtr> built;
 
 public:
 	idx_t MaxThreads() override {
 		// If there is only one partition, we have to process it on one thread.
-		if (!gsink.grouping_data) {
+		if (!gsink.global_partition->grouping_data) {
 			return 1;
 		}
 
 		// If there is not a lot of data, process serially.
-		if (gsink.count < STANDARD_ROW_GROUPS_SIZE) {
+		if (gsink.global_partition->count < STANDARD_ROW_GROUPS_SIZE) {
 			return 1;
 		}
 
-		return gsink.hash_groups.size();
+		return gsink.global_partition->hash_groups.size();
 	}
 };
 
-// Per-thread build state
+// Per-bin evaluation state (build and evaluate)
 class WindowPartitionSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
 	using ExecutorPtr = unique_ptr<WindowExecutor>;
 	using Executors = vector<ExecutorPtr>;
 
-	WindowPartitionSourceState(const PhysicalWindow &op_p, ExecutionContext &context, WindowGlobalSourceState &gsource)
-	    : context(context.client), op(op_p), gsink(gsource.gsink) {
-		layout.Initialize(gsink.payload_types);
+	WindowPartitionSourceState(ClientContext &context, WindowGlobalSourceState &gsource)
+	    : context(context), op(gsource.gsink.op), gsource(gsource) {
+		layout.Initialize(gsource.gsink.global_partition->payload_types);
 	}
 
 	unique_ptr<RowDataCollectionScanner> GetScanner() const;
 	void MaterializeSortedData();
 	void BuildPartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
 
-	HashGroupPtr hash_group;
 	ClientContext &context;
 	const PhysicalWindow &op;
+	WindowGlobalSourceState &gsource;
 
-	PartitionGlobalSinkState &gsink;
-
+	HashGroupPtr hash_group;
 	//! The generated input chunks
 	unique_ptr<RowDataCollection> rows;
 	unique_ptr<RowDataCollection> heap;
@@ -278,6 +294,7 @@ void WindowPartitionSourceState::MaterializeSortedData() {
 }
 
 unique_ptr<RowDataCollectionScanner> WindowPartitionSourceState::GetScanner() const {
+	auto &gsink = *gsource.gsink.global_partition;
 	if ((gsink.rows && !hash_bin) || hash_bin < gsink.hash_groups.size()) {
 		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, true);
 	}
@@ -294,11 +311,12 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	// 3. Multiple partitions (sorting and hashing)
 
 	//	How big is the partition?
+	auto &gpart = *gsource.gsink.global_partition;
 	idx_t count = 0;
-	if (hash_bin < gsink.hash_groups.size() && gsink.hash_groups[hash_bin]) {
-		count = gsink.hash_groups[hash_bin]->count;
-	} else if (gsink.rows && !hash_bin) {
-		count = gsink.count;
+	if (hash_bin < gpart.hash_groups.size() && gpart.hash_groups[hash_bin]) {
+		count = gpart.hash_groups[hash_bin]->count;
+	} else if (gpart.rows && !hash_bin) {
+		count = gpart.count;
 	} else {
 		return;
 	}
@@ -314,20 +332,20 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 	order_mask.Initialize(order_bits.data());
 
 	// Scan the sorted data into new Collections
-	external = gsink.external;
-	if (gsink.rows && !hash_bin) {
+	external = gpart.external;
+	if (gpart.rows && !hash_bin) {
 		// Simple mask
 		partition_mask.SetValidUnsafe(0);
 		order_mask.SetValidUnsafe(0);
 		//	No partition - align the heap blocks with the row blocks
-		rows = gsink.rows->CloneEmpty(gsink.rows->keep_pinned);
-		heap = gsink.strings->CloneEmpty(gsink.strings->keep_pinned);
-		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gsink.rows, *gsink.strings, layout);
+		rows = gpart.rows->CloneEmpty(gpart.rows->keep_pinned);
+		heap = gpart.strings->CloneEmpty(gpart.strings->keep_pinned);
+		RowDataCollectionScanner::AlignHeapBlocks(*rows, *heap, *gpart.rows, *gpart.strings, layout);
 		external = true;
-	} else if (hash_bin < gsink.hash_groups.size()) {
+	} else if (hash_bin < gpart.hash_groups.size()) {
 		// Overwrite the collections with the sorted data
-		D_ASSERT(gsink.hash_groups[hash_bin].get());
-		hash_group = std::move(gsink.hash_groups[hash_bin]);
+		D_ASSERT(gpart.hash_groups[hash_bin].get());
+		hash_group = std::move(gpart.hash_groups[hash_bin]);
 		hash_group->ComputeMasks(partition_mask, order_mask);
 		external = hash_group->global_sort->external;
 		MaterializeSortedData();
@@ -346,7 +364,7 @@ void WindowPartitionSourceState::BuildPartition(WindowGlobalSinkState &gstate, c
 
 	//	First pass over the input without flushing
 	DataChunk input_chunk;
-	input_chunk.Initialize(gsink.allocator, gsink.payload_types);
+	input_chunk.Initialize(gpart.allocator, gpart.payload_types);
 	auto scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, false);
 	idx_t input_idx = 0;
 	while (true) {
@@ -378,12 +396,14 @@ public:
 	using ReadStatePtr = unique_ptr<WindowExecutorState>;
 	using ReadStates = vector<ReadStatePtr>;
 
-	WindowLocalSourceState(const PhysicalWindow &op_p, ExecutionContext &context, WindowGlobalSourceState &gsource);
-	void SetPartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
+	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
+	bool NextPartition();
 	void Scan(DataChunk &chunk);
 
+	//! The shared source state
+	WindowGlobalSourceState &gsource;
 	//! The current source being processed
-	WindowPartitionSourceState partition_source;
+	optional_ptr<WindowPartitionSourceState> partition_source;
 	//! The read cursor
 	unique_ptr<RowDataCollectionScanner> scanner;
 	//! Buffer for the inputs
@@ -394,10 +414,9 @@ public:
 	DataChunk output_chunk;
 };
 
-WindowLocalSourceState::WindowLocalSourceState(const PhysicalWindow &op, ExecutionContext &context,
-                                               WindowGlobalSourceState &gsource)
-    : partition_source(op, context, gsource) {
-	auto &gsink = partition_source.gsink;
+WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource) : gsource(gsource) {
+	auto &gsink = *gsource.gsink.global_partition;
+	auto &op = gsource.gsink.op;
 
 	input_chunk.Initialize(gsink.allocator, gsink.payload_types);
 
@@ -407,20 +426,56 @@ WindowLocalSourceState::WindowLocalSourceState(const PhysicalWindow &op, Executi
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
 		output_types.emplace_back(wexpr.return_type);
 	}
-	output_chunk.Initialize(Allocator::Get(context.client), output_types);
+	output_chunk.Initialize(Allocator::Get(gsource.context), output_types);
 }
 
-void WindowLocalSourceState::SetPartition(WindowGlobalSinkState &gstate, const idx_t hash_bin) {
+WindowPartitionSourceState *WindowGlobalSourceState::NextPartition(WindowPartitionSourceState *result) {
+	auto &hash_groups = gsink.global_partition->hash_groups;
+	const auto bin_count = built.size();
+
+	//	Flush unneeded data
+	if (result) {
+		D_ASSERT(result->hash_bin < bin_count);
+		built[result->hash_bin].reset();
+		result = nullptr;
+	}
+	auto hash_bin = next_build++;
+	if (hash_bin >= bin_count) {
+		return nullptr;
+	}
+
+	//	Find a non-empty hash group.
+	for (; hash_bin < hash_groups.size(); hash_bin = next_build++) {
+		if (hash_groups[hash_bin]) {
+			break;
+		}
+	}
+
+	built[hash_bin] = make_uniq<WindowPartitionSourceState>(context, *this);
+	result = built[hash_bin].get();
+	result->BuildPartition(gsink, hash_bin);
+
+	return result;
+}
+
+bool WindowLocalSourceState::NextPartition() {
+	//	Release old states before the source
+	scanner.reset();
 	read_states.clear();
 
-	partition_source.BuildPartition(gstate, hash_bin);
+	partition_source = gsource.NextPartition(partition_source.get());
+	if (!partition_source) {
+		return false;
+	}
 
-	for (auto &wexec : partition_source.executors) {
+	for (auto &wexec : partition_source->executors) {
 		read_states.emplace_back(wexec->GetExecutorState());
 	}
 
 	//	Second pass can flush
-	scanner = partition_source.GetScanner();
+	scanner = partition_source->GetScanner();
+
+	return true;
 }
 
 void WindowLocalSourceState::Scan(DataChunk &result) {
@@ -433,7 +488,7 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	input_chunk.Reset();
 	scanner->Scan(input_chunk);
 
-	auto &executors = partition_source.executors;
+	auto &executors = partition_source->executors;
 	output_chunk.Reset();
 	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
 		auto &executor = *executors[expr_idx];
@@ -456,44 +511,25 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 }
 
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
-                                                                 GlobalSourceState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<WindowGlobalSourceState>();
-	return make_uniq<WindowLocalSourceState>(*this, context, gstate);
+                                                                 GlobalSourceState &gsource_p) const {
+	auto &gsource = gsource_p.Cast<WindowGlobalSourceState>();
+	return make_uniq<WindowLocalSourceState>(gsource);
 }
 
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
-	return make_uniq<WindowGlobalSourceState>(gsink);
+	return make_uniq<WindowGlobalSourceState>(context, gsink);
 }
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
                                          OperatorSourceInput &input) const {
 	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
-	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
-	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
-
-	auto &hash_groups = gsink.global_partition->hash_groups;
-	const auto bin_count = hash_groups.empty() ? 1 : hash_groups.size();
-
 	while (chunk.size() == 0) {
 		//	Move to the next bin if we are done.
 		while (!lsource.scanner || !lsource.scanner->Remaining()) {
-			lsource.scanner.reset();
-			auto &psource = lsource.partition_source;
-			psource.rows.reset();
-			psource.heap.reset();
-			psource.hash_group.reset();
-			auto hash_bin = gsource.next_bin++;
-			if (hash_bin >= bin_count) {
+			if (!lsource.NextPartition()) {
 				return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 			}
-
-			for (; hash_bin < hash_groups.size(); hash_bin = gsource.next_bin++) {
-				if (hash_groups[hash_bin]) {
-					break;
-				}
-			}
-			lsource.SetPartition(gsink, hash_bin);
 		}
 
 		lsource.Scan(chunk);
