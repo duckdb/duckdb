@@ -220,7 +220,7 @@ dtime_t PyTime::ToDuckTime() {
 
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
-	if (this->timezone_obj != Py_None) {
+	if (!py::none().is(this->timezone_obj)) {
 		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
 		// 'Add' requires a date_t for overflows
 		date_t ignored_date;
