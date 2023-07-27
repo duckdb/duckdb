@@ -177,6 +177,18 @@ void RegisterSqllogictests() {
 	    // strange error in hash comparison, results appear correct...
 	    "test/index/random/10/slt_good_7.test", "test/index/random/10/slt_good_9.test"};
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	struct TestCase {
+		TestCase(const string &path_p, string group_p, bool verification, bool switch_test_dir = false)
+		    : path(StringUtil::Replace(path_p, "\\", "/")), group(std::move(group_p)), verification(verification),
+		      switch_test_dir(switch_test_dir) {
+		}
+
+		string path;
+		string group;
+		bool verification;
+		bool switch_test_dir;
+	};
+	vector<TestCase> test_cases;
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [&](const string &path) {
 		if (endsWith(path, ".test")) {
 			for (auto &excl : excludes) {
@@ -191,17 +203,13 @@ void RegisterSqllogictests() {
 					break;
 				}
 			}
-			if (enable_verification) {
-				REGISTER_TEST_CASE(testRunner<true>, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			} else {
-				REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			}
+			test_cases.emplace_back(path, "[sqlitelogic][.]", enable_verification);
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 			// parse the name / group from the test
-			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			test_cases.emplace_back(path, ParseGroupFromPath(path), false);
 		}
 	});
 
@@ -209,11 +217,32 @@ void RegisterSqllogictests() {
 	for (auto extension_test_path : loaded_extension_test_paths) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-				auto fun = testRunner<false, true>;
-				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+				test_cases.emplace_back(path, ParseGroupFromPath(path), false, true);
 			}
 		});
 	}
 #endif
+	sort(test_cases.begin(), test_cases.end(),
+	     [](const TestCase &a, const TestCase &b) -> bool { return a.path < b.path; });
+	for (auto &test : test_cases) {
+		auto &path = test.path;
+		auto &group = test.group;
+
+		auto fun = testRunner<false>;
+		if (test.verification) {
+			if (test.switch_test_dir) {
+				fun = testRunner<true, true>;
+			} else {
+				fun = testRunner<true, false>;
+			}
+		} else {
+			if (test.switch_test_dir) {
+				fun = testRunner<false, true>;
+			} else {
+				fun = testRunner<false, false>;
+			}
+		}
+		REGISTER_TEST_CASE(fun, path, group);
+	}
 }
 } // namespace duckdb
