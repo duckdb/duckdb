@@ -69,3 +69,10 @@ if (NOT WIN32)
         GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
     )
 endif()
+
+################# POSTGRES_SCANNER
+duckdb_extension_load(postgres_scanner
+    DONT_LINK
+    GIT_URL https://github.com/duckdblabs/postgres_scanner
+    GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
+)

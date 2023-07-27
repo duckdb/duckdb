@@ -4,11 +4,6 @@
 # to build duckdb with this configuration run:
 #   EXTENSION_CONFIGS=.github/config/out_of_tree_extensions.cmake make
 #
-duckdb_extension_load(postgres_scanner
-    DONT_LINK
-    GIT_URL https://github.com/duckdblabs/postgres_scanner
-    GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
-)
 duckdb_extension_load(spatial
     DONT_LINK
     GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
