@@ -101,9 +101,9 @@ struct AtanFun {
 
 struct Atan2Fun {
 	static constexpr const char *Name = "atan2";
-	static constexpr const char *Parameters = "x,y";
-	static constexpr const char *Description = "computes the arctangent (x, y)";
-	static constexpr const char *Example = "atan2(0.5, 0.5)";
+	static constexpr const char *Parameters = "y,x";
+	static constexpr const char *Description = "computes the arctangent (y, x)";
+	static constexpr const char *Example = "atan2(1.0, 0.0)";
 
 	static ScalarFunction GetFunction();
 };

@@ -15,6 +15,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <limits>
 
@@ -343,7 +345,8 @@ public:
 			line_info.lines_read[0][0]++;
 		}
 	}
-	ParallelCSVGlobalState() : line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
+	explicit ParallelCSVGlobalState(idx_t system_threads_p)
+	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
 	}
 
@@ -405,7 +408,7 @@ private:
 	//! How many bytes we should execute per local state
 	idx_t bytes_per_local_state;
 	//! Size of first file
-	idx_t first_file_size;
+	idx_t first_file_size = 0;
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 	//! Basically max number of threads in DuckDB
@@ -691,7 +694,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return make_uniq<ParallelCSVGlobalState>();
+		return make_uniq<ParallelCSVGlobalState>(context.db->NumberOfThreads());
 	}
 	unique_ptr<CSVFileHandle> file_handle;
 
@@ -1234,6 +1237,20 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &s
 	return std::move(result_data);
 }
 
+static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                     const TableFunction &function) {
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
+	serializer.WriteProperty("extra_info", function.extra_info);
+	serializer.WriteProperty("csv_data", bind_data);
+}
+
+static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	unique_ptr<ReadCSVData> result;
+	deserializer.ReadProperty("extra_info", function.extra_info);
+	deserializer.ReadProperty("csv_data", result);
+	return std::move(result);
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);
@@ -1241,6 +1258,8 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
+	read_csv.format_serialize = CSVReaderFormatSerialize;
+	read_csv.format_deserialize = CSVReaderFormatDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
@@ -1278,7 +1297,8 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 	table_function->function = make_uniq<FunctionExpression>("read_csv_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		table_function->alias = FileSystem::ExtractBaseName(table_name);
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 
 	return std::move(table_function);

@@ -124,9 +124,11 @@ SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
+SinkCombineResultType PhysicalWindow::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 	lstate.Combine();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
@@ -139,8 +141,8 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 }
 
 SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &gstate_p) const {
-	auto &state = gstate_p.Cast<WindowGlobalSinkState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &state = input.global_state.Cast<WindowGlobalSinkState>();
 
 	//	Did we get any data?
 	if (!state.global_partition->count) {

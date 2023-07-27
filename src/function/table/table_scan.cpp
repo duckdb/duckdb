@@ -15,6 +15,8 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -447,6 +449,35 @@ static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &s
 	return std::move(result);
 }
 
+static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                                     const TableFunction &function) {
+	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
+	serializer.WriteProperty("catalog", bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty("schema", bind_data.table.schema.name);
+	serializer.WriteProperty("table", bind_data.table.name);
+	serializer.WriteProperty("is_index_scan", bind_data.is_index_scan);
+	serializer.WriteProperty("is_create_index", bind_data.is_create_index);
+	serializer.WriteProperty("result_ids", bind_data.result_ids);
+	serializer.WriteProperty("result_ids", bind_data.result_ids);
+}
+
+static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto table = deserializer.ReadProperty<string>("table");
+	auto &catalog_entry =
+	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
+	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
+		throw SerializationException("Cant find table for %s.%s", schema, table);
+	}
+	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
+	deserializer.ReadProperty("is_index_scan", result->is_index_scan);
+	deserializer.ReadProperty("is_create_index", result->is_create_index);
+	deserializer.ReadProperty("result_ids", result->result_ids);
+	deserializer.ReadProperty("result_ids", result->result_ids);
+	return std::move(result);
+}
+
 TableFunction TableScanFunction::GetIndexScanFunction() {
 	TableFunction scan_function("index_scan", {}, IndexScanFunction);
 	scan_function.init_local = nullptr;
@@ -462,6 +493,8 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.filter_pushdown = false;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
+	scan_function.format_serialize = TableScanFormatSerialize;
+	scan_function.format_deserialize = TableScanFormatDeserialize;
 	return scan_function;
 }
 
@@ -482,6 +515,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.filter_prune = true;
 	scan_function.serialize = TableScanSerialize;
 	scan_function.deserialize = TableScanDeserialize;
+	scan_function.format_serialize = TableScanFormatSerialize;
+	scan_function.format_deserialize = TableScanFormatDeserialize;
 	return scan_function;
 }
 
