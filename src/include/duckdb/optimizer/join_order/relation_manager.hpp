@@ -20,23 +20,6 @@
 
 namespace duckdb {
 
-struct DistinctCount {
-	idx_t distinct_count;
-	bool from_hll;
-};
-
-struct RelationStats {
-
-	vector<DistinctCount> column_distinct_count;
-	idx_t cardinality;
-	double filter_strength;
-	bool stats_initialized = false;
-
-	vector<string> column_names;
-	string table_name;
-
-};
-
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {
 	LogicalOperator &op;

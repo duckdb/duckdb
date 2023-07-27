@@ -516,9 +516,11 @@ void PlanEnumerator::InitLeafPlans() {
 		stats.filter_strength = 1;
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(relation_set, stats);
 	}
-
 }
 
+// the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
+// Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
+// https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
 unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product) {
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {

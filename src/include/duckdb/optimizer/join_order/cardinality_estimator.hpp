@@ -13,6 +13,7 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,6 @@ namespace duckdb {
 class JoinNode;
 struct FilterInfo;
 struct SingleJoinRelation;
-struct RelationStats;
 
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
