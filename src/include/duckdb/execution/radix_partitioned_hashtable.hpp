@@ -50,14 +50,17 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
-	TupleDataLayout GetLayout() const;
+	const TupleDataLayout &GetLayout() const;
 	idx_t Count(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
 
 private:
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
+	void CombineInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	idx_t CountInternal(GlobalSinkState &sink) const;
+
+	TupleDataLayout layout;
 };
 
 } // namespace duckdb
