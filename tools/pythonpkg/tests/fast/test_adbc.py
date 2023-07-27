@@ -3,7 +3,7 @@ import pytest
 import sys
 import datetime
 import os
-from pathlib import Path
+import tempfile
 
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
@@ -36,12 +36,79 @@ def example_table():
 def test_connection_get_info(duck_conn):
     assert duck_conn.adbc_get_info() != {}
 
+
 def test_connection_get_table_types(duck_conn):
     assert duck_conn.adbc_get_table_types() == []
     with duck_conn.cursor() as cursor:
         # Test Default Schema
         cursor.execute("CREATE TABLE tableschema (ints BIGINT)")
-        assert duck_conn.adbc_get_table_types() == ['BASE TABLE'] 
+    assert duck_conn.adbc_get_table_types() == ['BASE TABLE']
+
+
+def test_connection_get_objects(duck_conn):
+    with duck_conn.cursor() as cursor:
+        cursor.execute("CREATE TABLE getobjects (ints BIGINT)")
+    assert duck_conn.adbc_get_objects(depth="all").read_all().to_pylist() == [
+        {
+            'db_schema_name': 'main',
+            'db_schema_tables': [
+                {
+                    'table_name': 'getobjects',
+                    'table_columns': [{'column_name': 'ints', 'ordinal_position': 2, 'remarks': ''}],
+                }
+            ],
+        }
+    ]
+
+
+def test_commit():
+    if sys.platform.startswith("win"):
+        pytest.xfail("not supported on Windows")
+    # duckdb.duckdb.__file__
+    temp_folder_path = tempfile.gettempdir()
+    db = os.path.join(temp_folder_path, "tmp.db")
+    if os.path.exists(db):
+        os.remove(db)
+    table = example_table()
+    db_kwargs = {"path": f"{db}"}
+    # Start connection with auto-commit off
+    with adbc_driver_manager.connect(
+        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+    ) as conn:
+        assert not conn._autocommit
+        with conn.cursor() as cur:
+            cur.adbc_ingest("ingest", table, "create")
+
+    # Check Data is not there
+    with adbc_driver_manager.connect(
+        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+        autocommit=True,
+    ) as conn:
+        assert conn._autocommit
+        with conn.cursor() as cur:
+            # This errors because the table does not exist
+            with pytest.raises(
+                adbc_driver_manager_lib.InternalError,
+                match=r'Table with name ingest does not exist!',
+            ):
+                cur.execute("SELECT count(*) from ingest")
+
+            cur.adbc_ingest("ingest", table, "create")
+
+    # This now works because we enabled autocommit
+    with adbc_driver_manager.connect(
+        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        entrypoint="duckdb_adbc_init",
+        db_kwargs=db_kwargs,
+    ) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) from ingest")
+            assert cur.fetch_arrow_table().to_pydict() == {'count_star()': [4]}
+
 
 def test_connection_get_table_schema(duck_conn):
     with duck_conn.cursor() as cursor:

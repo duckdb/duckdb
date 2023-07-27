@@ -687,6 +687,10 @@ AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArra
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
+	if (depth != 0) {
+		SetError(error, "Depth parameter not yet supported");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
 	if (catalog != nullptr) {
 		if (strcmp(catalog, "duckdb") == 0) {
 			SetError(error, "catalog must be NULL or 'duckdb'");
