@@ -413,7 +413,7 @@ bool PandasAnalyzer::Analyze(py::object column) {
 		return false;
 	}
 	bool can_convert = true;
-	LogicalType type = InnerAnalyze(column, can_convert);
+	LogicalType type = InnerAnalyze(std::move(column), can_convert);
 	if (can_convert) {
 		analyzed_type = type;
 	}
