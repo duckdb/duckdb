@@ -121,6 +121,8 @@ protected:
 
 struct StrpTimeFormat : public StrTimeFormat {
 public:
+	StrpTimeFormat();
+
 	//! Type-safe parsing argument
 	struct ParseResult {
 		int32_t data[8]; // year, month, day, hour, min, sec, µs, offset
@@ -148,12 +150,18 @@ public:
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static StrpTimeFormat FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
 	                           idx_t collection_count);
+
+private:
+	explicit StrpTimeFormat(const string &format_string);
 };
 
 } // namespace duckdb

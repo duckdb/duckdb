@@ -15,10 +15,12 @@ namespace duckdb {
 
 struct DelimCandidate {
 public:
-	explicit DelimCandidate(LogicalDelimJoin &delim_join) : delim_join(delim_join), delim_get_count(0) {
+	explicit DelimCandidate(unique_ptr<LogicalOperator> &op, LogicalDelimJoin &delim_join)
+	    : op(op), delim_join(delim_join), delim_get_count(0) {
 	}
 
 public:
+	unique_ptr<LogicalOperator> &op;
 	LogicalDelimJoin &delim_join;
 	vector<reference<unique_ptr<LogicalOperator>>> joins;
 	idx_t delim_get_count;
@@ -61,7 +63,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 					}
 				}
 			}
-			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			candidate.op = LogicalComparisonJoin::FromDelimJoin(delim_join);
 		}
 	}
 
@@ -78,7 +80,7 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCa
 		return;
 	}
 
-	candidates.emplace_back(op->Cast<LogicalDelimJoin>());
+	candidates.emplace_back(op, op->Cast<LogicalDelimJoin>());
 	auto &candidate = candidates.back();
 
 	// DelimGets are in the RHS

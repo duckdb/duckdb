@@ -49,7 +49,7 @@ test_that("structs can be read", {
 })
 
 test_that("structs give the same results via Arrow", {
-  skip_if_not_installed("clearlynotinstalled")
+  skip_on_cran()
   skip_if_not_installed("vctrs")
   skip_if_not_installed("tibble")
   skip_if_not_installed("arrow")

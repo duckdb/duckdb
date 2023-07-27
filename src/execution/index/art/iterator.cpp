@@ -58,15 +58,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 			}
 		}
 
-		// adding more elements would exceed the maximum count
-		if (result_ids.size() + last_leaf->count > max_count) {
+		// copy all row IDs of this leaf into the result IDs (if they don't exceed max_count)
+		if (!Leaf::GetRowIds(*art, last_leaf, result_ids, max_count)) {
 			return false;
-		}
-
-		// FIXME: copy all at once to improve performance
-		for (idx_t i = 0; i < last_leaf->count; i++) {
-			row_t row_id = last_leaf->GetRowId(*art, i);
-			result_ids.push_back(row_id);
 		}
 
 		// get the next leaf
@@ -80,18 +74,18 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 void Iterator::FindMinimum(Node &node) {
 
 	D_ASSERT(node.IsSet());
-	if (node.IsSwizzled()) {
+	if (node.IsSerialized()) {
 		node.Deserialize(*art);
 	}
 
 	// found the minimum
-	if (node.DecodeARTNodeType() == NType::LEAF) {
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
+		last_leaf = node;
 		return;
 	}
 
 	// traverse the prefix
-	if (node.DecodeARTNodeType() == NType::PREFIX) {
+	if (node.GetType() == NType::PREFIX) {
 		auto &prefix = Prefix::Get(*art, node);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
@@ -115,20 +109,20 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 		return false;
 	}
 
-	if (node.IsSwizzled()) {
+	if (node.IsSerialized()) {
 		node.Deserialize(*art);
 	}
 
 	// we found the lower bound
-	if (node.DecodeARTNodeType() == NType::LEAF) {
+	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
 		if (!equal && current_key == key) {
 			return Next();
 		}
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+		last_leaf = node;
 		return true;
 	}
 
-	if (node.DecodeARTNodeType() != NType::PREFIX) {
+	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
 		auto child = node.GetNextChild(*art, next_byte);
 		if (!child) {
@@ -181,9 +175,9 @@ bool Iterator::Next() {
 	while (!nodes.empty()) {
 
 		auto &top = nodes.top();
-		D_ASSERT(top.node.DecodeARTNodeType() != NType::LEAF);
+		D_ASSERT(top.node.GetType() != NType::LEAF && top.node.GetType() != NType::LEAF_INLINED);
 
-		if (top.node.DecodeARTNodeType() == NType::PREFIX) {
+		if (top.node.GetType() == NType::PREFIX) {
 			PopNode();
 			continue;
 		}
@@ -211,7 +205,7 @@ bool Iterator::Next() {
 }
 
 void Iterator::PopNode() {
-	if (nodes.top().node.DecodeARTNodeType() == NType::PREFIX) {
+	if (nodes.top().node.GetType() == NType::PREFIX) {
 		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {

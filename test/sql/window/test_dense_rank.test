@@ -1,0 +1,36 @@
+# name: test/sql/window/test_dense_rank.test
+# description: Test DENSE_RANK state computations
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# Multiple chunks, single partition
+query IIIII
+WITH t AS (
+	SELECT i, DENSE_RANK() OVER (ORDER BY i % 50) AS d
+	FROM range(3000) tbl(i)
+), w AS (
+	SELECT d, COUNT(*) as c
+	FROM t
+	GROUP BY ALL
+)
+SELECT COUNT(*), MIN(d), MAX(d), MIN(c), MAX(c)
+FROM w
+----
+50	1	50	60	60
+
+# Multiple chunks, multiple partitions
+query IIIII
+WITH t AS (
+	SELECT i, DENSE_RANK() OVER (PARTITION BY i // 3000 ORDER BY i % 50) AS d
+	FROM range(9000) tbl(i)
+), w AS (
+	SELECT d, COUNT(*) as c
+	FROM t
+	GROUP BY ALL
+)
+SELECT COUNT(*), MIN(d), MAX(d), MIN(c), MAX(c)
+FROM w
+----
+50	1	50	180	180

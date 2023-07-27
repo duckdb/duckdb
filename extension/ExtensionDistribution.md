@@ -33,7 +33,8 @@ Configuration folder defaults to be placed in home directory, but can be overwri
 ## WebAssembly loadable extensions (in flux)
 
 ```
-https://extensions.duckdb.org/wasm/         The extension registry URL (can have subfolders)
+https://extensions.duckdb.org/ 	            The extension registry URL (can have subfolders)
+wasm/                                       wasm-subfolder, required
 v1.27.0/                                    The DuckDB-Wasm version identifier
 webassembly_eh/                             The platform/feature-set this extension is compatible with
 name                                        The default name of a given extension

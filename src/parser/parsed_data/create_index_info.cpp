@@ -11,7 +11,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	result->index_type = index_type;
 	result->index_name = index_name;
 	result->constraint_type = constraint_type;
-	result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
+	result->table = table;
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}
@@ -28,6 +28,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField(index_type);
+	writer.WriteString(table);
 	writer.WriteString(index_name);
 	writer.WriteField(constraint_type);
 
@@ -45,6 +46,7 @@ unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deseriali
 
 	FieldReader reader(deserializer);
 	result->index_type = reader.ReadRequired<IndexType>();
+	result->table = reader.ReadRequired<string>();
 	result->index_name = reader.ReadRequired<string>();
 	result->constraint_type = reader.ReadRequired<IndexConstraintType>();
 

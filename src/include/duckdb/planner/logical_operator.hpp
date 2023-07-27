@@ -77,6 +77,9 @@ public:
 
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
 	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
 
 	virtual bool RequireOptimizer() const {

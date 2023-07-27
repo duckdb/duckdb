@@ -9,8 +9,12 @@
 
 SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+	duckdb::OdbcHandleStmt *hstmt = nullptr;
+	if (ConvertHSTMTResult(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
 
-	return duckdb::GetDataStmtResult(statement_handle, col_or_param_num, target_type, target_value_ptr, buffer_length,
+	return duckdb::GetDataStmtResult(hstmt, col_or_param_num, target_type, target_value_ptr, buffer_length,
 	                                 str_len_or_ind_ptr);
 }
 
@@ -35,6 +39,12 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Fetches the next rowset of data from the result set and returns data for all bound columns.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfetch-function?view=sql-server-ver16
+ * @param statement_handle
+ * @return
+ */
 SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -50,17 +60,30 @@ SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	if (ret != SQL_SUCCESS) {
 		return ret;
 	}
-	return duckdb::FetchStmtResult(statement_handle);
+	return duckdb::FetchStmtResult(hstmt);
 }
 
+/**
+ * @brief Fetches the next rowset of data from the result set and returns data for all bound columns.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfetchscroll-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param fetch_orientation Type of fetch operation to be performed.
+ * @param fetch_offset Number of the row to be fetched. Depending on the value of the fetch_orientation argument.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	switch (fetch_orientation) {
 	case SQL_FETCH_FIRST:
 	case SQL_FETCH_ABSOLUTE:
 	case SQL_FETCH_PRIOR:
-	case SQL_FETCH_NEXT:
+	case SQL_FETCH_NEXT: {
 		// passing "fetch_offset - 1", the DuckDB's internal row index starts in 0
-		return duckdb::FetchStmtResult(statement_handle, fetch_orientation, fetch_offset - 1);
+		duckdb::OdbcHandleStmt *hstmt = nullptr;
+		if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
+			return SQL_ERROR;
+		}
+		return duckdb::FetchStmtResult(hstmt, fetch_orientation, fetch_offset - 1);
+	}
 	default:
 		return SQL_ERROR;
 	}

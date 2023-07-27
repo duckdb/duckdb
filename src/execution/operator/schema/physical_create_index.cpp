@@ -111,33 +111,22 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 
 #ifdef DEBUG
 	// ensure that all row IDs of this chunk exist in the ART
+	auto &local_art = lstate.local_index->Cast<ART>();
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
-		auto leaf_node =
-		    lstate.local_index->Cast<ART>().Lookup(*lstate.local_index->Cast<ART>().tree, lstate.keys[i], 0);
-		D_ASSERT(leaf_node.IsSet());
-		auto &leaf = Leaf::Get(lstate.local_index->Cast<ART>(), leaf_node);
-
-		if (leaf.IsInlined()) {
-			D_ASSERT(row_ids[i] == leaf.row_ids.inlined);
-			continue;
-		}
-
-		D_ASSERT(leaf.row_ids.ptr.IsSet());
-		Node leaf_segment = leaf.row_ids.ptr;
-		auto position = leaf.FindRowId(lstate.local_index->Cast<ART>(), leaf_segment, row_ids[i]);
-		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
+		auto leaf = local_art.Lookup(*local_art.tree, lstate.keys[i], 0);
+		D_ASSERT(leaf.IsSet());
+		D_ASSERT(Leaf::ContainsRowId(local_art, leaf, row_ids[i]));
 	}
 #endif
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
+SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 
-	auto &gstate = gstate_p.Cast<CreateIndexGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
@@ -146,14 +135,16 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 	// vacuum excess memory
 	gstate.global_index->Vacuum();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
+                                               OperatorSinkFinalizeInput &input) const {
 
 	// here, we just set the resulting global index as the newly created index of the table
 
-	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
 	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	auto &storage = table.GetStorage();

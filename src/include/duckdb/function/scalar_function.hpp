@@ -69,6 +69,11 @@ typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bi
 typedef unique_ptr<FunctionData> (*function_deserialize_t)(PlanDeserializationState &state, FieldReader &reader,
                                                            ScalarFunction &function);
 
+typedef void (*function_format_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                            const ScalarFunction &function);
+typedef unique_ptr<FunctionData> (*function_format_deserialize_t)(FormatDeserializer &deserializer,
+                                                                  ScalarFunction &function);
+
 class ScalarFunction : public BaseScalarFunction {
 public:
 	DUCKDB_API ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
@@ -99,6 +104,9 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
+
+	function_format_serialize_t format_serialize;
+	function_format_deserialize_t format_deserialize;
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
