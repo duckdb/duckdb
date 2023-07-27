@@ -67,7 +67,7 @@ CREATE TABLE base AS
 SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
 
 statement ok
-SET memory_limit='10GB';
+SET memory_limit='12GB';
 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
