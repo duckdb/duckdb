@@ -260,6 +260,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
+		BindLogicalType(context, type, catalog, schema);
 	} else if (type.id() == LogicalTypeId::ENUM) {
 		auto enum_type_name = EnumType::GetTypeName(type);
 		optional_ptr<TypeCatalogEntry> enum_type_catalog;
