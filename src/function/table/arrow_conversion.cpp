@@ -265,10 +265,11 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
-static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                             int64_t nested_offset, uint64_t parent_offset) {
+static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
+                             uint64_t parent_offset) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
-	auto data_ptr = ArrowBufferData<data_t>(array, 1) + internal_type * (scan_state.chunk_offset + array.offset + parent_offset);
+	auto data_ptr =
+	    ArrowBufferData<data_t>(array, 1) + internal_type * (scan_state.chunk_offset + array.offset + parent_offset);
 	if (nested_offset != -1) {
 		data_ptr = ArrowBufferData<data_t>(array, 1) + internal_type * (array.offset + nested_offset + parent_offset);
 	}
