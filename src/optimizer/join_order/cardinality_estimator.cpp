@@ -167,10 +167,13 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 }
 
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+	if (new_set.ToString() == "[1, 2, 3, 6]") {
+		auto a = 0;
+	}
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
-	idx_t numerator = 1;
+	double numerator = 1;
 	unordered_set<idx_t> actual_set;
 
 	for (idx_t i = 0; i < new_set.count; i++) {
@@ -266,11 +269,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	//       structures. When that's the case, multiply the denom structures that have no intersection
 	for (auto &match : subgraphs) {
-		// It's possible that in production, one of the D_ASSERTS above will fail and not all subgraphs
-		// were connected. When this happens, just use the largest denominator of all the subgraphs.
-		if (match.denom > denom) {
-			denom = match.denom;
-		}
+		D_ASSERT(match.denom >= 1);
+		denom *= match.denom;
 	}
 	// can happen if a table has cardinality 0, or a tdom is set to 0
 	if (denom == 0) {

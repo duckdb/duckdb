@@ -269,14 +269,15 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 }
 
 void RelationManager::PrintRelationStats() {
-	for (auto &relation : relations) {
+	for (idx_t i = 0; i < relations.size(); i++) {
+		auto &relation = relations.at(i);
 		auto &stats = relation->stats;
 		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
 		for (idx_t i = 0; i < stats.column_names.size(); i++) {
 			std::cout << stats.column_names.at(i) << " has estimated distinct count "
 			          << stats.column_distinct_count.at(i).distinct_count << std::endl;
 		}
-		std::cout << "table has cardinality " << stats.cardinality << std::endl;
+		std::cout << stats.table_name << " has estimated cardinality " << stats.cardinality << " and relation id " << i << std::endl;
 	}
 }
 

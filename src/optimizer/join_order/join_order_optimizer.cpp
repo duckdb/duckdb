@@ -38,6 +38,8 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		// TODO: the translation of SingleJoinNodeRelations to JoinNode should not happen in the
 		//  enumerator. The enumerator
 		plan_enumerator.InitLeafPlans();
+		query_graph_manager.relation_manager.PrintRelationStats();
+		cost_model.cardinality_estimator.PrintRelationToTdomInfo();
 
 		// Ask the plan enumerator to enumerate a number of join orders
 		auto final_plan = plan_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
