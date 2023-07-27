@@ -91,13 +91,13 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalSta
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset = -1,
+                                arrow_column_map_t &arrow_convert_data, idx_t col_idx,
+                                ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                              std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                              idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
+                              arrow_column_map_t &arrow_convert_data, idx_t col_idx,
+                              ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
                               ValidityMask *parent_mask) {
 	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 	idx_t list_size = 0;
@@ -174,8 +174,8 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalS
 }
 
 static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                              std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                              idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset) {
+                              arrow_column_map_t &arrow_convert_data, idx_t col_idx,
+                              ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset) {
 	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.variable_sized_index++];
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	if (original_type.first == ArrowVariableSizeType::FIXED_SIZE) {
@@ -358,8 +358,8 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                                std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
+                                arrow_column_map_t &arrow_convert_data, idx_t col_idx,
+                                ArrowConvertDataIndices &arrow_convert_idx, int64_t nested_offset,
                                 ValidityMask *parent_mask, uint64_t parent_offset) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
@@ -809,9 +809,8 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 }
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                          idx_t size,
-                                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                          idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx) {
+                                          idx_t size, arrow_column_map_t &arrow_convert_data, idx_t col_idx,
+                                          ArrowConvertDataIndices &arrow_convert_idx) {
 	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
 	if (!dict_vectors.count(col_idx)) {
@@ -836,8 +835,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 
-void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
-                                       unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];

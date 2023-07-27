@@ -56,12 +56,14 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
                                                                         ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
 
+using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowConvertData>>;
+
 struct ArrowScanFunctionData : public PyTableFunctionData {
 	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
 	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p) {
 	}
 	//! This holds the original list type (col_idx, [ArrowListType,size])
-	unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
+	arrow_column_map_t arrow_convert_data;
 	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
