@@ -131,7 +131,6 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(block_manager, meta_block);
-	reader.SetCatalog(catalog.GetAttached().GetCatalog());
 	reader.SetContext(*con.context);
 	LoadCheckpoint(*con.context, reader);
 	con.Commit();
@@ -414,10 +413,7 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type) {
 
 void CheckpointReader::ReadType(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TypeCatalogEntry::Deserialize(reader);
-	auto &catalog_entry = catalog.CreateType(context, *info)->Cast<TypeCatalogEntry>();
-	if (info->type.id() == LogicalTypeId::ENUM) {
-		EnumType::SetCatalog(info->type, &catalog_entry);
-	}
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 //===--------------------------------------------------------------------===//

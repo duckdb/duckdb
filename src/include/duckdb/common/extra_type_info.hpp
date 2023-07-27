@@ -35,7 +35,6 @@ struct ExtraTypeInfo {
 
 	ExtraTypeInfoType type;
 	string alias;
-	optional_ptr<TypeCatalogEntry> catalog_entry;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
@@ -184,19 +183,17 @@ private:
 enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
 
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p);
+	explicit EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p);
 	EnumTypeInfo(const EnumTypeInfo &) = delete;
 	EnumTypeInfo &operator=(const EnumTypeInfo &) = delete;
 
 public:
 	const EnumDictType &GetEnumDictType() const;
-	const string &GetEnumName() const;
-	const string GetSchemaName() const;
 	const Vector &GetValuesInsertOrder() const;
 	const idx_t &GetDictSize() const;
 	static PhysicalType DictType(idx_t size);
 
-	static LogicalType CreateType(const string &enum_name, Vector &ordered_data, idx_t size);
+	static LogicalType CreateType(Vector &ordered_data, idx_t size);
 
 	void Serialize(FieldWriter &writer) const override;
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
@@ -212,7 +209,6 @@ protected:
 
 private:
 	EnumDictType dict_type;
-	string enum_name;
 	idx_t dict_size;
 };
 

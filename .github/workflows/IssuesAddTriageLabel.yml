@@ -1,0 +1,16 @@
+name: Add Triage Label
+on:
+  issues:
+    types:
+      - opened
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+  add_triage_label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add triage label
+        run: |
+          gh issue edit --repo duckdb/duckdb ${{ github.event.issue.number }} --add-label "needs triage"
