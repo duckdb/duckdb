@@ -17,7 +17,7 @@ namespace duckdb {
 
 template <typename TGT_PY_TYPE, typename SRC_PY_TYPE>
 struct PythonAssignmentFunction {
-	typedef void (*assign_t)(TGT_PY_TYPE &, SRC_PY_TYPE &);
+	typedef void (*assign_t)(TGT_PY_TYPE &, SRC_PY_TYPE);
 };
 
 //! Every Python Object Must be created through our container
@@ -33,25 +33,18 @@ public:
 		py_obj.clear();
 	}
 
-	unique_ptr<PythonGILWrapper> GetLock() {
-		return make_uniq<PythonGILWrapper>();
-	}
-
 	template <class NEW_PY_TYPE>
 	void AssignInternal(typename PythonAssignmentFunction<PY_TYPE, NEW_PY_TYPE>::assign_t lambda,
-	                    NEW_PY_TYPE &new_value, PythonGILWrapper &lock) {
+	                    py::handle new_value) {
+		D_ASSERT(py::gil_check());
 		PY_TYPE obj;
 		lambda(obj, new_value);
-		PushInternal(lock, obj);
-	}
-
-	void PushInternal(PythonGILWrapper &lock, PY_TYPE obj) {
-		py_obj.push_back(obj);
+		PushInternal(obj);
 	}
 
 	void Push(PY_TYPE obj) {
-		auto lock = GetLock();
-		PushInternal(*lock, std::move(obj));
+		py::gil_scoped_acquire gil;
+		PushInternal(std::move(obj));
 	}
 
 	const PY_TYPE *GetPointerTop() {
@@ -59,6 +52,10 @@ public:
 	}
 
 private:
+	void PushInternal(PY_TYPE obj) {
+		py_obj.push_back(obj);
+	}
+
 	vector<PY_TYPE> py_obj;
 };
 } // namespace duckdb

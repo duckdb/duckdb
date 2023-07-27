@@ -317,14 +317,10 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				}
 				if (!py::isinstance<py::str>(val)) {
 					if (!gil) {
-						gil = bind_data.object_str_val.GetLock();
+						gil = make_uniq<PythonGILWrapper>();
 					}
-					bind_data.object_str_val.AssignInternal<PyObject>(
-					    [](py::str &obj, PyObject &new_val) {
-						    py::handle object_handle = &new_val;
-						    obj = py::str(object_handle);
-					    },
-					    *val, *gil);
+					bind_data.object_str_val.AssignInternal<py::handle>(
+					    [](py::str &obj, py::handle new_val) { obj = py::str(new_val); }, val);
 					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.GetPointerTop()->ptr());
 				}
 			}

@@ -17,7 +17,7 @@ struct PandasColumnBindData {
 	unique_ptr<RegisteredArray> mask;
 	//! Only for categorical types
 	string internal_categorical_type;
-	//! When object types are cast we must hold their data somewhere
+	//! Hold ownership of objects created during scanning
 	PythonObjectContainer<py::str> object_str_val;
 };
 
