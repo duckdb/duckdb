@@ -303,11 +303,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(optional_ptr<JoinRelati
 
 	auto card_helper = CardinalityHelper(relation_cardinality, relation_filter);
 	relation_set_2_cardinality[set->ToString()] = card_helper;
-	// use that to initialize the cardinality estimator here
-	//  if not: error
-	//  Store the cardinality here locally cardinality estimator
-	//  update the total domain.
-	//  Then update total domains.
+
 	UpdateTotalDomains(set, stats);
 
 	// sort relations from greatest tdom to lowest tdom.

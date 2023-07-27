@@ -181,7 +181,7 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 	auto stats = RelationStats();
 	idx_t card = dummy_scan.EstimateCardinality(context);
 	stats.cardinality = card;
-	for (auto _ : dummy_scan.GetColumnBindings()) {
+	for (idx_t i = 0; i < dummy_scan.GetColumnBindings().size(); i++) {
 		stats.column_distinct_count.push_back(DistinctCount({card, false}));
 		stats.column_names.push_back("dummy_scan_column");
 	}
@@ -221,16 +221,6 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(LogicalOperator &op,
                                                                             vector<RelationStats> child_stats) {
 	D_ASSERT(child_stats.size() == 2);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		auto &join = op.Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::MARK) {
-			auto a = 0;
-		}
-	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto &join = op.Cast<LogicalAnyJoin>();
-		auto b = 0;
-	}
 	RelationStats ret;
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;
 	idx_t child_2_card = child_stats[1].stats_initialized ? child_stats[1].cardinality : 0;
@@ -259,7 +249,7 @@ RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpress
 	auto stats = RelationStats();
 	idx_t card = expression_get.EstimateCardinality(context);
 	stats.cardinality = card;
-	for (auto _ : expression_get.GetColumnBindings()) {
+	for (idx_t i = 0; i < expression_get.GetColumnBindings().size(); i++) {
 		stats.column_distinct_count.push_back(DistinctCount({card, false}));
 		stats.column_names.push_back("expression_get_column");
 	}

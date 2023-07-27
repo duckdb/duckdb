@@ -101,11 +101,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(*op);
-			for (auto &cond : join.conditions) {
-				if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
-					auto a = 0;
-				}
-			}
 		} else {
 			non_reorderable_operation = true;
 		}

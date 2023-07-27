@@ -55,17 +55,7 @@ private:
 	unique_ptr<JoinNode> CreateJoinTree(optional_ptr<JoinRelationSet> set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections,
 	                                    optional_ptr<JoinNode> left, optional_ptr<JoinNode> right);
-
-	//	//! Extract the bindings referred to by an Expression
-	//	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
-	//
-	//	//! Get column bindings from a filter
-	//	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
-	//
-	//	//! Traverse the query tree to find (1) base relations, (2) existing join conditions and (3) filters that can be
-	//	//! rewritten into joins. Returns true if there are joins in the tree that can be reordered, false otherwise.
-	//	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
-	//	                          optional_ptr<LogicalOperator> parent = nullptr);
+	
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
