@@ -16,25 +16,9 @@
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
-//===--------------------------------------------------------------------===//
-// Arrow Variable Size Types
-//===--------------------------------------------------------------------===//
-enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
-
-//===--------------------------------------------------------------------===//
-// Arrow Time/Date Types
-//===--------------------------------------------------------------------===//
-enum class ArrowDateTimeType : uint8_t {
-	MILLISECONDS = 0,
-	MICROSECONDS = 1,
-	NANOSECONDS = 2,
-	SECONDS = 3,
-	DAYS = 4,
-	MONTHS = 5,
-	MONTH_DAY_NANO = 6
-};
 
 struct ArrowInterval {
 	int32_t months;
@@ -172,9 +156,7 @@ protected:
 	//! Renames repeated columns and case sensitive columns
 	static void RenameArrowColumns(vector<string> &names);
 	//! Helper function to get the DuckDB logical type
-	static LogicalType GetArrowLogicalType(ArrowSchema &schema,
-	                                       std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-	                                       idx_t col_idx);
+	static ArrowType GetArrowLogicalType(ArrowSchema &schema);
 };
 
 } // namespace duckdb

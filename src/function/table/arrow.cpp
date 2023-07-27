@@ -9,41 +9,37 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
-LogicalType ArrowTableFunction::GetArrowLogicalType(
-    ArrowSchema &schema, std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx) {
+ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 	auto format = string(schema.format);
-	if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
-		arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>();
-	}
-	auto &convert_data = *arrow_convert_data[col_idx];
 	if (format == "n") {
-		return LogicalType::SQLNULL;
+		return {LogicalType::SQLNULL};
 	} else if (format == "b") {
-		return LogicalType::BOOLEAN;
+		return {LogicalType::BOOLEAN};
 	} else if (format == "c") {
-		return LogicalType::TINYINT;
+		return {LogicalType::TINYINT};
 	} else if (format == "s") {
-		return LogicalType::SMALLINT;
+		return {LogicalType::SMALLINT};
 	} else if (format == "i") {
-		return LogicalType::INTEGER;
+		return {LogicalType::INTEGER};
 	} else if (format == "l") {
-		return LogicalType::BIGINT;
+		return {LogicalType::BIGINT};
 	} else if (format == "C") {
-		return LogicalType::UTINYINT;
+		return {LogicalType::UTINYINT};
 	} else if (format == "S") {
-		return LogicalType::USMALLINT;
+		return {LogicalType::USMALLINT};
 	} else if (format == "I") {
-		return LogicalType::UINTEGER;
+		return {LogicalType::UINTEGER};
 	} else if (format == "L") {
-		return LogicalType::UBIGINT;
+		return {LogicalType::UBIGINT};
 	} else if (format == "f") {
-		return LogicalType::FLOAT;
+		return {LogicalType::FLOAT};
 	} else if (format == "g") {
-		return LogicalType::DOUBLE;
+		return {LogicalType::DOUBLE};
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		std::string parameters = format.substr(format.find(':'));
 		uint8_t width = std::stoi(parameters.substr(1, parameters.find(',')));
@@ -51,82 +47,72 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		if (width > 38) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return LogicalType::DECIMAL(width, scale);
+		return {LogicalType::DECIMAL(width, scale)};
 	} else if (format == "u") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
-		return LogicalType::VARCHAR;
+		return {LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL};
 	} else if (format == "U") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
-		return LogicalType::VARCHAR;
+		return {LogicalType::VARCHAR, ArrowVariableSizeType::SUPER_SIZE};
 	} else if (format == "tsn:") {
-		return LogicalTypeId::TIMESTAMP_NS;
+		return {LogicalTypeId::TIMESTAMP_NS};
 	} else if (format == "tsu:") {
-		return LogicalTypeId::TIMESTAMP;
+		return {LogicalTypeId::TIMESTAMP};
 	} else if (format == "tsm:") {
-		return LogicalTypeId::TIMESTAMP_MS;
+		return {LogicalTypeId::TIMESTAMP_MS};
 	} else if (format == "tss:") {
-		return LogicalTypeId::TIMESTAMP_SEC;
+		return {LogicalTypeId::TIMESTAMP_SEC};
 	} else if (format == "tdD") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
-		return LogicalType::DATE;
+		return {LogicalType::DATE, ArrowDateTimeType::DAYS};
 	} else if (format == "tdm") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
-		return LogicalType::DATE;
+		return {LogicalType::DATE, ArrowDateTimeType::MILLISECONDS};
 	} else if (format == "tts") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
-		return LogicalType::TIME;
+		return {LogicalType::TIME, ArrowDateTimeType::SECONDS};
 	} else if (format == "ttm") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
-		return LogicalType::TIME;
+		return {LogicalType::TIME, ArrowDateTimeType::MILLISECONDS};
 	} else if (format == "ttu") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
-		return LogicalType::TIME;
+		return {LogicalType::TIME, ArrowDateTimeType::MICROSECONDS};
 	} else if (format == "ttn") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
-		return LogicalType::TIME;
+		return {LogicalType::TIME, ArrowDateTimeType::NANOSECONDS};
 	} else if (format == "tDs") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::SECONDS};
 	} else if (format == "tDm") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::MILLISECONDS};
 	} else if (format == "tDu") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::MICROSECONDS};
 	} else if (format == "tDn") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::NANOSECONDS};
 	} else if (format == "tiD") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::DAYS};
 	} else if (format == "tiM") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MONTHS);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::MONTHS};
 	} else if (format == "tin") {
-		convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MONTH_DAY_NANO);
-		return LogicalType::INTERVAL;
+		return {LogicalType::INTERVAL, ArrowDateTimeType::MONTH_DAY_NANO};
 	} else if (format == "+l") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
-		return LogicalType::LIST(child_type);
+		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
+		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), ArrowVariableSizeType::NORMAL);
+		list_type.AddChild(std::move(child_type));
+		return list_type;
 	} else if (format == "+L") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
-		return LogicalType::LIST(child_type);
+		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
+		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), ArrowVariableSizeType::SUPER_SIZE);
+		list_type.AddChild(std::move(child_type));
+		return list_type;
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
-		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
-		return LogicalType::LIST(child_type);
+		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
+		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), fixed_size);
+		list_type.AddChild(std::move(child_type));
+		return list_type;
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
+		vector<ArrowType> children;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
-			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_convert_data, col_idx);
-			child_types.emplace_back(schema.children[type_idx]->name, child_type);
+			children.emplace_back(GetArrowLogicalType(*schema.children[type_idx]));
+			child_types.emplace_back(schema.children[type_idx]->name, children.back().GetDuckType());
 		}
-		return LogicalType::STRUCT(child_types);
-
+		ArrowType struct_type(LogicalType::STRUCT(std::move(child_types)));
+		struct_type.AssignChildren(std::move(children));
+		return struct_type;
 	} else if (format[0] == '+' && format[1] == 'u') {
 		if (format[2] != 's') {
 			throw NotImplementedException("Unsupported Internal Arrow Type: \"%c\" Union", format[2]);
@@ -138,48 +124,48 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
 
 		child_list_t<LogicalType> members;
+		vector<ArrowType> children;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto type = schema.children[type_idx];
 
-			members.emplace_back(type->name, GetArrowLogicalType(*type, arrow_convert_data, col_idx));
+			children.emplace_back(GetArrowLogicalType(*type));
+			members.emplace_back(type->name, children.back().GetDuckType());
 		}
 
-		return LogicalType::UNION(members);
-
+		ArrowType union_type(LogicalType::UNION(members));
+		union_type.AssignChildren(std::move(children));
+		return union_type;
 	} else if (format == "+m") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
-
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
-		auto key_type = GetArrowLogicalType(*arrow_struct_type.children[0], arrow_convert_data, col_idx);
-		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1], arrow_convert_data, col_idx);
-		return LogicalType::MAP(key_type, value_type);
+		auto key_type = GetArrowLogicalType(*arrow_struct_type.children[0]);
+		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1]);
+		ArrowType map_type(LogicalType::MAP(key_type.GetDuckType(), value_type.GetDuckType()),
+		                   ArrowVariableSizeType::NORMAL);
+		map_type.AssignChildren({key_type, value_type});
+		return map_type;
 	} else if (format == "z") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
-		return LogicalType::BLOB;
+		return {LogicalType::BLOB, ArrowVariableSizeType::NORMAL};
 	} else if (format == "Z") {
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
-		return LogicalType::BLOB;
+		return {LogicalType::BLOB, ArrowVariableSizeType::SUPER_SIZE};
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
-		return LogicalType::BLOB;
+		return {LogicalType::BLOB, fixed_size};
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
+		// TODO right now we just get the UTC value. We probably want to support this properly in the future
 		if (format[2] == 'n') {
-			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::NANOSECONDS};
 		} else if (format[2] == 'u') {
-			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MICROSECONDS};
 		} else if (format[2] == 'm') {
-			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MILLISECONDS};
 		} else if (format[2] == 's') {
-			convert_data.date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::SECONDS};
 		} else {
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
-		// TODO right now we just get the UTC value. We probably want to support this properly in the future
-		return LogicalType::TIMESTAMP_TZ;
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
 	}
@@ -224,12 +210,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
+		auto arrow_type = GetArrowLogicalType(schema);
 		if (schema.dictionary) {
-			auto logical_type = GetArrowLogicalType(schema, res->arrow_convert_data, col_idx);
+			auto logical_type = arrow_type.GetDuckType();
 			res->arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>(std::move(logical_type));
-			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
+			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary).GetDuckType());
 		} else {
-			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			return_types.emplace_back(arrow_type.GetDuckType());
 		}
 		auto format = string(schema.format);
 		auto name = string(schema.name);
