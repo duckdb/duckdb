@@ -231,6 +231,29 @@ static void TemplatedMatchList(Vector &col, Vector &rows, SelectionVector &sel, 
 }
 
 template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchArray(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count,
+                                const TupleDataLayout &layout, const idx_t col_no, SelectionVector *no_match,
+                                idx_t &no_match_count) {
+	// Gather a dense Vector containing the column values being matched
+	Vector key(col.GetType());
+	const auto gather_function = TupleDataCollection::GetGatherFunction(col.GetType());
+	gather_function.function(layout, rows, col_no, sel, count, key, *FlatVector::IncrementalSelectionVector(), key,
+	                         gather_function.child_functions);
+
+	// Densify the input column
+	Vector sliced(col, sel, count);
+
+	if (NO_MATCH_SEL) {
+		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
+		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
+		no_match_count += count - match_count;
+		count = match_count;
+	} else {
+		count = SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
+	}
+}
+
+template <class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleDataLayout &layout, Vector &rows,
                              SelectionVector &sel, idx_t &count, idx_t col_no, SelectionVector *no_match,
                              idx_t &no_match_count, const idx_t original_count) {
@@ -298,6 +321,9 @@ static void TemplatedMatchOp(Vector &vec, UnifiedVectorFormat &col, const TupleD
 		break;
 	case PhysicalType::LIST:
 		TemplatedMatchList<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
+		break;
+	case PhysicalType::ARRAY:
+		TemplatedMatchArray<OP, NO_MATCH_SEL>(vec, rows, sel, count, layout, col_no, no_match, no_match_count);
 		break;
 	default:
 		throw InternalException("Unsupported column type for RowOperations::Match");

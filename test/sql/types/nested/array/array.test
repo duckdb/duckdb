@@ -1,6 +1,9 @@
 # name: test/sql/types/nested/array/array.test
 # group: [array]
 
+statement ok
+PRAGMA verify_external
+
 query I
 SELECT array_value(1, 2, 3);
 ----
@@ -55,3 +58,15 @@ SELECT * FROM t1 ORDER BY 1 ASC;
 [6, NULL]
 [NULL, 3]
 [NULL, NULL]
+
+
+# Aggregates
+statement ok
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM VALUES 
+	(array_value(1,2), 1),
+	(array_value(3,4), 2) as t(a, i);
+
+query II
+SELECT MAX(i), arg_max(a, i) FROM t1;
+----
+2	[3, 4]

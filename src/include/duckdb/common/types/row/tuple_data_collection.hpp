@@ -36,6 +36,12 @@ typedef void (*tuple_data_gather_function_t)(const TupleDataLayout &layout, Vect
                                              const SelectionVector &target_sel, Vector &list_vector,
                                              const vector<TupleDataGatherFunction> &child_functions);
 
+enum class WithinNested : uint8_t {
+	NO,
+	LIST,
+	ARRAY,
+};
+
 struct TupleDataGatherFunction {
 	tuple_data_gather_function_t function;
 	vector<TupleDataGatherFunction> child_functions;
@@ -69,9 +75,11 @@ public:
 	void Unpin();
 
 	//! Gets the scatter function for the given type
-	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_list = false);
+	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type,
+	                                                   WithinNested within_list = WithinNested::NO);
 	//! Gets the gather function for the given type
-	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type, bool within_list = false);
+	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type,
+	                                                 WithinNested within_list = WithinNested::NO);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -191,6 +199,7 @@ private:
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
 	                             const SelectionVector &append_sel, const idx_t append_count);
 	//! Computes the heap sizes for the specific Vector that will be appended (within a list)
+	template <class COLLECTION_VECTOR>
 	static void WithinListHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                       TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
 	                                       const idx_t append_count, const UnifiedVectorFormat &list_data);
@@ -204,11 +213,13 @@ private:
 	                                             const SelectionVector &append_sel, const idx_t append_count,
 	                                             const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the struct Vector that will be appended (within a list)
+	template <class COLLECTION_VECTOR>
 	static void StructWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                             TupleDataVectorFormat &source_format,
 	                                             const SelectionVector &append_sel, const idx_t append_count,
 	                                             const UnifiedVectorFormat &list_data);
 	//! Computes the heap sizes for the list Vector that will be appended (within a list)
+	template <class COLLECTION_VECTOR>
 	static void ListWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
 	                                           TupleDataVectorFormat &source_format, const SelectionVector &append_sel,
 	                                           const idx_t append_count, const UnifiedVectorFormat &list_data);

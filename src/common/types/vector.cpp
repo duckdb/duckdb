@@ -146,6 +146,14 @@ void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 		}
 		new_vector.validity.Slice(other.validity, offset, end - offset);
 		Reference(new_vector);
+	} else if (internal_type == PhysicalType::ARRAY) {
+		Vector new_vector(GetType());
+		auto &child_vec = ArrayVector::GetEntry(new_vector);
+		auto &other_child_vec = ArrayVector::GetEntry(other);
+		D_ASSERT(ArrayType::GetSize(GetType()) == ArrayType::GetSize(other.GetType()));
+		child_vec.Slice(other_child_vec, offset, end);
+		new_vector.validity.Slice(other.validity, offset, end - offset);
+		Reference(new_vector);
 	} else {
 		Reference(other);
 		if (offset > 0) {
@@ -826,8 +834,6 @@ void Vector::Flatten(idx_t count) {
 			auto &child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
 
-			// TODO: This should be set?
-			// D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR);
 			auto vector = make_uniq<Vector>(child);
 			vector->Flatten(count * array_size);
 
@@ -835,6 +841,7 @@ void Vector::Flatten(idx_t count) {
 			// flattened_buffer->GetChild() = vector;
 
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
+			D_ASSERT(ArrayVector::GetEntry(*this).GetVectorType() == VectorType::FLAT_VECTOR);
 		} break;
 		case PhysicalType::STRUCT: {
 			auto normalified_buffer = make_uniq<VectorStructBuffer>();
@@ -2252,10 +2259,14 @@ Vector &ArrayVector::GetEntry(Vector &vector) {
 	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
 }
 
-idx_t ArrayVector::GetTotalSize(Vector &vector) {
+idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
 	D_ASSERT(vector.auxiliary);
-	return vector.auxiliary->Cast<VectorArrayBuffer>().GetCapacity();
+	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vector);
+		return ArrayVector::GetTotalSize(child);
+	}
+	return vector.auxiliary->Cast<VectorArrayBuffer>().GetCapacity() * ArrayType::GetSize(vector.GetType());
 }
 
 } // namespace duckdb

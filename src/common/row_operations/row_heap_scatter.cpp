@@ -88,8 +88,6 @@ static void ComputeArrayEntrySizes(Vector &v, UnifiedVectorFormat &vdata, idx_t 
 
 	for (idx_t i = 0; i < ser_count; i++) {
 
-		// Validity byte for the array itself
-		// entry_sizes[i] += 1;
 		// Validity for the array elements
 		entry_sizes[i] += (array_size + 7) / 8;
 

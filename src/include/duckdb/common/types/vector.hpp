@@ -452,7 +452,7 @@ struct ArrayVector {
 	//! Gets a reference to the underlying child-vector of an array
 	DUCKDB_API static Vector &GetEntry(Vector &vector);
 	//! Gets the total size of the underlying child-vector of an array
-	DUCKDB_API static idx_t GetTotalSize(Vector &vector);
+	DUCKDB_API static idx_t GetTotalSize(const Vector &vector);
 };
 
 enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP };

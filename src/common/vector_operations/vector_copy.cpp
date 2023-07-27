@@ -199,8 +199,17 @@ void VectorOperations::Copy(const Vector &source_p, Vector &target, const Select
 		auto &source_child = ArrayVector::GetEntry(*source);
 		auto &target_child = ArrayVector::GetEntry(target);
 		auto array_size = ArrayType::GetSize(source->GetType());
-		VectorOperations::Copy(source_child, target_child, sel_p, source_count * array_size, source_offset * array_size,
-		                       target_offset * array_size);
+
+		// Create a selection vector for the child elements
+		SelectionVector child_sel(copy_count * array_size);
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = sel->get_index(source_offset + i);
+			for (idx_t j = 0; j < array_size; j++) {
+				child_sel.set_index(i * array_size + j, source_idx * array_size + j);
+			}
+		}
+		VectorOperations::Copy(source_child, target_child, child_sel, source_count * array_size,
+		                       source_offset * array_size, target_offset * array_size);
 		break;
 	}
 	case PhysicalType::LIST: {

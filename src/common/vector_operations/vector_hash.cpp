@@ -389,6 +389,9 @@ static inline void CombineHashTypeSwitch(Vector &hashes, Vector &input, const Se
 	case PhysicalType::LIST:
 		ListLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
 		break;
+	case PhysicalType::ARRAY:
+		ArrayLoopHash<HAS_RSEL, false>(input, hashes, rsel, count);
+		break;
 	default:
 		throw InvalidTypeException(input.GetType(), "Invalid type for hash");
 	}

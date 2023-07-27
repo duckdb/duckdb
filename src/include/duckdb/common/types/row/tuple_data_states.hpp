@@ -44,6 +44,9 @@ struct TupleDataVectorFormat {
 	UnifiedVectorFormat data;
 	vector<TupleDataVectorFormat> child_formats;
 	unique_ptr<CombinedListData> combined_list_data;
+
+	// Optional: only used for ArrayVector to fake being a list vector
+	unique_array<list_entry_t> array_list_entries;
 };
 
 struct TupleDataChunkState {

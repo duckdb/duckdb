@@ -1,0 +1,36 @@
+# name: test/sql/types/nested/array/nested_payloads.test
+# group: [array]
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE t1(i INTEGER, a INTEGER[3])
+
+statement ok
+INSERT INTO t1 VALUES 
+    (1, array_value(1,2,3)),
+    (2, array_value(NULL,5,6)),
+	(3, array_value(7,NULL,9)),
+    (4, array_value(10,11,NULL));
+
+
+query II
+SELECT DISTINCT * FROM t1 ORDER BY ALL;
+----
+1	[1, 2, 3]
+2	[NULL, 5, 6]
+3	[7, NULL, 9]
+4	[10, 11, NULL]
+
+
+#statement ok
+#CREATE TABLE t1(i INTEGER, a INTEGER[])
+
+#statement ok
+#INSERT INTO t1 VALUES 
+#    (1, list_value(1,2,3)),
+#    (2, list_value(NULL,5,6)),
+#	(3, list_value(7,NULL,9)),
+#    (4, list_value(10,11,NULL));
+
