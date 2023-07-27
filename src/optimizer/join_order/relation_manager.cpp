@@ -101,12 +101,14 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		if (join.join_type == JoinType::INNER) {
 			// extract join conditions from inner join
 			filter_operators.push_back(*op);
+			for (auto &cond : join.conditions) {
+				if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL) {
+					auto a = 0;
+				}
+			}
 		} else {
 			non_reorderable_operation = true;
 		}
-	}
-	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
-		auto a = 0;
 	}
 	if (non_reorderable_operation) {
 		// we encountered a non-reordable operation (setop or non-inner join)
