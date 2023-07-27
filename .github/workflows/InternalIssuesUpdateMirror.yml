@@ -36,7 +36,7 @@ jobs:
         if: github.event.action == 'closed'
         run: |
           if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
-            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "closed" --remove-label "reopened"
+            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "public closed" --remove-label "public reopened"
           fi
 
       - name: Reopen mirror issue and add reopened label
@@ -44,5 +44,5 @@ jobs:
         run: |
           if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
             gh issue reopen --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER
-            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "reopened" --remove-label "closed"
+            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "public reopened" --remove-label "public closed"
           fi
