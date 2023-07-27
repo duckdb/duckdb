@@ -5,7 +5,7 @@ using namespace odbc_test;
 #define MAX_INSERT_COUNT 2
 #define MAX_BUFFER_SIZE  100
 
-TEST_CASE("Test Multi-Column Param Bind", "[odbc]") {
+TEST_CASE("Test binding multiple columsn at once", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

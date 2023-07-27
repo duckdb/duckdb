@@ -134,7 +134,7 @@ static void FetchAbsolute(HSTMT &hstmt, ESize S) {
 	EXECUTE_AND_CHECK("SQLFreeStmt(CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 }
 
-TEST_CASE("Test Declare Fetch Block", "[odbc]") {
+TEST_CASE("Test Using SQLFetchScroll with different orrientations", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 	HSTMT hstmt = SQL_NULL_HSTMT;

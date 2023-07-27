@@ -97,7 +97,9 @@ static void MultipleHSTMTTest(SQLHANDLE dbc) {
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt2);
 }
 
-TEST_CASE("Test Cursor Commit", "[odbc]") {
+// These tests are related to cursor commit behavior.
+// The cursor represents the result set of a query, and is closed when the transaction is committed.
+TEST_CASE("Test setting cursor attributes, and closing the cursor", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
