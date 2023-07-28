@@ -9,6 +9,7 @@
 #include "duckdb/common/vector.hpp"
 
 using duckdb::vector;
+using duckdb_nanoarrow::ArrowSchema;
 
 namespace node_duckdb {
 
