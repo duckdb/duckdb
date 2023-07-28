@@ -75,16 +75,6 @@ string CommonTableExpressionMap::ToString() const {
 	return result;
 }
 
-void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("map", map);
-}
-
-CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = CommonTableExpressionMap();
-	deserializer.ReadProperty("map", result.map);
-	return result;
-}
-
 string QueryNode::ResultModifiersToString() const {
 	string result;
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {

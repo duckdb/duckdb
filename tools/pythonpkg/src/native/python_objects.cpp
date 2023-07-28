@@ -20,10 +20,9 @@ PyDictionary::PyDictionary(py::object dict) {
 }
 
 PyTimeDelta::PyTimeDelta(py::handle &obj) {
-	auto ptr = obj.ptr();
-	days = PyTimeDelta::GetDays(ptr);
-	seconds = PyTimeDelta::GetSeconds(ptr);
-	microseconds = PyTimeDelta::GetMicros(ptr);
+	days = PyTimeDelta::GetDays(obj);
+	seconds = PyTimeDelta::GetSeconds(obj);
+	microseconds = PyTimeDelta::GetMicros(obj);
 }
 
 interval_t PyTimeDelta::ToInterval() {
@@ -42,16 +41,16 @@ interval_t PyTimeDelta::ToInterval() {
 	return interval;
 }
 
-int64_t PyTimeDelta::GetDays(PyObject *obj) {
-	return PyDateTime_TIMEDELTA_GET_DAYS(obj); // NOLINT
+int64_t PyTimeDelta::GetDays(py::handle &obj) {
+	return PyDateTime_TIMEDELTA_GET_DAYS(obj.ptr()); // NOLINT
 }
 
-int64_t PyTimeDelta::GetSeconds(PyObject *obj) {
-	return PyDateTime_TIMEDELTA_GET_SECONDS(obj); // NOLINT
+int64_t PyTimeDelta::GetSeconds(py::handle &obj) {
+	return PyDateTime_TIMEDELTA_GET_SECONDS(obj.ptr()); // NOLINT
 }
 
-int64_t PyTimeDelta::GetMicros(PyObject *obj) {
-	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj); // NOLINT
+int64_t PyTimeDelta::GetMicros(py::handle &obj) {
+	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj.ptr()); // NOLINT
 }
 
 PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
@@ -209,12 +208,11 @@ Value PyDecimal::ToDuckValue() {
 }
 
 PyTime::PyTime(py::handle &obj) : obj(obj) {
-	auto ptr = obj.ptr();
-	hour = PyTime::GetHours(ptr);          // NOLINT
-	minute = PyTime::GetMinutes(ptr);      // NOLINT
-	second = PyTime::GetSeconds(ptr);      // NOLINT
-	microsecond = PyTime::GetMicros(ptr);  // NOLINT
-	timezone_obj = PyTime::GetTZInfo(ptr); // NOLINT
+	hour = PyTime::GetHours(obj);          // NOLINT
+	minute = PyTime::GetMinutes(obj);      // NOLINT
+	second = PyTime::GetSeconds(obj);      // NOLINT
+	microsecond = PyTime::GetMicros(obj);  // NOLINT
+	timezone_obj = PyTime::GetTZInfo(obj); // NOLINT
 }
 dtime_t PyTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, microsecond);
@@ -222,7 +220,7 @@ dtime_t PyTime::ToDuckTime() {
 
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
-	if (this->timezone_obj != Py_None) {
+	if (!py::none().is(this->timezone_obj)) {
 		auto utc_offset = PyTimezone::GetUTCOffset(this->timezone_obj);
 		// 'Add' requires a date_t for overflows
 		date_t ignored_date;
@@ -232,43 +230,42 @@ Value PyTime::ToDuckValue() {
 	return Value::TIME(duckdb_time);
 }
 
-int32_t PyTime::GetHours(PyObject *obj) {
-	return PyDateTime_TIME_GET_HOUR(obj); // NOLINT
+int32_t PyTime::GetHours(py::handle &obj) {
+	return PyDateTime_TIME_GET_HOUR(obj.ptr()); // NOLINT
 }
 
-int32_t PyTime::GetMinutes(PyObject *obj) {
-	return PyDateTime_TIME_GET_MINUTE(obj); // NOLINT
+int32_t PyTime::GetMinutes(py::handle &obj) {
+	return PyDateTime_TIME_GET_MINUTE(obj.ptr()); // NOLINT
 }
 
-int32_t PyTime::GetSeconds(PyObject *obj) {
-	return PyDateTime_TIME_GET_SECOND(obj); // NOLINT
+int32_t PyTime::GetSeconds(py::handle &obj) {
+	return PyDateTime_TIME_GET_SECOND(obj.ptr()); // NOLINT
 }
 
-int32_t PyTime::GetMicros(PyObject *obj) {
-	return PyDateTime_TIME_GET_MICROSECOND(obj); // NOLINT
+int32_t PyTime::GetMicros(py::handle &obj) {
+	return PyDateTime_TIME_GET_MICROSECOND(obj.ptr()); // NOLINT
 }
 
-PyObject *PyTime::GetTZInfo(PyObject *obj) {
-	return PyDateTime_TIME_GET_TZINFO(obj); // NOLINT
+py::object PyTime::GetTZInfo(py::handle &obj) {
+	// The object returned is borrowed, there is no reference to steal
+	return py::reinterpret_borrow<py::object>(PyDateTime_TIME_GET_TZINFO(obj.ptr())); // NOLINT
 }
 
-interval_t PyTimezone::GetUTCOffset(PyObject *tzone_obj) {
-	auto tzinfo = py::reinterpret_borrow<py::object>(tzone_obj);
-	auto res = tzinfo.attr("utcoffset")(py::none());
+interval_t PyTimezone::GetUTCOffset(py::handle &tzone_obj) {
+	auto res = tzone_obj.attr("utcoffset")(py::none());
 	auto timedelta = PyTimeDelta(res);
 	return timedelta.ToInterval();
 }
 
 PyDateTime::PyDateTime(py::handle &obj) : obj(obj) {
-	auto ptr = obj.ptr();
-	year = PyDateTime::GetYears(ptr);
-	month = PyDateTime::GetMonths(ptr);
-	day = PyDateTime::GetDays(ptr);
-	hour = PyDateTime::GetHours(ptr);
-	minute = PyDateTime::GetMinutes(ptr);
-	second = PyDateTime::GetSeconds(ptr);
-	micros = PyDateTime::GetMicros(ptr);
-	tzone_obj = PyDateTime::GetTZInfo(ptr);
+	year = PyDateTime::GetYears(obj);
+	month = PyDateTime::GetMonths(obj);
+	day = PyDateTime::GetDays(obj);
+	hour = PyDateTime::GetHours(obj);
+	minute = PyDateTime::GetMinutes(obj);
+	second = PyDateTime::GetSeconds(obj);
+	micros = PyDateTime::GetMicros(obj);
+	tzone_obj = PyDateTime::GetTZInfo(obj);
 }
 
 timestamp_t PyDateTime::ToTimestamp() {
@@ -277,9 +274,25 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
+bool PyDateTime::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59 && micros == 999999;
+}
+
+bool PyDateTime::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0 && micros == 0;
+}
+
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
+	if (IsPositiveInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	}
 	auto timestamp = ToTimestamp();
-	if (tzone_obj != Py_None) {
+	if (!py::none().is(tzone_obj)) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
 		// Need to subtract the UTC offset, so we invert the interval
 		utc_offset = Interval::Invert(utc_offset);
@@ -310,51 +323,77 @@ dtime_t PyDateTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, micros);
 }
 
-int32_t PyDateTime::GetYears(PyObject *obj) {
-	return PyDateTime_GET_YEAR(obj); // NOLINT
+int32_t PyDateTime::GetYears(py::handle &obj) {
+	return PyDateTime_GET_YEAR(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetMonths(PyObject *obj) {
-	return PyDateTime_GET_MONTH(obj); // NOLINT
+int32_t PyDateTime::GetMonths(py::handle &obj) {
+	return PyDateTime_GET_MONTH(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetDays(PyObject *obj) {
-	return PyDateTime_GET_DAY(obj); // NOLINT
+int32_t PyDateTime::GetDays(py::handle &obj) {
+	return PyDateTime_GET_DAY(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetHours(PyObject *obj) {
-	return PyDateTime_DATE_GET_HOUR(obj); // NOLINT
+int32_t PyDateTime::GetHours(py::handle &obj) {
+	return PyDateTime_DATE_GET_HOUR(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetMinutes(PyObject *obj) {
-	return PyDateTime_DATE_GET_MINUTE(obj); // NOLINT
+int32_t PyDateTime::GetMinutes(py::handle &obj) {
+	return PyDateTime_DATE_GET_MINUTE(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetSeconds(PyObject *obj) {
-	return PyDateTime_DATE_GET_SECOND(obj); // NOLINT
+int32_t PyDateTime::GetSeconds(py::handle &obj) {
+	return PyDateTime_DATE_GET_SECOND(obj.ptr()); // NOLINT
 }
 
-int32_t PyDateTime::GetMicros(PyObject *obj) {
-	return PyDateTime_DATE_GET_MICROSECOND(obj); // NOLINT
+int32_t PyDateTime::GetMicros(py::handle &obj) {
+	return PyDateTime_DATE_GET_MICROSECOND(obj.ptr()); // NOLINT
 }
 
-PyObject *PyDateTime::GetTZInfo(PyObject *obj) {
-	return PyDateTime_DATE_GET_TZINFO(obj); // NOLINT
+py::object PyDateTime::GetTZInfo(py::handle &obj) {
+	// The object returned is borrowed, there is no reference to steal
+	return py::reinterpret_borrow<py::object>(PyDateTime_DATE_GET_TZINFO(obj.ptr())); // NOLINT
 }
 
 PyDate::PyDate(py::handle &ele) {
-	auto ptr = ele.ptr();
-	year = PyDateTime::GetYears(ptr);
-	month = PyDateTime::GetMonths(ptr);
-	day = PyDateTime::GetDays(ptr);
+	year = PyDateTime::GetYears(ele);
+	month = PyDateTime::GetMonths(ele);
+	day = PyDateTime::GetDays(ele);
 }
 
 Value PyDate::ToDuckValue() {
+	if (IsPositiveInfinity()) {
+		return Value::DATE(date_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		return Value::DATE(date_t::ninfinity());
+	}
 	return Value::DATE(year, month, day);
+}
+
+bool PyDate::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31;
+}
+
+bool PyDate::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1;
 }
 
 void PythonObject::Initialize() {
 	PyDateTime_IMPORT; // NOLINT: Python datetime initialize #2
+}
+
+enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
+
+InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
+	if (timestamp == timestamp_t::infinity()) {
+		return InfinityType::POSITIVE;
+	}
+	if (timestamp == timestamp_t::ninfinity()) {
+		return InfinityType::NEGATIVE;
+	}
+	return InfinityType::NONE;
 }
 
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
@@ -409,12 +448,27 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
+
+		InfinityType infinity = InfinityType::NONE;
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
 			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
+		}
+		infinity = GetTimestampInfinityType(timestamp);
+
+		// Deal with infinity
+		switch (infinity) {
+		case InfinityType::POSITIVE: {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.max());
+		}
+		case InfinityType::NEGATIVE: {
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().datetime.min());
+		}
+		case InfinityType::NONE:
+			break;
 		}
 		int32_t year, month, day, hour, min, sec, micros;
 		date_t date;
@@ -438,13 +492,18 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
-		auto py_time = py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
+		if (!duckdb::Date::IsFinite(date)) {
+			if (date == date_t::infinity()) {
+				return py::reinterpret_borrow<py::object>(import_cache.datetime().date.max());
+			}
+			return py::reinterpret_borrow<py::object>(import_cache.datetime().date.min());
+		}
 		duckdb::Date::Convert(date, year, month, day);
 		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
 	}

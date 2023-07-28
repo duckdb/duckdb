@@ -61,7 +61,9 @@ class _NoValueType:
         return cls.__instance
 
     # Make the _NoValue instance falsey
-    def __nonzero__(self): return False
+    def __nonzero__(self):
+        return False
+
     __bool__ = __nonzero__
 
     # needed for python 2 to preserve identity through a pickle

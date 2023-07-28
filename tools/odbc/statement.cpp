@@ -18,6 +18,21 @@ using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using std::string;
 
+/**
+ * @brief SQLSetStmtAttr sets attributes that govern aspects of a statement.
+ * @param statement_handle
+ * @param attribute The attribute to set. See
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function
+ * @param value_ptr The value to set the attribute to.  Depending of the value of attribute, it can be:
+ * 					\n- ODBC descriptor handle
+ * 					\n- SQLUINTEGER value
+ * 					\n- SQLULEN value
+ * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN,
+ * or SQLUSMALLINT, a driver-defined value
+ * @param string_length The length of the value_ptr parameter.  See
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function for details.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
@@ -87,10 +102,9 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	}
 	case SQL_ATTR_IMP_PARAM_DESC:
 	case SQL_ATTR_IMP_ROW_DESC: {
-		duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-		                            SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR, hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec,
-		                                   hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(
+		    hstmt, SQL_ERROR, "SQLSetStmtAttr", "Option value changed:" + std::to_string(attribute),
+		    SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR, hstmt->dbc->GetDataSourceName());
 	}
 	case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
 		hstmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
@@ -99,10 +113,9 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	case SQL_ATTR_CONCURRENCY: {
 		SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
 		if (value != SQL_CONCUR_LOCK) {
-			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-			                            SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr",
+			                                   "Option value changed:" + std::to_string(attribute),
+			                                   SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
 		}
 		return SQL_SUCCESS;
 	}
@@ -116,10 +129,9 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			break;
 		default:
 			/* Invalid attribute value */
-			duckdb::DiagRecord diag_rec("Invalid attribute value: " + std::to_string(attribute),
-			                            SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr",
+			                                   "Invalid attribute value: " + std::to_string(attribute),
+			                                   SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
 		}
 		hstmt->retrieve_data = value;
 		return SQL_SUCCESS;
@@ -134,19 +146,17 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			hstmt->odbc_fetcher->cursor_type = SQL_CURSOR_STATIC;
 			break;
 		default:
-			duckdb::DiagRecord diag_rec("Invalid attribute value:" + std::to_string(attribute),
-			                            SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr",
+			                                   "Invalid attribute value:" + std::to_string(attribute),
+			                                   SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
 		}
 		hstmt->odbc_fetcher->cursor_scrollable = value;
 		return SQL_SUCCESS;
 	}
 	default:
-		duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-		                            SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr", diag_rec,
-		                                   hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr",
+		                                   "Option value changed:" + std::to_string(attribute),
+		                                   SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
 	}
 
 	return SQL_SUCCESS;
@@ -286,13 +296,20 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	case SQL_ATTR_SIMULATE_CURSOR:
 	case SQL_ATTR_USE_BOOKMARKS:
 	default:
-		duckdb::DiagRecord diag_rec("Unsupported attribute type:" + std::to_string(attribute),
-		                            SQLStateType::INVALID_ATTR_OPTION_ID, hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec,
-		                                   hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr",
+		                                   "Unsupported attribute type:" + std::to_string(attribute),
+		                                   SQLStateType::INVALID_ATTR_OPTION_ID, hstmt->dbc->GetDataSourceName());
 	}
 }
 
+/**
+ * @brief Prepares an SQL string for execution
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlprepare-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param statement_text SQL string to be prepared
+ * @param text_length The length of the statement text in characters
+ * @return
+ */
 SQLRETURN SQL_API SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	return duckdb::PrepareStmt(statement_handle, statement_text, text_length);
 }
@@ -314,7 +331,7 @@ SQLRETURN SQL_API SQLCancel(SQLHSTMT statement_handle) {
 
 /**
  *@brief  Executes a prepared statement
- *
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlexecdirect-function?view=sql-server-ver15
  * @param statement_handle A handle to a statement object. Stores information about the statement and the results of a
  *query.
  * @param statement_text The text of the query to execute.
@@ -446,10 +463,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	}
 
 	if (column_number < 1 || column_number > hstmt->stmt->GetTypes().size()) {
-		duckdb::DiagRecord diag_rec("Column number out of range", SQLStateType::INVALID_DESC_INDEX,
-		                            hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", diag_rec,
-		                                   hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Column number out of range",
+		                                   SQLStateType::INVALID_DESC_INDEX, hstmt->dbc->GetDataSourceName());
 	}
 
 	duckdb::idx_t col_idx = column_number - 1;
@@ -458,10 +473,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	switch (field_identifier) {
 	case SQL_DESC_LABEL: {
 		if (buffer_length <= 0) {
-			duckdb::DiagRecord diag_rec("Inadequate buffer length", SQLStateType::INVALID_STR_BUFF_LENGTH,
-			                            hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Inadequate buffer length",
+			                                   SQLStateType::INVALID_STR_BUFF_LENGTH, hstmt->dbc->GetDataSourceName());
 		}
 
 		auto col_name = hstmt->stmt->GetNames()[col_idx];
@@ -497,10 +510,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return SQL_SUCCESS;
 	case SQL_DESC_TYPE_NAME: {
 		if (buffer_length <= 0) {
-			duckdb::DiagRecord diag_rec("Inadequate buffer length", SQLStateType::INVALID_STR_BUFF_LENGTH,
-			                            hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Inadequate buffer length",
+			                                   SQLStateType::INVALID_STR_BUFF_LENGTH, hstmt->dbc->GetDataSourceName());
 		}
 
 		auto internal_type = hstmt->stmt->GetTypes()[col_idx].InternalType();
@@ -518,10 +529,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	case SQL_DESC_DISPLAY_SIZE: {
 		auto ret = duckdb::ApiInfo::GetColumnSize(hstmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
 		if (ret == SQL_ERROR) {
-			duckdb::DiagRecord diag_rec("Unsupported type for display size", SQLStateType::INVALID_PARAMETER_TYPE,
-			                            hstmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", diag_rec,
-			                                   hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Unsupported type for display size",
+			                                   SQLStateType::INVALID_PARAMETER_TYPE, hstmt->dbc->GetDataSourceName());
 		}
 		return SQL_SUCCESS;
 	}
@@ -619,10 +628,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		return SQL_SUCCESS;
 	}
 	default:
-		duckdb::DiagRecord diag_rec("Unsupported attribute type", SQLStateType::INVALID_ATTR_OPTION_ID,
-		                            hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", diag_rec,
-		                                   hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Unsupported attribute type",
+		                                   SQLStateType::INVALID_ATTR_OPTION_ID, hstmt->dbc->GetDataSourceName());
 	}
 }
 
@@ -640,6 +647,14 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 	                       string_length_ptr, numeric_attribute_ptr);
 }
 
+/**
+ * @brief Stops processing associated with a specific statement, closes any open cursors associated with the statement,
+ * discards pending results, or, optionally, frees all resources associated with the statement handle.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfreestmt-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param option SQL_CLOSE, SQL_DROP, SQL_UNBIND, SQL_RESET_PARAMS
+ * @return
+ */
 SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -664,6 +679,12 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	return SQL_ERROR;
 }
 
+/**
+ * @brief Determines whether more results are available on a statement, and, if so, prepares the next result set.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlmoreresults-function?view=sql-server-ver15
+ * @param statement_handle
+ * @return
+ */
 SQLRETURN SQL_API SQLMoreResults(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {

@@ -158,7 +158,7 @@ duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(At
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
 	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);

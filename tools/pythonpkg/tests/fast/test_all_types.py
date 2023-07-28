@@ -85,7 +85,7 @@ class TestAllTypes(object):
             , 'union':[('Frank',),(5,),(None,)],}
         for cur_type in all_types:
             if cur_type in replacement_values:
-                result = conn.execute("select "+replacement_values[cur_type]).fetchall()
+                result = conn.execute("select " + replacement_values[cur_type]).fetchall()
                 print(cur_type, result)
             else:
                 result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
@@ -102,7 +102,6 @@ class TestAllTypes(object):
         got = bytearray(con.fetchall()[0][0])
         # Don't truncate the array on the nullbyte
         assert want == bytearray(got)
-
 
     def test_fetchnumpy(self, duckdb_cursor):
         conn = duckdb.connect()
@@ -153,12 +152,12 @@ class TestAllTypes(object):
                 dtype=np.uint64,
             ),
             'float': np.ma.array(
-                [-3.4028234663852886e+38, 3.4028234663852886e+38, 42.0],
+                [-3.4028234663852886e38, 3.4028234663852886e38, 42.0],
                 mask=[0, 0, 1],
                 dtype=np.float32,
             ),
             'double': np.ma.array(
-                [-1.7976931348623157e+308, 1.7976931348623157e+308, 42.0],
+                [-1.7976931348623157e308, 1.7976931348623157e308, 42.0],
                 mask=[0, 0, 1],
                 dtype=np.float64,
             ),
@@ -301,11 +300,7 @@ class TestAllTypes(object):
                 mask=[0, 0, 1],
                 dtype=object,
             ),
-            'union': np.ma.array(
-                ['Frank', 5, None],
-                mask=[0, 0, 1],
-                dtype=object
-            ),
+            'union': np.ma.array(['Frank', 5, None], mask=[0, 0, 1], dtype=object),
         }
 
         # The following types don't have a numpy equivalent, and are coerced to
@@ -342,8 +337,7 @@ class TestAllTypes(object):
             else:
                 # assert_equal compares NaN equal, but also compares masked
                 # elements equal to any unmasked element
-                if (isinstance(result, np.ma.MaskedArray)
-                        or isinstance(correct_answer, np.ma.MaskedArray)):
+                if isinstance(result, np.ma.MaskedArray) or isinstance(correct_answer, np.ma.MaskedArray):
                     assert np.all(result.mask == correct_answer.mask)
                 np.testing.assert_equal(result, correct_answer)
 
@@ -359,7 +353,7 @@ class TestAllTypes(object):
         conn = duckdb.connect()
         for cur_type in all_types:
             if cur_type in replacement_values:
-                arrow_table = conn.execute("select "+replacement_values[cur_type]).arrow()
+                arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()
             else:
                 arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
             if cur_type in enum_types:
@@ -373,7 +367,8 @@ class TestAllTypes(object):
 
     def test_pandas(self):
         # We skip those since the extreme ranges are not supported in python.
-        replacement_values = { 'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
+        replacement_values = {
+            'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
             'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
             'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
             'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
@@ -382,13 +377,13 @@ class TestAllTypes(object):
             'date_array': "[], ['1970-01-01'::DATE, NULL, '0001-01-01'::DATE, '9999-12-31'::DATE,], [NULL::DATE,]",
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
-            }
+        }
 
         conn = duckdb.connect()
         conn.execute("SET timezone = UTC")
         for cur_type in all_types:
             if cur_type in replacement_values:
-                dataframe = conn.execute("select "+replacement_values[cur_type]).df()
+                dataframe = conn.execute("select " + replacement_values[cur_type]).df()
             else:
                 dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
             print(cur_type)

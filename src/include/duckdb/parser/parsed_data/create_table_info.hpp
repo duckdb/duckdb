@@ -40,6 +40,9 @@ public:
 	DUCKDB_API static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer);
 
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

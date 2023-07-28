@@ -67,5 +67,17 @@
         "optional": true
       }
     ]
+  },
+  {
+    "class": "BoundOrderModifier",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      }
+    ]
   }
 ]

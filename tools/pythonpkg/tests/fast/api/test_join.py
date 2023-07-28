@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 
+
 class TestJoin(object):
     def test_alias_from_sql(self):
         con = duckdb.connect()

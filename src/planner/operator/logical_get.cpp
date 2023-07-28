@@ -8,8 +8,13 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
+
+LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
+}
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
                        vector<LogicalType> returned_types, vector<string> returned_names)
@@ -196,6 +201,70 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	result->input_table_types = input_table_types;
 	result->input_table_names = input_table_names;
 	result->projected_input = std::move(projected_input);
+	return std::move(result);
+}
+
+void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("returned_types", returned_types);
+	serializer.WriteProperty("names", names);
+	serializer.WriteProperty("column_ids", column_ids);
+	serializer.WriteProperty("projection_ids", projection_ids);
+	serializer.WriteProperty("table_filters", table_filters);
+	FunctionSerializer::FormatSerialize(serializer, function, bind_data.get());
+	if (!function.format_serialize) {
+		D_ASSERT(!function.format_deserialize);
+		// no serialize method: serialize input values and named_parameters for rebinding purposes
+		serializer.WriteProperty("parameters", parameters);
+		serializer.WriteProperty("named_parameters", named_parameters);
+		serializer.WriteProperty("input_table_types", input_table_types);
+		serializer.WriteProperty("input_table_names", input_table_names);
+	}
+	serializer.WriteProperty("projected_input", projected_input);
+}
+
+unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = unique_ptr<LogicalGet>(new LogicalGet());
+	deserializer.ReadProperty("table_index", result->table_index);
+	deserializer.ReadProperty("returned_types", result->returned_types);
+	deserializer.ReadProperty("names", result->names);
+	deserializer.ReadProperty("column_ids", result->column_ids);
+	deserializer.ReadProperty("projection_ids", result->projection_ids);
+	deserializer.ReadProperty("table_filters", result->table_filters);
+	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
+	auto &function = entry.first;
+	auto has_serialize = entry.second;
+
+	unique_ptr<FunctionData> bind_data;
+	if (!has_serialize) {
+		deserializer.ReadProperty("parameters", result->parameters);
+		deserializer.ReadProperty("named_parameters", result->named_parameters);
+		deserializer.ReadProperty("input_table_types", result->input_table_types);
+		deserializer.ReadProperty("input_table_names", result->input_table_names);
+		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
+		                             result->input_table_names, function.function_info.get());
+
+		vector<LogicalType> bind_return_types;
+		vector<string> bind_names;
+		if (!function.bind) {
+			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
+		}
+		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
+		if (result->returned_types != bind_return_types) {
+			throw SerializationException(
+			    "Table function deserialization failure - bind returned different return types than were serialized");
+		}
+		// names can actually be different because of aliases - only the sizes cannot be different
+		if (result->names.size() != bind_names.size()) {
+			throw SerializationException(
+			    "Table function deserialization failure - bind returned different returned names than were serialized");
+		}
+	} else {
+		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
+	}
+	deserializer.ReadProperty("projected_input", result->projected_input);
 	return std::move(result);
 }
 

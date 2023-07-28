@@ -1,0 +1,25 @@
+# name: test/sql/join/asof/test_asof_join_merge.test_slow
+# description: Test merge queue and repartitioning
+# group: [asof]
+
+statement ok
+PRAGMA memory_limit='400M'
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+SET temp_directory='__TEST_DIR__/temp.tmp'
+
+query II
+WITH build AS (
+	SELECT k, ('2021-01-01'::TIMESTAMP + INTERVAL (i) SECOND) AS t, i % 37 AS v
+	FROM range(3000000) t(i), range(2) tk(k)
+), probe AS (
+	SELECT k, t 
+	FROM range(2) tk(k), 
+		 range('2021-01-01 00:00:30'::TIMESTAMP, '2021-02-01 00:00:30'::TIMESTAMP, INTERVAL 1 HOUR) tt(t)
+) SELECT SUM(v) AS v, COUNT(*) AS n
+FROM probe ASOF JOIN build USING(k, t)
+----
+26790	1488
