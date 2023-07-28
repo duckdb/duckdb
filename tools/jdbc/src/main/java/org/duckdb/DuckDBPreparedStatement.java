@@ -105,11 +105,8 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 		try {
 			stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
-			meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
+			meta = DuckDBNative.duckdb_jdbc_prepared_statement_meta(stmt_ref);
 			params = new Object[0];
-			returnsResultSet = meta.return_type.equals(StatementReturnType.QUERY_RESULT);
-			returnsChangedRows = meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
-			returnsNothing = meta.return_type.equals(StatementReturnType.NOTHING);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it might already be allocated
@@ -136,7 +133,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		try {
 			startTransaction();
 			result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-			select_result = new DuckDBResultSet(this, meta, result_ref, conn.conn_ref);
+			DuckDBResultSetMetaData result_meta = DuckDBNative.duckdb_jdbc_query_result_meta(result_ref);
+			select_result = new DuckDBResultSet(this, result_meta, result_ref, conn.conn_ref);
+			returnsResultSet = result_meta.return_type.equals(StatementReturnType.QUERY_RESULT);
+			returnsChangedRows = result_meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
+			returnsNothing = result_meta.return_type.equals(StatementReturnType.NOTHING);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it cannot be used anymore and 
@@ -164,19 +165,19 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public ResultSet executeQuery() throws SQLException {
+		execute();
 		if (!returnsResultSet) {
 			throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
 		}
-		execute();
 		return getResultSet();
 	}
 
 	@Override
 	public int executeUpdate() throws SQLException {
+		execute();
 		if (!(returnsChangedRows || returnsNothing)) {
 			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
 		}
-		execute();
 		return getUpdateCount();
 	}
 
@@ -203,10 +204,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null || select_result == null) {
-			throw new SQLException("Prepare and execute something first");
+		if (meta == null) {
+			throw new SQLException("Prepare something first");
 		}
-		return select_result.getMetaData();
+		return meta;
 	}
 
 	@Override

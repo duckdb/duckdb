@@ -12,6 +12,23 @@ BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
       parameter_nr(parameter_nr) {
 }
 
+BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global_parameter_set, idx_t parameter_nr,
+                                                   LogicalType return_type,
+                                                   shared_ptr<BoundParameterData> parameter_data)
+    : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
+      parameter_nr(parameter_nr) {
+	// check if we have already deserialized a parameter with this number
+	auto entry = global_parameter_set.find(parameter_nr);
+	if (entry == global_parameter_set.end()) {
+		// we have not - store the entry we deserialized from this parameter expression
+		global_parameter_set[parameter_nr] = parameter_data;
+	} else {
+		// we have! use the previously deserialized entry
+		parameter_data = entry->second;
+	}
+	this->parameter_data = std::move(parameter_data);
+}
+
 void BoundParameterExpression::Invalidate(Expression &expr) {
 	if (expr.type != ExpressionType::VALUE_PARAMETER) {
 		throw InternalException("BoundParameterExpression::Invalidate requires a parameter as input");
@@ -75,19 +92,10 @@ unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeseriali
                                                              FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
 	auto parameter_nr = reader.ReadRequired<idx_t>();
-	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
-	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
-	// check if we have already deserialized a parameter with this number
-	auto entry = global_parameter_set.find(parameter_nr);
-	if (entry == global_parameter_set.end()) {
-		// we have not - store the entry we deserialized from this parameter expression
-		global_parameter_set[parameter_nr] = parameter_data;
-	} else {
-		// we have! use the previously deserialized entry
-		parameter_data = entry->second;
-	}
-	result->parameter_data = std::move(parameter_data);
+	auto result = unique_ptr<BoundParameterExpression>(new BoundParameterExpression(
+	    global_parameter_set, parameter_nr, std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 

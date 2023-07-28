@@ -15,6 +15,8 @@ new_contents = """
 extern "C" U_EXPORT const unsigned char U_ICUDATA_ENTRY_POINT [] = {
 	%s
 };
-""" % (result_text,)
+""" % (
+    result_text,
+)
 
 sys.stdout.write(new_contents)

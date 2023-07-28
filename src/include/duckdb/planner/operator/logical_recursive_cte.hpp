@@ -13,9 +13,7 @@
 namespace duckdb {
 
 class LogicalRecursiveCTE : public LogicalOperator {
-	LogicalRecursiveCTE(idx_t table_index, idx_t column_count, bool union_all)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE), union_all(union_all), table_index(table_index),
-	      column_count(column_count) {
+	LogicalRecursiveCTE() : LogicalOperator(LogicalOperatorType::LOGICAL_RECURSIVE_CTE) {
 	}
 
 public:
@@ -41,6 +39,10 @@ public:
 	}
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
 	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 

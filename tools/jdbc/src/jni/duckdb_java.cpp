@@ -317,7 +317,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 
 			try {
 				config.SetOptionByName(key_str, Value(value_str));
-			} catch (Exception e) {
+			} catch (const Exception &e) {
 				throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
 			}
 		}
@@ -657,18 +657,8 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 	}
 }
 
-JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv *env, jclass, jobject stmt_ref_buf) {
-
-	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
-	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		env->ThrowNew(J_SQLException, "Invalid statement");
-		return nullptr;
-	}
-
-	auto column_count = stmt_ref->stmt->ColumnCount();
-	auto &names = stmt_ref->stmt->GetNames();
-	auto &types = stmt_ref->stmt->GetTypes();
-
+static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, const duckdb::vector<string> &names,
+                          const duckdb::vector<LogicalType> &types, StatementProperties properties) {
 	auto name_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_array = env->NewObjectArray(column_count, J_String, nullptr);
 	auto type_detail_array = env->NewObjectArray(column_count, J_String, nullptr);
@@ -688,11 +678,39 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 		                           env->NewStringUTF(type_to_jduckdb_type(types[col_idx]).c_str()));
 	}
 
-	auto return_type =
-	    env->NewStringUTF(StatementReturnTypeToString(stmt_ref->stmt->GetStatementProperties().return_type).c_str());
+	auto return_type = env->NewStringUTF(StatementReturnTypeToString(properties.return_type).c_str());
 
-	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, stmt_ref->stmt->n_param, column_count,
-	                      name_array, type_array, type_detail_array, return_type);
+	return env->NewObject(J_DuckResultSetMeta, J_DuckResultSetMeta_init, n_param, column_count, name_array, type_array,
+	                      type_detail_array, return_type);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1query_1result_1meta(JNIEnv *env, jclass,
+                                                                                         jobject res_ref_buf) {
+	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
+	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
+		env->ThrowNew(J_SQLException, "Invalid result set");
+		return nullptr;
+	}
+	auto &result = res_ref->res;
+
+	auto n_param = -1; // no params now
+
+	return build_meta(env, result->ColumnCount(), n_param, result->names, result->types, result->properties);
+}
+
+JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepared_1statement_1meta(JNIEnv *env, jclass,
+                                                                                               jobject stmt_ref_buf) {
+
+	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
+	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
+		env->ThrowNew(J_SQLException, "Invalid statement");
+		return nullptr;
+	}
+
+	auto &stmt = stmt_ref->stmt;
+
+	return build_meta(env, stmt->ColumnCount(), stmt->n_param, stmt->GetNames(), stmt->GetTypes(),
+	                  stmt->GetStatementProperties());
 }
 
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
