@@ -88,12 +88,24 @@ public:
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
 		case ExpressionType::ARRAY_SLICE: {
-			if (entry.children.size() == 4) {
-				return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
-				       entry.children[2]->ToString() + ":" + entry.children[3]->ToString() + "]";
+			string begin = entry.children[1]->ToString();
+			if (begin == "[]") {
+				begin = "";
 			}
-			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
-			       entry.children[2]->ToString() + "]";
+			string end = entry.children[2]->ToString();
+			if (end == "[]") {
+				if (entry.children.size() == 4) {
+					end = "-";
+				} else {
+					end = "";
+				}
+			}
+			if (entry.children.size() == 4) {
+				return entry.children[0]->ToString() + "[" + begin + ":" +
+				       end + ":" + entry.children[3]->ToString() + "]";
+			}
+			return entry.children[0]->ToString() + "[" + begin + ":" +
+			       end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
 			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {

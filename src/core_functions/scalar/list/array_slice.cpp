@@ -344,6 +344,19 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
+static bool CheckIfParamIsEmpty(duckdb::unique_ptr<duckdb::Expression> &param) {
+	bool is_empty = false;
+	if (param->return_type.id() == LogicalTypeId::LIST) {
+		auto empty_list = make_uniq<BoundConstantExpression>(Value::LIST(LogicalType::INTEGER, vector<Value>()));
+		is_empty = param->Equals(*empty_list);
+		if (!is_empty) {
+			// if the param is not empty, the user has entered a list instead of a BIGINT
+			throw BinderException("The upper and lower bounds of the slice must be a BIGINT");
+		}
+	}
+	return is_empty;
+}
+
 static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
@@ -377,16 +390,12 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
-	bool begin_is_empty = false;
-	if (arguments[1]->return_type.id() == LogicalTypeId::LIST) {
-		begin_is_empty = true;
-	} else {
+	bool begin_is_empty = CheckIfParamIsEmpty(arguments[1]);
+	if (!begin_is_empty) {
 		bound_function.arguments[1] = LogicalType::BIGINT;
 	}
-	bool end_is_empty = false;
-	if (arguments[2]->return_type.id() == LogicalTypeId::LIST) {
-		end_is_empty = true;
-	} else {
+	bool end_is_empty = CheckIfParamIsEmpty(arguments[2]);
+	if (!end_is_empty) {
 		bound_function.arguments[2] = LogicalType::BIGINT;
 	}
 
