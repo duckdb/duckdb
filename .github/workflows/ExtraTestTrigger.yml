@@ -13,7 +13,7 @@ env:
 
 jobs:
    trigger-nightly:
-      - name: Trigger Workflow
+        name: Trigger Workflow
         if: contains(github.event.pull_request.labels.*.name, 'stress test')
         uses: actions/github-script@v6
         with:
