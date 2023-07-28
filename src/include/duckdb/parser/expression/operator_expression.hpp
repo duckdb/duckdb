@@ -101,11 +101,10 @@ public:
 				}
 			}
 			if (entry.children.size() == 4) {
-				return entry.children[0]->ToString() + "[" + begin + ":" +
-				       end + ":" + entry.children[3]->ToString() + "]";
+				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
+				       "]";
 			}
-			return entry.children[0]->ToString() + "[" + begin + ":" +
-			       end + "]";
+			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
 			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {
