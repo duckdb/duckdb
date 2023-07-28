@@ -81,6 +81,10 @@ bool BinaryDeserializer::ReadBool() {
 	return ReadPrimitive<bool>();
 }
 
+char BinaryDeserializer::ReadChar() {
+	return ReadPrimitive<char>();
+}
+
 int8_t BinaryDeserializer::ReadSignedInt8() {
 	return ReadPrimitive<int8_t>();
 }

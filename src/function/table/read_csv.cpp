@@ -19,7 +19,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
