@@ -84,15 +84,11 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	if (__builtin_mul_overflow(left, right, &result_u128)) {
 		return false;
 	}
-	uint64_t upper = uint64_t(result_u128 >> 64);
-	if (upper & 0x8000000000000000) { // overflow check?
-		return false;
-	}
-	result.upper = uint64_t(upper);
+	result.upper = uint64_t(result_u128 >> 64);
 	result.lower = uint64_t(result_u128 & 0xffffffffffffffff);
 #else
 	// TODO: implement
-	return false;
+	throw InternalException("TryMultiply on UHUGEINT not implemented for systems without __uint128_t support");
 #endif
 	return true;
 }
