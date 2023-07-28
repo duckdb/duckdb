@@ -71,10 +71,19 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	relations.push_back(std::move(relation));
 }
 
+static bool HasChildJoin(LogicalOperator &op) {
+	LogicalOperator *tmp = &op;
+	while (tmp->children.size() == 1) {
+		tmp = tmp->children[0].get();
+	}
+	return tmp->children.size() == 0;
+}
+
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
                                            vector<reference<LogicalOperator>> &filter_operators,
                                            optional_ptr<LogicalOperator> parent) {
 	LogicalOperator *op = &input_op;
+	vector<reference<LogicalOperator>> datasource_filters;
 	// pass through single child operators
 	while (op->children.size() == 1 &&
 	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
@@ -83,7 +92,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	        op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
 	        op->type != LogicalOperatorType::LOGICAL_WINDOW)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
-			// extract join conditions from filter
+			if (HasChildJoin(*op)) {
+				datasource_filters.push_back(*op);
+			}
 			filter_operators.push_back(*op);
 		}
 		op = op->children[0].get();
@@ -172,6 +183,11 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// TODO: Get stats from a logical GET
 		auto &get = op->Cast<LogicalGet>();
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);
+		// if there is another logical filter that could not be pushed down into the
+		// table scan, apply another selectivity.
+		if (datasource_filters.size() > 0) {
+			stats.cardinality = (idx_t)MaxValue(stats.cardinality*RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+		}
 		AddRelation(input_op, parent, stats);
 		return true;
 	}
