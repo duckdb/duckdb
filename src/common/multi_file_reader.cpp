@@ -52,8 +52,8 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 	return key == key_end && pattern == pattern_end;
 }
 
-static bool Match(const string &key, const vector<string> &pattern, const bool partial_match_allowed = false) {
-	const vector<string> key_splits = StringUtil::Split(key, FileSystem::PathSeparator());
+static bool Match(const string &key, const vector<string> &pattern, const string& path_seperator, const bool partial_match_allowed = false) {
+	const vector<string> key_splits = StringUtil::Split(key, path_seperator);
 	return Match(key_splits.begin(), key_splits.end(), pattern.begin(), pattern.end(), partial_match_allowed);
 }
 
@@ -64,7 +64,7 @@ static string GetOneFile(FileSystem &fs, const string &path, MultiFileReaderOpti
 		return path;
 	}
 
-	const vector<string> splits = StringUtil::Split(path, fs.PathSeparator());
+	const vector<string> splits = StringUtil::Split(path, fs.PathSeparator(path));
 	D_ASSERT(!splits.empty());
 	string current = splits.front();
 
@@ -108,14 +108,14 @@ static void FindFiles(FileSystem &fs, const string &path, const vector<string> &
 			return;
 		}
 		const string full_path = fs.JoinPath(path, fname);
-		if (Match(full_path, pattern, partial_match_allowed)) {
+		if (Match(full_path, pattern, fs.PathSeparator(full_path), partial_match_allowed)) {
 			result.push_back(full_path);
 		}
 	});
 }
 
-static vector<string> GetHivePartitions(const string &path) {
-	const vector<string> chunks = StringUtil::Split(path, FileSystem::PathSeparator());
+static vector<string> GetHivePartitions(FileSystem &fs, const string &path) {
+	const vector<string> chunks = StringUtil::Split(path, fs.PathSeparator(path));
 
 	vector<string> partitions;
 	for (auto &chunk : chunks) {
@@ -127,7 +127,7 @@ static vector<string> GetHivePartitions(const string &path) {
 	return partitions;
 }
 static string GetHivePartitionRoot(FileSystem &fs, const string &path) {
-	const vector<string> chunks = StringUtil::Split(path, FileSystem::PathSeparator());
+	const vector<string> chunks = StringUtil::Split(path, fs.PathSeparator(path));
 
 	string root;
 	for (auto &chunk : chunks) {
@@ -244,8 +244,8 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 
 		const string partition_root = GetHivePartitionRoot(fs, files.front());
-		const vector<string> partitions = GetHivePartitions(files.front());
-		const vector<string> pattern = StringUtil::Split(options.input_file_pattern, FileSystem::PathSeparator());
+		const vector<string> partitions = GetHivePartitions(fs, files.front());
+		const vector<string> pattern = StringUtil::Split(options.input_file_pattern, fs.PathSeparator(options.input_file_pattern));
 
 		// filter directories
 		files.clear();
