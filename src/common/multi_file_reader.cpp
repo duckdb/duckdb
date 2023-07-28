@@ -52,7 +52,8 @@ static bool Match(vector<string>::const_iterator key, vector<string>::const_iter
 	return key == key_end && pattern == pattern_end;
 }
 
-static bool Match(const string &key, const vector<string> &pattern, const string& path_seperator, const bool partial_match_allowed = false) {
+static bool Match(const string &key, const vector<string> &pattern, const string &path_seperator,
+                  const bool partial_match_allowed = false) {
 	const vector<string> key_splits = StringUtil::Split(key, path_seperator);
 	return Match(key_splits.begin(), key_splits.end(), pattern.begin(), pattern.end(), partial_match_allowed);
 }
@@ -245,7 +246,8 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 
 		const string partition_root = GetHivePartitionRoot(fs, files.front());
 		const vector<string> partitions = GetHivePartitions(fs, files.front());
-		const vector<string> pattern = StringUtil::Split(options.input_file_pattern, fs.PathSeparator(options.input_file_pattern));
+		const vector<string> pattern =
+		    StringUtil::Split(options.input_file_pattern, fs.PathSeparator(options.input_file_pattern));
 
 		// filter directories
 		files.clear();
