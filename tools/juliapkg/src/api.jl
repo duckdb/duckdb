@@ -1005,9 +1005,9 @@ Binds an duckdb_uhugeint value to the prepared statement at the specified index.
 DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             duckdb_uhugeint val);
 """
-function duckdb_bind_hugeint(prepared_statement, param_idx, val)
+function duckdb_bind_uhugeint(prepared_statement, param_idx, val)
     return ccall(
-        (:duckdb_bind_hugeint, libduckdb),
+        (:duckdb_bind_uhugeint, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, Int32, duckdb_uhugeint),
         prepared_statement,
