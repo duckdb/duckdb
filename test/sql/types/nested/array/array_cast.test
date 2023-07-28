@@ -1,0 +1,54 @@
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+# Should be able to cast to varchar
+query I
+SELECT array_value(1, 2, 3)::VARCHAR
+----
+[1, 2, 3]
+
+# Should be able to cast to list
+query I
+SELECT array_value(1, 2, 3)::INT[]
+----
+[1, 2, 3]
+
+# Should be able to implicitly cast to list
+query I
+SELECT list_extract(array_value(1, 2, 3), 2)
+----
+2
+
+# Should not be able to implicitly cast to list with unnest
+statement error
+SELECT * FROM UNNEST(array_value(1, 2, 3))
+
+# Should be able to cast to list with unnest
+query I
+SELECT unnest(array_value(1, 2, 3)::INT[])
+----
+1
+2
+3
+
+# Should be able to cast if the elements are castable
+query I
+SELECT array_value('1.0', '2.0', '3.0')::DOUBLE[3]
+----
+[1.0, 2.0, 3.0]
+
+# Should not be able to cast arrays of different lengths (yet)
+statement error
+SELECT array_value(1, 2, 3)::INT[2]
+----
+Not implemented Error: Array to array cast with mismatched sizes
+
+# Should not be able to cast arrays of different lengths (yet)
+statement error
+SELECT array_value(1, 2, 3)::INT[4]
+----
+Not implemented Error: Array to array cast with mismatched sizes
