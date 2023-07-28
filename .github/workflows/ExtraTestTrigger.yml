@@ -1,0 +1,28 @@
+name: NightlyTests
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, labeled]
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+jobs:
+   trigger-nightly:
+     name: Trigger Workflow
+     runs-on: ubuntu-latest
+     if: contains(github.event.pull_request.labels.*.name, 'stress test')
+     steps:
+     - uses: actions/github-script@v6
+       with:
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'NightlyTests.yml',
+              ref: '${{ github.event.pull_request.head.ref }}',
+            })
