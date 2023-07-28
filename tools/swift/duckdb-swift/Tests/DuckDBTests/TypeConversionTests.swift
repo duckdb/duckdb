@@ -80,7 +80,7 @@ final class TypeConversionTests: XCTestCase {
   }
   
   func test_extract_from_uhugeint() throws {
-    let expected = [UIntHuge.min + 1, UIntHuge.max, nil]
+    let expected = [UIntHuge.min, UIntHuge.max, nil]
     try extractTest(testColumnName: "uhugeint", expected: expected) { $0.cast(to: UIntHuge.self) }
   }
   
