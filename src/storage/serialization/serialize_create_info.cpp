@@ -75,6 +75,7 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 void CreateIndexInfo::FormatSerialize(FormatSerializer &serializer) const {
 	CreateInfo::FormatSerialize(serializer);
 	serializer.WriteProperty("name", index_name);
+	serializer.WriteProperty("table", table);
 	serializer.WriteProperty("index_type", index_type);
 	serializer.WriteProperty("constraint_type", constraint_type);
 	serializer.WriteProperty("parsed_expressions", parsed_expressions);
@@ -85,6 +86,7 @@ void CreateIndexInfo::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
 	deserializer.ReadProperty("name", result->index_name);
+	deserializer.ReadProperty("table", result->table);
 	deserializer.ReadProperty("index_type", result->index_type);
 	deserializer.ReadProperty("constraint_type", result->constraint_type);
 	deserializer.ReadProperty("parsed_expressions", result->parsed_expressions);

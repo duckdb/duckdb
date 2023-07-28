@@ -45,6 +45,8 @@ public:
 	bool SupportSerialization() const override {
 		return false;
 	}
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	void ResolveTypes() override {

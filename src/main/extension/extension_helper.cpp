@@ -179,6 +179,19 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	}
 #endif
 
+#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
+	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, extension)) {
+		Connection con(db);
+		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
+		                        ".duckdb_extension'");
+		if (result->HasError()) {
+			result->Print();
+			return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		}
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+#endif
+
 	// This is the main extension loading mechanism that loads the extension that are statically linked.
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 	if (TryLoadLinkedExtension(db, extension)) {
