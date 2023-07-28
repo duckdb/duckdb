@@ -201,7 +201,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
-	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+	if (script.find("test/sqlite/select") != string::npos) {
+		original_sqlite_test = true;
+	}
+	if (script.find("third_party/sqllogictest") != string::npos) {
 		original_sqlite_test = true;
 	}
 

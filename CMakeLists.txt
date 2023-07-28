@@ -295,7 +295,7 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
-if(WIN32)
+if(WIN32 OR ZOS)
   set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
@@ -553,7 +553,10 @@ endfunction()
 
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
-
+  if(NOT("${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL ""))
+    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE="${TEST_WITH_LOADABLE_EXTENSION}")
+    add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
+  endif()
   if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
     add_definitions(-DDUCKDB_TEST_REMOTE_INSTALL="${TEST_REMOTE_INSTALL}")
   endif()
@@ -648,6 +651,8 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
         # Note that on MacOS we need to use the -exported_symbol whitelist feature due to a lack of -exclude-libs flag in mac's ld variant
         set(WHITELIST "-Wl,-exported_symbol,_${NAME}_init -Wl,-exported_symbol,_${NAME}_version -Wl,-exported_symbol,_${NAME}_storage_ini*")
         target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS} -Wl,-dead_strip ${WHITELIST})
+      elseif (ZOS)
+        target_link_libraries(${TARGET_NAME} duckdb_static ${DUCKDB_EXTRA_LINK_FLAGS})
       else()
         # For GNU we rely on fvisibility=hidden to hide the extension symbols and use -exclude-libs to hide the duckdb symbols
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -744,13 +749,17 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES)
   include(FetchContent)
+  if (${APPLY_PATCHES})
+    set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+  endif()
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
           GIT_REPOSITORY ${URL}
           GIT_TAG ${COMMIT}
           GIT_SUBMODULES ""
+          PATCH_COMMAND ${PATCH_COMMAND}
   )
   message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
@@ -772,7 +781,7 @@ endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK DONT_BUILD LOAD_TESTS)
+  set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -792,7 +801,7 @@ function(duckdb_extension_load NAME)
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}" "${duckdb_extension_load_APPLY_PATCHES}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
@@ -837,6 +846,14 @@ if(${EXPORT_DLL_SYMBOLS})
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
 
+# Log extensions that are built by directly passing cmake variables
+foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
+  if (NOT "${EXT}" STREQUAL "")
+    string(TOUPPER ${EXT} EXTENSION_NAME_UPPERCASE)
+    message(STATUS "Load extension '${EXT}' from '${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH}'")
+  endif()
+endforeach()
+
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS SKIP_EXTENSIONS)
   if (NOT "${EXT}" STREQUAL "")
@@ -880,6 +897,15 @@ endif()
 # Load base extension config
 include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
 
+# For extensions whose tests were loaded, but not linked into duckdb, we need to ensure they are registered to have
+# the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK} AND ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+    list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
+  endif()
+endforeach()
+
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
@@ -899,7 +925,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
-  if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT "${VCPKG_BUILD}")
+  if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
     message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
   endif()
 
@@ -932,19 +958,19 @@ endforeach()
 
 if(NOT "${LINKED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${LINKED_EXTENSIONS}")
-  message(STATUS "Extensions linked into DuckDB: ${EXT_LIST_DEBUG_MESSAGE}")
+  message(STATUS "Extensions linked into DuckDB: [${EXT_LIST_DEBUG_MESSAGE}]")
 endif()
 if(NOT "${NONLINKED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${NONLINKED_EXTENSIONS}")
-  message(STATUS "Extensions built but not linked: ${EXT_LIST_DEBUG_MESSAGE}")
+  message(STATUS "Extensions built but not linked: [${EXT_LIST_DEBUG_MESSAGE}]")
 endif()
 if(NOT "${SKIPPED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${SKIPPED_EXTENSIONS}")
-  message(STATUS "Extensions explicitly skipped: ${EXT_LIST_DEBUG_MESSAGE}")
+  message(STATUS "Extensions explicitly skipped: [${EXT_LIST_DEBUG_MESSAGE}]")
 endif()
 if(NOT "${TEST_LOADED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${TEST_LOADED_EXTENSIONS}")
-  message(STATUS "Tests loaded from extensions: ${EXT_LIST_DEBUG_MESSAGE}")
+  message(STATUS "Tests loaded for extensions: [${EXT_LIST_DEBUG_MESSAGE}]")
 endif()
 
 # Special build where instead of building duckdb, we produce several artifact that require parsing the

@@ -15,6 +15,7 @@ catalog/default/default_functions.cpp	9
 catalog/dependency_manager.cpp	5
 common/allocator.cpp	20
 common/arrow/arrow_appender.cpp	23
+common/arrow/appender/map_data.cpp	7
 common/arrow/arrow_converter.cpp	11
 common/arrow/arrow_wrapper.cpp	113
 common/assert.cpp	2
@@ -51,7 +52,7 @@ common/row_operations/row_match.cpp	4
 common/serializer/binary_deserializer.cpp	12
 common/serializer/binary_serializer.cpp	21
 common/serializer/buffered_deserializer.cpp	3
-common/serializer/buffered_file_reader.cpp	9
+common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
@@ -257,7 +258,7 @@ function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
 function/scalar/struct/struct_extract.cpp	3
-function/scalar/system/aggregate_export.cpp	8
+function/scalar/system/aggregate_export.cpp	10
 function/scalar_function.cpp	7
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	229
@@ -330,12 +331,15 @@ include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
 include/duckdb/common/enum_util.hpp	3
 include/duckdb/common/exception.hpp	22
-include/duckdb/common/field_writer.hpp	4
+include/duckdb/common/field_writer.hpp	5
 include/duckdb/common/gzip_file_system.hpp	3
 include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
 include/duckdb/common/multi_file_reader_options.hpp	3
 include/duckdb/common/opener_file_system.hpp	21
+include/duckdb/common/arrow/appender/append_data.hpp	1
+include/duckdb/common/arrow/appender/scalar_data.hpp	2
+include/duckdb/common/arrow/appender/varchar_data.hpp	2
 include/duckdb/common/operator/abs.hpp	1
 include/duckdb/common/operator/add.hpp	2
 include/duckdb/common/operator/decimal_cast_operators.hpp	3
@@ -689,7 +693,7 @@ planner/joinside.cpp	12
 planner/logical_operator.cpp	30
 planner/operator/logical_aggregate.cpp	3
 planner/operator/logical_column_data_get.cpp	2
-planner/operator/logical_copy_to_file.cpp	36
+planner/operator/logical_copy_to_file.cpp	37
 planner/operator/logical_create_index.cpp	2
 planner/operator/logical_cross_product.cpp	2
 planner/operator/logical_cteref.cpp	2
@@ -701,7 +705,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	7
+planner/operator/logical_extension_operator.cpp	18
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
@@ -744,6 +748,7 @@ storage/data_table.cpp	46
 storage/index.cpp	3
 storage/local_storage.cpp	10
 storage/magic_bytes.cpp	2
+storage/meta_block_reader.cpp	3
 storage/optimistic_data_writer.cpp	4
 storage/partial_block_manager.cpp	26
 storage/single_file_block_manager.cpp	15
