@@ -24,5 +24,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'NightlyTests.yml',
-              ref: ${{ github.event.pull_request.head.ref }},
+              ref: '${{ github.event.pull_request.head.ref }}',
             })
