@@ -467,7 +467,6 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			auto &right = smallest_plans[1]->set;
 			// create a cross product edge (i.e. edge with empty filter) between these two sets in the query graph
 			query_graph_manager.CreateQueryGraphCrossProduct(left, right);
-			//			query_graph = query_graph_manager.GetQueryGraph();
 			// now emit the pair and continue with the algorithm
 			auto connections = query_graph.GetConnections(left, right);
 			D_ASSERT(!connections.empty());
@@ -498,7 +497,6 @@ void PlanEnumerator::InitLeafPlans() {
 	// First we initialize each of the single-node plans with themselves and with their cardinalities these are the leaf
 	// nodes of the join tree NOTE: we can just use pointers to JoinRelationSet* here because the GetJoinRelation
 	// function ensures that a unique combination of relations will have a unique JoinRelationSet object.
-	vector<NodeOp> nodes_ops;
 	// first initialize equivalent relations based on the filters
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
 

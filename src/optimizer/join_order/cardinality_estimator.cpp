@@ -6,8 +6,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-
-#include "iostream"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -117,7 +116,7 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 }
 
 void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
-	//#ifdef DEBUG
+#ifdef DEBUG
 	for (auto &total_domain : relations_to_tdoms) {
 		for (auto &binding : total_domain.equivalent_relations) {
 			D_ASSERT(binding.table_index < stats.size());
@@ -126,7 +125,7 @@ void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats)
 			total_domain.column_names.push_back(column_name);
 		}
 	}
-	//#endif
+#endif
 }
 
 void CardinalityEstimator::PrintRelationToTdomInfo() {
@@ -137,7 +136,7 @@ void CardinalityEstimator::PrintRelationToTdomInfo() {
 		}
 		bool have_hll = total_domain.has_tdom_hll;
 		domain += "\n TOTAL DOMAIN = " + to_string(have_hll ? total_domain.tdom_hll : total_domain.tdom_no_hll);
-		std::cout << domain << std::endl;
+		Printer::Print(domain);
 	}
 }
 
@@ -167,9 +166,6 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 }
 
 double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-	if (new_set.ToString() == "[1, 2, 3, 6]") {
-		auto a = 0;
-	}
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}

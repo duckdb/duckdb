@@ -306,17 +306,22 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 }
 
 void RelationManager::PrintRelationStats() {
+#ifdef DEBUG
+	string to_print;
 	for (idx_t i = 0; i < relations.size(); i++) {
 		auto &relation = relations.at(i);
 		auto &stats = relation->stats;
 		D_ASSERT(stats.column_names.size() == stats.column_distinct_count.size());
 		for (idx_t i = 0; i < stats.column_names.size(); i++) {
-			std::cout << stats.column_names.at(i) << " has estimated distinct count "
-			          << stats.column_distinct_count.at(i).distinct_count << std::endl;
+			to_print = stats.column_names.at(i) + " has estimated distinct count " +
+			           to_string(stats.column_distinct_count.at(i).distinct_count);
+			Printer::Print(to_print);
 		}
-		std::cout << stats.table_name << " has estimated cardinality " << stats.cardinality << " and relation id " << i
-		          << std::endl;
+		to_print = stats.table_name + " has estimated cardinality " + to_string(stats.cardinality);
+		to_print += " and relation id " + to_string(i) + "\n";
+		Printer::Print(to_print);
 	}
+#endif
 }
 
 } // namespace duckdb

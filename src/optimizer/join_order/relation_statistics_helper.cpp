@@ -278,6 +278,7 @@ RelationStats RelationStatisticsHelper::ExtractWindowStats(LogicalWindow &window
 
 RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate &aggr, RelationStats &child_stats) {
 	RelationStats stats;
+	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
 	stats.column_names = child_stats.column_names;
@@ -288,7 +289,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	for (idx_t column_index = child_stats.column_distinct_count.size(); column_index < num_child_columns;
 	     column_index++) {
 		stats.column_distinct_count.push_back(DistinctCount({child_stats.cardinality, false}));
-		stats.column_names.push_back("window");
+		stats.column_names.push_back("aggregate");
 	}
 	return stats;
 }
