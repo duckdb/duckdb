@@ -8,6 +8,8 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -28,6 +30,19 @@ public:
 	                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: list lambda deserialize");
 	}
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const ScalarFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
+		serializer.WriteProperty("stype", bind_data.stype);
+		serializer.WriteOptionalProperty("lambda_expr", bind_data.lambda_expr);
+	}
+
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+		auto stype = deserializer.ReadProperty<LogicalType>("stype");
+		auto lambda_expr = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("lambda_expr");
+		return make_uniq<ListLambdaBindData>(stype, std::move(lambda_expr));
+	}
 };
 
 ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Expression> lambda_expr_p)
@@ -35,12 +50,12 @@ ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Ex
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_uniq<ListLambdaBindData>(stype, lambda_expr->Copy());
+	return make_uniq<ListLambdaBindData>(stype, lambda_expr ? lambda_expr->Copy() : nullptr);
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
-	return lambda_expr->Equals(*other.lambda_expr) && stype == other.stype;
+	return Expression::Equals(lambda_expr, other.lambda_expr) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {
@@ -330,7 +345,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -385,6 +400,8 @@ ScalarFunction ListTransformFun::GetFunction() {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
+	fun.format_serialize = ListLambdaBindData::FormatSerialize;
+	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 
@@ -394,6 +411,8 @@ ScalarFunction ListFilterFun::GetFunction() {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
+	fun.format_serialize = ListLambdaBindData::FormatSerialize;
+	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 

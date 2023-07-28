@@ -12,6 +12,7 @@ add_subdirectory(random)
 add_subdirectory(string)
 add_subdirectory(struct)
 add_subdirectory(union)
+add_subdirectory(debug)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES}

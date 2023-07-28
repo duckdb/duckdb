@@ -34,6 +34,10 @@ public:
 public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return 3;
 	}

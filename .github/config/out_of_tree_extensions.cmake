@@ -21,6 +21,7 @@ duckdb_extension_load(spatial
     GIT_TAG f577b9441793f9170403e489f5d3587e023a945f
     INCLUDE_DIR spatial/include
     TEST_DIR spatial/test/sql
+    APPLY_PATCHES
 )
 if (NOT WIN32)
     duckdb_extension_load(arrow

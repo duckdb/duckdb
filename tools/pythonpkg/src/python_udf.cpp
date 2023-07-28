@@ -163,9 +163,9 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 		py::gil_scoped_acquire gil;
 
 		// owning references
-		vector<py::handle> python_objects;
+		vector<py::object> python_objects;
 		vector<PyObject *> python_results;
-		python_results.reserve(input.size());
+		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -190,8 +190,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			}
-			python_objects.push_back(py::handle(ret));
-			python_results.push_back(ret);
+			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
+			python_results[row] = ret;
 		}
 
 		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);

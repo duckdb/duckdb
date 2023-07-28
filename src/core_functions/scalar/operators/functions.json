@@ -11,7 +11,7 @@
         "name": "|",
         "parameters": "left,right",
         "description": "Bitwise OR",
-        "example": "32 & 3",
+        "example": "32 | 3",
         "type": "scalar_function_set",
         "struct": "BitwiseOrFun"
     },

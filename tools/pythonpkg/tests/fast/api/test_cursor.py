@@ -12,13 +12,13 @@ class TestDBAPICursor(object):
         cursor = con.cursor()
         # Use the cursor for queries
         res = cursor.execute("select [1,2,3,NULL,4]").fetchall()
-        assert res == [([1,2,3,None,4],)]
+        assert res == [([1, 2, 3, None, 4],)]
 
     def test_cursor_preexisting(self):
         con = duckdb.connect(':memory:')
         con.execute("create table tbl as select i a, i+1 b, i+2 c from range(5) tbl(i)")
         cursor = con.cursor()
-        res = cursor.execute("select * from tbl").fetchall();
+        res = cursor.execute("select * from tbl").fetchall()
         assert res == [(0, 1, 2), (1, 2, 3), (2, 3, 4), (3, 4, 5), (4, 5, 6)]
 
     def test_cursor_after_creation(self):
@@ -27,7 +27,7 @@ class TestDBAPICursor(object):
         cursor = con.cursor()
         # Then create table on the source connection
         con.execute("create table tbl as select i a, i+1 b, i+2 c from range(5) tbl(i)")
-        res = cursor.execute("select * from tbl").fetchall();
+        res = cursor.execute("select * from tbl").fetchall()
         assert res == [(0, 1, 2), (1, 2, 3), (2, 3, 4), (3, 4, 5), (4, 5, 6)]
 
     def test_cursor_mixed(self):
@@ -39,7 +39,7 @@ class TestDBAPICursor(object):
         # Close the cursor and create a new one
         cursor.close()
         cursor = con.cursor()
-        res = cursor.execute("select * from tbl").fetchall();
+        res = cursor.execute("select * from tbl").fetchall()
         assert res == [(0, 1, 2), (1, 2, 3), (2, 3, 4), (3, 4, 5), (4, 5, 6)]
 
     def test_cursor_temp_schema_closed(self):
@@ -59,7 +59,7 @@ class TestDBAPICursor(object):
         cursor.execute("create temp table tbl as select * from range(100)")
         other_cursor = con.cursor()
         # Connection that created the table is still open
-        #cursor.close()
+        # cursor.close()
         with pytest.raises(duckdb.CatalogException):
             # This table does not exist in this cursor
             res = other_cursor.execute("select * from tbl").fetchall()
