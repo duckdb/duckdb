@@ -123,7 +123,7 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		child_list_t<LogicalType> child_types;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto child_type = GetArrowLogicalType(*schema.children[type_idx], arrow_convert_data, col_idx);
-			child_types.push_back({schema.children[type_idx]->name, child_type});
+			child_types.emplace_back(schema.children[type_idx]->name, child_type);
 		}
 		return LogicalType::STRUCT(child_types);
 
