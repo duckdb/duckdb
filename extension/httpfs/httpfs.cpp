@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(HeaderMap &header_map) {
+static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_headers(const HeaderMap &header_map) {
 	auto headers = make_uniq<duckdb_httplib_openssl::Headers>();
 	for (auto &entry : header_map) {
 		headers->insert(entry);
@@ -34,6 +34,7 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
+	HeaderMap headers;
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
 		timeout = value.GetValue<uint64_t>();
@@ -50,8 +51,14 @@ HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
 		retry_backoff = value.GetValue<float>();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "http_headers", value)) {
+		for (auto child : ListValue::GetChildren(value)) {
+			auto s = StructValue::GetChildren(child);
+			headers.emplace(s[0].ToString(), s[1].ToString());
+		}
+	}
 
-	return {timeout, retries, retry_wait_ms, retry_backoff, force_download};
+	return {timeout, retries, retry_wait_ms, retry_backoff, force_download, headers};
 }
 
 void HTTPFileSystem::ParseUrl(string &url, string &path_out, string &proto_host_port_out) {
@@ -187,6 +194,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
 	client->set_decompress(false);
+	client->set_default_headers(*initialize_http_headers(http_params.headers));
 	return client;
 }
 

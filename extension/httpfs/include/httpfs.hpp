@@ -41,6 +41,7 @@ struct HTTPParams {
 	uint64_t retry_wait_ms;
 	float retry_backoff;
 	bool force_download;
+	HeaderMap headers;
 
 	static HTTPParams ReadFrom(FileOpener *opener);
 };
