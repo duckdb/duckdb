@@ -2,8 +2,6 @@ name: Close Stale Issues
 on:
   repository_dispatch:
   workflow_dispatch:
-  schedule:
-    - cron: '00 0 * * *'
 
 jobs:
   close_stale_issues:
