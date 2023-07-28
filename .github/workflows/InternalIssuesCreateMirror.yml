@@ -5,7 +5,7 @@ on:
       - labeled
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
   TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number }}]"
 
 jobs:
