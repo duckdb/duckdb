@@ -1,7 +1,7 @@
 name: Close Stale Issues
 on:
-  schedule:
-    - cron: '00 0 * * *'
+  repository_dispatch:
+  workflow_dispatch:
 
 jobs:
   close_stale_issues:
@@ -14,3 +14,4 @@ jobs:
           close-issue-message: 'This issue was closed because it has been stale for 30 days with no activity.'
           days-before-stale: 90
           days-before-close: 30
+          operations-per-run: 500
