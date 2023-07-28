@@ -496,21 +496,9 @@ void ArrayTypeInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteField(size);
 }
 
-void ArrayTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("child_type", child_type);
-	serializer.WriteProperty("size", size);
-}
-
 shared_ptr<ExtraTypeInfo> ArrayTypeInfo::Deserialize(FieldReader &reader) {
 	auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto size = reader.ReadRequired<uint32_t>();
-	return make_shared<ArrayTypeInfo>(std::move(child_type), size);
-}
-
-shared_ptr<ExtraTypeInfo> ArrayTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto child_type = source.ReadProperty<LogicalType>("child_type");
-	auto size = source.ReadProperty<uint32_t>("size");
 	return make_shared<ArrayTypeInfo>(std::move(child_type), size);
 }
 

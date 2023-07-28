@@ -88,6 +88,22 @@
     ]
   },
   {
+    "class": "ArrayTypeInfo",
+    "base": "ExtraTypeInfo",
+    "enum": "ARRAY_TYPE_INFO",
+    "members": [
+      {
+        "name": "child_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "size",
+        "type": "uint32_t"
+      }
+    ],
+    "constructor": ["child_type", "size"]
+  },
+  {
     "class": "UserTypeInfo",
     "base": "ExtraTypeInfo",
     "enum": "USER_TYPE_INFO",

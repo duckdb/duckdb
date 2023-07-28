@@ -1015,9 +1015,6 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			// TODO: Technically, fixed size lists are constant size types,
-			// but we cant get the actual size from just the physical type.
-			// Maybe there is a better way to do this?
 			auto &child = ArrayVector::GetEntry(*this);
 			auto fixed_list_size = ArrayType::GetSize(type);
 
@@ -1114,6 +1111,16 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			serializer.OnObjectEnd();
 			break;
 		}
+		case PhysicalType::ARRAY: {
+			auto &child = ArrayVector::GetEntry(*this);
+			auto array_size = ArrayType::GetSize(type);
+			serializer.WriteProperty<uint64_t>("array_size", array_size);
+			serializer.SetTag("child");
+			serializer.OnObjectBegin();
+			child.FormatSerialize(serializer, array_size);
+			serializer.OnObjectEnd();
+			break;
+		}
 		default:
 			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
 		}
@@ -1198,6 +1205,15 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			auto &child = ListVector::GetEntry(*this);
 			deserializer.OnObjectBegin();
 			child.FormatDeserialize(deserializer, list_size);
+			deserializer.OnObjectEnd();
+			break;
+		}
+		case PhysicalType::ARRAY: {
+			auto array_size = deserializer.ReadProperty<uint64_t>("array_size");
+			deserializer.SetTag("child");
+			auto &child = ArrayVector::GetEntry(*this);
+			deserializer.OnObjectBegin();
+			child.FormatDeserialize(deserializer, array_size);
 			deserializer.OnObjectEnd();
 			break;
 		}

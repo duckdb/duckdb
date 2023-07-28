@@ -22,6 +22,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
+		result = ArrayTypeInfo::FormatDeserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
 		result = DecimalTypeInfo::FormatDeserialize(deserializer);
 		break;
@@ -64,6 +67,19 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::FormatDeserialize(FormatDeseri
 	deserializer.ReadProperty("function_name", result->state_type.function_name);
 	deserializer.ReadProperty("return_type", result->state_type.return_type);
 	deserializer.ReadProperty("bound_argument_types", result->state_type.bound_argument_types);
+	return std::move(result);
+}
+
+void ArrayTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
+	ExtraTypeInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("child_type", child_type);
+	serializer.WriteProperty("size", size);
+}
+
+shared_ptr<ExtraTypeInfo> ArrayTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto child_type = deserializer.ReadProperty<LogicalType>("child_type");
+	auto size = deserializer.ReadProperty<uint32_t>("size");
+	auto result = duckdb::shared_ptr<ArrayTypeInfo>(new ArrayTypeInfo(std::move(child_type), size));
 	return std::move(result);
 }
 

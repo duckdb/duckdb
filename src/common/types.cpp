@@ -1076,6 +1076,7 @@ uint32_t ArrayType::GetSize(const LogicalType &type) {
 }
 
 LogicalType LogicalType::ARRAY(const LogicalType &child, uint32_t size) {
+	D_ASSERT(size > 0);
 	auto info = make_shared<ArrayTypeInfo>(child, size);
 	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
 }
