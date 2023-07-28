@@ -153,6 +153,8 @@ DUCKDB_API void BaseAppender::Append(int64_t value);
 template <>
 DUCKDB_API void BaseAppender::Append(hugeint_t value);
 template <>
+DUCKDB_API void BaseAppender::Append(uhugeint_t value);
+template <>
 DUCKDB_API void BaseAppender::Append(uint8_t value);
 template <>
 DUCKDB_API void BaseAppender::Append(uint16_t value);

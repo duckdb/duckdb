@@ -234,6 +234,11 @@ void BaseAppender::Append(hugeint_t value) {
 }
 
 template <>
+void BaseAppender::Append(uhugeint_t value) {
+	AppendValueInternal<uhugeint_t>(value);
+}
+
+template <>
 void BaseAppender::Append(uint8_t value) {
 	AppendValueInternal<uint8_t>(value);
 }
