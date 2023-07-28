@@ -55,7 +55,6 @@ private:
 	unique_ptr<JoinNode> CreateJoinTree(optional_ptr<JoinRelationSet> set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections,
 	                                    optional_ptr<JoinNode> left, optional_ptr<JoinNode> right);
-	
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)

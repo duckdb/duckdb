@@ -91,6 +91,7 @@ public:
 	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
 	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
 	void PrintRelationToTdomInfo();
+
 private:
 	bool SingleColumnFilter(FilterInfo &filter_info);
 	//! Filter & bindings -> list of indexes into the equivalent_relations array.
@@ -102,9 +103,6 @@ private:
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
-
-
-
 };
 
 } // namespace duckdb

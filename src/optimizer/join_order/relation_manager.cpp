@@ -277,7 +277,8 @@ void RelationManager::PrintRelationStats() {
 			std::cout << stats.column_names.at(i) << " has estimated distinct count "
 			          << stats.column_distinct_count.at(i).distinct_count << std::endl;
 		}
-		std::cout << stats.table_name << " has estimated cardinality " << stats.cardinality << " and relation id " << i << std::endl;
+		std::cout << stats.table_name << " has estimated cardinality " << stats.cardinality << " and relation id " << i
+		          << std::endl;
 	}
 }
 
