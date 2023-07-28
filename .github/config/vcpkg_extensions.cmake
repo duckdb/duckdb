@@ -20,7 +20,7 @@ duckdb_extension_load(aws
 duckdb_extension_load(spatial
     DONT_LINK
     GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
-    GIT_TAG 847ad88c65e3fa8484f20fd53fc1150512d1b2f9
+    GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
 )
