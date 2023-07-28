@@ -113,6 +113,9 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			}
 			filter_operators.push_back(*op);
 		}
+		if (op->type == LogicalOperatorType::LOGICAL_SHOW) {
+			return false;
+		}
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
@@ -241,6 +244,13 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
+		if (expression.alias == "SUBQUERY" &&
+		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
+			// most likely a BoundSubqueryExpression that was created from an uncorrelated subquery
+			// just return true, since the expression can be reordered, but don't insert anything in the
+			// bindings,
+			return true;
+		}
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);
 	}

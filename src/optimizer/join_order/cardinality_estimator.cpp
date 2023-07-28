@@ -265,7 +265,6 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	// TODO: It's possible cross-products were added and are not present in the filters in the relation_2_tdom
 	//       structures. When that's the case, multiply the denom structures that have no intersection
 	for (auto &match : subgraphs) {
-		D_ASSERT(match.denom >= 1);
 		denom *= match.denom;
 	}
 	// can happen if a table has cardinality 0, or a tdom is set to 0
