@@ -166,6 +166,12 @@ inline void Radix::EncodeData(data_ptr_t dataptr, hugeint_t value) {
 }
 
 template <>
+inline void Radix::EncodeData(data_ptr_t dataptr, uhugeint_t value) {
+	EncodeData<uint64_t>(dataptr, value.upper);
+	EncodeData<uint64_t>(dataptr + sizeof(value.upper), value.lower);
+}
+
+template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
 	Store<uint32_t>(BSwap<uint32_t>(converted_value), dataptr);
