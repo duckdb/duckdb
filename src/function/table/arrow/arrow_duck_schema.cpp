@@ -29,6 +29,24 @@ LogicalType &ArrowType::GetDuckType() {
 	return type;
 }
 
+ArrowVariableSizeType ArrowType::GetSizeType() const {
+	return size_type;
+}
+
+ArrowDateTimeType ArrowType::GetDateTimeType() const {
+	return date_time_precision;
+}
+
+ArrowType &ArrowType::operator[](idx_t index) {
+	D_ASSERT(index < children.size());
+	return children[index];
+}
+
+idx_t ArrowType::FixedSize() const {
+	D_ASSERT(size_type == ArrowVariableSizeType::FIXED_SIZE);
+	return fixed_size;
+}
+
 void ArrowTableType::AddColumn(ArrowType &column) {
 	columns.emplace_back(column);
 }

@@ -55,6 +55,14 @@ public:
 
 	LogicalType &GetDuckType();
 
+	ArrowVariableSizeType GetSizeType() const;
+
+	idx_t FixedSize() const;
+
+	ArrowDateTimeType GetDateTimeType() const;
+
+	ArrowType &operator[](idx_t index);
+
 private:
 	LogicalType type;
 	//! If we have a nested type, their children's type.

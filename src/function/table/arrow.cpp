@@ -142,7 +142,13 @@ ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1]);
 		ArrowType map_type(LogicalType::MAP(key_type.GetDuckType(), value_type.GetDuckType()),
 		                   ArrowVariableSizeType::NORMAL);
-		map_type.AssignChildren({key_type, value_type});
+		child_list_t<LogicalType> key_value;
+		key_value.emplace_back(std::make_pair("key", key_type.GetDuckType()));
+		key_value.emplace_back(std::make_pair("value", value_type.GetDuckType()));
+
+		ArrowType inner_struct(LogicalType::STRUCT(std::move(key_value)), ArrowVariableSizeType::NORMAL);
+		inner_struct.AssignChildren({key_type, value_type});
+		map_type.AddChild(std::move(inner_struct));
 		return map_type;
 	} else if (format == "z") {
 		return {LogicalType::BLOB, ArrowVariableSizeType::NORMAL};
@@ -213,11 +219,11 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		auto arrow_type = GetArrowLogicalType(schema);
 		if (schema.dictionary) {
 			auto logical_type = arrow_type.GetDuckType();
-			res->arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>(std::move(logical_type));
 			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary).GetDuckType());
 		} else {
 			return_types.emplace_back(arrow_type.GetDuckType());
 		}
+		res->AddColumn(col_idx, std::move(arrow_type));
 		auto format = string(schema.format);
 		auto name = string(schema.name);
 		if (name.empty()) {
