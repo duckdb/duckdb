@@ -31,6 +31,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		result = LogicalAnyJoin::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
@@ -42,6 +45,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
+		result = LogicalCreateIndex::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::FormatDeserialize(deserializer);
@@ -73,6 +79,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 		result = LogicalDelimGet::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_DETACH:
 		result = LogicalSimple::FormatDeserialize(deserializer);
 		break;
@@ -96,6 +105,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
 		result = LogicalExpressionGet::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		result = LogicalExtensionOperator::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
 		result = LogicalFilter::FormatDeserialize(deserializer);
@@ -261,6 +273,7 @@ void LogicalComparisonJoin::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WriteProperty("right_projection_map", right_projection_map);
 	serializer.WriteProperty("conditions", conditions);
 	serializer.WriteProperty("mark_types", mark_types);
+	serializer.WriteProperty("duplicate_eliminated_columns", duplicate_eliminated_columns);
 }
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -271,6 +284,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
 	deserializer.ReadProperty("conditions", result->conditions);
 	deserializer.ReadProperty("mark_types", result->mark_types);
+	deserializer.ReadProperty("duplicate_eliminated_columns", result->duplicate_eliminated_columns);
 	return std::move(result);
 }
 
@@ -282,6 +296,19 @@ void LogicalCreate::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalCreate::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
 	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<LogicalOperatorType>(), deserializer.Get<ClientContext &>(), std::move(info)));
+	return std::move(result);
+}
+
+void LogicalCreateIndex::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("info", *info);
+	serializer.WriteProperty("unbound_expressions", unbound_expressions);
+}
+
+unique_ptr<LogicalOperator> LogicalCreateIndex::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>("info");
+	auto unbound_expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("unbound_expressions");
+	auto result = duckdb::unique_ptr<LogicalCreateIndex>(new LogicalCreateIndex(deserializer.Get<ClientContext &>(), std::move(info), std::move(unbound_expressions)));
 	return std::move(result);
 }
 

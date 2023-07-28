@@ -91,7 +91,7 @@ private:
 	IpywidgetsCacheItem ipywidgets_module;
 
 public:
-	PyObject *AddCache(py::object item);
+	py::handle AddCache(py::object item);
 
 private:
 	vector<py::object> owned_objects;

@@ -975,7 +975,7 @@ string S3FileSystem::GetName() const {
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;
-	StringUtil::RTrim(trimmed_dir, PathSeparator());
+	StringUtil::RTrim(trimmed_dir, PathSeparator(trimmed_dir));
 	auto glob_res = Glob(JoinPath(trimmed_dir, "**"), opener);
 
 	if (glob_res.empty()) {

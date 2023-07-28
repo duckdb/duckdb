@@ -450,7 +450,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 
 	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
 	                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
-	                                                      duckdb::Value::POINTER((uintptr_t)get_schema)});
+	                                                      duckdb::Value::POINTER((uintptr_t)input->get_schema)});
 	try {
 		if (ingestion_mode == IngestionMode::CREATE) {
 			// We create the table based on an Arrow Scanner
