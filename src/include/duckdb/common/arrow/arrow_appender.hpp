@@ -30,7 +30,8 @@ public:
 public:
 	static void ReleaseArray(ArrowArray *array);
 	static ArrowArray *FinalizeChild(const LogicalType &type, ArrowAppendData &append_data);
-	static unique_ptr<ArrowAppendData> InitializeChild(const LogicalType &type, idx_t capacity, ArrowOptions &options);
+	static unique_ptr<ArrowAppendData> InitializeChild(const LogicalType &type, idx_t capacity,
+	                                                   ClientProperties &options);
 
 private:
 	//! The types of the chunks that will be appended in

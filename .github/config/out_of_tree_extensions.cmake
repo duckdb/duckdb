@@ -28,6 +28,7 @@ if (NOT WIN32)
         DONT_LINK
         GIT_URL https://github.com/duckdblabs/arrow
         GIT_TAG 1a43a5513b96e4c6ffd92026775ffeb648e71dac
+            APPLY_PATCHES
     )
     duckdb_extension_load(substrait
         DONT_LINK

@@ -1,0 +1,51 @@
+diff --git a/duckdb b/duckdb
+index ccc1771..a8ef34e 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit ccc17718869d13e7da49788fee1d8d469d39f5dc
++Subproject commit a8ef34e120c8d55893fa754901fbf6a2026f572a
+diff --git a/src/arrow_to_ipc.cpp b/src/arrow_to_ipc.cpp
+index b03773c..e1e70e0 100644
+--- a/src/arrow_to_ipc.cpp
++++ b/src/arrow_to_ipc.cpp
+@@ -22,7 +22,7 @@
+ #include "duckdb/common/arrow/arrow_converter.hpp"
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+ #include "duckdb/function/table/arrow.hpp"
+-#include "duckdb/main/client_properties.hpp"
++#include "duckdb/common/arrow/arrow_options.hpp"
+ #endif
+ 
+ namespace duckdb {
+@@ -72,7 +72,10 @@ unique_ptr<FunctionData> ToArrowIPCFunction::Bind(ClientContext &context, TableF
+ 
+     // Create the Arrow schema
+     ArrowSchema schema;
+-    ArrowConverter::ToArrowSchema(&schema, input.input_table_types, input.input_table_names, context.GetClientProperties());
++    ArrowOptions options;
++    options.time_zone = context.GetClientProperties().time_zone;
++    options.offset_size = ArrowOffsetSize::REGULAR;
++    ArrowConverter::ToArrowSchema(&schema, input.input_table_types, input.input_table_names, options);
+     result->schema = arrow::ImportSchema(&schema).ValueOrDie();
+ 
+     return std::move(result);
+@@ -88,6 +91,9 @@ OperatorResultType ToArrowIPCFunction::Function(ExecutionContext &context, Table
+     bool sending_schema = false;
+ 
+     bool caching_disabled = context.pipeline && !context.pipeline->GetSink();
++    ArrowOptions options;
++    options.offset_size = ArrowOffsetSize::REGULAR;
++//    bool caching_disabled = true;
+ 
+     if (!local_state.checked_schema) {
+         if (!global_state.sent_schema) {
+@@ -107,7 +113,7 @@ OperatorResultType ToArrowIPCFunction::Function(ExecutionContext &context, Table
+         output.data[1].SetValue(0, Value::BOOLEAN(1));
+     } else {
+         if (!local_state.appender) {
+-            local_state.appender = make_uniq<ArrowAppender>(input.GetTypes(), data.chunk_size, context.client.GetClientProperties());
++            local_state.appender = make_uniq<ArrowAppender>(input.GetTypes(), data.chunk_size, options);
+         }
+ 
+         // Append input chunk
