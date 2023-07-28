@@ -75,17 +75,13 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 	LogicalOperator *tmp = &op;
 	while (tmp->children.size() == 1) {
 		if (tmp->type == LogicalOperatorType::LOGICAL_PROJECTION ||
-		    tmp->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET ||
-		    tmp->type == LogicalOperatorType::LOGICAL_GET ||
+		    tmp->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET || tmp->type == LogicalOperatorType::LOGICAL_GET ||
 		    tmp->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
 		    tmp->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-		    tmp->type == LogicalOperatorType::LOGICAL_WINDOW ||
-		    tmp->type == LogicalOperatorType::LOGICAL_UNION ||
-		    tmp->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-		    tmp->type == LogicalOperatorType::LOGICAL_INTERSECT ||
+		    tmp->type == LogicalOperatorType::LOGICAL_WINDOW || tmp->type == LogicalOperatorType::LOGICAL_UNION ||
+		    tmp->type == LogicalOperatorType::LOGICAL_EXCEPT || tmp->type == LogicalOperatorType::LOGICAL_INTERSECT ||
 		    tmp->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-		    tmp->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
-		    tmp->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		    tmp->type == LogicalOperatorType::LOGICAL_ANY_JOIN || tmp->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			return true;
 		}
 		tmp = tmp->children[0].get();
@@ -154,7 +150,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(*op, children_stats);
 		if (datasource_filters.size() > 0) {
-			combined_stats.cardinality = (idx_t)MaxValue(combined_stats.cardinality*RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			combined_stats.cardinality =
+			    (idx_t)MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		AddRelation(input_op, parent, combined_stats);
 		return true;
@@ -209,7 +206,8 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		// if there is another logical filter that could not be pushed down into the
 		// table scan, apply another selectivity.
 		if (datasource_filters.size() > 0) {
-			stats.cardinality = (idx_t)MaxValue(stats.cardinality*RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
+			stats.cardinality =
+			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
 		AddRelation(input_op, parent, stats);
 		return true;
