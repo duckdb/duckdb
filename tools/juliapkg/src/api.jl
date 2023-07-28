@@ -2583,9 +2583,9 @@ end
 
 """
 Append a duckdb_uhugeint value to the appender.
-DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_uhugeint value);
+DUCKDB_API duckdb_state duckdb_append_uhugeint(duckdb_appender appender, duckdb_uhugeint value);
 """
-function duckdb_append_hugeint(appender, value)
+function duckdb_append_uhugeint(appender, value)
     return ccall((:duckdb_append_uhugeint, libduckdb), duckdb_state, (duckdb_appender, UInt64), appender, value)
 end
 
