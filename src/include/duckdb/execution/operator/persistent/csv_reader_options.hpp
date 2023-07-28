@@ -16,6 +16,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -138,12 +139,12 @@ struct BufferedCSVReaderOptions {
 	string write_newline;
 
 	//! The date format to use (if any is specified)
-	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! The date format to use for writing (if any is specified)
-	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
+	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
-	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
@@ -170,6 +171,8 @@ struct BufferedCSVReaderOptions {
 	void SetTypeForColumn(const string &name, const LogicalType &type);
 	void SetSQLType(const LogicalType &type);
 
-	std::string ToString() const;
+	string ToString() const;
+
+	named_parameter_map_t OutputReadSettings();
 };
 } // namespace duckdb

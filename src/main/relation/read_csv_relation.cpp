@@ -32,7 +32,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 }
 
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
-                                 BufferedCSVReaderOptions options, string alias_p)
+                                 named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(true) {
 
@@ -40,9 +40,9 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
 
-	// Force auto_detect for this constructor
-	options.auto_detect = true;
-	BufferedCSVReader reader(*context, std::move(options));
+	options["auto_detect"] = Value::BOOLEAN(true);
+	// Run the auto-detect, populating the options with the detected settings
+	BufferedCSVReader reader(*context, options);
 
 	auto &types = reader.GetTypes();
 	auto &names = reader.GetNames();
@@ -50,7 +50,9 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		columns.emplace_back(names[i], types[i]);
 	}
 
-	AddNamedParameter("auto_detect", Value::BOOLEAN(true));
+	// No need to auto-detect again
+	options["auto_detect"] = Value::BOOLEAN(false);
+	SetNamedParameters(std::move(options));
 }
 
 string ReadCSVRelation::GetAlias() {

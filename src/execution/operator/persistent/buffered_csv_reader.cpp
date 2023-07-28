@@ -16,6 +16,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/map.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -497,7 +498,7 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
                                              const vector<BufferedCSVReaderOptions> &info_candidates,
                                              BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
                                              vector<vector<LogicalType>> &best_sql_types_candidates,
-                                             std::map<LogicalTypeId, vector<string>> &best_format_candidates,
+                                             map<LogicalTypeId, vector<string>> &best_format_candidates,
                                              DataChunk &best_header_row) {
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
@@ -509,8 +510,8 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 	for (auto &info_candidate : info_candidates) {
 		options = info_candidate;
 		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, type_candidates);
-		std::map<LogicalTypeId, bool> has_format_candidates;
-		std::map<LogicalTypeId, vector<string>> format_candidates;
+		map<LogicalTypeId, bool> has_format_candidates;
+		map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
 			has_format_candidates[t.first] = false;
 			format_candidates[t.first].clear();
@@ -856,7 +857,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 
 	// format template candidates, ordered by descending specificity (~ from high to low)
-	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
+	map<LogicalTypeId, vector<const char *>> format_template_candidates = {
 	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 	    {LogicalTypeId::TIMESTAMP,
 	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
