@@ -119,7 +119,7 @@ public:
 	                                              vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state,
-	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
+	                          arrow_column_map_t &arrow_convert_data,
 	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
 
 	//! Get next scan state
