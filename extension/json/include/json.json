@@ -1,0 +1,120 @@
+[
+  {
+    "class": "BufferedJSONReaderOptions",
+    "includes": [
+      "buffered_json_reader.hpp"
+    ],
+    "members": [
+      {
+        "name": "format",
+        "type": "JSONFormat"
+      },
+      {
+        "name": "record_type",
+        "type": "JSONRecordType"
+      },
+      {
+        "name": "compression",
+        "type": "FileCompressionType"
+      },
+      {
+        "name": "file_options",
+        "type": "MultiFileReaderOptions"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "JSONTransformOptions",
+    "includes": [
+      "json_transform.hpp"
+    ],
+    "members": [
+      {
+        "name": "strict_cast",
+        "type": "bool"
+      },
+      {
+        "name": "error_duplicate_key",
+        "type": "bool"
+      },
+      {
+        "name": "error_missing_key",
+        "type": "bool"
+      },
+      {
+        "name": "error_unknown_key",
+        "type": "bool"
+      },
+      {
+        "name": "delay_error",
+        "type": "bool"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "JSONScanData",
+    "includes": [
+      "json_scan.hpp"
+    ],
+    "members": [
+      {
+        "name": "json_type",
+        "type": "JSONScanType",
+        "property": "type"
+      },
+      {
+        "name": "options",
+        "type": "BufferedJSONReaderOptions"
+      },
+      {
+        "name": "reader_bind",
+        "type": "MultiFileReaderBindData"
+      },
+      {
+        "name": "files",
+        "type": "vector<string>"
+      },
+      {
+        "name": "ignore_errors",
+        "type": "bool"
+      },
+      {
+        "name": "maximum_object_size",
+        "type": "idx_t"
+      },
+      {
+        "name": "auto_detect",
+        "type": "bool"
+      },
+      {
+        "name": "sample_size",
+        "type": "idx_t"
+      },
+      {
+        "name": "max_depth",
+        "type": "idx_t"
+      },
+      {
+        "name": "transform_options",
+        "type": "JSONTransformOptions"
+      },
+      {
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "name": "date_format",
+        "type": "string",
+        "serialize_property": "GetDateFormat()"
+      },
+      {
+        "name": "timestamp_format",
+        "type": "string",
+        "serialize_property": "GetTimestampFormat()"
+      }
+    ],
+    "constructor": ["$ClientContext", "files", "date_format", "timestamp_format"]
+  }
+]

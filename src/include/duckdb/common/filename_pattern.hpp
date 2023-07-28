@@ -23,7 +23,7 @@ public:
 
 public:
 	void SetFilenamePattern(const string &pattern);
-	string CreateFilename(const FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
+	string CreateFilename(FileSystem &fs, const string &path, const string &extension, idx_t offset) const;
 
 private:
 	string _base;

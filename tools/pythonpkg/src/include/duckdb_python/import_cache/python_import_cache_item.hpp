@@ -38,13 +38,13 @@ protected:
 	}
 
 private:
-	PyObject *AddCache(PythonImportCache &cache, py::object object);
+	py::handle AddCache(PythonImportCache &cache, py::object object);
 
 private:
 	//! Whether or not we attempted to load the module
 	bool load_succeeded;
 	//! The stored item
-	PyObject *object;
+	py::handle object;
 };
 
 } // namespace duckdb

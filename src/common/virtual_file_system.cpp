@@ -108,6 +108,10 @@ void VirtualFileSystem::RemoveFile(const string &filename) {
 	FindFileSystem(filename).RemoveFile(filename);
 }
 
+string VirtualFileSystem::PathSeparator(const string &path) {
+	return FindFileSystem(path).PathSeparator(path);
+}
+
 vector<string> VirtualFileSystem::Glob(const string &path, FileOpener *opener) {
 	return FindFileSystem(path).Glob(path, opener);
 }

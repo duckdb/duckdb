@@ -37,14 +37,10 @@ public:
 
 	ClientContext &GetContext() override;
 
-	optional_ptr<Catalog> GetCatalog() override;
-	void SetCatalog(Catalog &catalog);
-
 private:
 	idx_t file_size;
 	idx_t total_read;
 	optional_ptr<ClientContext> context;
-	optional_ptr<Catalog> catalog;
 };
 
 } // namespace duckdb
