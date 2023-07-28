@@ -3,7 +3,7 @@
 
 #include <R_ext/Utils.h>
 
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"

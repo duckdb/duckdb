@@ -41,7 +41,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 /// \defgroup Arrow C Data Interface
 /// Definitions for the C Data Interface/C Stream Interface.
@@ -52,6 +52,11 @@
 
 //! @cond Doxygen_Suppress
 namespace duckdb_adbc {
+
+using duckdb_nanoarrow::ArrowArray;
+using duckdb_nanoarrow::ArrowArrayStream;
+using duckdb_nanoarrow::ArrowSchema;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -9,8 +9,7 @@
 #pragma once
 
 #include "duckdb/common/arrow/arrow_converter.hpp"
-
-struct ArrowSchema;
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 namespace duckdb {
 

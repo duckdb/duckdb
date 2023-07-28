@@ -20,7 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+
+namespace duckdb_nanoarrow {
 
 void ArrowSchemaRelease(struct ArrowSchema *schema) {
 	if (schema->format != NULL)
@@ -468,3 +470,5 @@ int ArrowSchemaDeepCopy(struct ArrowSchema *schema, struct ArrowSchema *schema_o
 
 	return NANOARROW_OK;
 }
+
+} // namespace duckdb_nanoarrow

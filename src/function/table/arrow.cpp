@@ -1,4 +1,4 @@
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"

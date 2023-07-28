@@ -14,6 +14,10 @@ using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
+using duckdb_nanoarrow::ArrowArray;
+using duckdb_nanoarrow::ArrowArrayStream;
+using duckdb_nanoarrow::ArrowSchema;
+
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
 	Connection *conn = (Connection *)connection;
 	auto wrapper = new ArrowResultWrapper();

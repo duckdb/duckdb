@@ -8,7 +8,7 @@
 
 #include "duckdb.h"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 
 #include <errno.h>
 #include <stdarg.h>

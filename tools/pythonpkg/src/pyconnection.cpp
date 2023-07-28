@@ -1,7 +1,7 @@
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 
 #include "duckdb/catalog/default/default_types.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/types.hpp"

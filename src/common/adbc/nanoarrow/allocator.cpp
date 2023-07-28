@@ -18,7 +18,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+
+namespace duckdb_nanoarrow {
 
 void *ArrowMalloc(int64_t size) {
 	return malloc(size);
@@ -51,3 +53,5 @@ static struct ArrowBufferAllocator ArrowBufferAllocatorMalloc = {
 struct ArrowBufferAllocator *ArrowBufferAllocatorDefault() {
 	return &ArrowBufferAllocatorMalloc;
 }
+
+} // namespace duckdb_nanoarrow

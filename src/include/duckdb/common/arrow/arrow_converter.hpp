@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
 #include "duckdb/common/arrow/arrow_options.hpp"
 
-struct ArrowSchema;
-
 namespace duckdb {
+
+using duckdb_nanoarrow::ArrowSchema;
 
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
