@@ -13,10 +13,11 @@ env:
 
 jobs:
    trigger-nightly:
-        name: Trigger Workflow
-        if: contains(github.event.pull_request.labels.*.name, 'stress test')
-        uses: actions/github-script@v6
-        with:
+     name: Trigger Workflow
+     if: contains(github.event.pull_request.labels.*.name, 'stress test')
+     steps:
+     - uses: actions/github-script@v6
+       with:
           script: |
             github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
