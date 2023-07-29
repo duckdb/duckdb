@@ -105,7 +105,7 @@ public:
 
 private:
 	//! Insert a row ID into a leaf
-	bool InsertToLeaf(Node &leaf_node, const row_t &row_id);
+	bool InsertToLeaf(Node &leaf, const row_t &row_id);
 	//! Insert a key into the tree
 	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself

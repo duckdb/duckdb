@@ -286,8 +286,6 @@ struct LogicalType {
 	//! Serializes a LogicalType to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 
-	DUCKDB_API void SerializeEnumType(Serializer &serializer) const;
-
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
 
@@ -373,9 +371,10 @@ public:
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
-	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
+	DUCKDB_API static LogicalType ENUM(Vector &ordered_data, idx_t size); // NOLINT
+	// DEPRECATED - provided for backwards compatibility
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -400,21 +399,17 @@ struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
 };
 
-struct UserType{
+struct UserType {
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 };
 
-struct EnumType{
-	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+struct EnumType {
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
 	DUCKDB_API static const Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
-	DUCKDB_API static void SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry);
-	DUCKDB_API static optional_ptr<TypeCatalogEntry> GetCatalog(const LogicalType &type);
-	DUCKDB_API static string GetSchemaName(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
-	DUCKDB_API static void Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals);
+	DUCKDB_API static string_t GetString(const LogicalType &type, idx_t pos);
 };
 
 struct StructType {

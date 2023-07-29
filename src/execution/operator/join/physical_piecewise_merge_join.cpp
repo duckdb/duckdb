@@ -118,23 +118,25 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataC
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                         LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
+SinkCombineResultType PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context,
+                                                          OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 	gstate.table->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this, lstate.table.executor, "rhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
+                                                      OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
 	auto &global_sort_state = gstate.table->global_sort_state;
 
 	if (IsRightOuterJoin(join_type)) {

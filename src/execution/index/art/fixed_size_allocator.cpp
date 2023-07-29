@@ -1,9 +1,5 @@
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 
-#include "duckdb/common/allocator.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/helper.hpp"
-
 namespace duckdb {
 
 constexpr idx_t FixedSizeAllocator::BASE[];
@@ -46,7 +42,7 @@ FixedSizeAllocator::~FixedSizeAllocator() {
 	}
 }
 
-SwizzleablePointer FixedSizeAllocator::New() {
+Node FixedSizeAllocator::New() {
 
 	// no more free pointers
 	if (buffers_with_free_space.empty()) {
@@ -77,19 +73,19 @@ SwizzleablePointer FixedSizeAllocator::New() {
 		buffers_with_free_space.erase(buffer_id);
 	}
 
-	return SwizzleablePointer(offset, buffer_id);
+	return Node(buffer_id, offset);
 }
 
-void FixedSizeAllocator::Free(const SwizzleablePointer ptr) {
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.buffer_id].ptr);
+void FixedSizeAllocator::Free(const Node ptr) {
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.GetBufferId()].ptr);
 	ValidityMask mask(bitmask_ptr);
-	D_ASSERT(!mask.RowIsValid(ptr.offset));
-	mask.SetValid(ptr.offset);
-	buffers_with_free_space.insert(ptr.buffer_id);
+	D_ASSERT(!mask.RowIsValid(ptr.GetOffset()));
+	mask.SetValid(ptr.GetOffset());
+	buffers_with_free_space.insert(ptr.GetBufferId());
 
 	D_ASSERT(total_allocations > 0);
-	D_ASSERT(buffers[ptr.buffer_id].allocation_count > 0);
-	buffers[ptr.buffer_id].allocation_count--;
+	D_ASSERT(buffers[ptr.GetBufferId()].allocation_count > 0);
+	buffers[ptr.GetBufferId()].allocation_count--;
 	total_allocations--;
 }
 
@@ -172,7 +168,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	}
 }
 
-SwizzleablePointer FixedSizeAllocator::VacuumPointer(const SwizzleablePointer ptr) {
+Node FixedSizeAllocator::VacuumPointer(const Node ptr) {
 
 	// we do not need to adjust the bitmask of the old buffer, because we will free the entire
 	// buffer after the vacuum operation

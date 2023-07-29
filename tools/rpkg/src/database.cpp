@@ -9,8 +9,8 @@
 using namespace duckdb;
 
 void duckdb::DBDeleter(DBWrapper *db) {
-	cpp11::warning(std::string("Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
-	                           "duckdb::duckdb_shutdown(drv) to avoid this."));
+	cpp11::warning("Database is garbage-collected, use dbDisconnect(con, shutdown=TRUE) or "
+	               "duckdb::duckdb_shutdown(drv) to avoid this.");
 	delete db;
 }
 

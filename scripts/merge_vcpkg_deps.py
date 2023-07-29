@@ -9,13 +9,14 @@ import sys
 # we need to pin the openssl version requiring us to also pin the vcpkg version here. When updating the vcpkg git hash
 # we probably want to change it here and in ('.github/actions/build_extensions/action.yml') at the same time
 
-merged_dependencies = []
+dependencies_str = []
+dependencies_dict = []
 merged_overlay_ports = []
 
 
 def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
     def prefix_overlay_port(overlay_port):
-        vcpkg_prefix_path = path_to_vcpkg_json[0:path_to_vcpkg_json.find("/vcpkg.json")]
+        vcpkg_prefix_path = path_to_vcpkg_json[0 : path_to_vcpkg_json.find("/vcpkg.json")]
         return vcpkg_prefix_path + overlay_port
 
     return map(prefix_overlay_port, overlay_ports)
@@ -24,30 +25,43 @@ def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
 for file in sys.argv[1:]:
     f = open(file)
     data = json.load(f)
-    merged_dependencies += data['dependencies']
+
+    for dep in data['dependencies']:
+        if type(dep) is str:
+            dependencies_str.append(dep)
+        elif type(dep) is dict:
+            dependencies_dict.append(dep)
+        else:
+            raise Exception(f"Unknown entry type found in dependencies: '{dep}'")
+
     if 'vcpkg-configuration' in data:
         if 'overlay-ports' in data['vcpkg-configuration']:
             merged_overlay_ports += prefix_overlay_ports(data['vcpkg-configuration']['overlay-ports'], file)
 
-deduplicated_dependencies = list(set(merged_dependencies))
+final_deduplicated_deps = list()
+dedup_set = set()
 
+for dep in dependencies_dict:
+    if dep['name'] not in dedup_set:
+        final_deduplicated_deps.append(dep)
+        # TODO: deduplication is disabled for now, just let vcpkg handle duplicates in deps
+        # dedup_set.add(dep['name'])
+
+for dep in dependencies_str:
+    if dep not in dedup_set:
+        final_deduplicated_deps.append(dep)
+        # TODO: deduplication is disabled for now, just let vcpkg handle duplicates in deps
+        # dedup_set.add(dep)
 
 data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
     "builtin-baseline": "501db0f17ef6df184fcdbfbe0f87cde2313b6ab1",
-    "dependencies": deduplicated_dependencies,
-    "overrides": [
-        {
-            "name": "openssl",
-            "version": "3.0.8"
-        }
-    ]
+    "dependencies": final_deduplicated_deps,
+    "overrides": [{"name": "openssl", "version": "3.0.8"}],
 }
 
 if merged_overlay_ports:
-    data['vcpkg-configuration'] = {
-        'overlay-ports': merged_overlay_ports
-    }
+    data['vcpkg-configuration'] = {'overlay-ports': merged_overlay_ports}
 
 # Print output
 print("Writing to 'build/extension_configuration/vcpkg.json': ")

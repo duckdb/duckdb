@@ -14,6 +14,8 @@
 #include <functional>
 
 namespace duckdb {
+class FormatSerializer;
+class FormatDeserializer;
 
 struct ColumnBinding {
 	idx_t table_index;
@@ -36,6 +38,9 @@ struct ColumnBinding {
 	bool operator!=(const ColumnBinding &rhs) const {
 		return !(*this == rhs);
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static ColumnBinding FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -1,17 +1,41 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/serializer/binary_deserializer.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
+
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 class BinaryDeserializer : public FormatDeserializer {
 public:
 	template <class T>
+	unique_ptr<T> Deserialize() {
+		OnObjectBegin();
+		auto result = T::FormatDeserialize(*this);
+		OnObjectEnd();
+		return result;
+	}
+
+	template <class T>
 	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
 		BinaryDeserializer deserializer(ptr, length);
-		deserializer.OnObjectBegin();
-		auto result = T::FormatDeserialize(deserializer);
-		deserializer.OnObjectEnd();
-		return result;
+		return deserializer.template Deserialize<T>();
+	}
+
+	template <class T>
+	static unique_ptr<T> Deserialize(ClientContext &context, bound_parameter_map_t &parameters, data_ptr_t ptr,
+	                                 idx_t length) {
+		BinaryDeserializer deserializer(ptr, length);
+		deserializer.Set<ClientContext &>(context);
+		deserializer.Set<bound_parameter_map_t &>(parameters);
+		return deserializer.template Deserialize<T>();
 	}
 
 private:
