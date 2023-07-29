@@ -59,6 +59,14 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	return std::move(result);
 }
 
+void LogicalCopyToFile::FormatSerialize(FormatSerializer &serializer) const {
+	throw SerializationException("LogicalCopyToFile not implemented yet");
+}
+
+unique_ptr<LogicalOperator> LogicalCopyToFile::FormatDeserialize(FormatDeserializer &deserializer) {
+	throw SerializationException("LogicalCopyToFile not implemented yet");
+}
+
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
