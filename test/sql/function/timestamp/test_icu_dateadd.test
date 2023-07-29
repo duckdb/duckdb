@@ -287,7 +287,7 @@ SELECT iv, '1962-07-31 12:20:48.123456Z'::TIMESTAMPTZ + iv FROM intervals;
 #
 statement ok
 CREATE TABLE limits AS SELECT ts, label FROM (VALUES
-	('290309-12-22 (BC) 00:00:00Z'::TIMESTAMPTZ, 'tsmin'),
+	('290303-12-11 (BC) 00:07:02Z'::TIMESTAMPTZ, 'tsmin'),
 	('294247-01-10 04:00:54.775806Z'::TIMESTAMPTZ, 'tsmax')
 ) tbl(ts, label);
 

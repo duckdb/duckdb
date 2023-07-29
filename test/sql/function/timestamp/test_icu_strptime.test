@@ -32,6 +32,28 @@ select strptime(NULL, '%Y-%m-%d %H:%M:%S.%g %Z');
 NULL
 
 #
+# Parsing pre-Gregorian timestamps
+#
+
+# Winter
+query I
+select '1582-01-01 10:33:41+01'::timestamptz
+----
+1582-01-01 01:33:41-07:52
+
+# Summer (no DST)
+query I
+select '1582-06-01 10:33:41+01'::timestamptz
+----
+1582-06-01 01:33:41-07:52
+
+# BC
+query I
+select '0044-03-13 (BC) 10:33:41+01'::timestamptz
+----
+0044-03-13 (BC) 01:33:41-07:52
+
+#
 # Same date, multiple TZ names
 #
 
