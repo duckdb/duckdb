@@ -252,11 +252,6 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &info = cast_data.info->Cast<BindData>();
 		CalendarPtr cal(info.calendar->clone());
 
-		//	When the user provides an offset, we skip re-computation for speed,
-		//	but if it is before the Gregorian cutover we have a proleptic Gregorian date
-		//	so we need to force it to be interpreted as a Julian date.
-		const auto gregorian_check = Timestamp::FromDatetime(Date::FromDate(1583, 1, 1), dtime_t(0));
-
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 			    timestamp_t result;
@@ -278,22 +273,6 @@ struct ICUStrptime : public ICUDateFunc {
 				    }
 
 				    // Now get the parts in the given time zone
-				    result = FromNaive(calendar, result);
-			    } else if (result < gregorian_check && Timestamp::IsFinite(result)) {
-				    //	A timestamp with an offset is an instant instead of naïve.
-				    //	Since we are assuming it is local for handing off to the calendar,
-				    //	offset it from UTC.
-				    auto calendar = cal.get();
-
-				    //	ICU gives bogus UCAL_ZONE_OFFSET values far from the epoch
-				    //	so look it up in the present.
-				    //	Note that DST is 0 before the switch, so we don't need it
-				    FromNaive(calendar, timestamp_t::epoch());
-				    int64_t micros = ExtractField(calendar, UCAL_ZONE_OFFSET);
-				    micros *= Interval::MICROS_PER_MSEC;
-
-				    //	Offset back to local time.
-				    result += micros;
 				    result = FromNaive(calendar, result);
 			    }
 

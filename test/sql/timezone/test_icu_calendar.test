@@ -82,7 +82,7 @@ SELECT era, ts, DATE_PART(['era', 'year', 'month', 'day'], ts)
 FROM timestamps
 ORDER BY 2
 ----
-Taika	0645-06-30 09:00:00+09:18	{'era': 0, 'year': 1, 'month': 6, 'day': 30}
+Taika	0645-06-27 09:18:59+09:18	{'era': 0, 'year': 1, 'month': 6, 'day': 27}
 Keiou	1867-01-01 09:18:59+09:18	{'era': 231, 'year': 3, 'month': 1, 'day': 1}
 Keiou	1868-09-07 09:18:59+09:18	{'era': 231, 'year': 4, 'month': 9, 'day': 7}
 Meiji	1868-09-08 09:18:59+09:18	{'era': 232, 'year': 1, 'month': 9, 'day': 8}

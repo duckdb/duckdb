@@ -1141,12 +1141,12 @@ statement error
 select time_bucket('3 months'::interval, '2019-05-05 00:00:00+00'::timestamptz, '-2000000000 months'::interval);
 
 statement error
-select time_bucket('1 microseconds'::interval, '290273-12-11 (BC) 20:06:07.225191+00'::timestamptz);
+select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.224191+00'::timestamptz);
 
 query I
-select time_bucket('1 microseconds'::interval, '290273-12-11 (BC) 20:06:07.225192+00'::timestamptz);
+select time_bucket('1 microseconds'::interval, '290279-12-24 (BC) 19:59:05.224192+00'::timestamptz);
 ----
-290273-12-11 (BC) 12:06:07.224192-07:52
+290279-12-24 (BC) 12:06:07.224192-07:52
 
 statement error
 select time_bucket('1 microseconds'::interval, '294247-01-10 04:00:54.775+00'::timestamptz);
