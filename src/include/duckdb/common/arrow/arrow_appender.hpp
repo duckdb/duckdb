@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
 

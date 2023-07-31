@@ -2,7 +2,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_buffer.hpp"
 #include "duckdb/common/arrow/arrow_options.hpp"
 #include "duckdb/common/array.hpp"

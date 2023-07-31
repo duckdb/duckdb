@@ -4,7 +4,7 @@
 #include "duckdb_python/python_objects.hpp"
 
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"

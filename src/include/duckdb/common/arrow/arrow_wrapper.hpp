@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #pragma once
-#include "duckdb/common/arrow/nanoarrow/nanoarrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/preserved_error.hpp"
 
