@@ -30,6 +30,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'blob.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'decimal.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'hugeint.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'types', 'uhugeint.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'uuid.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'interval.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
