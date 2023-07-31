@@ -63,7 +63,7 @@ public:
 public:
 	void AddColumn(idx_t index, ArrowType &&type) {
 		D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
-		arrow_convert_data.emplace(std::make_pair(index, type));
+		arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
 	}
 	arrow_column_map_t &GetColumns() {
 		return arrow_convert_data;

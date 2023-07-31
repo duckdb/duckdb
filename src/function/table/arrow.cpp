@@ -147,7 +147,11 @@ ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 		key_value.emplace_back(std::make_pair("value", value_type.GetDuckType()));
 
 		ArrowType inner_struct(LogicalType::STRUCT(std::move(key_value)), ArrowVariableSizeType::NORMAL);
-		inner_struct.AssignChildren({key_type, value_type});
+		vector<ArrowType> children;
+		children.reserve(2);
+		children.push_back(std::move(key_type));
+		children.push_back(std::move(value_type));
+		inner_struct.AssignChildren(std::move(children));
 		map_type.AddChild(std::move(inner_struct));
 		return map_type;
 	} else if (format == "z") {
@@ -219,7 +223,10 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		auto arrow_type = GetArrowLogicalType(schema);
 		if (schema.dictionary) {
 			auto logical_type = arrow_type.GetDuckType();
-			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary).GetDuckType());
+			auto dictionary = make_uniq<ArrowType>(GetArrowLogicalType(*schema.dictionary));
+			return_types.emplace_back(dictionary->GetDuckType());
+			// The dictionary might have different attributes (size type, datetime precision, etc..)
+			arrow_type.SetDictionary(std::move(dictionary));
 		} else {
 			return_types.emplace_back(arrow_type.GetDuckType());
 		}

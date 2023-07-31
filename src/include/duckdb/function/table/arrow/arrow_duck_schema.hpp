@@ -33,6 +33,9 @@ enum class ArrowDateTimeType : uint8_t {
 
 class ArrowType {
 public:
+	// Move constructor
+	ArrowType(ArrowType &&other) = default;
+
 	// From a DuckDB type
 	ArrowType(LogicalType type_p)
 	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
@@ -57,15 +60,19 @@ public:
 
 	void AssignChildren(vector<ArrowType> children);
 
-	LogicalType &GetDuckType();
+	const LogicalType &GetDuckType() const;
 
 	ArrowVariableSizeType GetSizeType() const;
 
 	idx_t FixedSize() const;
 
+	void SetDictionary(unique_ptr<ArrowType> dictionary);
+
 	ArrowDateTimeType GetDateTimeType() const;
 
-	ArrowType &operator[](idx_t index);
+	const ArrowType &GetDictionary() const;
+
+	const ArrowType &operator[](idx_t index) const;
 
 private:
 	LogicalType type;
@@ -77,12 +84,14 @@ private:
 	ArrowDateTimeType date_time_precision;
 	//! Only for size types with fixed size
 	idx_t fixed_size = 0;
+	//! Hold the optional type if the array is a dictionary
+	unique_ptr<ArrowType> dictionary_type;
 };
 
 struct ArrowTableType {
 public:
 	vector<LogicalType> GetDuckDBTypes();
-	void AddColumn(ArrowType &column);
+	void AddColumn(ArrowType &&column);
 
 private:
 	vector<ArrowType> columns;

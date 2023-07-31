@@ -91,11 +91,11 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalSta
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                                ArrowType &arrow_type, int64_t nested_offset = -1, ValidityMask *parent_mask = nullptr,
-                                uint64_t parent_offset = 0);
+                                const ArrowType &arrow_type, int64_t nested_offset = -1,
+                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
 static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                              ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
+                              const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
 	auto size_type = arrow_type.GetSizeType();
 	idx_t list_size = 0;
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
@@ -170,7 +170,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalS
 }
 
 static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                              ArrowType &arrow_type, int64_t nested_offset) {
+                              const ArrowType &arrow_type, int64_t nested_offset) {
 	auto size_type = arrow_type.GetSizeType();
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	if (size_type == ArrowVariableSizeType::FIXED_SIZE) {
@@ -354,7 +354,7 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-                                ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
+                                const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
@@ -800,14 +800,15 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 }
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
-                                          idx_t size, ArrowType &arrow_type, idx_t col_idx) {
+                                          idx_t size, const ArrowType &arrow_type, idx_t col_idx) {
 	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
 	if (!dict_vectors.count(col_idx)) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
-		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_type);
+		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length,
+		                    arrow_type.GetDictionary());
 		dict_vectors[col_idx] = std::move(base_vector);
 	}
 	auto dictionary_type = arrow_type.GetDuckType();

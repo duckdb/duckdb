@@ -12,12 +12,8 @@ vector<LogicalType> ArrowTableType::GetDuckDBTypes() {
 	return duckdb_types;
 }
 
-void ArrowType::AddChild(ArrowType &child) {
-	children.emplace_back(child);
-}
-
 void ArrowType::AddChild(ArrowType &&child) {
-	children.emplace_back(child);
+	children.emplace_back(std::move(child));
 }
 
 void ArrowType::AssignChildren(vector<ArrowType> children) {
@@ -25,7 +21,17 @@ void ArrowType::AssignChildren(vector<ArrowType> children) {
 	this->children = std::move(children);
 }
 
-LogicalType &ArrowType::GetDuckType() {
+void ArrowType::SetDictionary(unique_ptr<ArrowType> dictionary) {
+	D_ASSERT(!this->dictionary_type);
+	dictionary_type = std::move(dictionary);
+}
+
+const ArrowType &ArrowType::GetDictionary() const {
+	D_ASSERT(dictionary_type);
+	return *dictionary_type;
+}
+
+const LogicalType &ArrowType::GetDuckType() const {
 	return type;
 }
 
@@ -37,7 +43,7 @@ ArrowDateTimeType ArrowType::GetDateTimeType() const {
 	return date_time_precision;
 }
 
-ArrowType &ArrowType::operator[](idx_t index) {
+const ArrowType &ArrowType::operator[](idx_t index) const {
 	D_ASSERT(index < children.size());
 	return children[index];
 }
@@ -47,8 +53,8 @@ idx_t ArrowType::FixedSize() const {
 	return fixed_size;
 }
 
-void ArrowTableType::AddColumn(ArrowType &column) {
-	columns.emplace_back(column);
+void ArrowTableType::AddColumn(ArrowType &&column) {
+	columns.emplace_back(std::move(column));
 }
 
 } // namespace duckdb
