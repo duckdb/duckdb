@@ -18,6 +18,8 @@
 
 namespace duckdb_adbc {
 
+using duckdb_nanoarrow::ArrowSchemaDeepCopy;
+
 struct SingleBatchArrayStream {
 	struct ArrowSchema schema;
 	struct ArrowArray batch;

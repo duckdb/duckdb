@@ -7,9 +7,9 @@
 #include <unordered_map>
 
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 
 using duckdb::vector;
-using duckdb_nanoarrow::ArrowSchema;
 
 namespace node_duckdb {
 
