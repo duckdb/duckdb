@@ -67,10 +67,10 @@ static string GetOneFile(FileSystem &fs, const string &path, MultiFileReaderOpti
 
 	const vector<string> splits = StringUtil::Split(path, fs.PathSeparator(path));
 	D_ASSERT(!splits.empty());
-	string current;
+	string current = splits.front();
 
 	// find the path/directory until the first glob
-	for (idx_t i = 0; i < splits.size(); i++) {
+	for (idx_t i = 1; i < splits.size(); i++) {
 		if (fs.HasGlob(splits[i])) {
 			break;
 		}
@@ -93,11 +93,12 @@ static string GetOneFile(FileSystem &fs, const string &path, MultiFileReaderOpti
 			break;
 		}
 		if (directories.empty()) {
-			// this is not necessarily an error, but would be inconvenient nonetheless because no empty dirs are expected
+			// this is not necessarily an error, but would be inconvenient nonetheless because no empty dirs are
+			// expected
 			throw IOException("an empty directory was encountered: [%s], [%s]", current, partition_start);
 		}
 		// continue with one directory (and ignore any other dirs)
-		current = directories.front(); // move
+		current = std::move(directories.front());
 	}
 	return files.front();
 }
