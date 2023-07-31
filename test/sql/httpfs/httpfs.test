@@ -1,7 +1,7 @@
 # name: test/sql/httpfs/httpfs.test
 # group: [httpfs]
 
-require httpfs;
+require httpfs
 
 statement ok
 set http_headers = MAP {'hello': 'world'};
