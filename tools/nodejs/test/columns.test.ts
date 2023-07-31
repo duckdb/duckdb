@@ -12,7 +12,7 @@ describe('Column Types', function() {
 
           let cols = stmt.columns();
           
-          assert.equal(cols.length, 42);
+          assert.equal(cols.length, 43);
 
           var expected = [
             { name: 'bool', type: { id: 'BOOLEAN',  sql_type: 'BOOLEAN' } },
@@ -21,6 +21,7 @@ describe('Column Types', function() {
             { name: 'int', type: { id: 'INTEGER', sql_type: 'INTEGER' } },
             { name: 'bigint', type: { id: 'BIGINT', sql_type: 'BIGINT' } },
             { name: 'hugeint', type: { id: 'HUGEINT', sql_type: 'HUGEINT' } },
+            { name: 'uhugeint', type: { id: 'UHUGEINT', sql_type: 'UHUGEINT' } },
             { name: 'utinyint', type: { id: 'UTINYINT', sql_type: 'UTINYINT' } },
             { name: 'usmallint', type: { id: 'USMALLINT', sql_type: 'USMALLINT' } },
             { name: 'uint', type: { id: 'UINTEGER', sql_type: 'UINTEGER' } },
