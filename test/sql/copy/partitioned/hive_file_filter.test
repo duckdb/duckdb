@@ -27,11 +27,26 @@ endloop
 
 endloop
 
+query I
+SELECT COUNT(*) FROM t;
+----
+720
+
 # create hive partition
 statement ok
 COPY t TO '__TEST_DIR__/filter_partition' (FORMAT PARQUET, PARTITION_BY(year,month,day));
 
+query I
+SELECT COUNT(*) FROM GLOB('__TEST_DIR__/filter_partition/**');
+----
+720
+
 # check amount of files (_year * 12 * 30)
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/filter_partition/*/*/*/*.parquet', hive_partitioning=1, hive_filter=1);
+----
+720
+
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/filter_partition/**', hive_filter=1);
 ----
