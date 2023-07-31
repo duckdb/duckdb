@@ -22,8 +22,9 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	string query("SELECT * FROM (VALUES ");
@@ -216,9 +217,6 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 }
 
 SQLRETURN ApiInfo::GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-	if (function_id != SQL_API_ODBC3_ALL_FUNCTIONS) {
-		return SQL_ERROR;
-	}
 	memset(supported_ptr, 0, sizeof(UWORD) * SQL_API_ODBC3_ALL_FUNCTIONS_SIZE);
 	for (auto it = BASE_SUPPORTED_FUNCTIONS.begin(); it != BASE_SUPPORTED_FUNCTIONS.end(); it++) {
 		SetFunctionSupported(supported_ptr, *it);

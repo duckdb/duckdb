@@ -14,10 +14,13 @@ using std::ptrdiff_t;
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	duckdb::OdbcHandleDbc *dbc = nullptr;
-	if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
+	// TODO: If value_ptr is NULL shouldn't we return the length of the attribute, instead of returning SQL_ERROR?
+	// From the docs: "If ValuePtr is NULL, StringLengthPtr will still return the total number of bytes (excluding the null-termination character for character data) available to return in the buffer pointed to by ValuePtr."
 	if (!value_ptr) {
 		return SQL_ERROR;
 	}
@@ -38,7 +41,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			                                   SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
 		}
 
-		auto ret = SQL_SUCCESS;
+		ret = SQL_SUCCESS;
 		auto out_len = duckdb::MinValue(dbc->sql_attr_current_catalog.size(), (size_t)buffer_length);
 		memcpy((char *)value_ptr, dbc->sql_attr_current_catalog.c_str(), out_len);
 
@@ -125,8 +128,9 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	}
 
 	duckdb::OdbcHandleDbc *dbc = nullptr;
-	if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	switch (attribute) {
@@ -1065,8 +1069,9 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 
 SQLRETURN SQL_API SQLDisconnect(SQLHDBC connection_handle) {
 	duckdb::OdbcHandleDbc *dbc = nullptr;
-	if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	dbc->conn.reset();

@@ -43,8 +43,9 @@ using duckdb::vector;
 
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (hstmt->stmt) {
@@ -81,11 +82,11 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 //! the stmt is executed multiple times when there is a bound array of parameters in INSERT and UPDATE statements
 SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
-	SQLRETURN ret;
 	do {
 		ret = SingleExecuteStmt(hstmt);
 	} while (ret == SQL_STILL_EXECUTING);
@@ -807,8 +808,9 @@ SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_t
 
 SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 	return duckdb::BatchExecuteStmt(hstmt);
 }
@@ -818,8 +820,9 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
                                     SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
                                     SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (input_output_type != SQL_PARAM_INPUT) {
