@@ -354,6 +354,11 @@ public:
 	static optional_ptr<T> PGPointerCast(void *ptr) {
 		return optional_ptr<T>(reinterpret_cast<T *>(ptr));
 	}
+	template <class T, int ID>
+	static optional_ptr<T> PGCheckedCast(void *ptr) {
+		auto value = PGPointerCast<T>(ptr);
+		return value && value->type == ID ? value : nullptr;
+	}
 };
 
 vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);

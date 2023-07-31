@@ -48,10 +48,22 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 		throw ParserException("SET needs a single scalar value parameter");
 	}
 	D_ASSERT(stmt.args->head && stmt.args->head->data.ptr_value);
-	auto const_val = PGPointerCast<duckdb_libpgquery::PGAConst>(stmt.args->head->data.ptr_value);
-	D_ASSERT(const_val->type == duckdb_libpgquery::T_PGAConst);
 
-	auto value = TransformValue(const_val->val)->value;
+	auto ptr_value = stmt.args->head->data.ptr_value;
+
+	Value value;
+	if (auto const_val = PGCheckedCast<duckdb_libpgquery::PGAConst, duckdb_libpgquery::T_PGAConst>(ptr_value)) {
+		value = TransformValue(const_val->val)->value;
+	} else if (auto func_call =
+	               PGCheckedCast<duckdb_libpgquery::PGFuncCall, duckdb_libpgquery::T_PGFuncCall>(ptr_value)) {
+		auto func_expr = TransformFuncCall(*func_call);
+		if (!ConstructConstantFromExpression(*func_expr, value)) {
+			throw ParserException("Unsupported value type for setting");
+		}
+	} else {
+		throw InternalException("Unexpected node type in SET statement");
+	}
+
 	return make_uniq<SetVariableStatement>(name, value, ToSetScope(stmt.scope));
 }
 
