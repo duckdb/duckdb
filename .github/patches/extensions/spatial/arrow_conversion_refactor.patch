@@ -1,29 +1,70 @@
 diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
-index 709db44..309f009 100644
+index 709db44..861e6d3 100644
 --- a/spatial/src/spatial/gdal/functions/st_read.cpp
 +++ b/spatial/src/spatial/gdal/functions/st_read.cpp
-@@ -304,16 +304,19 @@ unique_ptr<FunctionData> GdalTableFunction::Bind(ClientContext &context, TableFu
-                                         ':',    'e',  'x',  't',  'e',    'n',  's',  'i',  'o', 'n', ':', 'n', 'a',
-                                         'm',    'e',  '\a', '\0', '\0',   '\0', 'o',  'g',  'c', '.', 'w', 'k', 'b'};
+@@ -94,12 +94,24 @@ struct GdalScanFunctionData : public TableFunctionData {
+ 	vector<string> layer_creation_options;
+ 	unique_ptr<SpatialFilter> spatial_filter;
+ 	GDALDatasetUniquePtr dataset;
+-	unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
+ 	idx_t max_threads;
+ 	// before they are renamed
+ 	vector<string> all_names;
+ 	vector<LogicalType> all_types;
+ 	atomic<idx_t> lines_read;
++
++public:
++	void AddColumn(idx_t index, ArrowType &&type) {
++		D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
++		arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
++	}
++	arrow_column_map_t &GetColumns() {
++		return arrow_convert_data;
++	}
++
++private:
++	//! This holds the original list type (col_idx, [ArrowListType,size])
++	arrow_column_map_t arrow_convert_data;
+ };
  
-+               auto arrow_type = GetArrowLogicalType(attribute);
-                if (attribute.metadata != nullptr && strncmp(attribute.metadata, ogc_flag, sizeof(ogc_flag)) == 0) {
-                        // This is a WKB geometry blob
--                       GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx);
-+                       result->AddColumn(col_idx, std::move(arrow_type));
-                        return_types.emplace_back(core::GeoTypes::WKB_BLOB());
-                } else if (attribute.dictionary) {
--                       result->arrow_convert_data[col_idx] =
--                           make_uniq<ArrowConvertData>(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
--                       return_types.emplace_back(GetArrowLogicalType(*attribute.dictionary, result->arrow_convert_data, col_idx));
-+                       auto dictionary_type = make_uniq<ArrowType>(GetArrowLogicalType(attribute));
-+                       return_types.emplace_back(dictionary_type->GetDuckType());
-+                       arrow_type.SetDictionary(std::move(dictionary_type));
-+                       result->AddColumn(col_idx, std::move(arrow_type));
-                } else {
--                       return_types.emplace_back(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
-+                       return_types.emplace_back(arrow_type.GetDuckType());
-+                       result->AddColumn(col_idx, std::move(arrow_type));
-                }
+ struct GdalScanLocalState : ArrowScanLocalState {
+@@ -304,16 +316,19 @@ unique_ptr<FunctionData> GdalTableFunction::Bind(ClientContext &context, TableFu
+ 		                         ':',    'e',  'x',  't',  'e',    'n',  's',  'i',  'o', 'n', ':', 'n', 'a',
+ 		                         'm',    'e',  '\a', '\0', '\0',   '\0', 'o',  'g',  'c', '.', 'w', 'k', 'b'};
  
-                // keep these around for projection/filter pushdown later
++		auto arrow_type = GetArrowLogicalType(attribute);
+ 		if (attribute.metadata != nullptr && strncmp(attribute.metadata, ogc_flag, sizeof(ogc_flag)) == 0) {
+ 			// This is a WKB geometry blob
+-			GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx);
++			result->AddColumn(col_idx, std::move(arrow_type));
+ 			return_types.emplace_back(core::GeoTypes::WKB_BLOB());
+ 		} else if (attribute.dictionary) {
+-			result->arrow_convert_data[col_idx] =
+-			    make_uniq<ArrowConvertData>(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
+-			return_types.emplace_back(GetArrowLogicalType(*attribute.dictionary, result->arrow_convert_data, col_idx));
++			auto dictionary_type = make_uniq<ArrowType>(GetArrowLogicalType(attribute));
++			return_types.emplace_back(dictionary_type->GetDuckType());
++			arrow_type.SetDictionary(std::move(dictionary_type));
++			result->AddColumn(col_idx, std::move(arrow_type));
+ 		} else {
+-			return_types.emplace_back(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
++			return_types.emplace_back(arrow_type.GetDuckType());
++			result->AddColumn(col_idx, std::move(arrow_type));
+ 		}
+ 
+ 		// keep these around for projection/filter pushdown later
+@@ -445,12 +460,12 @@ void GdalTableFunction::Scan(ClientContext &context, TableFunctionInput &input,
+ 	if (global_state.CanRemoveFilterColumns()) {
+ 		state.all_columns.Reset();
+ 		state.all_columns.SetCardinality(output_size);
+-		ArrowToDuckDB(state, data.arrow_convert_data, state.all_columns, data.lines_read - output_size, false);
++		ArrowToDuckDB(state, data.GetColumns(), state.all_columns, data.lines_read - output_size, false);
+ 		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
+ 	} else {
+ 		output.SetCardinality(output_size);
+ 
+-		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size, false);
++		ArrowToDuckDB(state, data.GetColumns(), output, data.lines_read - output_size, false);
+ 	}
+ 
+ 	output.Verify();
