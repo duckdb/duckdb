@@ -15,10 +15,7 @@ pyarrow = pytest.importorskip("pyarrow")
 def duck_conn():
     if sys.platform.startswith("win"):
         pytest.xfail("not supported on Windows")
-    # duckdb.duckdb.__file__
-    with adbc_driver_manager.connect(
-        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib', entrypoint="duckdb_adbc_init"
-    ) as conn:
+    with adbc_driver_manager.connect(driver='duckdb.duckdb.__file__', entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
 
@@ -73,7 +70,7 @@ def test_commit():
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
     with adbc_driver_manager.connect(
-        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        driver='duckdb.duckdb.__file__',
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
     ) as conn:
@@ -83,7 +80,7 @@ def test_commit():
 
     # Check Data is not there
     with adbc_driver_manager.connect(
-        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        driver='duckdb.duckdb.__file__',
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
         autocommit=True,
@@ -101,7 +98,7 @@ def test_commit():
 
     # This now works because we enabled autocommit
     with adbc_driver_manager.connect(
-        driver='/Users/holanda/Documents/Projects/duckdb/build/debug/src/libduckdb.dylib',
+        driver='duckdb.duckdb.__file__',
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
     ) as conn:
