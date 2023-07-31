@@ -157,19 +157,17 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
-	// vacuum excess memory
-	// TODO: move into merge, otherwise due to races, a lot of threads potentially merge first
-	gstate.global_index->Vacuum();
-
 	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
 
-	// here, we just set the resulting global index as the newly created index of the table
-
+	// here, we set the resulting global index as the newly created index of the table
 	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
+
+	// vacuum excess memory and verify
+	state.global_index->Vacuum();
 	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	auto &storage = table.GetStorage();
