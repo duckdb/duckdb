@@ -341,11 +341,11 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();
 		state.all_columns.SetCardinality(output_size);
-		ArrowToDuckDB(state, data.arrow_convert_data, state.all_columns, data.lines_read - output_size);
+		ArrowToDuckDB(state, data.GetColumns(), state.all_columns, data.lines_read - output_size);
 		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
 	} else {
 		output.SetCardinality(output_size);
-		ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
+		ArrowToDuckDB(state, data.GetColumns(), output, data.lines_read - output_size);
 	}
 
 	output.Verify();
