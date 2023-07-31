@@ -347,8 +347,8 @@ struct UhugeintToStringCast {
 	static string_t Format(uhugeint_t value, Vector &vector) {
 		std::string str = value.ToString();
 		string_t result = StringVector::EmptyString(vector, str.length());
-		
 		auto data = result.GetDataWriteable();
+
 		// null-termination not required
 		memcpy(data, str.data(), str.length());
 		result.Finalize();
