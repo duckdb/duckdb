@@ -37,7 +37,8 @@ struct RelationStats {
 	vector<string> column_names;
 	string table_name;
 
-	RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {}
+	RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {
+	}
 };
 
 class RelationStatisticsHelper {
