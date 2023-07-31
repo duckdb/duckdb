@@ -16,8 +16,6 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/list.hpp"
-#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {

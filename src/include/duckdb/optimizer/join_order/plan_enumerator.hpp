@@ -26,7 +26,7 @@ namespace duckdb {
 class PlanEnumerator {
 public:
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,
-	                        const QueryGraph &query_graph)
+	                        const QueryGraphEdges &query_graph)
 	    : query_graph(query_graph), query_graph_manager(query_graph_manager), cost_model(cost_model),
 	      full_plan_found(false), must_update_full_plan(false) {
 	}
@@ -38,7 +38,7 @@ public:
 	static unique_ptr<LogicalOperator> BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan);
 
 private:
-	QueryGraph const &query_graph;
+	QueryGraphEdges const &query_graph;
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
 	//! The set of edges used in the join optimizer

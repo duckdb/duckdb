@@ -137,10 +137,6 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 			auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
 			// Here we optimize build side probe side. Our build side is the right side
 			// So the right plans should have lower cardinalities.
-			if (node.left->cardinality < node.right->cardinality) {
-				std::swap(left, right);
-				std::swap(node.left, node.right);
-			}
 			join->children.push_back(std::move(left.op));
 			join->children.push_back(std::move(right.op));
 
@@ -281,7 +277,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 	return result;
 }
 
-const QueryGraph &QueryGraphManager::GetQueryGraph() const {
+const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 	return query_graph;
 }
 
@@ -332,6 +328,66 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	// have to replace at this node
 	parent->children[0] = std::move(join_tree.op);
 	return plan;
+}
+
+bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator *op) {
+	D_ASSERT(op->children.size() == 2);
+	if (op->children[0]->has_estimated_cardinality && op->children[1]->has_estimated_cardinality) {
+		return op->children[0]->estimated_cardinality < op->children[1]->estimated_cardinality;
+	}
+	return op->children[0]->EstimateCardinality(context) < op->children[1]->EstimateCardinality(context);
+}
+
+unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
+	auto op = input_op.get();
+	// pass through single child operators
+	while (op->children.size() > 0) {
+		if (op->children.size() == 2) {
+			switch (op->type) {
+			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+				auto &join = op->Cast<LogicalComparisonJoin>();
+				if (join.join_type == JoinType::INNER) {
+					if (LeftCardLessThanRight(op)) {
+						std::swap(op->children[0], op->children[1]);
+						for (auto &cond : join.conditions) {
+							std::swap(cond.left, cond.right);
+							cond.comparison = FlipComparisonExpression(cond.comparison);
+						}
+					}
+				} else if (join.join_type == JoinType::LEFT) {
+					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+					if (rhs_cardinality > lhs_cardinality * 2) {
+						join.join_type = JoinType::RIGHT;
+						std::swap(join.children[0], join.children[1]);
+						for (auto &cond : join.conditions) {
+							std::swap(cond.left, cond.right);
+							cond.comparison = FlipComparisonExpression(cond.comparison);
+						}
+					}
+				}
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
+			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+				if (LeftCardLessThanRight(op)) {
+					std::swap(op->children[0], op->children[1]);
+				}
+				break;
+			}
+			default:
+				break;
+			}
+			op->children[0] = LeftRightOptimizations(std::move(op->children[0]));
+			op->children[1] = LeftRightOptimizations(std::move(op->children[1]));
+			// break from while loop
+			break;
+		}
+		if (op->children.size() == 1) {
+			op = op->children[0].get();
+		}
+	}
+	return std::move(input_op);
 }
 
 } // namespace duckdb

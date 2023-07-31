@@ -37,6 +37,8 @@ struct GenerateJoinRelation {
 	unique_ptr<LogicalOperator> op;
 };
 
+//! Filter info struct that is used by the cardinality estimator to set the initial cardinality
+//! but is also eventually transformed into a query edge.
 struct FilterInfo {
 	FilterInfo(unique_ptr<Expression> filter, optional_ptr<JoinRelationSet> set, idx_t filter_index)
 	    : filter(std::move(filter)), set(set), filter_index(filter_index) {
@@ -51,7 +53,9 @@ struct FilterInfo {
 	ColumnBinding right_binding;
 };
 
-//! The QueryGraph contains edges between relations and allows edges to be created/queried
+//! The QueryGraphManager manages the process of extracting the reorderable and nonreorderable operations
+//! from the logical plan and creating the intermediate structures needed by the plan enumerator.
+//! When the plan enumerator finishes, the Query Graph Manger can then recreate the logical plan.
 class QueryGraphManager {
 public:
 	QueryGraphManager(ClientContext &context) : relation_manager(context), context(context) {
@@ -66,15 +70,25 @@ public:
 	//! Extract the join relations, optimizing non-reoderable relations when encountered
 	bool Build(LogicalOperator *op);
 
+	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node);
 
-	const QueryGraph &GetQueryGraph() const;
+	//! Get a reference to the QueryGraphEdges structure that stores edges between
+	//! nodes and hypernodes.
+	const QueryGraphEdges &GetQueryGraphEdges() const;
 
+	//! Get a list of the join filters in the join plan than eventually are
+	//! transformed into the query graph edges
 	const vector<unique_ptr<FilterInfo>> &GetFilterBindings() const;
 
 	//! Plan enumerator may not find a full plan and therefore will need to create cross
 	//! products to create edges.
 	void CreateQueryGraphCrossProduct(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right);
+
+	//! after join order optimization, we perform build side probe side optimizations.
+	//! (Basically we put lower expected cardinality columns on the build side, and larger
+	//! tables on the probe side)
+	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
 
 private:
 	ClientContext &context;
@@ -85,11 +99,12 @@ private:
 	//! used by the cardinality estimator to estimate distinct counts
 	vector<unique_ptr<FilterInfo>> filters_and_bindings;
 
-	QueryGraph query_graph;
+	QueryGraphEdges query_graph;
 
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
+	bool LeftCardLessThanRight(LogicalOperator *op);
 
 	void CreateHyperGraphEdges();
 

@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-using QueryEdge = QueryGraph::QueryEdge;
+using QueryEdge = QueryGraphEdges::QueryEdge;
 
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
@@ -35,16 +35,16 @@ static string QueryEdgeToString(const QueryEdge *info, vector<idx_t> prefix) {
 	return result;
 }
 
-string QueryGraph::ToString() const {
+string QueryGraphEdges::ToString() const {
 	return QueryEdgeToString(&root, {});
 }
 
-void QueryGraph::Print() {
+void QueryGraphEdges::Print() {
 	Printer::Print(ToString());
 }
 // LCOV_EXCL_STOP
 
-optional_ptr<QueryEdge> QueryGraph::GetQueryEdge(JoinRelationSet &left) {
+optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	D_ASSERT(left.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	optional_ptr<QueryEdge> info(&root);
@@ -61,8 +61,8 @@ optional_ptr<QueryEdge> QueryGraph::GetQueryEdge(JoinRelationSet &left) {
 	return info;
 }
 
-void QueryGraph::CreateEdge(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
-                            optional_ptr<FilterInfo> filter_info) {
+void QueryGraphEdges::CreateEdge(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
+                                 optional_ptr<FilterInfo> filter_info) {
 	D_ASSERT(left->count > 0 && right->count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(*left);
@@ -86,8 +86,8 @@ void QueryGraph::CreateEdge(optional_ptr<JoinRelationSet> left, optional_ptr<Joi
 	info->neighbors.push_back(std::move(n));
 }
 
-void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
-                                       const std::function<bool(NeighborInfo &)> &callback) const {
+void QueryGraphEdges::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
+                                            const std::function<bool(NeighborInfo &)> &callback) const {
 
 	for (auto &neighbor : info.get().neighbors) {
 		if (callback(*neighbor)) {
@@ -104,7 +104,8 @@ void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdg
 	}
 }
 
-void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) const {
+void QueryGraphEdges::EnumerateNeighbors(JoinRelationSet &node,
+                                         const std::function<bool(NeighborInfo &)> &callback) const {
 	for (idx_t j = 0; j < node.count; j++) {
 		auto iter = root.children.find(node.relations[j]);
 		if (iter != root.children.end()) {
@@ -119,7 +120,7 @@ static bool JoinRelationSetIsExcluded(optional_ptr<JoinRelationSet> node, unorde
 	return exclusion_set.find(node->relations[0]) != exclusion_set.end();
 }
 
-const vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) const {
+const vector<idx_t> QueryGraphEdges::GetNeighbors(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) const {
 	unordered_set<idx_t> result;
 	EnumerateNeighbors(node, [&](NeighborInfo &info) -> bool {
 		if (!JoinRelationSetIsExcluded(info.neighbor, exclusion_set)) {
@@ -133,8 +134,8 @@ const vector<idx_t> QueryGraph::GetNeighbors(JoinRelationSet &node, unordered_se
 	return neighbors;
 }
 
-const vector<reference<NeighborInfo>> QueryGraph::GetConnections(optional_ptr<JoinRelationSet> node,
-                                                                 optional_ptr<JoinRelationSet> other) const {
+const vector<reference<NeighborInfo>> QueryGraphEdges::GetConnections(optional_ptr<JoinRelationSet> node,
+                                                                      optional_ptr<JoinRelationSet> other) const {
 	vector<reference<NeighborInfo>> connections;
 	EnumerateNeighbors(node.operator*(), [&](NeighborInfo &info) -> bool {
 		if (JoinRelationSet::IsSubset(other.get(), info.neighbor)) {

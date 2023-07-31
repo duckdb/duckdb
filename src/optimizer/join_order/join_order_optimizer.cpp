@@ -13,6 +13,18 @@
 
 namespace duckdb {
 
+static bool HasJoin(LogicalOperator *op) {
+	while (op->children.size() > 0) {
+		if (op->children.size() == 1) {
+			op = op->children[0].get();
+		}
+		if (op->children.size() == 2) {
+			return true;
+		}
+	}
+	return false;
+}
+
 unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
                                                          optional_ptr<RelationStats> stats) {
 
@@ -32,11 +44,10 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto cost_model = CostModel(query_graph_manager);
 
 		// Initialize a plan enumerator.
-		auto plan_enumerator = PlanEnumerator(query_graph_manager, cost_model, query_graph_manager.GetQueryGraph());
+		auto plan_enumerator =
+		    PlanEnumerator(query_graph_manager, cost_model, query_graph_manager.GetQueryGraphEdges());
 
 		// Initialize the leaf/single node plans
-		// TODO: the translation of SingleJoinNodeRelations to JoinNode should not happen in the
-		//  enumerator. The enumerator
 		plan_enumerator.InitLeafPlans();
 
 		// Ask the plan enumerator to enumerate a number of join orders
@@ -59,6 +70,13 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
 		new_stats.cardinality = MaxValue(cardinality, new_stats.cardinality);
 		RelationStatisticsHelper::CopyRelationStats(stats, new_stats);
+	}
+
+	// only perform left right optimizations when stats is null (means we have the top level optimize call)
+	// Don't check reorderability because non-reorderable joins will result in 1 relation, but we can
+	// still switch the children.
+	if (stats == nullptr && HasJoin(new_logical_plan.get())) {
+		new_logical_plan = query_graph_manager.LeftRightOptimizations(std::move(new_logical_plan));
 	}
 
 	return new_logical_plan;

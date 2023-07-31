@@ -36,7 +36,7 @@ struct NeighborInfo {
 };
 
 //! The QueryGraph contains edges between relations and allows edges to be created/queried
-class QueryGraph {
+class QueryGraphEdges {
 public:
 	//! Contains a node with info about neighboring relations and child edge infos
 	struct QueryEdge {
