@@ -100,6 +100,41 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 			}
 			value = Value::STRUCT(std::move(values));
 			return true;
+		} else if (function.function_name == "map") {
+			duckdb::vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child_value);
+			}
+			auto type = LogicalType::STRUCT({{"key", ListType::GetChildType(values[0].type())},
+			                                 {"value", ListType::GetChildType(values[1].type())}});
+
+			// need to zip these lists together
+			duckdb::vector<Value> pairs;
+			auto &keys = ListValue::GetChildren(values[0]);
+			auto &vals = ListValue::GetChildren(values[1]);
+			for (size_t i = 0; i < keys.size(); i++) {
+				pairs.emplace_back(Value::STRUCT({{"key", keys[i]}, {"value", vals[i]}}));
+			}
+
+			value = Value::MAP(type, std::move(pairs));
+			return true;
+		} else if (function.function_name == "list_value") {
+			duckdb::vector<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child_value);
+			}
+			value = Value::LIST(std::move(values));
+			return true;
 		} else {
 			return false;
 		}
