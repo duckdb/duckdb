@@ -34,19 +34,23 @@ enum class ArrowDateTimeType : uint8_t {
 class ArrowType {
 public:
 	// From a DuckDB type
-	ArrowType(LogicalType type_p) : type(std::move(type_p)) {};
+	ArrowType(LogicalType type_p)
+	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
+	      date_time_precision(ArrowDateTimeType::DAYS) {};
 
 	// From a DuckDB type + fixed_size
 	ArrowType(LogicalType type_p, idx_t fixed_size_p)
-	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::FIXED_SIZE), fixed_size(fixed_size_p) {};
+	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::FIXED_SIZE),
+	      date_time_precision(ArrowDateTimeType::DAYS), fixed_size(fixed_size_p) {};
 
 	// From a DuckDB type + variable size type
 	ArrowType(LogicalType type_p, ArrowVariableSizeType size_type_p)
-	    : type(std::move(type_p)), size_type(size_type_p) {};
+	    : type(std::move(type_p)), size_type(size_type_p), date_time_precision(ArrowDateTimeType::DAYS) {};
 
 	// From a DuckDB type + datetime type
 	ArrowType(LogicalType type_p, ArrowDateTimeType date_time_precision_p)
-	    : type(std::move(type_p)), date_time_precision(date_time_precision_p) {};
+	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
+	      date_time_precision(date_time_precision_p) {};
 
 	void AddChild(ArrowType &child);
 	void AddChild(ArrowType &&child);
