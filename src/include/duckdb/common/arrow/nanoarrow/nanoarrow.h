@@ -15,6 +15,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#ifndef NANOARROW_H_INCLUDED
+#define NANOARROW_H_INCLUDED
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -26,9 +29,6 @@ extern "C" {
 #endif
 
 namespace duckdb_nanoarrow {
-
-#ifndef NANOARROW_H_INCLUDED
-#define NANOARROW_H_INCLUDED
 
 /// \file Arrow C Implementation
 ///
@@ -461,10 +461,10 @@ ArrowErrorCode ArrowBufferAppend(struct ArrowBuffer *buffer, const void *data, i
 
 /// }@
 
-#endif // NANOARROW_H_INCLUDED
-
 #ifdef __cplusplus
 }
 #endif
 
 } // namespace duckdb_nanoarrow
+
+#endif // NANOARROW_H_INCLUDED
