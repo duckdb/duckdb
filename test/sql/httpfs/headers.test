@@ -1,0 +1,15 @@
+# name: What
+# group: [httpfs]
+
+require httpfs
+
+require json
+
+statement ok
+SET http_headers = MAP {'Authorization': 'Basic QQ=='}
+
+query I
+SELECT read_json_auto from read_json_auto('http://duckdb-minio.com/v1/admin/info');
+----
+QQQ==
+
