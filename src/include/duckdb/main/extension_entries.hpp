@@ -171,6 +171,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
     {"binary_as_string", "parquet"},
     {"calendar", "icu"},
+    {"http_headers", "httpfs"},
     {"http_retries", "httpfs"},
     {"http_retry_backoff", "httpfs"},
     {"http_retry_wait_ms", "httpfs"},
