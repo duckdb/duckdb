@@ -1,0 +1,29 @@
+diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
+index 709db44..309f009 100644
+--- a/spatial/src/spatial/gdal/functions/st_read.cpp
++++ b/spatial/src/spatial/gdal/functions/st_read.cpp
+@@ -304,16 +304,19 @@ unique_ptr<FunctionData> GdalTableFunction::Bind(ClientContext &context, TableFu
+                                         ':',    'e',  'x',  't',  'e',    'n',  's',  'i',  'o', 'n', ':', 'n', 'a',
+                                         'm',    'e',  '\a', '\0', '\0',   '\0', 'o',  'g',  'c', '.', 'w', 'k', 'b'};
+ 
++               auto arrow_type = GetArrowLogicalType(attribute);
+                if (attribute.metadata != nullptr && strncmp(attribute.metadata, ogc_flag, sizeof(ogc_flag)) == 0) {
+                        // This is a WKB geometry blob
+-                       GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx);
++                       result->AddColumn(col_idx, std::move(arrow_type));
+                        return_types.emplace_back(core::GeoTypes::WKB_BLOB());
+                } else if (attribute.dictionary) {
+-                       result->arrow_convert_data[col_idx] =
+-                           make_uniq<ArrowConvertData>(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
+-                       return_types.emplace_back(GetArrowLogicalType(*attribute.dictionary, result->arrow_convert_data, col_idx));
++                       auto dictionary_type = make_uniq<ArrowType>(GetArrowLogicalType(attribute));
++                       return_types.emplace_back(dictionary_type->GetDuckType());
++                       arrow_type.SetDictionary(std::move(dictionary_type));
++                       result->AddColumn(col_idx, std::move(arrow_type));
+                } else {
+-                       return_types.emplace_back(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
++                       return_types.emplace_back(arrow_type.GetDuckType());
++                       result->AddColumn(col_idx, std::move(arrow_type));
+                }
+ 
+                // keep these around for projection/filter pushdown later
