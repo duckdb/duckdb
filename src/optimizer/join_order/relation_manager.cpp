@@ -6,7 +6,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -71,17 +70,39 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 	relations.push_back(std::move(relation));
 }
 
+static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
+	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+	case LogicalOperatorType::LOGICAL_WINDOW:
+	case LogicalOperatorType::LOGICAL_FILTER:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
+	switch (op_type) {
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool HasNonReorderableChild(LogicalOperator &op) {
 	LogicalOperator *tmp = &op;
 	while (tmp->children.size() == 1) {
-		if (tmp->type == LogicalOperatorType::LOGICAL_PROJECTION ||
-		    tmp->type == LogicalOperatorType::LOGICAL_EXPRESSION_GET || tmp->type == LogicalOperatorType::LOGICAL_GET ||
-		    tmp->type == LogicalOperatorType::LOGICAL_DELIM_GET ||
-		    tmp->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY ||
-		    tmp->type == LogicalOperatorType::LOGICAL_WINDOW || tmp->type == LogicalOperatorType::LOGICAL_UNION ||
-		    tmp->type == LogicalOperatorType::LOGICAL_EXCEPT || tmp->type == LogicalOperatorType::LOGICAL_INTERSECT ||
-		    tmp->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-		    tmp->type == LogicalOperatorType::LOGICAL_ANY_JOIN || tmp->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		if (OperatorNeedsRelation(tmp->type) || OperatorIsNonReorderable(tmp->type)) {
 			return true;
 		}
 		tmp = tmp->children[0].get();
@@ -101,12 +122,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	LogicalOperator *op = &input_op;
 	vector<reference<LogicalOperator>> datasource_filters;
 	// pass through single child operators
-	while (op->children.size() == 1 &&
-	       (op->type != LogicalOperatorType::LOGICAL_PROJECTION &&
-	        op->type != LogicalOperatorType::LOGICAL_EXPRESSION_GET && op->type != LogicalOperatorType::LOGICAL_GET &&
-	        op->type != LogicalOperatorType::LOGICAL_DELIM_GET &&
-	        op->type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY &&
-	        op->type != LogicalOperatorType::LOGICAL_WINDOW)) {
+	while (op->children.size() == 1 && OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);
@@ -119,9 +135,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		op = op->children[0].get();
 	}
 	bool non_reorderable_operation = false;
-	if (op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-	    op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN ||
-	    op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+	if (OperatorIsNonReorderable(op->type)) {
 		// set operation, optimize separately in children
 		non_reorderable_operation = true;
 	}
@@ -247,8 +261,9 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 		if (expression.alias == "SUBQUERY" &&
 		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
 			// most likely a BoundSubqueryExpression that was created from an uncorrelated subquery
-			// just return true, since the expression can be reordered, but don't insert anything in the
-			// bindings,
+			// Here we return true and don't fill the bindings, the expression can be reordered.
+			// A filter will be created using this expression, and pushed back on top of the parent
+			// operator during plan reconstruction
 			return true;
 		}
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
