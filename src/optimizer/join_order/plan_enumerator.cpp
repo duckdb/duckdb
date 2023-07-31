@@ -511,7 +511,6 @@ void PlanEnumerator::InitLeafPlans() {
 		join_node->cost = 0;
 		join_node->cardinality = stats.cardinality;
 		plans[relation_set.get()] = std::move(join_node);
-		stats.filter_strength = 1;
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(relation_set, stats);
 	}
 }

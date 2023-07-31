@@ -128,7 +128,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 	get.estimated_cardinality = cardinality_after_filters;
 	get.has_estimated_cardinality = true;
 	D_ASSERT(base_table_cardinality >= cardinality_after_filters);
-	return_stats.filter_strength = 1; //((double)base_table_cardinality / cardinality_after_filters);
 	return_stats.stats_initialized = true;
 	return return_stats;
 }
@@ -173,7 +172,6 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 		}
 	}
 	proj_stats.stats_initialized = true;
-	proj_stats.filter_strength = 1;
 	return proj_stats;
 }
 
@@ -185,7 +183,6 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 		stats.column_distinct_count.push_back(DistinctCount({card, false}));
 		stats.column_names.push_back("dummy_scan_column");
 	}
-	stats.filter_strength = 1;
 	stats.stats_initialized = true;
 	stats.table_name = "dummy scan";
 	return stats;
@@ -195,7 +192,6 @@ void RelationStatisticsHelper::CopyRelationStats(optional_ptr<RelationStats> to,
 	to->column_distinct_count = from.column_distinct_count;
 	to->column_names = from.column_names;
 	to->cardinality = from.cardinality;
-	to->filter_strength = from.filter_strength;
 	to->table_name = from.table_name;
 	to->stats_initialized = from.stats_initialized;
 }
@@ -212,7 +208,6 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 		stats.table_name += "joined with " + child_stats.table_name;
 		max_card = MaxValue(max_card, child_stats.cardinality);
 	}
-	stats.filter_strength = 1;
 	stats.stats_initialized = true;
 	stats.cardinality = max_card;
 	return stats;
@@ -253,7 +248,6 @@ RelationStats RelationStatisticsHelper::ExtractExpressionGetStats(LogicalExpress
 		stats.column_distinct_count.push_back(DistinctCount({card, false}));
 		stats.column_names.push_back("expression_get_column");
 	}
-	stats.filter_strength = 1;
 	stats.stats_initialized = true;
 	stats.table_name = "expression_get";
 	return stats;
@@ -264,7 +258,6 @@ RelationStats RelationStatisticsHelper::ExtractWindowStats(LogicalWindow &window
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
 	stats.column_names = child_stats.column_names;
-	stats.filter_strength = 1;
 	stats.stats_initialized = true;
 	auto num_child_columns = window.GetColumnBindings().size();
 
@@ -282,7 +275,6 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
 	stats.column_names = child_stats.column_names;
-	stats.filter_strength = 1;
 	stats.stats_initialized = true;
 	auto num_child_columns = aggr.GetColumnBindings().size();
 

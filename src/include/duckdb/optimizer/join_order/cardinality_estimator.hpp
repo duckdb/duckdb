@@ -88,8 +88,7 @@ public:
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
 	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
-	double EstimateCardinalityWithSet(JoinRelationSet &new_set);
-	void EstimateBaseTableCardinality(JoinNode &node, LogicalOperator &op);
+	idx_t EstimateCardinalityWithSet(JoinRelationSet &new_set);
 	void PrintRelationToTdomInfo();
 
 private:

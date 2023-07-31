@@ -115,31 +115,6 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 	InitTotalDomains();
 }
 
-void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
-#ifdef DEBUG
-	for (auto &total_domain : relations_to_tdoms) {
-		for (auto &binding : total_domain.equivalent_relations) {
-			D_ASSERT(binding.table_index < stats.size());
-			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
-			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
-			total_domain.column_names.push_back(column_name);
-		}
-	}
-#endif
-}
-
-void CardinalityEstimator::PrintRelationToTdomInfo() {
-	for (auto &total_domain : relations_to_tdoms) {
-		string domain = "Following columns have the same distinct count: ";
-		for (auto &column_name : total_domain.column_names) {
-			domain += column_name + ", ";
-		}
-		bool have_hll = total_domain.has_tdom_hll;
-		domain += "\n TOTAL DOMAIN = " + to_string(have_hll ? total_domain.tdom_hll : total_domain.tdom_no_hll);
-		Printer::Print(domain);
-	}
-}
-
 void CardinalityEstimator::InitTotalDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
@@ -165,7 +140,7 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 	}
 }
 
-double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
@@ -176,7 +151,6 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 		auto single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
 		auto card_helper = relation_set_2_cardinality[single_node_set.get()->ToString()];
 		numerator *= card_helper.cardinality_before_filters;
-		//		filter_strength *= card_helper.filter_strength;
 		actual_set.insert(new_set.relations[i]);
 	}
 
@@ -274,7 +248,7 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	auto result = numerator / denom;
 	auto new_entry = CardinalityHelper((idx_t)result, 1);
 	relation_set_2_cardinality[new_set.ToString()] = new_entry;
-	return result;
+	return (idx_t)result;
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
@@ -334,5 +308,34 @@ void CardinalityEstimator::UpdateTotalDomains(optional_ptr<JoinRelationSet> set,
 		}
 	}
 }
+
+// LCOV_EXCL_START
+
+void CardinalityEstimator::AddRelationNamesToTdoms(vector<RelationStats> &stats) {
+#ifdef DEBUG
+	for (auto &total_domain : relations_to_tdoms) {
+		for (auto &binding : total_domain.equivalent_relations) {
+			D_ASSERT(binding.table_index < stats.size());
+			D_ASSERT(binding.column_index < stats.at(binding.table_index).column_names.size());
+			string column_name = stats.at(binding.table_index).column_names.at(binding.column_index);
+			total_domain.column_names.push_back(column_name);
+		}
+	}
+#endif
+}
+
+void CardinalityEstimator::PrintRelationToTdomInfo() {
+	for (auto &total_domain : relations_to_tdoms) {
+		string domain = "Following columns have the same distinct count: ";
+		for (auto &column_name : total_domain.column_names) {
+			domain += column_name + ", ";
+		}
+		bool have_hll = total_domain.has_tdom_hll;
+		domain += "\n TOTAL DOMAIN = " + to_string(have_hll ? total_domain.tdom_hll : total_domain.tdom_no_hll);
+		Printer::Print(domain);
+	}
+}
+
+// LCOV_EXCL_STOP
 
 } // namespace duckdb

@@ -27,14 +27,17 @@ struct ExpressionBinding {
 };
 
 struct RelationStats {
-
+	// column_id -> estimated distinct count for column
 	vector<DistinctCount> column_distinct_count;
 	idx_t cardinality;
-	double filter_strength;
+	double filter_strength = 1;
 	bool stats_initialized = false;
 
+	// for debug, column names and tables
 	vector<string> column_names;
 	string table_name;
+
+	RelationStats() : cardinality(1), filter_strength(1), stats_initialized(false) {}
 };
 
 class RelationStatisticsHelper {
