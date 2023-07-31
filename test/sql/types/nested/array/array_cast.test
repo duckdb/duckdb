@@ -1,3 +1,5 @@
+# name: test/sql/types/nested/array/array_cast.test
+# group: [array]
 
 statement ok
 PRAGMA enable_verification

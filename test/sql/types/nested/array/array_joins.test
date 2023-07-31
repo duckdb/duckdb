@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/array/nested_payloads.test
+# name: test/sql/types/nested/array/array_joins.test
 # group: [array]
 
 statement ok

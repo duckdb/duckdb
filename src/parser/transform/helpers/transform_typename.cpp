@@ -232,12 +232,10 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			if (array_size < 0) {
 				// -1 if bounds are empty
 				result_type = LogicalType::LIST(result_type);
-			}
-			else if(array_size == 0) {
+			} else if (array_size == 0) {
 				// Empty arrays are not supported
 				throw ParserException("Arrays must have a size of at least 1");
-			}
-			else {
+			} else {
 				result_type = LogicalType::ARRAY(result_type, array_size);
 			}
 			StackCheck(extra_stack++);

@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/array/array.test
+# name: test/sql/types/nested/array/array_invalid.test
 # group: [array]
 
 statement ok

@@ -206,10 +206,9 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 	auto collection_type = arguments[0]->return_type.id();
 	D_ASSERT(LogicalTypeId::LIST == collection_type || LogicalTypeId::ARRAY == collection_type);
 	// list extract returns the child type of the list as return type
-	auto child_type = collection_type == LogicalTypeId::LIST
-	                      ? ListType::GetChildType(arguments[0]->return_type)
-	                      : ArrayType::GetChildType(arguments[0]->return_type);
-						  
+	auto child_type = collection_type == LogicalTypeId::LIST ? ListType::GetChildType(arguments[0]->return_type)
+	                                                         : ArrayType::GetChildType(arguments[0]->return_type);
+
 	bound_function.return_type = child_type;
 	bound_function.arguments[0] = LogicalType::LIST(child_type);
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

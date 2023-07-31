@@ -41,7 +41,7 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if(arguments.empty()) {
+	if (arguments.empty()) {
 		throw InvalidInputException("array_value requires at least one argument");
 	}
 
@@ -61,22 +61,21 @@ static unique_ptr<FunctionData> ArrayValueBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-
 unique_ptr<BaseStatistics> ArrayValueStats(ClientContext &context, FunctionStatisticsInput &input) {
-    auto &child_stats = input.child_stats;
-    auto &expr = input.expr;
-    auto list_stats = ArrayStats::CreateEmpty(expr.return_type);
-    auto &list_child_stats = ArrayStats::GetChildStats(list_stats);
-    for (idx_t i = 0; i < child_stats.size(); i++) {
-        list_child_stats.Merge(child_stats[i]);
-    }
-    return list_stats.ToUnique();
+	auto &child_stats = input.child_stats;
+	auto &expr = input.expr;
+	auto list_stats = ArrayStats::CreateEmpty(expr.return_type);
+	auto &list_child_stats = ArrayStats::GetChildStats(list_stats);
+	for (idx_t i = 0; i < child_stats.size(); i++) {
+		list_child_stats.Merge(child_stats[i]);
+	}
+	return list_stats.ToUnique();
 }
-
 
 ScalarFunction ArrayValueFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, nullptr, ArrayValueStats);
+	ScalarFunction fun("array_value", {}, LogicalTypeId::ARRAY, ArrayValueFunction, ArrayValueBind, nullptr,
+	                   ArrayValueStats);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;

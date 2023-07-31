@@ -278,26 +278,25 @@ public:
 	    : VectorBuffer(VectorBufferType::ARRAY_BUFFER),
 	      child(make_uniq<Vector>(ArrayType::GetChildType(array_type),
 	                              initial_capacity * ArrayType::GetSize(array_type))),
-	      capacity(initial_capacity) {
-		// initialize the child array with (size * capacity) ^
+	      array_size(ArrayType::GetSize(array_type)), size(initial_capacity) {
+		// initialize the child array with (array_size * size) ^
 	}
 	~VectorArrayBuffer() override {
 	}
 
 public:
-	Vector &GetChild() {
-		return *child;
-	}
-	idx_t GetCapacity() {
-		return capacity;
-	}
-	idx_t GetSize() {
-		return size;
-	}
+	Vector &GetChild();
+	idx_t GetSize();
+	idx_t GetArraySize();
+	idx_t GetInnerSize();
+	void SetSize(idx_t new_size);
 
 private:
 	unique_ptr<Vector> child;
-	idx_t capacity = 0;
+	// The size of each array in this buffer
+	idx_t array_size = 0;
+	// How many arrays are currently stored in this buffer
+	// The child vector has size (array_size * size)
 	idx_t size = 0;
 };
 

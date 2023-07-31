@@ -259,12 +259,15 @@ struct DataArrays {
 	optional_ptr<VectorBuffer> buffer;
 	idx_t type_size;
 	bool is_nested;
-	DataArrays(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, idx_t type_size, bool is_nested)
-	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested) {
+	idx_t nested_multiplier;
+	DataArrays(Vector &vec, data_ptr_t data, optional_ptr<VectorBuffer> buffer, idx_t type_size, bool is_nested,
+	           idx_t nested_multiplier = 1)
+	    : vec(vec), data(data), buffer(buffer), type_size(type_size), is_nested(is_nested),
+	      nested_multiplier(nested_multiplier) {
 	}
 };
 
-void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
+void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary, idx_t current_multiplier) {
 	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
 		auto &buffer = auxiliary.Cast<VectorListBuffer>();
 		auto &child = buffer.GetChild();
@@ -274,7 +277,7 @@ void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
 			                  true);
 			to_resize.emplace_back(arrays);
-			FindChildren(to_resize, *child.GetAuxiliary());
+			FindChildren(to_resize, *child.GetAuxiliary(), current_multiplier);
 		} else {
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
 			                  false);
@@ -290,12 +293,29 @@ void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 				DataArrays arrays(*child, data, child->GetBuffer().get(),
 				                  GetTypeIdSize(child->GetType().InternalType()), true);
 				to_resize.emplace_back(arrays);
-				FindChildren(to_resize, *child->GetAuxiliary());
+				FindChildren(to_resize, *child->GetAuxiliary(), current_multiplier);
 			} else {
 				DataArrays arrays(*child, data, child->GetBuffer().get(),
 				                  GetTypeIdSize(child->GetType().InternalType()), false);
 				to_resize.emplace_back(arrays);
 			}
+		}
+	} else if (auxiliary.GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
+		auto &buffer = auxiliary.Cast<VectorArrayBuffer>();
+		auto array_size = buffer.GetArraySize();
+		auto new_multiplier = current_multiplier * array_size;
+		auto &child = buffer.GetChild();
+		auto data = child.GetData();
+		if (!data) {
+			//! Nested type
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), true,
+			                  new_multiplier);
+			to_resize.emplace_back(arrays);
+			FindChildren(to_resize, *child.GetAuxiliary(), new_multiplier);
+		} else {
+			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
+			                  false, new_multiplier);
+			to_resize.emplace_back(arrays);
 		}
 	}
 }
@@ -308,19 +328,24 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 		//! this is a nested structure
 		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), true);
 		to_resize.emplace_back(arrays);
-		FindChildren(to_resize, *auxiliary);
+
+		// The child vectors of ArrayTypes always have to be (size * array_size), so we need to multiply the
+		// resize amount by the array size recursively for every nested array.
+		auto start_multiplier = GetType().id() == LogicalTypeId::ARRAY ? ArrayType::GetSize(GetType()) : 1;
+		FindChildren(to_resize, *auxiliary, start_multiplier);
 	} else {
 		DataArrays arrays(*this, data, buffer.get(), GetTypeIdSize(GetType().InternalType()), false);
 		to_resize.emplace_back(arrays);
 	}
 	for (auto &data_to_resize : to_resize) {
 		if (!data_to_resize.is_nested) {
-			auto new_data = make_unsafe_uniq_array<data_t>(new_size * data_to_resize.type_size);
+			auto new_data =
+			    make_unsafe_uniq_array<data_t>(new_size * data_to_resize.type_size * data_to_resize.nested_multiplier);
 			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
 			data_to_resize.buffer->SetData(std::move(new_data));
 			data_to_resize.vec.data = data_to_resize.buffer->GetData();
 		}
-		data_to_resize.vec.validity.Resize(cur_size, new_size);
+		data_to_resize.vec.validity.Resize(cur_size, new_size * data_to_resize.nested_multiplier);
 	}
 }
 
@@ -2282,7 +2307,7 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		auto &child = DictionaryVector::Child(vector);
 		return ArrayVector::GetTotalSize(child);
 	}
-	return vector.auxiliary->Cast<VectorArrayBuffer>().GetCapacity() * ArrayType::GetSize(vector.GetType());
+	return vector.auxiliary->Cast<VectorArrayBuffer>().GetInnerSize();
 }
 
 } // namespace duckdb
