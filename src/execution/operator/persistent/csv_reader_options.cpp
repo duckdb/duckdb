@@ -2,6 +2,7 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -286,6 +287,15 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       "\n  sample_size=" + std::to_string(sample_chunk_size * sample_chunks) +
 	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
+}
+
+void BufferedCSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
+	if (has_delimiter) {
+		named_params["delim"] = Value(delimiter);
+	}
+	if (has_newline) {
+		named_params["newline"] = Value(EnumUtil::ToString(new_line));
+	}
 }
 
 } // namespace duckdb

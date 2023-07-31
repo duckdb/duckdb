@@ -41,14 +41,21 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	}
 
 	options["auto_detect"] = Value::BOOLEAN(true);
+	BufferedCSVReaderOptions csv_options;
+	vector<string> empty;
+	for (auto &option : options) {
+		csv_options.SetReadOption(option.first, option.second, empty);
+	}
 	// Run the auto-detect, populating the options with the detected settings
-	BufferedCSVReader reader(*context, options);
+	BufferedCSVReader reader(*context, csv_options);
 
 	auto &types = reader.GetTypes();
 	auto &names = reader.GetNames();
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns.emplace_back(names[i], types[i]);
 	}
+
+	csv_options.ToNamedParameters(options);
 
 	// No need to auto-detect again
 	options["auto_detect"] = Value::BOOLEAN(false);
