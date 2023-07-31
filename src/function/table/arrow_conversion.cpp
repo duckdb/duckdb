@@ -5,16 +5,6 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 
-namespace {
-using duckdb::idx_t;
-struct ArrowConvertDataIndices {
-	//! The index that refers to 'variable_sz_type' in ArrowConvertData
-	idx_t variable_sized_index;
-	//! The index that refers to 'date_time_precision' in ArrowConvertData
-	idx_t datetime_precision_index;
-};
-} // namespace
-
 namespace duckdb {
 
 static void ShiftRight(unsigned char *ar, int size, int shift) {
