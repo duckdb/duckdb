@@ -361,6 +361,21 @@ The instantiated connection should be closed using 'duckdb_disconnect'
 DUCKDB_API duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out_connection);
 
 /*!
+Interrupt running query
+
+* connection: The connection to interruot
+*/
+DUCKDB_API void duckdb_interrupt(duckdb_connection connection);
+
+/*!
+Get progress of the running query
+
+* connection: The working connection
+* returns: -1 if no progress or a percentage of the progress
+*/
+DUCKDB_API double duckdb_query_progress(duckdb_connection connection);
+
+/*!
 Closes the specified connection and de-allocates all memory allocated for that connection.
 
 * connection: The connection to close.

@@ -11,6 +11,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/stack_checker.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/group_by_node.hpp"
@@ -26,7 +27,6 @@
 namespace duckdb {
 
 class ColumnDefinition;
-class StackChecker;
 struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
@@ -39,7 +39,7 @@ struct PivotColumn;
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {
-	friend class StackChecker;
+	friend class StackChecker<Transformer>;
 
 	struct CreatePivotEntry {
 		string enum_name;
@@ -343,7 +343,7 @@ private:
 	idx_t stack_depth;
 
 	void InitializeStackCheck();
-	StackChecker StackCheck(idx_t extra_stack = 1);
+	StackChecker<Transformer> StackCheck(idx_t extra_stack = 1);
 
 public:
 	template <class T>
@@ -354,18 +354,6 @@ public:
 	static optional_ptr<T> PGPointerCast(void *ptr) {
 		return optional_ptr<T>(reinterpret_cast<T *>(ptr));
 	}
-};
-
-class StackChecker {
-public:
-	StackChecker(Transformer &transformer, idx_t stack_usage);
-	~StackChecker();
-	StackChecker(StackChecker &&) noexcept;
-	StackChecker(const StackChecker &) = delete;
-
-private:
-	Transformer &transformer;
-	idx_t stack_usage;
 };
 
 vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list);
