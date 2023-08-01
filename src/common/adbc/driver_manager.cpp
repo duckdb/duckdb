@@ -57,7 +57,7 @@ void GetWinError(std::string *buffer) {
 
 #endif // defined(_WIN32)
 
-/// Temporary state while the database is being configured.
+// Temporary state while the database is being configured.
 struct TempDatabase {
 	std::unordered_map<std::string, std::string> options;
 	std::string driver;

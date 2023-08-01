@@ -48,7 +48,7 @@ class TestADBCStatementBind(object):
 
             _bind(statement, data)
             with pytest.raises(
-                adbc_driver_manager.ProgrammingError, match="Binding multiple rows at once is not supported yet"
+                adbc_driver_manager.NotSupportedError, match="Binding multiple rows at once is not supported yet"
             ):
                 res, number_of_rows = statement.execute_query()
 
