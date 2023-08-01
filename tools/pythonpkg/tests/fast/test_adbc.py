@@ -3,19 +3,22 @@ import pytest
 import sys
 import datetime
 import os
-import tempfile
 
 adbc_driver_manager = pytest.importorskip("adbc_driver_manager.dbapi")
 adbc_driver_manager_lib = pytest.importorskip("adbc_driver_manager._lib")
 
 pyarrow = pytest.importorskip("pyarrow")
 
+# When testing local, if you build via BUILD_PYTHON=1 make, you need to manually set up the
+# dylib duckdb path.
+driver_path = duckdb.duckdb.__file__
+
 
 @pytest.fixture
 def duck_conn():
     if sys.platform.startswith("win"):
         pytest.xfail("not supported on Windows")
-    with adbc_driver_manager.connect(driver='duckdb.duckdb.__file__', entrypoint="duckdb_adbc_init") as conn:
+    with adbc_driver_manager.connect(driver=driver_path, entrypoint="duckdb_adbc_init") as conn:
         yield conn
 
 
@@ -58,19 +61,17 @@ def test_connection_get_objects(duck_conn):
     ]
 
 
-def test_commit():
+def test_commit(tmp_path):
     if sys.platform.startswith("win"):
         pytest.xfail("not supported on Windows")
-    # duckdb.duckdb.__file__
-    temp_folder_path = tempfile.gettempdir()
-    db = os.path.join(temp_folder_path, "tmp.db")
+    db = os.path.join(tmp_path, "tmp.db")
     if os.path.exists(db):
         os.remove(db)
     table = example_table()
     db_kwargs = {"path": f"{db}"}
     # Start connection with auto-commit off
     with adbc_driver_manager.connect(
-        driver='duckdb.duckdb.__file__',
+        driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
     ) as conn:
@@ -80,7 +81,7 @@ def test_commit():
 
     # Check Data is not there
     with adbc_driver_manager.connect(
-        driver='duckdb.duckdb.__file__',
+        driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
         autocommit=True,
@@ -98,7 +99,7 @@ def test_commit():
 
     # This now works because we enabled autocommit
     with adbc_driver_manager.connect(
-        driver='duckdb.duckdb.__file__',
+        driver=driver_path,
         entrypoint="duckdb_adbc_init",
         db_kwargs=db_kwargs,
     ) as conn:
