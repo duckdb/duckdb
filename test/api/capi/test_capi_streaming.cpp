@@ -110,6 +110,7 @@ TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET threads=1"));
 	REQUIRE_NO_FAIL(tester.Query("create table tbl as select range a, mod(range,10) b from range(10000);"));
 	REQUIRE_NO_FAIL(tester.Query("create table tbl_2 as select range a from range(10000);"));
 	REQUIRE_NO_FAIL(tester.Query("set enable_progress_bar=true;"));

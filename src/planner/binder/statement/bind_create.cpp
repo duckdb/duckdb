@@ -134,33 +134,6 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
-	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::FUNCTION: {
-		auto &func = expr->Cast<FunctionExpression>();
-		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
-		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
-		if (function) {
-			func.catalog = function->ParentCatalog().GetName();
-			func.schema = function->ParentSchema().name;
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		// replacing parameters within a subquery is slightly different
-		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(
-		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
-		break;
-	}
-	default: // fall through
-		break;
-	}
-	// unfold child expressions
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyFunctionNames(context, child); });
-}
-
 SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto &base = info.Cast<CreateMacroInfo>();
 	auto &scalar_function = base.function->Cast<ScalarMacroFunction>();
@@ -190,7 +163,6 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto this_macro_binding = make_uniq<DummyBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
 	ExpressionBinder::QualifyColumnNames(*this, scalar_function.expression);
-	QualifyFunctionNames(context, scalar_function.expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = scalar_function.expression->Copy();
