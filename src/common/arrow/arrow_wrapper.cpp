@@ -119,7 +119,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	idx_t result_count;
 	PreservedError error;
-	if (!ArrowUtil::TryFetchChunk(scan_state, result.GetArrowOptions(result), my_stream->batch_size, out, result_count,
+	if (!ArrowUtil::TryFetchChunk(scan_state, result.client_properties, my_stream->batch_size, out, result_count,
 	                              error)) {
 		D_ASSERT(error);
 		my_stream->last_error = error;
@@ -165,12 +165,9 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
-bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t batch_size, ArrowArray *out,
+bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t batch_size, ArrowArray *out,
                               idx_t &count, PreservedError &error) {
 	count = 0;
-//		ArrowAppender appender(result->types, chunk_size, result->client_properties);
-//	auto &current_chunk = result->current_chunk;
-//	if (current_chunk.Valid()) {
 	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
 	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
 	if (remaining_tuples_in_chunk) {
@@ -212,7 +209,7 @@ bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, 
 	return true;
 }
 
-idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t chunk_size, ArrowArray *out) {
+idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ClientProperties options, idx_t chunk_size, ArrowArray *out) {
 	PreservedError error;
 	idx_t result_count;
 	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error)) {

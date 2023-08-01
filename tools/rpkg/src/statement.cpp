@@ -301,8 +301,8 @@ bool FetchArrowChunk(ChunkScanState &scan_state, ClientProperties options, Appen
 	AppendableRList batches_list;
 
 	QueryResultChunkScanState scan_state(*result);
-	while (FetchArrowChunk(scan_state, result->client_properties, batches_list, arrow_data, arrow_schema, batch_import_from_c,
-	                       arrow_namespace, chunk_size)) {
+	while (FetchArrowChunk(scan_state, result->client_properties, batches_list, arrow_data, arrow_schema,
+	                       batch_import_from_c, arrow_namespace, chunk_size)) {
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);

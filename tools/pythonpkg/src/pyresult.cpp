@@ -290,13 +290,14 @@ bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batch
 	auto &query_result = *result.get();
 	{
 		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(scan_state, query_result->client_properties, rows_per_batch, &data);
+		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
 	}
 	if (count == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names, query_result->client_properties);
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names,
+	                              query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
