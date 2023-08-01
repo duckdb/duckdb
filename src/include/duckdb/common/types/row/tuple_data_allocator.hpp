@@ -55,6 +55,8 @@ public:
 	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
+	//! Get the buffer manager
+	BufferManager &GetBufferManager();
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the layout

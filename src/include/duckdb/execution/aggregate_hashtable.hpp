@@ -94,8 +94,6 @@ public:
 	const TupleDataLayout &GetLayout() const;
 	//! Number of groups in the HT
 	idx_t Count() const;
-	//! Returns the number of tuples sunk into the HT
-	idx_t SinkCount() const;
 	//! Initial capacity of the HT
 	static idx_t InitialCapacity();
 	//! Capacity that can hold 'count' entries without resizing
@@ -130,13 +128,15 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	PartitionedTupleData &GetPartitionedData();
+	unique_ptr<PartitionedTupleData> &GetPartitionedData();
 	shared_ptr<ArenaAllocator> GetAggregateAllocator();
 
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
+	//! Resets the group count to 0
+	void ResetCount();
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
 
@@ -171,12 +171,12 @@ private:
 	idx_t radix_bits;
 	//! The data of the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
-	//! How much data was sunk into the HT
-	idx_t sink_count;
 
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;
 
+	//! The number of groups in the HT
+	idx_t count;
 	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
 	idx_t capacity;
 	//! The hash map (pointer table) of the HT: allocated data and pointer into it

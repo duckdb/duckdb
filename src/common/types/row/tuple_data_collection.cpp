@@ -321,13 +321,17 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (this->layout.GetTypes() != other.GetLayout().GetTypes()) {
 		throw InternalException("Attempting to combine TupleDataCollection with mismatching types");
 	}
-	this->count += other.count;
-	this->data_size += other.data_size;
 	this->segments.reserve(this->segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
-		this->segments.emplace_back(std::move(other_seg));
+		AddSegment(std::move(other_seg));
 	}
 	other.Reset();
+}
+
+void TupleDataCollection::AddSegment(TupleDataSegment &&segment) {
+	count += segment.count;
+	data_size += segment.data_size;
+	segments.emplace_back(std::move(segment));
 	Verify();
 }
 
@@ -394,7 +398,9 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	idx_t segment_index;
 	idx_t chunk_index;
 	if (!NextScanIndex(state, segment_index, chunk_index)) {
-		FinalizePinState(state.pin_state, segments[segment_index_before]);
+		if (!segments.empty()) {
+			FinalizePinState(state.pin_state, segments[segment_index_before]);
+		}
 		result.SetCardinality(0);
 		return false;
 	}
@@ -412,7 +418,9 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	{
 		lock_guard<mutex> guard(gstate.lock);
 		if (!NextScanIndex(gstate.scan_state, lstate.segment_index, lstate.chunk_index)) {
-			FinalizePinState(lstate.pin_state, segments[segment_index_before]);
+			if (!segments.empty()) {
+				FinalizePinState(lstate.pin_state, segments[segment_index_before]);
+			}
 			result.SetCardinality(0);
 			return false;
 		}

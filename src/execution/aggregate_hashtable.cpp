@@ -40,7 +40,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      radix_bits(radix_bits), sink_count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)),
+      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)),
       is_finalized(false) {
 
 	// Append hash column to the end and initialise the row layout
@@ -60,6 +60,8 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	if (!partitioned_data) {
 		partitioned_data =
 		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	} else {
+		partitioned_data->Reset();
 	}
 
 	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());
@@ -67,11 +69,10 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	D_ASSERT(GetLayout().GetRowWidth() == layout.GetRowWidth());
 
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
-	sink_count = 0;
 }
 
-PartitionedTupleData &GroupedAggregateHashTable::GetPartitionedData() {
-	return *partitioned_data;
+unique_ptr<PartitionedTupleData> &GroupedAggregateHashTable::GetPartitionedData() {
+	return partitioned_data;
 }
 
 shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
@@ -83,7 +84,7 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (partitioned_data->Count() == 0 || !layout.HasDestructor()) {
+	if (!partitioned_data || partitioned_data->Count() == 0 || !layout.HasDestructor()) {
 		return;
 	}
 
@@ -107,11 +108,7 @@ const TupleDataLayout &GroupedAggregateHashTable::GetLayout() const {
 }
 
 idx_t GroupedAggregateHashTable::Count() const {
-	return partitioned_data->Count();
-}
-
-idx_t GroupedAggregateHashTable::SinkCount() const {
-	return sink_count;
+	return count;
 }
 
 idx_t GroupedAggregateHashTable::InitialCapacity() {
@@ -151,7 +148,7 @@ idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 
 void GroupedAggregateHashTable::Verify() {
 #ifdef DEBUG
-	idx_t count = 0;
+	idx_t total_count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
 		const auto &entry = entries[i];
 		if (!entry.IsOccupied()) {
@@ -159,14 +156,18 @@ void GroupedAggregateHashTable::Verify() {
 		}
 		auto hash = Load<hash_t>(entry.GetPointer() + hash_offset);
 		D_ASSERT(entry.GetSalt() == aggr_ht_entry_t::ExtractSalt(hash));
-		count++;
+		total_count++;
 	}
-	D_ASSERT(count == Count());
+	D_ASSERT(total_count == Count());
 #endif
 }
 
 void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
+}
+
+void GroupedAggregateHashTable::ResetCount() {
+	count = 0;
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -319,9 +320,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	D_ASSERT(addresses_v.GetType() == LogicalType::POINTER);
 	D_ASSERT(state.hash_salts.GetType() == LogicalType::HASH);
 
-	// Update sink count
-	sink_count += groups.size();
-
 	// Need to fit the entire vector, and resize at threshold
 	if (Count() + groups.size() > capacity || Count() + groups.size() > ResizeThreshold()) {
 		Verify();
@@ -443,6 +441,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 		remaining_entries = no_match_count;
 	}
 
+	count += new_group_count;
 	return new_group_count;
 }
 

@@ -57,7 +57,6 @@ public:
 private:
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
-	void CombineInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	idx_t CountInternal(GlobalSinkState &sink) const;
 
 	TupleDataLayout layout;

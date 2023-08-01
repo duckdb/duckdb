@@ -185,6 +185,8 @@ private:
 	void Initialize();
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
+	//! Adds a segment to this TupleDataCollection
+	void AddSegment(TupleDataSegment &&segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,

@@ -75,6 +75,8 @@ public:
 	void FlushAppendState(PartitionedTupleDataAppendState &state);
 	//! Combine another PartitionedTupleData into this PartitionedTupleData
 	void Combine(PartitionedTupleData &other);
+	//! Resets this PartitionedTupleData
+	void Reset();
 	//! Partition a TupleDataCollection
 	void Partition(TupleDataCollection &source,
 	               TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);

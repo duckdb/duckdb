@@ -33,6 +33,10 @@ TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
 }
 
+BufferManager &TupleDataAllocator::GetBufferManager() {
+	return buffer_manager;
+}
+
 Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
 }

@@ -101,6 +101,7 @@ RadixPartitionedColumnData::RadixPartitionedColumnData(ClientContext &context_p,
                                                        idx_t radix_bits_p, idx_t hash_col_idx_p)
     : PartitionedColumnData(PartitionedColumnDataType::RADIX, context_p, std::move(types_p)), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < types.size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);
@@ -145,6 +146,7 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manag
                                                      idx_t radix_bits_p, idx_t hash_col_idx_p)
     : PartitionedTupleData(PartitionedTupleDataType::RADIX, buffer_manager, layout_p.Copy()), radix_bits(radix_bits_p),
       hash_col_idx(hash_col_idx_p) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);

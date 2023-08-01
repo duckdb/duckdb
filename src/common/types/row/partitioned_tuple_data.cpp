@@ -105,11 +105,20 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
 
 	// Early out: check if everything belongs to a single partition
-	auto &partition_entries = state.partition_entries;
-	if (partition_entries.size() == 1) {
-		const auto &partition_index = partition_entries.begin()->first;
-		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+	optional_idx partition_index;
+	if (UseFixedSizeMap()) {
+		if (state.fixed_partition_entries.size() == 1) {
+			partition_index = state.fixed_partition_entries.begin().GetKey();
+		}
+	} else {
+		if (state.partition_entries.size() == 1) {
+			partition_index = state.partition_entries.begin()->first;
+		}
+	}
+
+	if (partition_index.IsValid()) {
+		auto &partition = *partitions[partition_index.GetIndex()];
+		auto &partition_pin_state = *state.partition_pin_states[partition_index.GetIndex()];
 
 		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
 
@@ -295,6 +304,15 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 	}
 	this->count += other.count;
 	this->data_size += other.data_size;
+	Verify();
+}
+
+void PartitionedTupleData::Reset() {
+	for (auto &partition : partitions) {
+		partition->Reset();
+	}
+	this->count = 0;
+	this->data_size = 0;
 	Verify();
 }
 
