@@ -24,11 +24,11 @@
 
 #include "duckdb/common/arrow/arrow.hpp"
 
+namespace duckdb_nanoarrow {
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-namespace duckdb_nanoarrow {
 
 /// \file Arrow C Implementation
 ///
