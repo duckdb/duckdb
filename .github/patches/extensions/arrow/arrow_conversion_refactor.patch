@@ -1,5 +1,5 @@
 diff --git a/src/arrow_scan_ipc.cpp b/src/arrow_scan_ipc.cpp
-index 693ae6a..2423c63 100644
+index 693ae6a..8b3d059 100644
 --- a/src/arrow_scan_ipc.cpp
 +++ b/src/arrow_scan_ipc.cpp
 @@ -60,13 +60,15 @@ unique_ptr <FunctionData> ArrowIPCTableFunction::ArrowScanBind(ClientContext &co
@@ -18,7 +18,7 @@ index 693ae6a..2423c63 100644
 -            return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
 +            return_types.emplace_back(arrow_type.GetDuckType());
          }
-+        res->AddColumn(col_idx, std::move(arrow_type));
++        res->arrow_table.AddColumn(col_idx, std::move(arrow_type));
          auto format = string(schema.format);
          auto name = string(schema.name);
          if (name.empty()) {
@@ -27,7 +27,7 @@ index 693ae6a..2423c63 100644
      data.lines_read += output_size;
      output.SetCardinality(output_size);
 -    ArrowTableFunction::ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size, false);
-+    ArrowTableFunction::ArrowToDuckDB(state, data.GetColumns(), output, data.lines_read - output_size, false);
++    ArrowTableFunction::ArrowToDuckDB(state, data.arrow_table.GetColumns(), output, data.lines_read - output_size, false);
      output.Verify();
      state.chunk_offset += output.size();
  }

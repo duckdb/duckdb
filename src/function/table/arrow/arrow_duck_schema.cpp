@@ -4,12 +4,13 @@
 
 namespace duckdb {
 
-vector<LogicalType> ArrowTableType::GetDuckDBTypes() {
-	vector<LogicalType> duckdb_types;
-	for (auto &column : columns) {
-		duckdb_types.emplace_back(column.GetDuckType());
-	}
-	return duckdb_types;
+void ArrowTableType::AddColumn(idx_t index, ArrowType &&type) {
+	D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
+	arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
+}
+
+const arrow_column_map_t &ArrowTableType::GetColumns() const {
+	return arrow_convert_data;
 }
 
 void ArrowType::AddChild(ArrowType &&child) {
@@ -51,10 +52,6 @@ const ArrowType &ArrowType::operator[](idx_t index) const {
 idx_t ArrowType::FixedSize() const {
 	D_ASSERT(size_type == ArrowVariableSizeType::FIXED_SIZE);
 	return fixed_size;
-}
-
-void ArrowTableType::AddColumn(ArrowType &&column) {
-	columns.emplace_back(std::move(column));
 }
 
 } // namespace duckdb

@@ -613,7 +613,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		//! Fill the children
 		auto &child_entries = StructVector::GetEntries(vector);
 		auto &struct_validity_mask = FlatVector::Validity(vector);
-		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
+		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(array.n_children); type_idx++) {
 			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size, nested_offset);
 			if (!struct_validity_mask.AllValid()) {
 				auto &child_validity_mark = FlatVector::Validity(*child_entries[type_idx]);
@@ -636,7 +636,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		auto &validity_mask = FlatVector::Validity(vector);
 
 		duckdb::vector<Vector> children;
-		for (idx_t type_idx = 0; type_idx < (::idx_t)array.n_children; type_idx++) {
+		for (idx_t type_idx = 0; type_idx < static_cast<idx_t>(array.n_children); type_idx++) {
 			Vector child(members[type_idx].second);
 			auto arrow_array = array.children[type_idx];
 
@@ -815,7 +815,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 
-void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, arrow_column_map_t &arrow_convert_data,
+void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
                                        DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];

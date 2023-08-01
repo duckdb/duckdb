@@ -230,7 +230,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		} else {
 			return_types.emplace_back(arrow_type.GetDuckType());
 		}
-		res->AddColumn(col_idx, std::move(arrow_type));
+		res->arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto format = string(schema.format);
 		auto name = string(schema.name);
 		if (name.empty()) {
@@ -348,11 +348,11 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunction
 	if (global_state.CanRemoveFilterColumns()) {
 		state.all_columns.Reset();
 		state.all_columns.SetCardinality(output_size);
-		ArrowToDuckDB(state, data.GetColumns(), state.all_columns, data.lines_read - output_size);
+		ArrowToDuckDB(state, data.arrow_table.GetColumns(), state.all_columns, data.lines_read - output_size);
 		output.ReferenceColumns(state.all_columns, global_state.projection_ids);
 	} else {
 		output.SetCardinality(output_size);
-		ArrowToDuckDB(state, data.GetColumns(), output, data.lines_read - output_size);
+		ArrowToDuckDB(state, data.arrow_table.GetColumns(), output, data.lines_read - output_size);
 	}
 
 	output.Verify();

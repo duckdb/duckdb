@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
@@ -88,12 +89,15 @@ private:
 	unique_ptr<ArrowType> dictionary_type;
 };
 
+using arrow_column_map_t = unordered_map<idx_t, ArrowType>;
+
 struct ArrowTableType {
 public:
-	vector<LogicalType> GetDuckDBTypes();
-	void AddColumn(ArrowType &&column);
+	void AddColumn(idx_t index, ArrowType &&type);
+	const arrow_column_map_t &GetColumns() const;
 
 private:
-	vector<ArrowType> columns;
+	arrow_column_map_t arrow_convert_data;
 };
+
 } // namespace duckdb

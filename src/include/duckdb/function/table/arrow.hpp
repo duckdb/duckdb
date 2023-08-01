@@ -44,8 +44,6 @@ typedef unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce_t)(uintptr_
                                                                         ArrowStreamParameters &parameters);
 typedef void (*stream_factory_get_schema_t)(uintptr_t stream_factory_ptr, ArrowSchemaWrapper &schema);
 
-using arrow_column_map_t = unordered_map<idx_t, ArrowType>;
-
 struct ArrowScanFunctionData : public PyTableFunctionData {
 public:
 	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p)
@@ -59,19 +57,8 @@ public:
 	uintptr_t stream_factory_ptr;
 	//! Pointer to the scanner factory produce
 	stream_factory_produce_t scanner_producer;
-
-public:
-	void AddColumn(idx_t index, ArrowType &&type) {
-		D_ASSERT(arrow_convert_data.find(index) == arrow_convert_data.end());
-		arrow_convert_data.emplace(std::make_pair(index, std::move(type)));
-	}
-	arrow_column_map_t &GetColumns() {
-		return arrow_convert_data;
-	}
-
-private:
-	//! This holds the original list type (col_idx, [ArrowListType,size])
-	arrow_column_map_t arrow_convert_data;
+	//! Arrow table data
+	ArrowTableType arrow_table;
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
@@ -118,7 +105,7 @@ public:
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
-	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, arrow_column_map_t &arrow_convert_data,
+	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
 	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
 
 	//! Get next scan state
