@@ -383,8 +383,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 						join.join_type = JoinType::RIGHT;
 						std::swap(join.children[0], join.children[1]);
 					}
-				}
-				else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(op)) {
+				} else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(op)) {
 					std::swap(join.children[0], join.children[1]);
 				}
 				break;
