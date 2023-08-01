@@ -112,10 +112,10 @@ void CardinalityEstimator::InitEquivalentRelations(const vector<unique_ptr<Filte
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
 	}
-	InitTotalDomains();
+	RemoveEmptyTotalDomains();
 }
 
-void CardinalityEstimator::InitTotalDomains() {
+void CardinalityEstimator::RemoveEmptyTotalDomains() {
 	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
 	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
@@ -140,7 +140,9 @@ void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
 	}
 }
 
-idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+template <>
+double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+
 	if (relation_set_2_cardinality.find(new_set.ToString()) != relation_set_2_cardinality.end()) {
 		return relation_set_2_cardinality[new_set.ToString()].cardinality_before_filters;
 	}
@@ -246,9 +248,14 @@ idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set)
 		denom = 1;
 	}
 	auto result = numerator / denom;
-	auto new_entry = CardinalityHelper((idx_t)result, 1);
+	auto new_entry = CardinalityHelper((double)result, 1);
 	relation_set_2_cardinality[new_set.ToString()] = new_entry;
-	return (idx_t)result;
+	return result;
+}
+
+template <>
+idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
+	return (idx_t)EstimateCardinalityWithSet<double>(new_set);
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {

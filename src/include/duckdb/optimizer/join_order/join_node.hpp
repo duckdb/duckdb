@@ -31,13 +31,13 @@ public:
 	//! a join node stays in sync with how the join node is constructed. Storing the cost in an unordered_set
 	//! in the cost model is error prone. If the plan enumerator join node is updated and not the cost model
 	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
-	idx_t cost;
+	double cost;
 	//! used only to populate logical operators with estimated caridnalities after the best join plan has been found.
-	idx_t cardinality;
+	double cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
 	JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
-	         optional_ptr<JoinNode> right, idx_t cost);
+	         optional_ptr<JoinNode> right, double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes

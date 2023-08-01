@@ -8,10 +8,11 @@ CostModel::CostModel(QueryGraphManager &query_graph_manager)
     : query_graph_manager(query_graph_manager), cardinality_estimator() {
 }
 
-idx_t CostModel::ComputeCost(optional_ptr<JoinNode> left, optional_ptr<JoinNode> right) {
+double CostModel::ComputeCost(optional_ptr<JoinNode> left, optional_ptr<JoinNode> right) {
 	auto combination = query_graph_manager.set_manager.Union(left->set, right->set);
-	auto card = cardinality_estimator.EstimateCardinalityWithSet(*combination);
-	return card + left->cost + right->cost;
+	auto join_card = cardinality_estimator.EstimateCardinalityWithSet<double>(*combination);
+	auto join_cost = join_card;
+	return join_cost + left->cost + right->cost;
 }
 
 } // namespace duckdb

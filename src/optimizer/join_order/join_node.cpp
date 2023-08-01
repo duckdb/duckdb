@@ -10,7 +10,7 @@ JoinNode::JoinNode(optional_ptr<JoinRelationSet> set) : set(set), info(nullptr),
 }
 
 JoinNode::JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
-                   optional_ptr<JoinNode> right, idx_t cost)
+                   optional_ptr<JoinNode> right, double cost)
     : set(set), info(info), left(left), right(right), cost(cost) {
 }
 

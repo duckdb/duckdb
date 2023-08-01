@@ -38,13 +38,6 @@ struct RelationsToTDom {
 	      has_tdom_hll(false) {};
 };
 
-struct NodeOp {
-	unique_ptr<JoinNode> node;
-	LogicalOperator &op;
-
-	NodeOp(unique_ptr<JoinNode> node, LogicalOperator &op) : node(std::move(node)), op(op) {};
-};
-
 struct Subgraph2Denominator {
 	unordered_set<idx_t> relations;
 	double denom;
@@ -56,11 +49,11 @@ class CardinalityHelper {
 public:
 	CardinalityHelper() {
 	}
-	CardinalityHelper(idx_t cardinality_before_filters, double filter_string)
+	CardinalityHelper(double cardinality_before_filters, double filter_string)
 	    : cardinality_before_filters(cardinality_before_filters), filter_strength(filter_string) {};
 
 public:
-	idx_t cardinality_before_filters;
+	double cardinality_before_filters;
 	double filter_strength;
 
 	vector<string> table_names_joined;
@@ -81,20 +74,23 @@ private:
 	vector<RelationStats> relation_stats;
 
 public:
-	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
-
-	void InitTotalDomains();
+	void RemoveEmptyTotalDomains();
 	void UpdateTotalDomains(optional_ptr<JoinRelationSet> set, RelationStats &stats);
 	void InitEquivalentRelations(const vector<unique_ptr<FilterInfo>> &filter_infos);
 
 	void InitCardinalityEstimatorProps(optional_ptr<JoinRelationSet> set, RelationStats &stats);
-	idx_t EstimateCardinalityWithSet(JoinRelationSet &new_set);
+
+	//! cost model needs estimated cardinalities to the fraction since the formula captures
+	//! distinct count selectivities and multiplicities. Hence the template
+	template <class T>
+	T EstimateCardinalityWithSet(JoinRelationSet &new_set);
+
+	//! used for debugging.
+	void AddRelationNamesToTdoms(vector<RelationStats> &stats);
 	void PrintRelationToTdomInfo();
 
 private:
 	bool SingleColumnFilter(FilterInfo &filter_info);
-	//! Filter & bindings -> list of indexes into the equivalent_relations array.
-	// The column binding set at each index is an equivalence set.
 	vector<idx_t> DetermineMatchingEquivalentSets(FilterInfo *filter_info);
 	//! Given a filter, add the column bindings to the matching equivalent set at the index
 	//! given in matching equivalent sets.

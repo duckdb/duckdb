@@ -122,9 +122,9 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(optional_ptr<JoinRelationSet
 		best_connection = &possible_connections.back().get();
 	}
 
-	idx_t cost = cost_model.ComputeCost(left, right);
+	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
-	result->cardinality = (idx_t)cost_model.cardinality_estimator.EstimateCardinalityWithSet(*set.get());
+	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<double>(*set.get());
 	return result;
 }
 
@@ -142,7 +142,7 @@ JoinNode &PlanEnumerator::EmitPair(optional_ptr<JoinRelationSet> left, optional_
 	// check if this plan is the optimal plan we found for this set of relations
 	auto entry = plans.find(new_set.get());
 	auto new_cost = new_plan->cost;
-	idx_t old_cost = NumericLimits<idx_t>::Maximum();
+	double old_cost = NumericLimits<double>::Maximum();
 	if (entry != plans.end()) {
 		old_cost = entry->second->cost;
 	}
