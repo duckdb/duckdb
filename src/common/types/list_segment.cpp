@@ -177,17 +177,17 @@ template <class T>
 static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &, ListSegment *segment,
                                         RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
-	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
 	// write value
 	if (valid) {
 		auto segment_data = GetPrimitiveData<T>(segment);
-		auto input_data_ptr = UnifiedVectorFormat::GetData<T>(input_data.format);
+		auto input_data_ptr = UnifiedVectorFormat::GetData<T>(input_data.unified);
 		Store<T>(input_data_ptr[sel_entry_idx], data_ptr_cast(segment_data + segment->count));
 	}
 }
@@ -196,11 +196,11 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
                                       ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
                                       idx_t &entry_idx) {
 
-	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
 	// set the length of this string
@@ -208,10 +208,10 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	uint64_t str_length = 0;
 
 	// get the string
-	string_t str_t;
+	string_t str_entry;
 	if (valid) {
-		str_t = UnifiedVectorFormat::GetData<string_t>(input_data.format)[sel_entry_idx];
-		str_length = str_t.GetSize();
+		str_entry = UnifiedVectorFormat::GetData<string_t>(input_data.unified)[sel_entry_idx];
+		str_length = str_entry.GetSize();
 	}
 
 	// we can reconstruct the offset from the length
@@ -222,7 +222,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 
 	// write the characters to the linked list of child segments
 	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
-	for (char &c : str_t.GetString()) {
+	for (char &c : str_entry.GetString()) {
 		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
 		auto data = GetPrimitiveData<char>(child_segment);
 		data[child_segment->count] = c;
@@ -237,11 +237,11 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                    ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
-	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
 	// set the length of this list
@@ -250,7 +250,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaA
 
 	if (valid) {
 		// get list entry information
-		const auto &list_entry = UnifiedVectorFormat::GetData<list_entry_t>(input_data.format)[sel_entry_idx];
+		const auto &list_entry = UnifiedVectorFormat::GetData<list_entry_t>(input_data.unified)[sel_entry_idx];
 		list_length = list_entry.length;
 
 		// loop over the child vector entries and recurse on them
@@ -258,7 +258,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaA
 		D_ASSERT(functions.child_functions.size() == 1);
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx_child = list_entry.offset + child_idx;
-			functions.child_functions[0].AppendRow(allocator, child_segments, input_data.child_formats.back(),
+			functions.child_functions[0].AppendRow(allocator, child_segments, input_data.children.back(),
 			                                       source_idx_child);
 		}
 		// store the updated linked list
@@ -271,22 +271,22 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaA
 static void WriteDataToStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                      ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
-	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
+	auto sel_entry_idx = input_data.unified.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	auto valid = input_data.unified.validity.RowIsValid(sel_entry_idx);
 	null_mask[segment->count] = !valid;
 
 	// write value
-	D_ASSERT(input_data.child_formats.size() == functions.child_functions.size());
+	D_ASSERT(input_data.children.size() == functions.child_functions.size());
 	auto child_list = GetStructData(segment);
 
 	// write the data of each of the children of the struct
-	for (idx_t i = 0; i < input_data.child_formats.size(); i++) {
+	for (idx_t i = 0; i < input_data.children.size(); i++) {
 		auto child_list_segment = Load<ListSegment *>(data_ptr_cast(child_list + i));
 		auto &child_function = functions.child_functions[i];
-		child_function.write_data(child_function, allocator, child_list_segment, input_data.child_formats[i],
+		child_function.write_data(child_function, allocator, child_list_segment, input_data.children[i],
 		                          entry_idx);
 		child_list_segment->count++;
 	}

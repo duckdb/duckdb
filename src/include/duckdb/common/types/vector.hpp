@@ -36,8 +36,8 @@ struct UnifiedVectorFormat {
 };
 
 struct RecursiveUnifiedVectorFormat {
-	UnifiedVectorFormat format;
-	vector<RecursiveUnifiedVectorFormat> child_formats;
+	UnifiedVectorFormat unified;
+	vector<RecursiveUnifiedVectorFormat> children;
 };
 
 class VectorCache;
