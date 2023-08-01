@@ -901,7 +901,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
 # the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK} AND ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK}" AND "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS}")
     list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
   endif()
 endforeach()

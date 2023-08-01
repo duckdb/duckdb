@@ -16,6 +16,7 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 namespace duckdb {
 
@@ -283,19 +284,19 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(QueryResult *query_result, py::list &batches, idx_t rows_per_batch) {
+bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch) {
 	ArrowArray data;
 	idx_t count;
+	auto &query_result = *result.get();
 	{
 		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(query_result, rows_per_batch, &data);
+		count = ArrowUtil::FetchChunk(scan_state, query_result->client_properties, rows_per_batch, &data);
 	}
 	if (count == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result->types, query_result->names,
-	                              query_result->client_properties);
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names, query_result->client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
@@ -307,8 +308,8 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 	py::list batches;
-
-	while (FetchArrowChunk(result.get(), batches, rows_per_batch)) {
+	QueryResultChunkScanState scan_state(*result.get());
+	while (FetchArrowChunk(scan_state, batches, rows_per_batch)) {
 	}
 	return batches;
 }
