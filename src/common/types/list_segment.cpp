@@ -286,8 +286,7 @@ static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Aren
 	for (idx_t i = 0; i < input_data.children.size(); i++) {
 		auto child_list_segment = Load<ListSegment *>(data_ptr_cast(child_list + i));
 		auto &child_function = functions.child_functions[i];
-		child_function.write_data(child_function, allocator, child_list_segment, input_data.children[i],
-		                          entry_idx);
+		child_function.write_data(child_function, allocator, child_list_segment, input_data.children[i], entry_idx);
 		child_list_segment->count++;
 	}
 }
