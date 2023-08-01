@@ -26,6 +26,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
 import java.sql.Driver;
+import java.util.concurrent.Future;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -49,6 +50,7 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
@@ -61,9 +63,10 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Logger;
@@ -123,14 +126,17 @@ public class TestDuckDBJDBC {
     }
 
     private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
+        return assertThrows(exception, thrower).getMessage();
+    }
+
+    private static <T extends Throwable> Throwable assertThrows(Class<T> exception, Thrower thrower) throws Exception {
         try {
             thrower.run();
         } catch (Throwable e) {
             assertEquals(e.getClass(), exception);
-            return e.getMessage();
+            return e;
         }
-        fail("Expected to throw " + exception.getName());
-        return null;
+        throw new Exception("Expected to throw " + exception.getName());
     }
 
     static {
