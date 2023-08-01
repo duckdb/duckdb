@@ -122,7 +122,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	LogicalOperator *op = &input_op;
 	vector<reference<LogicalOperator>> datasource_filters;
 	// pass through single child operators
-	while (op->children.size() == 1 && OperatorNeedsRelation(op->type)) {
+	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			if (HasNonReorderableChild(*op)) {
 				datasource_filters.push_back(*op);

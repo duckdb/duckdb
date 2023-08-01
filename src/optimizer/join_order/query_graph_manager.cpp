@@ -354,7 +354,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 							cond.comparison = FlipComparisonExpression(cond.comparison);
 						}
 					}
-				} else if (join.join_type == JoinType::LEFT) {
+				} else if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
 					if (rhs_cardinality > lhs_cardinality * 2) {
@@ -368,10 +368,24 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 				}
 				break;
 			}
-			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
 				if (LeftCardLessThanRight(op)) {
 					std::swap(op->children[0], op->children[1]);
+				}
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+				auto &join = op->Cast<LogicalAnyJoin>();
+				if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+					auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+					auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+					if (rhs_cardinality > lhs_cardinality * 2) {
+						join.join_type = JoinType::RIGHT;
+						std::swap(join.children[0], join.children[1]);
+					}
+				}
+				else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(op)) {
+					std::swap(join.children[0], join.children[1]);
 				}
 				break;
 			}
