@@ -10,7 +10,7 @@ WITH urls AS (
 	SELECT 'a.csv' AS url UNION ALL SELECT 'b.csv'
 )
 SELECT *
-FROM read_csv_auto((SELECT url FROM urls LIMIT 3), delimiter=',')
+FROM read_csv_auto((SELECT url FROM urls LIMIT 3), delim=',')
 WHERE properties.height > -1.0
 LIMIT 10
 ----
@@ -30,6 +30,6 @@ Table function cannot contain aggregates
 
 statement error
 SELECT *
-FROM read_csv_auto('a.csv', delimiter=',', 42)
+FROM read_csv_auto('a.csv', delim=',', 42)
 ----
 Unnamed parameters cannot come after named parameters

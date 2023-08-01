@@ -15,3 +15,4 @@ jobs:
           days-before-stale: 90
           days-before-close: 30
           operations-per-run: 500
+          stale-issue-label: stale
