@@ -47,7 +47,7 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 
 	// Check the data
 	for (int i = 1; i < 1600; i++) {
-		DATA_CHECK(hstmt, i, std::to_string(i).c_str());
+		DATA_CHECK(hstmt, i, std::to_string(i));
 	}
 
 	// SELECT $x; should throw error

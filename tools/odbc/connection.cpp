@@ -101,6 +101,17 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	}
 }
 
+/**
+ * @brief Sets attribute for connection
+ * @param connection_handle
+ * @param attribute Attribute to set, for full list see:
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetconnectattr-function?view=sql-server-ver15#comments
+ * @param value_ptr Value to set, depending on the attribute, could be either an unsigned integer or a pointer to a null
+ * terminated string.
+ * @param string_length Length of the string, if the attribute is a string, in bytes.  If the attribute is an integer,
+ * this value is ignored.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                     SQLINTEGER string_length) {
 	// attributes before connection
@@ -1004,6 +1015,18 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	}
 } // end SQLGetInfo
 
+/**
+ * @brief Requests a commit or rollback operation for all active operations on all statements associated with a
+ * connection. https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlendtran-function?view=sql-server-ver15
+ * @param handle_type Can either be SQL_HANDLE_ENV or SQL_HANDLE_DBC
+ * @param handle The input handle
+ * @param completion_type Can either be SQL_COMMIT or SQL_ROLLBACK
+ *
+ * For more about committing and rolling back transactions, see:
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/committing-and-rolling-back-transactions?view=sql-server-ver15
+ *
+ * @return
+ */
 SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
 	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
 		return SQL_ERROR;

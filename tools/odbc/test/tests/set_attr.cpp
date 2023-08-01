@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 TEST_CASE("Test SQL_ATTR_ROW_BIND_TYPE attribute in SQLSetStmtAttr", "[odbc]") {
@@ -19,7 +17,7 @@ TEST_CASE("Test SQL_ATTR_ROW_BIND_TYPE attribute in SQLSetStmtAttr", "[odbc]") {
 	// Set the statement attribute SQL_ATTR_ROW_BIND_TYPE
 	uint64_t row_len = 256;
 	EXECUTE_AND_CHECK("SQLSetStmtAttr (SQL_ATTR_ROW_BIND_TYPE)", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_BIND_TYPE,
-	                  (SQLPOINTER)row_len, SQL_IS_INTEGER);
+	                  ConvertToSQLPOINTER(row_len), SQL_IS_INTEGER);
 
 	// Check the statement attribute SQL_ATTR_ROW_BIND_TYPE
 	SQLULEN buf;
@@ -48,7 +46,7 @@ TEST_CASE("Test SQL_ATTR_ACCESS_MODE and SQL_ATTR_METADATA_ID attribute in SQLSe
 
 	// Set the Connect attribute SQL_ATTR_ACCESS_MODE to SQL_MODE_READ_ONLY
 	EXECUTE_AND_CHECK("SQLSetConnectAttr (SQL_ATTR_ACCESS_MODE)", SQLSetConnectAttr, dbc, SQL_ATTR_ACCESS_MODE,
-	                  (SQLPOINTER)SQL_MODE_READ_ONLY, SQL_IS_INTEGER);
+	                  ConvertToSQLPOINTER(SQL_MODE_READ_ONLY), SQL_IS_INTEGER);
 
 	// Check the Connect attribute SQL_ATTR_ACCESS_MODE
 	SQLUINTEGER buf;
@@ -67,7 +65,7 @@ TEST_CASE("Test SQL_ATTR_ACCESS_MODE and SQL_ATTR_METADATA_ID attribute in SQLSe
 
 	// Set the Connect attribute SQL_ATTR_METADATA_ID to SQL_TRUE
 	EXECUTE_AND_CHECK("SQLSetConnectAttr (SQL_ATTR_METADATA_ID)", SQLSetConnectAttr, dbc, SQL_ATTR_METADATA_ID,
-	                  (SQLPOINTER)SQL_TRUE, SQL_IS_INTEGER);
+	                  ConvertToSQLPOINTER(SQL_TRUE), SQL_IS_INTEGER);
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
