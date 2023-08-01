@@ -13,7 +13,7 @@ foreach bitpacking_mode delta_for for constant_delta constant
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 
-foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+foreach type <numeric> hugeint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
 CREATE TABLE a AS SELECT MOD(i,3)::${type} i FROM range(10000) tbl(i)
@@ -50,19 +50,20 @@ statement ok
 DROP TABLE IF EXISTS test;
 
 statement ok
-CREATE TABLE test (a INT64, b INT32, c INT16, d TINYINT);
+CREATE TABLE test (x INT128, a INT64, b INT32, c INT16, d TINYINT);
 
 # Only using (SIZEOF(TYPE)*8)-1
 # (All but 1 bit)
 # Because bitpacking wont accept a value range bigger than that
 statement ok
-INSERT INTO test VALUES (-4611686018427387904, -1073741824, -16384, -64), (4611686018427387903, 1073741823, 16383, 63);
+INSERT INTO test VALUES (-85070591730234615865843651857942052864, -4611686018427387904, -1073741824, -16384, -64), (85070591730234615865843651857942052863, 4611686018427387903, 1073741823, 16383, 63);
 
 statement ok
 checkpoint
 
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'HUGEINT' OR
 	segment_type ILIKE 'BIGINT' OR
 	segment_type ILIKE 'INTEGER' OR
 	segment_type ILIKE 'SMALLINT' OR
@@ -72,11 +73,12 @@ BitPacking
 BitPacking
 BitPacking
 BitPacking
+BitPacking
 
-query IIIII
-SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
+query IIIIII
+SELECT AVG(x), AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
--0.5	-0.5	-0.5	-0.5	2
+-0.5	-0.5	-0.5	-0.5	-0.5	2
 
 statement ok
 drop table test

@@ -4,10 +4,4 @@ from .context import SparkContext
 from ._globals import _NoValue
 from .exception import ContributionsAcceptedError
 
-__all__ = [
-	"SparkSession",
-	"DataFrame",
-	"SparkConf",
-	"SparkContext",
-	"ContributionsAcceptedError"
-]
+__all__ = ["SparkSession", "DataFrame", "SparkConf", "SparkContext", "ContributionsAcceptedError"]

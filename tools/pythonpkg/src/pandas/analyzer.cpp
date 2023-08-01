@@ -143,7 +143,7 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	return true;
 }
 
-LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
+LogicalType PandasAnalyzer::GetListType(py::object &ele, bool &can_convert) {
 	auto size = py::len(ele);
 
 	if (size == 0) {
@@ -153,7 +153,8 @@ LogicalType PandasAnalyzer::GetListType(py::handle &ele, bool &can_convert) {
 	idx_t i = 0;
 	LogicalType list_type = LogicalType::SQLNULL;
 	for (auto py_val : ele) {
-		auto item_type = GetItemType(py_val, can_convert);
+		auto object = py::reinterpret_borrow<py::object>(py_val);
+		auto item_type = GetItemType(object, can_convert);
 		if (!i) {
 			list_type = item_type;
 		} else {
@@ -257,7 +258,7 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 //! e.g python lists can consist of multiple different types, which we cant communicate downwards through
 //! LogicalType's alone
 
-LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
+LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 	auto object_type = GetPythonObjectType(ele);
 
 	switch (object_type) {
@@ -362,7 +363,7 @@ uint64_t PandasAnalyzer::GetSampleIncrement(idx_t rows) {
 	return rows / sample;
 }
 
-LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, bool sample, idx_t increment) {
+LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, bool sample, idx_t increment) {
 	idx_t rows = py::len(column);
 
 	if (!rows) {
@@ -406,13 +407,13 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::handle column, bool &can_convert, b
 	return item_type;
 }
 
-bool PandasAnalyzer::Analyze(py::handle column) {
+bool PandasAnalyzer::Analyze(py::object column) {
 	// Disable analyze
 	if (sample_size == 0) {
 		return false;
 	}
 	bool can_convert = true;
-	LogicalType type = InnerAnalyze(column, can_convert);
+	LogicalType type = InnerAnalyze(std::move(column), can_convert);
 	if (can_convert) {
 		analyzed_type = type;
 	}

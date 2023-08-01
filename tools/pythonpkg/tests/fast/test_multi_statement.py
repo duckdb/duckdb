@@ -2,20 +2,24 @@ import duckdb
 import os
 import shutil
 
+
 class TestMultiStatement(object):
     def test_multi_statement(self, duckdb_cursor):
         import duckdb
+
         con = duckdb.connect(':memory:')
 
         # test empty statement
         con.execute('')
 
         # run multiple statements in one call to execute
-        con.execute('''
+        con.execute(
+            '''
         CREATE TABLE integers(i integer);
         insert into integers select * from range(10);
         select * from integers;
-        ''')
+        '''
+        )
         results = [x[0] for x in con.fetchall()]
         assert results == [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 

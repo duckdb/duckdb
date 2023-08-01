@@ -14,7 +14,6 @@ class LogicalOperator;
 
 class LogicalAggregate;
 class LogicalAnyJoin;
-class LogicalAsOfJoin;
 class LogicalColumnDataGet;
 class LogicalComparisonJoin;
 class LogicalCopyToFile;
@@ -26,7 +25,6 @@ class LogicalCrossProduct;
 class LogicalCTERef;
 class LogicalDelete;
 class LogicalDelimGet;
-class LogicalDelimJoin;
 class LogicalDistinct;
 class LogicalDummyScan;
 class LogicalEmptyResult;
