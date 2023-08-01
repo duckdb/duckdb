@@ -57,19 +57,6 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(std::move(client_properties_p)) {
 }
 
-bool CurrentChunk::Valid() {
-	if (data_chunk) {
-		if (position < data_chunk->size()) {
-			return true;
-		}
-	}
-	return false;
-}
-
-idx_t CurrentChunk::RemainingSize() {
-	return data_chunk->size() - position;
-}
-
 QueryResult::QueryResult(QueryResultType type, PreservedError error)
     : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }

@@ -9,6 +9,7 @@
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 namespace duckdb {
 
@@ -99,6 +100,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	auto &result = *my_stream->result;
+	auto &scan_state = *my_stream->scan_state;
 	if (result.HasError()) {
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
@@ -117,7 +119,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	}
 	idx_t result_count;
 	PreservedError error;
-	if (!ArrowUtil::TryFetchChunk(&result, my_stream->batch_size, out, result_count, error)) {
+	if (!ArrowUtil::TryFetchChunk(scan_state, result.GetArrowOptions(result), my_stream->batch_size, out, result_count,
+	                              error)) {
 		D_ASSERT(error);
 		my_stream->last_error = error;
 		return -1;
@@ -147,7 +150,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 }
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
-    : result(std::move(result_p)) {
+    : result(std::move(result_p)), scan_state(make_uniq<QueryResultChunkScanState>(*result)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
@@ -162,52 +165,43 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
 }
 
-bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, PreservedError &error) {
-	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = result.Cast<StreamQueryResult>();
-		if (!stream_result.IsOpen()) {
-			return true;
-		}
-	}
-	return result.TryFetch(chunk, error);
-}
-
-bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count,
-                              PreservedError &error) {
+bool ArrowUtil::TryFetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t batch_size, ArrowArray *out,
+                              idx_t &count, PreservedError &error) {
 	count = 0;
-	ArrowAppender appender(result->types, chunk_size, QueryResult::GetArrowOptions(*result));
-	auto &current_chunk = result->current_chunk;
-	if (current_chunk.Valid()) {
+	ArrowAppender appender(scan_state.Types(), batch_size, std::move(options));
+	auto remaining_tuples_in_chunk = scan_state.RemainingInChunk();
+	if (remaining_tuples_in_chunk) {
 		// We start by scanning the non-finished current chunk
-		// Limit the amount we're fetching to the chunk_size
-		idx_t cur_consumption = MinValue<idx_t>(current_chunk.RemainingSize(), chunk_size);
+		idx_t cur_consumption = MinValue(remaining_tuples_in_chunk, batch_size);
 		count += cur_consumption;
-		appender.Append(*current_chunk.data_chunk, current_chunk.position, current_chunk.position + cur_consumption,
-		                current_chunk.data_chunk->size());
-		current_chunk.position += cur_consumption;
+		auto &current_chunk = scan_state.CurrentChunk();
+		appender.Append(current_chunk, scan_state.CurrentOffset(), scan_state.CurrentOffset() + cur_consumption,
+		                current_chunk.size());
+		scan_state.IncreaseOffset(cur_consumption);
 	}
-	while (count < chunk_size) {
-		unique_ptr<DataChunk> data_chunk;
-		if (!TryFetchNext(*result, data_chunk, error)) {
-			if (result->HasError()) {
-				error = result->GetErrorObject();
+	while (count < batch_size) {
+		if (!scan_state.LoadNextChunk(error)) {
+			if (scan_state.HasError()) {
+				error = scan_state.GetError();
 			}
 			return false;
 		}
-		if (!data_chunk || data_chunk->size() == 0) {
+		if (scan_state.ChunkIsEmpty()) {
+			// The scan was successful, but an empty chunk was returned
 			break;
 		}
-		if (count + data_chunk->size() > chunk_size) {
-			// We have to split the chunk between this and the next batch
-			idx_t available_space = chunk_size - count;
-			appender.Append(*data_chunk, 0, available_space, data_chunk->size());
-			count += available_space;
-			current_chunk.data_chunk = std::move(data_chunk);
-			current_chunk.position = available_space;
-		} else {
-			count += data_chunk->size();
-			appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());
+		auto &current_chunk = scan_state.CurrentChunk();
+		if (scan_state.Finished() || current_chunk.size() == 0) {
+			break;
 		}
+		// The amount we still need to append into this chunk
+		auto remaining = batch_size - count;
+
+		// The amount remaining, capped by the amount left in the current chunk
+		auto to_append_to_batch = MinValue(remaining, scan_state.RemainingInChunk());
+		appender.Append(current_chunk, 0, to_append_to_batch, current_chunk.size());
+		count += to_append_to_batch;
+		scan_state.IncreaseOffset(to_append_to_batch);
 	}
 	if (count > 0) {
 		*out = appender.Finalize();
@@ -215,10 +209,10 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 	return true;
 }
 
-idx_t ArrowUtil::FetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out) {
+idx_t ArrowUtil::FetchChunk(ChunkScanState &scan_state, ArrowOptions options, idx_t chunk_size, ArrowArray *out) {
 	PreservedError error;
 	idx_t result_count;
-	if (!TryFetchChunk(result, chunk_size, out, result_count, error)) {
+	if (!TryFetchChunk(scan_state, std::move(options), chunk_size, out, result_count, error)) {
 		error.Throw();
 	}
 	return result_count;
