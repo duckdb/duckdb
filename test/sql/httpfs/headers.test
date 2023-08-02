@@ -8,10 +8,11 @@ require httpfs
 require json
 
 statement ok
-SET http_headers = MAP {'Authorization': 'Basic QQ=='}
+set http_headers = MAP {'Accept': 'text/xml'};
 
-query I
-SELECT read_json_auto from read_json_auto('http://duckdb-minio.com/v1/admin/info');
+# we send an intentionally bad Accept header value - GitHub responds with 415 "Unacceptable"
+statement error
+from read_json_auto('https://api.github.com/licenses');
 ----
-QQQ==
+415
 
