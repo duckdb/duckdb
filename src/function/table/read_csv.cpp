@@ -85,25 +85,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	}
 }
 
-uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
-	//! Const ht with accepted auto_types and their weights in specificity
-	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {(uint8_t)LogicalTypeId::VARCHAR, 0},  {(uint8_t)LogicalTypeId::TIMESTAMP, 1},
-	    {(uint8_t)LogicalTypeId::DATE, 2},     {(uint8_t)LogicalTypeId::TIME, 3},
-	    {(uint8_t)LogicalTypeId::DOUBLE, 4},   {(uint8_t)LogicalTypeId::FLOAT, 5},
-	    {(uint8_t)LogicalTypeId::BIGINT, 6},   {(uint8_t)LogicalTypeId::INTEGER, 7},
-	    {(uint8_t)LogicalTypeId::SMALLINT, 8}, {(uint8_t)LogicalTypeId::TINYINT, 9},
-	    {(uint8_t)LogicalTypeId::BOOLEAN, 10}, {(uint8_t)LogicalTypeId::SQLNULL, 11}};
-
-	auto id = (uint8_t)candidate_type.id();
-	auto it = auto_type_candidates_specificity.find(id);
-	if (it == auto_type_candidates_specificity.end()) {
-		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
-		                      EnumUtil::ToString(candidate_type.id()));
-	}
-	return it->second;
-}
-
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
 
@@ -111,117 +92,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &options = result->options;
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
-	bool explicitly_set_columns = false;
-	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
-			continue;
-		}
-		auto loption = StringUtil::Lower(kv.first);
-		if (loption == "columns") {
-			explicitly_set_columns = true;
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_csv columns requires a struct as input");
-			}
-			auto &struct_children = StructValue::GetChildren(kv.second);
-			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-			for (idx_t i = 0; i < struct_children.size(); i++) {
-				auto &name = StructType::GetChildName(child_type, i);
-				auto &val = struct_children[i];
-				names.push_back(name);
-				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv requires a type specification as string");
-				}
-				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
-			}
-			if (names.empty()) {
-				throw BinderException("read_csv requires at least a single column as input!");
-			}
-		} else if (loption == "auto_type_candidates") {
-			options.auto_type_candidates.clear();
-			map<uint8_t, LogicalType> candidate_types;
-			// We always have the extremes of Null and Varchar, so we can default to varchar if the
-			// sniffer is not able to confidently detect that column type
-			candidate_types[GetCandidateSpecificity(LogicalType::VARCHAR)] = LogicalType::VARCHAR;
-			candidate_types[GetCandidateSpecificity(LogicalType::SQLNULL)] = LogicalType::SQLNULL;
+	options.FromNamedParameters(input.named_parameters, context, return_types, names);
+	bool explicitly_set_columns = options.explicitly_set_columns;
 
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv auto_types requires a list as input");
-			}
-			auto &list_children = ListValue::GetChildren(kv.second);
-			if (list_children.empty()) {
-				throw BinderException("auto_type_candidates requires at least one type");
-			}
-			for (auto &child : list_children) {
-				if (child.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("auto_type_candidates requires a type specification as string");
-				}
-				auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
-				candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;
-			}
-			for (auto &candidate_type : candidate_types) {
-				options.auto_type_candidates.emplace_back(candidate_type.second);
-			}
-		} else if (loption == "column_names" || loption == "names") {
-			if (!options.name_list.empty()) {
-				throw BinderException("read_csv_auto column_names/names can only be supplied once");
-			}
-			if (kv.second.IsNull()) {
-				throw BinderException("read_csv_auto %s cannot be NULL", kv.first);
-			}
-			auto &children = ListValue::GetChildren(kv.second);
-			for (auto &child : children) {
-				options.name_list.push_back(StringValue::Get(child));
-			}
-		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv_auto %s requires a struct or list as input", kv.first);
-			}
-			if (!options.sql_type_list.empty()) {
-				throw BinderException("read_csv_auto column_types/types/dtypes can only be supplied once");
-			}
-			vector<string> sql_type_names;
-			if (child_type.id() == LogicalTypeId::STRUCT) {
-				auto &struct_children = StructValue::GetChildren(kv.second);
-				D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-				for (idx_t i = 0; i < struct_children.size(); i++) {
-					auto &name = StructType::GetChildName(child_type, i);
-					auto &val = struct_children[i];
-					if (val.type().id() != LogicalTypeId::VARCHAR) {
-						throw BinderException("read_csv_auto %s requires a type specification as string", kv.first);
-					}
-					sql_type_names.push_back(StringValue::Get(val));
-					options.sql_types_per_column[name] = i;
-				}
-			} else {
-				auto &list_child = ListType::GetChildType(child_type);
-				if (list_child.id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv_auto %s requires a list of types (varchar) as input", kv.first);
-				}
-				auto &children = ListValue::GetChildren(kv.second);
-				for (auto &child : children) {
-					sql_type_names.push_back(StringValue::Get(child));
-				}
-			}
-			options.sql_type_list.reserve(sql_type_names.size());
-			for (auto &sql_type : sql_type_names) {
-				auto def_type = TransformStringToLogicalType(sql_type);
-				if (def_type.id() == LogicalTypeId::USER) {
-					throw BinderException("Unrecognized type \"%s\" for read_csv_auto %s definition", sql_type,
-					                      kv.first);
-				}
-				options.sql_type_list.push_back(std::move(def_type));
-			}
-		} else if (loption == "all_varchar") {
-			options.all_varchar = BooleanValue::Get(kv.second);
-		} else if (loption == "normalize_names") {
-			options.normalize_names = BooleanValue::Get(kv.second);
-		} else {
-			options.SetReadOption(loption, kv.second, names);
-		}
-	}
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
 	if (!options.auto_detect && return_types.empty()) {

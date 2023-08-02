@@ -44,10 +44,10 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	BufferedCSVReaderOptions csv_options;
 	csv_options.file_path = csv_file;
 	vector<string> empty;
-	for (auto &option : options) {
-		// FIXME: can this always be empty or do we need extra logic here?
-		csv_options.SetReadOption(option.first, option.second, empty);
-	}
+
+	vector<LogicalType> unused_types;
+	vector<string> unused_names;
+	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
 	// Run the auto-detect, populating the options with the detected settings
 	BufferedCSVReader reader(*context, csv_options);
 

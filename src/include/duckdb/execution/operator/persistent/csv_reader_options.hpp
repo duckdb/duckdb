@@ -170,9 +170,15 @@ struct BufferedCSVReaderOptions {
 	void SetTypeForColumn(const string &name, const LogicalType &type);
 	void SetSQLType(const LogicalType &type);
 	void ToNamedParameters(named_parameter_map_t &out);
+	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context, vector<LogicalType> &return_types,
+	                         vector<string> &names);
 
 	string ToString() const;
 
 	named_parameter_map_t OutputReadSettings();
+
+public:
+	//! Whether columns were explicitly provided through named parameters
+	bool explicitly_set_columns = false;
 };
 } // namespace duckdb

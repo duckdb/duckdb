@@ -868,28 +868,28 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		if (!py::isinstance<py::bool_>(all_varchar)) {
 			throw InvalidInputException("read_csv only accepts 'all_varchar' as a boolean");
 		}
-		bind_parameters["all_varchar"] = Value::INTEGER(py::bool_(all_varchar));
+		bind_parameters["all_varchar"] = Value::BOOLEAN(py::bool_(all_varchar));
 	}
 
 	if (!py::none().is(normalize_names)) {
 		if (!py::isinstance<py::bool_>(normalize_names)) {
 			throw InvalidInputException("read_csv only accepts 'normalize_names' as a boolean");
 		}
-		bind_parameters["normalize_names"] = Value::INTEGER(py::bool_(normalize_names));
+		bind_parameters["normalize_names"] = Value::BOOLEAN(py::bool_(normalize_names));
 	}
 
 	if (!py::none().is(filename)) {
 		if (!py::isinstance<py::bool_>(filename)) {
 			throw InvalidInputException("read_csv only accepts 'filename' as a boolean");
 		}
-		bind_parameters["filename"] = Value::INTEGER(py::bool_(filename));
+		bind_parameters["filename"] = Value::BOOLEAN(py::bool_(filename));
 	}
 
 	if (!py::none().is(null_padding)) {
 		if (!py::isinstance<py::bool_>(null_padding)) {
 			throw InvalidInputException("read_csv only accepts 'null_padding' as a boolean");
 		}
-		bind_parameters["null_padding"] = Value::INTEGER(py::bool_(null_padding));
+		bind_parameters["null_padding"] = Value::BOOLEAN(py::bool_(null_padding));
 	}
 
 	// Create the ReadCSV Relation using the 'options'
