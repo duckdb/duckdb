@@ -14,11 +14,11 @@ INSERT INTO uhugeints VALUES (42::UHUGEINT), ('1267650600228229401496703205376':
 
 # out of range conversion
 # statement error
-# SELECT h::INTEGER FROM uhugeints
+# SELECT h::UINTEGER FROM uhugeints
 
 # filter before cast works
 query I
-SELECT h::INTEGER FROM uhugeints WHERE h < 100
+SELECT h::UINTEGER FROM uhugeints WHERE h < 100::UINTEGER
 ----
 42
 
