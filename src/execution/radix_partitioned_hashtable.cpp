@@ -83,8 +83,8 @@ private:
 		const auto max_threads = DBConfig::GetSystemMaxThreads(FileSystem::GetFileSystem(context));
 
 		// Compute cache size per active thread (assuming cache is shared)
-		const auto total_cache_size = max_threads * CACHE_PER_CORE;
-		const auto cache_per_active_thread = total_cache_size / active_threads;
+		const auto total_shared_cache_size = max_threads * L3_CACHE_SIZE;
+		const auto cache_per_active_thread = L1_CACHE_SIZE + L2_CACHE_SIZE + total_shared_cache_size / active_threads;
 
 		// Divide cache per active thread by entry size, round up to next power of two, to get capacity
 		const auto size_per_entry = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
@@ -104,8 +104,13 @@ private:
 	}
 
 private:
-	//! Assume (1 << 20) = 1.0MB of L2 cache per CPU
-	static constexpr const idx_t CACHE_PER_CORE = 1048576;
+	//! Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
+	static constexpr const idx_t L1_CACHE_SIZE = 32768 / 2;
+	//! Assume (1 << 20) = 1MB L2 cache per core, divided by two because hyperthreading
+	static constexpr const idx_t L2_CACHE_SIZE = 1048576 / 2;
+	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
+	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
+
 	//! By how many bits to repartition if we go out-of-core
 	static constexpr const idx_t REPARTITION_RADIX_BITS = 3;
 
