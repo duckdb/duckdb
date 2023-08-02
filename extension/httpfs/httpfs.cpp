@@ -626,7 +626,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		// Lock cache and get or create cache entry
 		{
 			lock_guard<mutex> lock(state->cached_files_mutex);
-			auto& cache_entry_ref = state->cached_files[path];
+			auto &cache_entry_ref = state->cached_files[path];
 			if (cache_entry_ref) {
 				cached_file = cache_entry_ref;
 			} else {
