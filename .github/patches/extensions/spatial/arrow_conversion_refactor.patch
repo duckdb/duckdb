@@ -1,5 +1,5 @@
 diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
-index 709db44..92588c1 100644
+index 275bd45..92588c1 100644
 --- a/spatial/src/spatial/gdal/functions/st_read.cpp
 +++ b/spatial/src/spatial/gdal/functions/st_read.cpp
 @@ -94,12 +94,12 @@ struct GdalScanFunctionData : public TableFunctionData {
@@ -56,12 +56,3 @@ index 709db44..92588c1 100644
  	}
  
  	output.Verify();
-@@ -462,7 +465,7 @@ void GdalTableFunction::Register(ClientContext &context) {
- 	TableFunctionSet set("st_read");
- 	TableFunction scan({LogicalType::VARCHAR}, GdalTableFunction::Scan, GdalTableFunction::Bind,
- 	                   GdalTableFunction::InitGlobal, ArrowTableFunction::ArrowScanInitLocal);
--					   
-+
- 	scan.cardinality = ArrowTableFunction::ArrowScanCardinality;
- 	scan.get_batch_index = ArrowTableFunction::ArrowGetBatchIndex;
- 
