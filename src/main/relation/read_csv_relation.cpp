@@ -42,8 +42,10 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	options["auto_detect"] = Value::BOOLEAN(true);
 	BufferedCSVReaderOptions csv_options;
+	csv_options.file_path = csv_file;
 	vector<string> empty;
 	for (auto &option : options) {
+		// FIXME: can this always be empty or do we need extra logic here?
 		csv_options.SetReadOption(option.first, option.second, empty);
 	}
 	// Run the auto-detect, populating the options with the detected settings
@@ -55,6 +57,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		columns.emplace_back(names[i], types[i]);
 	}
 
+	//! Capture the options potentially set/altered by the auto detection phase
 	csv_options.ToNamedParameters(options);
 
 	// No need to auto-detect again

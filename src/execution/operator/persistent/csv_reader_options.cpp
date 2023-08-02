@@ -289,6 +289,16 @@ std::string BufferedCSVReaderOptions::ToString() const {
 	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
 }
 
+static Value StringVectorToValue(const vector<string> &vec) {
+	vector<Value> content;
+	content.reserve(vec.size());
+	for (auto &item : vec) {
+		content.push_back(Value(item));
+	}
+	return Value::LIST(std::move(content));
+}
+
+//! This function is used to remember options set by the sniffer, for use in ReadCSVRelation
 void BufferedCSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	if (has_delimiter) {
 		named_params["delim"] = Value(delimiter);
@@ -296,6 +306,35 @@ void BufferedCSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_pa
 	if (has_newline) {
 		named_params["newline"] = Value(EnumUtil::ToString(new_line));
 	}
+	if (has_quote) {
+		named_params["quote"] = Value(quote);
+	}
+	if (has_escape) {
+		named_params["escape"] = Value(escape);
+	}
+	if (has_header) {
+		named_params["header"] = Value(header);
+	}
+	named_params["max_line_size"] = Value::BIGINT(maximum_line_size);
+	if (skip_rows_set) {
+		named_params["skip_rows"] = Value::BIGINT(skip_rows);
+	}
+	named_params["sample_chunks"] = Value::BIGINT(sample_chunks);
+	named_params["sample_chunk_size"] = Value::BIGINT(sample_chunk_size);
+	named_params["null_padding"] = Value::BOOLEAN(null_padding);
+	if (!date_format.at(LogicalType::DATE).format_specifier.empty()) {
+		named_params["date_format"] = Value(date_format.at(LogicalType::DATE).format_specifier);
+	}
+	if (!date_format.at(LogicalType::TIMESTAMP).format_specifier.empty()) {
+		named_params["timestamp_format"] = Value(date_format.at(LogicalType::TIMESTAMP).format_specifier);
+	}
+
+	named_params["normalize_names"] = Value::BOOLEAN(normalize_names);
+	if (!name_list.empty()) {
+		named_params["column_names"] = StringVectorToValue(name_list);
+	}
+	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);
+	named_params["maximum_line_size"] = Value::BIGINT(maximum_line_size);
 }
 
 } // namespace duckdb

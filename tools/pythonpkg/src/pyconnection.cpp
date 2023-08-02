@@ -708,11 +708,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	BufferedCSVReaderOptions options;
 	auto path_like = GetPathLike(name_p);
 	auto &name = path_like.str;
 	auto file_like_object_wrapper = std::move(path_like.dependency);
-	vector<std::pair<string, Value>> post_bind_options;
+	named_parameter_map_t bind_parameters;
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -721,29 +720,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		bool header_as_int = py::isinstance<py::int_>(header);
 		bool header_as_bool = py::isinstance<py::bool_>(header);
 
+		bool header_value;
 		if (header_as_bool) {
-			options.SetHeader(py::bool_(header));
+			header_value = py::bool_(header);
 		} else if (header_as_int) {
 			if ((int)py::int_(header) != 0) {
 				throw InvalidInputException("read_csv only accepts 0 if 'header' is given as an integer");
 			}
-			options.SetHeader(true);
+			header_value = true;
 		} else {
 			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
 		}
-		post_bind_options.emplace_back(std::make_pair("header", Value::BOOLEAN(options.header)));
+		bind_parameters["header"] = Value::BOOLEAN(header_value);
 	}
 
-	// We want to detect if the file can be opened, we set this in the options so we can detect this at bind time
-	// rather than only at execution time
 	if (!py::none().is(compression)) {
 		if (!py::isinstance<py::str>(compression)) {
 			throw InvalidInputException("read_csv only accepts 'compression' as a string");
 		}
-		options.SetCompression(py::str(compression));
-		if (options.compression != FileCompressionType::AUTO_DETECT) {
-			post_bind_options.emplace_back(std::make_pair("compression", Value(py::str(compression))));
-		}
+		bind_parameters["compression"] = Value(py::str(compression));
 	}
 
 	if (!py::none().is(dtype)) {
@@ -755,11 +750,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 				if (!py::try_cast(kv.second, sql_type)) {
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
-				options.SetTypeForColumn(py::str(kv.first), sql_type->Type());
 				struct_fields.emplace_back(py::str(kv.first), Value(py::str(kv.second)));
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
-			post_bind_options.emplace_back(std::make_pair("dtypes", std::move(dtype_struct)));
+			bind_parameters["dtypes"] = std::move(dtype_struct);
 		} else if (py::isinstance<py::list>(dtype)) {
 			vector<Value> list_values;
 			py::list dtype_list = dtype;
@@ -769,28 +763,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
 				list_values.push_back(std::string(py::str(child)));
-				options.SetSQLType(sql_type->Type());
 			}
-			post_bind_options.emplace_back(
-			    std::make_pair("dtypes", Value::LIST(LogicalType::VARCHAR, std::move(list_values))));
+			bind_parameters["dtypes"] = Value::LIST(LogicalType::VARCHAR, std::move(list_values));
 		} else {
 			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
 		}
-	}
-
-	// Create the ReadCSV Relation using the 'options'
-
-	auto read_csv_p = connection->ReadCSV(name, options);
-	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
-	if (file_like_object_wrapper) {
-		D_ASSERT(!read_csv.extra_dependencies);
-		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
-	}
-
-	for (auto &pair : post_bind_options) {
-		auto &param_name = pair.first;
-		auto &param_val = pair.second;
-		read_csv.AddNamedParameter(param_name, param_val);
 	}
 
 	bool has_sep = !py::none().is(sep);
@@ -799,9 +776,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		throw InvalidInputException("read_csv takes either 'delimiter' or 'sep', not both");
 	}
 	if (has_sep) {
-		read_csv.AddNamedParameter("delim", Value(py::str(sep)));
+		bind_parameters["delim"] = Value(py::str(sep));
 	} else if (has_delimiter) {
-		read_csv.AddNamedParameter("delim", Value(py::str(delimiter)));
+		bind_parameters["delim"] = Value(py::str(delimiter));
 	}
 
 	// We don't support overriding the names of the header yet
@@ -825,35 +802,35 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		if (!py::isinstance<py::str>(na_values)) {
 			throw InvalidInputException("read_csv only accepts 'na_values' as a string");
 		}
-		read_csv.AddNamedParameter("nullstr", Value(py::str(na_values)));
+		bind_parameters["nullstr"] = Value(py::str(na_values));
 	}
 
 	if (!py::none().is(skiprows)) {
 		if (!py::isinstance<py::int_>(skiprows)) {
 			throw InvalidInputException("read_csv only accepts 'skiprows' as an integer");
 		}
-		read_csv.AddNamedParameter("skip", Value::INTEGER(py::int_(skiprows)));
+		bind_parameters["skip"] = Value::INTEGER(py::int_(skiprows));
 	}
 
 	if (!py::none().is(parallel)) {
 		if (!py::isinstance<py::bool_>(parallel)) {
 			throw InvalidInputException("read_csv only accepts 'parallel' as a boolean");
 		}
-		read_csv.AddNamedParameter("parallel", Value::BOOLEAN(py::bool_(parallel)));
+		bind_parameters["parallel"] = Value::BOOLEAN(py::bool_(parallel));
 	}
 
 	if (!py::none().is(quotechar)) {
 		if (!py::isinstance<py::str>(quotechar)) {
 			throw InvalidInputException("read_csv only accepts 'quotechar' as a string");
 		}
-		read_csv.AddNamedParameter("quote", Value(py::str(quotechar)));
+		bind_parameters["quote"] = Value(py::str(quotechar));
 	}
 
 	if (!py::none().is(escapechar)) {
 		if (!py::isinstance<py::str>(escapechar)) {
 			throw InvalidInputException("read_csv only accepts 'escapechar' as a string");
 		}
-		read_csv.AddNamedParameter("escape", Value(py::str(escapechar)));
+		bind_parameters["escape"] = Value(py::str(escapechar));
 	}
 
 	if (!py::none().is(encoding)) {
@@ -870,49 +847,58 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		if (!py::isinstance<py::str>(date_format)) {
 			throw InvalidInputException("read_csv only accepts 'date_format' as a string");
 		}
-		read_csv.AddNamedParameter("dateformat", Value(py::str(date_format)));
+		bind_parameters["dateformat"] = Value(py::str(date_format));
 	}
 
 	if (!py::none().is(timestamp_format)) {
 		if (!py::isinstance<py::str>(timestamp_format)) {
 			throw InvalidInputException("read_csv only accepts 'timestamp_format' as a string");
 		}
-		read_csv.AddNamedParameter("timestampformat", Value(py::str(timestamp_format)));
+		bind_parameters["timestampformat"] = Value(py::str(timestamp_format));
 	}
 
 	if (!py::none().is(sample_size)) {
 		if (!py::isinstance<py::int_>(sample_size)) {
 			throw InvalidInputException("read_csv only accepts 'sample_size' as an integer");
 		}
-		read_csv.AddNamedParameter("sample_size", Value::INTEGER(py::int_(sample_size)));
+		bind_parameters["sample_size"] = Value::INTEGER(py::int_(sample_size));
 	}
 
 	if (!py::none().is(all_varchar)) {
 		if (!py::isinstance<py::bool_>(all_varchar)) {
 			throw InvalidInputException("read_csv only accepts 'all_varchar' as a boolean");
 		}
-		read_csv.AddNamedParameter("all_varchar", Value::INTEGER(py::bool_(all_varchar)));
+		bind_parameters["all_varchar"] = Value::INTEGER(py::bool_(all_varchar));
 	}
 
 	if (!py::none().is(normalize_names)) {
 		if (!py::isinstance<py::bool_>(normalize_names)) {
 			throw InvalidInputException("read_csv only accepts 'normalize_names' as a boolean");
 		}
-		read_csv.AddNamedParameter("normalize_names", Value::INTEGER(py::bool_(normalize_names)));
+		bind_parameters["normalize_names"] = Value::INTEGER(py::bool_(normalize_names));
 	}
 
 	if (!py::none().is(filename)) {
 		if (!py::isinstance<py::bool_>(filename)) {
 			throw InvalidInputException("read_csv only accepts 'filename' as a boolean");
 		}
-		read_csv.AddNamedParameter("filename", Value::INTEGER(py::bool_(filename)));
+		bind_parameters["filename"] = Value::INTEGER(py::bool_(filename));
 	}
 
 	if (!py::none().is(null_padding)) {
 		if (!py::isinstance<py::bool_>(null_padding)) {
 			throw InvalidInputException("read_csv only accepts 'null_padding' as a boolean");
 		}
-		read_csv.AddNamedParameter("null_padding", Value::INTEGER(py::bool_(null_padding)));
+		bind_parameters["null_padding"] = Value::INTEGER(py::bool_(null_padding));
+	}
+
+	// Create the ReadCSV Relation using the 'options'
+
+	auto read_csv_p = connection->ReadCSV(name, std::move(bind_parameters));
+	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
+	if (file_like_object_wrapper) {
+		D_ASSERT(!read_csv.extra_dependencies);
+		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
 	}
 
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));

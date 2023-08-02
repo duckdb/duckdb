@@ -17,6 +17,11 @@ void TableFunctionRelation::AddNamedParameter(const string &name, Value argument
 	named_parameters[name] = std::move(argument);
 }
 
+void TableFunctionRelation::SetNamedParameters(named_parameter_map_t &&options) {
+	D_ASSERT(named_parameters.empty());
+	named_parameters = std::move(options);
+}
+
 TableFunctionRelation::TableFunctionRelation(const shared_ptr<ClientContext> &context, string name_p,
                                              vector<Value> parameters_p, named_parameter_map_t named_parameters,
                                              shared_ptr<Relation> input_relation_p, bool auto_init)
