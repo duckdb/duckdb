@@ -28,23 +28,9 @@ protected:
 public:
 	// Serialize a value
 	template <class T>
-	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, const T &value) {
+	void WriteProperty(const char *tag, const T &value) {
 		SetTag(tag);
 		WriteValue(value);
-	}
-
-	// Serialize an enum
-	template <class T>
-	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value) {
-		SetTag(tag);
-		if (serialize_enum_as_string) {
-			// Use the enum serializer to lookup tostring function
-			auto str = EnumUtil::ToChars(value);
-			WriteValue(str);
-		} else {
-			// Use the underlying type
-			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
-		}
 	}
 
 	// Optional pointer
@@ -67,7 +53,29 @@ public:
 		WriteDataPtr(ptr, count);
 	}
 
+	// Manually begin an object - should be followed by EndObject
+	void BeginObject(const char *tag) {
+		SetTag(tag);
+		OnObjectBegin();
+	}
+
+	void EndObject() {
+		OnObjectEnd();
+	}
+
 protected:
+	template <typename T>
+	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
+		if (serialize_enum_as_string) {
+			// Use the enum serializer to lookup tostring function
+			auto str = EnumUtil::ToChars(value);
+			WriteValue(str);
+		} else {
+			// Use the underlying type
+			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
+		}
+	}
+
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
@@ -145,6 +153,24 @@ protected:
 	// Map
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const duckdb::unordered_map<K, V, HASH, CMP> &map) {
+		auto count = map.size();
+		OnMapBegin(count);
+		for (auto &item : map) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			WriteValue(item.first);
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			WriteValue(item.second);
+			OnMapValueEnd();
+			OnMapEntryEnd();
+		}
+		OnMapEnd(count);
+	}
+
+	// Map
+	template <class K, class V, class HASH, class CMP>
+	void WriteValue(const duckdb::map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
 		OnMapBegin(count);
 		for (auto &item : map) {
@@ -246,5 +272,9 @@ protected:
 		WriteValue(value.index);
 	}
 };
+
+// We need to special case vector<bool> because elements of vector<bool> cannot be referenced
+template <>
+void FormatSerializer::WriteValue(const vector<bool> &vec);
 
 } // namespace duckdb

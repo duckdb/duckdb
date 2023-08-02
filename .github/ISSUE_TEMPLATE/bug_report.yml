@@ -1,5 +1,7 @@
 name: Bug report
 description: Create a report to help us improve
+labels:
+  - needs triage
 body:
   - type: markdown
     attributes:
@@ -72,21 +74,23 @@ body:
 
         # Before Submitting
 
-  - type: checkboxes
+  - type: dropdown
     attributes:
       label: Have you tried this on the latest `master` branch?
       description: |
         * **Python**: `pip install duckdb --upgrade --pre`
         * **R**: `install.packages('duckdb', repos=c('https://duckdb.r-universe.dev', 'https://cloud.r-project.org'))`
         * **Other Platforms**: You can find links to binaries [here](https://duckdb.org/docs/installation/) or compile from source.
-
       options:
-        - label: I agree
-          required: true
+        - I have tested with a master build
+        - I have tested with a release build (and could not test with a master build)
+        - I have not tested with any build
+    validations:
+      required: true
 
   - type: checkboxes
     attributes:
       label: Have you tried the steps to reproduce? Do they include all relevant data and configuration? Does the issue you report still appear there?
       options:
-        - label: I agree
+        - label: Yes, I have
           required: true

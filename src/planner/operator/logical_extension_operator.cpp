@@ -1,6 +1,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(LogicalDeserializationState &state,
@@ -29,6 +31,27 @@ void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res,
 	}
 	// finally update the current set of bindings to the current set of column bindings
 	bindings = GetColumnBindings();
+}
+
+void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("extension_name", GetExtensionName());
+}
+
+unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
+	auto extension_name = deserializer.ReadProperty<string>("extension_name");
+	for (auto &extension : config.operator_extensions) {
+		if (extension->GetName() == extension_name) {
+			return extension->FormatDeserialize(deserializer);
+		}
+	}
+	throw SerializationException("No deserialization method exists for extension: " + extension_name);
+}
+
+string LogicalExtensionOperator::GetExtensionName() const {
+	throw SerializationException("LogicalExtensionOperator::GetExtensionName not implemented which is required for "
+	                             "serializing extension operators");
 }
 
 } // namespace duckdb

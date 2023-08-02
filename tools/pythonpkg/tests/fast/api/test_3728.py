@@ -15,5 +15,5 @@ class Test3728(object):
         # This fails with "RuntimeError: Not implemented Error: unsupported type: mood"
         assert cursor.table("person").execute().description == [
             ('name', 'STRING', None, None, None, None, None),
-            ('current_mood', 'mood', None, None, None, None, None),
+            ('current_mood', "ENUM('sad', 'ok', 'happy')", None, None, None, None, None),
         ]

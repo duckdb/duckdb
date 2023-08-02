@@ -74,7 +74,7 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit) REPLACE "
+	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz) REPLACE "
 	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint) FROM test_all_types()");
 }
 
@@ -102,7 +102,8 @@ TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {
 	// data.emplace_back("data/parquet-testing/complex.parquet");
 	data.emplace_back("data/parquet-testing/data-types.parquet");
 	data.emplace_back("data/parquet-testing/date.parquet");
-	data.emplace_back("data/parquet-testing/date_stats.parquet");
+	// arrow can't read this because it's a time with a timezone and it's not supported by arrow
+	//	data.emplace_back("data/parquet-testing/date_stats.parquet");
 	data.emplace_back("data/parquet-testing/decimal_stats.parquet");
 	data.emplace_back("data/parquet-testing/decimals.parquet");
 	data.emplace_back("data/parquet-testing/enum.parquet");

@@ -54,6 +54,22 @@ duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	return DuckDBSuccess;
 }
 
+void duckdb_interrupt(duckdb_connection connection) {
+	if (!connection) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	conn->Interrupt();
+}
+
+double duckdb_query_progress(duckdb_connection connection) {
+	if (!connection) {
+		return -1;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	return conn->context->GetProgress();
+}
+
 void duckdb_disconnect(duckdb_connection *connection) {
 	if (connection && *connection) {
 		Connection *conn = reinterpret_cast<Connection *>(*connection);
