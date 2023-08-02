@@ -26,10 +26,6 @@
 
 namespace duckdb_nanoarrow {
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /// \file Arrow C Implementation
 ///
 /// EXPERIMENTAL. Interface subject to change.
@@ -460,10 +456,6 @@ void ArrowBufferAppendUnsafe(struct ArrowBuffer *buffer, const void *data, int64
 ArrowErrorCode ArrowBufferAppend(struct ArrowBuffer *buffer, const void *data, int64_t size_bytes);
 
 /// }@
-
-#ifdef __cplusplus
-}
-#endif
 
 } // namespace duckdb_nanoarrow
 
