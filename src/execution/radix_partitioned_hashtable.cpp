@@ -296,10 +296,13 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		return; // We can fit another chunk
 	}
 
-	// 'Reset' the HT without taking its data, we can just keep appending to the same collection
-	// This only works because we never resize the HT
-	ht.ClearPointerTable();
-	ht.ResetCount();
+	if (gstate.active_threads > 1) {
+		// 'Reset' the HT without taking its data, we can just keep appending to the same collection
+		// This only works because we never resize the HT
+		ht.ClearPointerTable();
+		ht.ResetCount();
+		// We don't do this when running single-threaded, because we don't have to combine anyway
+	}
 
 	// If the size of the data owned by the HT becomes too big, we repartition and assume we need to go out-of-core
 	if (OverMemoryLimit(context.client, *ht.GetPartitionedData())) {
@@ -355,10 +358,22 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		auto &uncombined_data = *gstate.uncombined_data;
 		gstate.count_before_combining = uncombined_data.Count();
 
+		// If true there is no need to combine, it was all done by a single thread in a single HT
+		const auto single_ht = !gstate.external && gstate.active_threads == 1;
+
 		auto &uncombined_partition_data = uncombined_data.GetPartitions();
-		gstate.partitions.reserve(uncombined_partition_data.size());
-		for (idx_t i = 0; i < uncombined_partition_data.size(); i++) {
+		const auto n_partitions = uncombined_partition_data.size();
+		gstate.partitions.reserve(n_partitions);
+		for (idx_t i = 0; i < n_partitions; i++) {
 			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(uncombined_partition_data[i])));
+			if (single_ht) {
+				gstate.partitions.back()->finalized = true;
+			}
+		}
+
+		if (single_ht) {
+			gstate.finalize_idx = n_partitions;
+			gstate.finalize_done = n_partitions;
 		}
 	} else {
 		gstate.count_before_combining = 0;

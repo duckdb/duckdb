@@ -26,7 +26,7 @@ public:
 	SelectionVector partition_sel;
 	SelectionVector reverse_partition_sel;
 
-	static constexpr idx_t MAP_THRESHOLD = 64;
+	static constexpr idx_t MAP_THRESHOLD = 256;
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
