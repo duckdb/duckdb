@@ -32,7 +32,6 @@ string PhysicalComparisonJoin::ParamsToString() const {
 	}
 	extra_info += "\n[INFOSEPARATOR]\n";
 	extra_info += StringUtil::Format("EC: %llu\n", estimated_cardinality);
-	//	extra_info += StringUtil::Format("Cost: %llu", estimated_props->GetCost<idx_t>());
 	return extra_info;
 }
 

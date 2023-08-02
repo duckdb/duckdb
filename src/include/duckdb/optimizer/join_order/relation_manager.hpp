@@ -44,10 +44,13 @@ public:
 	bool ExtractJoinRelations(LogicalOperator &input_op, vector<reference<LogicalOperator>> &filter_operators,
 	                          optional_ptr<LogicalOperator> parent = nullptr);
 
+	//! for each join filter in the logical plan op, extract the relations that are referred to on
+	//! both sides of the join filter, along with the tables & indexes.
 	vector<unique_ptr<FilterInfo>> ExtractEdges(LogicalOperator &op,
 	                                            vector<reference<LogicalOperator>> &filter_operators,
 	                                            JoinRelationSetManager &set_manager);
 
+	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
 	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
 

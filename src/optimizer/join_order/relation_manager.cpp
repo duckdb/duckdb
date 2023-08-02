@@ -25,8 +25,6 @@ idx_t RelationManager::NumRelations() {
 	return relations.size();
 }
 
-struct DistinctCount;
-
 void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
                                            RelationStats stats) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
@@ -250,7 +248,6 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 	}
 }
 
-//! Extract the set of relations referred to inside an expression
 bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();

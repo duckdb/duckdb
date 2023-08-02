@@ -10,8 +10,6 @@
 
 namespace duckdb {
 
-struct DistinctCount;
-
 static ExpressionBinding GetChildColumnBinding(Expression *expr) {
 	auto ret = ExpressionBinding();
 	switch (expr->expression_class) {
@@ -96,8 +94,8 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
 			auto column_name = string("column");
-			if (get.names.size() < get.column_ids.size()) {
-				column_name = get.names.at(i);
+			if (get.column_ids.at(i) < get.names.size()) {
+				column_name = get.names.at(get.column_ids.at(i));
 			}
 			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}
