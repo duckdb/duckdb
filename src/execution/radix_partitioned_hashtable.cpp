@@ -91,12 +91,13 @@ private:
 		return MinValue<idx_t>(sink_radix_bits_p + REPARTITION_RADIX_BITS, RadixPartitioning::MAX_RADIX_BITS);
 	}
 
-public:
+private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB cache per CPU
 	static constexpr const idx_t CACHE_SIZE = 1572864;
 	//! By how many bits to repartition if we go out-of-core
 	static constexpr const idx_t REPARTITION_RADIX_BITS = 3;
 
+public:
 	//! Capacity of HTs during the Sink
 	const idx_t sink_capacity;
 	//! Radix bits used during the Sink
@@ -438,8 +439,8 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 	// We first try to assign a Scan task, then a Finalize task if that didn't work, without using any locks
 
-	// We need an atomic compare-and-swap to assign a Scan task,
-	// because we need to only increment the 'scan_idx' atomic if that partition is actually ready to be scanned
+	// We need an atomic compare-and-swap to assign a Scan task, because we need to only increment
+	// the 'scan_idx' atomic if that partition's 'finalize' is true, i.e., ready to be scanned
 	bool scan_assigned = true;
 	do {
 		lstate.task_idx = scan_idx.load();
