@@ -178,7 +178,7 @@ jobs:
     name: Linux Extensions (x64)
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-    needs: linux-release-64
+#    needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
@@ -212,7 +212,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     container: ubuntu:18.04
-    needs: linux-release-64
+#    needs: linux-release-64
 
     steps:
       - uses: actions/checkout@v3
