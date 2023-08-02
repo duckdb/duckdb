@@ -236,6 +236,7 @@ public:
 	bool operator!=(const DBConfig &other);
 
 	DUCKDB_API CastFunctionSet &GetCastFunctions();
+	static idx_t GetSystemMaxThreads(FileSystem &fs);
 	void SetDefaultMaxThreads();
 	void SetDefaultMaxMemory();
 

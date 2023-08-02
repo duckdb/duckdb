@@ -7,6 +7,7 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
@@ -71,20 +72,31 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 struct RadixHTConfig {
 public:
 	RadixHTConfig(ClientContext &context)
-	    : sink_capacity(SinkCapacity()), sink_radix_bits(SinkRadixBits(context)),
+	    : sink_capacity(SinkCapacity(context)), sink_radix_bits(SinkRadixBits(context)),
 	      repartition_radix_bits(RepartitionRadixBits(sink_radix_bits)) {
 	}
 
 private:
-	static idx_t SinkCapacity() {
+	static idx_t SinkCapacity(ClientContext &context) {
+		// Get active and maximum number of threads
+		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		const auto max_threads = DBConfig::GetSystemMaxThreads(FileSystem::GetFileSystem(context));
+
+		// Compute cache size per active thread (assuming cache is shared)
+		const auto total_cache_size = max_threads * CACHE_PER_CORE;
+		const auto cache_per_active_thread = total_cache_size / active_threads;
+
+		// Divide cache per active thread by entry size, round up to next power of two, to get capacity
 		const auto size_per_entry = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
-		const auto capacity = NextPowerOfTwo(CACHE_SIZE / size_per_entry);
+		const auto capacity = NextPowerOfTwo(cache_per_active_thread / size_per_entry);
+
+		// Capacity must be at least the minimum capacity
 		return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
 	}
 
 	static idx_t SinkRadixBits(ClientContext &context) {
-		const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		return RadixPartitioning::RadixBits(NextPowerOfTwo(n_threads));
+		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		return RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads));
 	}
 
 	static idx_t RepartitionRadixBits(idx_t sink_radix_bits_p) {
@@ -92,8 +104,8 @@ private:
 	}
 
 private:
-	//! Assume (1 << 20) + (1 << 19) = 1.5MB cache per CPU
-	static constexpr const idx_t CACHE_SIZE = 1572864 * 4;
+	//! Assume (1 << 20) = 1.0MB of L2 cache per CPU
+	static constexpr const idx_t CACHE_PER_CORE = 1048576;
 	//! By how many bits to repartition if we go out-of-core
 	static constexpr const idx_t REPARTITION_RADIX_BITS = 3;
 
