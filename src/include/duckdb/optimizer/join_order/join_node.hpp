@@ -9,12 +9,10 @@
 #pragma once
 
 #include "duckdb/optimizer/join_order/join_relation.hpp"
-#include "duckdb/storage/statistics/distinct_statistics.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 
 namespace duckdb {
 
-class JoinOrderOptimizer;
 struct NeighborInfo;
 
 class JoinNode {

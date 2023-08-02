@@ -22,10 +22,7 @@
 #include <functional>
 
 namespace duckdb {
-class Expression;
-class LogicalOperator;
-class JoinNode;
-class RelationManager;
+
 struct FilterInfo;
 
 struct NeighborInfo {

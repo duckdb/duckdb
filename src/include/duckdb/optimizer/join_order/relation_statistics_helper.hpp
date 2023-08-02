@@ -7,8 +7,7 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {

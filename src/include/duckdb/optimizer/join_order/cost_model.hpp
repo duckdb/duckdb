@@ -12,6 +12,8 @@
 
 namespace duckdb {
 
+class QueryGraphManager;
+
 class CostModel {
 public:
 	CostModel(QueryGraphManager &query_graph_manager);

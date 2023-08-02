@@ -10,23 +10,20 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/query_graph.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 #include <functional>
 
 namespace duckdb {
-
-class Expression;
-class LogicalOperator;
-class RelationManager;
 
 struct GenerateJoinRelation {
 	GenerateJoinRelation(optional_ptr<JoinRelationSet> set, unique_ptr<LogicalOperator> op_p)

@@ -23,6 +23,8 @@
 
 namespace duckdb {
 
+class QueryGraphManager;
+
 class PlanEnumerator {
 public:
 	explicit PlanEnumerator(QueryGraphManager &query_graph_manager, CostModel &cost_model,

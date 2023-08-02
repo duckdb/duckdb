@@ -1,10 +1,12 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
-
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_map.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
 namespace duckdb {

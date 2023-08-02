@@ -7,19 +7,14 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/optimizer/join_order/join_node.hpp"
-#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/optimizer/join_order/relation_manager.hpp"
+#include "duckdb/optimizer/join_order/query_graph.hpp"
+
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
 
 namespace duckdb {
 
-class JoinNode;
 struct FilterInfo;
-struct SingleJoinRelation;
 
 struct RelationsToTDom {
 	//! column binding sets that are equivalent in a join plan.
@@ -65,8 +60,6 @@ public:
 	explicit CardinalityEstimator() {};
 
 private:
-	//! A mapping of (relation, bound_column) -> (actual table, actual column)
-	column_binding_map_t<ColumnBinding> relation_column_to_original_column;
 
 	vector<RelationsToTDom> relations_to_tdoms;
 	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;

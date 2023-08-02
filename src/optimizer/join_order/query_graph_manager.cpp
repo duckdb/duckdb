@@ -1,15 +1,23 @@
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/planner/operator/list.hpp"
-
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/assert.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
+
+//! Returns true if A and B are disjoint, false otherwise
+template <class T>
+static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
+	return std::all_of(a.begin(), a.end(), [&b](typename std::unordered_set<T>::const_reference entry) {
+		return b.find(entry) == b.end();
+	});
+}
 
 bool QueryGraphManager::Build(LogicalOperator *op) {
 	vector<reference<LogicalOperator>> filter_operators;

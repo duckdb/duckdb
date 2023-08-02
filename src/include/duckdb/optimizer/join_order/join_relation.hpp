@@ -11,10 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
-class LogicalOperator;
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {

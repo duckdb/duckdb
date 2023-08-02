@@ -13,13 +13,15 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
-#include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
 namespace duckdb {
+
+struct FilterInfo;
+struct RelationStats;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {

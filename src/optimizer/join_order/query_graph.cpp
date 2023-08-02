@@ -8,14 +8,6 @@ namespace duckdb {
 
 using QueryEdge = QueryGraphEdges::QueryEdge;
 
-//! Returns true if A and B are disjoint, false otherwise
-template <class T>
-static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
-	return std::all_of(a.begin(), a.end(), [&b](typename std::unordered_set<T>::const_reference entry) {
-		return b.find(entry) == b.end();
-	});
-}
-
 // LCOV_EXCL_START
 static string QueryEdgeToString(const QueryEdge *info, vector<idx_t> prefix) {
 	string result = "";

@@ -14,7 +14,7 @@
 namespace duckdb {
 
 static bool HasJoin(LogicalOperator *op) {
-	while (op->children.size() > 0) {
+	while (!op->children.empty()) {
 		if (op->children.size() == 1) {
 			op = op->children[0].get();
 		}
