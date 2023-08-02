@@ -202,14 +202,15 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	if (db_schema == nullptr) {
+		// if schema is not set, we use the default schema
+		db_schema = "main";
+	}
 	if (catalog != nullptr && strlen(catalog) > 0) {
 		// In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now,
 		// scream.
 		SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
 		return ADBC_STATUS_NOT_IMPLEMENTED;
-	} else if (db_schema == nullptr) {
-		SetError(error, "AdbcConnectionGetTableSchema: must provide db_schema");
-		return ADBC_STATUS_INVALID_ARGUMENT;
 	} else if (table_name == nullptr) {
 		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -686,6 +687,10 @@ AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArra
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
+	if (depth != 0) {
+		SetError(error, "Depth parameter not yet supported");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
 	if (catalog != nullptr) {
 		if (strcmp(catalog, "duckdb") == 0) {
 			SetError(error, "catalog must be NULL or 'duckdb'");
