@@ -61,6 +61,10 @@ public:
 	DUCKDB_API uhugeint_t &operator|=(const uhugeint_t &rhs);
 	DUCKDB_API uhugeint_t &operator^=(const uhugeint_t &rhs);
 
+	// boolean operators
+	DUCKDB_API explicit operator bool() const;
+	DUCKDB_API bool operator!() const;
+
 	// cast operators -- doesn't check bounds/overflow/underflow
 	DUCKDB_API explicit operator uint8_t() const;
 	DUCKDB_API explicit operator uint16_t() const;

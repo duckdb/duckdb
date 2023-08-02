@@ -556,6 +556,14 @@ uhugeint_t &uhugeint_t::operator^=(const uhugeint_t &rhs) {
 	return *this;
 }
 
+bool uhugeint_t::operator!() const {
+	return *this == 0;
+}
+
+uhugeint_t::operator bool() const {
+	return *this != 0;
+}
+
 template <class T>
 static T NarrowCast(const uhugeint_t &input) {
 	// NarrowCast is supposed to truncate (take lower)
