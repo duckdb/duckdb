@@ -1,5 +1,4 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/common/arrow/arrow_options.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -68,10 +67,7 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		result_schema->release = nullptr;
 	}
 
-	duckdb::ArrowOptions options;
-	options.time_zone = properties.time_zone;
-	options.offset_size = properties.arrow_offset_size;
-	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, options);
+	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties);
 	return DuckDBSuccess;
 }
 
