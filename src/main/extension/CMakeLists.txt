@@ -28,18 +28,23 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+
       # Assumes lowercase input!
-      set(EXTENSION_CLASS ${EXT_NAME}Extension)
-      string(SUBSTRING ${EXT_NAME} 0 1 FIRST_LETTER)
-      string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
-      string(REGEX REPLACE "^.(.*)" "${FIRST_LETTER}\\1" EXTENSION_CLASS
-                           "${EXT_NAME}")
+      string(REPLACE "_" ";" EXT_NAME_SPLIT ${EXT_NAME})
+      set(EXT_NAME_CAMELCASE "")
+      foreach(EXT_NAME_PART IN LISTS EXT_NAME_SPLIT)
+        string(SUBSTRING ${EXT_NAME_PART} 0 1 FIRST_LETTER)
+        string(SUBSTRING ${EXT_NAME_PART} 1 -1 REMAINDER)
+        string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
+        set(EXT_NAME_CAMELCASE
+            "${EXT_NAME_CAMELCASE}${FIRST_LETTER}${REMAINDER}")
+      endforeach()
 
       set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\n\t\"${EXT_NAME}\"")
       set(EXT_LOADER_BODY
           "${EXT_LOADER_BODY}\
     if (extension==\"${EXT_NAME}\") {
-        db.LoadExtension<${EXTENSION_CLASS}Extension>();
+        db.LoadExtension<${EXT_NAME_CAMELCASE}Extension>();
         return true;
     }
 ")

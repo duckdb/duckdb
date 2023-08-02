@@ -162,19 +162,20 @@ struct StringConvert {
 		// based on the max codepoint, we construct the result string
 		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
 		// based on the resulting unicode kind, we fill in the code points
-		auto kind = PyUtil::PyUnicodeKind(result);
+		auto result_handle = py::handle(result);
+		auto kind = PyUtil::PyUnicodeKind(result_handle);
 		switch (kind) {
 		case PyUnicode_1BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		case PyUnicode_2BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		case PyUnicode_4BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		default:
 			throw NotImplementedException("Unsupported typekind constant '%d' for Python Unicode Compact decode", kind);
@@ -198,7 +199,8 @@ struct StringConvert {
 		// no unicode: fast path
 		// directly construct the string and memcpy it
 		auto result = PyUnicode_New(len, 127);
-		auto target_data = PyUtil::PyUnicodeDataMutable(result);
+		auto result_handle = py::handle(result);
+		auto target_data = PyUtil::PyUnicodeDataMutable(result_handle);
 		memcpy(target_data, data, len);
 		return result;
 	}

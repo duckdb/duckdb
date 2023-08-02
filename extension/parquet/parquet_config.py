@@ -17,6 +17,7 @@ source_files = [
     for x in [
         'extension/parquet/parquet_extension.cpp',
         'extension/parquet/column_writer.cpp',
+        'extension/parquet/serialize_parquet.cpp',
         'third_party/parquet/parquet_constants.cpp',
         'third_party/parquet/parquet_types.cpp',
         'third_party/thrift/thrift/protocol/TProtocol.cpp',

@@ -42,5 +42,6 @@ class TestCopyOnWrite(object):
         )
         rel = con.sql('select * from df_in')
         res = rel.fetchall()
+        print(res)
         expected = convert_to_result(col)
         assert res == expected

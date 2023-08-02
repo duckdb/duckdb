@@ -53,3 +53,7 @@ class TestGetAttribute(object):
         rel = duckdb.sql("select {'a':5, 'b':6} as a, 5 as b")
         assert rel.a.a.fetchall()[0][0] == 5
         assert rel.a.b.fetchall()[0][0] == 6
+
+    def test_getattr_spaces(self):
+        rel = duckdb.sql('select 42 as "hello world"')
+        assert rel['hello world'].fetchall()[0][0] == 42
