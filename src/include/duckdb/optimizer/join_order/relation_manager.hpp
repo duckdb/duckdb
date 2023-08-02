@@ -21,7 +21,6 @@
 namespace duckdb {
 
 struct FilterInfo;
-struct RelationStats;
 
 //! Represents a single relation and any metadata accompanying that relation
 struct SingleJoinRelation {

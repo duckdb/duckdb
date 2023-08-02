@@ -130,8 +130,8 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
                                    const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
-	auto left_plan = plans.find(&left);
-	auto right_plan = plans.find(&right);
+	auto left_plan = plans.find(left);
+	auto right_plan = plans.find(right);
 	if (left_plan == plans.end() || right_plan == plans.end()) {
 		throw InternalException("No left or right plan: internal error in join order optimizer");
 	}
@@ -139,7 +139,7 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 	// create the join tree based on combining the two plans
 	auto new_plan = CreateJoinTree(new_set, info, *left_plan->second, *right_plan->second);
 	// check if this plan is the optimal plan we found for this set of relations
-	auto entry = plans.find(&new_set);
+	auto entry = plans.find(new_set);
 	auto new_cost = new_plan->cost;
 	double old_cost = NumericLimits<double>::Maximum();
 	if (entry != plans.end()) {
@@ -170,7 +170,7 @@ JoinNode &PlanEnumerator::EmitPair(JoinRelationSet &left, JoinRelationSet &right
 		}
 
 		D_ASSERT(new_plan);
-		plans[&new_set] = std::move(new_plan);
+		plans[new_set] = std::move(new_plan);
 		return result;
 	}
 	return *entry->second;
@@ -262,7 +262,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 		// If combined_set.count == right.count, This means we found a neighbor that has been present before
 		// This means we didn't set exclusion_set correctly.
 		D_ASSERT(combined_set.count > right.count);
-		if (plans.find(&combined_set) != plans.end()) {
+		if (plans.find(combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
 				if (!TryEmitPair(left, combined_set, connections)) {
@@ -303,7 +303,7 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 		// emit the combinations of this node and its neighbors
 		auto &new_set = query_graph_manager.set_manager.Union(node, neighbor);
 		D_ASSERT(new_set.count > node.count);
-		if (plans.find(&new_set) != plans.end()) {
+		if (plans.find(new_set) != plans.end()) {
 			if (!EmitCSG(new_set)) {
 				return false;
 			}
@@ -367,7 +367,7 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 		auto &neighbor_relation = query_graph_manager.set_manager.GetJoinRelation(neighbor);
 		auto &combined_set = query_graph_manager.set_manager.Union(new_set, neighbor_relation);
 
-		auto combined_set_plan = plans.find(&combined_set);
+		auto combined_set_plan = plans.find(combined_set);
 		if (combined_set_plan == plans.end()) {
 			continue;
 		}
@@ -376,7 +376,7 @@ void PlanEnumerator::UpdateDPTree(JoinNode &new_plan) {
 		auto connections = query_graph.GetConnections(new_set, neighbor_relation);
 		// recurse and update up the tree if the combined set produces a plan with a lower cost
 		// only recurse on neighbor relations that have plans.
-		auto right_plan = plans.find(&neighbor_relation);
+		auto right_plan = plans.find(neighbor_relation);
 		if (right_plan == plans.end()) {
 			continue;
 		}
@@ -393,9 +393,9 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 	// at this point, we exited the dynamic programming but did not compute the final join order because it took too
 	// long instead, we use a greedy heuristic to obtain a join ordering now we use Greedy Operator Ordering to
 	// construct the result tree first we start out with all the base relations (the to-be-joined relations)
-	vector<optional_ptr<JoinRelationSet>> join_relations; // T in the paper
+	vector<reference<JoinRelationSet>> join_relations; // T in the paper
 	for (idx_t i = 0; i < query_graph_manager.relation_manager.NumRelations(); i++) {
-		join_relations.push_back(&query_graph_manager.set_manager.GetJoinRelation(i));
+		join_relations.push_back(query_graph_manager.set_manager.GetJoinRelation(i));
 	}
 	while (join_relations.size() > 1) {
 		// now in every step of the algorithm, we greedily pick the join between the to-be-joined relations that has the
@@ -408,10 +408,10 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			for (idx_t j = i + 1; j < join_relations.size(); j++) {
 				auto right = join_relations[j];
 				// check if we can connect these two relations
-				auto connection = query_graph.GetConnections(*left, *right);
+				auto connection = query_graph.GetConnections(left, right);
 				if (!connection.empty()) {
 					// we can check the cost of this connection
-					auto &node = EmitPair(*left, *right, connection);
+					auto &node = EmitPair(left, right, connection);
 
 					// update the DP tree in case a plan created by the DP algorithm uses the node
 					// that was potentially just updated by EmitPair. You will get a use-after-free
@@ -438,7 +438,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 			// first just add the first two join relations. It doesn't matter the cost as the JOO
 			// will swap them on estimated cardinality anyway.
 			for (idx_t i = 0; i < 2; i++) {
-				auto current_plan = plans[join_relations[i].get()].get();
+				auto current_plan = plans[join_relations[i]].get();
 				smallest_plans[i] = current_plan;
 				smallest_index[i] = i;
 			}
@@ -488,7 +488,7 @@ void PlanEnumerator::SolveJoinOrderApproximately() {
 		D_ASSERT(best_right > best_left);
 		join_relations.erase(join_relations.begin() + best_right);
 		join_relations.erase(join_relations.begin() + best_left);
-		join_relations.push_back(&best_connection->set);
+		join_relations.push_back(best_connection->set);
 	}
 }
 
@@ -509,7 +509,7 @@ void PlanEnumerator::InitLeafPlans() {
 		auto join_node = make_uniq<JoinNode>(relation_set);
 		join_node->cost = 0;
 		join_node->cardinality = stats.cardinality;
-		plans[&relation_set] = std::move(join_node);
+		plans[relation_set] = std::move(join_node);
 		cost_model.cardinality_estimator.InitCardinalityEstimatorProps(&relation_set, stats);
 	}
 }
@@ -531,7 +531,7 @@ unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product)
 		bindings.insert(i);
 	}
 	auto &total_relation = query_graph_manager.set_manager.GetJoinRelation(bindings);
-	auto final_plan = plans.find(&total_relation);
+	auto final_plan = plans.find(total_relation);
 	if (final_plan == plans.end()) {
 		// could not find the final plan
 		// this should only happen in case the sets are actually disjunct

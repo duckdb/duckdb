@@ -16,6 +16,7 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 
@@ -48,7 +49,7 @@ private:
 	//! Cost model to evaluate cost of joins
 	CostModel &cost_model;
 	//! A map to store the optimal join plan found for a specific JoinRelationSet*
-	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
+	reference_map_t<JoinRelationSet, unique_ptr<JoinNode>> plans;
 
 	bool full_plan_found;
 	bool must_update_full_plan;
