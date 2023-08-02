@@ -229,17 +229,19 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = (HTTPFileHandle &)handle;
+	auto &hfh = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
+
+	if (!hfh.cached_file) {
+		throw InternalException("Did not find a cached file for full file downloading");
+	}
+
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
-		D_ASSERT(hfs.state);
-		auto &cached_file = hfs.state->cached_files[hfs.path];
-		if (!cached_file.finished) {
-			hfs.state->get_count++;
-		}
-		return hfs.http_client->Get(
+		D_ASSERT(hfh.state);
+		hfh.state->get_count++;
+		return hfh.http_client->Get(
 		    path.c_str(), *headers,
 		    [&](const duckdb_httplib_openssl::Response &response) {
 			    if (response.status >= 400) {
@@ -253,45 +255,41 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 			    return true;
 		    },
 		    [&](const char *data, size_t data_length) {
-			    D_ASSERT(hfs.state);
-			    auto &cached_file = hfs.state->cached_files[hfs.path];
-			    if (cached_file.finished) {
-				    return true;
+			    D_ASSERT(hfh.state);
+			    if (hfh.state) {
+				    hfh.state->total_bytes_received += data_length;
 			    }
-			    if (hfs.state) {
-				    hfs.state->total_bytes_received += data_length;
-			    }
-			    if (!cached_file.data) {
-				    cached_file.data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
-				    hfs.length = data_length;
-				    cached_file.capacity = data_length;
-				    memcpy(cached_file.data.get(), data, data_length);
+			    if (!hfh.cached_file->data) {
+				    hfh.cached_file->data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
+				    hfh.length = data_length;
+				    hfh.cached_file->capacity = data_length;
+				    memcpy(hfh.cached_file->data.get(), data, data_length);
 			    } else {
-				    auto new_capacity = cached_file.capacity;
-				    while (new_capacity < hfs.length + data_length) {
+				    auto new_capacity = hfh.cached_file->capacity;
+				    while (new_capacity < hfh.length + data_length) {
 					    new_capacity *= 2;
 				    }
 				    // Gotta eat your beans
-				    if (new_capacity != cached_file.capacity) {
+				    if (new_capacity != hfh.cached_file->capacity) {
 					    auto new_hfs_data =
 					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
 					    // copy the old data
-					    memcpy(new_hfs_data.get(), cached_file.data.get(), hfs.length);
-					    cached_file.capacity = new_capacity;
-					    cached_file.data = new_hfs_data;
+					    memcpy(new_hfs_data.get(), hfh.cached_file->data.get(), hfh.length);
+					    hfh.cached_file->capacity = new_capacity;
+					    hfh.cached_file->data = new_hfs_data;
 				    }
 				    // We can just copy stuff
-				    memcpy(cached_file.data.get() + hfs.length, data, data_length);
-				    hfs.length += data_length;
+				    memcpy(hfh.cached_file->data.get() + hfh.length, data, data_length);
+				    hfh.length += data_length;
 			    }
 			    return true;
 		    });
 	});
 
 	std::function<void(void)> on_retry(
-	    [&]() { hfs.http_client = GetClient(hfs.http_params, proto_host_port.c_str()); });
+	    [&]() { hfh.http_client = GetClient(hfh.http_params, proto_host_port.c_str()); });
 
-	return RunRequestWithRetry(request, url, "GET", hfs.http_params, on_retry);
+	return RunRequestWithRetry(request, url, "GET", hfh.http_params, on_retry);
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
@@ -378,9 +376,11 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 
 	D_ASSERT(hfh.state);
-	auto &cached_file = hfh.state->cached_files[hfh.path];
-	if (cached_file.data) {
-		memcpy(buffer, cached_file.data.get() + location, nr_bytes);
+	if (hfh.cached_file) {
+		if (!hfh.cached_file->data) {
+			throw InternalException("Cached file not initialized properly");
+		}
+		memcpy(buffer, hfh.cached_file->data.get() + location, nr_bytes);
 		hfh.file_offset = location + nr_bytes;
 		return;
 	}
@@ -622,13 +622,19 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		}
 	}
 	if (state && (length == 0 || http_params.force_download)) {
-		lock_guard<mutex> lock(state->cached_files_mutex);
-		auto &cached_file = state->cached_files[path];
 
-		if (!cached_file.finished) {
+		// Lock cache and get or create cache entry
+		{
+			lock_guard<mutex> lock(state->cached_files_mutex);
+			cached_file = state->cached_files[path];
+		}
+
+		// Lock the file, and see if we need to download it
+		lock_guard<mutex> lock(cached_file->lock);
+		if (!cached_file->finished) {
 			// Try to fully download the file first
 			hfs.GetRequest(*this, path, {});
-			cached_file.finished = true;
+			cached_file->finished = true;
 		}
 	}
 

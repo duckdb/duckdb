@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -60,7 +61,9 @@ public:
 	uint8_t flags;
 	idx_t length;
 	time_t last_modified;
-	bool range_read = true;
+
+	// If using full file download, this holds the cached file
+	shared_ptr<CachedFile> cached_file;
 
 	// Read info
 	idx_t buffer_available;

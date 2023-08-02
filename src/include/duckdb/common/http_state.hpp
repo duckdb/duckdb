@@ -23,6 +23,8 @@ struct CachedFile {
 	uint64_t capacity = 0;
 	//! If we finished downloading the file
 	bool finished = false;
+	//! Lock that allows waiting for other threads to download file
+	mutex lock = {};
 };
 
 class HTTPState {
@@ -36,7 +38,7 @@ public:
 	//! Mutex to lock when getting the cached file(Parallel Only)
 	mutex cached_files_mutex;
 	//! In case of fully downloading the file, the cached files of this query
-	unordered_map<string, CachedFile> cached_files;
+	unordered_map<string, shared_ptr<CachedFile>> cached_files;
 
 	void Reset() {
 		head_count = 0;
