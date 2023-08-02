@@ -26,6 +26,7 @@ class Expression;
 class LogicalOperator;
 class JoinNode;
 class RelationManager;
+struct FilterInfo;
 
 struct NeighborInfo {
 	NeighborInfo(optional_ptr<JoinRelationSet> neighbor) : neighbor(neighbor) {

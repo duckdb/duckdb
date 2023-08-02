@@ -66,12 +66,23 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 		name = table_thing->name;
 		return_stats.table_name = name;
 	}
+
+	// if we can get the catalog table, then our column statistics will be accurate
+	// parquet readers etc. will still return statistics, but they initialize distinct column
+	// counts to 0.
+	// TODO: fix this, some file formats can encode distinct counts, we don't want to rely on
+	//  getting a catalog table to know that we can use statistics.
+	bool have_catalog_table_statistics = false;
+	if (get.GetTable()) {
+		have_catalog_table_statistics = true;
+	}
+
 	// first push back basic distinct counts for each column (if we have them).
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		bool have_distinct_count_stats = false;
 		if (get.function.statistics) {
 			column_statistics = get.function.statistics(context, get.bind_data.get(), get.column_ids[i]);
-			if (column_statistics) {
+			if (column_statistics && have_catalog_table_statistics) {
 				auto column_distinct_count = DistinctCount({column_statistics->GetDistinctCount(), true});
 				return_stats.column_distinct_count.push_back(column_distinct_count);
 				return_stats.column_names.push_back(name + "." + get.names.at(get.column_ids.at(i)));
@@ -79,14 +90,16 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			}
 		}
 		if (!have_distinct_count_stats) {
-			// TODO: currently treating the cardinality as the distinct count.
-			//  the cardinality estimator will update these distinct counts based
-			//  on the extra columns that are joined on.
-			// TODO: Should this be changed?
+			// currently treating the cardinality as the distinct count.
+			// the cardinality estimator will update these distinct counts based
+			// on the extra columns that are joined on.
 			auto column_distinct_count = DistinctCount({cardinality_after_filters, false});
 			return_stats.column_distinct_count.push_back(column_distinct_count);
-			// TODO: we can still get parquet column names right?
-			return_stats.column_names.push_back(get.GetName() + ".some_column");
+			auto column_name = string("column");
+			if (get.names.size() < get.column_ids.size()) {
+				column_name = get.names.at(i);
+			}
+			return_stats.column_names.push_back(get.GetName() + "." + column_name);
 		}
 	}
 

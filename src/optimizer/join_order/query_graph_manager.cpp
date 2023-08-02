@@ -26,7 +26,6 @@ bool QueryGraphManager::Build(LogicalOperator *op) {
 	// Create the query_graph hyper edges
 	CreateHyperGraphEdges();
 	return true;
-	//	D_ASSERT(!query_graph.ToString().empty());
 }
 
 void QueryGraphManager::GetColumnBinding(Expression &expression, ColumnBinding &binding) {
