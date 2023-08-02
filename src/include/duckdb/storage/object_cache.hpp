@@ -48,7 +48,7 @@ public:
 	}
 
 	template <class T, class... Args>
-	shared_ptr<T> GetOrCreate(const string &key, Args &&...args) {
+	shared_ptr<T> GetOrCreate(const string &key, Args &&... args) {
 		lock_guard<mutex> glock(lock);
 
 		auto entry = cache.find(key);

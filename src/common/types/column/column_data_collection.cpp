@@ -645,25 +645,87 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
 	// TODO: This function is sloppily implemented and probably not correct
+	// TODO: We need to get the ConsecutiveChildListInfo here, but for arrays basically.
 	auto &child_vector = ArrayVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
 	auto array_size = ArrayType::GetSize(source.GetType());
 
-	// Why is this neccessary, it isnt for structs?
 	if (!meta_data.GetVectorMetaData().child_index.IsValid()) {
 		auto child_index = segment.AllocateVector(child_type, meta_data.chunk_data, meta_data.state);
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
 
-	// TODO: Ensure we copy the right amount of data
+	// Figure out the current list size by traversing the set of child entries
 	auto &child_function = meta_data.copy_function.child_functions[0];
-	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index, 0);
+	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
+
+	idx_t current_list_size = 0;
+	auto current_child_index = child_index;
+	while (current_child_index.IsValid()) {
+		auto &child_vdata = segment.GetVectorData(current_child_index);
+		current_list_size += child_vdata.count;
+		current_child_index = child_vdata.next_data;
+	}
+
+	// set the child vector
+	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
 
-	UnifiedVectorFormat child_data;
-	child_vector.ToUnifiedFormat(copy_count * array_size, child_data);
+	// Figure out the first non-null entry
+	// TODO: Replace this with source_data, its the same right?
+	UnifiedVectorFormat unified_array_data;
+	source.ToUnifiedFormat(offset + copy_count, unified_array_data);
 
-	child_function.function(child_meta_data, child_data, child_vector, offset, copy_count * array_size);
+	// find the first non-NULL entry
+	idx_t first_offset = 0;
+	for (idx_t i = offset; i < offset + copy_count; i++) {
+		auto idx = unified_array_data.sel->get_index(i);
+		if (!unified_array_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		first_offset = idx * array_size;
+		break;
+	}
+
+	idx_t total_length = 0;
+	for (idx_t i = offset; i < offset + copy_count; i++) {
+		auto idx = unified_array_data.sel->get_index(i);
+		if (!unified_array_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		total_length += array_size;
+	}
+
+	// if need slicing (true)
+	/*
+	SelectionVector sel(total_length);
+	//begin
+	idx_t entry = 0;
+	for (idx_t i = offset; i < offset + copy_count; i++) {
+	    auto idx = unified_array_data.sel->get_index(i);
+	    if (!unified_array_data.validity.RowIsValid(idx)) {
+	        continue;
+	    }
+	    for (idx_t k = 0; k < array_size; k++) {
+	        //			child_sel.set_index(entry++, list_data[idx].offset + k);
+	        sel.set_index(entry++, (idx * array_size) + k);
+	    }
+	}
+	// end
+
+	auto sliced_child_vector = Vector(child_vector, sel, total_length);
+	sliced_child_vector.Flatten(total_length);
+
+	sliced_child_vector.ToUnifiedFormat(total_length, child_vector_data);
+	child_function.function(child_meta_data, child_vector_data, sliced_child_vector, 0,
+	                        total_length);
+	*/
+
+	// If not need slicing (false)
+	child_vector.ToUnifiedFormat(total_length, child_vector_data);
+	child_function.function(child_meta_data, child_vector_data, child_vector, first_offset, total_length);
+
+	meta_data.child_list_size = current_list_size;
 }
 
 ColumnDataCopyFunction ColumnDataCollection::GetCopyFunction(const LogicalType &type) {

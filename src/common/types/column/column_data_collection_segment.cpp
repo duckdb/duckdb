@@ -60,6 +60,8 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 		}
 		GetVectorData(index).child_index = base_child_index;
 	}
+
+	// TODO: add case for array here?
 	return index;
 }
 
@@ -196,6 +198,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 		auto &child_vector = ListVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 		ListVector::SetListSize(result, child_count);
+
 	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
 		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);

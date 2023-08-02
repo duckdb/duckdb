@@ -341,7 +341,8 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 		if (!data_to_resize.is_nested) {
 			auto new_data =
 			    make_unsafe_uniq_array<data_t>(new_size * data_to_resize.type_size * data_to_resize.nested_multiplier);
-			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
+			memcpy(new_data.get(), data_to_resize.data,
+			       cur_size * data_to_resize.type_size * data_to_resize.nested_multiplier * sizeof(data_t));
 			data_to_resize.buffer->SetData(std::move(new_data));
 			data_to_resize.vec.data = data_to_resize.buffer->GetData();
 		}
@@ -859,10 +860,11 @@ void Vector::Flatten(idx_t count) {
 			auto &child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
 
-			auto vector = make_uniq<Vector>(child);
-			vector->Flatten(count * array_size);
+			auto &vector = flattened_buffer->GetChild();
+			vector.ReferenceAndSetType(child);
+			vector.Flatten(count * array_size);
 
-			VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * array_size, 0, 0);
+			// VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * array_size, 0, 0);
 			// flattened_buffer->GetChild() = vector;
 
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
@@ -1450,6 +1452,23 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 	}
 
+	if (type.InternalType() == PhysicalType::ARRAY) {
+		auto &child = ArrayVector::GetEntry(*vector);
+		auto array_size = ArrayType::GetSize(type);
+		auto child_count = count * array_size;
+
+		D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
+		SelectionVector child_sel(child_count);
+		for (idx_t i = 0; i < count; i++) {
+			auto oidx = sel->get_index(i);
+			for (idx_t j = 0; j < array_size; j++) {
+				child_sel.set_index(i * array_size + j, oidx * array_size + j);
+			}
+		}
+
+		Vector::Verify(child, child_sel, child_count);
+	}
+
 	if (type.InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		D_ASSERT(!child_types.empty());
@@ -1631,6 +1650,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		break;
 	}
 	case PhysicalType::ARRAY: {
+		// TODO: assert source and vector are the same type
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
 
@@ -1644,6 +1664,16 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		// Reference the child vector
 		auto &child = ArrayVector::GetEntry(vector);
 		child.Reference(ArrayVector::GetEntry(source));
+
+		// Only take the element at the given position
+		auto array_size = ArrayType::GetSize(source_type);
+		SelectionVector sel(array_size);
+		for (idx_t i = 0; i < array_size; i++) {
+			sel.set_index(i, array_size * position + i);
+		}
+		child.Slice(sel, array_size);
+		child.Flatten(array_size); // since its constant we only have to flatten this much
+
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		vector.validity.Set(0, true);
 		break;
