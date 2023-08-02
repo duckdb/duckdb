@@ -1,4 +1,4 @@
-# name: test/sql/join/asof/test_asof_join_merge.test
+# name: test/sql/join/asof/test_asof_join_merge.test_slow
 # description: Test merge queue and repartitioning
 # group: [asof]
 
@@ -7,6 +7,9 @@ PRAGMA memory_limit='400M'
 
 statement ok
 PRAGMA threads=4
+
+statement ok
+SET temp_directory='__TEST_DIR__/temp.tmp'
 
 query II
 WITH build AS (

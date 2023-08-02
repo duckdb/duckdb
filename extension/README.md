@@ -23,7 +23,7 @@ and less complex. Secondly, keeping extensions out-of-tree can be useful for lic
 There are two main types of OOTEs. Firstly, there are the **DuckDB Managed OOTEs**. These are distributed through the main
 DuckDB CI. These extensions are signed using DuckDBs signing key and are maintained by the DuckDB team. Some examples are 
 the `sqlite_scanner` and `postgres_scanner` extensions. The DuckDB Managed OOTEs are distributed automatically with every
-release of DuckDB. For the current list of extensions in this category check out `.github/config/out_of_tree_extensions.cmake`
+release of DuckDB. For the current list of extensions in this category check out `.github/config/vcpkg_extensions.cmake`
 
 Secondly, there are **External OOTEs**. Extensions in this category are not tied to the DuckDB CI, but instead their CI/CD
 runs in their own repository. The maintainer of the external OOTE repo is responsible for testing, distribution and making

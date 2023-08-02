@@ -8,6 +8,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 #include "duckdb/parser/statement/relation_statement.hpp"
 
@@ -267,13 +268,14 @@ struct AppendableRList {
 	idx_t size = 0;
 };
 
-bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
-                     ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace, idx_t chunk_size) {
-	auto count = ArrowUtil::FetchChunk(result, chunk_size, &arrow_data);
+bool FetchArrowChunk(ChunkScanState &scan_state, ArrowOptions options, AppendableRList &batches_list,
+                     ArrowArray &arrow_data, ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace,
+                     idx_t chunk_size) {
+	auto count = ArrowUtil::FetchChunk(scan_state, options, chunk_size, &arrow_data);
 	if (count == 0) {
 		return false;
 	}
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
+	ArrowConverter::ToArrowSchema(&arrow_schema, scan_state.Types(), scan_state.Names(), options);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;
@@ -298,8 +300,10 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	// create data batches
 	AppendableRList batches_list;
 
-	while (FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c, arrow_namespace,
-	                       chunk_size)) {
+	QueryResultChunkScanState scan_state(*result);
+	auto arrow_options = result->GetArrowOptions(*result);
+	while (FetchArrowChunk(scan_state, arrow_options, batches_list, arrow_data, arrow_schema, batch_import_from_c,
+	                       arrow_namespace, chunk_size)) {
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);

@@ -6,28 +6,28 @@
 namespace duckdb {
 
 struct PyUtil {
-	static idx_t PyByteArrayGetSize(PyObject *obj) {
-		return PyByteArray_GET_SIZE(obj); // NOLINT
+	static idx_t PyByteArrayGetSize(py::handle &obj) {
+		return PyByteArray_GET_SIZE(obj.ptr()); // NOLINT
 	}
 
-	static Py_buffer *PyMemoryViewGetBuffer(PyObject *obj) {
-		return PyMemoryView_GET_BUFFER(obj);
+	static Py_buffer *PyMemoryViewGetBuffer(py::handle &obj) {
+		return PyMemoryView_GET_BUFFER(obj.ptr());
 	}
 
-	static bool PyUnicodeIsCompactASCII(PyObject *obj) {
-		return PyUnicode_IS_COMPACT_ASCII(obj);
+	static bool PyUnicodeIsCompactASCII(py::handle &obj) {
+		return PyUnicode_IS_COMPACT_ASCII(obj.ptr());
 	}
 
-	static const char *PyUnicodeData(PyObject *obj) {
-		return const_char_ptr_cast(PyUnicode_DATA(obj));
+	static const char *PyUnicodeData(py::handle &obj) {
+		return const_char_ptr_cast(PyUnicode_DATA(obj.ptr()));
 	}
 
-	static char *PyUnicodeDataMutable(PyObject *obj) {
-		return char_ptr_cast(PyUnicode_DATA(obj));
+	static char *PyUnicodeDataMutable(py::handle &obj) {
+		return char_ptr_cast(PyUnicode_DATA(obj.ptr()));
 	}
 
-	static idx_t PyUnicodeGetLength(PyObject *obj) {
-		return PyUnicode_GET_LENGTH(obj);
+	static idx_t PyUnicodeGetLength(py::handle &obj) {
+		return PyUnicode_GET_LENGTH(obj.ptr());
 	}
 
 	static bool PyUnicodeIsCompact(PyCompactUnicodeObject *obj) {
@@ -38,20 +38,20 @@ struct PyUtil {
 		return PyUnicode_IS_ASCII(obj);
 	}
 
-	static int PyUnicodeKind(PyObject *obj) {
-		return PyUnicode_KIND(obj);
+	static int PyUnicodeKind(py::handle &obj) {
+		return PyUnicode_KIND(obj.ptr());
 	}
 
-	static Py_UCS1 *PyUnicode1ByteData(PyObject *obj) {
-		return PyUnicode_1BYTE_DATA(obj);
+	static Py_UCS1 *PyUnicode1ByteData(py::handle &obj) {
+		return PyUnicode_1BYTE_DATA(obj.ptr());
 	}
 
-	static Py_UCS2 *PyUnicode2ByteData(PyObject *obj) {
-		return PyUnicode_2BYTE_DATA(obj);
+	static Py_UCS2 *PyUnicode2ByteData(py::handle &obj) {
+		return PyUnicode_2BYTE_DATA(obj.ptr());
 	}
 
-	static Py_UCS4 *PyUnicode4ByteData(PyObject *obj) {
-		return PyUnicode_4BYTE_DATA(obj);
+	static Py_UCS4 *PyUnicode4ByteData(py::handle &obj) {
+		return PyUnicode_4BYTE_DATA(obj.ptr());
 	}
 };
 

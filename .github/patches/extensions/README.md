@@ -27,7 +27,7 @@ workflow for this is as follows:
 - Commit breaking change to DuckDB
 - Fix breakage in extension X, producing a patch with fix (be wary of already existing patches)
 - Commit patch in `.github/patches/extensions/x/*.patch` using a descriptive name
-- enable APPLY_PATCHES for extension X in `.github/config/out_of_tree_extensions.cmake` (if not already enabled)
+- enable APPLY_PATCHES for extension X in `.github/config/vcpkg_extensions.cmake` (if not already enabled)
 
 ### PR #2: patch to extension X
 - Apply (all) the patch(es) in `.github/patches/extensions/x/*.patch` to extension X.

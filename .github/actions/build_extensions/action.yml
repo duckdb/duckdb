@@ -51,9 +51,6 @@ inputs:
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
     default: 1
-  build_vcpkg_extensions:
-    description: 'Build extensions that require vcpkg for dependency management'
-    default: 1
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
@@ -83,8 +80,7 @@ runs:
       shell: bash
       run: |
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/vcpkg_extensions.cmake' || '' }}"
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
     - name: Setup vcpkg

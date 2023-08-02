@@ -286,7 +286,7 @@ jobs:
     - name: Check if extension_functions.hpp is up to date
       shell: bash
       env:
-        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/out_of_tree_extensions.cmake;.github/config/vcpkg_extensions.cmake'
+        EXTENSION_CONFIGS: '.github/config/in_tree_extensions.cmake;.github/config/vcpkg_extensions.cmake'
       run: |
         make extension_configuration
         python scripts/generate_extensions_function.py --validate
