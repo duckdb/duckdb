@@ -608,11 +608,6 @@ hugeint_t::hugeint_t(int64_t value) {
 	this->upper = result.upper;
 }
 
-hugeint_t::hugeint_t(const uhugeint_t &value) {
-	this->lower = value.lower;
-	this->upper = value.upper;
-}
-
 bool hugeint_t::operator==(const hugeint_t &rhs) const {
 	return Hugeint::Equals(*this, rhs);
 }
@@ -818,6 +813,9 @@ hugeint_t::operator int32_t() const {
 }
 hugeint_t::operator int64_t() const {
 	return NarrowCast<int64_t>(*this);
+}
+hugeint_t::operator uhugeint_t() const {
+	return { static_cast<uint64_t>(this->upper), this->lower };
 }
 
 string hugeint_t::ToString() const {

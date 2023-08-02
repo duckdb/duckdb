@@ -104,7 +104,7 @@ uhugeint_t Uhugeint::Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Divide
 //===--------------------------------------------------------------------===//
-uint8_t Bits(uhugeint_t x) {
+static uint8_t Bits(uhugeint_t x) {
 	uint8_t out = 0;
 	if (x.upper) {
 		out = 64;
@@ -165,22 +165,23 @@ uhugeint_t Uhugeint::Modulo(uhugeint_t lhs, uhugeint_t rhs) {
 // Add/Subtract
 //===--------------------------------------------------------------------===//
 bool Uhugeint::AddInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
-	uint64_t new_upper = lhs.upper + rhs.upper + ((lhs.lower + rhs.lower) < lhs.lower);
-	if (new_upper < lhs.upper) {
-		return false;
+	uint64_t new_upper = lhs.upper + rhs.upper;
+	bool no_overflow = !(new_upper < lhs.upper || new_upper < rhs.upper);
+	new_upper += (lhs.lower + rhs.lower) < lhs.lower;
+	if (new_upper < lhs.upper || new_upper < rhs.upper) {
+		no_overflow = false;
 	}
 	lhs.upper = new_upper;
 	lhs.lower += rhs.lower;
-	return true;
+	return no_overflow;
 }
 
 bool Uhugeint::SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	uint64_t new_upper = lhs.upper - rhs.upper - ((lhs.lower - rhs.lower) > lhs.lower);
-	if (new_upper > lhs.upper) {
-		return false;
-	}
+	bool no_overflow = !(new_upper > lhs.upper);
 	lhs.lower -= rhs.lower;
-	return true;
+	lhs.upper = new_upper;
+	return no_overflow;
 }
 
 uhugeint_t Uhugeint::Add(uhugeint_t lhs, uhugeint_t rhs) {
@@ -403,11 +404,6 @@ uhugeint_t::uhugeint_t(uint64_t value) {
 	this->upper = 0;
 }
 
-uhugeint_t::uhugeint_t(const hugeint_t &value) {
-	this->lower = value.lower;
-	this->upper = value.upper;
-}
-
 bool uhugeint_t::operator==(const uhugeint_t &rhs) const {
 	return Uhugeint::Equals(*this, rhs);
 }
@@ -589,6 +585,9 @@ uhugeint_t::operator int32_t() const {
 }
 uhugeint_t::operator int64_t() const {
 	return NarrowCast<int64_t>(*this);
+}
+uhugeint_t::operator hugeint_t() const {
+	return { static_cast<int64_t>(this->upper), this->lower };
 }
 
 string uhugeint_t::ToString() const {

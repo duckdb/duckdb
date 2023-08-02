@@ -16,7 +16,6 @@ public:
 public:
 	uhugeint_t() = default;
 	DUCKDB_API uhugeint_t(uint64_t value); // NOLINT: Allow implicit conversion from `uint64_t`
-	DUCKDB_API explicit uhugeint_t(const hugeint_t &value);
 	constexpr uhugeint_t(uint64_t upper, uint64_t lower) : lower(lower), upper(upper) {
 	}
 	constexpr uhugeint_t(const uhugeint_t &rhs) = default;
@@ -62,7 +61,7 @@ public:
 	DUCKDB_API uhugeint_t &operator|=(const uhugeint_t &rhs);
 	DUCKDB_API uhugeint_t &operator^=(const uhugeint_t &rhs);
 
-	// cast operators
+	// cast operators -- doesn't check bounds/overflow/underflow
 	DUCKDB_API explicit operator uint8_t() const;
 	DUCKDB_API explicit operator uint16_t() const;
 	DUCKDB_API explicit operator uint32_t() const;
@@ -71,6 +70,7 @@ public:
 	DUCKDB_API explicit operator int16_t() const;
 	DUCKDB_API explicit operator int32_t() const;
 	DUCKDB_API explicit operator int64_t() const;
+	DUCKDB_API explicit operator hugeint_t() const;
 };
 
 } // namespace duckdb
