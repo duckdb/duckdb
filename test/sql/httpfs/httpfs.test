@@ -1,6 +1,8 @@
 # name: test/sql/httpfs/httpfs.test
 # group: [httpfs]
 
+require-env S3_TEST_SERVER_AVAILABLE 1
+
 require httpfs
 
 statement ok
