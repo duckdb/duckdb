@@ -253,7 +253,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 	}
 
 	auto all_subset = GetAllNeighborSets(neighbors);
-	vector<optional_ptr<JoinRelationSet>> union_sets;
+	vector<reference<JoinRelationSet>> union_sets;
 	union_sets.reserve(all_subset.size());
 	for (const auto &rel_set : all_subset) {
 		auto &neighbor = query_graph_manager.set_manager.GetJoinRelation(rel_set);
@@ -270,7 +270,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 				}
 			}
 		}
-		union_sets.push_back(&combined_set);
+		union_sets.push_back(combined_set);
 	}
 
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
@@ -281,7 +281,7 @@ bool PlanEnumerator::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSe
 	// recursively enumerate the sets
 	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		if (!EnumerateCmpRecursive(left, *union_sets[i], new_exclusion_set)) {
+		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
 	}
@@ -296,7 +296,7 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 	}
 
 	auto all_subset = GetAllNeighborSets(neighbors);
-	vector<optional_ptr<JoinRelationSet>> union_sets;
+	vector<reference<JoinRelationSet>> union_sets;
 	union_sets.reserve(all_subset.size());
 	for (const auto &rel_set : all_subset) {
 		auto &neighbor = query_graph_manager.set_manager.GetJoinRelation(rel_set);
@@ -308,7 +308,7 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 				return false;
 			}
 		}
-		union_sets.push_back(&new_set);
+		union_sets.push_back(new_set);
 	}
 
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
@@ -319,7 +319,7 @@ bool PlanEnumerator::EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<
 	// recursively enumerate the sets
 	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		if (!EnumerateCSGRecursive(*union_sets[i], new_exclusion_set)) {
+		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
 		}
 	}
