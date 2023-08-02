@@ -162,6 +162,14 @@ def generate_return(class_entry):
         return '\treturn std::move(result);'
 
 
+def detect_duplicate_member_names(class_entry):
+    def get_hierarchy(class_entry, child_set):
+        child_set.add(class_entry)
+        if class_entry.children is not None:
+            for child in class_entry.children:
+                get_hierarchy(child, child_set)
+
+
 supported_member_entries = [
     'name',
     'type',
@@ -528,6 +536,28 @@ for entry in file_list:
                 if enum_entry in base_class_object.children:
                     raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
                 base_class_object.children[enum_entry] = new_class
+
+    # Ensure that there are no duplicate names in the inheritance tree
+    for base_class in base_classes:
+        if base_class.base is None:
+            # Root base class, now traverse the children
+            def traverse_children(node, parents: list, seen: set):
+                # Check for duplicate names
+                if node.members is not None:
+                    for member in node.members:
+                        if member.name in seen:
+                            # Print the inheritance tree
+                            print(
+                                f"Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                            )
+                            exit()
+                        seen.add(member.name)
+
+                # Recurse
+                for child in node.children.values():
+                    traverse_children(child, parents + [node], seen.copy())
+
+            traverse_children(base_class, [], set())
 
     with open(target_path, 'w+') as f:
         f.write(
