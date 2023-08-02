@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -157,6 +158,12 @@ template <>
 bool TrySubtractOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	result = left;
 	return Hugeint::SubtractInPlace(result, right);
+}
+
+template <>
+bool TrySubtractOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	result = left;
+	return Uhugeint::SubtractInPlace(result, right);
 }
 
 //===--------------------------------------------------------------------===//
