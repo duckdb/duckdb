@@ -490,6 +490,11 @@ int32_t Date::ExtractDayOfTheYear(date_t date) {
 	return date.days - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
 }
 
+int64_t Date::ExtractJulianDay(date_t date) {
+	const auto julian_epoch = Date::FromDate(-4713, 11, 24);
+	return date.days - julian_epoch.days;
+}
+
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// date of 0 is 1970-01-01, which was a Thursday (4)
 	// -7 = 4

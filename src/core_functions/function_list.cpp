@@ -182,6 +182,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(JaccardFun),
 	DUCKDB_SCALAR_FUNCTION(JaroSimilarityFun),
 	DUCKDB_SCALAR_FUNCTION(JaroWinklerSimilarityFun),
+	DUCKDB_SCALAR_FUNCTION_SET(JulianDayFun),
 	DUCKDB_AGGREGATE_FUNCTION(KahanSumFun),
 	DUCKDB_AGGREGATE_FUNCTION(KurtosisFun),
 	DUCKDB_SCALAR_FUNCTION_SET(LastDayFun),

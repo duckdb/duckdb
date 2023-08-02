@@ -73,6 +73,9 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	case DatePartSpecifier::EPOCH:
 		new_function_name = "epoch";
 		break;
+	case DatePartSpecifier::JULIAN_DAY:
+		new_function_name = "julian";
+		break;
 	case DatePartSpecifier::MICROSECONDS:
 		new_function_name = "microsecond";
 		break;

@@ -485,6 +485,7 @@ static TR TruncateElement(DatePartSpecifier type, TA element) {
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return DateTrunc::DayOperator::Operation<TA, TR>(element);
 	case DatePartSpecifier::HOUR:
 		return DateTrunc::HourOperator::Operation<TA, TR>(element);
@@ -541,6 +542,7 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		DateTrunc::UnaryExecute<TA, TR, DateTrunc::DayOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::HOUR:

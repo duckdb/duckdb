@@ -37,6 +37,7 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 		case DatePartSpecifier::DOY:
 		case DatePartSpecifier::YEARWEEK:
 		case DatePartSpecifier::ERA:
+		case DatePartSpecifier::JULIAN_DAY:
 			return part;
 		default:
 			break;
@@ -499,6 +500,18 @@ struct DatePart {
 		}
 	};
 
+	struct JulianDayOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return 0;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, JulianDayOperator>(input.child_stats);
+		}
+	};
+
 	// These are all zero and have the same restrictions
 	using TimezoneHourOperator = TimezoneOperator;
 	using TimezoneMinuteOperator = TimezoneOperator;
@@ -514,7 +527,8 @@ struct DatePart {
 			EPOCH = 1 << 3,
 			TIME = 1 << 4,
 			ZONE = 1 << 5,
-			ISO = 1 << 6
+			ISO = 1 << 6,
+			JD = 1 << 7
 		};
 
 		static part_mask_t GetMask(const part_codes_t &part_codes) {
@@ -546,6 +560,8 @@ struct DatePart {
 				case DatePartSpecifier::EPOCH:
 					mask |= EPOCH;
 					break;
+				case DatePartSpecifier::JULIAN_DAY:
+					mask |= JD;
 				case DatePartSpecifier::MICROSECONDS:
 				case DatePartSpecifier::MILLISECONDS:
 				case DatePartSpecifier::SECOND:
@@ -653,6 +669,12 @@ struct DatePart {
 				part_data = HasPartValue(part_values, DatePartSpecifier::DOY);
 				if (part_data) {
 					part_data[idx] = Date::ExtractDayOfTheYear(input);
+				}
+			}
+			if (mask & JD) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::JULIAN_DAY);
+				if (part_data) {
+					part_data[idx] = Date::ExtractJulianDay(input);
 				}
 			}
 		}
@@ -1046,6 +1068,21 @@ int64_t DatePart::TimezoneOperator::Operation(dtime_t input) {
 }
 
 template <>
+int64_t DatePart::JulianDayOperator::Operation(date_t input) {
+	return Date::ExtractJulianDay(input);
+}
+
+template <>
+int64_t DatePart::JulianDayOperator::Operation(timestamp_t input) {
+	return Date::ExtractJulianDay(Timestamp::GetDate(input));
+}
+
+template <>
+double DatePart::JulianDayOperator::Operation(timestamp_t input) {
+	return Timestamp::GetJulianDay(input);
+}
+
+template <>
 void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &input, const idx_t idx,
                                          const part_mask_t mask) {
 	int64_t *part_data;
@@ -1113,6 +1150,13 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 		auto part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
 		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<timestamp_t, int64_t>(input);
+		}
+	}
+
+	if (mask & JD) {
+		auto part_data = HasPartValue(part_values, DatePartSpecifier::JULIAN_DAY);
+		if (part_data) {
+			part_data[idx] = JulianDayOperator::Operation<date_t, int64_t>(d);
 		}
 	}
 }
@@ -1232,6 +1276,8 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	case DatePartSpecifier::TIMEZONE_HOUR:
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return DatePart::TimezoneOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::JULIAN_DAY:
+		return DatePart::JulianDayOperator::template Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
@@ -1256,22 +1302,23 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
-                                             function_statistics_t ts_stats) {
+                                             function_statistics_t ts_stats,
+                                             const LogicalType &result_type = LogicalType::BIGINT) {
 	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, result_type, std::move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
+	    ScalarFunction({LogicalType::TIMESTAMP}, result_type, std::move(ts_func), nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, result_type, std::move(interval_func)));
 	return operator_set;
 }
 
-template <class OP>
-static ScalarFunctionSet GetDatePartFunction() {
+template <class OP, class RESULT = int64_t>
+static ScalarFunctionSet GetDatePartFunction(const LogicalType &result_type = LogicalType::BIGINT) {
 	return GetGenericDatePartFunction(
-	    DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
-	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>);
+	    DatePart::UnaryFunction<date_t, RESULT, OP>, DatePart::UnaryFunction<timestamp_t, RESULT, OP>,
+	    ScalarFunction::UnaryFunction<interval_t, RESULT, OP>, OP::template PropagateStatistics<date_t>,
+	    OP::template PropagateStatistics<timestamp_t>, result_type);
 }
 
 ScalarFunctionSet GetGenericTimePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
@@ -1394,14 +1441,14 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		vector<int64_t *> part_values(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, nullptr);
+		vector<int64_t *> part_values(int(DatePartSpecifier::JULIAN_DAY) + 1, nullptr);
 		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
 
 		auto &child_entries = StructVector::GetEntries(result);
 
 		// The first computer of a part "owns" it
 		// and other requestors just reference the owner
-		vector<size_t> owners(int(DatePartSpecifier::TIMEZONE_MINUTE) + 1, child_entries.size());
+		vector<size_t> owners(int(DatePartSpecifier::JULIAN_DAY) + 1, child_entries.size());
 		for (size_t col = 0; col < child_entries.size(); ++col) {
 			const auto part_index = size_t(info.part_codes[col]);
 			if (owners[part_index] == child_entries.size()) {
@@ -1693,6 +1740,22 @@ ScalarFunctionSet DayNameFun::GetFunctions() {
 	dayname.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::VARCHAR,
 	                                   DatePart::UnaryFunction<timestamp_t, string_t, DayNameOperator>));
 	return dayname;
+}
+
+ScalarFunctionSet JulianDayFun::GetFunctions() {
+	using OP = DatePart::JulianDayOperator;
+
+	ScalarFunctionSet operator_set;
+	auto date_func = DatePart::UnaryFunction<date_t, int64_t, OP>;
+	auto date_stats = OP::template PropagateStatistics<date_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func, nullptr, nullptr, date_stats));
+	auto ts_func = DatePart::UnaryFunction<timestamp_t, double, OP>;
+	auto ts_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::DOUBLE, ts_func, nullptr, nullptr, ts_stats));
+
+	return operator_set;
 }
 
 ScalarFunctionSet DatePartFun::GetFunctions() {
