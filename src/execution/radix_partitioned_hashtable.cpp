@@ -455,7 +455,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	// We first try to assign a Scan task, then a Finalize task if that didn't work, without using any locks
 
 	// We need an atomic compare-and-swap to assign a Scan task, because we need to only increment
-	// the 'scan_idx' atomic if that partition's 'finalize' is true, i.e., ready to be scanned
+	// the 'scan_idx' atomic if the 'finalize' of that partition is true, i.e., ready to be scanned
 	bool scan_assigned = true;
 	do {
 		lstate.task_idx = scan_idx.load();
@@ -526,7 +526,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(partition.data->Count());
 		ht = sink.radix_ht.CreateHT(gstate.context, capacity, 0);
 	} else {
-		// We might want to resize here to this partition's size, but for now we just assume uniform partition sizes
+		// We may want to resize here to the size of this partition, but for now we just assume uniform partition sizes
 		ht->InitializePartitionedData();
 		ht->ClearPointerTable();
 		ht->ResetCount();
