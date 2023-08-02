@@ -397,15 +397,6 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	return true;
 }
 
-string ClientConfig::ExtractTimezone() const {
-	auto entry = set_variables.find("TimeZone");
-	if (entry == set_variables.end()) {
-		return "UTC";
-	} else {
-		return entry->second.GetValue<std::string>();
-	}
-}
-
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }

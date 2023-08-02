@@ -151,12 +151,4 @@ string QueryResult::HeaderToString() {
 	return result;
 }
 
-ArrowOptions QueryResult::GetArrowOptions(QueryResult &query_result) {
-	return {query_result.client_properties.arrow_offset_size, query_result.client_properties.time_zone};
-}
-
-string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	return query_result.client_properties.time_zone;
-}
-
 } // namespace duckdb
