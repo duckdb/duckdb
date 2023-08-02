@@ -14,32 +14,32 @@
 
 namespace duckdb {
 
-ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
+unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 	auto format = string(schema.format);
 	if (format == "n") {
-		return {LogicalType::SQLNULL};
+		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
-		return {LogicalType::BOOLEAN};
+		return make_uniq<ArrowType>(LogicalType::BOOLEAN);
 	} else if (format == "c") {
-		return {LogicalType::TINYINT};
+		return make_uniq<ArrowType>(LogicalType::TINYINT);
 	} else if (format == "s") {
-		return {LogicalType::SMALLINT};
+		return make_uniq<ArrowType>(LogicalType::SMALLINT);
 	} else if (format == "i") {
-		return {LogicalType::INTEGER};
+		return make_uniq<ArrowType>(LogicalType::INTEGER);
 	} else if (format == "l") {
-		return {LogicalType::BIGINT};
+		return make_uniq<ArrowType>(LogicalType::BIGINT);
 	} else if (format == "C") {
-		return {LogicalType::UTINYINT};
+		return make_uniq<ArrowType>(LogicalType::UTINYINT);
 	} else if (format == "S") {
-		return {LogicalType::USMALLINT};
+		return make_uniq<ArrowType>(LogicalType::USMALLINT);
 	} else if (format == "I") {
-		return {LogicalType::UINTEGER};
+		return make_uniq<ArrowType>(LogicalType::UINTEGER);
 	} else if (format == "L") {
-		return {LogicalType::UBIGINT};
+		return make_uniq<ArrowType>(LogicalType::UBIGINT);
 	} else if (format == "f") {
-		return {LogicalType::FLOAT};
+		return make_uniq<ArrowType>(LogicalType::FLOAT);
 	} else if (format == "g") {
-		return {LogicalType::DOUBLE};
+		return make_uniq<ArrowType>(LogicalType::DOUBLE);
 	} else if (format[0] == 'd') { //! this can be either decimal128 or decimal 256 (e.g., d:38,0)
 		std::string parameters = format.substr(format.find(':'));
 		uint8_t width = std::stoi(parameters.substr(1, parameters.find(',')));
@@ -47,71 +47,73 @@ ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 		if (width > 38) {
 			throw NotImplementedException("Unsupported Internal Arrow Type for Decimal %s", format);
 		}
-		return {LogicalType::DECIMAL(width, scale)};
+		return make_uniq<ArrowType>(LogicalType::DECIMAL(width, scale));
 	} else if (format == "u") {
-		return {LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL};
+		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::NORMAL);
 	} else if (format == "U") {
-		return {LogicalType::VARCHAR, ArrowVariableSizeType::SUPER_SIZE};
+		return make_uniq<ArrowType>(LogicalType::VARCHAR, ArrowVariableSizeType::SUPER_SIZE);
 	} else if (format == "tsn:") {
-		return {LogicalTypeId::TIMESTAMP_NS};
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_NS);
 	} else if (format == "tsu:") {
-		return {LogicalTypeId::TIMESTAMP};
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP);
 	} else if (format == "tsm:") {
-		return {LogicalTypeId::TIMESTAMP_MS};
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_MS);
 	} else if (format == "tss:") {
-		return {LogicalTypeId::TIMESTAMP_SEC};
+		return make_uniq<ArrowType>(LogicalTypeId::TIMESTAMP_SEC);
 	} else if (format == "tdD") {
-		return {LogicalType::DATE, ArrowDateTimeType::DAYS};
+		return make_uniq<ArrowType>(LogicalType::DATE, ArrowDateTimeType::DAYS);
 	} else if (format == "tdm") {
-		return {LogicalType::DATE, ArrowDateTimeType::MILLISECONDS};
+		return make_uniq<ArrowType>(LogicalType::DATE, ArrowDateTimeType::MILLISECONDS);
 	} else if (format == "tts") {
-		return {LogicalType::TIME, ArrowDateTimeType::SECONDS};
+		return make_uniq<ArrowType>(LogicalType::TIME, ArrowDateTimeType::SECONDS);
 	} else if (format == "ttm") {
-		return {LogicalType::TIME, ArrowDateTimeType::MILLISECONDS};
+		return make_uniq<ArrowType>(LogicalType::TIME, ArrowDateTimeType::MILLISECONDS);
 	} else if (format == "ttu") {
-		return {LogicalType::TIME, ArrowDateTimeType::MICROSECONDS};
+		return make_uniq<ArrowType>(LogicalType::TIME, ArrowDateTimeType::MICROSECONDS);
 	} else if (format == "ttn") {
-		return {LogicalType::TIME, ArrowDateTimeType::NANOSECONDS};
+		return make_uniq<ArrowType>(LogicalType::TIME, ArrowDateTimeType::NANOSECONDS);
 	} else if (format == "tDs") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::SECONDS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::SECONDS);
 	} else if (format == "tDm") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::MILLISECONDS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::MILLISECONDS);
 	} else if (format == "tDu") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::MICROSECONDS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::MICROSECONDS);
 	} else if (format == "tDn") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::NANOSECONDS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::NANOSECONDS);
 	} else if (format == "tiD") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::DAYS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::DAYS);
 	} else if (format == "tiM") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::MONTHS};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::MONTHS);
 	} else if (format == "tin") {
-		return {LogicalType::INTERVAL, ArrowDateTimeType::MONTH_DAY_NANO};
+		return make_uniq<ArrowType>(LogicalType::INTERVAL, ArrowDateTimeType::MONTH_DAY_NANO);
 	} else if (format == "+l") {
-		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
-		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), ArrowVariableSizeType::NORMAL);
-		list_type.AddChild(std::move(child_type));
+		auto child_type = GetArrowLogicalType(*schema.children[0]);
+		auto list_type =
+		    make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::NORMAL);
+		list_type->AddChild(std::move(child_type));
 		return list_type;
 	} else if (format == "+L") {
-		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
-		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), ArrowVariableSizeType::SUPER_SIZE);
-		list_type.AddChild(std::move(child_type));
+		auto child_type = GetArrowLogicalType(*schema.children[0]);
+		auto list_type =
+		    make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), ArrowVariableSizeType::SUPER_SIZE);
+		list_type->AddChild(std::move(child_type));
 		return list_type;
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		ArrowType child_type = GetArrowLogicalType(*schema.children[0]);
-		ArrowType list_type(LogicalType::LIST(child_type.GetDuckType()), fixed_size);
-		list_type.AddChild(std::move(child_type));
+		auto child_type = GetArrowLogicalType(*schema.children[0]);
+		auto list_type = make_uniq<ArrowType>(LogicalType::LIST(child_type->GetDuckType()), fixed_size);
+		list_type->AddChild(std::move(child_type));
 		return list_type;
 	} else if (format == "+s") {
 		child_list_t<LogicalType> child_types;
-		vector<ArrowType> children;
+		vector<unique_ptr<ArrowType>> children;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			children.emplace_back(GetArrowLogicalType(*schema.children[type_idx]));
-			child_types.emplace_back(schema.children[type_idx]->name, children.back().GetDuckType());
+			child_types.emplace_back(schema.children[type_idx]->name, children.back()->GetDuckType());
 		}
-		ArrowType struct_type(LogicalType::STRUCT(std::move(child_types)));
-		struct_type.AssignChildren(std::move(children));
+		auto struct_type = make_uniq<ArrowType>(LogicalType::STRUCT(std::move(child_types)));
+		struct_type->AssignChildren(std::move(children));
 		return struct_type;
 	} else if (format[0] == '+' && format[1] == 'u') {
 		if (format[2] != 's') {
@@ -124,55 +126,56 @@ ArrowType ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schema) {
 		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
 
 		child_list_t<LogicalType> members;
-		vector<ArrowType> children;
+		vector<unique_ptr<ArrowType>> children;
 		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
 			auto type = schema.children[type_idx];
 
 			children.emplace_back(GetArrowLogicalType(*type));
-			members.emplace_back(type->name, children.back().GetDuckType());
+			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
 
-		ArrowType union_type(LogicalType::UNION(members));
-		union_type.AssignChildren(std::move(children));
+		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members));
+		union_type->AssignChildren(std::move(children));
 		return union_type;
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
 		auto key_type = GetArrowLogicalType(*arrow_struct_type.children[0]);
 		auto value_type = GetArrowLogicalType(*arrow_struct_type.children[1]);
-		ArrowType map_type(LogicalType::MAP(key_type.GetDuckType(), value_type.GetDuckType()),
-		                   ArrowVariableSizeType::NORMAL);
+		auto map_type = make_uniq<ArrowType>(LogicalType::MAP(key_type->GetDuckType(), value_type->GetDuckType()),
+		                                     ArrowVariableSizeType::NORMAL);
 		child_list_t<LogicalType> key_value;
-		key_value.emplace_back(std::make_pair("key", key_type.GetDuckType()));
-		key_value.emplace_back(std::make_pair("value", value_type.GetDuckType()));
+		key_value.emplace_back(std::make_pair("key", key_type->GetDuckType()));
+		key_value.emplace_back(std::make_pair("value", value_type->GetDuckType()));
 
-		ArrowType inner_struct(LogicalType::STRUCT(std::move(key_value)), ArrowVariableSizeType::NORMAL);
-		vector<ArrowType> children;
+		auto inner_struct =
+		    make_uniq<ArrowType>(LogicalType::STRUCT(std::move(key_value)), ArrowVariableSizeType::NORMAL);
+		vector<unique_ptr<ArrowType>> children;
 		children.reserve(2);
 		children.push_back(std::move(key_type));
 		children.push_back(std::move(value_type));
-		inner_struct.AssignChildren(std::move(children));
-		map_type.AddChild(std::move(inner_struct));
+		inner_struct->AssignChildren(std::move(children));
+		map_type->AddChild(std::move(inner_struct));
 		return map_type;
 	} else if (format == "z") {
-		return {LogicalType::BLOB, ArrowVariableSizeType::NORMAL};
+		return make_uniq<ArrowType>(LogicalType::BLOB, ArrowVariableSizeType::NORMAL);
 	} else if (format == "Z") {
-		return {LogicalType::BLOB, ArrowVariableSizeType::SUPER_SIZE};
+		return make_uniq<ArrowType>(LogicalType::BLOB, ArrowVariableSizeType::SUPER_SIZE);
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		return {LogicalType::BLOB, fixed_size};
+		return make_uniq<ArrowType>(LogicalType::BLOB, fixed_size);
 	} else if (format[0] == 't' && format[1] == 's') {
 		// Timestamp with Timezone
 		// TODO right now we just get the UTC value. We probably want to support this properly in the future
 		if (format[2] == 'n') {
-			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::NANOSECONDS};
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::NANOSECONDS);
 		} else if (format[2] == 'u') {
-			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MICROSECONDS};
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MICROSECONDS);
 		} else if (format[2] == 'm') {
-			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MILLISECONDS};
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::MILLISECONDS);
 		} else if (format[2] == 's') {
-			return {LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::SECONDS};
+			return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, ArrowDateTimeType::SECONDS);
 		} else {
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
@@ -222,13 +225,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		auto arrow_type = GetArrowLogicalType(schema);
 		if (schema.dictionary) {
-			auto logical_type = arrow_type.GetDuckType();
-			auto dictionary = make_uniq<ArrowType>(GetArrowLogicalType(*schema.dictionary));
+			auto logical_type = arrow_type->GetDuckType();
+			auto dictionary = GetArrowLogicalType(*schema.dictionary);
 			return_types.emplace_back(dictionary->GetDuckType());
 			// The dictionary might have different attributes (size type, datetime precision, etc..)
-			arrow_type.SetDictionary(std::move(dictionary));
+			arrow_type->SetDictionary(std::move(dictionary));
 		} else {
-			return_types.emplace_back(arrow_type.GetDuckType());
+			return_types.emplace_back(arrow_type->GetDuckType());
 		}
 		res->arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto format = string(schema.format);

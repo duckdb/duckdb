@@ -839,7 +839,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
 		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
-		auto &arrow_type = arrow_convert_data.at(col_idx);
+		auto &arrow_type = *arrow_convert_data.at(col_idx);
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_type, col_idx);
 		} else {

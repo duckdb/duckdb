@@ -1,5 +1,5 @@
 diff --git a/spatial/src/spatial/gdal/functions/st_read.cpp b/spatial/src/spatial/gdal/functions/st_read.cpp
-index 709db44..54b2b33 100644
+index 709db44..92588c1 100644
 --- a/spatial/src/spatial/gdal/functions/st_read.cpp
 +++ b/spatial/src/spatial/gdal/functions/st_read.cpp
 @@ -94,12 +94,12 @@ struct GdalScanFunctionData : public TableFunctionData {
@@ -30,13 +30,13 @@ index 709db44..54b2b33 100644
 -			result->arrow_convert_data[col_idx] =
 -			    make_uniq<ArrowConvertData>(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
 -			return_types.emplace_back(GetArrowLogicalType(*attribute.dictionary, result->arrow_convert_data, col_idx));
-+			auto dictionary_type = make_uniq<ArrowType>(GetArrowLogicalType(attribute));
++			auto dictionary_type = GetArrowLogicalType(attribute);
 +			return_types.emplace_back(dictionary_type->GetDuckType());
-+			arrow_type.SetDictionary(std::move(dictionary_type));
++			arrow_type->SetDictionary(std::move(dictionary_type));
 +			result->arrow_table.AddColumn(col_idx, std::move(arrow_type));
  		} else {
 -			return_types.emplace_back(GetArrowLogicalType(attribute, result->arrow_convert_data, col_idx));
-+			return_types.emplace_back(arrow_type.GetDuckType());
++			return_types.emplace_back(arrow_type->GetDuckType());
 +			result->arrow_table.AddColumn(col_idx, std::move(arrow_type));
  		}
  
@@ -56,3 +56,12 @@ index 709db44..54b2b33 100644
  	}
  
  	output.Verify();
+@@ -462,7 +465,7 @@ void GdalTableFunction::Register(ClientContext &context) {
+ 	TableFunctionSet set("st_read");
+ 	TableFunction scan({LogicalType::VARCHAR}, GdalTableFunction::Scan, GdalTableFunction::Bind,
+ 	                   GdalTableFunction::InitGlobal, ArrowTableFunction::ArrowScanInitLocal);
+-					   
++
+ 	scan.cardinality = ArrowTableFunction::ArrowScanCardinality;
+ 	scan.get_batch_index = ArrowTableFunction::ArrowGetBatchIndex;
+ 

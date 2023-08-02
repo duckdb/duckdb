@@ -1,5 +1,5 @@
 diff --git a/src/arrow_scan_ipc.cpp b/src/arrow_scan_ipc.cpp
-index 693ae6a..8b3d059 100644
+index 693ae6a..e3bf858 100644
 --- a/src/arrow_scan_ipc.cpp
 +++ b/src/arrow_scan_ipc.cpp
 @@ -60,13 +60,15 @@ unique_ptr <FunctionData> ArrowIPCTableFunction::ArrowScanBind(ClientContext &co
@@ -11,12 +11,12 @@ index 693ae6a..8b3d059 100644
 -            res->arrow_convert_data[col_idx] =
 -                    make_uniq<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
 -            return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
-+            auto dictionary_type = make_uniq<ArrowType>(GetArrowLogicalType(*schema.dictionary));
++            auto dictionary_type = GetArrowLogicalType(*schema.dictionary);
 +            return_types.emplace_back(dictionary_type->GetDuckType());
-+            arrow_type.SetDictionary(std::move(dictionary_type));
++            arrow_type->SetDictionary(std::move(dictionary_type));
          } else {
 -            return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
-+            return_types.emplace_back(arrow_type.GetDuckType());
++            return_types.emplace_back(arrow_type->GetDuckType());
          }
 +        res->arrow_table.AddColumn(col_idx, std::move(arrow_type));
          auto format = string(schema.format);

@@ -10,6 +10,8 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
@@ -32,9 +34,6 @@ enum class ArrowDateTimeType : uint8_t {
 
 class ArrowType {
 public:
-	// Move constructor
-	ArrowType(ArrowType &&other) = default;
-
 	// From a DuckDB type
 	ArrowType(LogicalType type_p)
 	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
@@ -54,10 +53,9 @@ public:
 	    : type(std::move(type_p)), size_type(ArrowVariableSizeType::NORMAL),
 	      date_time_precision(date_time_precision_p) {};
 
-	void AddChild(ArrowType &child);
-	void AddChild(ArrowType &&child);
+	void AddChild(unique_ptr<ArrowType> child);
 
-	void AssignChildren(vector<ArrowType> children);
+	void AssignChildren(vector<unique_ptr<ArrowType>> children);
 
 	const LogicalType &GetDuckType() const;
 
@@ -76,7 +74,7 @@ public:
 private:
 	LogicalType type;
 	//! If we have a nested type, their children's type.
-	vector<ArrowType> children;
+	vector<unique_ptr<ArrowType>> children;
 	//! If its a variable size type (e.g., strings, blobs, lists) holds which type it is
 	ArrowVariableSizeType size_type;
 	//! If this is a date/time holds its precision
@@ -87,11 +85,11 @@ private:
 	unique_ptr<ArrowType> dictionary_type;
 };
 
-using arrow_column_map_t = unordered_map<idx_t, ArrowType>;
+using arrow_column_map_t = unordered_map<idx_t, unique_ptr<ArrowType>>;
 
 struct ArrowTableType {
 public:
-	void AddColumn(idx_t index, ArrowType &&type);
+	void AddColumn(idx_t index, unique_ptr<ArrowType> type);
 	const arrow_column_map_t &GetColumns() const;
 
 private:

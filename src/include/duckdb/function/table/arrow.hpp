@@ -144,7 +144,7 @@ protected:
 	//! Renames repeated columns and case sensitive columns
 	static void RenameArrowColumns(vector<string> &names);
 	//! Helper function to get the DuckDB logical type
-	static ArrowType GetArrowLogicalType(ArrowSchema &schema);
+	static unique_ptr<ArrowType> GetArrowLogicalType(ArrowSchema &schema);
 };
 
 } // namespace duckdb
