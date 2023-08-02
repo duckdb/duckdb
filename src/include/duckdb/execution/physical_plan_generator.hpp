@@ -50,7 +50,6 @@ protected:
 
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAggregate &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalAnyJoin &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalAsOfJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalColumnDataGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
@@ -59,7 +58,6 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCrossProduct &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelete &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimGet &op);
-	unique_ptr<PhysicalOperator> CreatePlan(LogicalDelimJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDistinct &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalDummyScan &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalEmptyResult &op);
@@ -93,6 +91,9 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPivot &op);
 
+	unique_ptr<PhysicalOperator> PlanAsOfJoin(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> PlanComparisonJoin(LogicalComparisonJoin &op);
+	unique_ptr<PhysicalOperator> PlanDelimJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> ExtractAggregateExpressions(unique_ptr<PhysicalOperator> child,
 	                                                         vector<unique_ptr<Expression>> &expressions,
 	                                                         vector<unique_ptr<Expression>> &groups);

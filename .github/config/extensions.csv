@@ -12,4 +12,4 @@ sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,05dd50b3fc91ee497496
 postgres_scanner,https://github.com/duckdblabs/postgres_scanner,cd043b49cdc9e0d3752535b8333c9433e1007a48,
 substrait,https://github.com/duckdblabs/substrait,53da781310c9c680efb97576d33a5fde89a58870,no-windows
 arrow,https://github.com/duckdblabs/arrow,1a43a5513b96e4c6ffd92026775ffeb648e71dac,no-windows
-spatial,https://github.com/duckdblabs/duckdb_spatial.git,f577b9441793f9170403e489f5d3587e023a945f,
+spatial,https://github.com/duckdblabs/duckdb_spatial.git,dc66594776fbe2f0a8a3af30af7f9f8626e6e215,
