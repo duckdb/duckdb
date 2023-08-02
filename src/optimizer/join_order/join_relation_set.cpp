@@ -35,8 +35,7 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return false;
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations,
-                                                                      idx_t count) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -77,8 +76,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left,
-                                                            JoinRelationSet &right) {
+JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelationSet &right) {
 	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates

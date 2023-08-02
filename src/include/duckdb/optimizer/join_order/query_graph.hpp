@@ -47,8 +47,7 @@ public:
 	void Print();
 
 	//! Returns a connection if there is an edge that connects these two sets, or nullptr otherwise
-	const vector<reference<NeighborInfo>> GetConnections(JoinRelationSet &node,
-	                                                     JoinRelationSet &other) const;
+	const vector<reference<NeighborInfo>> GetConnections(JoinRelationSet &node, JoinRelationSet &other) const;
 	//! Enumerate the neighbors of a specific node that do not belong to any of the exclusion_set. Note that if a
 	//! neighbor has multiple nodes, this function will return the lowest entry in that set.
 	const vector<idx_t> GetNeighbors(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set) const;
@@ -56,8 +55,7 @@ public:
 	//! Enumerate all neighbors of a given JoinRelationSet node
 	void EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) const;
 	//! Create an edge in the edge_set
-	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right,
-	                optional_ptr<FilterInfo> info);
+	void CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<FilterInfo> info);
 
 private:
 	//! Get the QueryEdge of a specific node

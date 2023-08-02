@@ -226,7 +226,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 }
 
 RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(LogicalOperator &op,
-                                                                            vector<RelationStats> child_stats) {
+                                                                             vector<RelationStats> child_stats) {
 	D_ASSERT(child_stats.size() == 2);
 	RelationStats ret;
 	idx_t child_1_card = child_stats[0].stats_initialized ? child_stats[0].cardinality : 0;

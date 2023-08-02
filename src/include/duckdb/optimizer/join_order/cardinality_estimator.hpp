@@ -60,7 +60,6 @@ public:
 	explicit CardinalityEstimator() {};
 
 private:
-
 	vector<RelationsToTDom> relations_to_tdoms;
 	unordered_map<string, CardinalityHelper> relation_set_2_cardinality;
 	JoinRelationSetManager set_manager;

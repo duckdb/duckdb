@@ -285,8 +285,7 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 	return query_graph;
 }
 
-void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left,
-                                                     JoinRelationSet &right) {
+void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
 }

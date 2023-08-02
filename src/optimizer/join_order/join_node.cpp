@@ -9,8 +9,7 @@ namespace duckdb {
 JoinNode::JoinNode(JoinRelationSet &set) : set(set), info(nullptr), left(nullptr), right(nullptr) {
 }
 
-JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left,
-                   JoinNode &right, double cost)
+JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right, double cost)
     : set(set), info(info), left(&left), right(&right), cost(cost) {
 }
 

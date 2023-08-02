@@ -53,8 +53,7 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	return info;
 }
 
-void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right,
-                                 optional_ptr<FilterInfo> filter_info) {
+void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optional_ptr<FilterInfo> filter_info) {
 	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
 	auto info = GetQueryEdge(left);

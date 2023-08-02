@@ -55,20 +55,17 @@ private:
 	unordered_set<std::string> join_nodes_in_full_plan;
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
-	                                    const vector<reference<NeighborInfo>> &possible_connections,
-	                                    JoinNode &left, JoinNode &right);
+	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,
+	                                    JoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right,
-	                   const vector<reference<NeighborInfo>> &info);
+	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
-	                 const vector<reference<NeighborInfo>> &info);
+	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right, const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
-	                           unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right, unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
 	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
