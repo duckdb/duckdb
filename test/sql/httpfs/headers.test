@@ -1,5 +1,7 @@
-# name: What
+# name: test/sql/httpfs/headers.test
 # group: [httpfs]
+
+require-env S3_TEST_SERVER_AVAILABLE 1
 
 require httpfs
 
