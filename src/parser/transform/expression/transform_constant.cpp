@@ -133,7 +133,11 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				}
 				values.emplace_back(child_value);
 			}
-			value = Value::LIST(std::move(values));
+			if (values.empty()) {
+				value = Value::LIST(LogicalTypeId::VARCHAR, std::move(values));
+			} else {
+				value = Value::LIST(std::move(values));
+			}
 			return true;
 		} else {
 			return false;

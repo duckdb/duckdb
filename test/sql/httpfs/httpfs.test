@@ -9,6 +9,9 @@ statement ok
 set http_headers = MAP {'hello': 'world'};
 
 statement ok
+set http_headers = MAP {};
+
+statement ok
 set http_headers TO MAP {'hello': 'world'};
 
 query I
