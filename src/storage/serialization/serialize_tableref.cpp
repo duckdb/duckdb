@@ -151,14 +151,12 @@ unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserial
 void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
 	serializer.WriteProperty("function", *function);
-	serializer.WriteProperty("function_alias", alias);
 	serializer.WriteProperty("column_name_alias", column_name_alias);
 }
 
 unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
 	deserializer.ReadProperty("function", result->function);
-	deserializer.ReadProperty("function_alias", result->alias);
 	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
 	return std::move(result);
 }
