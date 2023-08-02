@@ -107,14 +107,6 @@ runs:
         ls -al
         pwd
 
-    # Todo: remove this after spatial no longer depends on it
-    - name: Globally install OpenSSL (Spatial still depends on it to be available)
-      if: inputs.vcpkg_build == 1 && inputs.openssl_path == ''
-      shell: bash
-      run: |
-        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
-        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
       shell: bash

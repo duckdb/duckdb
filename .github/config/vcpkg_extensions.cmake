@@ -47,11 +47,12 @@ duckdb_extension_load(iceberg
 )
 
 ################# POSTGRES_SCANNER
-duckdb_extension_load(postgres_scanner
-    DONT_LINK
-    GIT_URL https://github.com/duckdblabs/postgres_scanner
-    GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
-)
+# TODO re-enable with new hash!
+#duckdb_extension_load(postgres_scanner
+#    DONT_LINK
+#    GIT_URL https://github.com/duckdblabs/postgres_scanner
+#    GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
+#)
 
 ################# SPATIAL
 duckdb_extension_load(spatial
@@ -71,17 +72,17 @@ else ()
 endif()
 
 duckdb_extension_load(sqlite_scanner
-        ${STATIC_LINK_SQLITE}
-        LOAD_TESTS
-        GIT_URL https://github.com/duckdblabs/sqlite_scanner
-        GIT_TAG 9c38a30be2237456cdcd423d527b96c944158c77
-        )
+    ${STATIC_LINK_SQLITE}
+    LOAD_TESTS
+    GIT_URL https://github.com/duckdblabs/sqlite_scanner
+    GIT_TAG 9c38a30be2237456cdcd423d527b96c944158c77
+)
 
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
-            DONT_LINK
-            GIT_URL https://github.com/duckdblabs/substrait
-            GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
-            )
+        DONT_LINK
+        GIT_URL https://github.com/duckdblabs/substrait
+        GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
+    )
 endif()
