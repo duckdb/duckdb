@@ -61,3 +61,7 @@ Conversion Error: Failure in decode: could not convert blob to UTF8 string, the 
 
 statement ok
 CREATE INDEX i1 ON t1 USING ART (c1);
+
+
+statement error
+CREATE INDEX i3 ON t1 USING random_index_method (foo) WITH (my_option = 2, is_cool);

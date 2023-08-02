@@ -146,6 +146,7 @@ core_functions/scalar/union/union_extract.cpp	11
 core_functions/scalar/union/union_tag.cpp	4
 core_functions/scalar/union/union_value.cpp	2
 execution/aggregate_hashtable.cpp	14
+execution/column_binding_resolver.cpp 4
 execution/expression_executor.cpp	12
 execution/expression_executor/execute_between.cpp	30
 execution/expression_executor/execute_case.cpp	17
@@ -204,7 +205,7 @@ execution/operator/projection/physical_tableinout_function.cpp	8
 execution/operator/scan/physical_expression_scan.cpp	2
 execution/operator/scan/physical_positional_scan.cpp	20
 execution/operator/schema/physical_attach.cpp	6
-execution/operator/schema/physical_create_index.cpp	3
+execution/operator/schema/physical_create_art_index.cpp	1
 execution/operator/schema/physical_create_type.cpp	2
 execution/operator/set/physical_cte.cpp	1
 execution/partitionable_hashtable.cpp	5
@@ -705,7 +706,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	7
+planner/operator/logical_extension_operator.cpp	13
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
