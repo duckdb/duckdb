@@ -32,6 +32,7 @@ select (
     )
     group by ra, rb)
 from b
+order by all
 ----
 {'x': a, 'y': A, '__matches': 1}
 {'x': b, 'y': B, '__matches': 1}
