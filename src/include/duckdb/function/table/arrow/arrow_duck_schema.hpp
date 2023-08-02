@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include <utility>
-
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
