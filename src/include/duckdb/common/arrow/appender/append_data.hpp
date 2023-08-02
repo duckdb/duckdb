@@ -4,7 +4,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_buffer.hpp"
-#include "duckdb/common/arrow/arrow_options.hpp"
+#include "duckdb/main/client_properties.hpp"
 #include "duckdb/common/array.hpp"
 
 namespace duckdb {
@@ -26,7 +26,7 @@ typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type
 // FIXME: we should separate the append state variables from the variables required by the ArrowArray into
 // ArrowAppendState
 struct ArrowAppendData {
-	explicit ArrowAppendData(ArrowOptions &options_p) : options(options_p) {
+	explicit ArrowAppendData(ClientProperties &options_p) : options(options_p) {
 	}
 	// the buffers of the arrow vector
 	ArrowBuffer validity;
@@ -49,7 +49,7 @@ struct ArrowAppendData {
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
 
-	ArrowOptions options;
+	ClientProperties options;
 };
 
 //===--------------------------------------------------------------------===//
