@@ -70,15 +70,15 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 //! Config for RadixPartitionedHashTable
 struct RadixHTConfig {
 public:
-	RadixHTConfig(ClientContext &context, const idx_t row_width)
-	    : sink_capacity(SinkCapacity(row_width)), sink_radix_bits(SinkRadixBits(context)),
+	RadixHTConfig(ClientContext &context)
+	    : sink_capacity(SinkCapacity()), sink_radix_bits(SinkRadixBits(context)),
 	      repartition_radix_bits(RepartitionRadixBits(sink_radix_bits)) {
 	}
 
 private:
-	static idx_t SinkCapacity(const idx_t row_width) {
-		const auto size_per_row = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR + row_width;
-		const auto capacity = NextPowerOfTwo(CACHE_SIZE / size_per_row);
+	static idx_t SinkCapacity() {
+		const auto size_per_entry = sizeof(aggr_ht_entry_t) * GroupedAggregateHashTable::LOAD_FACTOR;
+		const auto capacity = NextPowerOfTwo(CACHE_SIZE / size_per_entry);
 		return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
 	}
 
@@ -93,7 +93,7 @@ private:
 
 private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB cache per CPU
-	static constexpr const idx_t CACHE_SIZE = 1572864;
+	static constexpr const idx_t CACHE_SIZE = 1572864 * 4;
 	//! By how many bits to repartition if we go out-of-core
 	static constexpr const idx_t REPARTITION_RADIX_BITS = 3;
 
@@ -157,9 +157,9 @@ public:
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht_p)
-    : radix_ht(radix_ht_p), config(context, radix_ht.GetLayout().GetRowWidth()), finalized(false),
-      external(context.config.force_external), active_threads(0), combined_threads(0), finalize_idx(0),
-      finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
+    : radix_ht(radix_ht_p), config(context), finalized(false), external(context.config.force_external),
+      active_threads(0), combined_threads(0), finalize_idx(0), finalize_done(0),
+      scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 }
 
 RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
