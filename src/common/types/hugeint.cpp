@@ -815,7 +815,7 @@ hugeint_t::operator int64_t() const {
 	return NarrowCast<int64_t>(*this);
 }
 hugeint_t::operator uhugeint_t() const {
-	return { static_cast<uint64_t>(this->upper), this->lower };
+	return {static_cast<uint64_t>(this->upper), this->lower};
 }
 
 string hugeint_t::ToString() const {

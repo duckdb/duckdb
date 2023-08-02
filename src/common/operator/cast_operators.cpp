@@ -1997,8 +1997,8 @@ struct UhugeIntegerCastOperation {
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
 	UhugeIntCastData data;
-	if (!TryIntegerCast<UhugeIntCastData, false, true, UhugeIntegerCastOperation>(input.GetData(), input.GetSize(), data,
-	                                                                             strict)) {
+	if (!TryIntegerCast<UhugeIntCastData, false, true, UhugeIntegerCastOperation>(input.GetData(), input.GetSize(),
+	                                                                              data, strict)) {
 		return false;
 	}
 	result = data.uhugeint;
