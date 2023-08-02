@@ -114,7 +114,7 @@ runs:
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
-      if: inputs.vcpkg_build == 1 && inputs.build_vcpkg_extensions == 1
+      if: inputs.vcpkg_build == 1 && inputs.build_out_of_tree_extensions == 1
       shell: bash
       run: |
         make extension_configuration
