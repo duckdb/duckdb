@@ -61,14 +61,14 @@ optional_ptr<QueryEdge> QueryGraphEdges::GetQueryEdge(JoinRelationSet &left) {
 	return info;
 }
 
-void QueryGraphEdges::CreateEdge(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
+void QueryGraphEdges::CreateEdge(JoinRelationSet &left, JoinRelationSet &right,
                                  optional_ptr<FilterInfo> filter_info) {
-	D_ASSERT(left->count > 0 && right->count > 0);
+	D_ASSERT(left.count > 0 && right.count > 0);
 	// find the EdgeInfo corresponding to the left set
-	auto info = GetQueryEdge(*left);
+	auto info = GetQueryEdge(left);
 	// now insert the edge to the right relation, if it does not exist
 	for (idx_t i = 0; i < info->neighbors.size(); i++) {
-		if (info->neighbors[i]->neighbor.get() == right.get()) {
+		if (info->neighbors[i]->neighbor == &right) {
 			if (filter_info) {
 				// neighbor already exists just add the filter, if we have any
 				info->neighbors[i]->filters.push_back(filter_info);
@@ -77,7 +77,7 @@ void QueryGraphEdges::CreateEdge(optional_ptr<JoinRelationSet> left, optional_pt
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_uniq<NeighborInfo>(right);
+	auto n = make_uniq<NeighborInfo>(&right);
 	// if the edge represents a cross product, filter_info is null. The easiest way then to determine
 	// if an edge is for a cross product is if the filters are empty
 	if (info && filter_info) {
@@ -134,11 +134,11 @@ const vector<idx_t> QueryGraphEdges::GetNeighbors(JoinRelationSet &node, unorder
 	return neighbors;
 }
 
-const vector<reference<NeighborInfo>> QueryGraphEdges::GetConnections(optional_ptr<JoinRelationSet> node,
-                                                                      optional_ptr<JoinRelationSet> other) const {
+const vector<reference<NeighborInfo>> QueryGraphEdges::GetConnections(JoinRelationSet &node,
+                                                                      JoinRelationSet &other) const {
 	vector<reference<NeighborInfo>> connections;
-	EnumerateNeighbors(node.operator*(), [&](NeighborInfo &info) -> bool {
-		if (JoinRelationSet::IsSubset(other.get(), info.neighbor)) {
+	EnumerateNeighbors(node, [&](NeighborInfo &info) -> bool {
+		if (JoinRelationSet::IsSubset(other, *info.neighbor)) {
 			connections.push_back(info);
 		}
 		return false;

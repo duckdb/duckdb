@@ -20,7 +20,7 @@ struct NeighborInfo;
 class JoinNode {
 public:
 	//! Represents a node in the join plan
-	optional_ptr<JoinRelationSet> set;
+	JoinRelationSet &set;
 	//! information on how left and right are connected
 	optional_ptr<NeighborInfo> info;
 	//! left and right plans
@@ -36,16 +36,16 @@ public:
 	double cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
-	JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
-	         optional_ptr<JoinNode> right, double cost);
+	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left,
+	         JoinNode &right, double cost);
 
 	//! Create a leaf node in the join tree
 	//! set cost to 0 for leaf nodes
 	//! cost will be the cost to *produce* an intermediate table
-	JoinNode(optional_ptr<JoinRelationSet> set);
+	JoinNode(JoinRelationSet &set);
 
 	bool operator==(const JoinNode &other) {
-		return other.set->ToString().compare(set->ToString()) == 0;
+		return other.set.ToString().compare(set.ToString()) == 0;
 	}
 
 private:

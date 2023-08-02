@@ -20,7 +20,7 @@ bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
 }
 
 void CardinalityEstimator::AddRelationTdom(FilterInfo &filter_info) {
-	D_ASSERT(filter_info.set->count >= 1);
+	D_ASSERT(filter_info.set.count >= 1);
 	for (const RelationsToTDom &r2tdom : relations_to_tdoms) {
 		auto &i_set = r2tdom.equivalent_relations;
 		if (i_set.find(filter_info.left_binding) != i_set.end()) {
@@ -150,8 +150,8 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 	unordered_set<idx_t> actual_set;
 
 	for (idx_t i = 0; i < new_set.count; i++) {
-		auto single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
-		auto card_helper = relation_set_2_cardinality[single_node_set.get()->ToString()];
+		auto &single_node_set = set_manager.GetJoinRelation(new_set.relations[i]);
+		auto card_helper = relation_set_2_cardinality[single_node_set.ToString()];
 		numerator *= card_helper.cardinality_before_filters;
 		actual_set.insert(new_set.relations[i]);
 	}

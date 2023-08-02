@@ -199,12 +199,12 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 	return stats;
 }
 
-void RelationStatisticsHelper::CopyRelationStats(optional_ptr<RelationStats> to, RelationStats from) {
-	to->column_distinct_count = from.column_distinct_count;
-	to->column_names = from.column_names;
-	to->cardinality = from.cardinality;
-	to->table_name = from.table_name;
-	to->stats_initialized = from.stats_initialized;
+void RelationStatisticsHelper::CopyRelationStats(RelationStats &to, RelationStats from) {
+	to.column_distinct_count = from.column_distinct_count;
+	to.column_names = from.column_names;
+	to.cardinality = from.cardinality;
+	to.table_name = from.table_name;
+	to.stats_initialized = from.stats_initialized;
 }
 
 RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
@@ -224,7 +224,7 @@ RelationStats RelationStatisticsHelper::CombineStatsOfReorderableOperator(vector
 	return stats;
 }
 
-RelationStats RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(LogicalOperator &op,
+RelationStats RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(LogicalOperator &op,
                                                                             vector<RelationStats> child_stats) {
 	D_ASSERT(child_stats.size() == 2);
 	RelationStats ret;

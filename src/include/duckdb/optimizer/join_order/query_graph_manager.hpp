@@ -40,12 +40,12 @@ struct GenerateJoinRelation {
 //! Filter info struct that is used by the cardinality estimator to set the initial cardinality
 //! but is also eventually transformed into a query edge.
 struct FilterInfo {
-	FilterInfo(unique_ptr<Expression> filter, optional_ptr<JoinRelationSet> set, idx_t filter_index)
+	FilterInfo(unique_ptr<Expression> filter, JoinRelationSet &set, idx_t filter_index)
 	    : filter(std::move(filter)), set(set), filter_index(filter_index) {
 	}
 
 	unique_ptr<Expression> filter;
-	optional_ptr<JoinRelationSet> set;
+	JoinRelationSet &set;
 	idx_t filter_index;
 	optional_ptr<JoinRelationSet> left_set;
 	optional_ptr<JoinRelationSet> right_set;
@@ -83,7 +83,7 @@ public:
 
 	//! Plan enumerator may not find a full plan and therefore will need to create cross
 	//! products to create edges.
-	void CreateQueryGraphCrossProduct(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right);
+	void CreateQueryGraphCrossProduct(JoinRelationSet &left, JoinRelationSet &right);
 
 	//! after join order optimization, we perform build side probe side optimizations.
 	//! (Basically we put lower expected cardinality columns on the build side, and larger
@@ -93,7 +93,7 @@ public:
 private:
 	ClientContext &context;
 
-	vector<optional_ptr<LogicalOperator>> filter_operators;
+	vector<reference<LogicalOperator>> filter_operators;
 
 	//! Filter information including the column_bindings that join filters
 	//! used by the cardinality estimator to estimate distinct counts

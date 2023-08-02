@@ -52,25 +52,25 @@ private:
 	bool must_update_full_plan;
 	unordered_set<std::string> join_nodes_in_full_plan;
 
-	unique_ptr<JoinNode> CreateJoinTree(optional_ptr<JoinRelationSet> set,
+	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections,
-	                                    optional_ptr<JoinNode> left, optional_ptr<JoinNode> right);
+	                                    JoinNode &left, JoinNode &right);
 
 	//! Emit a pair as a potential join candidate. Returns the best plan found for the (left, right) connection (either
 	//! the newly created plan, or an existing plan)
-	JoinNode &EmitPair(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
+	JoinNode &EmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	                   const vector<reference<NeighborInfo>> &info);
 	//! Tries to emit a potential join candidate pair. Returns false if too many pairs have already been emitted,
 	//! cancelling the dynamic programming step.
-	bool TryEmitPair(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
+	bool TryEmitPair(JoinRelationSet &left, JoinRelationSet &right,
 	                 const vector<reference<NeighborInfo>> &info);
 
-	bool EnumerateCmpRecursive(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right,
+	bool EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
 	                           unordered_set<idx_t> &exclusion_set);
 	//! Emit a relation set node
-	bool EmitCSG(optional_ptr<JoinRelationSet> node);
+	bool EmitCSG(JoinRelationSet &node);
 	//! Enumerate the possible connected subgraphs that can be joined together in the join graph
-	bool EnumerateCSGRecursive(optional_ptr<JoinRelationSet> node, unordered_set<idx_t> &exclusion_set);
+	bool EnumerateCSGRecursive(JoinRelationSet &node, unordered_set<idx_t> &exclusion_set);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
 

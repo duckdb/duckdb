@@ -18,16 +18,16 @@ string JoinRelationSet::ToString() const {
 // LCOV_EXCL_STOP
 
 //! Returns true if sub is a subset of super
-bool JoinRelationSet::IsSubset(optional_ptr<JoinRelationSet> super, optional_ptr<JoinRelationSet> sub) {
-	D_ASSERT(sub->count > 0);
-	if (sub->count > super->count) {
+bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
+	D_ASSERT(sub.count > 0);
+	if (sub.count > super.count) {
 		return false;
 	}
 	idx_t j = 0;
-	for (idx_t i = 0; i < super->count; i++) {
-		if (sub->relations[j] == super->relations[i]) {
+	for (idx_t i = 0; i < super.count; i++) {
+		if (sub.relations[j] == super.relations[i]) {
 			j++;
-			if (j == sub->count) {
+			if (j == sub.count) {
 				return true;
 			}
 		}
@@ -35,7 +35,7 @@ bool JoinRelationSet::IsSubset(optional_ptr<JoinRelationSet> super, optional_ptr
 	return false;
 }
 
-optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations,
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations,
                                                                       idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
@@ -54,11 +54,11 @@ optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(unsafe_uni
 		// if it hasn't we need to create it
 		info.get().relation = make_uniq<JoinRelationSet>(std::move(relations), count);
 	}
-	return info.get().relation;
+	return *info.get().relation;
 }
 
 //! Create or get a JoinRelationSet from a single node with the given index
-optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(idx_t index) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
 	// create a sorted vector of the relations
 	auto relations = make_unsafe_uniq_array<idx_t>(1);
 	relations[0] = index;
@@ -66,7 +66,7 @@ optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(idx_t inde
 	return GetJoinRelation(std::move(relations), count);
 }
 
-optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
 	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
 	idx_t count = 0;
@@ -77,33 +77,33 @@ optional_ptr<JoinRelationSet> JoinRelationSetManager::GetJoinRelation(const unor
 	return GetJoinRelation(std::move(relations), count);
 }
 
-optional_ptr<JoinRelationSet> JoinRelationSetManager::Union(optional_ptr<JoinRelationSet> left,
-                                                            optional_ptr<JoinRelationSet> right) {
-	auto relations = make_unsafe_uniq_array<idx_t>(left->count + right->count);
+JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left,
+                                                            JoinRelationSet &right) {
+	auto relations = make_unsafe_uniq_array<idx_t>(left.count + right.count);
 	idx_t count = 0;
 	// move through the left and right relations, eliminating duplicates
 	idx_t i = 0, j = 0;
 	while (true) {
-		if (i == left->count) {
+		if (i == left.count) {
 			// exhausted left relation, add remaining of right relation
-			for (; j < right->count; j++) {
-				relations[count++] = right->relations[j];
+			for (; j < right.count; j++) {
+				relations[count++] = right.relations[j];
 			}
 			break;
-		} else if (j == right->count) {
+		} else if (j == right.count) {
 			// exhausted right relation, add remaining of left
-			for (; i < left->count; i++) {
-				relations[count++] = left->relations[i];
+			for (; i < left.count; i++) {
+				relations[count++] = left.relations[i];
 			}
 			break;
-		} else if (left->relations[i] < right->relations[j]) {
+		} else if (left.relations[i] < right.relations[j]) {
 			// left is smaller, progress left and add it to the set
-			relations[count++] = left->relations[i];
+			relations[count++] = left.relations[i];
 			i++;
 		} else {
-			D_ASSERT(left->relations[i] > right->relations[j]);
+			D_ASSERT(left.relations[i] > right.relations[j]);
 			// right is smaller, progress right and add it to the set
-			relations[count++] = right->relations[j];
+			relations[count++] = right.relations[j];
 			j++;
 		}
 	}

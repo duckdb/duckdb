@@ -6,12 +6,12 @@
 
 namespace duckdb {
 
-JoinNode::JoinNode(optional_ptr<JoinRelationSet> set) : set(set), info(nullptr), left(nullptr), right(nullptr) {
+JoinNode::JoinNode(JoinRelationSet &set) : set(set), info(nullptr), left(nullptr), right(nullptr) {
 }
 
-JoinNode::JoinNode(optional_ptr<JoinRelationSet> set, optional_ptr<NeighborInfo> info, optional_ptr<JoinNode> left,
-                   optional_ptr<JoinNode> right, double cost)
-    : set(set), info(info), left(left), right(right), cost(cost) {
+JoinNode::JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left,
+                   JoinNode &right, double cost)
+    : set(set), info(info), left(&left), right(&right), cost(cost) {
 }
 
 unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
@@ -21,7 +21,7 @@ unique_ptr<EstimatedProperties> EstimatedProperties::Copy() {
 
 string JoinNode::ToString() {
 	string result = "-------------------------------\n";
-	result += set->ToString() + "\n";
+	result += set.ToString() + "\n";
 	result += "cost = " + to_string(cost) + "\n";
 	result += "left = \n";
 	if (left) {

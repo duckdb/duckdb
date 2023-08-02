@@ -26,7 +26,7 @@ struct JoinRelationSet {
 	unsafe_unique_array<idx_t> relations;
 	idx_t count;
 
-	static bool IsSubset(optional_ptr<JoinRelationSet> super, optional_ptr<JoinRelationSet> sub);
+	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
 };
 
 //! The JoinRelationTree is a structure holding all the created JoinRelationSet objects and allowing fast lookup on to
@@ -42,13 +42,13 @@ public:
 
 public:
 	//! Create or get a JoinRelationSet from a single node with the given index
-	optional_ptr<JoinRelationSet> GetJoinRelation(idx_t index);
+	JoinRelationSet &GetJoinRelation(idx_t index);
 	//! Create or get a JoinRelationSet from a set of relation bindings
-	optional_ptr<JoinRelationSet> GetJoinRelation(const unordered_set<idx_t> &bindings);
+	JoinRelationSet &GetJoinRelation(const unordered_set<idx_t> &bindings);
 	//! Create or get a JoinRelationSet from a (sorted, duplicate-free!) list of relations
-	optional_ptr<JoinRelationSet> GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
+	JoinRelationSet &GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
 	//! Union two sets of relations together and create a new relation set
-	optional_ptr<JoinRelationSet> Union(optional_ptr<JoinRelationSet> left, optional_ptr<JoinRelationSet> right);
+	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)
 	// JoinRelationSet *Difference(JoinRelationSet *left, JoinRelationSet *right);
 

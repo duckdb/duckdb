@@ -162,7 +162,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 			children_stats.push_back(stats);
 		}
 
-		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReoderableOperator(*op, children_stats);
+		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
 		if (datasource_filters.size() > 0) {
 			combined_stats.cardinality =
 			    (idx_t)MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
@@ -302,7 +302,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					filter_set.insert(*comparison);
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*comparison, bindings);
-					auto set = set_manager.GetJoinRelation(bindings);
+					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(comparison), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}
@@ -314,7 +314,7 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 					filter_set.insert(*expression);
 					unordered_set<idx_t> bindings;
 					ExtractBindings(*expression, bindings);
-					auto set = set_manager.GetJoinRelation(bindings);
+					auto &set = set_manager.GetJoinRelation(bindings);
 					auto filter_info = make_uniq<FilterInfo>(std::move(expression), set, filters_and_bindings.size());
 					filters_and_bindings.push_back(std::move(filter_info));
 				}

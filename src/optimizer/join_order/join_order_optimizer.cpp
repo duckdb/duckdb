@@ -77,7 +77,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		auto bindings = new_logical_plan->GetColumnBindings();
 		auto new_stats = RelationStatisticsHelper::CombineStatsOfReorderableOperator(bindings, relation_stats);
 		new_stats.cardinality = MaxValue(cardinality, new_stats.cardinality);
-		RelationStatisticsHelper::CopyRelationStats(stats, new_stats);
+		RelationStatisticsHelper::CopyRelationStats(*stats, new_stats);
 	}
 
 	return new_logical_plan;

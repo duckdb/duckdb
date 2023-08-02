@@ -81,15 +81,15 @@ void QueryGraphManager::CreateHyperGraphEdges() {
 			if (!left_bindings.empty() && !right_bindings.empty()) {
 				// both the left and the right side have bindings
 				// first create the relation sets, if they do not exist
-				filter_info->left_set = set_manager.GetJoinRelation(left_bindings);
-				filter_info->right_set = set_manager.GetJoinRelation(right_bindings);
+				filter_info->left_set = &set_manager.GetJoinRelation(left_bindings);
+				filter_info->right_set = &set_manager.GetJoinRelation(right_bindings);
 				// we can only create a meaningful edge if the sets are not exactly the same
 				if (filter_info->left_set != filter_info->right_set) {
 					// check if the sets are disjoint
 					if (Disjoint(left_bindings, right_bindings)) {
 						// they are disjoint, we only need to create one set of edges in the join graph
-						query_graph.CreateEdge(filter_info->left_set, filter_info->right_set, filter_info);
-						query_graph.CreateEdge(filter_info->right_set, filter_info->left_set, filter_info);
+						query_graph.CreateEdge(*filter_info->left_set, *filter_info->right_set, filter_info);
+						query_graph.CreateEdge(*filter_info->right_set, *filter_info->left_set, filter_info);
 					} else {
 						continue;
 					}
@@ -147,16 +147,16 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				auto &filter_and_binding = filters_and_bindings.at(f->filter_index);
 				auto condition = std::move(filter_and_binding->filter);
 				// now create the actual join condition
-				D_ASSERT((JoinRelationSet::IsSubset(left.set, f->left_set) &&
-				          JoinRelationSet::IsSubset(right.set, f->right_set)) ||
-				         (JoinRelationSet::IsSubset(left.set, f->right_set) &&
-				          JoinRelationSet::IsSubset(right.set, f->left_set)));
+				D_ASSERT((JoinRelationSet::IsSubset(*left.set, *f->left_set) &&
+				          JoinRelationSet::IsSubset(*right.set, *f->right_set)) ||
+				         (JoinRelationSet::IsSubset(*left.set, *f->right_set) &&
+				          JoinRelationSet::IsSubset(*right.set, *f->left_set)));
 				JoinCondition cond;
 				D_ASSERT(condition->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON);
 				auto &comparison = condition->Cast<BoundComparisonExpression>();
 
 				// we need to figure out which side is which by looking at the relations available to us
-				bool invert = !JoinRelationSet::IsSubset(left.set, f->left_set);
+				bool invert = !JoinRelationSet::IsSubset(*left.set, *f->left_set);
 				cond.left = !invert ? std::move(comparison.left) : std::move(comparison.right);
 				cond.right = !invert ? std::move(comparison.right) : std::move(comparison.left);
 				cond.comparison = condition->type;
@@ -172,13 +172,13 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		}
 		left_node = left.set;
 		right_node = right.set;
-		result_relation = set_manager.Union(left.set, right.set);
+		result_relation = &set_manager.Union(*left.set, *right.set);
 	} else {
 		// base node, get the entry from the list of extracted relations
-		D_ASSERT(node.set->count == 1);
-		D_ASSERT(extracted_relations[node.set->relations[0]]);
-		result_relation = node.set;
-		result_operator = std::move(extracted_relations[node.set->relations[0]]);
+		D_ASSERT(node.set.count == 1);
+		D_ASSERT(extracted_relations[node.set.relations[0]]);
+		result_relation = &node.set;
+		result_operator = std::move(extracted_relations[node.set.relations[0]]);
 	}
 	// TODO: this is where estimated properties start coming into play.
 	//  when creating the result operator, we should ask the cost model and cardinality estimator what
@@ -203,7 +203,7 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 		if (filters_and_bindings[info.filter_index]->filter) {
 			// now check if the filter is a subset of the current relation
 			// note that infos with an empty relation set are a special case and we do not push them down
-			if (info.set->count > 0 && JoinRelationSet::IsSubset(result_relation, info.set)) {
+			if (info.set.count > 0 && JoinRelationSet::IsSubset(*result_relation, info.set)) {
 				auto &filter_and_binding = filters_and_bindings[info.filter_index];
 				auto filter = std::move(filter_and_binding->filter);
 				// if it is, we can push the filter
@@ -218,11 +218,11 @@ GenerateJoinRelation QueryGraphManager::GenerateJoins(vector<unique_ptr<LogicalO
 				// check if the nodes can be split up into left/right
 				bool found_subset = false;
 				bool invert = false;
-				if (JoinRelationSet::IsSubset(left_node, info.left_set) &&
-				    JoinRelationSet::IsSubset(right_node, info.right_set)) {
+				if (JoinRelationSet::IsSubset(*left_node, *info.left_set) &&
+				    JoinRelationSet::IsSubset(*right_node, *info.right_set)) {
 					found_subset = true;
-				} else if (JoinRelationSet::IsSubset(right_node, info.left_set) &&
-				           JoinRelationSet::IsSubset(left_node, info.right_set)) {
+				} else if (JoinRelationSet::IsSubset(*right_node, *info.left_set) &&
+				           JoinRelationSet::IsSubset(*left_node, *info.right_set)) {
 					invert = true;
 					found_subset = true;
 				}
@@ -277,8 +277,8 @@ const QueryGraphEdges &QueryGraphManager::GetQueryGraphEdges() const {
 	return query_graph;
 }
 
-void QueryGraphManager::CreateQueryGraphCrossProduct(optional_ptr<JoinRelationSet> left,
-                                                     optional_ptr<JoinRelationSet> right) {
+void QueryGraphManager::CreateQueryGraphCrossProduct(JoinRelationSet &left,
+                                                     JoinRelationSet &right) {
 	query_graph.CreateEdge(left, right, nullptr);
 	query_graph.CreateEdge(right, left, nullptr);
 }

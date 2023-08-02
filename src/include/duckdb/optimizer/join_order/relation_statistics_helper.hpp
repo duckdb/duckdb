@@ -65,8 +65,8 @@ public:
 	static RelationStats CombineStatsOfReorderableOperator(vector<ColumnBinding> &bindings,
 	                                                       vector<RelationStats> relation_stats);
 	//! Called after reordering a query plan with potentially 2+ relations.
-	static RelationStats CombineStatsOfNonReoderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
-	static void CopyRelationStats(optional_ptr<RelationStats> to, RelationStats from);
+	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
+	static void CopyRelationStats(RelationStats &to, RelationStats from);
 
 private:
 };
