@@ -167,16 +167,24 @@ RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
 }
 
 void RadixHTGlobalSinkState::Destroy() {
-	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE || count_before_combining == 0) {
+	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE || count_before_combining == 0 ||
+	    partitions.empty()) {
 		// Already destroyed / empty
 		return;
 	}
 
-	auto layout = radix_ht.GetLayout().Copy();
+	TupleDataLayout layout = partitions[0]->data->GetLayout().Copy();
+	if (!layout.HasDestructor()) {
+		return; // No destructors, exit
+	}
+
+	// There are aggregates with destructors: Call the destructor for each of the aggregates
 	RowOperationsState row_state(*stored_allocators.back());
 	for (auto &partition : partitions) {
-		// There are aggregates with destructors: Call the destructor for each of the aggregates
 		auto &data_collection = *partition->data;
+		if (data_collection.Count() == 0) {
+			continue;
+		}
 		TupleDataChunkIterator iterator(data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 		auto &row_locations = iterator.GetChunkState().row_locations;
 		do {
@@ -290,6 +298,9 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
                                         LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalSinkState>();
+	if (!lstate.ht) {
+		return;
+	}
 
 	// Loop until all threads have called Combine, or until 'external' has been set
 	gstate.combined_threads++;
@@ -323,13 +334,17 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	// TODO: detect single-threaded case and move data directly to scan data??
 
-	auto &uncombined_data = *gstate.uncombined_data;
-	gstate.count_before_combining = uncombined_data.Count();
+	if (gstate.uncombined_data) {
+		auto &uncombined_data = *gstate.uncombined_data;
+		gstate.count_before_combining = uncombined_data.Count();
 
-	auto &uncombined_partition_data = uncombined_data.GetPartitions();
-	gstate.partitions.reserve(uncombined_partition_data.size());
-	for (idx_t i = 0; i < uncombined_partition_data.size(); i++) {
-		gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(uncombined_partition_data[i])));
+		auto &uncombined_partition_data = uncombined_data.GetPartitions();
+		gstate.partitions.reserve(uncombined_partition_data.size());
+		for (idx_t i = 0; i < uncombined_partition_data.size(); i++) {
+			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(uncombined_partition_data[i])));
+		}
+	} else {
+		gstate.count_before_combining = 0;
 	}
 
 	gstate.finalized = true;

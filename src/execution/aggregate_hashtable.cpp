@@ -93,6 +93,9 @@ void GroupedAggregateHashTable::Destroy() {
 	// LCOV_EXCL_START
 	RowOperationsState row_state(*aggregate_allocator);
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
+		if (data_collection->Count() == 0) {
+			continue;
+		}
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 		auto &row_locations = iterator.GetChunkState().row_locations;
 		do {
