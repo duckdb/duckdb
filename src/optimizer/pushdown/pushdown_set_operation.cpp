@@ -11,73 +11,71 @@ namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
-static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr,
-                                 LogicalSetOperation &setop) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+static void ReplaceSetOpBindings(vector<ColumnBinding> &bindings, Filter &filter, Expression &expr, LogicalSetOperation &setop)
+{
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.binding.table_index == setop.table_index);
 		D_ASSERT(colref.depth == 0);
-
 		// rewrite the binding by looking into the bound_tables list of the subquery
 		colref.binding = bindings[colref.binding.column_index];
 		filter.bindings.insert(colref.binding.table_index);
 		return;
 	}
-	ExpressionIterator::EnumerateChildren(
-	    expr, [&](Expression &child) { ReplaceSetOpBindings(bindings, filter, child, setop); });
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { ReplaceSetOpBindings(bindings, filter, child, setop); });
 }
 
-unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-	         op->type == LogicalOperatorType::LOGICAL_INTERSECT);
+unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<LogicalOperator> op)
+{
+	D_ASSERT(op->logical_type == LogicalOperatorType::LOGICAL_UNION || op->logical_type == LogicalOperatorType::LOGICAL_EXCEPT || op->logical_type == LogicalOperatorType::LOGICAL_INTERSECT);
 	auto &setop = op->Cast<LogicalSetOperation>();
-
 	D_ASSERT(op->children.size() == 2);
 	auto left_bindings = op->children[0]->GetColumnBindings();
 	auto right_bindings = op->children[1]->GetColumnBindings();
-	if (left_bindings.size() != right_bindings.size()) {
+	if (left_bindings.size() != right_bindings.size())
+	{
 		throw InternalException("Filter pushdown - set operation LHS and RHS have incompatible counts");
 	}
-
 	// pushdown into set operation, we can duplicate the condition and pushdown the expressions into both sides
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
-	for (idx_t i = 0; i < filters.size(); i++) {
+	for (idx_t i = 0; i < filters.size(); i++)
+	{
 		// first create a copy of the filter
 		auto right_filter = make_uniq<Filter>();
 		right_filter->filter = filters[i]->filter->Copy();
-
 		// in the original filter, rewrite references to the result of the union into references to the left_index
 		ReplaceSetOpBindings(left_bindings, *filters[i], *filters[i]->filter, setop);
 		// in the copied filter, rewrite references to the result of the union into references to the right_index
 		ReplaceSetOpBindings(right_bindings, *right_filter, *right_filter->filter, setop);
-
 		// extract bindings again
 		filters[i]->ExtractBindings();
 		right_filter->ExtractBindings();
-
 		// move the filters into the child pushdown nodes
 		left_pushdown.filters.push_back(std::move(filters[i]));
 		right_pushdown.filters.push_back(std::move(right_filter));
 	}
-
-	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-
-	bool left_empty = op->children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
-	bool right_empty = op->children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
-	if (left_empty && right_empty) {
+	op->children[0] = left_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+	op->children[1] = right_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	bool left_empty = op->children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
+	bool right_empty = op->children[1]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
+	if (left_empty && right_empty)
+	{
 		// both empty: return empty result
 		return make_uniq<LogicalEmptyResult>(std::move(op));
 	}
-	if (left_empty) {
+	if (left_empty)
+	{
 		// left child is empty result
-		switch (op->type) {
+		switch (op->logical_type)
+		{
 		case LogicalOperatorType::LOGICAL_UNION:
-			if (op->children[1]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			if (((LogicalOperator*)op->children[1].get())->logical_type == LogicalOperatorType::LOGICAL_PROJECTION)
+			{
 				// union with empty left side: return right child
 				auto &projection = op->children[1]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
-				return std::move(op->children[1]);
+				return unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get());
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -88,16 +86,19 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		default:
 			throw InternalException("Unsupported set operation");
 		}
-	} else if (right_empty) {
+	} else if (right_empty)
+	{
 		// right child is empty result
-		switch (op->type) {
+		switch (op->logical_type)
+		{
 		case LogicalOperatorType::LOGICAL_UNION:
 		case LogicalOperatorType::LOGICAL_EXCEPT:
-			if (op->children[0]->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+			if (((LogicalOperator*)op->children[0].get())->logical_type == LogicalOperatorType::LOGICAL_PROJECTION)
+			{
 				// union or except with empty right child: return left child
 				auto &projection = op->children[0]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
-				return std::move(op->children[0]);
+				return unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get());
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_INTERSECT:
@@ -109,5 +110,4 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 	}
 	return op;
 }
-
 } // namespace duckdb

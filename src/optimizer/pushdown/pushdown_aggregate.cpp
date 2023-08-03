@@ -5,12 +5,14 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 
-namespace duckdb {
-
+namespace duckdb
+{
 using Filter = FilterPushdown::Filter;
 
-static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+static void ExtractFilterBindings(Expression &expr, vector<ColumnBinding> &bindings)
+{
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		bindings.push_back(colref.binding);
 	}
@@ -32,7 +34,7 @@ static unique_ptr<Expression> ReplaceGroupBindings(LogicalAggregate &proj, uniqu
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<LogicalOperator> op) {
-	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
+	D_ASSERT(op->logical_type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY);
 	auto &aggr = op->Cast<LogicalAggregate>();
 
 	// pushdown into AGGREGATE and GROUP BY
@@ -91,8 +93,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		i--;
 	}
 	child_pushdown.GenerateFilters();
-
-	op->children[0] = child_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[0] = child_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
 	return FinishPushdown(std::move(op));
 }
 
