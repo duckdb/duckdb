@@ -10,11 +10,13 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXform.h"
+#include "duckdb/common/unique_ptr.hpp"
+
+using namespace duckdb;
+using namespace gpos;
 
 namespace gpopt
 {
-using namespace gpos;
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CXformExploration
@@ -25,58 +27,45 @@ using namespace gpos;
 //---------------------------------------------------------------------------
 class CXformExploration : public CXform
 {
-private:
-	// private copy ctor
-	CXformExploration(const CXformExploration &);
-
 public:
 	// ctor
-	explicit CXformExploration(CExpression *pexpr);
+	explicit CXformExploration(duckdb::unique_ptr<Operator> pexpr);
+
+	// private copy ctor
+	CXformExploration(const CXformExploration &) = delete;
 
 	// dtor
 	virtual ~CXformExploration();
 
 	// type of operator
-	virtual BOOL
-	FExploration() const
+	virtual bool FExploration() const
 	{
-		GPOS_ASSERT(!FSubstitution() && !FImplementation());
 		return true;
 	}
 
 	// is transformation a subquery unnesting (Subquery To Apply) xform?
-	virtual BOOL
-	FSubqueryUnnesting() const
+	virtual bool FSubqueryUnnesting() const
 	{
 		return false;
 	}
 
 	// is transformation an Apply decorrelation (Apply To Join) xform?
-	virtual BOOL
-	FApplyDecorrelating() const
+	virtual bool FApplyDecorrelating() const
 	{
 		return false;
 	}
 
 	// do stats need to be computed before applying xform?
-	virtual BOOL
-	FNeedsStats() const
+	virtual bool FNeedsStats() const
 	{
 		return false;
 	}
 
 	// conversion function
-	static CXformExploration *
-	Pxformexp(CXform *pxform)
+	static CXformExploration* Pxformexp(CXform* pxform)
 	{
-		GPOS_ASSERT(NULL != pxform);
-		GPOS_ASSERT(pxform->FExploration());
-
-		return dynamic_cast<CXformExploration *>(pxform);
+		return dynamic_cast<CXformExploration*>(pxform);
 	}
-
 };	// class CXformExploration
-
 }  // namespace gpopt
-
 #endif

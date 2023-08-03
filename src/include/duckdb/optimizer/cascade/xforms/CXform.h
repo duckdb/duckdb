@@ -10,22 +10,9 @@
 #define GPOPT_CXform_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CEnumSet.h"
-#include "duckdb/optimizer/cascade/common/CEnumSetIter.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-#include "duckdb/optimizer/cascade/base/CUtils.h"
-#include "duckdb/optimizer/cascade/operators/CExpression.h"
-#include "duckdb/optimizer/cascade/operators/CPhysicalHashJoin.h"
 #include "duckdb/optimizer/cascade/xforms/CXformContext.h"
 #include "duckdb/optimizer/cascade/xforms/CXformResult.h"
-#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
-
-// Macro for enabling and disabling xforms
-#define GPOPT_DISABLE_XFORM_TF(x) EopttraceDisableXformBase + x
-#define GPOPT_ENABLE_XFORM(x) GPOS_UNSET_TRACE(GPOPT_DISABLE_XFORM_TF(x))
-#define GPOPT_DISABLE_XFORM(x) GPOS_SET_TRACE(GPOPT_DISABLE_XFORM_TF(x))
-#define GPOPT_FENABLED_XFORM(x) !GPOS_FTRACE(GPOPT_DISABLE_XFORM_TF(x))
-#define GPOPT_FDISABLED_XFORM(x) GPOS_FTRACE(GPOPT_DISABLE_XFORM_TF(x))
+#include <bitset>
 
 namespace gpopt
 {
@@ -39,14 +26,21 @@ using namespace gpos;
 //		base class for all transformations
 //
 //---------------------------------------------------------------------------
-class CXform : public CRefCount
+class CXform
 {
-private:
+public:
 	// pattern
-	CExpression *m_pexpr;
+	duckdb::unique_ptr<Operator> m_pop;
 
+public:
 	// private copy ctor
 	CXform(CXform &);
+
+	// ctor
+	explicit CXform(duckdb::unique_ptr<Operator> pexpr);
+
+	// dtor
+	virtual ~CXform();
 
 public:
 	// identification
@@ -56,14 +50,14 @@ public:
 	// referenced using their location in the array (e.g. when disabling
 	// xforms using traceflags), so shifting these ids may result in
 	// accidentally disabling the wrong xform
-
 	enum EXformId
 	{
-		ExfProject2ComputeScalar = 0,
-		ExfExpandNAryJoin,
-		ExfExpandNAryJoinMinCard,
-		ExfExpandNAryJoinDP,
-		ExfGet2TableScan,
+		/* I comment here */
+		ExfGet2TableScan = 0,
+		ExfLogicalProj2PhysicalProj = 1,
+		ExfProject2ComputeScalarExfn,
+		ExfInnerJoin2HashJoin,
+		ExfSelect2Filter,
 		ExfIndexGet2IndexScan,
 		ExfDynamicGet2DynamicTableScan,
 		ExfDynamicIndexGet2DynamicIndexScan,
@@ -72,7 +66,6 @@ public:
 		ExfUnnestTVF,
 		ExfImplementTVF,
 		ExfImplementTVFNoArgs,
-		ExfSelect2Filter,
 		ExfSelect2IndexGet,
 		ExfSelect2DynamicIndexGet,
 		ExfSelect2PartialDynamicIndexGet,
@@ -82,13 +75,11 @@ public:
 		ExfProject2Apply,
 		ExfGbAgg2Apply,
 		ExfSubqJoin2Apply,
-		ExfSubqNAryJoin2Apply,
 		ExfInnerJoin2IndexGetApply,
 		ExfInnerJoin2DynamicIndexGetApply,
 		ExfInnerApplyWithOuterKey2InnerJoin,
 		ExfInnerJoin2NLJoin,
 		ExfImplementIndexApply,
-		ExfInnerJoin2HashJoin,
 		ExfInnerApply2InnerJoin,
 		ExfInnerApply2InnerJoinNoCorrelations,
 		ExfImplementInnerCorrelatedApply,
@@ -120,6 +111,7 @@ public:
 		ExfGbAggDedup2HashAggDedup,
 		ExfGbAggDedup2StreamAggDedup,
 		ExfImplementLimit,
+		ExfImplementLogicalGet,
 		ExfIntersectAll2LeftSemiJoin,
 		ExfIntersect2Join,
 		ExfDifference2LeftAntiSemiJoin,
@@ -203,14 +195,13 @@ public:
 		ExfLeftOuterJoin2IndexGetApply,
 		ExfLeftOuterJoinWithInnerSelect2BitmapIndexGetApply,
 		ExfLeftOuterJoinWithInnerSelect2IndexGetApply,
-		ExfExpandNAryJoinGreedy,
 		ExfEagerAgg,
-		ExfExpandNAryJoinDPv2,
 		ExfImplementFullOuterMergeJoin,
 		ExfLeftOuterJoin2DynamicBitmapIndexGetApply,
 		ExfLeftOuterJoin2DynamicIndexGetApply,
 		ExfLeftOuterJoinWithInnerSelect2DynamicBitmapIndexGetApply,
 		ExfLeftOuterJoinWithInnerSelect2DynamicIndexGetApply,
+		ExfImplementColumnDataGet,
 		ExfInvalid,
 		ExfSentinel = ExfInvalid
 	};
@@ -219,55 +210,48 @@ public:
 	// used for prioritizing xforms as well as bypassing inapplicable xforms
 	enum EXformPromise
 	{
-		ExfpNone,	 // xform must not be used as it fails a precondition
-		ExfpLow,	 // xform has low priority
-		ExfpMedium,	 // xform has medium priority
-		ExfpHigh	 // xform has high priority
+		ExfpNone, ExfpLow, ExfpMedium, ExfpHigh	 // xform has high priority
 	};
-
-	// ctor
-	explicit CXform(CExpression *pexpr);
-
-	// dtor
-	virtual ~CXform();
-
+	
+public:
 	// ident accessors
 	virtual EXformId Exfid() const = 0;
 
 	// return a string for xform name
 	virtual const CHAR *SzId() const = 0;
 
-	// the following functions check xform type
+	// return true if xform should be applied only once.
+	// for expression of type CPatternTree, in deep trees, the number
+	// of expressions generated for group expression can be significantly
+	// large causing the Xform to be applied many times. This can lead to
+	// significantly long planning time, so such Xform should only be applied once
+	virtual bool IsApplyOnce();
 
+public:
+	// the following functions check xform type
 	// is xform substitution?
-	virtual BOOL FSubstitution() const
+	virtual bool FSubstitution() const
 	{
 		return false;
 	}
 
 	// is xform exploration?
-	virtual BOOL FExploration() const
+	virtual bool FExploration() const
 	{
 		return false;
 	}
 
 	// is xform implementation?
-	virtual BOOL FImplementation() const
+	virtual bool FImplementation() const
 	{
 		return false;
 	}
 
 	// actual transformation
-	virtual void Transform(CXformContext *pxfctxt, CXformResult *pxfres, CExpression *pexpr) const = 0;
-
-	// accessor
-	CExpression* PexprPattern() const
-	{
-		return m_pexpr;
-	}
+	virtual void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const = 0;
 
 	// check compatibility with another xform
-	virtual BOOL FCompatible(CXform::EXformId)
+	virtual bool FCompatible(CXform::EXformId)
 	{
 		return true;
 	}
@@ -275,70 +259,40 @@ public:
 	// compute xform promise for a given expression handle
 	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const = 0;
 
-	// print
-	virtual IOstream &OsPrint(IOstream &os) const;
-
-#ifdef GPOS_DEBUG
-
-	// verify pattern against given expression
-	BOOL FCheckPattern(CExpression *pexpr) const;
-
-	// verify xform promise on the given expression
-	static BOOL FPromising(CMemoryPool *mp, const CXform *pxform, CExpression *pexpr);
-
-#endif	// GPOS_DEBUG
-
+public:
 	// equality function over xform ids
-	static BOOL FEqualIds(const CHAR *szIdOne, const CHAR *szIdTwo);
+	static bool FEqualIds(const CHAR* szIdOne, const CHAR* szIdTwo);
 
 	// returns a set containing all xforms related to index join
 	// caller takes ownership of the returned set
-	static CBitSet *PbsIndexJoinXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsIndexJoinXforms();
 
 	// returns a set containing all xforms related to bitmap indexes
 	// caller takes ownership of the returned set
-	static CBitSet *PbsBitmapIndexXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsBitmapIndexXforms();
 
 	// returns a set containing all xforms related to heterogeneous indexes
 	// caller takes ownership of the returned set
-	static CBitSet *PbsHeterogeneousIndexXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsHeterogeneousIndexXforms();
 
 	// returns a set containing all xforms that generate a plan with a hash join
 	// caller takes ownership of the returned set
-	static CBitSet *PbsHashJoinXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsHashJoinXforms();
 
 	// returns a set containing xforms to use only the join order as available
 	// in the query
-	static CBitSet *PbsJoinOrderInQueryXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsJoinOrderInQueryXforms();
 
 	// returns a set containing xforms to use combination of greedy xforms
 	// for join order
-	static CBitSet *PbsJoinOrderOnGreedyXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsJoinOrderOnGreedyXforms();
 
 	// returns a set containing xforms to use for exhaustive join order
-	static CBitSet *PbsJoinOrderOnExhaustiveXforms(CMemoryPool *mp);
+	static bitset<ExfSentinel> PbsJoinOrderOnExhaustiveXforms();
 
 	// returns a set containing xforms to use for exhaustive2 join order
-	static CBitSet *PbsJoinOrderOnExhaustive2Xforms(CMemoryPool *mp);
-
-	// return true if xform should be applied only once.
-	// for expression of type CPatternTree, in deep trees, the number
-	// of expressions generated for group expression can be significantly
-	// large causing the Xform to be applied many times. This can lead to
-	// significantly long planning time, so such Xform should only be applied once
-	virtual BOOL IsApplyOnce();
-
+	static bitset<ExfSentinel> PbsJoinOrderOnExhaustive2Xforms();
 };	// class CXform
-
-// shorthand for printing
-inline IOstream& operator<<(IOstream &os, CXform &xform)
-{
-	return xform.OsPrint(os);
-}
-
-// shorthands for enum sets and iterators of xform ids
-typedef CEnumSet<CXform::EXformId, CXform::ExfSentinel> CXformSet;
-typedef CEnumSetIter<CXform::EXformId, CXform::ExfSentinel> CXformSetIter;
+typedef bitset<CXform::ExfSentinel> CXformSet;
 }  // namespace gpopt
-
 #endif

@@ -25,49 +25,44 @@ using namespace gpos;
 //---------------------------------------------------------------------------
 class CXformFactory
 {
-private:
-	// definition of hash map to maintain mappings
-	typedef CHashMap<CHAR, CXform, gpos::HashValue<CHAR>, CXform::FEqualIds, CleanupDeleteArray<CHAR>, CleanupNULL<CXform>> XformNameToXformMap;
-
-	// memory pool
-	CMemoryPool *m_mp;
-
+public:
 	// range of all xforms
-	CXform *m_rgpxf[CXform::ExfSentinel];
+	CXform* m_rgpxf[CXform::ExfSentinel];
 
 	// name -> xform map
-	XformNameToXformMap *m_phmszxform;
+	unordered_map<CHAR*, CXform*> m_phmszxform;
 
 	// bitset of exploration xforms
-	CXformSet *m_pxfsExploration;
+	CXformSet* m_pxfsExploration;
 
 	// bitset of implementation xforms
-	CXformSet *m_pxfsImplementation;
+	CXformSet* m_pxfsImplementation;
 
 	// global instance
-	static CXformFactory *m_pxff;
-
-	// private ctor
-	explicit CXformFactory(CMemoryPool *mp);
-
-	// private copy ctor
-	CXformFactory(const CXformFactory &);
-
-	// actual adding of xform
-	void Add(CXform *pxform);
+	static CXformFactory* m_pxff;
 
 public:
+	// ctor
+	explicit CXformFactory();
+
+	// np copy ctor
+	CXformFactory(const CXformFactory &) = delete;
+
 	// dtor
 	~CXformFactory();
+
+public:
+	// actual adding of xform
+	void Add(CXform* pxform);
 
 	// create all xforms
 	void Instantiate();
 
 	// accessor by xform id
-	CXform *Pxf(CXform::EXformId exfid) const;
+	CXform* Pxf(CXform::EXformId exfid) const;
 
 	// accessor by xform name
-	CXform *Pxf(const CHAR *szXformName) const;
+	CXform* Pxf(const CHAR* szXformName) const;
 
 	// accessor of exploration xforms
 	CXformSet* PxfsExploration() const
@@ -92,9 +87,6 @@ public:
 
 	// destroy global factory instance
 	void Shutdown();
-
 };	// class CXformFactory
-
 }  // namespace gpopt
-
 #endif

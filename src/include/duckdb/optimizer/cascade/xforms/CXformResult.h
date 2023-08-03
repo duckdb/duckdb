@@ -9,7 +9,7 @@
 #define GPOPT_CXformResult_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/operators/CExpression.h"
+#include "duckdb/optimizer/cascade/operators/Operator.h"
 
 namespace gpopt
 {
@@ -23,50 +23,30 @@ using namespace gpos;
 //		result container
 //
 //---------------------------------------------------------------------------
-class CXformResult : public CRefCount
+class CXformResult
 {
-private:
+public:
 	// set of alternatives
-	CExpressionArray *m_pdrgpexpr;
+	duckdb::vector<duckdb::unique_ptr<Operator>> m_pdrgpexpr;
 
 	// cursor for retrieval
 	ULONG m_ulExpr;
 
-	// private copy ctor
-	CXformResult(const CXformResult &);
-
 public:
 	// ctor
-	explicit CXformResult(CMemoryPool *);
+	explicit CXformResult();
 
+	CXformResult(const CXformResult &) = delete;
+	
 	// dtor
 	~CXformResult();
 
-	// accessor
-	inline CExpressionArray *
-	Pdrgpexpr() const
-	{
-		return m_pdrgpexpr;
-	}
-
 	// add alternative
-	void Add(CExpression *pexpr);
+	void Add(duckdb::unique_ptr<Operator> pexpr);
 
 	// retrieve next alternative
-	CExpression *PexprNext();
-
-	// print function
-	virtual IOstream &OsPrint(IOstream &os) const;
-
+	duckdb::unique_ptr<Operator> PexprNext();
 };	// class CXformResult
-
-// shorthand for printing
-inline IOstream &
-operator<<(IOstream &os, CXformResult &xfres)
-{
-	return xfres.OsPrint(os);
-}
-
 }  // namespace gpopt
 
 #endif
