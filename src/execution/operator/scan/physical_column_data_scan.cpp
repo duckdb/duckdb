@@ -46,7 +46,7 @@ void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk
 void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	// check if there is any additional action we need to do depending on the type
 	auto &state = meta_pipeline.GetState();
-	switch (type) {
+	switch (physical_type) {
 	case PhysicalOperatorType::DELIM_SCAN: {
 		auto entry = state.delim_join_dependencies.find(*this);
 		D_ASSERT(entry != state.delim_join_dependencies.end());
@@ -55,7 +55,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		auto delim_dependency = entry->second.get().shared_from_this();
 		auto delim_sink = state.GetPipelineSink(*delim_dependency);
 		D_ASSERT(delim_sink);
-		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
+		D_ASSERT(delim_sink->physical_type == PhysicalOperatorType::DELIM_JOIN);
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
 		state.SetPipelineSource(current, (PhysicalOperator &)*delim_join.distinct);
