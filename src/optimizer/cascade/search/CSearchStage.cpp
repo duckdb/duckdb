@@ -6,7 +6,6 @@
 //		Implementation of optimizer search stage
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/search/CSearchStage.h"
-
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
 
 using namespace gpopt;
@@ -20,19 +19,12 @@ using namespace gpos;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CSearchStage::CSearchStage(CXformSet *xform_set, ULONG ulTimeThreshold,
-						   CCost costThreshold)
-	: m_xforms(xform_set),
-	  m_time_threshold(ulTimeThreshold),
-	  m_cost_threshold(costThreshold),
-	  m_pexprBest(NULL),
-	  m_costBest(GPOPT_INVALID_COST)
+CSearchStage::CSearchStage(CXformSet* xform_set, ULONG ulTimeThreshold, double costThreshold)
+	: m_xforms(xform_set), m_time_threshold(ulTimeThreshold), m_cost_threshold(costThreshold), m_costBest(-0.5)
 {
-	GPOS_ASSERT(NULL != xform_set);
-	GPOS_ASSERT(0 < xform_set->Size());
-
 	// include all implementation rules in any search strategy
-	m_xforms->Union(CXformFactory::Pxff()->PxfsImplementation());
+	*m_xforms |= *(CXformFactory::Pxff()->PxfsImplementation());
+	m_pexprBest = nullptr;
 }
 
 
@@ -46,33 +38,8 @@ CSearchStage::CSearchStage(CXformSet *xform_set, ULONG ulTimeThreshold,
 //---------------------------------------------------------------------------
 CSearchStage::~CSearchStage()
 {
-	m_xforms->Release();
-	CRefCount::SafeRelease(m_pexprBest);
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CSearchStage::OsPrint
-//
-//	@doc:
-//		Print job
-//
-//---------------------------------------------------------------------------
-IOstream &
-CSearchStage::OsPrint(IOstream &os) const
-{
-	os << "Search Stage" << std::endl
-	   << "\ttime threshold: " << m_time_threshold
-	   << ", cost threshold:" << m_cost_threshold
-	   << ", best plan found: " << std::endl;
-
-	if (NULL != m_pexprBest)
-	{
-		os << *m_pexprBest;
-	}
-
-	return os;
+	delete m_xforms;
+	// CRefCount::SafeRelease(m_pexprBest);
 }
 
 //---------------------------------------------------------------------------
@@ -83,18 +50,14 @@ CSearchStage::OsPrint(IOstream &os) const
 //		Set best plan found at the end of search stage
 //
 //---------------------------------------------------------------------------
-void
-CSearchStage::SetBestExpr(CExpression *pexpr)
+void CSearchStage::SetBestExpr(Operator* pexpr)
 {
-	GPOS_ASSERT_IMP(NULL != pexpr, pexpr->Pop()->FPhysical());
-
-	m_pexprBest = pexpr;
+	m_pexprBest = pexpr->Copy();
 	if (NULL != m_pexprBest)
 	{
-		m_costBest = m_pexprBest->Cost();
+		m_costBest = m_pexprBest->m_cost;
 	}
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -105,14 +68,11 @@ CSearchStage::SetBestExpr(CExpression *pexpr)
 //		one stage with all xforms and no time/cost thresholds
 //
 //---------------------------------------------------------------------------
-CSearchStageArray *
-CSearchStage::PdrgpssDefault(CMemoryPool *mp)
+duckdb::vector<CSearchStage*> CSearchStage::PdrgpssDefault()
 {
-	CXformSet *xform_set = GPOS_NEW(mp) CXformSet(mp);
-	xform_set->Union(CXformFactory::Pxff()->PxfsExploration());
-	CSearchStageArray *search_stage_array = GPOS_NEW(mp) CSearchStageArray(mp);
-
-	search_stage_array->Append(GPOS_NEW(mp) CSearchStage(xform_set));
-
+	CXformSet* xform_set = new CXformSet();
+	*xform_set |= *(CXformFactory::Pxff()->PxfsExploration());
+	duckdb::vector<CSearchStage*> search_stage_array;
+	search_stage_array.push_back(new CSearchStage(xform_set));
 	return search_stage_array;
 }

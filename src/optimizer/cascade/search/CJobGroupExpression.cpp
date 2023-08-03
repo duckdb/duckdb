@@ -6,8 +6,7 @@
 //		Implementation of group expression job superclass
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/search/CJobGroupExpression.h"
-
-#include "duckdb/optimizer/cascade/operators/CLogical.h"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 #include "duckdb/optimizer/cascade/search/CJobFactory.h"
 #include "duckdb/optimizer/cascade/search/CJobGroupExpressionExploration.h"
@@ -24,13 +23,8 @@
 //		Initialize job
 //
 //---------------------------------------------------------------------------
-void gpopt::CJobGroupExpression::Init(gpopt::CGroupExpression *pgexpr)
+void gpopt::CJobGroupExpression::Init(CGroupExpression* pgexpr)
 {
-	GPOS_ASSERT(!FInit());
-	GPOS_ASSERT(NULL != pgexpr);
-	GPOS_ASSERT(NULL != pgexpr->Pgroup());
-	GPOS_ASSERT(NULL != pgexpr->Pop());
-
 	m_fChildrenScheduled = false;
 	m_fXformsScheduled = false;
 	m_pgexpr = pgexpr;
@@ -45,13 +39,15 @@ void gpopt::CJobGroupExpression::Init(gpopt::CGroupExpression *pgexpr)
 //		Schedule transformation jobs for the given set of xforms
 //
 //---------------------------------------------------------------------------
-void gpopt::CJobGroupExpression::ScheduleTransformations(gpopt::CSchedulerContext *psc, gpopt::CXformSet *xform_set)
+void gpopt::CJobGroupExpression::ScheduleTransformations(CSchedulerContext* psc, CXformSet* xform_set)
 {
 	// iterate on xforms
-	gpopt::CXformSetIter xsi(*(xform_set));
-	while (xsi.Advance())
+	for(size_t i = 0; i < CXform::EXformId::ExfSentinel; i++)
 	{
-		gpopt::CXform *pxform = CXformFactory::Pxff()->Pxf(xsi.TBit());
-		CJobTransformation::ScheduleJob(psc, m_pgexpr, pxform, this);
+		if (xform_set->test(i))
+		{
+			CXform* pxform = CXformFactory::Pxff()->Pxf(static_cast<CXform::EXformId>(i));
+			CJobTransformation::ScheduleJob(psc, m_pgexpr, pxform, this);
+		}
 	}
 }

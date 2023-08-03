@@ -6,15 +6,13 @@
 //		Implementation of optimizer job scheduler
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/search/CScheduler.h"
-
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/search/CJobFactory.h"
 #include "duckdb/optimizer/cascade/search/CSchedulerContext.h"
-#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
+#include <assert.h>
 
-using namespace gpopt;
-
+namespace gpopt
+{
 //---------------------------------------------------------------------------
 //	@function:
 //		CScheduler::CScheduler
@@ -23,42 +21,18 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CScheduler::CScheduler(CMemoryPool *mp, ULONG ulJobs
-#ifdef GPOS_DEBUG
-					   ,
-					   BOOL fTrackingJobs
-#endif	// GPOS_DEBUG
-					   )
-	: m_spjl(mp, ulJobs),
-	  m_ulpTotal(0),
-	  m_ulpRunning(0),
-	  m_ulpQueued(0),
-	  m_ulpStatsQueued(0),
-	  m_ulpStatsDequeued(0),
-	  m_ulpStatsSuspended(0),
-	  m_ulpStatsCompleted(0),
-	  m_ulpStatsCompletedQueued(0),
-	  m_ulpStatsResumed(0)
-#ifdef GPOS_DEBUG
-	  ,
-	  m_fTrackingJobs(fTrackingJobs)
-#endif	// GPOS_DEBUG
+CScheduler::CScheduler(ULONG ulJobs)
+	: m_spjl(ulJobs), m_ulpTotal(0), m_ulpRunning(0), m_ulpQueued(0), m_ulpStatsQueued(0), m_ulpStatsDequeued(0), m_ulpStatsSuspended(0), m_ulpStatsCompleted(0), m_ulpStatsCompletedQueued(0), m_ulpStatsResumed(0)
 {
+	SJobLink* jl = new SJobLink();
+	SIZE_T id_offset = (SIZE_T)(&(jl->m_id)) - (SIZE_T)jl;
+	SIZE_T link_offset = (SIZE_T)(&(jl->m_link)) - (SIZE_T)jl;
+	delete jl;
 	// initialize pool of job links
-	m_spjl.Init(GPOS_OFFSET(SJobLink, m_id));
-
+	m_spjl.Init((gpos::ULONG)id_offset);
 	// initialize list of waiting new jobs
-	m_listjlWaiting.Init(GPOS_OFFSET(SJobLink, m_link));
-
-#ifdef GPOS_DEBUG
-	// initialize list of running jobs
-	m_listjRunning.Init(GPOS_OFFSET(CJob, m_linkRunning));
-
-	// initialize list of suspended jobs
-	m_listjSuspended.Init(GPOS_OFFSET(CJob, m_linkSuspended));
-#endif	// GPOS_DEBUG
+	m_listjlWaiting.Init((gpos::ULONG)link_offset);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -70,9 +44,7 @@ CScheduler::CScheduler(CMemoryPool *mp, ULONG ulJobs
 //---------------------------------------------------------------------------
 CScheduler::~CScheduler()
 {
-	GPOS_ASSERT_IMP(!ITask::Self()->HasPendingExceptions(), 0 == m_ulpTotal);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -82,15 +54,12 @@ CScheduler::~CScheduler()
 //		Main job processing task
 //
 //---------------------------------------------------------------------------
-void *
-CScheduler::Run(void *pv)
+void* CScheduler::Run(void *pv)
 {
-	CSchedulerContext *psc = reinterpret_cast<CSchedulerContext *>(pv);
-	psc->Psched()->ExecuteJobs(psc);
-
+	CSchedulerContext* psc = reinterpret_cast<CSchedulerContext*>(pv);
+	psc->m_psched->ExecuteJobs(psc);
 	return NULL;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -101,70 +70,42 @@ CScheduler::Run(void *pv)
 //		keeps executing jobs as long as there is work queued;
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::ExecuteJobs(CSchedulerContext *psc)
+void CScheduler::ExecuteJobs(CSchedulerContext* psc)
 {
-	CJob *pj = NULL;
+	CJob* pj;
 	ULONG count = 0;
-
 	// keep retrieving jobs
 	while (NULL != (pj = PjRetrieve()))
 	{
 		// prepare for job execution
 		PreExecute(pj);
-
 		// execute job
-		BOOL fCompleted = FExecute(pj, psc);
-
-#ifdef GPOS_DEBUG
-		// restrict parallelism to keep track of jobs
-		if (FTrackingJobs())
-		{
-			m_listjRunning.Remove(pj);
-		}
-#endif	// GPOS_DEBUG
-
+		bool fCompleted = FExecute(pj, psc);
 		// process job result
 		switch (EjrPostExecute(pj, fCompleted))
 		{
 			case EjrCompleted:
 				// job is completed
 				Complete(pj);
-
-#ifdef GPOS_DEBUG
-				if (GPOS_FTRACE(EopttracePrintJobScheduler))
-				{
-					CAutoTrace at(psc->GetGlobalMemoryPool());
-
-					at.Os() << "Print scheduler:" << std::endl << *this;
-				}
-#endif	// GPOS_DEBUG
-
-				psc->Pjf()->Release(pj);
+				psc->m_pjf->Release(pj);
 				break;
-
 			case EjrRunnable:
 				// child jobs have completed, job can immediately resume
 				Resume(pj);
 				continue;
-
 			case EjrSuspended:
 				// job is suspended until child jobs complete
 				Suspend(pj);
 				break;
-
 			default:
-				GPOS_ASSERT(!"Invalid job execution result");
+				assert(false);
 		}
-
 		if (++count == OPT_SCHED_CFA)
 		{
-			GPOS_CHECK_ABORT;
 			count = 0;
 		}
 	}
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -174,27 +115,19 @@ CScheduler::ExecuteJobs(CSchedulerContext *psc)
 //		Add new job for execution
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::Add(CJob *pj, CJob *pjParent)
+void CScheduler::Add(CJob* pj, CJob* pjParent)
 {
-	GPOS_ASSERT(NULL != pj);
-	GPOS_ASSERT(0 == pj->UlpRefs());
-
 	// increment ref counter for parent job
-	if (NULL != pjParent)
+	if (nullptr != pjParent)
 	{
 		pjParent->IncRefs();
 	}
-
 	// set current job as parent of its child
 	pj->SetParent(pjParent);
-
 	// increment total number of jobs
 	m_ulpTotal++;
-
 	Schedule(pj);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -204,15 +137,10 @@ CScheduler::Add(CJob *pj, CJob *pjParent)
 //		Resume suspended job
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::Resume(CJob *pj)
+void CScheduler::Resume(CJob* pj)
 {
-	GPOS_ASSERT(NULL != pj);
-	GPOS_ASSERT(0 == pj->UlpRefs());
-
 	Schedule(pj);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -222,41 +150,18 @@ CScheduler::Resume(CJob *pj)
 //		Schedule job for execution
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::Schedule(CJob *pj)
+void CScheduler::Schedule(CJob* pj)
 {
-	GPOS_ASSERT(NULL != pj);
-
 	// get job link
-	SJobLink *pjl = m_spjl.PtRetrieve();
-
-	// throw OOM if no link can be retrieved
-	if (NULL == pjl)
-	{
-		GPOS_OOM_CHECK(NULL);
-	}
+	SJobLink* pjl = m_spjl.PtRetrieve();
 	pjl->Init(pj);
-
-#ifdef GPOS_DEBUG
-	if (FTrackingJobs())
-	{
-		GPOS_ASSERT(CJob::EjsInit == pj->Ejs() ||
-					CJob::EjsRunning == pj->Ejs() ||
-					CJob::EjsSuspended == pj->Ejs());
-		pj->SetState(CJob::EjsWaiting);
-	}
-#endif	// GPOS_DEBUG
-
 	// add to waiting list
 	m_listjlWaiting.Push(pjl);
-
 	// increment number of queued jobs
 	m_ulpQueued++;
-
 	// update statistics
 	m_ulpStatsQueued++;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -266,20 +171,13 @@ CScheduler::Schedule(CJob *pj)
 // 		Prepare for job execution
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::PreExecute(CJob *pj)
+void CScheduler::PreExecute(CJob* pj)
 {
-	GPOS_ASSERT(NULL != pj);
-	GPOS_ASSERT(0 == pj->UlpRefs() &&
-				"Runnable job cannot have pending children");
-
 	// increment number of running jobs
 	m_ulpRunning++;
-
 	// increment job ref counter
 	pj->IncRefs();
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -289,12 +187,10 @@ CScheduler::PreExecute(CJob *pj)
 //		Execution function using job queue
 //
 //---------------------------------------------------------------------------
-BOOL
-CScheduler::FExecute(CJob *pj, CSchedulerContext *psc)
+bool CScheduler::FExecute(CJob* pj, CSchedulerContext* psc)
 {
-	BOOL fCompleted = true;
-	CJobQueue *pjq = pj->Pjq();
-
+	bool fCompleted = true;
+	CJobQueue* pjq = pj->Pjq();
 	// check if job is associated to a job queue
 	if (NULL == pjq)
 	{
@@ -318,20 +214,16 @@ CScheduler::FExecute(CJob *pj, CSchedulerContext *psc)
 					(void) pj->UlpDecrRefs();
 				}
 				break;
-
 			case CJobQueue::EjqrQueued:
 				// queued job
 				fCompleted = false;
 				break;
-
 			case CJobQueue::EjqrCompleted:
 				break;
 		}
 	}
-
 	return fCompleted;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -341,35 +233,24 @@ CScheduler::FExecute(CJob *pj, CSchedulerContext *psc)
 // 		Process job execution outcome
 //
 //---------------------------------------------------------------------------
-CScheduler::EJobResult
-CScheduler::EjrPostExecute(CJob *pj, BOOL fCompleted)
+CScheduler::EJobResult CScheduler::EjrPostExecute(CJob* pj, bool fCompleted)
 {
-	GPOS_ASSERT(NULL != pj);
-	GPOS_ASSERT(0 < pj->UlpRefs() && "IsRunning job is marked as completed");
-
 	// decrement job ref counter
 	ULONG_PTR ulRefs = pj->UlpDecrRefs();
-
 	// decrement number of running jobs
 	m_ulpRunning--;
-
 	// check if job completed
 	if (fCompleted)
 	{
-		GPOS_ASSERT(1 == ulRefs);
-
 		return EjrCompleted;
 	}
-
 	// check if all children have completed
 	if (1 == ulRefs)
 	{
 		return EjrRunnable;
 	}
-
 	return EjrSuspended;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -379,44 +260,23 @@ CScheduler::EjrPostExecute(CJob *pj, BOOL fCompleted)
 //		Retrieve next runnable job from queue
 //
 //---------------------------------------------------------------------------
-CJob *
-CScheduler::PjRetrieve()
+CJob* CScheduler::PjRetrieve()
 {
 	// retrieve runnable job from lists of waiting jobs
-	SJobLink *pjl = m_listjlWaiting.Pop();
-	CJob *pj = NULL;
-
+	SJobLink* pjl = m_listjlWaiting.Pop();
+	CJob* pj = nullptr;
 	if (NULL != pjl)
 	{
 		pj = pjl->m_pj;
-
-		GPOS_ASSERT(NULL != pj);
-		GPOS_ASSERT(0 == pj->UlpRefs());
-
 		// decrement number of queued jobs
 		m_ulpQueued--;
-
 		// update statistics
 		m_ulpStatsDequeued++;
-
 		// recycle job link
 		m_spjl.Recycle(pjl);
-
-#ifdef GPOS_DEBUG
-		// add job to running list
-		if (FTrackingJobs())
-		{
-			GPOS_ASSERT(CJob::EjsWaiting == pj->Ejs());
-
-			pj->SetState(CJob::EjsRunning);
-			m_listjRunning.Append(pj);
-		}
-#endif	// GPOS_DEBUG
 	}
-
 	return pj;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -426,28 +286,10 @@ CScheduler::PjRetrieve()
 //		Transition job to suspended
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::Suspend(CJob *
-#ifdef GPOS_DEBUG
-						pj
-#endif	// GPOS_DEBUG
-)
+void CScheduler::Suspend(CJob* )
 {
-	GPOS_ASSERT(NULL != pj);
-
-#ifdef GPOS_DEBUG
-	if (FTrackingJobs())
-	{
-		GPOS_ASSERT(CJob::EjsRunning == pj->Ejs());
-
-		pj->SetState(CJob::EjsSuspended);
-		m_listjSuspended.Append(pj);
-	}
-#endif	// GPOS_DEBUG)
-
 	m_ulpStatsSuspended++;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -457,27 +299,13 @@ CScheduler::Suspend(CJob *
 //		Transition job to completed
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::Complete(CJob *pj)
+void CScheduler::Complete(CJob* pj)
 {
-	GPOS_ASSERT(0 == pj->UlpRefs());
-
-#ifdef GPOS_DEBUG
-	if (FTrackingJobs())
-	{
-		GPOS_ASSERT(CJob::EjsRunning == pj->Ejs());
-
-		pj->SetState(CJob::EjsCompleted);
-	}
-#endif	// GPOS_DEBUG
-
 	ResumeParent(pj);
-
 	// update statistics
 	m_ulpTotal--;
 	m_ulpStatsCompleted++;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -487,29 +315,14 @@ CScheduler::Complete(CJob *pj)
 //		Transition queued job to completed
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::CompleteQueued(CJob *pj)
+void CScheduler::CompleteQueued(CJob* pj)
 {
-	GPOS_ASSERT(0 == pj->UlpRefs());
-
-#ifdef GPOS_DEBUG
-	if (FTrackingJobs())
-	{
-		GPOS_ASSERT(CJob::EjsSuspended == pj->Ejs());
-
-		m_listjSuspended.Remove(pj);
-		pj->SetState(CJob::EjsCompleted);
-	}
-#endif	// GPOS_DEBUG
-
 	ResumeParent(pj);
-
 	// update statistics
 	m_ulpTotal--;
 	m_ulpStatsCompleted++;
 	m_ulpStatsCompletedQueued++;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -519,94 +332,19 @@ CScheduler::CompleteQueued(CJob *pj)
 //		Resume parent job
 //
 //---------------------------------------------------------------------------
-void
-CScheduler::ResumeParent(CJob *pj)
+void CScheduler::ResumeParent(CJob* pj)
 {
-	GPOS_ASSERT(0 == pj->UlpRefs());
-
-	CJob *pjParent = pj->PjParent();
-
+	CJob* pjParent = pj->PjParent();
 	if (NULL != pjParent)
 	{
 		// notify parent job
 		if (pj->FResumeParent())
 		{
-#ifdef GPOS_DEBUG
-			if (FTrackingJobs())
-			{
-				m_listjSuspended.Remove(pjParent);
-			}
-#endif	// GPOS_DEBUG)
-
 			// reschedule parent
 			Resume(pjParent);
-
 			// update statistics
 			m_ulpStatsResumed++;
 		}
 	}
 }
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CScheduler::PrintStats
-//
-//	@doc:
-//		Print statistics
-//
-//---------------------------------------------------------------------------
-void
-CScheduler::PrintStats() const
-{
-	GPOS_TRACE_FORMAT(
-		"Job statistics: Queued=%d Dequeued=%d Suspended=%d "
-		"Resumed=%d CompletedQueued=%d Completed=%d",
-		m_ulpStatsQueued, m_ulpStatsDequeued, m_ulpStatsSuspended,
-		m_ulpStatsResumed, m_ulpStatsCompletedQueued, m_ulpStatsCompleted);
 }
-
-
-#ifdef GPOS_DEBUG
-//---------------------------------------------------------------------------
-//	@function:
-//		CScheduler::OsPrintActiveJobs
-//
-//	@doc:
-//		Print scheduler queue
-//
-//---------------------------------------------------------------------------
-IOstream &
-CScheduler::OsPrintActiveJobs(IOstream &os)
-{
-	os << "Scheduler - active jobs: " << std::endl << std::endl;
-
-	os << "List of running jobs: " << std::endl;
-	CJob *pj = m_listjRunning.First();
-	while (NULL != pj)
-	{
-		pj->OsPrint(os);
-		pj = m_listjRunning.Next(pj);
-	}
-
-	os << std::endl << "List of waiting jobs: " << std::endl;
-
-	SJobLink *pjl = m_listjlWaiting.PtFirst();
-	while (NULL != pjl)
-	{
-		pjl->m_pj->OsPrint(os);
-		pjl = m_listjlWaiting.Next(pjl);
-	}
-
-	os << std::endl << "List of suspended jobs: " << std::endl;
-	pj = m_listjSuspended.First();
-	while (NULL != pj)
-	{
-		pj->OsPrint(os);
-		pj = m_listjSuspended.Next(pj);
-	}
-
-	return os;
-}
-
-#endif

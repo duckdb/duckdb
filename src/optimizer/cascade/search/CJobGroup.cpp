@@ -22,14 +22,10 @@ using namespace gpopt;
 //		Initialize job
 //
 //---------------------------------------------------------------------------
-void
-CJobGroup::Init(CGroup *pgroup)
+void CJobGroup::Init(CGroup* pgroup)
 {
-	GPOS_ASSERT(!FInit());
-	GPOS_ASSERT(NULL != pgroup);
-
 	m_pgroup = pgroup;
-	m_pgexprLastScheduled = NULL;
+	m_pgexprLastScheduled = m_pgroup->m_listGExprs.end();
 }
 
 
@@ -41,25 +37,24 @@ CJobGroup::Init(CGroup *pgroup)
 //		Get first non-logical group expression with an unscheduled job
 //
 //---------------------------------------------------------------------------
-CGroupExpression *
-CJobGroup::PgexprFirstUnschedNonLogical()
+list<CGroupExpression*>::iterator CJobGroup::PgexprFirstUnschedNonLogical()
 {
-	CGroupExpression *pgexpr = NULL;
+	list<CGroupExpression*>::iterator itr;
 	{
 		CGroupProxy gp(m_pgroup);
-		if (NULL == m_pgexprLastScheduled)
+		if (m_pgroup->m_listGExprs.end() == m_pgexprLastScheduled)
 		{
 			// get first group expression
-			pgexpr = gp.PgexprSkipLogical(NULL /*pgexpr*/);
+			itr = gp.PgexprSkipLogical(m_pgroup->m_listGExprs.begin());
 		}
 		else
 		{
+			itr = m_pgexprLastScheduled;
 			// get group expression next to last scheduled one
-			pgexpr = gp.PgexprSkipLogical(m_pgexprLastScheduled);
+			itr = gp.PgexprSkipLogical(++itr);
 		}
 	}
-
-	return pgexpr;
+	return itr;
 }
 
 //---------------------------------------------------------------------------
@@ -70,23 +65,22 @@ CJobGroup::PgexprFirstUnschedNonLogical()
 //		Get first logical group expression with an unscheduled job
 //
 //---------------------------------------------------------------------------
-CGroupExpression *
-CJobGroup::PgexprFirstUnschedLogical()
+list<CGroupExpression*>::iterator CJobGroup::PgexprFirstUnschedLogical()
 {
-	CGroupExpression *pgexpr = NULL;
+	list<CGroupExpression*>::iterator itr;
 	{
 		CGroupProxy gp(m_pgroup);
-		if (NULL == m_pgexprLastScheduled)
+		if (m_pgroup->m_listGExprs.end() == m_pgexprLastScheduled)
 		{
 			// get first group expression
-			pgexpr = gp.PgexprFirst();
+			itr = m_pgroup->m_listGExprs.begin();
 		}
 		else
 		{
 			// get group expression next to last scheduled one
-			pgexpr = gp.PgexprNext(m_pgexprLastScheduled);
+			itr = m_pgexprLastScheduled;
+			++itr;
 		}
 	}
-
-	return pgexpr;
+	return itr;
 }
