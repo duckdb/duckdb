@@ -7,14 +7,9 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/engine/CStatisticsConfig.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CAutoP.h"
-#include "duckdb/optimizer/cascade/common/CHashMap.h"
-#include "duckdb/optimizer/cascade/common/CHashMapIter.h"
-#include "duckdb/optimizer/cascade/base/CColRefSet.h"
-#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
 
-using namespace gpopt;
-
+namespace gpopt
+{
 //---------------------------------------------------------------------------
 //	@function:
 //		CStatisticsConfig::CStatisticsConfig
@@ -23,16 +18,10 @@ using namespace gpopt;
 //		ctor
 //
 //---------------------------------------------------------------------------
-CStatisticsConfig::CStatisticsConfig(CMemoryPool *mp, CDouble damping_factor_filter, CDouble damping_factor_join, CDouble damping_factor_groupby)
-	: m_mp(mp), m_damping_factor_filter(damping_factor_filter), m_damping_factor_join(damping_factor_join), m_damping_factor_groupby(damping_factor_groupby), m_phsmdidcolinfo(NULL)
+CStatisticsConfig::CStatisticsConfig(double damping_factor_filter, double damping_factor_join, double damping_factor_groupby)
+	: m_damping_factor_filter(damping_factor_filter), m_damping_factor_join(damping_factor_join), m_damping_factor_groupby(damping_factor_groupby)
 {
-	GPOS_ASSERT(CDouble(0.0) < damping_factor_filter);
-	GPOS_ASSERT(CDouble(0.0) <= damping_factor_join);
-	GPOS_ASSERT(CDouble(0.0) < damping_factor_groupby);
-	//m_phmmdidcolinfo = New(m_mp) HMMDIdMissingstatscol(m_mp);
-	m_phsmdidcolinfo = GPOS_NEW(m_mp) MdidHashSet(m_mp);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -45,51 +34,5 @@ CStatisticsConfig::CStatisticsConfig(CMemoryPool *mp, CDouble damping_factor_fil
 //---------------------------------------------------------------------------
 CStatisticsConfig::~CStatisticsConfig()
 {
-	m_phsmdidcolinfo->Release();
 }
-
-//---------------------------------------------------------------------------
-//      @function:
-//              CStatisticsConfig::AddMissingStatsColumn
-//
-//      @doc:
-//              Add the information about the column with the missing statistics
-//
-//---------------------------------------------------------------------------
-void CStatisticsConfig::AddMissingStatsColumn(CMDIdColStats *pmdidCol)
-{
-	GPOS_ASSERT(NULL != pmdidCol);
-
-	// add the new column information to the hash set
-	if (m_phsmdidcolinfo->Insert(pmdidCol))
-	{
-		pmdidCol->AddRef();
-	}
 }
-
-
-//---------------------------------------------------------------------------
-//      @function:
-//              CStatisticsConfig::CollectMissingColumns
-//
-//      @doc:
-//              Collect the columns with missing stats
-//
-//---------------------------------------------------------------------------
-void
-CStatisticsConfig::CollectMissingStatsColumns(IMdIdArray *pdrgmdid)
-{
-	GPOS_ASSERT(NULL != pdrgmdid);
-
-	MdidHashSetIter hsiter(m_phsmdidcolinfo);
-	while (hsiter.Advance())
-	{
-		CMDIdColStats *mdid_col_stats =
-			CMDIdColStats::CastMdid(const_cast<IMDId *>(hsiter.Get()));
-		mdid_col_stats->AddRef();
-		pdrgmdid->Append(mdid_col_stats);
-	}
-}
-
-
-// EOF
