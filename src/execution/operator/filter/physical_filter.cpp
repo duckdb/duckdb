@@ -4,18 +4,22 @@
 #include "duckdb/parallel/thread_context.hpp"
 namespace duckdb {
 
-PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-                               idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
+PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality)
+{
 	D_ASSERT(select_list.size() > 0);
-	if (select_list.size() > 1) {
+	if (select_list.size() > 1)
+	{
 		// create a big AND out of the expressions
 		auto conjunction = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND);
-		for (auto &expr : select_list) {
+		for (auto &expr : select_list)
+		{
 			conjunction->children.push_back(std::move(expr));
 		}
 		expression = std::move(conjunction);
-	} else {
+	}
+	else
+	{
 		expression = std::move(select_list[0]);
 	}
 }
