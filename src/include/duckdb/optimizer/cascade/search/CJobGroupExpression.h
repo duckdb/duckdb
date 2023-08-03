@@ -15,8 +15,8 @@
 namespace gpopt
 {
 // prototypes
-class gpopt::CGroup;
-class gpopt::CGroupExpression;
+class CGroup;
+class CGroupExpression;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -28,32 +28,34 @@ class gpopt::CGroupExpression;
 //---------------------------------------------------------------------------
 class CJobGroupExpression : public gpopt::CJob
 {
-private:
+public:
 	// true if job has scheduled child group jobs
-	gpos::BOOL m_fChildrenScheduled;
+	bool m_fChildrenScheduled;
 
 	// true if job has scheduled transformation jobs
-	gpos::BOOL m_fXformsScheduled;
+	bool m_fXformsScheduled;
 
-	// private copy ctor
-	CJobGroupExpression(const CJobGroupExpression &);
-
-protected:
 	// target group expression
-	gpopt::CGroupExpression *m_pgexpr;
+	CGroupExpression* m_pgexpr;
 
+public:
 	// ctor
-	CJobGroupExpression() : m_pgexpr(NULL)
+	CJobGroupExpression()
+		: m_pgexpr(nullptr)
 	{
 	}
 
+	// no copy ctor
+	CJobGroupExpression(const CJobGroupExpression &) = delete;
+	
 	// dtor
 	virtual ~CJobGroupExpression()
 	{
 	}
 
+public:
 	// has job scheduled child groups ?
-	gpos::BOOL FChildrenScheduled() const
+	bool FChildrenScheduled() const
 	{
 		return m_fChildrenScheduled;
 	}
@@ -65,7 +67,7 @@ protected:
 	}
 
 	// has job scheduled xform groups ?
-	gpos::BOOL FXformsScheduled() const
+	bool FXformsScheduled() const
 	{
 		return m_fXformsScheduled;
 	}
@@ -77,29 +79,19 @@ protected:
 	}
 
 	// initialize job
-	void Init(gpopt::CGroupExpression *pgexpr);
+	void Init(CGroupExpression* pgexpr);
 
 	// schedule transformation jobs for applicable xforms
-	virtual void ScheduleApplicableTransformations(CSchedulerContext *psc) = 0;
+	virtual void ScheduleApplicableTransformations(CSchedulerContext* psc) = 0;
 
 	// schedule jobs for all child groups
-	virtual void ScheduleChildGroupsJobs(CSchedulerContext *psc) = 0;
+	virtual void ScheduleChildGroupsJobs(CSchedulerContext* psc) = 0;
 
 	// schedule transformation jobs for the given set of xforms
-	void ScheduleTransformations(CSchedulerContext *psc, CXformSet *xform_set);
+	void ScheduleTransformations(CSchedulerContext* psc, CXformSet* xform_set);
 
 	// job's function
-	virtual gpos::BOOL FExecute(CSchedulerContext *psc) = 0;
-
-#ifdef GPOS_DEBUG
-
-	// print function
-	virtual gpos::IOstream &OsPrint(IOstream &os) = 0;
-
-#endif	// GPOS_DEBUG
-
+	bool FExecute(CSchedulerContext* psc) override = 0;
 };	// class CJobGroupExpression
-
 }  // namespace gpopt
-
 #endif

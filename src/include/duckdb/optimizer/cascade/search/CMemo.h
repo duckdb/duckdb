@@ -9,11 +9,11 @@
 #define GPOPT_CMemo_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-#include "duckdb/optimizer/cascade/common/CSyncHashtable.h"
 #include "duckdb/optimizer/cascade/common/CSyncList.h"
-
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
+#include <list>
+
+using namespace std;
 
 namespace gpopt
 {
@@ -24,9 +24,7 @@ class CMemoProxy;
 class COptimizationContext;
 
 // memo tree map definition
-typedef CTreeMap<CCostContext, CExpression, CDrvdPropCtxtPlan,
-				 CCostContext::HashValue, CCostContext::Equals>
-	MemoTreeMap;
+typedef CTreeMap<CCostContext, gpopt::Operator, CDrvdPropCtxtPlan, CCostContext::HashValue, CCostContext::Equals> MemoTreeMap;
 
 using namespace gpos;
 
@@ -40,79 +38,55 @@ using namespace gpos;
 //---------------------------------------------------------------------------
 class CMemo
 {
-private:
-	// definition of hash table key accessor
-	typedef CSyncHashtableAccessByKey<CGroupExpression,	 // entry
-									  CGroupExpression>
-		ShtAcc;
-
-	// definition of hash table iterator
-	typedef CSyncHashtableIter<CGroupExpression,  // entry
-							   CGroupExpression>
-		ShtIter;
-
-	// definition of hash table iterator accessor
-	typedef CSyncHashtableAccessByIter<CGroupExpression,  // entry
-									   CGroupExpression>
-		ShtAccIter;
-
-	// memory pool
-	CMemoryPool *m_mp;
-
+public:
 	// id counter for groups
 	ULONG m_aul;
 
 	// root group
-	CGroup *m_pgroupRoot;
+	CGroup* m_pgroupRoot;
 
 	// number of groups
 	ULONG_PTR m_ulpGrps;
 
 	// tree map of member group expressions
-	MemoTreeMap *m_pmemotmap;
+	MemoTreeMap* m_pmemotmap;
 
 	// list of groups
-	CSyncList<CGroup> m_listGroups;
+	list<CGroup*> m_listGroups;
 
 	// hashtable of all group expressions
-	CSyncHashtable<CGroupExpression,  // entry
-				   CGroupExpression>
-		m_sht;
+	unordered_map<ULONG, CGroupExpression*> m_sht;
 
 	// add new group
-	void Add(CGroup *pgroup, CExpression *pexprOrigin);
+	void Add(CGroup* pgroup, Operator* pexprOrigin);
 
 	// rehash all group expressions after group merge - not thread-safe
-	BOOL FRehash();
+	bool FRehash();
 
 	// helper for inserting group expression in target group
-	CGroup *PgroupInsert(CGroup *pgroupTarget, CGroupExpression *pgexpr,
-						 CExpression *pexprOrigin, BOOL fNewGroup);
+	CGroup* PgroupInsert(CGroup* pgroupTarget, CGroupExpression* pgexpr, Operator* pexprOrigin, bool fNewGroup);
 
 	// helper to check if a new group needs to be created
-	BOOL FNewGroup(CGroup **ppgroupTarget, CGroupExpression *pgexpr,
-				   BOOL fScalar);
-
-	// private copy ctor
-	CMemo(const CMemo &);
+	bool FNewGroup(CGroup** ppgroupTarget, CGroupExpression* pgexpr, bool fScalar);
 
 public:
 	// ctor
-	explicit CMemo(CMemoryPool *mp);
-
+	explicit CMemo();
+	
+	// no copy ctor
+	CMemo(const CMemo &) = delete;
+	
 	// dtor
 	~CMemo();
 
 	// return root group
-	CGroup *
-	PgroupRoot() const
+	CGroup* PgroupRoot() const
 	{
 		return m_pgroupRoot;
 	}
 
 	// return number of groups
-	ULONG_PTR
-	UlpGroups() const
+	ULONG_PTR UlpGroups() const
 	{
 		return m_ulpGrps;
 	}
@@ -124,26 +98,22 @@ public:
 	ULONG UlDuplicateGroups();
 
 	// mark groups as duplicates
-	void MarkDuplicates(CGroup *pgroupFst, CGroup *pgroupSnd);
+	void MarkDuplicates(CGroup* pgroupFst, CGroup* pgroupSnd);
 
 	// return tree map
-	MemoTreeMap *
-	Pmemotmap() const
+	MemoTreeMap* Pmemotmap() const
 	{
 		return m_pmemotmap;
 	}
 
 	// set root group
-	void SetRoot(CGroup *pgroup);
+	void SetRoot(CGroup* pgroup);
 
 	// insert group expression into hash table
-	CGroup *PgroupInsert(CGroup *pgroupTarget, CExpression *pexprOrigin,
-						 CGroupExpression *pgexpr);
+	CGroup* PgroupInsert(CGroup* pgroupTarget, CGroupExpression* pgexpr);
 
 	// extract a plan that delivers the given required properties
-	CExpression *PexprExtractPlan(CMemoryPool *mp, CGroup *pgroupRoot,
-								  CReqdPropPlan *prppInput,
-								  ULONG ulSearchStages);
+	duckdb::unique_ptr<Operator> PexprExtractPlan(CGroup* pgroupRoot, CReqdPropPlan* prppInput, ULONG ulSearchStages);
 
 	// merge duplicate groups
 	void GroupMerge();
@@ -151,34 +121,14 @@ public:
 	// reset states of all memo groups
 	void ResetGroupStates();
 
-	// reset statistics of memo groups
-	void ResetStats();
-
-	// print driver
-	IOstream &OsPrint(IOstream &os);
-
 	// derive stats when no stats not present for the group
-	void DeriveStatsIfAbsent(CMemoryPool *mp);
+	void DeriveStatsIfAbsent();
 
 	// build tree map
-	void BuildTreeMap(COptimizationContext *poc);
+	void BuildTreeMap(COptimizationContext* poc);
 
 	// reset tree map
 	void ResetTreeMap();
-
-	// print memo to output logger
-	void Trace();
-
-#ifdef GPOS_DEBUG
-	// get group by id
-	CGroup *Pgroup(ULONG id);
-
-	// debug print for interactive debugging sessions only
-	void DbgPrint();
-#endif	// GPOS_DEBUG
-
 };	// class CMemo
-
 }  // namespace gpopt
-
 #endif

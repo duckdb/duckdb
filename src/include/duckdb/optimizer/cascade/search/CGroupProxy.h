@@ -9,7 +9,6 @@
 #define GPOPT_CGroupProxy_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/search/CGroup.h"
 
 namespace gpopt
@@ -31,84 +30,53 @@ class COptimizationContext;
 //---------------------------------------------------------------------------
 class CGroupProxy
 {
-private:
+public:
 	// group we're operating on
-	CGroup *m_pgroup;
-
-	// skip group expressions starting from the given expression;
-	CGroupExpression *PgexprSkip(CGroupExpression *pgexprStart,
-								 BOOL fSkipLogical);
+	CGroup*  m_pgroup;
 
 public:
 	// ctor
-	explicit CGroupProxy(CGroup *pgroup);
+	explicit CGroupProxy(CGroup* pgroup);
 
 	// dtor
 	~CGroupProxy();
 
+public:
 	// set group id
-	void
-	SetId(ULONG id)
+	void SetId(ULONG id)
 	{
 		m_pgroup->SetId(id);
 	}
 
 	// set group state
-	void
-	SetState(CGroup::EState estNewState)
+	void SetState(CGroup::EState estNewState)
 	{
 		m_pgroup->SetState(estNewState);
 	}
 
-	// set hash join keys
-	void
-	SetJoinKeys(CExpressionArray *pdrgpexprOuter,
-				CExpressionArray *pdrgpexprInner)
-	{
-		m_pgroup->SetJoinKeys(pdrgpexprOuter, pdrgpexprInner);
-	}
+	// skip group expressions starting from the given expression;
+	list<CGroupExpression*>::iterator PgexprSkip(list<CGroupExpression*>::iterator pgexprStart, bool fSkipLogical);
 
 	// insert group expression
-	void Insert(CGroupExpression *pgexpr);
+	void Insert(CGroupExpression* pgexpr);
 
 	// move duplicate group expression to duplicates list
-	void MoveDuplicateGExpr(CGroupExpression *pgexpr);
+	void MoveDuplicateGExpr(CGroupExpression* pgexpr);
 
 	// initialize group's properties;
-	void InitProperties(CDrvdProp *pdp);
-
-	// initialize group's stat;
-	void InitStats(IStatistics *stats);
+	void InitProperties(CDrvdProp* ppdp);
 
 	// retrieve first group expression
-	CGroupExpression *PgexprFirst();
-
-	// retrieve next group expression
-	CGroupExpression *PgexprNext(CGroupExpression *pgexpr);
+	list<CGroupExpression*>::iterator PgexprFirst();
 
 	// get the first non-logical group expression following the given expression
-	CGroupExpression *PgexprSkipLogical(CGroupExpression *pgexpr);
+	list<CGroupExpression*>::iterator PgexprSkipLogical(list<CGroupExpression*>::iterator pgexpr);
 
 	// get the next logical group expression following the given expression
-	CGroupExpression *PgexprNextLogical(CGroupExpression *pgexpr);
+	list<CGroupExpression*>::iterator PgexprNextLogical(list<CGroupExpression*>::iterator pgexpr);
 
 	// lookup best expression under optimization context
-	CGroupExpression *PgexprLookup(COptimizationContext *poc) const;
-
-
-#ifdef GPOS_DEBUG
-	// is group transition to given state complete?
-	BOOL
-	FTransitioned(CGroup::EState estate) const
-	{
-		return (CGroup::estExplored == estate && m_pgroup->FExplored()) ||
-			   (CGroup::estImplemented == estate && m_pgroup->FImplemented()) ||
-			   (CGroup::estOptimized == estate && m_pgroup->FOptimized());
-	}
-#endif	// GPOS_DEBUG
-
+	CGroupExpression* PgexprLookup(COptimizationContext* poc) const;
 };	// class CGroupProxy
-
 }  // namespace gpopt
-
 #endif

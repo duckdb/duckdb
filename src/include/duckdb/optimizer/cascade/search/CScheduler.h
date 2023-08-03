@@ -60,15 +60,9 @@ class CScheduler
 public:
 	// enum for job execution result
 	enum EJobResult
-	{
-		EjrRunnable = 0,
-		EjrSuspended,
-		EjrCompleted,
+	{ EjrRunnable = 0, EjrSuspended, EjrCompleted, EjrSentinel };
 
-		EjrSentinel
-	};
-
-private:
+public:
 	// job wrapper; used for inserting job to waiting list (lock-free)
 	struct SJobLink
 	{
@@ -76,14 +70,13 @@ private:
 		ULONG m_id;
 
 		// pointer to job
-		CJob *m_pj;
+		CJob* m_pj;
 
 		// slink for list of waiting jobs
 		SLink m_link;
 
 		// initialize link
-		void
-		Init(CJob *pj)
+		void Init(CJob* pj)
 		{
 			m_pj = pj;
 			m_link.m_prev = m_link.m_next = NULL;
@@ -109,114 +102,64 @@ private:
 	ULONG_PTR m_ulpStatsCompletedQueued;
 	ULONG_PTR m_ulpStatsResumed;
 
-#ifdef GPOS_DEBUG
-	// list of running jobs
-	CList<CJob> m_listjRunning;
-
-	// list of suspended jobs
-	CList<CJob> m_listjSuspended;
-
-	// flag indicating if scheduler keeps track
-	// of running and suspended jobs
-	const BOOL m_fTrackingJobs;
-#endif	// GPOS_DEBUG
-
-	// keep executing jobs (if any)
-	void ExecuteJobs(CSchedulerContext *psc);
-
-	// process job execution results
-	void ProcessJobResult(CJob *pj, CSchedulerContext *psc, BOOL fCompleted);
-
-	// retrieve next job to run
-	CJob *PjRetrieve();
-
-	// schedule job for execution
-	void Schedule(CJob *pj);
-
-	// prepare for job execution
-	void PreExecute(CJob *pj);
-
-	// execute job
-	BOOL FExecute(CJob *pj, CSchedulerContext *psc);
-
-	// process job execution outcome
-	EJobResult EjrPostExecute(CJob *pj, BOOL fCompleted);
-
-	// resume parent job
-	void ResumeParent(CJob *pj);
-
-	// check if all jobs have completed
-	BOOL
-	IsEmpty() const
-	{
-		return (0 == m_ulpTotal);
-	}
-
-	// no copy ctor
-	CScheduler(const CScheduler &);
-
 public:
 	// ctor
-	CScheduler(CMemoryPool *mp, ULONG ulJobs
-#ifdef GPOS_DEBUG
-			   ,
-			   BOOL fTrackingJobs = true
-#endif	// GPOS_DEBUG
-	);
-
+	CScheduler(ULONG ulJobs);
+	
+	// no copy ctor
+	CScheduler(const CScheduler &) = delete;
+	
 	// dtor
 	virtual ~CScheduler();
 
+public:
+	// keep executing jobs (if any)
+	void ExecuteJobs(CSchedulerContext* psc);
+
+	// process job execution results
+	void ProcessJobResult(CJob* pj, CSchedulerContext* psc, bool fCompleted);
+
+	// retrieve next job to run
+	CJob* PjRetrieve();
+
+	// schedule job for execution
+	void Schedule(CJob* pj);
+
+	// prepare for job execution
+	void PreExecute(CJob* pj);
+
+	// execute job
+	bool FExecute(CJob* pj, CSchedulerContext* psc);
+
+	// process job execution outcome
+	EJobResult EjrPostExecute(CJob* pj, bool fCompleted);
+
+	// resume parent job
+	void ResumeParent(CJob* pj);
+
+	// check if all jobs have completed
+	bool IsEmpty() const
+	{
+		return (0 == m_ulpTotal);
+	}
+	
 	// main job processing task
-	static void *Run(void *);
+	static void* Run(void *);
 
 	// transition job to completed
-	void Complete(CJob *pj);
+	void Complete(CJob* pj);
 
 	// transition queued job to completed
-	void CompleteQueued(CJob *pj);
+	void CompleteQueued(CJob* pj);
 
 	// transition job to suspended
-	void Suspend(CJob *pj);
+	void Suspend(CJob* pj);
 
 	// add new job for scheduling
-	void Add(CJob *pj, CJob *pjParent);
+	void Add(CJob* pj, CJob* pjParent);
 
 	// resume suspended job
-	void Resume(CJob *pj);
-
-	// print statistics
-	void PrintStats() const;
-
-#ifdef GPOS_DEBUG
-	// get flag for tracking jobs
-	BOOL
-	FTrackingJobs() const
-	{
-		return m_fTrackingJobs;
-	}
-
-	// print queue
-	IOstream &OsPrintActiveJobs(IOstream &);
-
-#endif	// GPOS_DEBUG
-
+	void Resume(CJob* pj);
 };	// class CScheduler
-
-// shorthand for printing
-inline IOstream &
-operator<<(IOstream &os, CScheduler &
-#ifdef GPOS_DEBUG
-							 sched
-#endif	// GPOS_DEBUG
-)
-{
-#ifdef GPOS_DEBUG
-	return sched.OsPrintActiveJobs(os);
-#else
-	return os;
-#endif	// GPOS_DEBUG
-}
 }  // namespace gpopt
-
 #endif

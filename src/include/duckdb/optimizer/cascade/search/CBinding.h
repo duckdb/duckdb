@@ -9,13 +9,17 @@
 #define GPOPT_CBinding_H
 
 #include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/optimizer/cascade/operators/Operator.h"
+#include <memory>
+#include <list>
 
-#include "duckdb/optimizer/cascade/operators/CExpression.h"
+using namespace gpos;
+using namespace duckdb;
+using namespace std;
 
 namespace gpopt
 {
-using namespace gpos;
-
 // fwd declaration
 class CGroupExpression;
 class CGroup;
@@ -28,63 +32,47 @@ class CGroup;
 //		Binding class used to iteratively generate expressions from the
 //		memo so that they match a given pattern
 //
-//
 //---------------------------------------------------------------------------
 class CBinding
 {
-private:
+public:
 	// initialize cursors of child expressions
-	BOOL FInitChildCursors(CMemoryPool *mp, CGroupExpression *pgexpr,
-						   CExpression *pexprPattern,
-						   ExpressionArray *pdrgpexpr);
+	bool FInitChildCursors(CGroupExpression* pgexpr, Operator* pexprPattern, duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexpr);
 
 	// advance cursors of child expressions
-	BOOL FAdvanceChildCursors(CMemoryPool *mp, CGroupExpression *pgexpr,
-							  CExpression *pexprPattern, CExpression *pexprLast,
-							  ExpressionArray *pdrgpexpr);
-
-	// extraction of child expressions
-	BOOL FExtractChildren(CMemoryPool *mp, CExpression *pexprPattern,
-						  CGroupExpression *pgexprCursor,
-						  ExpressionArray *pdrgpexpr);
+	bool FAdvanceChildCursors(CGroupExpression* pgexpr, Operator* pexprPattern, Operator* pexprLast, duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexpr);
 
 	// move cursor
-	CGroupExpression *PgexprNext(CGroup *pgroup,
-								 CGroupExpression *pgexpr) const;
+	list<CGroupExpression*>::iterator PgexprNext(CGroup* pgroup, CGroupExpression* pgexpr) const;
 
 	// expand n-th child of pattern
-	LogicalOperator* PexprExpandPattern(LogicalOperator *pexpr, ULONG ulPos, ULONG arity);
+	Operator* PexprExpandPattern(Operator* pexpr, ULONG ulPos, ULONG arity);
 
 	// get binding for children
-	BOOL FExtractChildren(CMemoryPool *mp, CGroupExpression *pgexpr, CExpression *pexprPattern, CExpression *pexprLast, ExpressionArray* pdrgpexprChildren);
+	BOOL FExtractChildren(CGroupExpression* pgexpr, Operator* pexprPattern, Operator* pexprLast, duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexprChildren);
 
 	// extract binding from a group
-	CExpression *PexprExtract(CMemoryPool *mp, CGroup *pgroup, CExpression* pexprPattern, CExpression* pexprLast);
-
+	Operator* PexprExtract(CGroup* pgroup, Operator* pexprPattern, Operator* pexprLast);
+	
+	// extract binding from group expression
+	Operator* PexprExtract(CGroupExpression* pgexpr, Operator* pexprPatetrn, Operator* pexprLast);
+	
 	// build expression
-	CExpression *PexprFinalize(CMemoryPool *mp, CGroupExpression *pgexpr, ExpressionArray* pdrgpexprChildren);
-
-	// private copy ctor
-	CBinding(const CBinding &);
+	Operator* PexprFinalize(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexprChildren);
 
 public:
 	// ctor
 	CBinding()
 	{
 	}
-
+	
+	// no copy ctor
+	CBinding(const CBinding &) = delete;
+	
 	// dtor
 	~CBinding()
 	{
 	}
-
-	// extract binding from group expression
-	CExpression *PexprExtract(CMemoryPool *mp, CGroupExpression *pgexpr,
-							  CExpression *pexprPatetrn,
-							  CExpression *pexprLast);
-
 };	// class CBinding
-
 }  // namespace gpopt
-
 #endif

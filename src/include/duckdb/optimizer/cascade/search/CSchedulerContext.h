@@ -31,86 +31,31 @@ class CEngine;
 //---------------------------------------------------------------------------
 class CSchedulerContext
 {
-private:
-	// memory pool used by all workers
-	CMemoryPool *m_pmpGlobal;
-
-	// memory pool used by only by current worker (scratch space)
-	CMemoryPool *m_pmpLocal;
-
+public:
 	// job factory
-	CJobFactory *m_pjf;
+	CJobFactory* m_pjf;
 
 	// scheduler
-	CScheduler *m_psched;
+	CScheduler* m_psched;
 
 	// optimization engine
-	CEngine *m_peng;
+	CEngine* m_peng;
 
 	// flag indicating if context has been initialized
-	BOOL m_fInit;
-
-	BOOL
-	FInit() const
-	{
-		return m_fInit;
-	}
-
-	// no copy ctor
-	CSchedulerContext(const CSchedulerContext &);
+	bool m_fInit;
 
 public:
 	// ctor
 	CSchedulerContext();
 
+	// no copy ctor
+	CSchedulerContext(const CSchedulerContext &) = delete;
+
 	// dtor
 	~CSchedulerContext();
 
 	// initialization
-	void Init(CMemoryPool *pmpGlobal, CJobFactory *pjf, CScheduler *psched,
-			  CEngine *peng);
-
-	// global memory pool accessor
-	CMemoryPool *
-	GetGlobalMemoryPool() const
-	{
-		GPOS_ASSERT(FInit() && "Scheduling context is not initialized");
-		return m_pmpGlobal;
-	}
-
-	// local memory pool accessor
-	CMemoryPool *
-	PmpLocal() const
-	{
-		GPOS_ASSERT(FInit() && "Scheduling context is not initialized");
-		return m_pmpLocal;
-	}
-
-	// job factory accessor
-	CJobFactory *
-	Pjf() const
-	{
-		GPOS_ASSERT(FInit() && "Scheduling context is not initialized");
-		return m_pjf;
-	}
-
-	// scheduler accessor
-	CScheduler *
-	Psched() const
-	{
-		GPOS_ASSERT(FInit() && "Scheduling context is not initialized");
-		return m_psched;
-	}
-
-	// engine accessor
-	CEngine *
-	Peng() const
-	{
-		GPOS_ASSERT(FInit() && "Scheduling context is not initialized");
-		return m_peng;
-	}
-
+	void Init(CJobFactory* pjf, CScheduler* psched, CEngine* peng);
 };	// class CSchedulerContext
 }  // namespace gpopt
-
 #endif

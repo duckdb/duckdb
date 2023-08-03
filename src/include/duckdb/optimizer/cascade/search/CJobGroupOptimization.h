@@ -38,24 +38,13 @@ public:
 	// transition events of group optimization
 	enum EEvent
 	{
-		eevImplementing,		   // implementation is in progress
-		eevImplemented,			   // implementation is complete
-		eevOptimizing,			   // optimization is in progress
-		eevOptimizedCurrentLevel,  // optimization of current level is complete
-		eevOptimized,			   // optimization is complete
-
-		eevSentinel
+		eevImplementing, eevImplemented, eevOptimizing, eevOptimizedCurrentLevel, eevOptimized, eevSentinel
 	};
 
 	// states of group optimization job
 	enum EState
 	{
-		estInitialized = 0,			  // initial state
-		estOptimizingChildren,		  // optimizing group expressions
-		estDampingOptimizationLevel,  // damping optimization level
-		estCompleted,				  // done optimization
-
-		estSentinel
+		estInitialized = 0, estOptimizingChildren, estDampingOptimizationLevel, estCompleted, estSentinel
 	};
 
 private:
@@ -66,105 +55,68 @@ private:
 	JSM m_jsm;
 
 	// group expression that triggered group optimization
-	CGroupExpression *m_pgexprOrigin;
+	CGroupExpression* m_pgexprOrigin;
 
 	// optimization context of the job
-	COptimizationContext *m_poc;
+	COptimizationContext* m_poc;
 
 	// current optimization level of group expressions
 	EOptimizationLevel m_eolCurrent;
 
 	// start optimization action
-	static EEvent EevtStartOptimization(CSchedulerContext *psc, CJob *pj);
+	static EEvent EevtStartOptimization(CSchedulerContext* psc, CJob* pj);
 
 	// optimized child group expressions action
-	static EEvent EevtOptimizeChildren(CSchedulerContext *psc, CJob *pj);
+	static EEvent EevtOptimizeChildren(CSchedulerContext* psc, CJob* pj);
 
 	// complete optimization action
-	static EEvent EevtCompleteOptimization(CSchedulerContext *psc, CJob *pj);
-
-	// private copy ctor
-	CJobGroupOptimization(const CJobGroupOptimization &);
+	static EEvent EevtCompleteOptimization(CSchedulerContext* psc, CJob* pj);
 
 public:
 	// ctor
 	CJobGroupOptimization();
 
+	// no copy ctor
+	CJobGroupOptimization(const CJobGroupOptimization &) = delete;
+
 	// dtor
 	virtual ~CJobGroupOptimization();
 
 	// initialize job
-	void Init(CGroup *pgroup, CGroupExpression *pgexprOrigin,
-			  COptimizationContext *poc);
+	void Init(CGroup* pgroup, CGroupExpression* pgexprOrigin, COptimizationContext* poc);
 
 	// current optimization level accessor
-	EOptimizationLevel
-	EolCurrent() const
+	EOptimizationLevel EolCurrent() const
 	{
 		return m_eolCurrent;
 	}
 
 	// damp optimization level of member group expressions
-	void
-	DampOptimizationLevel()
+	void DampOptimizationLevel()
 	{
 		m_eolCurrent = CEngine::EolDamp(m_eolCurrent);
 	}
 
 	// get first unscheduled expression
-	virtual CGroupExpression *
-	PgexprFirstUnsched()
+	virtual list<CGroupExpression*>::iterator PgexprFirstUnsched() override
 	{
 		return CJobGroup::PgexprFirstUnschedNonLogical();
 	}
 
 	// schedule optimization jobs for of all new group expressions
-	virtual BOOL FScheduleGroupExpressions(CSchedulerContext *psc);
+	virtual bool FScheduleGroupExpressions(CSchedulerContext* psc) override;
 
 	// schedule a new group optimization job
-	static void ScheduleJob(CSchedulerContext *psc, CGroup *pgroup,
-							CGroupExpression *pgexprOrigin,
-							COptimizationContext *poc, CJob *pjParent);
+	static void ScheduleJob(CSchedulerContext* psc, CGroup* pgroup, CGroupExpression* pgexprOrigin, COptimizationContext* poc, CJob* pjParent);
 
 	// job's function
-	virtual BOOL FExecute(CSchedulerContext *psc);
-
-#ifdef GPOS_DEBUG
-
-	// print function
-	virtual IOstream &OsPrint(IOstream &os);
-
-	// dump state machine diagram in graphviz format
-	virtual IOstream &
-	OsDiagramToGraphviz(CMemoryPool *mp, IOstream &os,
-						const WCHAR *wszTitle) const
-	{
-		(void) m_jsm.OsDiagramToGraphviz(mp, os, wszTitle);
-
-		return os;
-	}
-
-	// compute unreachable states
-	void
-	Unreachable(CMemoryPool *mp, EState **ppestate, ULONG *pulSize) const
-	{
-		m_jsm.Unreachable(mp, ppestate, pulSize);
-	}
-
-#endif	// GPOS_DEBUG
+	virtual bool FExecute(CSchedulerContext* psc) override;
 
 	// conversion function
-	static CJobGroupOptimization *
-	PjConvert(CJob *pj)
+	static CJobGroupOptimization* PjConvert(CJob* pj)
 	{
-		GPOS_ASSERT(NULL != pj);
-		GPOS_ASSERT(EjtGroupOptimization == pj->Ejt());
-
-		return dynamic_cast<CJobGroupOptimization *>(pj);
+		return dynamic_cast<CJobGroupOptimization*>(pj);
 	}
-
 };	// class CJobGroupOptimization
-
 }  // namespace gpopt
-
 #endif

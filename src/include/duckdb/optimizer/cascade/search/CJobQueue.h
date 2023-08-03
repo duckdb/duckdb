@@ -11,13 +11,12 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CList.h"
-
 #include "duckdb/optimizer/cascade/search/CJob.h"
+
+using namespace gpos;
 
 namespace gpopt
 {
-using namespace gpos;
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CJobQueue
@@ -30,10 +29,10 @@ class CJobQueue
 {
 private:
 	// main job
-	CJob *m_pj;
+	CJob* m_pj;
 
 	// flag indicating if main job has completed
-	BOOL m_fCompleted;
+	bool m_fCompleted;
 
 	// list of jobs waiting for main job to complete
 	CList<CJob> m_listjQueued;
@@ -41,49 +40,35 @@ private:
 public:
 	// enum indicating job queueing result
 	enum EJobQueueResult
-	{
-		EjqrMain = 0,
-		EjqrQueued,
-		EjqrCompleted
-	};
+	{ EjqrMain = 0, EjqrQueued, EjqrCompleted };
 
 	// ctor
-	CJobQueue() : m_pj(NULL), m_fCompleted(false)
+	CJobQueue()
+		: m_pj(NULL), m_fCompleted(false)
 	{
-		m_listjQueued.Init(GPOS_OFFSET(CJob, m_linkQueue));
+		CJob* tmp = new CJob();
+		SIZE_T ptr = (SIZE_T)(&(tmp->m_linkQueue)) - (SIZE_T)tmp;
+		m_listjQueued.Init((gpos::ULONG)ptr);
+		delete tmp;
 	}
 
 	// dtor
 	~CJobQueue()
 	{
-		GPOS_ASSERT_IMP(
-			NULL != ITask::Self() && !ITask::Self()->HasPendingExceptions(),
-			m_listjQueued.IsEmpty());
 	}
 
 	// reset job queue
-	void
-	Reset()
+	void Reset()
 	{
-		GPOS_ASSERT(m_listjQueued.IsEmpty());
-
-		m_pj = NULL;
+		m_pj = nullptr;
 		m_fCompleted = false;
 	}
 
 	// add job as a waiter;
-	EJobQueueResult EjqrAdd(CJob *pj);
+	EJobQueueResult EjqrAdd(CJob* pj);
 
 	// notify waiting jobs of job completion
-	void NotifyCompleted(CSchedulerContext *psc);
-
-#ifdef GPOS_DEBUG
-	// print queue - not thread-safe
-	IOstream &OsPrintQueuedJobs(IOstream &);
-#endif	// GPOS_DEBUG
-
+	void NotifyCompleted(CSchedulerContext* psc);
 };	// class CJobQueue
-
 }  // namespace gpopt
-
 #endif
