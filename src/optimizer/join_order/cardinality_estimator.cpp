@@ -13,7 +13,7 @@
 namespace duckdb {
 
 static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op) {
-	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_GET);
+	D_ASSERT(op.logical_type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op.Cast<LogicalGet>();
 	TableCatalogEntry *entry = get.GetTable();
 	return entry;
@@ -96,63 +96,72 @@ void CardinalityEstimator::AddToEquivalenceSets(FilterInfo *filter_info, vector<
 	}
 }
 
-void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value) {
+void CardinalityEstimator::AddRelationToColumnMapping(ColumnBinding key, ColumnBinding value)
+{
 	relation_column_to_original_column[key] = value;
 }
 
-void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map) {
+void CardinalityEstimator::CopyRelationMap(column_binding_map_t<ColumnBinding> &child_binding_map)
+{
 	for (auto &binding_map : relation_column_to_original_column) {
 		D_ASSERT(child_binding_map.find(binding_map.first) == child_binding_map.end());
 		child_binding_map[binding_map.first] = binding_map.second;
 	}
 }
 
-void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t column_index) {
+void CardinalityEstimator::AddColumnToRelationMap(idx_t table_index, idx_t column_index)
+{
 	relation_attributes[table_index].columns.insert(column_index);
 }
 
-void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos) {
+void CardinalityEstimator::InitEquivalentRelations(vector<unique_ptr<FilterInfo>> &filter_infos)
+{
 	// For each filter, we fill keep track of the index of the equivalent relation set
 	// the left and right relation needs to be added to.
-	for (auto &filter : filter_infos) {
-		if (SingleColumnFilter(*filter)) {
+	for (auto &filter : filter_infos)
+	{
+		if (SingleColumnFilter(*filter))
+		{
 			// Filter on one relation, (i.e string or range filter on a column).
 			// Grab the first relation and add it to  the equivalence_relations
 			AddRelationTdom(*filter);
 			continue;
-		} else if (EmptyFilter(*filter)) {
+		} else if (EmptyFilter(*filter))
+		{
 			continue;
 		}
 		D_ASSERT(filter->left_set->count >= 1);
 		D_ASSERT(filter->right_set->count >= 1);
-
 		auto matching_equivalent_sets = DetermineMatchingEquivalentSets(filter.get());
 		AddToEquivalenceSets(filter.get(), matching_equivalent_sets);
 	}
 }
 
-void CardinalityEstimator::VerifySymmetry(JoinNode &result, JoinNode &entry) {
-	if (result.GetCardinality<double>() != entry.GetCardinality<double>()) {
+void CardinalityEstimator::VerifySymmetry(JoinNode &result, JoinNode &entry)
+{
+	if (result.GetCardinality<double>() != entry.GetCardinality<double>())
+	{
 		// Currently it's possible that some entries are cartesian joins.
 		// When this is the case, you don't always have symmetry, but
 		// if the cost of the result is less, then just assure the cardinality
 		// is also less, then you have the same effect of symmetry.
-		D_ASSERT(ceil(result.GetCardinality<double>()) <= ceil(entry.GetCardinality<double>()) ||
-		         floor(result.GetCardinality<double>()) <= floor(entry.GetCardinality<double>()));
+		D_ASSERT(ceil(result.GetCardinality<double>()) <= ceil(entry.GetCardinality<double>()) || floor(result.GetCardinality<double>()) <= floor(entry.GetCardinality<double>()));
 	}
 }
 
-void CardinalityEstimator::InitTotalDomains() {
-	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(),
-	                                   [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
+void CardinalityEstimator::InitTotalDomains()
+{
+	auto remove_start = std::remove_if(relations_to_tdoms.begin(), relations_to_tdoms.end(), [](RelationsToTDom &r_2_tdom) { return r_2_tdom.equivalent_relations.empty(); });
 	relations_to_tdoms.erase(remove_start, relations_to_tdoms.end());
 }
 
-double CardinalityEstimator::ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality) {
+double CardinalityEstimator::ComputeCost(JoinNode &left, JoinNode &right, double expected_cardinality)
+{
 	return expected_cardinality + left.GetCost() + right.GetCost();
 }
 
-double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const JoinNode &right) {
+double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const JoinNode &right)
+{
 	// need to explicity use double here, otherwise auto converts it to an int, then
 	// there is an autocast in the return.
 	if (left.GetCardinality<double>() >= (NumericLimits<double>::Maximum() / right.GetCardinality<double>())) {
@@ -161,21 +170,23 @@ double CardinalityEstimator::EstimateCrossProduct(const JoinNode &left, const Jo
 	return left.GetCardinality<double>() * right.GetCardinality<double>();
 }
 
-void CardinalityEstimator::AddRelationColumnMapping(LogicalGet &get, idx_t relation_id) {
-	for (idx_t it = 0; it < get.column_ids.size(); it++) {
+void CardinalityEstimator::AddRelationColumnMapping(LogicalGet &get, idx_t relation_id)
+{
+	for (idx_t it = 0; it < get.column_ids.size(); it++)
+	{
 		auto key = ColumnBinding(relation_id, it);
 		auto value = ColumnBinding(get.table_index, get.column_ids[it]);
 		AddRelationToColumnMapping(key, value);
 	}
 }
 
-void UpdateDenom(Subgraph2Denominator &relation_2_denom, RelationsToTDom &relation_to_tdom) {
+void UpdateDenom(Subgraph2Denominator &relation_2_denom, RelationsToTDom &relation_to_tdom)
+{
 	relation_2_denom.denom *= relation_to_tdom.has_tdom_hll ? relation_to_tdom.tdom_hll : relation_to_tdom.tdom_no_hll;
 }
 
-void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me,
-                               vector<Subgraph2Denominator>::iterator subgraph,
-                               vector<Subgraph2Denominator>::iterator end) {
+void FindSubgraphMatchAndMerge(Subgraph2Denominator &merge_to, idx_t find_me, vector<Subgraph2Denominator>::iterator subgraph, vector<Subgraph2Denominator>::iterator end)
+{
 	for (; subgraph != end; subgraph++) {
 		if (subgraph->relations.count(find_me) >= 1) {
 			for (auto &relation : subgraph->relations) {
@@ -294,38 +305,42 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 }
 
 static bool IsLogicalFilter(LogicalOperator &op) {
-	return op.type == LogicalOperatorType::LOGICAL_FILTER;
+	return op.logical_type == LogicalOperatorType::LOGICAL_FILTER;
 }
 
 static optional_ptr<LogicalGet> GetLogicalGet(LogicalOperator &op, idx_t table_index = DConstants::INVALID_INDEX) {
 	optional_ptr<LogicalGet> get;
-	switch (op.type) {
+	switch (op.logical_type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		get = &op.Cast<LogicalGet>();
 		break;
 	case LogicalOperatorType::LOGICAL_FILTER:
-		get = GetLogicalGet(*op.children.at(0), table_index);
+		get = GetLogicalGet(*((LogicalOperator*)op.children.at(0).get()), table_index);
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		get = GetLogicalGet(*op.children.at(0), table_index);
+		get = GetLogicalGet(*((LogicalOperator*)op.children.at(0).get()), table_index);
 		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	{
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		// We should never be calling GetLogicalGet without a valid table_index.
 		// We are attempting to get the catalog table for a relation (for statistics/cardinality estimation)
 		// A logical join means there is a non-reorderable relation in the join plan. This means we need
 		// to know the exact table index to return.
 		D_ASSERT(table_index != DConstants::INVALID_INDEX);
-		if (join.join_type == JoinType::MARK || join.join_type == JoinType::LEFT) {
+		if (join.join_type == JoinType::MARK || join.join_type == JoinType::LEFT)
+		{
 			auto &left_child = *join.children.at(0);
-			get = GetLogicalGet(left_child, table_index);
-			if (get && get->table_index == table_index) {
+			get = GetLogicalGet(*((LogicalOperator*)&left_child), table_index);
+			if (get && get->table_index == table_index)
+			{
 				return get;
 			}
 			auto &right_child = *join.children.at(1);
-			get = GetLogicalGet(right_child, table_index);
-			if (get && get->table_index == table_index) {
+			get = GetLogicalGet(*((LogicalOperator*)&right_child), table_index);
+			if (get && get->table_index == table_index)
+			{
 				return get;
 			}
 		}
@@ -338,14 +353,16 @@ static optional_ptr<LogicalGet> GetLogicalGet(LogicalOperator &op, idx_t table_i
 	return get;
 }
 
-void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id,
-                                         vector<column_binding_map_t<ColumnBinding>> &child_binding_maps) {
-	for (auto &map_set : child_binding_maps) {
-		for (auto &mapping : map_set) {
+void CardinalityEstimator::MergeBindings(idx_t binding_index, idx_t relation_id, vector<column_binding_map_t<ColumnBinding>> &child_binding_maps)
+{
+	for (auto &map_set : child_binding_maps)
+	{
+		for (auto &mapping : map_set)
+		{
 			ColumnBinding relation_bindings = mapping.first;
 			ColumnBinding actual_bindings = mapping.second;
-
-			if (actual_bindings.table_index == binding_index) {
+			if (actual_bindings.table_index == binding_index)
+			{
 				auto key = ColumnBinding(relation_id, relation_bindings.column_index);
 				AddRelationToColumnMapping(key, actual_bindings);
 			}
@@ -374,7 +391,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> &node_op
 		auto &join_node = *node_ops[i].node;
 		auto &op = node_ops[i].op;
 		join_node.SetBaseTableCardinality(op.EstimateCardinality(context));
-		if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+		if (op.logical_type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 			auto &join = op.Cast<LogicalComparisonJoin>();
 			if (join.join_type == JoinType::LEFT) {
 				// If a base op is a Logical Comparison join it is probably a left join,
@@ -384,7 +401,7 @@ void CardinalityEstimator::InitCardinalityEstimatorProps(vector<NodeOp> &node_op
 				// less than the base table cardinality.
 				join_node.SetCost(join_node.GetBaseTableCardinality());
 			}
-		} else if (op.type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
+		} else if (op.logical_type == LogicalOperatorType::LOGICAL_ASOF_JOIN) {
 			// AsOf joins have the cardinality of the LHS
 			join_node.SetCost(join_node.GetBaseTableCardinality());
 		}
