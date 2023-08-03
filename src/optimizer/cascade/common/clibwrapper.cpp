@@ -18,9 +18,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <assert.h>
 #include "duckdb/optimizer/cascade/assert.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/error/CException.h"
 #include "duckdb/optimizer/cascade/utils.h"
 
 using namespace gpos;
@@ -81,8 +81,6 @@ gpos::clib::WalkContext(const ucontext_t *user_ctxt, Callback callback,
 //---------------------------------------------------------------------------
 void gpos::clib::USleep(ULONG usecs)
 {
-	GPOS_ASSERT(1000000 >= usecs);
-
 	// ignore return value
 	(void) usleep(usecs);
 }
@@ -187,22 +185,8 @@ gpos::clib::WcStrNCpy(WCHAR *dest, const WCHAR *src, SIZE_T num_bytes)
 //		Copy a specified number of bytes between two memory areas
 //
 //---------------------------------------------------------------------------
-void *
-gpos::clib::Memcpy(void *dest, const void *src, SIZE_T num_bytes)
+void* gpos::clib::Memcpy(void *dest, const void *src, SIZE_T num_bytes)
 {
-	GPOS_ASSERT(NULL != dest);
-
-	GPOS_ASSERT(NULL != src && num_bytes > 0);
-
-#ifdef GPOS_DEBUG
-	const BYTE *src_addr = static_cast<const BYTE *>(src);
-	const BYTE *dest_addr = static_cast<const BYTE *>(dest);
-#endif	// GPOS_DEBUG
-
-	// check for overlap
-	GPOS_ASSERT(((src_addr + num_bytes) <= dest_addr) ||
-				((dest_addr + num_bytes) <= src_addr));
-
 	return memcpy(dest, src, num_bytes);
 }
 
@@ -215,21 +199,8 @@ gpos::clib::Memcpy(void *dest, const void *src, SIZE_T num_bytes)
 //		Copy a specified number of wide characters
 //
 //---------------------------------------------------------------------------
-WCHAR *
-gpos::clib::Wmemcpy(WCHAR *dest, const WCHAR *src, SIZE_T num_bytes)
+WCHAR* gpos::clib::Wmemcpy(WCHAR *dest, const WCHAR *src, SIZE_T num_bytes)
 {
-	GPOS_ASSERT(NULL != dest);
-	GPOS_ASSERT(NULL != src && num_bytes > 0);
-
-#ifdef GPOS_DEBUG
-	const WCHAR *src_addr = static_cast<const WCHAR *>(src);
-	const WCHAR *dest_addr = static_cast<WCHAR *>(dest);
-#endif
-
-	// check for overlap
-	GPOS_ASSERT(((src_addr + num_bytes) <= dest_addr) ||
-				((dest_addr + num_bytes) <= src_addr));
-
 	return wmemcpy(dest, src, num_bytes);
 }
 
@@ -384,21 +355,17 @@ gpos::clib::Rand(ULONG *seed)
 //		Format wide character output conversion
 //
 //---------------------------------------------------------------------------
-INT
-gpos::clib::Vswprintf(WCHAR *wcstr, SIZE_T max_len, const WCHAR *format,
-					  VA_LIST vaArgs)
+INT gpos::clib::Vswprintf(WCHAR *wcstr, SIZE_T max_len, const WCHAR *format, VA_LIST vaArgs)
 {
 	GPOS_ASSERT(NULL != wcstr);
 	GPOS_ASSERT(NULL != format);
-
 	INT res = vswprintf(wcstr, max_len, format, vaArgs);
 	if (-1 == res && EILSEQ == errno)
 	{
 		// Invalid multibyte character encountered. This can happen if the byte sequence does not
 		// match with the server encoding.
-		GPOS_RAISE(CException::ExmaSystem, CException::ExmiIllegalByteSequence);
+		assert(false);
 	}
-
 	return res;
 }
 

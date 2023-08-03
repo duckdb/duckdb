@@ -11,7 +11,6 @@
 #include <sys/time.h>
 #include <syslog.h>
 #include "duckdb/optimizer/cascade/assert.h"
-#include "duckdb/optimizer/cascade/error/CException.h"
 #include "duckdb/optimizer/cascade/utils.h"
 
 using namespace gpos;

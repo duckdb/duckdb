@@ -7,7 +7,6 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/common/CAutoTimer.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/task/CAutoSuspendAbort.h"
 
 using namespace gpos;
 
@@ -22,7 +21,6 @@ using namespace gpos;
 CAutoTimer::CAutoTimer(const CHAR *sz, BOOL fPrint)
 	: m_timer_text_label(sz), m_print_text_label(fPrint)
 {
-	GPOS_ASSERT(NULL != sz);
 }
 
 //---------------------------------------------------------------------------
@@ -35,11 +33,4 @@ CAutoTimer::CAutoTimer(const CHAR *sz, BOOL fPrint)
 //---------------------------------------------------------------------------
 CAutoTimer::~CAutoTimer() throw()
 {
-	if (m_print_text_label)
-	{
-		// suspend cancellation - destructors should not throw
-		CAutoSuspendAbort asa;
-		ULONG ulElapsedTimeMS = m_clock.ElapsedMS();
-		GPOS_TRACE_FORMAT("timer:%s: %dms", m_timer_text_label, ulElapsedTimeMS);
-	}
 }
