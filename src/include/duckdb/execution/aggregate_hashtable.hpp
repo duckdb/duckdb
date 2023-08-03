@@ -103,13 +103,6 @@ public:
 	//! Threshold at which to resize the HT
 	idx_t ResizeThreshold() const;
 
-	//! The size (in bytes) of the data collection
-	idx_t DataSize() const;
-	//! The size (in bytes) of the pointer table of the HT
-	static idx_t PointerTableSize(idx_t count);
-	//! The total size (pointer table and data) of the HT
-	idx_t TotalSize() const;
-
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -137,6 +130,8 @@ public:
 	void ClearPointerTable();
 	//! Resets the group count to 0
 	void ResetCount();
+	//! Set the radix bits for this HT
+	void SetRadixBits(idx_t radix_bits);
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
 
@@ -144,8 +139,6 @@ public:
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data);
 
-	//! Unpin the pointer table and data blocks
-	void Finalize();
 	//! Unpins the data blocks
 	void UnpinData();
 

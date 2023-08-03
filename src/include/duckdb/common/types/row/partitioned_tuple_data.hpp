@@ -92,6 +92,8 @@ public:
 	idx_t Count() const;
 	//! Get the size (in bytes) of this PartitionedTupleData
 	idx_t SizeInBytes() const;
+	//! Get the number of partitions of this PartitionedTupleData
+	idx_t PartitionCount() const;
 	//! Converts this PartitionedTupleData to a string representation
 	string ToString();
 	//! Prints the string representation of this PartitionedTupleData

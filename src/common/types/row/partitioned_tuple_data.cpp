@@ -349,6 +349,11 @@ void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinPr
 void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
+	if (partitions.size() == new_partitioned_data.partitions.size()) {
+		new_partitioned_data.Combine(*this);
+		return;
+	}
+
 	PartitionedTupleDataAppendState append_state;
 	new_partitioned_data.InitializeAppendState(append_state);
 
@@ -417,6 +422,10 @@ idx_t PartitionedTupleData::SizeInBytes() const {
 		total_size += partition->SizeInBytes();
 	}
 	return total_size;
+}
+
+idx_t PartitionedTupleData::PartitionCount() const {
+	return partitions.size();
 }
 
 void PartitionedTupleData::Verify() const {

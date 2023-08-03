@@ -57,11 +57,14 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
-	if (!partitioned_data) {
+	if (!partitioned_data || RadixPartitioning::RadixBits(partitioned_data->PartitionCount()) != radix_bits) {
+		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
 		partitioned_data =
 		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+		ResetCount();
 	} else {
 		partitioned_data->Reset();
+		ResetCount();
 	}
 
 	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());
@@ -131,20 +134,6 @@ idx_t GroupedAggregateHashTable::ResizeThreshold() const {
 	return Capacity() / LOAD_FACTOR;
 }
 
-idx_t GroupedAggregateHashTable::DataSize() const {
-	return partitioned_data->SizeInBytes();
-}
-
-idx_t GroupedAggregateHashTable::PointerTableSize(idx_t count) {
-	const auto capacity = MaxValue<idx_t>(NextPowerOfTwo(count * LOAD_FACTOR), InitialCapacity());
-	return capacity * sizeof(aggr_ht_entry_t);
-}
-
-idx_t GroupedAggregateHashTable::TotalSize() const {
-	D_ASSERT(hash_map.get());
-	return DataSize() + hash_map.GetSize();
-}
-
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
 	return hash & bitmask;
 }
@@ -171,6 +160,10 @@ void GroupedAggregateHashTable::ClearPointerTable() {
 
 void GroupedAggregateHashTable::ResetCount() {
 	count = 0;
+}
+
+void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
+	radix_bits = radix_bits_p;
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
@@ -538,18 +531,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 	}
 
 	Verify();
-}
-
-void GroupedAggregateHashTable::Finalize() {
-	if (is_finalized) {
-		return;
-	}
-
-	// Early release hashes (not needed for partition/scan) and data collection (will be pinned again when scanning)
-	hash_map.Reset();
-	UnpinData();
-
-	is_finalized = true;
 }
 
 void GroupedAggregateHashTable::UnpinData() {
