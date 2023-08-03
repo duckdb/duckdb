@@ -33,11 +33,11 @@ class StatementOptions(enum.Enum):
     BATCH_ROWS = "adbc.duckdb.query.batch_rows"
 
 
-def connect(uri: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabase:
+def connect(path: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabase:
     """Create a low level ADBC connection to DuckDB."""
-    if uri is None:
+    if path is None:
         return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init")
-    return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init", uri=uri)
+    return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init", path=path)
 
 
 @functools.cache
