@@ -187,7 +187,7 @@ public:
 	vector<unique_ptr<AggregatePartition>> partitions;
 
 	//! For synchronizing finalize tasks
-	idx_t finalize_idx;
+	atomic<idx_t> finalize_idx;
 
 	//! Pin properties when scanning
 	TupleDataPinProperties scan_pin_properties;
@@ -471,7 +471,7 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing scan tasks
-	idx_t scan_idx;
+	atomic<idx_t> scan_idx;
 	atomic<idx_t> scan_done;
 };
 
@@ -535,32 +535,70 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 }
 
 void RadixHTGlobalSourceState::AssignTaskRange(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate) {
+	D_ASSERT(lstate.scan_status != RadixHTScanStatus::IN_PROGRESS);
+	D_ASSERT(lstate.finalize_task_range.empty());
+	D_ASSERT(lstate.scan_task_range.empty());
 	const idx_t thread_count = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const idx_t partition_count = RadixPartitioning::NumberOfPartitions(sink.config.GetRadixBits());
 	const idx_t range = (partition_count + thread_count - 1) / thread_count;
 
-	idx_t finalize_idx_from;
-	idx_t finalize_idx_to;
-	idx_t scan_idx_from;
-	idx_t scan_idx_to;
-	{
-		lock_guard<mutex> guard(sink.lock);
+	if (partition_count > thread_count) {
+		// Assign range if more partitions than threads so there's less contention
+		idx_t finalize_idx_from;
+		idx_t finalize_idx_to;
+		idx_t scan_idx_from;
+		idx_t scan_idx_to;
+		{
+			lock_guard<mutex> guard(sink.lock);
 
-		finalize_idx_from = sink.finalize_idx;
-		sink.finalize_idx = MinValue(sink.finalize_idx + range, partition_count);
-		finalize_idx_to = sink.finalize_idx;
+			finalize_idx_from = sink.finalize_idx;
+			sink.finalize_idx = MinValue(sink.finalize_idx + range, partition_count);
+			finalize_idx_to = sink.finalize_idx;
 
-		scan_idx_from = scan_idx;
-		scan_idx = MinValue(scan_idx + range, partition_count);
-		scan_idx_to = scan_idx;
-	}
+			scan_idx_from = scan_idx;
+			scan_idx = MinValue(scan_idx + range, partition_count);
+			scan_idx_to = scan_idx;
+		}
 
-	for (idx_t i = finalize_idx_from; i < finalize_idx_to; i++) {
-		lstate.finalize_task_range.push_back(i);
-	}
+		for (idx_t i = finalize_idx_from; i < finalize_idx_to; i++) {
+			lstate.finalize_task_range.push_back(i);
+		}
 
-	for (idx_t i = scan_idx_from; i < scan_idx_to; i++) {
-		lstate.scan_task_range.push_back(i);
+		for (idx_t i = scan_idx_from; i < scan_idx_to; i++) {
+			lstate.scan_task_range.push_back(i);
+		}
+	} else {
+		// Assign single task if more threads than partitions
+		// We first try to assign a Scan task, then a Finalize task if that didn't work, without using any locks
+
+		// We need an atomic compare-and-swap to assign a Scan task, because we need to only increment
+		// the 'scan_idx' atomic if the 'finalize' of that partition is true, i.e., ready to be scanned
+		idx_t task_idx;
+
+		bool scan_assigned = true;
+		do {
+			task_idx = scan_idx.load();
+			if (task_idx >= partition_count || !sink.partitions[task_idx]->finalized) {
+				scan_assigned = false;
+				break;
+			}
+		} while (!std::atomic_compare_exchange_weak(&scan_idx, &task_idx, task_idx + 1));
+
+		if (scan_assigned) {
+			// We successfully assigned a Scan task
+			D_ASSERT(task_idx < partition_count && sink.partitions[task_idx]->finalized);
+			lstate.task = RadixHTSourceTaskType::SCAN;
+			lstate.scan_task_range.push_back(task_idx);
+			lstate.scan_status = RadixHTScanStatus::INIT;
+		} else {
+			// We can just increment the atomic here, much simpler than assigning the scan task
+			task_idx = sink.finalize_idx++;
+			if (task_idx < partition_count) {
+				// We successfully assigned a Finalize task
+				lstate.task = RadixHTSourceTaskType::FINALIZE;
+				lstate.finalize_task_range.push_back(task_idx);
+			}
+		}
 	}
 }
 
@@ -703,26 +741,24 @@ bool RadixHTLocalSourceState::TaskFinished() {
 
 bool RadixHTLocalSourceState::NextTask(RadixHTGlobalSinkState &sink) {
 	D_ASSERT(scan_status != RadixHTScanStatus::IN_PROGRESS);
-	if (scan_task_range.empty()) {
-		return false;
+	if (!scan_task_range.empty()) {
+		task_idx = scan_task_range.back();
+		if (sink.partitions[task_idx]->finalized) {
+			scan_task_range.pop_back();
+			task = RadixHTSourceTaskType::SCAN;
+			scan_status = RadixHTScanStatus::INIT;
+			return true;
+		}
 	}
 
-	task_idx = scan_task_range.back();
-	if (sink.partitions[task_idx]->finalized) {
-		scan_task_range.pop_back();
-		task = RadixHTSourceTaskType::SCAN;
-		scan_status = RadixHTScanStatus::INIT;
+	if (!finalize_task_range.empty()) {
+		task_idx = finalize_task_range.back();
+		finalize_task_range.pop_back();
+		task = RadixHTSourceTaskType::FINALIZE;
 		return true;
 	}
 
-	if (finalize_task_range.empty()) {
-		return false;
-	}
-
-	task_idx = finalize_task_range.back();
-	finalize_task_range.pop_back();
-	task = RadixHTSourceTaskType::FINALIZE;
-	return true;
+	return false;
 }
 
 SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk,
@@ -777,13 +813,15 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	}
 
 	while (!gstate.finished && chunk.size() == 0) {
-		if (lstate.scan_task_range.empty()) {
-			gstate.AssignTaskRange(sink, lstate);
+		if (lstate.TaskFinished()) {
+			if (lstate.finalize_task_range.empty() && lstate.scan_task_range.empty()) {
+				gstate.AssignTaskRange(sink, lstate);
+			}
+			if (!lstate.NextTask(sink)) {
+				continue;
+			}
 		}
-
-		if (!lstate.TaskFinished() || lstate.NextTask(sink)) {
-			lstate.ExecuteTask(sink, gstate, chunk);
-		}
+		lstate.ExecuteTask(sink, gstate, chunk);
 	}
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
