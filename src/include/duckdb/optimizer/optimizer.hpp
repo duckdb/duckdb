@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/optimizer/expression_rewriter.hpp"
@@ -22,8 +21,8 @@ class Optimizer {
 public:
 	Optimizer(Binder &binder, ClientContext &context);
 
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
-	unique_ptr<PhysicalOperator> OptimizebyCascade(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<Operator> plan);
+	unique_ptr<PhysicalOperator> OptimizebyCascade(unique_ptr<Operator> plan);
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;

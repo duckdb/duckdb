@@ -12,23 +12,28 @@
 #include "duckdb/optimizer/filter_combiner.hpp"
 #include "duckdb/optimizer/rule.hpp"
 
-namespace duckdb {
-
+namespace duckdb
+{
 class Optimizer;
 
-class FilterPushdown {
+class FilterPushdown
+{
 public:
 	explicit FilterPushdown(Optimizer &optimizer);
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
 
-	struct Filter {
+	struct Filter
+	{
 		unordered_set<idx_t> bindings;
 		unique_ptr<Expression> filter;
 
-		Filter() {
+		Filter()
+		{
 		}
-		explicit Filter(unique_ptr<Expression> filter) : filter(std::move(filter)) {
+
+		explicit Filter(unique_ptr<Expression> filter) : filter(std::move(filter))
+		{
 		}
 
 		void ExtractBindings();

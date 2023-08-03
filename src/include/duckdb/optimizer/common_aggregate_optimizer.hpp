@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -13,7 +12,8 @@
 
 namespace duckdb {
 //! The CommonAggregateOptimizer optimizer eliminates duplicate aggregates from aggregate nodes
-class CommonAggregateOptimizer : public LogicalOperatorVisitor {
+class CommonAggregateOptimizer : public LogicalOperatorVisitor
+{
 public:
 	void VisitOperator(LogicalOperator &op) override;
 
