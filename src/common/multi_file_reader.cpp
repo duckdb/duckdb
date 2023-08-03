@@ -550,6 +550,12 @@ Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const st
 	if (it == hive_types_schema.end()) {
 		return value;
 	}
+
+	// Handle nulls
+	if (base.empty() || StringUtil::CIEquals(base, "NULL")) {
+		return Value(it->second);
+	}
+
 	if (!value.TryCastAs(context, it->second)) {
 		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
 		                            StringUtil::Upper(it->first), it->second.ToString());
