@@ -1,27 +1,128 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
-
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
-                             idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
-      orders(std::move(orders)), projections(std::move(projections)) {
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality), orders(std::move(orders)), projections(std::move(projections))
+{
+}
+
+CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const
+{
+	bool compactible = true;
+	for(int ul = 0; ul < peo.size(); ul++)
+	{
+		bool flag = false;
+		for(int sul = 0; sul < orders.size(); sul++)
+		{
+			if(orders[sul].Equals(peo[ul]))
+			{
+				flag = true;
+				break;
+			}
+		}
+		if(!flag)
+		{
+			compactible = false;
+			break;
+		}
+	}
+	if (compactible)
+	{
+		// required order is already established by sort operator
+		return CEnfdOrder::EpetUnnecessary;
+	}
+	// required order is incompatible with the order established by the
+	// sort operator, prohibit adding another sort operator on top
+	return CEnfdOrder::EpetProhibited;
+}
+
+COrderSpec* PhysicalOrder::PosRequired(CExpressionHandle &exprhdl, COrderSpec* posRequired, ULONG child_index, vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq) const
+{
+	return new COrderSpec();
+}
+
+bool PhysicalOrder::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG ulOptReq) const
+{
+	return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		CPhysicalSort::PcrsRequired
+//
+//	@doc:
+//		Compute required columns of the n-th child;
+//
+//---------------------------------------------------------------------------
+vector<ColumnBinding> PhysicalOrder::PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG child_index, vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq)
+{
+	vector<ColumnBinding> pcrsSort;
+	for(auto &child : orders)
+	{
+		vector<ColumnBinding> cell = child.expression->getColumnBinding();
+		pcrsSort.insert(pcrsSort.end(), cell.begin(), cell.begin());
+	}
+	vector<ColumnBinding> pcrs;
+	std::set_union(pcrsSort.begin(), pcrsSort.end(), pcrsRequired.begin(), pcrsRequired.end(), pcrs.begin());
+	vector<ColumnBinding> pcrsChildReqd = PcrsChildReqd(exprhdl, pcrs, child_index);
+	return pcrsChildReqd;
+}
+
+CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl)
+{
+	return NULL;
+}
+
+Operator* PhysicalOrder::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
+{
+	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	double cost = pcc->m_cost;
+	ULONG arity = pgexpr->Arity();
+	vector<double> pdrgpcost;
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		double costChild = pdrgpexpr[ul]->m_cost;
+		pdrgpcost.push_back(costChild);
+	}
+	cost = pcc->CostCompute(pdrgpcost);
+	PhysicalOrder* pexpr = new PhysicalOrder(types, orders, projections, 0);
+	pexpr->m_cost = cost;
+	pexpr->m_pgexpr = pgexpr;
+	return pexpr;
+}
+
+vector<ColumnBinding> PhysicalOrder::GetColumnBindings()
+{
+	auto child_bindings = ((LogicalOperator*)children[0].get())->GetColumnBindings();
+	if (projections.empty())
+	{
+		return child_bindings;
+	}
+	vector<ColumnBinding> result;
+	for (auto &col_idx : projections)
+	{
+		result.push_back(child_bindings[col_idx]);
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class OrderGlobalSinkState : public GlobalSinkState {
+class OrderGlobalSinkState : public GlobalSinkState
+{
 public:
 	OrderGlobalSinkState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
-	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
+	    : global_sort_state(buffer_manager, order.orders, payload_layout)
+	{
 	}
 
 	//! Global sort state
@@ -30,12 +131,14 @@ public:
 	idx_t memory_per_thread;
 };
 
-class OrderLocalSinkState : public LocalSinkState {
+class OrderLocalSinkState : public LocalSinkState
+{
 public:
 	OrderLocalSinkState(ClientContext &context, const PhysicalOrder &op) : key_executor(context) {
 		// Initialize order clause expression executor and DataChunk
 		vector<LogicalType> key_types;
-		for (auto &order : op.orders) {
+		for (auto &order : op.orders)
+		{
 			key_types.push_back(order.expression->return_type);
 			key_executor.AddExpression(*order.expression);
 		}
@@ -54,7 +157,8 @@ public:
 	DataChunk payload;
 };
 
-unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const {
+unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const
+{
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
@@ -65,12 +169,13 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	return std::move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
+unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const
+{
 	return make_uniq<OrderLocalSinkState>(context.client, *this);
 }
 
-SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                   DataChunk &input) const {
+SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p, DataChunk &input) const
+{
 	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
 
@@ -140,11 +245,9 @@ public:
 public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
-
 		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 		auto &ts = TaskScheduler::GetScheduler(context);
 		idx_t num_threads = ts.NumberOfThreads();
-
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 			merge_tasks.push_back(make_uniq<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));

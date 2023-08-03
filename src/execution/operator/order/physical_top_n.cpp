@@ -10,10 +10,9 @@
 
 namespace duckdb {
 
-PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-                           idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)),
-      limit(limit), offset(offset) {
+PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::TOP_N, std::move(types), estimated_cardinality), orders(std::move(orders)), limit(limit), offset(offset) 
+{
 }
 
 //===--------------------------------------------------------------------===//
@@ -21,7 +20,8 @@ PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> o
 //===--------------------------------------------------------------------===//
 class TopNHeap;
 
-struct TopNScanState {
+struct TopNScanState
+{
 	unique_ptr<PayloadScanner> scanner;
 	idx_t pos;
 	bool exclude_offset;
