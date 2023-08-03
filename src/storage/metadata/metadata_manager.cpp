@@ -116,6 +116,10 @@ void MetadataManager::Flush() {
 	// write the blocks of the metadata manager to disk
 	for(auto &block : blocks) {
 		auto handle = buffer_manager.Pin(block.block);
+		// FIXME: zero-initialize any free blocks
+//		for(auto &free_block : free_blocks) {
+//			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0, MetadataManager::METADATA_BLOCK_SIZE);
+//		}
 		block_manager.Write(handle.GetFileBuffer(), block.block_id);
 	}
 }
@@ -137,7 +141,7 @@ void MetadataManager::Deserialize(Deserializer &source) {
 			AddAndRegisterBlock(std::move(block));
 		} else {
 			// block was already created - only copy over the free list
-			blocks[entry->second].free_blocks = block.free_blocks;
+			blocks[entry->second].free_blocks = std::move(block.free_blocks);
 		}
 	}
 }
@@ -169,10 +173,11 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 	if (free_list == 0) {
 		return;
 	}
-	for(idx_t i = 0; i < 64; i++) {
-		idx_t mask = idx_t(1) >> i;
+	for(idx_t i = 64; i > 0; i--) {
+		auto index = i - 1;
+		idx_t mask = idx_t(1) << index;
 		if (free_list & mask) {
-			free_blocks.push_back(i);
+			free_blocks.push_back(index);
 		}
 	}
 }

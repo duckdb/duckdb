@@ -87,6 +87,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		WriteSchema(schema.get());
 	}
 	partial_block_manager.FlushPartialBlocks();
+	metadata_writer->Flush();
+	table_metadata_writer->Flush();
 
 	// write a checkpoint flag to the WAL
 	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the

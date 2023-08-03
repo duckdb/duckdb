@@ -19,12 +19,15 @@ public:
 public:
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 
+	void Flush();
+
 	MetaBlockPointer GetBlockPointer();
 
 protected:
 	virtual MetadataHandle NextHandle();
 
 private:
+	data_ptr_t BasePtr();
 	data_ptr_t Ptr();
 
 	void NextBlock();

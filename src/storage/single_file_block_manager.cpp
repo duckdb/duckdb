@@ -407,8 +407,8 @@ vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	// since these blocks are no longer free we cannot just include them in the free list!
 	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
 	while(total_size > 0) {
-		auto handle = GetMetadataManager().AllocateHandle();
-		free_list_blocks.push_back(std::move(handle));
+		auto free_list_handle = GetMetadataManager().AllocateHandle();
+		free_list_blocks.push_back(std::move(free_list_handle));
 		total_size -= MinValue<idx_t>(total_size, block_size);
 	}
 

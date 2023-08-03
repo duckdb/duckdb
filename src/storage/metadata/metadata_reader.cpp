@@ -3,11 +3,11 @@
 namespace duckdb {
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer) :
-	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), offset(0), capacity(0) {
+	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), index(0), offset(0), capacity(0) {
 }
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type) :
-	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), offset(0), capacity(0) {
+	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0), capacity(0) {
 }
 
 MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
@@ -37,7 +37,7 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 }
 
 MetaBlockPointer MetadataReader::GetBlockPointer() {
-	throw InternalException("FIXME: GetBlockPointer");
+	return manager.GetDiskPointer(block.pointer, offset);
 }
 
 void MetadataReader::ReadNextBlock() {
@@ -45,6 +45,7 @@ void MetadataReader::ReadNextBlock() {
 		throw IOException("No more data remaining in MetadataReader");
 	}
 	block = manager.Pin(next_pointer);
+	index = next_pointer.index;
 
 	idx_t next_block = Load<idx_t>(Ptr());
 	if (next_block == idx_t(-1)) {
@@ -57,7 +58,7 @@ void MetadataReader::ReadNextBlock() {
 }
 
 data_ptr_t MetadataReader::Ptr() {
-	return block.handle.Ptr();
+	return block.handle.Ptr() + index * MetadataManager::METADATA_BLOCK_SIZE;
 }
 
 }

@@ -45,6 +45,7 @@ private:
 	MetadataHandle block;
 	MetadataPointer next_pointer;
 	bool has_next_block;
+	idx_t index;
 	idx_t offset;
 	idx_t capacity;
 };

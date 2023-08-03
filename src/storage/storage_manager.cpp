@@ -227,7 +227,9 @@ unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(T
 }
 
 bool SingleFileStorageManager::IsCheckpointClean(block_id_t checkpoint_id) {
-	return block_manager->IsRootBlock(checkpoint_id);
+	// FIXME
+	return false;
+//	return block_manager->IsRootBlock(checkpoint_id);
 }
 
 void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
