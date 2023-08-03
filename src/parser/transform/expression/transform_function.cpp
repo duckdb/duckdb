@@ -209,6 +209,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			}
 			window_ref = it->second;
 			D_ASSERT(window_ref);
+			if (window_ref->startOffset || window_ref->endOffset || window_ref->frameOptions != FRAMEOPTION_DEFAULTS) {
+				throw ParserException("cannot copy window \"%s\" because it has a frame clause", window_spec->refname);
+			}
 		}
 		in_window_definition = true;
 		TransformWindowDef(*window_ref, *expr);
