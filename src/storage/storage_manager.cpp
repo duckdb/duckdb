@@ -82,6 +82,9 @@ public:
 	BlockManager &GetBlockManagerForRowData() override {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager() override {
+		throw InternalException("FIXME: GetMetadataManager");
+	}
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)

@@ -157,7 +157,7 @@ public:
 	void Delete();
 	void Flush();
 
-	void WriteCheckpoint(block_id_t meta_block);
+	void WriteCheckpoint(MetaBlockPointer meta_block);
 
 protected:
 	AttachedDatabase &database;

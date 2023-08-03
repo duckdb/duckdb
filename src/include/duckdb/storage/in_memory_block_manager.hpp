@@ -41,7 +41,7 @@ public:
 	void IncreaseBlockReferenceCount(block_id_t block_id) override {
 		throw InternalException("Cannot perform IO in in-memory database - IncreaseBlockReferenceCount!");
 	}
-	block_id_t GetMetaBlock() override {
+	idx_t GetMetaBlock() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetMetaBlock!");
 	}
 	void Read(Block &block) override {

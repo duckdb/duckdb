@@ -16,7 +16,7 @@ namespace duckdb {
 class DatabaseInstance;
 class ClientContext;
 class ColumnSegment;
-class MetaBlockReader;
+class MetadataReader;
 class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class TableCatalogEntry;
@@ -33,7 +33,8 @@ public:
 	//! The database
 	AttachedDatabase &db;
 
-	virtual MetaBlockWriter &GetMetaBlockWriter() = 0;
+	virtual MetadataManager &GetMetadataManager() = 0;
+	virtual MetadataWriter &GetMetadataWriter() = 0;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
 
 protected:
@@ -58,17 +59,17 @@ protected:
 	Catalog &catalog;
 
 protected:
-	virtual void LoadCheckpoint(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadSchema(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadTable(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadView(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadSequence(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadMacro(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadTableMacro(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadIndex(ClientContext &context, MetaBlockReader &reader);
-	virtual void ReadType(ClientContext &context, MetaBlockReader &reader);
+	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
+	virtual void ReadSchema(ClientContext &context, MetadataReader &reader);
+	virtual void ReadTable(ClientContext &context, MetadataReader &reader);
+	virtual void ReadView(ClientContext &context, MetadataReader &reader);
+	virtual void ReadSequence(ClientContext &context, MetadataReader &reader);
+	virtual void ReadMacro(ClientContext &context, MetadataReader &reader);
+	virtual void ReadTableMacro(ClientContext &context, MetadataReader &reader);
+	virtual void ReadIndex(ClientContext &context, MetadataReader &reader);
+	virtual void ReadType(ClientContext &context, MetadataReader &reader);
 
-	virtual void ReadTableData(ClientContext &context, MetaBlockReader &reader, BoundCreateTableInfo &bound_info);
+	virtual void ReadTableData(ClientContext &context, MetadataReader &reader, BoundCreateTableInfo &bound_info);
 };
 
 class SingleFileCheckpointReader final : public CheckpointReader {
@@ -78,6 +79,7 @@ public:
 	}
 
 	void LoadFromStorage();
+	MetadataManager &GetMetadataManager();
 
 	//! The database
 	SingleFileStorageManager &storage;
@@ -98,16 +100,17 @@ public:
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
 	void CreateCheckpoint();
 
-	virtual MetaBlockWriter &GetMetaBlockWriter() override;
+	virtual MetadataWriter &GetMetadataWriter() override;
+	virtual MetadataManager &GetMetadataManager() override;
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) override;
 
 	BlockManager &GetBlockManager();
 
 private:
 	//! The metadata writer is responsible for writing schema information
-	unique_ptr<MetaBlockWriter> metadata_writer;
+	unique_ptr<MetadataWriter> metadata_writer;
 	//! The table data writer is responsible for writing the DataPointers used by the table chunks
-	unique_ptr<MetaBlockWriter> table_metadata_writer;
+	unique_ptr<MetadataWriter> table_metadata_writer;
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;

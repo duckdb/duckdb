@@ -79,6 +79,10 @@ void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	}
 }
 
+MetadataManager &BlockManager::GetMetadataManager() {
+	throw InternalException("FIXME: GetMetadataManager");
+}
+
 void BlockManager::Truncate() {
 }
 

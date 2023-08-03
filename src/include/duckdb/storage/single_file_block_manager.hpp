@@ -53,7 +53,7 @@ public:
 	//! Increase the reference count of a block. The block should hold at least one reference
 	void IncreaseBlockReferenceCount(block_id_t block_id) override;
 	//! Return the meta block id
-	block_id_t GetMetaBlock() override;
+	idx_t GetMetaBlock() override;
 	//! Read the content of the block from disk
 	void Read(Block &block) override;
 	//! Write the given block to disk
@@ -78,7 +78,7 @@ private:
 	void ChecksumAndWrite(FileBuffer &handle, uint64_t location) const;
 
 	//! Return the blocks to which we will write the free list and modified blocks
-	vector<block_id_t> GetFreeListBlocks();
+	vector<MetadataHandle> GetFreeListBlocks();
 
 private:
 	AttachedDatabase &db;

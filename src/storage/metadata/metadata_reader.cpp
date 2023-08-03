@@ -4,7 +4,11 @@ namespace duckdb {
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer) :
 	manager(manager), next_pointer(pointer), has_next_block(true), offset(0), capacity(0) {
+}
 
+MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer) :
+	manager(manager) {
+	throw InternalException("FIXME: MetadataReader from block pointer");
 }
 
 void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
@@ -23,6 +27,10 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	// we have enough left in this block to read from the buffer
 	memcpy(buffer, Ptr() + offset, read_size);
 	offset += read_size;
+}
+
+MetaBlockPointer MetadataReader::GetBlockPointer() {
+	throw InternalException("FIXME: GetBlockPointer");
 }
 
 void MetadataReader::ReadNextBlock() {

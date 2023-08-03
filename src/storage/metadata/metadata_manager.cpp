@@ -77,6 +77,13 @@ MetadataPointer MetadataManager::FromDiskPointer(idx_t pointer) {
 	throw InternalException("Failed to load pointer %llu, no metadata block with block id %llu\n", pointer, block_id);
 }
 
+void MetadataManager::Flush() {
+	throw InternalException("FIXME: Flush to disk");
+}
+
+void MetadataManager::MarkWrittenBlocks() {
+	throw InternalException("FIXME: MarkWrittenBlocks");
+}
 
 block_id_t MetadataManager::GetNextBlockId() {
 	return block_manager.GetFreeBlockId();

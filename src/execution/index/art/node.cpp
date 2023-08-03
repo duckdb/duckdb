@@ -9,8 +9,8 @@
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
@@ -19,18 +19,17 @@ namespace duckdb {
 // Constructors / Destructors
 //===--------------------------------------------------------------------===//
 
-Node::Node(MetaBlockReader &reader) {
-
-	idx_t block_id = reader.Read<block_id_t>();
+Node::Node(MetadataReader &reader) {
+	idx_t block_pointer = reader.Read<idx_t>();
 	auto offset = reader.Read<uint32_t>();
 	Reset();
 
-	if (block_id == DConstants::INVALID_INDEX) {
+	if (block_pointer == DConstants::INVALID_INDEX) {
 		return;
 	}
 
 	SetSerialized();
-	SetPtr(block_id, offset);
+	SetPtr(block_pointer, offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -225,10 +224,9 @@ optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deseri
 // (De)serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
-
+MetaBlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
 	if (!IsSet()) {
-		return {(block_id_t)DConstants::INVALID_INDEX, 0};
+		return MetaBlockPointer();
 	}
 	if (IsSerialized()) {
 		Deserialize(art);
@@ -254,11 +252,10 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 }
 
 void Node::Deserialize(ART &art) {
-
 	D_ASSERT(IsSet() && IsSerialized());
 
-	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), GetBufferId());
-	reader.offset = GetOffset();
+	MetaBlockPointer pointer(GetBufferId(), GetOffset());
+	MetadataReader reader(art.table_io_manager.GetMetadataManager(), pointer);
 	Reset();
 	SetType(reader.Read<uint8_t>());
 

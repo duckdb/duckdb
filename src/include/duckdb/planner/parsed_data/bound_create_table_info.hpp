@@ -47,7 +47,7 @@ struct BoundCreateTableInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table <Block_ID, Offset>
-	vector<BlockPointer> indexes;
+	vector<MetaBlockPointer> indexes;
 
 	//! Serializes a BoundCreateTableInfo to a stand-alone binary blob
 	void Serialize(Serializer &serializer) const;

@@ -2,8 +2,8 @@
 
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
@@ -313,7 +313,7 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 	return str;
 }
 
-BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
+MetaBlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		auto block_pointer = writer.GetBlockPointer();
@@ -337,13 +337,13 @@ BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 	}
 
 	// write child block pointer
-	writer.Write(child_block_pointer.block_id);
+	writer.Write(child_block_pointer.block_pointer);
 	writer.Write(child_block_pointer.offset);
 
 	return block_pointer;
 }
 
-void Leaf::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
+void Leaf::Deserialize(ART &art, Node &node, MetadataReader &reader) {
 
 	D_ASSERT(node.GetType() == NType::LEAF);
 

@@ -3,8 +3,8 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/common/swap.hpp"
 
 namespace duckdb {
@@ -280,7 +280,7 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 	return str + node_ref.get().VerifyAndToString(art, only_verify);
 }
 
-BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
+MetaBlockPointer Prefix::Serialize(ART &art, MetadataWriter &writer) {
 
 	// recurse into the child and retrieve its block pointer
 	auto child_block_pointer = ptr.Serialize(art, writer);
@@ -296,13 +296,13 @@ BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 	}
 
 	// write child block pointer
-	writer.Write(child_block_pointer.block_id);
+	writer.Write(child_block_pointer.block_pointer);
 	writer.Write(child_block_pointer.offset);
 
 	return block_pointer;
 }
 
-void Prefix::Deserialize(MetaBlockReader &reader) {
+void Prefix::Deserialize(MetadataReader &reader) {
 
 	data[Node::PREFIX_SIZE] = reader.Read<uint8_t>();
 

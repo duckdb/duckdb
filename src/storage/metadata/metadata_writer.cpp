@@ -8,16 +8,12 @@ MetadataWriter::MetadataWriter(MetadataManager &manager) :
 
 }
 
-void MetadataWriter::NextBlock() {
-	// FIXME: next block
-	if (capacity > 0) {
-		written_blocks.push_back(current_pointer);
-	}
-//	written_blocks.insert(block->id);
-//	if (offset > sizeof(block_id_t)) {
-//		block_manager.Write(*block);
-//		offset = sizeof(block_id_t);
-//	}
+MetaBlockPointer MetadataWriter::GetBlockPointer() {
+	throw InternalException("MetaBlockPointer - GetBlockPointer");
+}
+
+MetadataHandle MetadataWriter::NextHandle() {
+	return manager.AllocateHandle();
 }
 
 void MetadataWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
@@ -33,19 +29,18 @@ void MetadataWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			write_size -= copy_amount;
 		}
 		// now we need to get a new block id
-		auto new_handle = manager.AllocateHandle();
+		auto new_handle = NextHandle();
 
 		// write the block id of the new block to the start of the current block
 		if (capacity > 0) {
 			Store<idx_t>(manager.GetDiskPointer(new_handle.pointer), Ptr());
 		}
-		// first flush the old block
-		NextBlock();
 		// now update the block id of the block
 		block = std::move(new_handle);
-		current_pointer = new_handle.pointer;
+		current_pointer = block.pointer;
+		offset = sizeof(idx_t);
 		capacity = MetadataManager::METADATA_BLOCK_SIZE;
-		Store<block_id_t>(-1, Ptr());
+		Store<idx_t>(-1, Ptr());
 	}
 	memcpy(Ptr() + offset, buffer, write_size);
 	offset += write_size;

@@ -49,6 +49,11 @@ public:
 	idx_t GetDiskPointer(MetadataPointer pointer);
 	MetadataPointer FromDiskPointer(idx_t pointer);
 
+	//! Flush all blocks to disk
+	void Flush();
+
+	void MarkWrittenBlocks();
+
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;

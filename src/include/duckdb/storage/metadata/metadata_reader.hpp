@@ -15,10 +15,17 @@ namespace duckdb {
 class MetadataReader : public Deserializer {
 public:
 	MetadataReader(MetadataManager &manager, MetadataPointer next_pointer);
+	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer);
 
 public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
+
+	MetaBlockPointer GetBlockPointer();
+
+	MetadataManager &GetMetadataManager() {
+		return manager;
+	}
 
 private:
 	data_ptr_t Ptr();

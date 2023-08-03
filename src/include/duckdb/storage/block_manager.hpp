@@ -19,6 +19,7 @@ class BlockHandle;
 class BufferManager;
 class ClientContext;
 class DatabaseInstance;
+class MetadataManager;
 
 //! BlockManager is an abstract representation to manage blocks on DuckDB. When writing or reading blocks, the
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
@@ -48,7 +49,7 @@ public:
 	//! called.
 	virtual void IncreaseBlockReferenceCount(block_id_t block_id) = 0;
 	//! Get the first meta block id
-	virtual block_id_t GetMetaBlock() = 0;
+	virtual idx_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk
 	virtual void Read(Block &block) = 0;
 	//! Writes the block to disk
@@ -76,6 +77,8 @@ public:
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
 	void UnregisterBlock(block_id_t block_id, bool can_destroy);
+
+	MetadataManager &GetMetadataManager();
 
 private:
 	//! The lock for the set of blocks

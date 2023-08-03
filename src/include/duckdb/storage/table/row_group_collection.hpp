@@ -106,6 +106,7 @@ public:
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo() {
 		return *info;
 	}

@@ -76,9 +76,9 @@ public:
 	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
 	//! Serialize this node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	MetaBlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize this node
-	void Deserialize(MetaBlockReader &reader);
+	void Deserialize(MetadataReader &reader);
 
 	//! Vacuum the child of the node
 	inline void Vacuum(ART &art, const ARTFlags &flags) {
