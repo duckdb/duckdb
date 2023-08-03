@@ -23,9 +23,8 @@ void PreparedStatementVerifier::Extract() {
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
 	    *select.node, [&](unique_ptr<ParsedExpression> &child) { ConvertConstants(child); });
 	statement->n_param = values.size();
-	for (idx_t i = 0; i < values.size(); i++) {
-		auto identifier = std::to_string(i + 1);
-		statement->named_param_map[identifier] = 0;
+	for (auto &kv : values) {
+		statement->named_param_map[kv.first] = 0;
 	}
 	// create the PREPARE and EXECUTE statements
 	string name = "__duckdb_verification_prepared_statement";
