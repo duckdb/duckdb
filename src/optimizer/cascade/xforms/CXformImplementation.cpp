@@ -1,36 +1,37 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CXformExploration.cpp
+//		CXformImplementation.cpp
 //
 //	@doc:
-//		Implementation of basic exploration transformation
+//		Implementation of basic implementation transformation
 //---------------------------------------------------------------------------
-#include "duckdb/optimizer/cascade/xforms/CXformExploration.h"
+#include "duckdb/optimizer/cascade/xforms/CXformImplementation.h"
 #include "duckdb/optimizer/cascade/base.h"
 
 using namespace gpopt;
 
+
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformExploration::CXformExploration
+//		CXformImplementation::CXformImplementation
 //
 //	@doc:
-//		Ctor
+//		Dtor
 //
 //---------------------------------------------------------------------------
-CXformExploration::CXformExploration(duckdb::unique_ptr<Operator> pexpr)
-	: CXform(std::move(pexpr))
+CXformImplementation::CXformImplementation(duckdb::unique_ptr<Operator> pop)
+    : CXform(std::move(pop))
 {
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformExploration::~CXformExploration
+//		CXformImplementation::~CXformImplementation
 //
 //	@doc:
-//		Ctor
+//		Dtor
 //
 //---------------------------------------------------------------------------
-CXformExploration::~CXformExploration()
+CXformImplementation::~CXformImplementation()
 {
 }

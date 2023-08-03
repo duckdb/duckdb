@@ -18,12 +18,10 @@ using namespace gpopt;
 //		ctor
 //
 //---------------------------------------------------------------------------
-CXformResult::CXformResult(CMemoryPool *mp) : m_ulExpr(0)
+CXformResult::CXformResult()
+	: m_ulExpr(0)
 {
-	GPOS_ASSERT(NULL != mp);
-	m_pdrgpexpr = GPOS_NEW(mp) CExpressionArray(mp);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -35,10 +33,7 @@ CXformResult::CXformResult(CMemoryPool *mp) : m_ulExpr(0)
 //---------------------------------------------------------------------------
 CXformResult::~CXformResult()
 {
-	// release array (releases all elements)
-	m_pdrgpexpr->Release();
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -48,16 +43,10 @@ CXformResult::~CXformResult()
 //		add alternative
 //
 //---------------------------------------------------------------------------
-void
-CXformResult::Add(CExpression *pexpr)
+void CXformResult::Add(duckdb::unique_ptr<Operator> pexpr)
 {
-	GPOS_ASSERT(0 == m_ulExpr &&
-				"Incorrect workflow: cannot add further alternatives");
-
-	GPOS_ASSERT(NULL != pexpr);
-	m_pdrgpexpr->Append(pexpr);
+	m_pdrgpexpr.push_back(std::move(pexpr));
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -67,40 +56,13 @@ CXformResult::Add(CExpression *pexpr)
 //		retrieve next alternative
 //
 //---------------------------------------------------------------------------
-CExpression *
-CXformResult::PexprNext()
+duckdb::unique_ptr<Operator> CXformResult::PexprNext()
 {
-	CExpression *pexpr = NULL;
-	if (m_ulExpr < m_pdrgpexpr->Size())
+	duckdb::unique_ptr<Operator> pexpr = nullptr;
+	if (m_ulExpr < m_pdrgpexpr.size())
 	{
-		pexpr = (*m_pdrgpexpr)[m_ulExpr];
+		pexpr = std::move(m_pdrgpexpr[m_ulExpr]);
 	}
-
-	GPOS_ASSERT(m_ulExpr <= m_pdrgpexpr->Size());
 	m_ulExpr++;
-
 	return pexpr;
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CXformResult::OsPrint
-//
-//	@doc:
-//		debug print
-//
-//---------------------------------------------------------------------------
-IOstream &
-CXformResult::OsPrint(IOstream &os) const
-{
-	os << "Alternatives:" << std::endl;
-
-	for (ULONG i = 0; i < m_pdrgpexpr->Size(); i++)
-	{
-		os << i << ": " << std::endl;
-		(*m_pdrgpexpr)[i]->OsPrint(os);
-	}
-
-	return os;
 }
