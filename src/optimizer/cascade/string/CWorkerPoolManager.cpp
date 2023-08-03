@@ -9,16 +9,17 @@
 //		* assigns tasks to workers
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/task/CWorkerPoolManager.h"
-#include "duckdb/optimizer/cascade/memory/CMemoryPool.h"
-#include "duckdb/optimizer/cascade/memory/CMemoryPoolManager.h"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/helper.hpp"
 
-using namespace gpos;
+using namespace duckdb;
 
+namespace gpos
+{
 //---------------------------------------------------------------------------
 // static singleton - global instance of worker pool manager
 //---------------------------------------------------------------------------
-CWorkerPoolManager *CWorkerPoolManager::m_worker_pool_manager = NULL;
-
+duckdb::unique_ptr<CWorkerPoolManager> CWorkerPoolManager::m_worker_pool_manager = nullptr;
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -28,22 +29,12 @@ CWorkerPoolManager *CWorkerPoolManager::m_worker_pool_manager = NULL;
 //		Private ctor
 //
 //---------------------------------------------------------------------------
-CWorkerPoolManager::CWorkerPoolManager(CMemoryPool *mp)
-	: m_mp(mp),
-	  m_auto_task_proxy_counter(0),
-	  m_active(false),
-	  m_single_worker(NULL)
+CWorkerPoolManager::CWorkerPoolManager()
+	: m_auto_task_proxy_counter(0), m_active(false), m_single_worker(nullptr)
 {
-	// initialize hash table
-	m_shtTS.Init(mp, GPOS_WORKERPOOL_HT_SIZE,
-				 GPOS_OFFSET(CTask, m_worker_pool_manager_link),
-				 GPOS_OFFSET(CTask, m_tid), &(CTaskId::m_invalid_tid),
-				 CTaskId::HashValue, CTaskId::Equals);
-
 	// set active
 	m_active = true;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -53,39 +44,12 @@ CWorkerPoolManager::CWorkerPoolManager(CMemoryPool *mp)
 //		Initializer for global worker pool manager
 //
 //---------------------------------------------------------------------------
-GPOS_RESULT
-CWorkerPoolManager::Init()
+GPOS_RESULT CWorkerPoolManager::Init()
 {
-	GPOS_ASSERT(NULL == WorkerPoolManager());
-
-	CMemoryPool *mp =
-		CMemoryPoolManager::GetMemoryPoolMgr()->CreateMemoryPool();
-
-	GPOS_TRY
-	{
-		// create worker pool
-		CWorkerPoolManager::m_worker_pool_manager =
-			GPOS_NEW(mp) CWorkerPoolManager(mp);
-	}
-	GPOS_CATCH_EX(ex)
-	{
-		// turn in memory pool in case of failure
-		CMemoryPoolManager::GetMemoryPoolMgr()->Destroy(mp);
-
-		CWorkerPoolManager::m_worker_pool_manager = NULL;
-
-		if (GPOS_MATCH_EX(ex, CException::ExmaSystem, CException::ExmiOOM))
-		{
-			return GPOS_OOM;
-		}
-
-		return GPOS_FAILED;
-	}
-	GPOS_CATCH_END;
-
+	// create worker pool
+	CWorkerPoolManager::m_worker_pool_manager = make_uniq<CWorkerPoolManager>();
 	return GPOS_OK;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -95,31 +59,13 @@ CWorkerPoolManager::Init()
 //		Shutdown stops workers and cleans up worker pool memory
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::Shutdown()
+void CWorkerPoolManager::Shutdown()
 {
-	CWorkerPoolManager *worker_pool_manager =
-		CWorkerPoolManager::m_worker_pool_manager;
-
-	GPOS_ASSERT(NULL != worker_pool_manager &&
-				"Worker pool has not been initialized");
-
-	GPOS_ASSERT(0 == worker_pool_manager->m_auto_task_proxy_counter &&
-				"AutoTaskProxy alive at worker pool shutdown");
-
 	// stop scheduling tasks
-	worker_pool_manager->m_active = false;
-
-	CMemoryPool *mp = worker_pool_manager->m_mp;
-
+	CWorkerPoolManager::m_worker_pool_manager->m_active = false;
 	// destroy worker pool
-	CWorkerPoolManager::m_worker_pool_manager = NULL;
-	GPOS_DELETE(worker_pool_manager);
-
-	// release allocated memory pool
-	CMemoryPoolManager::GetMemoryPoolMgr()->Destroy(mp);
+	CWorkerPoolManager::m_worker_pool_manager.release();
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -129,14 +75,10 @@ CWorkerPoolManager::Shutdown()
 //		Insert worker into the WLS table
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::RegisterWorker(CWorker *worker)
+void CWorkerPoolManager::RegisterWorker(duckdb::unique_ptr<CWorker> worker)
 {
-	GPOS_ASSERT(NULL != worker);
-	GPOS_ASSERT(NULL == m_single_worker);
-	m_single_worker = worker;
+	m_single_worker = std::move(worker);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -146,12 +88,10 @@ CWorkerPoolManager::RegisterWorker(CWorker *worker)
 //		Remover worker, given its id, from WLS table
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::RemoveWorker()
+void CWorkerPoolManager::RemoveWorker()
 {
 	m_single_worker = NULL;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -161,21 +101,12 @@ CWorkerPoolManager::RemoveWorker()
 //		Insert a task into the task table
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::RegisterTask(CTask *task)
+void CWorkerPoolManager::RegisterTask(CTask* task)
 {
-	GPOS_ASSERT(m_active && "Worker pool is not operating");
-
 	// get access
 	CTaskId &tid = task->m_tid;
-	CSyncHashtableAccessByKey<CTask, CTaskId> shta(m_shtTS, tid);
-
-	// must be first to register
-	GPOS_ASSERT(NULL == shta.Find() && "Found registered task.");
-
-	shta.Insert(task);
+	m_shtTS.insert(make_pair(tid, task));
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -185,26 +116,21 @@ CWorkerPoolManager::RegisterTask(CTask *task)
 //		Remove worker, given by id, from the task table
 //
 //---------------------------------------------------------------------------
-CTask *
-CWorkerPoolManager::RemoveTask(CTaskId tid)
+CTask* CWorkerPoolManager::RemoveTask(CTaskId tid)
 {
-	CTask *task = NULL;
-
+	CTask* task = nullptr;
 	// scope for hash table accessor
 	{
 		// get access
-		CSyncHashtableAccessByKey<CTask, CTaskId> shta(m_shtTS, tid);
-
-		task = shta.Find();
-		if (NULL != task)
+		auto itr = m_shtTS.find(tid);
+		if (m_shtTS.end() != itr)
 		{
-			shta.Remove(task);
+			task = itr->second;
+			m_shtTS.erase(itr);
 		}
 	}
-
 	return task;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -214,17 +140,11 @@ CWorkerPoolManager::RemoveTask(CTaskId tid)
 //		Add task to scheduler;
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::Schedule(CTask *task)
+void CWorkerPoolManager::Schedule(CTask* task)
 {
-	GPOS_ASSERT(m_active && "Worker pool is not operating");
-
 	// add task to scheduler's queue
 	m_task_scheduler.Enqueue(task);
-
-	GPOS_CHECK_ABORT;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -234,40 +154,31 @@ CWorkerPoolManager::Schedule(CTask *task)
 //		Mark task as canceled
 //
 //---------------------------------------------------------------------------
-void
-CWorkerPoolManager::Cancel(CTaskId tid)
+void CWorkerPoolManager::Cancel(CTaskId tid)
 {
-	BOOL is_queued = false;
-
-	CTask *task = NULL;
-
+	bool is_queued = false;
+	CTask* task = nullptr;
 	// scope for hash table accessor
 	{
-		CSyncHashtableAccessByKey<CTask, CTaskId> shta(m_shtTS, tid);
-		task = shta.Find();
-		if (NULL != task)
+		// get access
+		auto itr = m_shtTS.find(tid);
+		if (m_shtTS.end() != itr)
 		{
+			task = itr->second;
 			task->Cancel();
-			is_queued = (CTask::EtsQueued == task->m_status);
+			is_queued = (EtsQueued == task->m_status);
 		}
 	}
-
 	// remove task from scheduler's queue
 	if (is_queued)
 	{
-		GPOS_ASSERT(NULL != task);
-
 		GPOS_RESULT eres = GPOS_OK;
-
 		eres = m_task_scheduler.Cancel(task);
-
 		// if task was dequeued, signal task completion
 		if (GPOS_OK == eres)
 		{
-			task->SetStatus(CTask::EtsError);
+			task->SetStatus(EtsError);
 		}
 	}
 }
-
-
-// EOF
+}

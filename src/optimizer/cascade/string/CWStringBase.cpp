@@ -22,10 +22,9 @@ const WCHAR CWStringBase::m_empty_wcstr = GPOS_WSZ_LIT('\0');
 //		Creates a deep copy of the string
 //
 //---------------------------------------------------------------------------
-CWStringConst *
-CWStringBase::Copy(CMemoryPool *mp) const
+shared_ptr<CWStringConst> CWStringBase::Copy() const
 {
-	return GPOS_NEW(mp) CWStringConst(mp, GetBuffer());
+	return make_shared<CWStringConst>(GetBuffer());
 }
 
 //---------------------------------------------------------------------------
@@ -36,8 +35,7 @@ CWStringBase::Copy(CMemoryPool *mp) const
 //		Checks if the string is properly NULL-terminated
 //
 //---------------------------------------------------------------------------
-bool
-CWStringBase::IsValid() const
+bool CWStringBase::IsValid() const
 {
 	return (Length() == GPOS_WSZ_LENGTH(GetBuffer()));
 }
@@ -50,8 +48,7 @@ CWStringBase::IsValid() const
 //		Equality operator on strings
 //
 //---------------------------------------------------------------------------
-BOOL
-CWStringBase::operator==(const CWStringBase &str) const
+bool CWStringBase::operator==(const CWStringBase &str) const
 {
 	return Equals(&str);
 }
@@ -66,8 +63,7 @@ CWStringBase::operator==(const CWStringBase &str) const
 //		not counting the terminating '\0'
 //
 //---------------------------------------------------------------------------
-ULONG
-CWStringBase::Length() const
+ULONG CWStringBase::Length() const
 {
 	return m_length;
 }
@@ -80,7 +76,7 @@ CWStringBase::Length() const
 //		Checks whether the string is byte-wise equal to another string
 //
 //---------------------------------------------------------------------------
-BOOL
+bool
 CWStringBase::Equals(const CWStringBase *str) const
 {
 	GPOS_ASSERT(NULL != str);
@@ -95,7 +91,7 @@ CWStringBase::Equals(const CWStringBase *str) const
 //		Checks whether the string is byte-wise equal to a string literal
 //
 //---------------------------------------------------------------------------
-BOOL
+bool
 CWStringBase::Equals(const WCHAR *w_str_buffer) const
 {
 	GPOS_ASSERT(NULL != w_str_buffer);
@@ -116,7 +112,7 @@ CWStringBase::Equals(const WCHAR *w_str_buffer) const
 //		Checks whether the string is empty
 //
 //---------------------------------------------------------------------------
-BOOL
+bool
 CWStringBase::IsEmpty() const
 {
 	return (0 == Length());
@@ -156,7 +152,7 @@ CWStringBase::Find(WCHAR wc) const
 //		Checks if a character is escaped
 //
 //---------------------------------------------------------------------------
-BOOL
+bool
 CWStringBase::HasEscapedCharAt(ULONG offset) const
 {
 	GPOS_ASSERT(!IsEmpty());
