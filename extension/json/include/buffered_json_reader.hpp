@@ -14,27 +14,10 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
+#include "json_enums.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
-
-enum class JSONFormat : uint8_t {
-	//! Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)
-	AUTO_DETECT = 0,
-	//! One unit after another, newlines can be anywhere
-	UNSTRUCTURED = 1,
-	//! Units are separated by newlines, newlines do not occur within Units (NDJSON)
-	NEWLINE_DELIMITED = 2,
-	//! File is one big array of units
-	ARRAY = 3,
-};
-
-enum class JSONRecordType : uint8_t {
-	AUTO_DETECT = 0,
-	//! Sequential objects that are unpacked
-	RECORDS = 1,
-	//! Any other JSON type, e.g., ARRAY
-	VALUES = 2,
-};
 
 struct BufferedJSONReaderOptions {
 public:
@@ -50,6 +33,9 @@ public:
 public:
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BufferedJSONReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct JSONBufferHandle {

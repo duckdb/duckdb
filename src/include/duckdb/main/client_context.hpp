@@ -24,6 +24,7 @@
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
 class Appender;

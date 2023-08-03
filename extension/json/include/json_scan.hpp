@@ -9,6 +9,7 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
+#include "json_enums.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -18,16 +19,6 @@
 #include "json_transform.hpp"
 
 namespace duckdb {
-
-enum class JSONScanType : uint8_t {
-	INVALID = 0,
-	//! Read JSON straight to columnar data
-	READ_JSON = 1,
-	//! Read JSON values as strings
-	READ_JSON_OBJECTS = 2,
-	//! Sample run for schema detection
-	SAMPLE = 3,
-};
 
 struct JSONString {
 public:
@@ -104,6 +95,9 @@ public:
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(ClientContext &context, FieldReader &reader);
 
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<JSONScanData> FormatDeserialize(FormatDeserializer &deserializer);
+
 public:
 	//! Scan type
 	JSONScanType type;
@@ -144,6 +138,12 @@ public:
 
 	//! The inferred avg tuple size
 	idx_t avg_tuple_size = 420;
+
+private:
+	JSONScanData(ClientContext &context, vector<string> files, string date_format, string timestamp_format);
+
+	string GetDateFormat() const;
+	string GetTimestampFormat() const;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
@@ -294,6 +294,10 @@ public:
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
 	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            TableFunction &function);
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                            const TableFunction &function);
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };

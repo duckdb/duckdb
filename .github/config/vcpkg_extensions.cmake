@@ -17,6 +17,14 @@ duckdb_extension_load(aws
     GIT_TAG 617a4b1456eec1dee3d668f9ce005a1de9ef21c8
 )
 
+duckdb_extension_load(spatial
+    DONT_LINK
+    GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
+    GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
+    INCLUDE_DIR spatial/include
+    TEST_DIR test/sql
+)
+
 # Windows tests for iceberg currently not working
 if (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
@@ -28,4 +36,5 @@ duckdb_extension_load(iceberg
     ${LOAD_ICEBERG_TESTS}
     GIT_URL https://github.com/duckdblabs/duckdb_iceberg
     GIT_TAG 6481aa4dd0ab9d724a8df28a1db66800561dd5f9
+    APPLY_PATCHES
 )

@@ -108,7 +108,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
 				levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, (string)levels[level_idx]);
 			}
-			duckdb_col_type = LogicalType::ENUM(df_names[col_idx], duckdb_levels, levels.size());
+			duckdb_col_type = LogicalType::ENUM(duckdb_levels, levels.size());
 			break;
 		}
 		case RType::STRING:

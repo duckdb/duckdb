@@ -10,6 +10,7 @@ namespace duckdb {
 
 ExpressionBinder::ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder)
     : binder(binder), context(context) {
+	InitializeStackCheck();
 	if (replace_binder) {
 		stored_binder = &binder.GetActiveBinder();
 		binder.SetActiveBinder(*this);
@@ -28,7 +29,26 @@ ExpressionBinder::~ExpressionBinder() {
 	}
 }
 
+void ExpressionBinder::InitializeStackCheck() {
+	if (binder.HasActiveBinder()) {
+		stack_depth = binder.GetActiveBinder().stack_depth;
+	} else {
+		stack_depth = 0;
+	}
+}
+
+StackChecker<ExpressionBinder> ExpressionBinder::StackCheck(const ParsedExpression &expr, idx_t extra_stack) {
+	D_ASSERT(stack_depth != DConstants::INVALID_INDEX);
+	if (stack_depth + extra_stack >= MAXIMUM_STACK_DEPTH) {
+		throw BinderException("Maximum recursion depth exceeded (Maximum: %llu) while binding \"%s\"",
+		                      MAXIMUM_STACK_DEPTH, expr.ToString());
+	}
+	return StackChecker<ExpressionBinder>(*this, extra_stack);
+}
+
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
+	auto stack_checker = StackCheck(*expr);
+
 	auto &expr_ref = *expr;
 	switch (expr_ref.expression_class) {
 	case ExpressionClass::BETWEEN:

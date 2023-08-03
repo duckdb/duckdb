@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,6 +19,8 @@ struct ApproxQuantileState {
 };
 
 struct ApproximateQuantileBindData : public FunctionData {
+	ApproximateQuantileBindData() {
+	}
 	explicit ApproximateQuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
 	}
 
@@ -46,6 +50,18 @@ struct ApproximateQuantileBindData : public FunctionData {
 	                                            AggregateFunction &bound_function) {
 		auto quantiles = reader.ReadRequiredList<float>();
 		return make_uniq<ApproximateQuantileBindData>(std::move(quantiles));
+	}
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const AggregateFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ApproximateQuantileBindData>();
+		serializer.WriteProperty("quantiles", bind_data.quantiles);
+	}
+
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+		auto result = make_uniq<ApproximateQuantileBindData>();
+		deserializer.ReadProperty("quantiles", result->quantiles);
+		return std::move(result);
 	}
 
 	vector<float> quantiles;
@@ -192,6 +208,8 @@ unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, Aggre
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;
+	function.format_serialize = ApproximateQuantileBindData::FormatSerialize;
+	function.format_deserialize = ApproximateQuantileBindData::FormatDeserialize;
 	return bind_data;
 }
 
@@ -200,6 +218,8 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 	fun.bind = BindApproxQuantile;
 	fun.serialize = ApproximateQuantileBindData::Serialize;
 	fun.deserialize = ApproximateQuantileBindData::Deserialize;
+	fun.format_serialize = ApproximateQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ApproximateQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::FLOAT);
 	return fun;
@@ -255,6 +275,8 @@ AggregateFunction GetTypedApproxQuantileListAggregateFunction(const LogicalType 
 	auto fun = ApproxQuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.serialize = ApproximateQuantileBindData::Serialize;
 	fun.deserialize = ApproximateQuantileBindData::Deserialize;
+	fun.format_serialize = ApproximateQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ApproximateQuantileBindData::FormatDeserialize;
 	return fun;
 }
 
@@ -300,6 +322,8 @@ unique_ptr<FunctionData> BindApproxQuantileDecimalList(ClientContext &context, A
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;
+	function.format_serialize = ApproximateQuantileBindData::FormatSerialize;
+	function.format_deserialize = ApproximateQuantileBindData::FormatDeserialize;
 	return bind_data;
 }
 
@@ -308,6 +332,8 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	fun.bind = BindApproxQuantile;
 	fun.serialize = ApproximateQuantileBindData::Serialize;
 	fun.deserialize = ApproximateQuantileBindData::Deserialize;
+	fun.format_serialize = ApproximateQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ApproximateQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
 	fun.arguments.push_back(list_of_float);

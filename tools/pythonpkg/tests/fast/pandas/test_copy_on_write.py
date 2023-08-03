@@ -1,6 +1,8 @@
 import duckdb
 import pytest
-import pandas
+
+# https://pandas.pydata.org/docs/dev/user_guide/copy_on_write.html
+pandas = pytest.importorskip('pandas', '1.5', reason='copy_on_write does not exist in earlier versions')
 import datetime
 
 
@@ -40,5 +42,6 @@ class TestCopyOnWrite(object):
         )
         rel = con.sql('select * from df_in')
         res = rel.fetchall()
+        print(res)
         expected = convert_to_result(col)
         assert res == expected

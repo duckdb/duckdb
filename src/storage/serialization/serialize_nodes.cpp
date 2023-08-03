@@ -22,6 +22,12 @@
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -79,6 +85,86 @@ BoundPivotInfo BoundPivotInfo::FormatDeserialize(FormatDeserializer &deserialize
 	return result;
 }
 
+void BufferedCSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("has_delimiter", has_delimiter);
+	serializer.WriteProperty("delimiter", delimiter);
+	serializer.WriteProperty("has_quote", has_quote);
+	serializer.WriteProperty("quote", quote);
+	serializer.WriteProperty("has_escape", has_escape);
+	serializer.WriteProperty("escape", escape);
+	serializer.WriteProperty("has_header", has_header);
+	serializer.WriteProperty("header", header);
+	serializer.WriteProperty("ignore_errors", ignore_errors);
+	serializer.WriteProperty("num_cols", num_cols);
+	serializer.WriteProperty("buffer_sample_size", buffer_sample_size);
+	serializer.WriteProperty("null_str", null_str);
+	serializer.WriteProperty("compression", compression);
+	serializer.WriteProperty("new_line", new_line);
+	serializer.WriteProperty("allow_quoted_nulls", allow_quoted_nulls);
+	serializer.WriteProperty("skip_rows", skip_rows);
+	serializer.WriteProperty("skip_rows_set", skip_rows_set);
+	serializer.WriteProperty("maximum_line_size", maximum_line_size);
+	serializer.WriteProperty("normalize_names", normalize_names);
+	serializer.WriteProperty("force_not_null", force_not_null);
+	serializer.WriteProperty("all_varchar", all_varchar);
+	serializer.WriteProperty("sample_chunk_size", sample_chunk_size);
+	serializer.WriteProperty("sample_chunks", sample_chunks);
+	serializer.WriteProperty("auto_detect", auto_detect);
+	serializer.WriteProperty("file_path", file_path);
+	serializer.WriteProperty("decimal_separator", decimal_separator);
+	serializer.WriteProperty("null_padding", null_padding);
+	serializer.WriteProperty("buffer_size", buffer_size);
+	serializer.WriteProperty("file_options", file_options);
+	serializer.WriteProperty("force_quote", force_quote);
+	serializer.WriteProperty("date_format", date_format);
+	serializer.WriteProperty("has_format", has_format);
+	serializer.WriteProperty("rejects_table_name", rejects_table_name);
+	serializer.WriteProperty("rejects_limit", rejects_limit);
+	serializer.WriteProperty("rejects_recovery_columns", rejects_recovery_columns);
+	serializer.WriteProperty("rejects_recovery_column_ids", rejects_recovery_column_ids);
+}
+
+BufferedCSVReaderOptions BufferedCSVReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	BufferedCSVReaderOptions result;
+	deserializer.ReadProperty("has_delimiter", result.has_delimiter);
+	deserializer.ReadProperty("delimiter", result.delimiter);
+	deserializer.ReadProperty("has_quote", result.has_quote);
+	deserializer.ReadProperty("quote", result.quote);
+	deserializer.ReadProperty("has_escape", result.has_escape);
+	deserializer.ReadProperty("escape", result.escape);
+	deserializer.ReadProperty("has_header", result.has_header);
+	deserializer.ReadProperty("header", result.header);
+	deserializer.ReadProperty("ignore_errors", result.ignore_errors);
+	deserializer.ReadProperty("num_cols", result.num_cols);
+	deserializer.ReadProperty("buffer_sample_size", result.buffer_sample_size);
+	deserializer.ReadProperty("null_str", result.null_str);
+	deserializer.ReadProperty("compression", result.compression);
+	deserializer.ReadProperty("new_line", result.new_line);
+	deserializer.ReadProperty("allow_quoted_nulls", result.allow_quoted_nulls);
+	deserializer.ReadProperty("skip_rows", result.skip_rows);
+	deserializer.ReadProperty("skip_rows_set", result.skip_rows_set);
+	deserializer.ReadProperty("maximum_line_size", result.maximum_line_size);
+	deserializer.ReadProperty("normalize_names", result.normalize_names);
+	deserializer.ReadProperty("force_not_null", result.force_not_null);
+	deserializer.ReadProperty("all_varchar", result.all_varchar);
+	deserializer.ReadProperty("sample_chunk_size", result.sample_chunk_size);
+	deserializer.ReadProperty("sample_chunks", result.sample_chunks);
+	deserializer.ReadProperty("auto_detect", result.auto_detect);
+	deserializer.ReadProperty("file_path", result.file_path);
+	deserializer.ReadProperty("decimal_separator", result.decimal_separator);
+	deserializer.ReadProperty("null_padding", result.null_padding);
+	deserializer.ReadProperty("buffer_size", result.buffer_size);
+	deserializer.ReadProperty("file_options", result.file_options);
+	deserializer.ReadProperty("force_quote", result.force_quote);
+	deserializer.ReadProperty("date_format", result.date_format);
+	deserializer.ReadProperty("has_format", result.has_format);
+	deserializer.ReadProperty("rejects_table_name", result.rejects_table_name);
+	deserializer.ReadProperty("rejects_limit", result.rejects_limit);
+	deserializer.ReadProperty("rejects_recovery_columns", result.rejects_recovery_columns);
+	deserializer.ReadProperty("rejects_recovery_column_ids", result.rejects_recovery_column_ids);
+	return result;
+}
+
 void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("when_expr", *when_expr);
 	serializer.WriteProperty("then_expr", *then_expr);
@@ -121,6 +207,18 @@ ColumnDefinition ColumnDefinition::FormatDeserialize(FormatDeserializer &deseria
 	return result;
 }
 
+void ColumnInfo::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("names", names);
+	serializer.WriteProperty("types", types);
+}
+
+ColumnInfo ColumnInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	ColumnInfo result;
+	deserializer.ReadProperty("names", result.names);
+	deserializer.ReadProperty("types", result.types);
+	return result;
+}
+
 void ColumnList::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("columns", columns);
 }
@@ -155,6 +253,18 @@ CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeser
 	return result;
 }
 
+void HivePartitioningIndex::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("value", value);
+	serializer.WriteProperty("index", index);
+}
+
+HivePartitioningIndex HivePartitioningIndex::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto value = deserializer.ReadProperty<string>("value");
+	auto index = deserializer.ReadProperty<idx_t>("index");
+	HivePartitioningIndex result(std::move(value), index);
+	return result;
+}
+
 void JoinCondition::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("left", *left);
 	serializer.WriteProperty("right", *right);
@@ -178,6 +288,38 @@ LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
 	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 	LogicalType result(id, std::move(type_info));
+	return result;
+}
+
+void MultiFileReaderBindData::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("filename_idx", filename_idx);
+	serializer.WriteProperty("hive_partitioning_indexes", hive_partitioning_indexes);
+}
+
+MultiFileReaderBindData MultiFileReaderBindData::FormatDeserialize(FormatDeserializer &deserializer) {
+	MultiFileReaderBindData result;
+	deserializer.ReadProperty("filename_idx", result.filename_idx);
+	deserializer.ReadProperty("hive_partitioning_indexes", result.hive_partitioning_indexes);
+	return result;
+}
+
+void MultiFileReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("filename", filename);
+	serializer.WriteProperty("hive_partitioning", hive_partitioning);
+	serializer.WriteProperty("auto_detect_hive_partitioning", auto_detect_hive_partitioning);
+	serializer.WriteProperty("union_by_name", union_by_name);
+	serializer.WriteProperty("hive_types_autocast", hive_types_autocast);
+	serializer.WriteProperty("hive_types_schema", hive_types_schema);
+}
+
+MultiFileReaderOptions MultiFileReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	MultiFileReaderOptions result;
+	deserializer.ReadProperty("filename", result.filename);
+	deserializer.ReadProperty("hive_partitioning", result.hive_partitioning);
+	deserializer.ReadProperty("auto_detect_hive_partitioning", result.auto_detect_hive_partitioning);
+	deserializer.ReadProperty("union_by_name", result.union_by_name);
+	deserializer.ReadProperty("hive_types_autocast", result.hive_types_autocast);
+	deserializer.ReadProperty("hive_types_schema", result.hive_types_schema);
 	return result;
 }
 
@@ -211,6 +353,34 @@ PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &deserializer) {
 	return result;
 }
 
+void ReadCSVData::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("files", files);
+	serializer.WriteProperty("csv_types", csv_types);
+	serializer.WriteProperty("csv_names", csv_names);
+	serializer.WriteProperty("return_types", return_types);
+	serializer.WriteProperty("return_names", return_names);
+	serializer.WriteProperty("filename_col_idx", filename_col_idx);
+	serializer.WriteProperty("options", options);
+	serializer.WriteProperty("single_threaded", single_threaded);
+	serializer.WriteProperty("reader_bind", reader_bind);
+	serializer.WriteProperty("column_info", column_info);
+}
+
+unique_ptr<ReadCSVData> ReadCSVData::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<ReadCSVData>(new ReadCSVData());
+	deserializer.ReadProperty("files", result->files);
+	deserializer.ReadProperty("csv_types", result->csv_types);
+	deserializer.ReadProperty("csv_names", result->csv_names);
+	deserializer.ReadProperty("return_types", result->return_types);
+	deserializer.ReadProperty("return_names", result->return_names);
+	deserializer.ReadProperty("filename_col_idx", result->filename_col_idx);
+	deserializer.ReadProperty("options", result->options);
+	deserializer.ReadProperty("single_threaded", result->single_threaded);
+	deserializer.ReadProperty("reader_bind", result->reader_bind);
+	deserializer.ReadProperty("column_info", result->column_info);
+	return result;
+}
+
 void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("sample_size", sample_size);
 	serializer.WriteProperty("is_percentage", is_percentage);
@@ -224,6 +394,26 @@ unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &d
 	deserializer.ReadProperty("is_percentage", result->is_percentage);
 	deserializer.ReadProperty("method", result->method);
 	deserializer.ReadProperty("seed", result->seed);
+	return result;
+}
+
+void StrpTimeFormat::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("format_specifier", format_specifier);
+}
+
+StrpTimeFormat StrpTimeFormat::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto format_specifier = deserializer.ReadProperty<string>("format_specifier");
+	StrpTimeFormat result(format_specifier);
+	return result;
+}
+
+void TableFilterSet::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("filters", filters);
+}
+
+TableFilterSet TableFilterSet::FormatDeserialize(FormatDeserializer &deserializer) {
+	TableFilterSet result;
+	deserializer.ReadProperty("filters", result.filters);
 	return result;
 }
 

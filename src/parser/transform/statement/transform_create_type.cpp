@@ -56,7 +56,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 			D_ASSERT(stmt.query == nullptr);
 			idx_t size = 0;
 			auto ordered_array = PGListToVector(stmt.vals, size);
-			info->type = LogicalType::ENUM(info->name, ordered_array, size);
+			info->type = LogicalType::ENUM(ordered_array, size);
 		}
 	} break;
 
