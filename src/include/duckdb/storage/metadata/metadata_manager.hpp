@@ -22,6 +22,12 @@ struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
+
+	void Serialize(Serializer &serializer);
+	static MetadataBlock Deserialize(Deserializer &source);
+
+	idx_t FreeBlocksToInteger();
+	void FreeBlocksFromInteger(idx_t blocks);
 };
 
 struct MetadataPointer {
@@ -54,6 +60,11 @@ public:
 	void Flush();
 
 	void MarkWrittenBlocks();
+
+	idx_t BlockCount();
+
+	void Serialize(Serializer &serializer);
+	void Deserialize(Deserializer &source);
 
 protected:
 	BlockManager &block_manager;

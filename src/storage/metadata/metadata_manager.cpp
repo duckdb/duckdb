@@ -79,6 +79,10 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 	throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
 }
 
+idx_t MetadataManager::BlockCount() {
+	return blocks.size();
+}
+
 void MetadataManager::Flush() {
 	// write the blocks of the metadata manager to disk
 	for(auto &block : blocks) {
@@ -86,6 +90,59 @@ void MetadataManager::Flush() {
 		block_manager.Write(handle.GetFileBuffer(), block.block_id);
 	}
 }
+
+void MetadataManager::Serialize(Serializer &serializer) {
+	serializer.Write<uint64_t>(blocks.size());
+	for(auto &block : blocks) {
+		block.Serialize(serializer);
+	}
+}
+
+void MetadataManager::Deserialize(Deserializer &source) {
+	auto block_count = source.Read<uint64_t>();
+	for(idx_t i = 0; i < block_count; i++) {
+		auto block = MetadataBlock::Deserialize(source);
+		block.block = block_manager.RegisterBlock(block.block_id);
+		blocks.push_back(std::move(block));
+	}
+}
+
+void MetadataBlock::Serialize(Serializer &serializer) {
+	serializer.Write<block_id_t>(block_id);
+	serializer.Write<idx_t>(FreeBlocksToInteger());
+}
+
+MetadataBlock MetadataBlock::Deserialize(Deserializer &source) {
+	MetadataBlock result;
+	result.block_id = source.Read<block_id_t>();
+	auto free_list = source.Read<idx_t>();
+	result.FreeBlocksFromInteger(free_list);
+	return result;
+}
+
+idx_t MetadataBlock::FreeBlocksToInteger() {
+	idx_t result = 0;
+	for(idx_t i = 0; i < free_blocks.size(); i++) {
+		D_ASSERT(free_blocks[i] < idx_t(64));
+		idx_t mask = idx_t(1) << idx_t(free_blocks[i]);
+		result |= mask;
+	}
+	return result;
+}
+
+void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
+	if (free_list == 0) {
+		return;
+	}
+	for(idx_t i = 0; i < 64; i++) {
+		idx_t mask = idx_t(1) >> i;
+		if (free_list & mask) {
+			free_blocks.push_back(i);
+		}
+	}
+}
+
+
 
 void MetadataManager::MarkWrittenBlocks() {
 //	throw InternalException("FIXME: MarkWrittenBlocks");

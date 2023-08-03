@@ -259,6 +259,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		auto usage_count = reader.Read<uint32_t>();
 		multi_use_blocks[block_id] = usage_count;
 	}
+	GetMetadataManager().Deserialize(reader);
 }
 
 bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
@@ -395,25 +396,20 @@ void SingleFileBlockManager::Truncate() {
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
 
-	if (!free_list.empty() || !multi_use_blocks.empty() || !modified_blocks.empty()) {
-		// there are blocks in the free list or multi_use_blocks
-		// figure out how many blocks we need to write these to the file
-		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
-		auto multi_use_blocks_size =
-		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
-		auto total_size = free_list_size + multi_use_blocks_size;
+	auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
+	auto multi_use_blocks_size =
+		sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+	auto metadata_blocks =
+			sizeof(uint64_t) + (sizeof(idx_t) * 2) * GetMetadataManager().BlockCount();
+	auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
 
-		// reserve the blocks that we are going to write
-		// since these blocks are no longer free we cannot just include them in the free list!
-		auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
-		while(true) {
-			auto handle = GetMetadataManager().AllocateHandle();
-			free_list_blocks.push_back(std::move(handle));
-			if (total_size < block_size) {
-				break;
-			}
-			total_size -= block_size;
-		}
+	// reserve the blocks that we are going to write
+	// since these blocks are no longer free we cannot just include them in the free list!
+	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
+	while(total_size > 0) {
+		auto handle = GetMetadataManager().AllocateHandle();
+		free_list_blocks.push_back(std::move(handle));
+		total_size -= MinValue<idx_t>(total_size, block_size);
 	}
 
 	return free_list_blocks;
@@ -471,6 +467,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
+		GetMetadataManager().Serialize(writer);
 	} else {
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;
