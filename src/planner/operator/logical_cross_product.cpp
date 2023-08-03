@@ -8,10 +8,12 @@ LogicalCrossProduct::LogicalCrossProduct(unique_ptr<LogicalOperator> left, uniqu
 
 unique_ptr<LogicalOperator> LogicalCrossProduct::Create(unique_ptr<LogicalOperator> left,
                                                         unique_ptr<LogicalOperator> right) {
-	if (left->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+	if (left->logical_type == LogicalOperatorType::LOGICAL_DUMMY_SCAN)
+	{
 		return right;
 	}
-	if (right->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
+	if (right->logical_type == LogicalOperatorType::LOGICAL_DUMMY_SCAN)
+	{
 		return left;
 	}
 	return make_uniq<LogicalCrossProduct>(std::move(left), std::move(right));

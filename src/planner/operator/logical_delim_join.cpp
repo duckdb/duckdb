@@ -9,7 +9,7 @@ LogicalDelimJoin::LogicalDelimJoin(JoinType type)
 
 void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
 	LogicalComparisonJoin::Serialize(writer);
-	if (type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	if (logical_type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
 		D_ASSERT(duplicate_eliminated_columns.empty());
 		// if the delim join has no delim columns anymore it is turned into a regular comparison join
 		return;

@@ -6,8 +6,8 @@
 namespace duckdb {
 
 void LogicalSimple::Serialize(FieldWriter &writer) const {
-	writer.WriteField<LogicalOperatorType>(type);
-	switch (type) {
+	writer.WriteField<LogicalOperatorType>(logical_type);
+	switch (logical_type) {
 	case LogicalOperatorType::LOGICAL_ALTER:
 		static_cast<const AlterInfo &>(*info).Serialize(writer.GetSerializer());
 		break;
@@ -18,7 +18,7 @@ void LogicalSimple::Serialize(FieldWriter &writer) const {
 		static_cast<const LoadInfo &>(*info).Serialize(writer.GetSerializer());
 		break;
 	default:
-		throw NotImplementedException(LogicalOperatorToString(type));
+		throw NotImplementedException(LogicalOperatorToString(logical_type));
 	}
 }
 

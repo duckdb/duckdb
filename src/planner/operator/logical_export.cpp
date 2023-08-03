@@ -3,7 +3,7 @@
 namespace duckdb {
 
 void LogicalExport::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(LogicalOperatorToString(type));
+	throw NotImplementedException(LogicalOperatorToString(logical_type));
 }
 
 unique_ptr<LogicalOperator> LogicalExport::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {

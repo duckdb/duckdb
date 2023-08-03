@@ -50,7 +50,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	}
 
 	auto result = make_uniq<LogicalInsert>(*table_catalog_entry, table_index);
-	result->type = state.type;
+	result->logical_type = state.type;
 	result->return_chunk = return_chunk;
 	result->insert_values = std::move(insert_values);
 	result->column_index_map = column_index_map;
