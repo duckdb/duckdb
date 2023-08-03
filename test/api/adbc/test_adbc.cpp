@@ -17,7 +17,7 @@ const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
-		InitiliazeADBCError(&adbc_error);
+		InitializeADBCError(&adbc_error);
 		path = TestCreatePath(path_parameter);
 		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -127,7 +127,7 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 	}
 	AdbcStatusCode adbc_status;
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
 	// NULL error
 	adbc_status = DatabaseInit(&adbc_database, nullptr);
@@ -150,7 +150,7 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 		return;
 	}
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 	AdbcDatabase adbc_database;
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -170,7 +170,7 @@ TEST_CASE("Error Release", "[adbc]") {
 		return;
 	}
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	AdbcDatabase adbc_database;
 	AdbcConnection adbc_connection;
@@ -276,7 +276,7 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	AdbcConnection adbc_connection;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -311,7 +311,7 @@ TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
 	AdbcConnection adbc_connection;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -369,7 +369,7 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	AdbcConnection adbc_connection;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	string query = "select ?, ?, ?";
 
@@ -459,7 +459,7 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	AdbcConnection adbc_connection;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -530,7 +530,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	AdbcConnection adbc_connection_2;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;
 
@@ -751,7 +751,7 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	AdbcConnection adbc_connection;
 
 	AdbcError adbc_error;
-	InitiliazeADBCError(&adbc_error);
+	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
@@ -797,7 +797,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	duckdb_adbc::AdbcConnection adbc_connection;
 
 	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -868,7 +868,7 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::AdbcStatement adbc_statement;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::InitializeADBCError(&adbc_error);
 
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;

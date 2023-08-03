@@ -107,7 +107,7 @@ static void EmptyErrorRelease(AdbcError *error) {
 	return;
 }
 
-void InitiliazeADBCError(AdbcError *error) {
+void InitializeADBCError(AdbcError *error) {
 	if (!error) {
 		return;
 	}

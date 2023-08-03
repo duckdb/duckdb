@@ -88,6 +88,6 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
 void SetError(struct AdbcError *error, const std::string &message);
 void SetError(struct AdbcError *error, const char *message);
 
-void InitiliazeADBCError(AdbcError *error);
+void InitializeADBCError(AdbcError *error);
 
 } // namespace duckdb_adbc
