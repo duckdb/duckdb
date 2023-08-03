@@ -22,15 +22,16 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the DelimJoinGlobalState
-	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(
-	    children[0]->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
+	auto cached_chunk_scan = make_uniq<PhysicalColumnDataScan>(((PhysicalOperator*)children[0].get())->GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality);
 	join->children[0] = std::move(cached_chunk_scan);
 }
 
-vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const {
+vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const
+{
 	vector<const_reference<PhysicalOperator>> result;
-	for (auto &child : children) {
-		result.push_back(*child);
+	for (auto &child : GetChildren())
+	{
+		result.push_back(child);
 	}
 	result.push_back(*join);
 	result.push_back(*distinct);
@@ -43,7 +44,8 @@ vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const
 class DelimJoinGlobalState : public GlobalSinkState {
 public:
 	explicit DelimJoinGlobalState(ClientContext &context, const PhysicalDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
+	    : lhs_data(context, ((PhysicalOperator*)delim_join.children[0].get())->GetTypes())
+	{
 		D_ASSERT(delim_join.delim_scans.size() > 0);
 		// set up the delim join chunk to scan in the original join
 		auto &cached_chunk_scan = delim_join.join->children[0]->Cast<PhysicalColumnDataScan>();
@@ -62,7 +64,7 @@ public:
 class DelimJoinLocalState : public LocalSinkState {
 public:
 	explicit DelimJoinLocalState(ClientContext &context, const PhysicalDelimJoin &delim_join)
-	    : lhs_data(context, delim_join.children[0]->GetTypes()) {
+	    : lhs_data(context, ((PhysicalOperator*)delim_join.children[0].get())->GetTypes()) {
 		lhs_data.InitializeAppend(append_state);
 	}
 
@@ -120,14 +122,14 @@ string PhysicalDelimJoin::ParamsToString() const {
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+void PhysicalDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
+{
 	op_state.reset();
 	sink_state.reset();
-
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(*children[0]);
-
-	if (type == PhysicalOperatorType::DELIM_JOIN) {
+	child_meta_pipeline.Build(*(PhysicalOperator*)children[0].get());
+	if (physical_type == PhysicalOperatorType::DELIM_JOIN)
+	{
 		// recurse into the actual join
 		// any pipelines in there depend on the main pipeline
 		// any scan of the duplicate eliminated data on the RHS depends on this pipeline

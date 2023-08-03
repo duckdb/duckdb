@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
-
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -14,9 +13,10 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
-namespace duckdb {
-
-class IndexJoinOperatorState : public CachingOperatorState {
+namespace duckdb
+{
+class IndexJoinOperatorState : public CachingOperatorState
+{
 public:
 	IndexJoinOperatorState(ClientContext &context, const PhysicalIndexJoin &op)
 	    : probe_executor(context), arena_allocator(BufferAllocator::Get(context)), keys(STANDARD_VECTOR_SIZE) {
@@ -62,10 +62,8 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
                                      const vector<idx_t> &left_projection_map_p, vector<idx_t> right_projection_map_p,
                                      vector<column_t> column_ids_p, Index &index_p, bool lhs_first,
                                      idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, std::move(op.types), estimated_cardinality),
-      left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)),
-      index(index_p), conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
-	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
+    : CachingPhysicalOperator(PhysicalOperatorType::INDEX_JOIN, std::move(op.types), estimated_cardinality), left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)), index(index_p), conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
+	D_ASSERT(right->physical_type == PhysicalOperatorType::TABLE_SCAN);
 	auto &tbl_scan = (PhysicalTableScan &)*right;
 	column_ids = std::move(column_ids_p);
 	children.push_back(std::move(left));
@@ -225,16 +223,17 @@ OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context,
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+void PhysicalIndexJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
+{
 	// index join: we only continue into the LHS
 	// the right side is probed by the index join
 	// so we don't need to do anything in the pipeline with this child
 	meta_pipeline.GetState().AddPipelineOperator(current, *this);
-	children[0]->BuildPipelines(current, meta_pipeline);
+	((PhysicalOperator*)children[0].get())->BuildPipelines(current, meta_pipeline);
 }
 
-vector<const_reference<PhysicalOperator>> PhysicalIndexJoin::GetSources() const {
-	return children[0]->GetSources();
+vector<const_reference<PhysicalOperator>> PhysicalIndexJoin::GetSources() const
+{
+	return ((PhysicalOperator*)children[0].get())->GetSources();
 }
-
 } // namespace duckdb

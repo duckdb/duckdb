@@ -16,34 +16,26 @@
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   const vector<idx_t> &left_projection_map,
-                                   const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
-    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(std::move(delim_types)),
-      perfect_join_statistics(std::move(perfect_join_stats)) {
-
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types, idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
+    : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, std::move(cond), join_type, estimated_cardinality), right_projection_map(right_projection_map_p), delim_types(std::move(delim_types)), perfect_join_statistics(std::move(perfect_join_stats))
+{
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
-
 	D_ASSERT(left_projection_map.empty());
-	for (auto &condition : conditions) {
+	for (auto &condition : conditions)
+	{
 		condition_types.push_back(condition.left->return_type);
 	}
-
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
-	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
-		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
+	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK)
+	{
+		build_types = LogicalOperator::MapTypes(((PhysicalOperator*)children[1].get())->GetTypes(), right_projection_map);
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
-    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, std::move(perfect_join_state)) {
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
+    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {}, estimated_cardinality, std::move(perfect_join_state))
+{
 }
 
 //===--------------------------------------------------------------------===//
@@ -156,8 +148,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			vector<unique_ptr<Expression>> children;
 			// this is a dummy but we need it to make the hash table understand whats going on
 			children.push_back(make_uniq_base<Expression, BoundReferenceExpression>(count_fun.return_type, 0));
-			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr,
-			                                             AggregateType::NON_DISTINCT);
+			aggr = function_binder.BindAggregateFunction(count_fun, std::move(children), nullptr, AggregateType::NON_DISTINCT);
 			correlated_aggregates.push_back(&*aggr);
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));

@@ -220,21 +220,22 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
-class PhysicalNestedLoopJoinState : public CachingOperatorState {
+class PhysicalNestedLoopJoinState : public CachingOperatorState
+{
 public:
-	PhysicalNestedLoopJoinState(ClientContext &context, const PhysicalNestedLoopJoin &op,
-	                            const vector<JoinCondition> &conditions)
-	    : fetch_next_left(true), fetch_next_right(false), lhs_executor(context), left_tuple(0), right_tuple(0),
-	      left_outer(IsLeftOuterJoin(op.join_type)) {
+	PhysicalNestedLoopJoinState(ClientContext &context, const PhysicalNestedLoopJoin &op, const vector<JoinCondition> &conditions)
+	    : fetch_next_left(true), fetch_next_right(false), lhs_executor(context), left_tuple(0), right_tuple(0), left_outer(IsLeftOuterJoin(op.join_type))
+	{
 		vector<LogicalType> condition_types;
-		for (auto &cond : conditions) {
+		for (auto &cond : conditions)
+		{
 			lhs_executor.AddExpression(*cond.left);
 			condition_types.push_back(cond.left->return_type);
 		}
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
-		right_payload.Initialize(allocator, op.children[1]->GetTypes());
+		right_payload.Initialize(allocator, ((PhysicalOperator*)op.children[1].get())->GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 	}
 

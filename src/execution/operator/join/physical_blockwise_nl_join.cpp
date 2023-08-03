@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
-
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -9,11 +8,9 @@
 
 namespace duckdb {
 
-PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                                 unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition,
-                                                 JoinType join_type, idx_t estimated_cardinality)
-    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality),
-      condition(std::move(condition)) {
+PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right, unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalJoin(op, PhysicalOperatorType::BLOCKWISE_NL_JOIN, join_type, estimated_cardinality), condition(std::move(condition))
+{
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
 	// MARK and SINGLE joins not handled
@@ -24,16 +21,19 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class BlockwiseNLJoinLocalState : public LocalSinkState {
+class BlockwiseNLJoinLocalState : public LocalSinkState
+{
 public:
 	BlockwiseNLJoinLocalState() {
 	}
 };
 
-class BlockwiseNLJoinGlobalState : public GlobalSinkState {
+class BlockwiseNLJoinGlobalState : public GlobalSinkState
+{
 public:
 	explicit BlockwiseNLJoinGlobalState(ClientContext &context, const PhysicalBlockwiseNLJoin &op)
-	    : right_chunks(context, op.children[1]->GetTypes()), right_outer(IsRightOuterJoin(op.join_type)) {
+	    : right_chunks(context, ((PhysicalOperator*)op.children[1].get())->GetTypes()), right_outer(IsRightOuterJoin(op.join_type))
+		{
 	}
 
 	mutex lock;

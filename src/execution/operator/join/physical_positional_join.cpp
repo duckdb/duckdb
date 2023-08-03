@@ -15,10 +15,12 @@ PhysicalPositionalJoin::PhysicalPositionalJoin(vector<LogicalType> types, unique
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class PositionalJoinGlobalState : public GlobalSinkState {
+class PositionalJoinGlobalState : public GlobalSinkState
+{
 public:
 	explicit PositionalJoinGlobalState(ClientContext &context, const PhysicalPositionalJoin &op)
-	    : rhs(context, op.children[1]->GetTypes()), initialized(false), source_offset(0), exhausted(false) {
+	    : rhs(context, ((PhysicalOperator*)op.children[1].get())->GetTypes()), initialized(false), source_offset(0), exhausted(false)
+	{
 		rhs.InitializeAppend(append_state);
 	}
 
@@ -179,12 +181,14 @@ void PhysicalPositionalJoin::GetData(ExecutionContext &context, DataChunk &resul
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
+void PhysicalPositionalJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
+{
 	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *this);
 }
 
-vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const {
-	auto result = children[0]->GetSources();
+vector<const_reference<PhysicalOperator>> PhysicalPositionalJoin::GetSources() const
+{
+	auto result = ((PhysicalOperator*)children[0].get())->GetSources();
 	if (IsSource()) {
 		result.push_back(*this);
 	}
