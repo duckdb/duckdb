@@ -50,6 +50,10 @@ public:
 	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout, bool external,
 	                         bool flush = true);
 
+	//	Single block scan
+	RowDataCollectionScanner(RowDataCollection &rows, RowDataCollection &heap, const RowLayout &layout, bool external,
+	                         idx_t block_idx, bool flush);
+
 	//! The type layout of the payload
 	inline const vector<LogicalType> &GetTypes() const {
 		return layout.GetTypes();
@@ -82,9 +86,6 @@ public:
 
 	//! Resets to the start and updates the flush flag
 	void Reset(bool flush = true);
-
-	//! Resets to scan a single block and updates the flush flag
-	void ResetToBlock(idx_t block_idx, bool flush = true);
 
 private:
 	//! The row data being scanned
