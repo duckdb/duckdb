@@ -1,12 +1,12 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CPatternTree.h
+//		CPatternMultiLeaf.h
 //
 //	@doc:
-//		Pattern that matches entire expression trees
+//		Pattern that matches a variable number of leaves
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CPatternTree_H
-#define GPOPT_CPatternTree_H
+#ifndef GPOPT_CPatternMultiLeaf_H
+#define GPOPT_CPatternMultiLeaf_H
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/operators/CPattern.h"
@@ -17,44 +17,42 @@ using namespace gpos;
 
 //---------------------------------------------------------------------------
 //	@class:
-//		CPatternTree
+//		CPatternMultiLeaf
 //
 //	@doc:
-//		Pattern that matches entire expression trees, e.g. scalar expressions
+//		Pattern that matches a variable number of expressions, eg inputs to
+//		union operator
 //
 //---------------------------------------------------------------------------
-class CPatternTree : public CPattern
+class CPatternMultiLeaf : public CPattern
 {
+private:
+	// private copy ctor
+	CPatternMultiLeaf(const CPatternMultiLeaf &);
+
 public:
 	// ctor
-	explicit CPatternTree()
+	explicit CPatternMultiLeaf()
 		: CPattern()
 	{
 	}
 
-	CPatternTree(const CPatternTree &) = delete;
-
 	// dtor
-	virtual ~CPatternTree()
+	virtual ~CPatternMultiLeaf()
 	{
 	}
 
 	// check if operator is a pattern leaf
-	virtual bool FLeaf() const override
+	virtual bool FLeaf() const
 	{
-		return false;
+		return true;
 	}
 
 	// return a string for operator name
 	virtual const CHAR* SzId() const
 	{
-		return "CPatternTree";
+		return "CPatternMultiLeaf";
 	}
-
-	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override
-	{
-		return make_uniq<CPatternTree>();
-	}
-};	// class CPatternTree
+};	// class CPatternMultiLeaf
 }  // namespace gpopt
 #endif

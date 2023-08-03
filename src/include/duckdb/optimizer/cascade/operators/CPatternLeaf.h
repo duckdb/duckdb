@@ -9,13 +9,13 @@
 #define GPOPT_CPatternLeaf_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/operators/CPattern.h"
+
+using namespace gpos;
+using namespace duckdb;
 
 namespace gpopt
 {
-using namespace gpos;
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CPatternLeaf
@@ -26,15 +26,15 @@ using namespace gpos;
 //---------------------------------------------------------------------------
 class CPatternLeaf : public CPattern
 {
-private:
-	// private copy ctor
-	CPatternLeaf(const CPatternLeaf &);
-
 public:
 	// ctor
-	explicit CPatternLeaf(CMemoryPool *mp) : CPattern(mp)
+	explicit CPatternLeaf()
+		: CPattern()
 	{
 	}
+
+	// private copy ctor
+	CPatternLeaf(const CPatternLeaf &) = delete;
 
 	// dtor
 	virtual ~CPatternLeaf()
@@ -42,28 +42,21 @@ public:
 	}
 
 	// check if operator is a pattern leaf
-	virtual BOOL
-	FLeaf() const
+	virtual bool FLeaf() const override
 	{
 		return true;
 	}
 
-	// ident accessors
-	virtual EOperatorId
-	Eopid() const
-	{
-		return EopPatternLeaf;
-	}
-
 	// return a string for operator name
-	virtual const CHAR *
-	SzId() const
+	virtual const CHAR* SzId() const
 	{
 		return "CPatternLeaf";
 	}
 
+	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override
+	{
+		return make_uniq<CPatternLeaf>();
+	}
 };	// class CPatternLeaf
-
 }  // namespace gpopt
-
 #endif

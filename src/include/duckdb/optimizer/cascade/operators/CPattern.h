@@ -9,12 +9,12 @@
 #define GPOPT_CPattern_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
-#include "duckdb/optimizer/cascade/operators/COperator.h"
+#include "duckdb/optimizer/cascade/operators/Operator.h"
 
 namespace gpopt
 {
 using namespace gpos;
+using namespace duckdb;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -24,17 +24,19 @@ using namespace gpos;
 //		base class for all pattern operators
 //
 //---------------------------------------------------------------------------
-class CPattern : public COperator
+class CPattern : public Operator
 {
-private:
-	// private copy ctor
-	CPattern(const CPattern &);
-
 public:
 	// ctor
-	explicit CPattern(CMemoryPool *mp) : COperator(mp)
+	explicit CPattern()
+		: Operator()
 	{
+		logical_type = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
+		physical_type = PhysicalOperatorType::EXTENSION;
 	}
+
+	// private copy ctor
+	CPattern(const CPattern &) = delete;
 
 	// dtor
 	virtual ~CPattern()
@@ -42,43 +44,60 @@ public:
 	}
 
 	// type of operator
-	virtual BOOL
-	FPattern() const
+	virtual bool FPattern() const override
 	{
-		GPOS_ASSERT(!FPhysical() && !FScalar() && !FLogical());
 		return true;
 	}
 
 	// create derived properties container
-	virtual CDrvdProp *PdpCreate(CMemoryPool *mp) const;
+	CDrvdProp* PdpCreate() override;
 
 	// create required properties container
-	virtual CReqdProp *PrpCreate(CMemoryPool *mp) const;
+	CReqdProp* PrpCreate() const override;
 
 	// match function
-	BOOL Matches(COperator *) const;
+	bool Matches(Operator* op) override;
 
 	// sensitivity to order of inputs
-	BOOL FInputOrderSensitive() const;
+	bool FInputOrderSensitive() override;
 
 	// check if operator is a pattern leaf
-	virtual BOOL FLeaf() const = 0;
+	virtual bool FLeaf() const = 0;
 
 	// return a copy of the operator with remapped columns
-	virtual COperator *PopCopyWithRemappedColumns(
-		CMemoryPool *mp, UlongToColRefMap *colref_mapping, BOOL must_exist);
+	virtual Operator* PopCopyWithRemappedColumns(std::map<ULONG, ColumnBinding> colref_mapping, bool must_exist);
 
 	// conversion function
-	static CPattern *
-	PopConvert(COperator *pop)
+	static CPattern* PopConvert(Operator* pop)
 	{
-		GPOS_ASSERT(NULL != pop);
-		GPOS_ASSERT(pop->FPattern());
+		return reinterpret_cast<CPattern*>(pop);
+	}
 
-		return reinterpret_cast<CPattern *>(pop);
+	duckdb::vector<ColumnBinding> GetColumnBindings() override
+	{
+		duckdb::vector<ColumnBinding> v;
+		return v;
+	}
+
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override
+	{
+		return nullptr;
+	}
+
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override
+	{
+		return nullptr;
+	}
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override
+	{
+		return 0;
+	}
+
+	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override
+	{
+		return nullptr;
 	}
 };	// class CPattern
-
 }  // namespace gpopt
-
 #endif
