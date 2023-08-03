@@ -68,11 +68,10 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-//! Config for RadixPartitionedHashTable
 struct RadixHTConfig {
 public:
-	explicit RadixHTConfig(ClientContext &context, const idx_t row_width)
-	    : radix_bits(InitialRadixBits(context, row_width)), sink_capacity(SinkCapacity(context)),
+	explicit RadixHTConfig(ClientContext &context)
+	    : radix_bits(INITIAL_RADIX_BITS), sink_capacity(SinkCapacity(context)),
 	      maximum_radix_bits(MaximumRadixBits(context)) {
 	}
 
@@ -115,13 +114,6 @@ private:
 		return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
 	}
 
-	static idx_t InitialRadixBits(ClientContext &context, const idx_t row_width) {
-		// TODO something with row width
-		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		const auto thread_radix_bits = RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads));
-		return MinValue(MaxValue(thread_radix_bits, MINIMUM_INITIAL_RADIX_BITS), MAXIMUM_INITIAL_RADIX_BITS);
-	}
-
 	static idx_t MaximumRadixBits(ClientContext &context) {
 		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		const auto thread_radix_bits = RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads));
@@ -136,10 +128,8 @@ private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
 	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
 
-	//! Minimum number of radix bits to initialize with
-	static constexpr const idx_t MINIMUM_INITIAL_RADIX_BITS = 3;
-	//! Maximum number of radix bits to initialize with
-	static constexpr const idx_t MAXIMUM_INITIAL_RADIX_BITS = 5;
+	//! Radix bits to initialize with
+	static constexpr const idx_t INITIAL_RADIX_BITS = 3;
 
 	//! Current thread-global radix bits
 	atomic<idx_t> radix_bits;
@@ -160,7 +150,7 @@ struct AggregatePartition {
 	explicit AggregatePartition(unique_ptr<TupleDataCollection> data_p) : data(std::move(data_p)), finalized(false) {
 	}
 	unique_ptr<TupleDataCollection> data;
-	bool finalized;
+	atomic<bool> finalized;
 };
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
@@ -206,8 +196,8 @@ public:
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht_p)
-    : radix_ht(radix_ht_p), config(context, radix_ht.GetLayout().GetRowWidth()), finalized(false),
-      external(context.config.force_external), active_threads(0), combined_threads(0), finalize_idx(0),
+    : radix_ht(radix_ht_p), config(context), finalized(false), external(context.config.force_external),
+      active_threads(0), combined_threads(0), finalize_idx(0),
       scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE), count_before_combining(0) {
 }
 
@@ -257,7 +247,7 @@ public:
 	unique_ptr<PartitionedTupleData> abandoned_data;
 };
 
-RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &context, const RadixPartitionedHashTable &radix_ht) {
+RadixHTLocalSinkState::RadixHTLocalSinkState(ClientContext &, const RadixPartitionedHashTable &radix_ht) {
 	// If there are no groups we create a fake group so everything has the same group
 	group_chunk.InitializeEmpty(radix_ht.group_types);
 	if (radix_ht.grouping_set.empty()) {
@@ -412,9 +402,8 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	gstate.stored_allocators.emplace_back(ht.GetAggregateAllocator());
 }
 
-void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
+void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
-	// TODO: detect single-threaded case and move data directly to scan data??
 
 	if (gstate.uncombined_data) {
 		auto &uncombined_data = *gstate.uncombined_data;
