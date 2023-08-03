@@ -11,6 +11,7 @@
 ################# ARROW
 if (NOT WIN32)
     duckdb_extension_load(arrow
+        LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdblabs/arrow
         GIT_TAG 56d24d4224df43cac0e071d71371385de5831129
@@ -47,16 +48,18 @@ duckdb_extension_load(iceberg
 )
 
 ################# POSTGRES_SCANNER
-# TODO re-enable with new hash!
-#duckdb_extension_load(postgres_scanner
-#    DONT_LINK
-#    GIT_URL https://github.com/duckdblabs/postgres_scanner
-#    GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
-#)
+# Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
+#       uses a remote rds server but that's not something we want to run here.
+duckdb_extension_load(postgres_scanner
+    DONT_LINK
+    GIT_URL https://github.com/duckdblabs/postgres_scanner
+    GIT_TAG 828578442d18fb3acb53b08f4f54a0683217a2c8
+)
 
 ################# SPATIAL
 duckdb_extension_load(spatial
     DONT_LINK
+    LOAD_TESTS
     GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
     GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
     INCLUDE_DIR spatial/include
@@ -81,6 +84,7 @@ duckdb_extension_load(sqlite_scanner
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
+        LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdblabs/substrait
         GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
