@@ -584,6 +584,12 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	}
 
 	Verify();
+
+	// if we combine states, then we also need to combine the arena allocators
+	for (auto &stored_allocator : other.stored_allocators) {
+		stored_allocators.push_back(stored_allocator);
+	}
+	stored_allocators.push_back(other.aggregate_allocator);
 }
 
 void GroupedAggregateHashTable::Append(GroupedAggregateHashTable &other) {

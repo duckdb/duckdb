@@ -152,7 +152,8 @@
         "type": "string"
       },
       {
-        "name": "type",
+        "name": "logical_type",
+        "property": "type",
         "type": "LogicalType"
       }
     ]
