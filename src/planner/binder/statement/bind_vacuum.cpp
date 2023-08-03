@@ -58,7 +58,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		stmt.info->columns = std::move(non_generated_column_names);
 		if (!select_list.empty()) {
 			auto table_scan = CreatePlan(*ref);
-			D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
+			D_ASSERT(table_scan->logical_type == LogicalOperatorType::LOGICAL_GET);
 
 			auto &get = table_scan->Cast<LogicalGet>();
 

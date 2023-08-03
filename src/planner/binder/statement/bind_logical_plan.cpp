@@ -2,36 +2,40 @@
 #include "duckdb/planner/binder.hpp"
 #include <algorithm>
 
-namespace duckdb {
-
-idx_t GetMaxTableIndex(LogicalOperator &op) {
+namespace duckdb
+{
+idx_t GetMaxTableIndex(Operator &op)
+{
 	idx_t result = 0;
-	for (auto &child : op.children) {
+	for (auto &child : op.children)
+	{
 		auto max_child_index = GetMaxTableIndex(*child);
 		result = MaxValue<idx_t>(result, max_child_index);
 	}
-	auto indexes = op.GetTableIndex();
-	for (auto &index : indexes) {
+	auto indexes = ((LogicalOperator*)&op)->GetTableIndex();
+	for (auto &index : indexes)
+	{
 		result = MaxValue<idx_t>(result, index);
 	}
 	return result;
 }
 
-BoundStatement Binder::Bind(LogicalPlanStatement &stmt) {
+BoundStatement Binder::Bind(LogicalPlanStatement &stmt)
+{
 	BoundStatement result;
 	result.types = stmt.plan->types;
-	for (idx_t i = 0; i < result.types.size(); i++) {
+	for (idx_t i = 0; i < result.types.size(); i++)
+	{
 		result.names.push_back(StringUtil::Format("col%d", i));
 	}
 	result.plan = std::move(stmt.plan);
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT; // TODO could also be something else
-
-	if (parent) {
+	if (parent)
+	{
 		throw InternalException("LogicalPlanStatement should be bound in root binder");
 	}
 	bound_tables = GetMaxTableIndex(*result.plan) + 1;
 	return result;
 }
-
 } // namespace duckdb

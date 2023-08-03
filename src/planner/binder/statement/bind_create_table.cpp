@@ -254,10 +254,11 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
 	auto &base = (CreateTableInfo &)*info;
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
-	if (base.query) {
+	if (base.query)
+	{
 		// construct the result object
 		auto query_obj = Bind(*base.query);
-		result->query = std::move(query_obj.plan);
+		result->query = unique_ptr_cast<Operator, LogicalOperator>(std::move(query_obj.plan));
 
 		// construct the set of columns based on the names and types of the query
 		auto &names = query_obj.names;

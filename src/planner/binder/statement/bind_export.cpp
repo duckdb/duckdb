@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
-
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
 
@@ -184,14 +183,15 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
-		if (child_operator) {
+		if (child_operator)
+		{
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union =
-			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
-			                                   std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, unique_ptr_cast<Operator, LogicalOperator>(std::move(child_operator)), unique_ptr_cast<Operator, LogicalOperator>(std::move(bound_statement.plan)), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = std::move(copy_union);
-		} else {
-			child_operator = std::move(bound_statement.plan);
+		}
+		else
+		{
+			child_operator = unique_ptr_cast<Operator, LogicalOperator>(std::move(bound_statement.plan));
 		}
 	}
 

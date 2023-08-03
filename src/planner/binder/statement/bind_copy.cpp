@@ -148,14 +148,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt) {
 	copy->per_thread_output = per_thread_output;
 	copy->partition_output = !partition_cols.empty();
 	copy->partition_columns = std::move(partition_cols);
-
 	copy->names = unique_column_names;
 	copy->expected_types = select_node.types;
-
 	copy->AddChild(std::move(select_node.plan));
-
 	result.plan = std::move(copy);
-
 	return result;
 }
 
@@ -181,7 +177,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);
-	D_ASSERT(insert_statement.plan->type == LogicalOperatorType::LOGICAL_INSERT);
+	D_ASSERT(insert_statement.plan->logical_type == LogicalOperatorType::LOGICAL_INSERT);
 
 	auto &bound_insert = insert_statement.plan->Cast<LogicalInsert>();
 
