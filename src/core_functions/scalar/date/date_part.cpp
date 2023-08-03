@@ -1300,6 +1300,35 @@ static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &re
 	    });
 }
 
+static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunction &bound_function,
+                                             vector<unique_ptr<Expression>> &arguments) {
+	//	If we are only looking for Julian Days for timestamps,
+	//	then return doubles.
+	if (arguments[0]->HasParameter() || !arguments[0]->IsFoldable()) {
+		return nullptr;
+	}
+
+	Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
+	if (part_value.IsNull()) {
+		return nullptr;
+	}
+	const auto part_name = part_value.ToString();
+	switch (GetDatePartSpecifier(part_name)) {
+	case DatePartSpecifier::JULIAN_DAY:
+		arguments.erase(arguments.begin());
+		bound_function.arguments.erase(bound_function.arguments.begin());
+		bound_function.name = "julian";
+		bound_function.return_type = LogicalType::DOUBLE;
+		bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>;
+		bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>;
+		break;
+	default:
+		break;
+	}
+
+	return nullptr;
+}
+
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
                                              function_statistics_t ts_stats,
@@ -1763,7 +1792,7 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT, DatePartFunction<date_t>));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                                     DatePartFunction<timestamp_t>));
+	                                     DatePartFunction<timestamp_t>, DatePartBind));
 	date_part.AddFunction(
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
