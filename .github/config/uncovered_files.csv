@@ -450,7 +450,7 @@ include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
-main/chunk_scan_state.cpp	21
+main/chunk_scan_state.cpp	25
 main/capi/appender-c.cpp	3
 main/capi/arrow-c.cpp	8
 main/capi/cast/from_decimal-c.cpp	5
@@ -478,7 +478,7 @@ main/connection.cpp	38
 main/database.cpp	39
 main/database_manager.cpp	3
 main/database_path_and_type.cpp	5
-main/db_instance_cache.cpp	26
+main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
