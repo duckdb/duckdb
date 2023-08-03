@@ -87,6 +87,6 @@ if (NOT WIN32)
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdblabs/substrait
-        GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
+        GIT_TAG 0cd88fa8b240babe5316924e32fb68aaba408780
     )
 endif()
