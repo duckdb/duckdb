@@ -5,8 +5,9 @@ on:
       - labeled
 
 env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
   TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number }}]"
+  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
   create_or_label_issue:
@@ -49,7 +50,7 @@ jobs:
       - name: Create or label issue
         run: |
           if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
-            gh issue create --repo duckdblabs/duckdb-internal --label "$LABEL" --title "$TITLE_PREFIX - ${{ github.event.issue.title }}" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number }}"
+            gh issue create --repo duckdblabs/duckdb-internal --label "$LABEL" --title "$TITLE_PREFIX - $PUBLIC_ISSUE_TITLE" --body "See https://github.com/duckdb/duckdb/issues/${{ github.event.issue.number }}"
           else
             gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --remove-label "$UNLABEL" --add-label "$LABEL"
           fi

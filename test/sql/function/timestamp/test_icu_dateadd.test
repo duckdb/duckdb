@@ -107,7 +107,7 @@ select 'epoch'::timestamptz + '-9223372022400001001 microseconds'::interval
 query I
 select 'epoch'::timestamptz + '-9223372022400001000 microseconds'::interval
 ----
-290303-12-10 (BC) 16:07:02-07:52
+290309-12-21 (BC) 16:07:02-07:52
 
 # interval + timestamp
 query II
@@ -164,7 +164,7 @@ select '-9223372022400001001 microseconds'::interval + 'epoch'::timestamptz
 query I
 select  '-9223372022400001000 microseconds'::interval + 'epoch'::timestamptz
 ----
-290303-12-10 (BC) 16:07:02-07:52
+290309-12-21 (BC) 16:07:02-07:52
 
 # infinity
 query I
@@ -234,7 +234,7 @@ select 'epoch'::timestamptz - '9223372022400001001 microseconds'::interval
 query I
 select 'epoch'::timestamptz - '9223372022400001000 microseconds'::interval
 ----
-290303-12-10 (BC) 16:07:02-07:52
+290309-12-21 (BC) 16:07:02-07:52
 
 # infinity
 query I
@@ -297,21 +297,21 @@ SELECT iv, ts + iv FROM limits, intervals
 WHERE label = 'tsmin'
   AND iv >= INTERVAL 0 SECONDS;
 ----
-1 year	290302-12-10 (BC) 16:07:02-07:52
-1 month	290302-01-10 (BC) 16:07:02-07:52
-1 year 1 month	290301-01-10 (BC) 16:07:02-07:52
-1 day	290303-12-11 (BC) 16:07:02-07:52
-32 days	290302-01-11 (BC) 16:07:02-07:52
-01:00:00	290303-12-10 (BC) 17:07:02-07:52
-11:00:00	290303-12-11 (BC) 03:07:02-07:52
-00:01:00	290303-12-10 (BC) 16:08:02-07:52
-00:06:00	290303-12-10 (BC) 16:13:02-07:52
-00:00:01	290303-12-10 (BC) 16:07:03-07:52
-00:00:23	290303-12-10 (BC) 16:07:25-07:52
-00:00:00.001	290303-12-10 (BC) 16:07:02-07:52
-00:00:00.91	290303-12-10 (BC) 16:07:02.91-07:52
-00:00:00.000001	290303-12-10 (BC) 16:07:02.000001-07:52
-00:00:00.000612	290303-12-10 (BC) 16:07:02.000612-07:52
+1 year	290308-12-21 (BC) 16:07:02-07:52
+1 month	290308-01-21 (BC) 16:07:02-07:52
+1 year 1 month	290307-01-21 (BC) 16:07:02-07:52
+1 day	290309-12-22 (BC) 16:07:02-07:52
+32 days	290308-01-22 (BC) 16:07:02-07:52
+01:00:00	290309-12-21 (BC) 17:07:02-07:52
+11:00:00	290309-12-22 (BC) 03:07:02-07:52
+00:01:00	290309-12-21 (BC) 16:08:02-07:52
+00:06:00	290309-12-21 (BC) 16:13:02-07:52
+00:00:01	290309-12-21 (BC) 16:07:03-07:52
+00:00:23	290309-12-21 (BC) 16:07:25-07:52
+00:00:00.001	290309-12-21 (BC) 16:07:02-07:52
+00:00:00.91	290309-12-21 (BC) 16:07:02.91-07:52
+00:00:00.000001	290309-12-21 (BC) 16:07:02.000001-07:52
+00:00:00.000612	290309-12-21 (BC) 16:07:02.000612-07:52
 
 # Backwards from the minimum
 statement error
@@ -351,7 +351,7 @@ SELECT ts + (INTERVAL (-118) second) FROM limits WHERE label = 'tsmin';
 query I
 SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
 ----
-290303-12-10 (BC) 16:07:02-07:52
+290309-12-21 (BC) 16:07:02-07:52
 
 statement error
 SELECT ts + (INTERVAL (-150) millisecond) FROM limits WHERE label = 'tsmin';

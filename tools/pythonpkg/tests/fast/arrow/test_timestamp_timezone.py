@@ -1,13 +1,9 @@
 import duckdb
 import pytest
 import datetime
+import pytz
 
-try:
-    import pyarrow as pa
-
-    can_run = True
-except:
-    can_run = False
+pa = pytest.importorskip('pyarrow')
 
 
 def generate_table(current_time, precision, timezone):
@@ -22,10 +18,8 @@ timezones = ['UTC', 'BET', 'CET', 'Asia/Kathmandu']
 
 class TestArrowTimestampsTimezone(object):
     def test_timestamp_timezone(self, duckdb_cursor):
-        if not can_run:
-            return
         precisions = ['us', 's', 'ns', 'ms']
-        current_time = datetime.datetime(2017, 11, 28, 23, 55, 59)
+        current_time = datetime.datetime(2017, 11, 28, 23, 55, 59, tzinfo=pytz.UTC)
         con = duckdb.connect()
         con.execute("SET TimeZone = 'UTC'")
         for precision in precisions:
@@ -34,8 +28,6 @@ class TestArrowTimestampsTimezone(object):
             assert res_utc[0][0] == current_time
 
     def test_timestamp_timezone_overflow(self, duckdb_cursor):
-        if not can_run:
-            return
         precisions = ['s', 'ms']
         current_time = 9223372036854775807
         for precision in precisions:
@@ -44,8 +36,6 @@ class TestArrowTimestampsTimezone(object):
                 res_utc = duckdb.from_arrow(arrow_table).execute().fetchall()
 
     def test_timestamp_tz_to_arrow(self, duckdb_cursor):
-        if not can_run:
-            return
         precisions = ['us', 's', 'ns', 'ms']
         current_time = datetime.datetime(2017, 11, 28, 23, 55, 59)
         con = duckdb.connect()
@@ -58,8 +48,6 @@ class TestArrowTimestampsTimezone(object):
                 assert res == generate_table(current_time, 'us', timezone)
 
     def test_timestamp_tz_with_null(self, duckdb_cursor):
-        if not can_run:
-            return
         con = duckdb.connect()
         con.execute("create table t (i timestamptz)")
         con.execute("insert into t values (NULL),('2021-11-15 02:30:00'::timestamptz)")
@@ -70,8 +58,6 @@ class TestArrowTimestampsTimezone(object):
         assert con.execute("select * from t").fetchall() == con.execute("select * from t2").fetchall()
 
     def test_timestamp_stream(self, duckdb_cursor):
-        if not can_run:
-            return
         con = duckdb.connect()
         con.execute("create table t (i timestamptz)")
         con.execute("insert into t values (NULL),('2021-11-15 02:30:00'::timestamptz)")

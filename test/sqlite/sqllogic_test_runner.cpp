@@ -204,6 +204,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	if (script.find("test/sqlite/select") != string::npos) {
 		original_sqlite_test = true;
 	}
+	if (script.find("third_party/sqllogictest") != string::npos) {
+		original_sqlite_test = true;
+	}
 
 	if (!dbpath.empty()) {
 		// delete the target database file, if it exists
