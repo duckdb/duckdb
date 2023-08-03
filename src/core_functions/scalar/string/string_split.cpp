@@ -36,7 +36,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find((const unsigned char *)input_data, input_size, (const unsigned char *)delim_data,
+		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
 		                         delim_size);
 	}
 };
@@ -45,7 +45,7 @@ struct ConstantRegexpStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
-		auto regex = (duckdb_re2::RE2 *)data;
+		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
 		duckdb_re2::StringPiece match;
 		if (!regex->Match(duckdb_re2::StringPiece(input_data, input_size), 0, input_size, RE2::UNANCHORED, &match, 1)) {
 			return DConstants::INVALID_INDEX;
@@ -109,11 +109,11 @@ template <class OP>
 static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
 	UnifiedVectorFormat input_data;
 	args.data[0].ToUnifiedFormat(args.size(), input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	UnifiedVectorFormat delim_data;
 	args.data[1].ToUnifiedFormat(args.size(), delim_data);
-	auto delims = (string_t *)delim_data.data;
+	auto delims = UnifiedVectorFormat::GetData<string_t>(delim_data);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 

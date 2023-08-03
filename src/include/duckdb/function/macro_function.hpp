@@ -48,6 +48,9 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<MacroFunction> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	virtual void SerializeInternal(FieldWriter &writer) const = 0;
 
@@ -57,7 +60,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -65,7 +68,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

@@ -2,6 +2,12 @@
 # description: Test the list aggregate function for all data types
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 # INTEGER types
 
 foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint
@@ -64,7 +70,6 @@ SELECT LIST(str) FROM varch GROUP BY g ORDER BY g
 
 # LIST
 # one level nested LIST
-
 
 statement ok
 CREATE TABLE nested_lists (g INTEGER, i INTEGER[])

@@ -46,11 +46,17 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 
 	unique_ptr<Expression> Copy() override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	BoundCastExpression(ClientContext &context, unique_ptr<Expression> child, LogicalType target_type);
 };
 } // namespace duckdb

@@ -34,7 +34,7 @@ struct RelationsToTDom {
 	bool has_tdom_hll;
 	vector<FilterInfo *> filters;
 
-	RelationsToTDom(column_binding_set_t column_binding_set)
+	RelationsToTDom(const column_binding_set_t &column_binding_set)
 	    : equivalent_relations(column_binding_set), tdom_hll(0), tdom_no_hll(NumericLimits<idx_t>::Maximum()),
 	      has_tdom_hll(false) {};
 };
@@ -111,9 +111,9 @@ private:
 	void AddRelationTdom(FilterInfo &filter_info);
 	bool EmptyFilter(FilterInfo &filter_info);
 
-	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *fil,
+	idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &fil,
 	                            unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
+	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &fil,
 	                           unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator &op, TableFilterSet &table_filters, idx_t table_index);
 };

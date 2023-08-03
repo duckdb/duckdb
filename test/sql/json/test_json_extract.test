@@ -120,6 +120,15 @@ SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
 ----
 NULL
 
+# list of paths must be constant
+statement error
+with tbl as (
+    select '{"a":2,"c":[4,5],"f":7}' j, ['$.c','$.a'] p
+)
+SELECT json_extract(j, p);
+----
+Binder Error
+
 query T
 SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
 ----
@@ -146,68 +155,77 @@ SELECT json_extract(j, '$.b[#]') FROM t1;
 ----
 NULL
 
-query T
-SELECT json_extract(j, '$.b[#-1]') FROM t1;
+# -0 is interpreted as just 0, just like in python
+query II
+SELECT json_extract(j, '$.b[#-0]') a, a = json_extract(j, '$.b[-0]') FROM t1;
 ----
-4
+1	true
 
-query T
-SELECT json_extract(j, '$.b[#-2]') FROM t1;
+query II
+SELECT json_extract(j, '$.b[#-1]') a, a = json_extract(j, '$.b[-1]') FROM t1;
 ----
-[2,3]
+4	true
 
-query T
-SELECT json_extract(j, '$.b[#-02]') FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-2]') a, a = json_extract(j, '$.b[-2]') FROM t1;
 ----
-[2,3]
+[2,3]	true
 
-query T
-SELECT json_extract(j, '$.b[#-3]') FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-02]') a, a = json_extract(j, '$.b[-02]') FROM t1;
 ----
-1
+[2,3]	true
 
-query T
-SELECT json_extract(j, '$.b[#-4]') FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-3]') a, a = json_extract(j, '$.b[-3]') FROM t1;
 ----
-NULL
+1	true
 
-query T
-SELECT json_extract(j, '$.b[#-2][#-1]') FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-4]'), json_extract(j, '$.b[-4]') FROM t1;
 ----
-3
+NULL	NULL
 
-query T
-SELECT j::JSON->'$.b[#-2][#-1]' FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-2][#-1]') a, a = json_extract(j, '$.b[-2][-1]') FROM t1;
 ----
-3
+3	true
 
-query T
-SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) FROM t1;
+query TT
+SELECT j::JSON->'$.b[#-2][#-1]' a, a = (j::JSON->'$.b[-2][-1]') FROM t1;
 ----
-[1, 4]
+3	true
 
-query T
-SELECT j::JSON->['$.b[0]', '$.b[#-1]'] FROM t1;
+query TT
+SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) a, a = json_extract(j, ['$.b[0]', '$.b[-1]']) FROM t1;
 ----
-[1, 4]
+[1, 4]	true
 
-query T
-SELECT json_extract(j, '$.a[#-1]') FROM t1;
+query TT
+SELECT j::JSON->['$.b[0]', '$.b[#-1]'] a, a = (j::JSON->['$.b[0]', '$.b[-1]']) FROM t1;
 ----
-NULL
+[1, 4]	true
 
-query T
-SELECT json_extract(j, '$.b[#-000001]') FROM t1;
+query TT
+SELECT json_extract(j, '$.a[#-1]'), json_extract(j, '$.a[-1]') FROM t1;
 ----
-4
+NULL	NULL
 
-query T
-SELECT j::JSON->'$.b[#-000001]' FROM t1;
+query TT
+SELECT json_extract(j, '$.b[#-000001]') a, a = json_extract(j, '$.b[-000001]') FROM t1;
 ----
-4
+4	true
+
+query TT
+SELECT j::JSON->'$.b[#-000001]' a, a = (j::JSON->'$.b[-000001]') FROM t1;
+----
+4	true
 
 statement error
 SELECT json_extract(j, '$.b[#-]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[-]') FROM t1;
 
 statement error
 SELECT json_extract(j, '$.b[#9]') FROM t1;
@@ -272,10 +290,6 @@ query T
 SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false
-
-
-# can't deal with force reload / force storage (#5132)
-require skip_reload
 
 # test issue #5063
 statement ok

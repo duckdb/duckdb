@@ -132,7 +132,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the lists data
 	UnifiedVectorFormat lists_data;
 	result.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]

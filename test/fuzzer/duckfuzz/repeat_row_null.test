@@ -1,0 +1,23 @@
+# name: test/fuzzer/duckfuzz/repeat_row_null.test
+# description: Repeat row with NULL argument
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM repeat_row(NULL)
+----
+repeat_rows requires num_rows to be specified
+
+query I
+FROM repeat_row(NULL, num_rows=3)
+----
+NULL
+NULL
+NULL
+
+statement error
+FROM repeat_row(num_rows=3)
+----
+requires at least one column to be specified

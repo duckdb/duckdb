@@ -19,7 +19,7 @@ PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique
 	if (left->type == PhysicalOperatorType::TABLE_SCAN) {
 		child_tables.emplace_back(std::move(left));
 	} else if (left->type == PhysicalOperatorType::POSITIONAL_SCAN) {
-		auto &left_scan = (PhysicalPositionalScan &)*left;
+		auto &left_scan = left->Cast<PhysicalPositionalScan>();
 		child_tables = std::move(left_scan.child_tables);
 	} else {
 		throw InternalException("Invalid left input for PhysicalPositionalScan");
@@ -28,7 +28,7 @@ PhysicalPositionalScan::PhysicalPositionalScan(vector<LogicalType> types, unique
 	if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 		child_tables.emplace_back(std::move(right));
 	} else if (right->type == PhysicalOperatorType::POSITIONAL_SCAN) {
-		auto &right_scan = (PhysicalPositionalScan &)*right;
+		auto &right_scan = right->Cast<PhysicalPositionalScan>();
 		auto &right_tables = right_scan.child_tables;
 		child_tables.reserve(child_tables.size() + right_tables.size());
 		std::move(right_tables.begin(), right_tables.end(), std::back_inserter(child_tables));

@@ -1,11 +1,10 @@
 #include "duckdb/execution/operator/helper/physical_limit.hpp"
 
 #include "duckdb/common/algorithm.hpp"
-#include "duckdb/main/config.hpp"
-
-#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/helper/physical_streaming_limit.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -22,7 +21,7 @@ PhysicalLimit::PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offse
 //===--------------------------------------------------------------------===//
 class LimitGlobalState : public GlobalSinkState {
 public:
-	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op) : data(op.types) {
+	explicit LimitGlobalState(ClientContext &context, const PhysicalLimit &op) : data(context, op.types, true) {
 		limit = 0;
 		offset = 0;
 	}
@@ -35,7 +34,8 @@ public:
 
 class LimitLocalState : public LocalSinkState {
 public:
-	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op) : current_offset(0), data(op.types) {
+	explicit LimitLocalState(ClientContext &context, const PhysicalLimit &op)
+	    : current_offset(0), data(context, op.types, true) {
 		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
 	}
@@ -116,14 +116,16 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<LimitGlobalState>();
-	auto &state = lstate_p.Cast<LimitLocalState>();
+SinkCombineResultType PhysicalLimit::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<LimitGlobalState>();
+	auto &state = input.local_state.Cast<LimitLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
 	gstate.limit = state.limit;
 	gstate.offset = state.offset;
 	gstate.data.Merge(state.data);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//

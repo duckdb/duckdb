@@ -21,11 +21,11 @@ string BoundWindowExpression::ToString() const {
 	                                                                                       function_name);
 }
 
-bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
+bool BoundWindowExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundWindowExpression>();
+	auto &other = other_p.Cast<BoundWindowExpression>();
 
 	if (ignore_nulls != other.ignore_nulls) {
 		return false;
@@ -34,24 +34,17 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 		return false;
 	}
 	// check if the child expressions are equivalent
-	if (other.children.size() != children.size()) {
+	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
-	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other.children[i].get())) {
-			return false;
-		}
-	}
 	// check if the filter expressions are equivalent
-	if (!Expression::Equals(filter_expr.get(), other.filter_expr.get())) {
+	if (!Expression::Equals(filter_expr, other.filter_expr)) {
 		return false;
 	}
 
 	// check if the framing expressions are equivalent
-	if (!Expression::Equals(start_expr.get(), other.start_expr.get()) ||
-	    !Expression::Equals(end_expr.get(), other.end_expr.get()) ||
-	    !Expression::Equals(offset_expr.get(), other.offset_expr.get()) ||
-	    !Expression::Equals(default_expr.get(), other.default_expr.get())) {
+	if (!Expression::Equals(start_expr, other.start_expr) || !Expression::Equals(end_expr, other.end_expr) ||
+	    !Expression::Equals(offset_expr, other.offset_expr) || !Expression::Equals(default_expr, other.default_expr)) {
 		return false;
 	}
 
@@ -60,24 +53,15 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 
 bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {
 	// check if the partitions are equivalent
-	if (partitions.size() != other.partitions.size()) {
+	if (!Expression::ListEquals(partitions, other.partitions)) {
 		return false;
-	}
-	for (idx_t i = 0; i < partitions.size(); i++) {
-		if (!Expression::Equals(partitions[i].get(), other.partitions[i].get())) {
-			return false;
-		}
 	}
 	// check if the orderings are equivalent
 	if (orders.size() != other.orders.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < orders.size(); i++) {
-		if (orders[i].type != other.orders[i].type) {
-			return false;
-		}
-		if (!BaseExpression::Equals((BaseExpression *)orders[i].expression.get(),
-		                            (BaseExpression *)other.orders[i].expression.get())) {
+		if (!orders[i].Equals(other.orders[i])) {
 			return false;
 		}
 	}
@@ -175,6 +159,53 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->children = std::move(children);
+	return std::move(result);
+}
+
+void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty("return_type", return_type);
+	serializer.WriteProperty("children", children);
+	if (type == ExpressionType::WINDOW_AGGREGATE) {
+		D_ASSERT(aggregate);
+		FunctionSerializer::FormatSerialize(serializer, *aggregate, bind_info.get());
+	}
+	serializer.WriteProperty("partitions", partitions);
+	serializer.WriteProperty("orders", orders);
+	serializer.WriteOptionalProperty("filters", filter_expr);
+	serializer.WriteProperty("ignore_nulls", ignore_nulls);
+	serializer.WriteProperty("start", start);
+	serializer.WriteProperty("end", end);
+	serializer.WriteOptionalProperty("start_expr", start_expr);
+	serializer.WriteOptionalProperty("end_expr", end_expr);
+	serializer.WriteOptionalProperty("offset_expr", offset_expr);
+	serializer.WriteOptionalProperty("default_expr", default_expr);
+}
+
+unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto expression_type = deserializer.Get<ExpressionType>();
+	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
+	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<FunctionData> bind_info;
+	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
+		auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
+		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
+		bind_info = std::move(entry.second);
+	}
+	auto result =
+	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
+	deserializer.ReadProperty("partitions", result->partitions);
+	deserializer.ReadProperty("orders", result->orders);
+	deserializer.ReadOptionalProperty("filters", result->filter_expr);
+	deserializer.ReadProperty("ignore_nulls", result->ignore_nulls);
+	deserializer.ReadProperty("start", result->start);
+	deserializer.ReadProperty("end", result->end);
+	deserializer.ReadOptionalProperty("start_expr", result->start_expr);
+	deserializer.ReadOptionalProperty("end_expr", result->end_expr);
+	deserializer.ReadOptionalProperty("offset_expr", result->offset_expr);
+	deserializer.ReadOptionalProperty("default_expr", result->default_expr);
 	return std::move(result);
 }
 

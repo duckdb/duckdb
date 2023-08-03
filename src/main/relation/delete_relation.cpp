@@ -21,7 +21,7 @@ BoundStatement DeleteRelation::Bind(Binder &binder) {
 	DeleteStatement stmt;
 	stmt.condition = condition ? condition->Copy() : nullptr;
 	stmt.table = std::move(basetable);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &DeleteRelation::Columns() {

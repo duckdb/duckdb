@@ -7,6 +7,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
 
@@ -17,7 +19,6 @@ PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry 
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
       unbound_expressions(std::move(unbound_expressions)) {
-	D_ASSERT(table_p.IsDuckTable());
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
@@ -107,27 +108,45 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (!lstate.local_index->MergeIndexes(*art)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+
+#ifdef DEBUG
+	// ensure that all row IDs of this chunk exist in the ART
+	auto &local_art = lstate.local_index->Cast<ART>();
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
+		auto leaf = local_art.Lookup(*local_art.tree, lstate.keys[i], 0);
+		D_ASSERT(leaf.IsSet());
+		D_ASSERT(Leaf::ContainsRowId(local_art, leaf, row_ids[i]));
+	}
+#endif
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
+SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 
-	auto &gstate = gstate_p.Cast<CreateIndexGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+
+	// vacuum excess memory
+	gstate.global_index->Vacuum();
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               GlobalSinkState &gstate_p) const {
+                                               OperatorSinkFinalizeInput &input) const {
 
 	// here, we just set the resulting global index as the newly created index of the table
 
-	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
+
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
@@ -136,6 +155,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto &schema = table.schema;
 	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
+		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return SinkFinalizeType::READY;
 	}
@@ -146,9 +166,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	for (auto &parsed_expr : info->parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// vacuum excess memory
-	state.global_index->Vacuum();
 
 	// add index to storage
 	storage.info->indexes.AddIndex(std::move(state.global_index));

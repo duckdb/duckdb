@@ -9,18 +9,6 @@
 
 namespace duckdb {
 
-struct CastFromSQLiteValue {
-	/**
-	 * Noop GetValue()
-	 * Specialized GetValue() must be implemented for every needed type
-	 */
-	template <class DST>
-	static inline DST GetValue(sqlite3_value input) {
-		DST value;
-		return value;
-	}
-};
-
 struct CastSQLite {
 	static void InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk);
 	static bool RequiresCastToVarchar(LogicalType type);
@@ -31,23 +19,7 @@ struct CastSQLite {
 
 	static unique_ptr<vector<sqlite3_value>> ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
 	                                                  Vector &result);
-
-	static void ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result);
-
-	template <class T>
-	static void ToVectorStringValue(sqlite3_value *__restrict data, idx_t count, string_t *__restrict result_data,
-	                                Vector &result) {
-		for (idx_t i = 0; i < count; ++i) {
-			T value = CastFromSQLiteValue::GetValue<T>(data[i]);
-			result_data[i] = StringCast::Operation(value, result);
-		}
-		return;
-	}
 };
-// Specialization from string_t
-template <>
-void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data, idx_t count,
-                                               string_t *__restrict result_data, Vector &result);
 
 struct CastToSQLiteValue {
 	template <class SRC>
@@ -91,7 +63,7 @@ struct CastToVectorSQLiteValue {
 		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 
-		auto input_data = (INPUT_TYPE *)vec_data.data;
+		auto input_data = UnifiedVectorFormat::GetData<INPUT_TYPE>(vec_data);
 
 		if (vec_data.validity.AllValid()) {
 			for (idx_t i = 0; i < count; ++i) {
@@ -147,17 +119,5 @@ sqlite3_value CastToSQLiteValue::Operation(char *input);
 
 template <>
 sqlite3_value CastToSQLiteValue::Operation(string_t input);
-
-// GET value from sqlite int (sqlite.u.i) ********/
-template <>
-int64_t CastFromSQLiteValue::GetValue(sqlite3_value input);
-
-// GET value from sqlite float (sqlite.u.r) ******/
-template <>
-double CastFromSQLiteValue::GetValue(sqlite3_value input);
-
-// GET value from sqlite string (sqlite.str_t) ******/
-template <>
-string_t CastFromSQLiteValue::GetValue(sqlite3_value input);
 
 } // namespace duckdb

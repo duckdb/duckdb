@@ -319,6 +319,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 			planner.parameter_data.emplace_back(value);
 		}
 	}
+
+	client_data->http_state = make_shared<HTTPState>();
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
@@ -774,8 +776,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #endif
 	}
 	// log query path is set: log the query
-	client_data->log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-	client_data->log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	client_data->log_query_writer->WriteData(const_data_ptr_cast("\n"), 1);
 	client_data->log_query_writer->Flush();
 	client_data->log_query_writer->Sync();
 }
@@ -918,7 +920,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
 		                                                                       info.name, OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
-			auto &new_info = (CreateScalarFunctionInfo &)info;
+			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
@@ -934,7 +936,7 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
                                                      bool requires_valid_transaction) {
 	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
 	    ValidChecker::IsInvalidated(ActiveTransaction())) {
-		throw Exception(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
+		throw TransactionException(ErrorManager::FormatException(*this, ErrorType::INVALIDATED_TRANSACTION));
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
 	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
@@ -1153,9 +1155,21 @@ ParserOptions ClientContext::GetParserOptions() const {
 }
 
 ClientProperties ClientContext::GetClientProperties() const {
-	ClientProperties properties;
-	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
-	return properties;
+	string timezone = "UTC";
+	Value result;
+	// 1) Check Set Variable
+	auto &client_config = ClientConfig::GetConfig(*this);
+	auto tz_config = client_config.set_variables.find("timezone");
+	if (tz_config == client_config.set_variables.end()) {
+		// 2) Check for Default Value
+		auto default_value = db->config.extension_parameters.find("timezone");
+		if (default_value != db->config.extension_parameters.end()) {
+			timezone = default_value->second.default_value.GetValue<string>();
+		}
+	} else {
+		timezone = tz_config->second.GetValue<string>();
+	}
+	return {timezone, db->config.options.arrow_offset_size};
 }
 
 bool ClientContext::ExecutionIsFinished() {

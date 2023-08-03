@@ -16,6 +16,8 @@ namespace duckdb {
 
 class Serializer;
 class Deserializer;
+class FormatSerializer;
+class FormatDeserializer;
 class FieldWriter;
 class FieldReader;
 
@@ -68,13 +70,16 @@ public:
 	//! Deserializes a blob back into a Constraint
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 
+	DUCKDB_API virtual void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static unique_ptr<Constraint> FormatDeserialize(FormatDeserializer &deserializer);
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -82,7 +87,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb

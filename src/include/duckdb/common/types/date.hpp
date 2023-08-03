@@ -72,13 +72,13 @@ struct date_t { // NOLINT
 	};
 
 	// special values
-	static inline date_t infinity() {
+	static inline date_t infinity() { // NOLINT
 		return date_t(NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t ninfinity() {
+	}                                  // NOLINT
+	static inline date_t ninfinity() { // NOLINT
 		return date_t(-NumericLimits<int32_t>::Maximum());
-	} // NOLINT
-	static inline date_t epoch() {
+	}                              // NOLINT
+	static inline date_t epoch() { // NOLINT
 		return date_t(0);
 	} // NOLINT
 };
@@ -158,6 +158,8 @@ public:
 	DUCKDB_API static int64_t EpochNanoseconds(date_t date);
 	//! Extract the epoch from the date (microseconds since 1970-01-01)
 	DUCKDB_API static int64_t EpochMicroseconds(date_t date);
+	//! Extract the epoch from the date (milliseconds since 1970-01-01)
+	DUCKDB_API static int64_t EpochMilliseconds(date_t date);
 	//! Convert the epoch (seconds since 1970-01-01) to a date_t
 	DUCKDB_API static date_t EpochToDate(int64_t epoch);
 

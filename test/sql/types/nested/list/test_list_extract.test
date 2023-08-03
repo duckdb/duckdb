@@ -184,3 +184,8 @@ query I
 SELECT list_extract('1', -1);
 ----
 1
+
+query I
+SELECT list_extract([1, 2, 3], -9223372036854775808);
+----
+NULL

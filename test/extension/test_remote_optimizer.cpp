@@ -17,6 +17,11 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
+#endif
+
 using namespace duckdb;
 using namespace std;
 
@@ -79,7 +84,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
 			con2.BeginTransaction();
 			PlanDeserializationState state(*con2.context);
 			auto plan = LogicalOperator::Deserialize(deserializer, state);

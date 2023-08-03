@@ -751,7 +751,7 @@ void StandardBufferManager::FreeReservedMemory(idx_t size) {
 // Buffer Allocator
 //===--------------------------------------------------------------------===//
 data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto &data = (BufferAllocatorData &)*private_data;
+	auto &data = private_data->Cast<BufferAllocatorData>();
 	auto reservation = data.manager.EvictBlocksOrThrow(size, nullptr, "failed to allocate data of size %s%s",
 	                                                   StringUtil::BytesToHumanReadableString(size));
 	// We rely on manual tracking of this one. :(
@@ -760,7 +760,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorAllocate(PrivateAllocatorData *
 }
 
 void StandardBufferManager::BufferAllocatorFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
-	auto &data = (BufferAllocatorData &)*private_data;
+	auto &data = private_data->Cast<BufferAllocatorData>();
 	BufferPoolReservation r(data.manager.GetBufferPool());
 	r.size = size;
 	r.Resize(0);
@@ -772,7 +772,7 @@ data_ptr_t StandardBufferManager::BufferAllocatorRealloc(PrivateAllocatorData *p
 	if (old_size == size) {
 		return pointer;
 	}
-	auto &data = (BufferAllocatorData &)*private_data;
+	auto &data = private_data->Cast<BufferAllocatorData>();
 	BufferPoolReservation r(data.manager.GetBufferPool());
 	r.size = old_size;
 	r.Resize(size);

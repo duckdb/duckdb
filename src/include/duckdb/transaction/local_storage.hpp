@@ -32,7 +32,7 @@ public:
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
-	                  optional_ptr<Expression> default_value);
+	                  Expression &default_value);
 	~LocalTableStorage();
 
 	reference<DataTable> table_ref;
@@ -108,7 +108,7 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
 	//! Scan
-	void Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
@@ -143,8 +143,7 @@ public:
 
 	idx_t AddedRows(DataTable &table);
 
-	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-	               optional_ptr<Expression> default_value);
+	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column, Expression &default_value);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);

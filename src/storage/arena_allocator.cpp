@@ -31,7 +31,7 @@ struct ArenaAllocatorData : public PrivateAllocatorData {
 };
 
 static data_ptr_t ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	auto &allocator_data = private_data->Cast<ArenaAllocatorData>();
 	return allocator_data.allocator.Allocate(size);
 }
 
@@ -41,7 +41,7 @@ static void ArenaAllocatorFree(PrivateAllocatorData *, data_ptr_t, idx_t) {
 
 static data_ptr_t ArenaAllocateReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                           idx_t size) {
-	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	auto &allocator_data = private_data->Cast<ArenaAllocatorData>();
 	return allocator_data.allocator.Reallocate(pointer, old_size, size);
 }
 //===--------------------------------------------------------------------===//
@@ -109,7 +109,6 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 }
 
 void ArenaAllocator::Reset() {
-
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
@@ -148,8 +147,20 @@ ArenaChunk *ArenaAllocator::GetTail() {
 	return tail;
 }
 
-bool ArenaAllocator::IsEmpty() {
+bool ArenaAllocator::IsEmpty() const {
 	return head == nullptr;
+}
+
+idx_t ArenaAllocator::SizeInBytes() const {
+	idx_t total_size = 0;
+	if (!IsEmpty()) {
+		auto current = head.get();
+		while (current != nullptr) {
+			total_size += current->current_position;
+			current = current->next.get();
+		}
+	}
+	return total_size;
 }
 
 } // namespace duckdb

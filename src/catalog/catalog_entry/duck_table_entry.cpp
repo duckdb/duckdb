@@ -16,6 +16,9 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 
 namespace duckdb {
 
@@ -295,7 +298,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
+	    make_shared<DataTable>(context, *storage, info.new_column, *bound_create_info->bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -524,10 +527,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
-	if (info.target_type.id() == LogicalTypeId::USER) {
-		info.target_type =
-		    Catalog::GetType(context, catalog.GetName(), schema.name, UserType::GetTypeName(info.target_type));
-	}
+	Binder::BindLogicalType(context, info.target_type, &catalog, schema.name);
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;
@@ -714,10 +714,13 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
+	return storage->GetColumnSegmentInfo();
+}
+
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	TableStorageInfo result;
 	result.cardinality = storage->info->cardinality.load();
-	storage->GetStorageInfo(result);
 	storage->info->indexes.Scan([&](Index &index) {
 		IndexInfo info;
 		info.is_primary = index.IsPrimary();

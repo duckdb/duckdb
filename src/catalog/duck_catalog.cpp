@@ -142,6 +142,7 @@ string DuckCatalog::GetDBPath() {
 
 void DuckCatalog::Verify() {
 #ifdef DEBUG
+	Catalog::Verify();
 	schemas->Verify(*this);
 #endif
 }

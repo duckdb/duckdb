@@ -24,6 +24,20 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+
+	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		return reinterpret_cast<const T *>(format.data);
+	}
+	template <class T>
+	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		return reinterpret_cast<T *>(format.data);
+	}
+};
+
+struct RecursiveUnifiedVectorFormat {
+	UnifiedVectorFormat unified;
+	vector<RecursiveUnifiedVectorFormat> children;
 };
 
 class VectorCache;
@@ -131,6 +145,8 @@ public:
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
 	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
+	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
+	static void RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);

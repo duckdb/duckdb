@@ -16,4 +16,4 @@ run
 SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 're')
 
 result I
-2456127
+2453562

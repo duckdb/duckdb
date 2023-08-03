@@ -50,7 +50,7 @@ public:
 	BufferHandle AllocateBuffer(idx_t buffer_size);
 
 	char *Ptr() {
-		return (char *)handle.Ptr();
+		return char_ptr_cast(handle.Ptr());
 	}
 
 private:

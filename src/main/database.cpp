@@ -158,7 +158,7 @@ duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(At
 
 void DatabaseInstance::CreateMainDatabase() {
 	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path, GetFileSystem());
 	info.path = config.options.database_path;
 
 	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
@@ -171,13 +171,14 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	// initialize the database
+	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
 
 void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
 	auto unrecognized_options_iter = unrecognized_options.begin();
 	string unrecognized_option_keys = unrecognized_options_iter->first;
-	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+	while (++unrecognized_options_iter != unrecognized_options.end()) {
 		unrecognized_option_keys = "," + unrecognized_options_iter->first;
 	}
 	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
@@ -394,15 +395,6 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	}
 	result = global_value->second;
 	return true;
-}
-
-string ClientConfig::ExtractTimezone() const {
-	auto entry = set_variables.find("TimeZone");
-	if (entry == set_variables.end()) {
-		return "UTC";
-	} else {
-		return entry->second.GetValue<std::string>();
-	}
 }
 
 ValidChecker &DatabaseInstance::GetValidChecker() {

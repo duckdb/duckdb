@@ -39,6 +39,11 @@ SELECT * FROM tbl WHERE COLUMNS(['nonexistent']) >= 2 ORDER BY ALL
 nonexistent
 
 statement error
+SELECT * FROM tbl WHERE COLUMNS(* EXCLUDE (col1, col2, col3)) >= 2 ORDER BY ALL
+----
+empty set of columns
+
+statement error
 SELECT * FROM tbl WHERE * ORDER BY ALL
 ----
 STAR expression is not allowed in the WHERE clause

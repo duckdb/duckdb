@@ -109,11 +109,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static int64_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
 		UErrorCode status = U_ZERO_ERROR;
-		auto millis = calendar->getTime(status);
-		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
-		millis += ExtractField(calendar, UCAL_DST_OFFSET);
 		//	Truncate
-		return millis / Interval::MSECS_PER_SEC;
+		return calendar->getTime(status) / Interval::MSECS_PER_SEC;
 	}
 
 	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
@@ -200,7 +197,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		calendar->set(UCAL_DATE, dd);
 
-		return Date::EpochToDate(ExtractEpoch(calendar, 0));
+		//	Offset to UTC
+		auto millis = calendar->getTime(status);
+		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, UCAL_DST_OFFSET);
+
+		return Date::EpochToDate(millis / Interval::MSECS_PER_SEC);
 	}
 
 	static string_t MonthName(icu::Calendar *calendar, const uint64_t micros) {
@@ -271,7 +273,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &date_arg = args.data[1];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BIND_TYPE &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -293,7 +295,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<int64_t>;
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BIND_TYPE &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -329,7 +331,7 @@ struct ICUDatePart : public ICUDateFunc {
 			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
-			auto tdata = (const INPUT_TYPE *)rdata.data;
+			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);
@@ -432,7 +434,7 @@ struct ICUDatePart : public ICUDateFunc {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static duckdb::unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
 	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}

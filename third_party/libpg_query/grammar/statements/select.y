@@ -444,15 +444,22 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctequery = $5;
+				n->ctematerialized = $4;
+				n->ctequery = $6;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
+		;
+
+opt_materialized:
+		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
+		| NOT MATERIALIZED						{ $$ = PGCTEMaterializeNever; }
+		| /*EMPTY*/								{ $$ = PGCTEMaterializeDefault; }
 		;
 
 into_clause:
@@ -2632,7 +2639,7 @@ d_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
-			| '$' named_param
+			| '$' ColLabel
 				{
 					$$ = makeNamedParamRef($2, @1);
 				}
@@ -2733,10 +2740,9 @@ indirection_expr:		'?'
 				{
 					$$ = $2;
 				}
-			| '{' dict_arguments_opt_comma '}'
+			| struct_expr
 				{
-					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| MAP '{' opt_map_arguments_opt_comma '}'
 				{
@@ -2760,6 +2766,17 @@ indirection_expr:		'?'
 					$$ = $1;
 				}
 		;
+
+
+
+struct_expr:		'{' dict_arguments_opt_comma '}'
+				{
+					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = (PGNode *) f;
+				}
+		;
+
+
 
 func_application:       func_name '(' ')'
 				{
@@ -3627,11 +3644,7 @@ columnref:	ColId
 		;
 
 indirection_el:
-			'.' attr_name
-				{
-					$$ = (PGNode *) makeString($2);
-				}
-			| '[' a_expr ']'
+			'[' a_expr ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
 					ai->is_slice = false;
@@ -3654,10 +3667,6 @@ opt_slice_bound:
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-indirection:
-			indirection_el							{ $$ = list_make1($1); }
-			| indirection indirection_el			{ $$ = lappend($1, $2); }
-		;
 
 opt_indirection:
 			/*EMPTY*/								{ $$ = NIL; }
@@ -3806,45 +3815,6 @@ qualified_name_list:
 			| qualified_name_list ',' qualified_name { $$ = lappend($1, $3); }
 		;
 
-/*
- * The production for a qualified relation name has to exactly match the
- * production for a qualified func_name, because in a FROM clause we cannot
- * tell which we are parsing until we see what comes after it ('(' for a
- * func_name, something else for a relation). Therefore we allow 'indirection'
- * which may contain subscripts, and reject that case in the C code.
- */
-qualified_name:
-			ColIdOrString
-				{
-					$$ = makeRangeVar(NULL, $1, @1);
-				}
-			| ColId indirection
-				{
-					check_qualified_name($2, yyscanner);
-					$$ = makeRangeVar(NULL, NULL, @1);
-					switch (list_length($2))
-					{
-						case 1:
-							$$->catalogname = NULL;
-							$$->schemaname = $1;
-							$$->relname = strVal(linitial($2));
-							break;
-						case 2:
-							$$->catalogname = $1;
-							$$->schemaname = strVal(linitial($2));
-							$$->relname = strVal(lsecond($2));
-							break;
-						case 3:
-						default:
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("improper qualified name (too many dotted names): %s",
-											NameListToString(lcons(makeString($1), $2))),
-									 parser_errposition(@1)));
-							break;
-					}
-				}
-		;
 
 name_list:	name
 					{ $$ = list_make1(makeString($1)); }
@@ -3865,7 +3835,6 @@ name_list_opt_comma_opt_bracket:
 
 name:		ColIdOrString							{ $$ = $1; };
 
-attr_name:	ColLabel								{ $$ = $1; };
 
 /*
  * The production for a qualified func_name has to exactly match the
@@ -3998,7 +3967,6 @@ AexprConst: Iconst
 		;
 
 Iconst:		ICONST									{ $$ = $1; };
-Sconst:		SCONST									{ $$ = $1; };
 
 /* Role specifications */
 /*
@@ -4011,17 +3979,6 @@ Sconst:		SCONST									{ $$ = $1; };
  * So, we divide names into several possible classes.  The classification
  * is chosen in part to make keywords acceptable as names wherever possible.
  */
-
-/* Column identifier --- names that can be column, table, etc names.
- */
-ColId:		IDENT									{ $$ = $1; }
-			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| col_name_keyword						{ $$ = pstrdup($1); }
-		;
-
-ColIdOrString:	ColId											{ $$ = $1; }
-				| SCONST										{ $$ = $1; }
-		;
 
 
 /* Type/function identifier --- names that can be type or function names.
@@ -4059,19 +4016,7 @@ opt_name_list:
 param_name:	type_function_name
 		;
 
-/* Any not-fully-reserved word --- these names can be, eg, role names.
- */
-/* Column label --- allowed labels in "AS" clauses.
- * This presently includes *all* Postgres keywords.
- */
-ColLabel:	IDENT									{ $$ = $1; }
-			| other_keyword							{ $$ = pstrdup($1); }
-			| unreserved_keyword					{ $$ = pstrdup($1); }
-			| reserved_keyword						{ $$ = pstrdup($1); }
-		;
 
 ColLabelOrString:	ColLabel						{ $$ = $1; }
 					| SCONST						{ $$ = $1; }
 		;
-
-named_param: IDENT { $$ = $1; }

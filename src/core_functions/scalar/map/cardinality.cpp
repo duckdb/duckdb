@@ -16,7 +16,7 @@ static void CardinalityFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	map.ToUnifiedFormat(args.size(), map_data);
 	for (idx_t row = 0; row < args.size(); row++) {
-		auto list_entry = ((list_entry_t *)map_data.data)[map_data.sel->get_index(row)];
+		auto list_entry = UnifiedVectorFormat::GetData<list_entry_t>(map_data)[map_data.sel->get_index(row)];
 		result_data[row] = list_entry.length;
 		result_validity.Set(row, map_data.validity.RowIsValid(map_data.sel->get_index(row)));
 	}

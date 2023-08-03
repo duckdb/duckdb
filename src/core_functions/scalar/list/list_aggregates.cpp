@@ -15,6 +15,12 @@ namespace duckdb {
 // FIXME: use a local state for each thread to increase performance?
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
+static unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
+	bound_function.arguments[0] = LogicalType::SQLNULL;
+	bound_function.return_type = LogicalType::SQLNULL;
+	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
+}
+
 struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
 	~ListAggregatesBindData() override;
@@ -27,15 +33,28 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ListAggregatesBindData &)other_p;
-		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
+		auto &other = other_p.Cast<ListAggregatesBindData>();
+		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		throw NotImplementedException("FIXME: list aggr serialize");
+		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p);
+		if (!bind_data) {
+			writer.WriteField<bool>(false);
+		} else {
+			writer.WriteField<bool>(true);
+			writer.WriteSerializable(bind_data->stype);
+			writer.WriteSerializable(*bind_data->aggr_expr);
+		}
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
-		throw NotImplementedException("FIXME: list aggr deserialize");
+		if (reader.ReadRequired<bool>()) {
+			auto s_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+			auto expr = reader.ReadRequiredSerializable<Expression>(state);
+			return make_uniq<ListAggregatesBindData>(s_type, std::move(expr));
+		} else {
+			return ListAggregatesBindFailure(bound_function);
+		}
 	}
 };
 
@@ -55,7 +74,8 @@ struct StateVector {
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
-			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+			ArenaAllocator allocator(Allocator::DefaultAllocator());
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
@@ -162,7 +182,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
 	D_ASSERT(aggr.function.update);
 
@@ -175,7 +196,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();
@@ -396,9 +417,7 @@ template <bool IS_AGGR = false>
 static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		return ListAggregatesBindFailure(bound_function);
 	}
 
 	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;

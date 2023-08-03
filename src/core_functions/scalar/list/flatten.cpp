@@ -19,8 +19,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 
 	UnifiedVectorFormat list_data;
 	input.ToUnifiedFormat(count, list_data);
-	auto list_entries = (list_entry_t *)list_data.data;
-
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	auto &child_vector = ListVector::GetEntry(input);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -28,7 +27,6 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto &result_validity = FlatVector::Validity(result);
 
 	if (child_vector.GetType().id() == LogicalTypeId::SQLNULL) {
-		auto result_entries = FlatVector::GetData<list_entry_t>(result);
 		for (idx_t i = 0; i < count; i++) {
 			auto list_index = list_data.sel->get_index(i);
 			if (!list_data.validity.RowIsValid(list_index)) {
@@ -47,7 +45,7 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 	auto child_size = ListVector::GetListSize(input);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(child_size, child_data);
-	auto child_entries = (list_entry_t *)child_data.data;
+	auto child_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_data);
 	auto &data_vector = ListVector::GetEntry(child_vector);
 
 	idx_t offset = 0;

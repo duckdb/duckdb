@@ -33,7 +33,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 		// AND, remove expression from the list
 		auto &and_expr = child->Cast<BoundConjunctionExpression>();
 		for (idx_t i = 0; i < and_expr.children.size(); i++) {
-			if (Expression::Equals(and_expr.children[i].get(), &expr)) {
+			if (and_expr.children[i]->Equals(expr)) {
 				result = std::move(and_expr.children[i]);
 				and_expr.children.erase(and_expr.children.begin() + i);
 				break;
@@ -45,7 +45,7 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 	} else {
 		// not an AND node! remove the entire expression
 		// this happens in the case of e.g. (X AND B) OR X
-		D_ASSERT(Expression::Equals(child.get(), &expr));
+		D_ASSERT(child->Equals(expr));
 		result = std::move(child);
 		conj.children[idx] = nullptr;
 	}

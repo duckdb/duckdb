@@ -77,6 +77,9 @@ SELECT COUNT(*), COUNT(i::INT), SUM(i::INT) FROM nulls
 ----
 70006	6	9
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT lower(compression)='${compression}' FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----

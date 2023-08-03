@@ -8,39 +8,12 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
 namespace duckdb {
-
-enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
-//! Whether or not the input order influences the result of the aggregate
-enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
-
-class BoundAggregateExpression;
-
-struct AggregateInputData {
-	AggregateInputData(FunctionData *bind_data_p, Allocator &allocator_p)
-	    : bind_data(bind_data_p), allocator(allocator_p) {
-	}
-	FunctionData *bind_data;
-	Allocator &allocator;
-};
-
-struct AggregateStatisticsInput {
-	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         NodeStatistics *node_stats_p)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
-	}
-
-	FunctionData *bind_data;
-	vector<BaseStatistics> &child_stats;
-	NodeStatistics *node_stats;
-};
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
@@ -68,7 +41,6 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
                                           data_ptr_t state, idx_t count);
 
 //! The type used for updating complex windowed aggregate functions (optional)
-typedef std::pair<idx_t, idx_t> FrameBounds;
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
@@ -76,8 +48,13 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
 
 typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                             AggregateFunction &function);
+
+typedef void (*aggregate_format_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                             const AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_format_deserialize_t)(FormatDeserializer &deserializer,
+                                                                   AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -93,7 +70,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -107,7 +85,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), format_serialize(nullptr), format_deserialize(nullptr),
+	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -158,6 +137,8 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
+	aggregate_format_serialize_t format_serialize;
+	aggregate_format_deserialize_t format_deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
 
@@ -215,7 +196,7 @@ public:
 
 	template <class STATE, class OP>
 	static void StateInitialize(data_ptr_t state) {
-		OP::Initialize((STATE *)state);
+		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
 	template <class STATE, class OP>
@@ -279,6 +260,12 @@ public:
 	static void StateFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                          idx_t offset) {
 		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, aggr_input_data, result, count, offset);
+	}
+
+	template <class STATE, class OP>
+	static void StateVoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                              idx_t offset) {
+		AggregateExecutor::VoidFinalize<STATE, OP>(states, aggr_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>

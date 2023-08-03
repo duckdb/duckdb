@@ -16,7 +16,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem *fs_p, const string &path) {
 	char buffer[MAGIC_BYTES_READ_SIZE];
 
 	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
-	if (memcmp(buffer, "SQLite format 3\0\0\0", 16) == 0) {
+	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {
 		return DataFileType::SQLITE_FILE;
 	}
 	if (memcmp(buffer, "PAR1", 4) == 0) {

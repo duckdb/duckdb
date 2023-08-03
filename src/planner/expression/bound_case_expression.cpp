@@ -22,23 +22,23 @@ string BoundCaseExpression::ToString() const {
 	return CaseExpression::ToString<BoundCaseExpression, Expression>(*this);
 }
 
-bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {
+bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundCaseExpression>();
+	auto &other = other_p.Cast<BoundCaseExpression>();
 	if (case_checks.size() != other.case_checks.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < case_checks.size(); i++) {
-		if (!Expression::Equals(case_checks[i].when_expr.get(), other.case_checks[i].when_expr.get())) {
+		if (!Expression::Equals(*case_checks[i].when_expr, *other.case_checks[i].when_expr)) {
 			return false;
 		}
-		if (!Expression::Equals(case_checks[i].then_expr.get(), other.case_checks[i].then_expr.get())) {
+		if (!Expression::Equals(*case_checks[i].then_expr, *other.case_checks[i].then_expr)) {
 			return false;
 		}
 	}
-	if (!Expression::Equals(else_expr.get(), other.else_expr.get())) {
+	if (!Expression::Equals(*else_expr, *other.else_expr)) {
 		return false;
 	}
 	return true;

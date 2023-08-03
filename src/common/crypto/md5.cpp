@@ -30,7 +30,7 @@ static void ByteReverse(unsigned char *buf, unsigned longs) {
 	uint32_t t;
 	do {
 		t = (uint32_t)((unsigned)buf[3] << 8 | buf[2]) << 16 | ((unsigned)buf[1] << 8 | buf[0]);
-		*(uint32_t *)buf = t;
+		*reinterpret_cast<uint32_t *>(buf) = t;
 		buf += 4;
 	} while (--longs);
 }
@@ -174,7 +174,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 		}
 		memcpy(p, input, t);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 		input += t;
 		len -= t;
 	}
@@ -184,7 +184,7 @@ void MD5Context::MD5Update(const_data_ptr_t input, idx_t len) {
 	while (len >= 64) {
 		memcpy(in, input, 64);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 		input += 64;
 		len -= 64;
 	}
@@ -217,7 +217,7 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 		/* Two lots of padding:  Pad the first block to 64 bytes */
 		memset(p, 0, count);
 		ByteReverse(in, 16);
-		MD5Transform(buf, (uint32_t *)in);
+		MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
 
 		/* Now fill the next block with 56 bytes */
 		memset(in, 0, 56);
@@ -228,11 +228,11 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 	ByteReverse(in, 14);
 
 	/* Append length in bits and transform */
-	((uint32_t *)in)[14] = bits[0];
-	((uint32_t *)in)[15] = bits[1];
+	(reinterpret_cast<uint32_t *>(in))[14] = bits[0];
+	(reinterpret_cast<uint32_t *>(in))[15] = bits[1];
 
-	MD5Transform(buf, (uint32_t *)in);
-	ByteReverse((unsigned char *)buf, 4);
+	MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
+	ByteReverse(reinterpret_cast<unsigned char *>(buf), 4);
 	memcpy(out_digest, buf, 16);
 }
 
@@ -260,7 +260,7 @@ string MD5Context::FinishHex() {
 }
 
 void MD5Context::Add(const char *data) {
-	MD5Update((const_data_ptr_t)data, strlen(data));
+	MD5Update(const_data_ptr_cast(data), strlen(data));
 }
 
 } // namespace duckdb

@@ -1,0 +1,11 @@
+# name: test/fuzzer/duckfuzz/unpivot_multiple_in.test
+# description: Unpivot with multiple pivot elements
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM (SELECT 42) AS t1 UNPIVOT (c2 FOR c2 IN (6317) c2 IN (NULL))
+----
+requires a single pivot element

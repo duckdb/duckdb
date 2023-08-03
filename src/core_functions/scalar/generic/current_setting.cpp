@@ -19,7 +19,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const CurrentSettingBindData &)other_p;
+		auto &other = other_p.Cast<CurrentSettingBindData>();
 		return Value::NotDistinctFrom(value, other.value);
 	}
 };

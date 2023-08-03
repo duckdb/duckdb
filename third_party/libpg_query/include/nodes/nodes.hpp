@@ -426,7 +426,6 @@ typedef enum PGNodeTag {
 	T_PGImportStmt,
 	T_PGAttachStmt,
 	T_PGDetachStmt,
-	T_PGCreateDatabaseStmt,
 	T_PGUseStmt,
 
 	/*

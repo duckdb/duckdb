@@ -23,12 +23,12 @@ hash_t BoundUnnestExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash("unnest"));
 }
 
-bool BoundUnnestExpression::Equals(const BaseExpression *other_p) const {
+bool BoundUnnestExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundUnnestExpression>();
-	if (!Expression::Equals(child.get(), other.child.get())) {
+	auto &other = other_p.Cast<BoundUnnestExpression>();
+	if (!Expression::Equals(*child, *other.child)) {
 		return false;
 	}
 	return true;

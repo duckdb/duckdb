@@ -13,6 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
+
 #include <cstring>
 #include <cassert>
 
@@ -46,7 +47,7 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	string timezone_config;
+	ClientProperties options;
 };
 
 struct AppenderWrapper {

@@ -56,8 +56,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 
 	string flags_s = DecodeFlags(flags);
 
-	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
-	const auto &handle = filesystem.attr("open")(path, py::str(flags_s), py::arg("seekable") = true);
+	const auto &handle = filesystem.attr("open")(path, py::str(flags_s));
 	return make_uniq<PythonFileHandle>(*this, path, handle);
 }
 
@@ -66,7 +65,7 @@ int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_byt
 
 	const auto &write = PythonFileHandle::GetHandle(handle).attr("write");
 
-	auto data = py::bytes(std::string((const char *)buffer, nr_bytes));
+	auto data = py::bytes(std::string(const_char_ptr_cast(buffer), nr_bytes));
 
 	return py::int_(write(data));
 }
@@ -115,6 +114,9 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 		results.push_back(py::str(unstrip_protocol(py::str(item))));
 	}
 	return results;
+}
+string PythonFilesystem::PathSeparator(const string &path) {
+	return "/";
 }
 int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle

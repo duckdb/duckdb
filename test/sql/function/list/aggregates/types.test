@@ -319,7 +319,7 @@ SELECT list_aggr([NULL::BLOB], '${func_name}')
 endloop
 
 # statement error for BLOB
-foreach func_name approx_count_distinct avg favg bit_and bit_or bit_xor bool_and bool_or entropy histogram kurtosis mad median mode product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
+foreach func_name avg favg bit_and bit_or bit_xor bool_and bool_or entropy histogram kurtosis mad median mode product sem skewness string_agg group_concat sum fsum sumKahan kahan_sum var_samp var_pop stddev stddev_pop variance stddev_samp
 
 statement error
 SELECT list_aggr(['{a: 1}'::BLOB], '${func_name}')

@@ -1,7 +1,5 @@
 #include "duckdb/execution/index/art/node16.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -11,19 +9,18 @@ namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_16).New());
-	node.type = (uint8_t)NType::NODE_16;
+	node = Node::GetAllocator(art, NType::NODE_16).New();
+	node.SetType((uint8_t)NType::NODE_16);
 	auto &n16 = Node16::Get(art, node);
 
 	n16.count = 0;
-	n16.prefix.Initialize();
 	return n16;
 }
 
 void Node16::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 
 	auto &n16 = Node16::Get(art, node);
 
@@ -39,8 +36,6 @@ Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 	auto &n16 = Node16::New(art, node16);
 
 	n16.count = n4.count;
-	n16.prefix.Move(n4.prefix);
-
 	for (idx_t i = 0; i < n4.count; i++) {
 		n16.key[i] = n4.key[i];
 		n16.children[i] = n4.children[i];
@@ -57,9 +52,8 @@ Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	auto &n48 = Node48::Get(art, node48);
 
 	n16.count = 0;
-	n16.prefix.Move(n48.prefix);
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		D_ASSERT(n16.count <= Node::NODE_16_CAPACITY);
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
 			n16.key[n16.count] = i;
 			n16.children[n16.count] = n48.children[n48.child_index[i]];
@@ -82,7 +76,7 @@ void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n16 = Node16::Get(art, node);
 
 	// ensure that there is no other child at the same byte
@@ -118,7 +112,7 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n16 = Node16::Get(art, node);
 
 	idx_t child_pos = 0;
@@ -160,6 +154,7 @@ optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}
@@ -171,6 +166,7 @@ optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
 			byte = key[i];
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}
@@ -192,7 +188,6 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_16);
 	writer.Write<uint8_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write key values
 	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
@@ -208,10 +203,9 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node16::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
-	prefix.Deserialize(art, reader);
 
 	// read key values
 	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
@@ -227,7 +221,7 @@ void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
 void Node16::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		Node::Vacuum(art, children[i], flags);
+		children[i].Vacuum(art, flags);
 	}
 }
 

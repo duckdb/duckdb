@@ -55,7 +55,7 @@ struct ICUTableRange {
 		bool greater_than_check;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (const BindData &)other_p;
+			auto &other = other_p.Cast<const BindData>();
 			return other.start == start && other.end == end && other.increment == increment &&
 			       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check &&
 			       *calendar == *other.calendar;
@@ -65,7 +65,7 @@ struct ICUTableRange {
 			return make_uniq<BindData>(*this);
 		}
 
-		bool Finished(timestamp_t current_value) {
+		bool Finished(timestamp_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
 					return current_value > end;
@@ -139,15 +139,15 @@ struct ICUTableRange {
 	};
 
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input) {
-		auto &bind_data = (BindData &)*input.bind_data;
+		auto &bind_data = input.bind_data->Cast<BindData>();
 		return make_uniq<State>(bind_data.start);
 	}
 
 	static void ICUTableRangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (BindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<BindData>();
 		CalendarPtr calendar_ptr(bind_data.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &state = (State &)*data_p.global_state;
+		auto &state = data_p.global_state->Cast<State>();
 		if (state.finished) {
 			return;
 		}

@@ -41,19 +41,17 @@ public:
 
 	hash_t Hash() const override;
 
-	bool Equals(const BaseExpression *other) const override {
+	bool Equals(const BaseExpression &other) const override {
 		if (!BaseExpression::Equals(other)) {
 			return false;
 		}
-		return return_type == ((Expression *)other)->return_type;
-	}
-
-	static bool Equals(const Expression *left, const Expression *right) {
-		return BaseExpression::Equals((const BaseExpression *)left, (const BaseExpression *)right);
+		return return_type == ((Expression &)other).return_type;
 	}
 	static bool Equals(const Expression &left, const Expression &right) {
-		return left.Equals(&right);
+		return left.Equals(right);
 	}
+	static bool Equals(const unique_ptr<Expression> &left, const unique_ptr<Expression> &right);
+	static bool ListEquals(const vector<unique_ptr<Expression>> &left, const vector<unique_ptr<Expression>> &right);
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
 
@@ -65,6 +63,9 @@ public:
 	//! Deserializes a blob back into an Expression [CAN THROW:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source, PlanDeserializationState &state);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

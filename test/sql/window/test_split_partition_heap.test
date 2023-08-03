@@ -1,0 +1,12 @@
+# name: test/sql/window/test_split_partition_heap.test
+# description: Validate AlignHeapBlocks whith 2 heap : 1 data
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table partsupp as select uuid()::varchar as c5 from range(8000);
+
+statement ok
+SELECT (ntile(5002) OVER (ROWS BETWEEN CURRENT ROW AND CURRENT ROW) >= 0), c5 FROM partsupp;

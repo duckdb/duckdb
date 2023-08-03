@@ -1,5 +1,5 @@
 name: "Build Extensions"
-description: "Build, test and deploy the in-tree DuckDB extensions"
+description: "Build, test and deploy the DuckDB extensions"
 inputs:
   # Test config
   run_tests:
@@ -24,105 +24,129 @@ inputs:
     default: ''
 
   # Build config
-  force_32_bit:
-    description: 'Force the 32 bit build'
-    default: 0
   static_link_build:
-    description: 'Links duckdb statically to the built extensions'
+    description: 'Links DuckDB statically to the loadable extensions'
+    default: 1
+  no_static_linking:
+    description: 'Disables linking extensions into DuckDB for testing'
+    default: 0
+  vcpkg_build:
+    description: 'Installs vcpkg and pass its toolchain to CMakes'
     default: 1
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
   openssl_path:
     description: 'Directory of OpenSSL installation'
-    default: '/usr/local/ssl'
+    default: ''
   post_install:
     description: 'Post-install scripts to run'
     default: ''
   treat_warn_as_error:
     description: 'Treat compilation warnings as errors'
     default: 1
-  visualizer:
-    description: 'Build Visualizer'
+  build_in_tree_extensions:
+    description: 'Build in-tree extensions'
     default: 1
-  icu:
-    description: 'Build ICU'
+  build_out_of_tree_extensions:
+    description: 'Build out-of-tree extensions'
     default: 1
-  tpch:
-    description: 'Build TPCH'
+  build_vcpkg_extensions:
+    description: 'Build extensions that require vcpkg for dependency management'
     default: 1
-  tpcds:
-    description: 'Build TPCDS'
-    default: 1
-  httpfs:
-    description: 'Build HTTPFS'
-    default: 1
-  fts:
-    description: 'Build FTS'
-    default: 1
-  json:
-    description: 'Build JSON'
-    default: 1
-  excel:
-    description: 'Build Excel'
-    default: 1
-  sqlsmith:
-    description: 'Build SQLsmith'
-    default: 1
-  inet:
-    description: 'Build INET'
-    default: 1
-  autocomplete:
-    description: 'Build SQL autocomplete extension'
-    default: 1
-  out_of_tree_ext:
-    description: 'Build Out-Of-Tree Extensions'
-    default: 1
-  python_name:
-    description: 'Python binary name because wtf Python'
-    default: 'python3'
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  osx_arch:
+    description: 'Build specific architecture for OSX'
+    default: ''
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
+  vcpkg_target_triplet:
+    description: 'Target triplet for installing vcpkg dependencies'
+    default: ''
   override_cc:
     description: 'Override C Compiler'
     default: ''
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
+  unittest_script:
+    description: 'Script/program to execute the unittests'
+    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
 
 runs:
   using: "composite"
   steps:
+    - name: Setup DuckDB extension build config
+      shell: bash
+      run: |
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_extensions.cmake' || '' }}"
+        echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
+
+    - name: Setup vcpkg
+      if: inputs.vcpkg_build == 1
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+
+    - name: Set vcpkg env variables
+      if: inputs.vcpkg_build == 1
+      shell: bash
+      run: |
+        echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
+        echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+        
+    - name: workaround for https://github.com/duckdb/duckdb/issues/8360
+      if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT
+        mkdir -p downloads
+        cd downloads
+        curl -O -L https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
+        ls -al
+        pwd
+
+    # Todo: remove this after spatial no longer depends on it
+    - name: Globally install OpenSSL (Spatial still depends on it to be available)
+      if: inputs.vcpkg_build == 1 && inputs.openssl_path == ''
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
+        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+
+    - name: Set Openssl dir
+      if: inputs.openssl_path != ''
+      shell: bash
+      run: |
+        echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
+
+    - name: Create combined vcpkg manifest
+      if: inputs.vcpkg_build == 1 && inputs.build_vcpkg_extensions == 1
+      shell: bash
+      run: |
+        make extension_configuration
+        echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
+
     - name: Build
       shell: bash
       env:
-        BUILD_VISUALIZER: ${{ inputs.visualizer }}
-        BUILD_ICU: ${{ inputs.icu }}
-        BUILD_TPCH: ${{ inputs.tpch }}
-        BUILD_TPCDS: ${{ inputs.tpcds }}
-        BUILD_FTS: ${{ inputs.fts }}
-        BUILD_INET: ${{ inputs.inet }}
-        BUILD_HTTPFS: ${{ inputs.httpfs }}
-        BUILD_JSON: ${{ inputs.json }}
-        BUILD_EXCEL: ${{ inputs.excel }}
-        BUILD_SQLSMITH: ${{ inputs.sqlsmith }}
-        BUILD_AUTOCOMPLETE: ${{ inputs.autocomplete }}
-        FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
-        DISABLE_BUILTIN_EXTENSIONS: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
-        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
+        DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-
       run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd
@@ -130,15 +154,11 @@ runs:
         git config --global --add safe.directory '*'
         make
 
-    - name: Build External Extensions
-      if: ${{ inputs.out_of_tree_ext != 0 }}
+    - name: Test statically linked extensions
+      if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
       shell: bash
       run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-        cd  ${{ inputs.build_dir}}
-        mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }} --github-ref=$GITHUB_REF
+         ${{ inputs.unittest_script }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -167,7 +187,9 @@ runs:
           fi
         fi
 
-    - name: Test
+    # Note: the extension-upload-test script will currently not run the out-of-tree extensions tests.
+    #       it will however test that the out-of-tree extensions can actually be loaded, and the default tests still pass
+    - name: Test loadable extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:

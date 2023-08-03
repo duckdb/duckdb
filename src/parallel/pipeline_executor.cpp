@@ -17,11 +17,10 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 		if (requires_batch_index) {
 			auto &partition_info = local_sink_state->partition_info;
-			if (!partition_info.batch_index.IsValid()) {
-				// batch index is not set yet - initialize before fetching anything
-				partition_info.batch_index = pipeline.RegisterNewBatchIndex();
-				partition_info.min_batch_index = partition_info.batch_index;
-			}
+			D_ASSERT(!partition_info.batch_index.IsValid());
+			// batch index is not set yet - initialize before fetching anything
+			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
@@ -79,6 +78,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 		OperatorResultType push_result;
 
 		if (in_process_operators.empty()) {
+			curr_chunk.Reset();
 			StartOperator(current_operator);
 			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
 			                                                *intermediate_states[flushing_idx]);
@@ -171,9 +171,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 
-	PushFinalize();
-
-	return PipelineExecuteResult::FINISHED;
+	return PushFinalize();
 }
 
 PipelineExecuteResult PipelineExecutor::Execute() {
@@ -238,24 +236,45 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-void PipelineExecutor::PushFinalize() {
+PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	if (finalized) {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
 
 	D_ASSERT(local_sink_state);
 
+	// Run the combine for the sink
+	OperatorSinkCombineInput combine_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (debug_blocked_combine_count < debug_blocked_target_count) {
+		debug_blocked_combine_count++;
+
+		auto &callback_state = combine_input.interrupt_state;
+		std::thread rewake_thread([callback_state] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			callback_state.Callback();
+		});
+		rewake_thread.detach();
+
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+#endif
+	auto result = pipeline.sink->Combine(context, combine_input);
+
+	if (result == SinkCombineResultType::BLOCKED) {
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+
 	finalized = true;
-
-	// run the combine for the sink
-	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
-
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
 		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
 	}
 	pipeline.executor.Flush(thread);
 	local_sink_state.reset();
+
+	return PipelineExecuteResult::FINISHED;
 }
 
 // TODO: Refactoring the StreamingQueryResult to use Push-based execution should eliminate the need for this code
@@ -477,7 +496,8 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 		} else {
 			next_batch_index =
 			    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
-			next_batch_index += pipeline.base_batch_index;
+			// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
+			next_batch_index += pipeline.base_batch_index + 1;
 		}
 		auto &partition_info = local_sink_state->partition_info;
 		if (next_batch_index != partition_info.batch_index.GetIndex()) {

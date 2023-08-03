@@ -29,7 +29,7 @@ static void HeapGatherStringVector(Vector &v, const idx_t vcount, const Selectio
 		}
 		auto len = Load<uint32_t>(key_locations[i]);
 		key_locations[i] += sizeof(uint32_t);
-		target[col_idx] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
+		target[col_idx] = StringVector::AddStringOrBlob(v, string_t(const_char_ptr_cast(key_locations[i]), len));
 		key_locations[i] += len;
 	}
 }

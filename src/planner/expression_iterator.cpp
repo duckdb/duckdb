@@ -5,6 +5,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
+#include "duckdb/planner/query_node/bound_cte_node.hpp"
 #include "duckdb/planner/tableref/list.hpp"
 
 namespace duckdb {
@@ -198,6 +199,11 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		EnumerateQueryNodeChildren(*cte_node.right, callback);
 		break;
 	}
+	case QueryNodeType::CTE_NODE: {
+		auto &cte_node = node.Cast<BoundCTENode>();
+		EnumerateQueryNodeChildren(*cte_node.child, callback);
+		break;
+	}
 	case QueryNodeType::SELECT_NODE: {
 		auto &bound_select = node.Cast<BoundSelectNode>();
 		for (auto &expr : bound_select.select_list) {
@@ -230,12 +236,12 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	for (idx_t i = 0; i < node.modifiers.size(); i++) {
 		switch (node.modifiers[i]->type) {
 		case ResultModifierType::DISTINCT_MODIFIER:
-			for (auto &expr : ((BoundDistinctModifier &)*node.modifiers[i]).target_distincts) {
+			for (auto &expr : node.modifiers[i]->Cast<BoundDistinctModifier>().target_distincts) {
 				EnumerateExpression(expr, callback);
 			}
 			break;
 		case ResultModifierType::ORDER_MODIFIER:
-			for (auto &order : ((BoundOrderModifier &)*node.modifiers[i]).orders) {
+			for (auto &order : node.modifiers[i]->Cast<BoundOrderModifier>().orders) {
 				EnumerateExpression(order.expression, callback);
 			}
 			break;

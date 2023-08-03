@@ -29,6 +29,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
+			unbound_expressions.reserve(art.unbound_expressions.size());
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
@@ -60,11 +61,11 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 }
 
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
-                                     ColumnDefinition &new_column, optional_ptr<Expression> default_value)
+                                     ColumnDefinition &new_column, Expression &default_value)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
       merged_storage(parent.merged_storage) {
-	row_groups = parent.row_groups->AddColumn(context, new_column, default_value.get());
+	row_groups = parent.row_groups->AddColumn(context, new_column, default_value);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
 }
@@ -252,7 +253,7 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 		return nullptr;
 	}
 	auto storage_entry = std::move(entry->second);
-	table_storage.erase(table);
+	table_storage.erase(entry);
 	return storage_entry;
 }
 
@@ -310,7 +311,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	storage->InitializeScan(state, table_filters);
 }
 
-void LocalStorage::Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+void LocalStorage::Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result) {
 	state.Scan(transaction, result);
 }
 
@@ -507,7 +508,7 @@ void LocalStorage::MoveStorage(DataTable &old_dt, DataTable &new_dt) {
 }
 
 void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
-                             optional_ptr<Expression> default_value) {
+                             Expression &default_value) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {

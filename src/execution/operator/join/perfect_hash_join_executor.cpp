@@ -168,7 +168,7 @@ unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionCon
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &result, OperatorState &state_p) {
-	auto &state = (PerfectHashJoinState &)state_p;
+	auto &state = state_p.Cast<PerfectHashJoinState>();
 	// keeps track of how many probe keys have a match
 	idx_t probe_sel_count = 0;
 

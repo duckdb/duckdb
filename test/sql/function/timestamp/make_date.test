@@ -211,6 +211,12 @@ SELECT
 ----
 2021-12-30 12:41:46.123456	NULL	NULL	NULL	NULL	NULL	NULL
 
+# From microseconds
+query II
+SELECT make_timestamp(0), make_timestamp(1684509234845000);
+----
+1970-01-01 00:00:00	2023-05-19 15:13:54.845
+
 #
 # Times
 #

@@ -456,7 +456,7 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 }
 
 void DuckDBFunctionsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBFunctionsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBFunctionsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

@@ -101,15 +101,16 @@ void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block
 			    make_uniq<RowDataBlock>(buffer_manager, MaxValue<idx_t>(total_size, (idx_t)Storage::BLOCK_SIZE), 1));
 			auto new_heap_handle = buffer_manager.Pin(swizzled_string_heap.blocks.back()->block);
 			auto new_heap_ptr = new_heap_handle.Ptr();
+			for (auto &ptr_and_size : ptrs_and_sizes) {
+				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
+				new_heap_ptr += ptr_and_size.second;
+			}
+			new_heap_ptr = new_heap_handle.Ptr();
 			if (swizzled_string_heap.keep_pinned) {
 				// Since the heap blocks are pinned, we can unswizzle the data again.
 				swizzled_string_heap.pinned_blocks.emplace_back(std::move(new_heap_handle));
 				RowOperations::UnswizzlePointers(layout, base_row_ptr, new_heap_ptr, data_block->count);
 				RowOperations::UnswizzleHeapPointer(layout, base_row_ptr, new_heap_ptr, data_block->count);
-			}
-			for (auto &ptr_and_size : ptrs_and_sizes) {
-				memcpy(new_heap_ptr, ptr_and_size.first, ptr_and_size.second);
-				new_heap_ptr += ptr_and_size.second;
 			}
 		}
 	}

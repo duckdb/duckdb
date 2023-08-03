@@ -14,7 +14,7 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 	} else {
 		// there is already a filter: AND it together
 		if (entry->second->filter_type == TableFilterType::CONJUNCTION_AND) {
-			auto &and_filter = (ConjunctionAndFilter &)*entry->second;
+			auto &and_filter = entry->second->Cast<ConjunctionAndFilter>();
 			and_filter.child_filters.push_back(std::move(filter));
 		} else {
 			auto and_filter = make_uniq<ConjunctionAndFilter>();

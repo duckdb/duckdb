@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -20,8 +19,6 @@ class Node256 {
 public:
 	//! Number of non-null children
 	uint16_t count;
-	//! Compressed path (prefix)
-	Prefix prefix;
 	//! ART node pointers to the child nodes
 	Node children[Node::NODE_256_CAPACITY];
 
@@ -32,6 +29,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the node
 	static inline Node256 &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::NODE_256).Get<Node256>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node48 to a Node256
@@ -60,10 +58,10 @@ public:
 	//! Get the first child that is greater or equal to the specific byte
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
-	//! Serialize an ART node
+	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
-	void Deserialize(ART &art, MetaBlockReader &reader);
+	void Deserialize(MetaBlockReader &reader);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

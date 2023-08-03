@@ -20,7 +20,7 @@ restart
 statement error
 INSERT INTO test VALUES (1,101),(2,201);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "i: 1" violates unique constraint
 
 restart
 
@@ -38,4 +38,4 @@ restart
 statement error
 INSERT INTO unique_index_test VALUES (1,101),(2,201);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "ordernumber: 1" violates unique constraint

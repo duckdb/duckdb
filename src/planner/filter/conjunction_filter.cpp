@@ -35,7 +35,7 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConjunctionOrFilter &)other_p;
+	auto &other = other_p.Cast<ConjunctionOrFilter>();
 	if (other.child_filters.size() != child_filters.size()) {
 		return false;
 	}
@@ -90,7 +90,7 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConjunctionAndFilter &)other_p;
+	auto &other = other_p.Cast<ConjunctionAndFilter>();
 	if (other.child_filters.size() != child_filters.size()) {
 		return false;
 	}

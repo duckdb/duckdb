@@ -8,7 +8,7 @@ string EmptyTableRef::ToString() const {
 	return "";
 }
 
-bool EmptyTableRef::Equals(const TableRef *other) const {
+bool EmptyTableRef::Equals(const TableRef &other) const {
 	return TableRef::Equals(other);
 }
 
@@ -20,10 +20,6 @@ void EmptyTableRef::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<TableRef> EmptyTableRef::Deserialize(FieldReader &reader) {
-	return make_uniq<EmptyTableRef>();
-}
-
-unique_ptr<TableRef> EmptyTableRef::FormatDeserialize(FormatDeserializer &source) {
 	return make_uniq<EmptyTableRef>();
 }
 

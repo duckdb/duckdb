@@ -241,8 +241,10 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				lock_guard<mutex> guard(part->lock);
 				const auto old_base_heap_ptr = part->base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
-					Vector old_heap_ptrs(Value::POINTER((uintptr_t)old_base_heap_ptr + part->heap_block_offset));
-					Vector new_heap_ptrs(Value::POINTER((uintptr_t)new_base_heap_ptr + part->heap_block_offset));
+					Vector old_heap_ptrs(
+					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part->heap_block_offset)));
+					Vector new_heap_ptrs(
+					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part->heap_block_offset)));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part->base_heap_ptr = new_base_heap_ptr;
@@ -298,7 +300,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 
 	UnifiedVectorFormat new_heap_data;
 	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
-	const auto new_heap_locations = (data_ptr_t *)new_heap_data.data;
+	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {

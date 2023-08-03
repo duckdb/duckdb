@@ -1,0 +1,11 @@
+# name: test/sql/copy/parquet/parquet_6990.test_slow
+# description: Issue #6990: Reading parquet file causes a segfault
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT * FROM 'data/parquet-testing/issue6990.parquet';

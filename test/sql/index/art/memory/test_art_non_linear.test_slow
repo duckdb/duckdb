@@ -1,0 +1,117 @@
+# name: test/sql/index/art/memory/test_art_non_linear.test_slow
+# description: Test the memory usage of the ART for various workloads
+# group: [memory]
+
+statement ok
+PRAGMA enable_verification;
+
+require noforcestorage
+
+require skip_reload
+
+statement ok
+CREATE FUNCTION mem_to_bytes(x) AS CASE
+    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::INT * 1000
+    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::INT * 1000 * 1000
+    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::INT * 1000 * 1000 * 1000
+    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::INT * 1000 * 1000 * 1000 * 1000
+    WHEN x = '0 bytes' THEN 0
+    ELSE x::INT END;
+
+# test 100K short strings
+
+statement ok
+CREATE TABLE strings_temp AS
+    SELECT ((i * 95823983533) % 100000)::VARCHAR AS s1,
+           ((i * 547892347987) % 1000)::VARCHAR AS s2,
+            ((i * 847892347987) % 100)::VARCHAR AS s3,
+        FROM range(100000) tbl(i);
+
+statement ok
+CREATE TABLE art AS SELECT s1 || 'a' || s2 || 'b' || s3 || 'c' AS id FROM strings_temp;
+
+statement ok
+DROP TABLE strings_temp;
+
+statement ok
+CREATE INDEX idx ON art USING ART(id);
+
+# 10 blocks for prefixes, 6 blocks for Node16
+# 16 blocks * 256KB = 4096KB
+# WITHOUT the index, our database size is already approximately 2.1MB here
+
+query I
+SELECT mem_to_bytes(memory_usage) < 7000000 FROM pragma_database_size();
+----
+true
+
+statement ok
+DROP TABLE art;
+
+# test 100K long strings
+
+statement ok
+CREATE TABLE strings_temp AS
+    SELECT ((i * 95823983533) % 100000)::VARCHAR AS s1,
+           ((i * 547892347987) % 1000)::VARCHAR AS s2,
+            ((i * 847892347987) % 100)::VARCHAR AS s3,
+        FROM range(100000) tbl(i);
+
+statement ok
+CREATE TABLE art AS SELECT s3 || 'a' || s2 || 'b' || s3 || 'c' || repeat(s2, s3::INT) || s1 || 'a' || s3 || 'c' AS id FROM strings_temp;
+
+statement ok
+DROP TABLE strings_temp;
+
+statement ok
+CREATE INDEX idx ON art USING ART(id);
+
+# 11 blocks for prefixes, 2 blocks for Node4, 6 blocks for Node16,
+# 19 blocks * 256KB = 4864KB
+# WITHOUT the index, our database size is already approximately 17MB here
+
+query I
+SELECT mem_to_bytes(memory_usage) < 23000000 FROM pragma_database_size();
+----
+true
+
+statement ok
+DROP TABLE art;
+
+# test 100K mostly distinct BIGINT keys
+
+statement ok
+CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS id FROM range(100000);
+
+statement ok
+CREATE INDEX idx ON art USING ART(id);
+
+# 1 block for prefixes, 6 blocks for Node4, 2 blocks for Node256
+# 8 blocks * 256KB = 2048KB
+
+query I
+SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
+----
+true
+
+statement ok
+DROP TABLE art;
+
+# test 100K mostly duplicate INTEGER keys
+
+statement ok
+CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 1000)::INT64 AS id FROM range(100000);
+
+statement ok
+CREATE INDEX idx ON art USING ART(id);
+
+# 1 block for prefixes, 5 blocks for leaves, 1 block for Node4, 1 block for Node256
+# 8 blocks * 256KB = 2048KB
+
+query I
+SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
+----
+true
+
+statement ok
+DROP TABLE art;

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/function/pragma_function.hpp"
+#include "duckdb/parser/parsed_data/pragma_info.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -34,6 +34,10 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return false;
+	}
 
 protected:
 	void ResolveTypes() override {

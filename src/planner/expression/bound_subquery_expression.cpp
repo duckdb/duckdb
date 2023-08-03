@@ -12,7 +12,7 @@ string BoundSubqueryExpression::ToString() const {
 	return "SUBQUERY";
 }
 
-bool BoundSubqueryExpression::Equals(const BaseExpression *other_p) const {
+bool BoundSubqueryExpression::Equals(const BaseExpression &other_p) const {
 	// equality between bound subqueries not implemented currently
 	return false;
 }

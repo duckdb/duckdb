@@ -16,6 +16,17 @@
 
 namespace duckdb {
 
+#ifndef DUCKDB_QUOTE_DEFINE
+// Preprocessor trick to allow text to be converted to C-string / string
+// Expecte use is:
+//	#ifdef SOME_DEFINE
+//	string str = DUCKDB_QUOTE_DEFINE(SOME_DEFINE)
+//	...do something with str
+//	#endif SOME_DEFINE
+#define DUCKDB_QUOTE_DEFINE_IMPL(x) #x
+#define DUCKDB_QUOTE_DEFINE(x)      DUCKDB_QUOTE_DEFINE_IMPL(x)
+#endif
+
 /**
  * String Utility Functions
  * Note that these are not the most efficient implementations (i.e., they copy
@@ -162,6 +173,8 @@ public:
 
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
+
+	DUCKDB_API static bool IsLower(const string &str);
 
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);

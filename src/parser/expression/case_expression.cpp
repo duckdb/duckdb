@@ -8,18 +8,6 @@
 
 namespace duckdb {
 
-void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("when_expr", when_expr);
-	serializer.WriteProperty("then_expr", then_expr);
-}
-
-CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
-	CaseCheck check;
-	deserializer.ReadProperty("when_expr", check.when_expr);
-	deserializer.ReadProperty("then_expr", check.then_expr);
-	return check;
-}
-
 CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
 }
 
@@ -27,19 +15,19 @@ string CaseExpression::ToString() const {
 	return ToString<CaseExpression, ParsedExpression>(*this);
 }
 
-bool CaseExpression::Equal(const CaseExpression *a, const CaseExpression *b) {
-	if (a->case_checks.size() != b->case_checks.size()) {
+bool CaseExpression::Equal(const CaseExpression &a, const CaseExpression &b) {
+	if (a.case_checks.size() != b.case_checks.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->case_checks.size(); i++) {
-		if (!a->case_checks[i].when_expr->Equals(b->case_checks[i].when_expr.get())) {
+	for (idx_t i = 0; i < a.case_checks.size(); i++) {
+		if (!a.case_checks[i].when_expr->Equals(*b.case_checks[i].when_expr)) {
 			return false;
 		}
-		if (!a->case_checks[i].then_expr->Equals(b->case_checks[i].then_expr.get())) {
+		if (!a.case_checks[i].then_expr->Equals(*b.case_checks[i].then_expr)) {
 			return false;
 		}
 	}
-	if (!a->else_expr->Equals(b->else_expr.get())) {
+	if (!a.else_expr->Equals(*b.else_expr)) {
 		return false;
 	}
 	return true;
@@ -81,19 +69,6 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, Fi
 		result->case_checks.push_back(std::move(new_check));
 	}
 	result->else_expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return std::move(result);
-}
-
-void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("case_checks", case_checks);
-	serializer.WriteProperty("else_expr", *else_expr);
-}
-
-unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<CaseExpression>();
-	deserializer.ReadProperty("case_checks", result->case_checks);
-	deserializer.ReadProperty("else_expr", result->else_expr);
 	return std::move(result);
 }
 

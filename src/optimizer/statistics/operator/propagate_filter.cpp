@@ -161,15 +161,15 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
-	BoundConstantExpression *constant = nullptr;
-	BoundColumnRefExpression *columnref = nullptr;
+	optional_ptr<BoundConstantExpression> constant;
+	optional_ptr<BoundColumnRefExpression> columnref;
 	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
-		constant = (BoundConstantExpression *)&left;
-		columnref = (BoundColumnRefExpression *)&right;
+		constant = &left.Cast<BoundConstantExpression>();
+		columnref = &right.Cast<BoundColumnRefExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
-		columnref = (BoundColumnRefExpression *)&left;
-		constant = (BoundConstantExpression *)&right;
+		columnref = &left.Cast<BoundColumnRefExpression>();
+		constant = &right.Cast<BoundConstantExpression>();
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();

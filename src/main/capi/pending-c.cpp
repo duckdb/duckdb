@@ -14,7 +14,7 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	if (!prepared_statement || !out_result) {
 		return DuckDBError;
 	}
-	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	auto result = new PendingStatementWrapper();
 	result->allow_streaming = allow_streaming;
 	try {
@@ -25,7 +25,7 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
 	duckdb_state return_value = !result->statement->HasError() ? DuckDBSuccess : DuckDBError;
-	*out_result = (duckdb_pending_result)result;
+	*out_result = reinterpret_cast<duckdb_pending_result>(result);
 
 	return return_value;
 }
@@ -43,7 +43,7 @@ void duckdb_destroy_pending(duckdb_pending_result *pending_result) {
 	if (!pending_result || !*pending_result) {
 		return;
 	}
-	auto wrapper = (PendingStatementWrapper *)*pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(*pending_result);
 	if (wrapper->statement) {
 		wrapper->statement->Close();
 	}
@@ -55,7 +55,7 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	if (!pending_result) {
 		return nullptr;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return nullptr;
 	}
@@ -66,7 +66,7 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	if (!pending_result) {
 		return DUCKDB_PENDING_ERROR;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DUCKDB_PENDING_ERROR;
 	}
@@ -97,7 +97,7 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}

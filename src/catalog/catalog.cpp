@@ -278,7 +278,7 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(CatalogTransaction transaction, 
 
 optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIndexInfo &info) {
 	auto &schema = GetSchema(context, info.schema);
-	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table->table_name);
+	auto &table = GetEntry<TableCatalogEntry>(context, schema.name, info.table);
 	return schema.CreateIndex(context, info, table);
 }
 
@@ -532,10 +532,6 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
-		auto catalog_name = GetName();
-		if (catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
-			catalog_name = INVALID_CATALOG;
-		}
 		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
@@ -659,17 +655,13 @@ LogicalType Catalog::GetType(ClientContext &context, const string &schema, const
 	if (!type_entry) {
 		return LogicalType::INVALID;
 	}
-	auto result_type = type_entry->user_type;
-	EnumType::SetCatalog(result_type, type_entry.get());
-	return result_type;
+	return type_entry->user_type;
 }
 
 LogicalType Catalog::GetType(ClientContext &context, const string &catalog_name, const string &schema,
                              const string &name) {
 	auto &type_entry = Catalog::GetEntry<TypeCatalogEntry>(context, catalog_name, schema, name);
-	auto result_type = type_entry.user_type;
-	EnumType::SetCatalog(result_type, &type_entry);
-	return result_type;
+	return type_entry.user_type;
 }
 
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context) {
@@ -678,31 +670,19 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context
 	return schemas;
 }
 
-bool Catalog::TypeExists(ClientContext &context, const string &catalog_name, const string &schema, const string &name) {
-	optional_ptr<CatalogEntry> entry;
-	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
-		// look in the system catalog
-		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (!entry) {
-			return false;
-		}
-	}
-	return true;
-}
-
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
 	vector<reference<Catalog>> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
-		unordered_set<string> name;
+		reference_set_t<Catalog> inserted_catalogs;
 
 		auto &search_path = *context.client_data->catalog_search_path;
 		for (auto &entry : search_path.Get()) {
-			if (name.find(entry.catalog) != name.end()) {
+			auto &catalog = Catalog::GetCatalog(context, entry.catalog);
+			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
 				continue;
 			}
-			name.insert(entry.catalog);
-			catalogs.push_back(Catalog::GetCatalog(context, entry.catalog));
+			inserted_catalogs.insert(catalog);
+			catalogs.push_back(catalog);
 		}
 	} else {
 		catalogs.push_back(Catalog::GetCatalog(context, catalog_name));

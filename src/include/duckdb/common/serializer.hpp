@@ -22,8 +22,6 @@ private:
 	uint64_t version = 0L;
 
 public:
-	bool is_query_plan = false;
-
 	virtual ~Serializer() {
 	}
 
@@ -46,16 +44,16 @@ public:
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
 
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	//! Write data from a string buffer directly (without length prefix)
 	void WriteBufferData(const string &str) {
-		WriteData((const_data_ptr_t)str.c_str(), str.size());
+		WriteData(const_data_ptr_cast(str.c_str()), str.size());
 	}
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		Write<uint32_t>((uint32_t)len);
@@ -119,15 +117,10 @@ public:
 		throw InternalException("This deserializer does not have a client-context");
 	};
 
-	//! Gets the catalog for the deserializer
-	virtual optional_ptr<Catalog> GetCatalog() {
-		return nullptr;
-	};
-
 	template <class T>
 	T Read() {
 		T value;
-		ReadData((data_ptr_t)&value, sizeof(T));
+		ReadData(data_ptr_cast(&value), sizeof(T));
 		return value;
 	}
 

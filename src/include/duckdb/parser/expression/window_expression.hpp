@@ -70,14 +70,14 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression *a, const WindowExpression *b);
+	static bool Equal(const WindowExpression &a, const WindowExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 
 	static ExpressionType WindowToExpressionType(string &fun_name);
 
@@ -210,6 +210,9 @@ public:
 
 		return result;
 	}
+
+private:
+	explicit WindowExpression(ExpressionType type);
 };
 
 } // namespace duckdb

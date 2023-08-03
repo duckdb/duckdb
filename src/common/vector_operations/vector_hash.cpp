@@ -25,7 +25,7 @@ static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopHash(T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
+static inline void TightLoopHash(const T *__restrict ldata, hash_t *__restrict result_data, const SelectionVector *rsel,
                                  idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -56,8 +56,8 @@ static inline void TemplatedLoopHash(Vector &input, Vector &result, const Select
 		UnifiedVectorFormat idata;
 		input.ToUnifiedFormat(count, idata);
 
-		TightLoopHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(result), rsel, count, idata.sel,
-		                           idata.validity);
+		TightLoopHash<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata), FlatVector::GetData<hash_t>(result), rsel,
+		                           count, idata.sel, idata.validity);
 	}
 }
 
@@ -94,7 +94,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
-	const auto ldata = (const list_entry_t *)idata.data;
+	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(idata);
 
 	// Hash the children into a temporary
 	auto &child = ListVector::GetEntry(input);
@@ -240,8 +240,8 @@ void VectorOperations::Hash(Vector &input, Vector &result, const SelectionVector
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t constant_hash, hash_t *__restrict hash_data,
-                                                const SelectionVector *rsel, idx_t count,
+static inline void TightLoopCombineHashConstant(const T *__restrict ldata, hash_t constant_hash,
+                                                hash_t *__restrict hash_data, const SelectionVector *rsel, idx_t count,
                                                 const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -261,8 +261,9 @@ static inline void TightLoopCombineHashConstant(T *__restrict ldata, hash_t cons
 }
 
 template <bool HAS_RSEL, class T>
-static inline void TightLoopCombineHash(T *__restrict ldata, hash_t *__restrict hash_data, const SelectionVector *rsel,
-                                        idx_t count, const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
+static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__restrict hash_data,
+                                        const SelectionVector *rsel, idx_t count,
+                                        const SelectionVector *__restrict sel_vector, ValidityMask &mask) {
 	if (!mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
@@ -296,13 +297,14 @@ void TemplatedLoopCombineHash(Vector &input, Vector &hashes, const SelectionVect
 			auto constant_hash = *ConstantVector::GetData<hash_t>(hashes);
 			// now re-initialize the hashes vector to an empty flat vector
 			hashes.SetVectorType(VectorType::FLAT_VECTOR);
-			TightLoopCombineHashConstant<HAS_RSEL, T>((T *)idata.data, constant_hash,
+			TightLoopCombineHashConstant<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata), constant_hash,
 			                                          FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
 			                                          idata.validity);
 		} else {
 			D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-			TightLoopCombineHash<HAS_RSEL, T>((T *)idata.data, FlatVector::GetData<hash_t>(hashes), rsel, count,
-			                                  idata.sel, idata.validity);
+			TightLoopCombineHash<HAS_RSEL, T>(UnifiedVectorFormat::GetData<T>(idata),
+			                                  FlatVector::GetData<hash_t>(hashes), rsel, count, idata.sel,
+			                                  idata.validity);
 		}
 	}
 }

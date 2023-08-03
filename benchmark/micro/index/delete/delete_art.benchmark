@@ -1,0 +1,13 @@
+# name: benchmark/micro/index/delete/delete_art.benchmark
+# description: Delete approx. 5M integers from an ART with 10M integers
+# group: [delete]
+
+name Delete ART
+group art
+
+load
+CREATE TABLE art AS SELECT (random() * 1000000)::INT AS id FROM range(10000000);
+CREATE INDEX idx ON art USING ART(id);
+
+run
+DELETE FROM art WHERE id < 500000;

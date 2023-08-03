@@ -32,15 +32,16 @@ main_con = duckdb.connect()
 main_con.execute('CALL dbgen(sf=1)')
 
 tables = [
- "customer",
- "lineitem",
- "nation",
- "orders",
- "part",
- "partsupp",
- "region",
- "supplier",
+    "customer",
+    "lineitem",
+    "nation",
+    "orders",
+    "part",
+    "partsupp",
+    "region",
+    "supplier",
 ]
+
 
 def open_connection():
     con = duckdb.connect()
@@ -60,6 +61,7 @@ def write_result(benchmark_name, nrun, t):
     else:
         print(bench_result)
 
+
 def benchmark_queries(benchmark_name, con, queries):
     if verbose:
         print(benchmark_name)
@@ -68,7 +70,23 @@ def benchmark_queries(benchmark_name, con, queries):
         t = 0.0
         for i, q in enumerate(queries):
             start = time.time()
-            df_result = con.execute(q).fetchall()
+            rel = con.sql(q)
+            if rel:
+                if benchmark_name.startswith('pandas'):
+                    if verbose:
+                        print(f"Fetching '{q}' as a DataFrame")
+                    df_result = rel.df()
+                elif benchmark_name.startswith('arrow'):
+                    if verbose:
+                        print(f"Fetching '{q}' as an Arrow table")
+                    df_result = rel.arrow()
+                else:
+                    if verbose:
+                        print(f"Fetching '{q}' as native Python lists/tuples")
+                    df_result = rel.fetchall()
+            else:
+                if verbose:
+                    print(f"Query '{q}' did not produce output")
             end = time.time()
             query_time = float(end - start)
             if verbose:
@@ -79,6 +97,7 @@ def benchmark_queries(benchmark_name, con, queries):
                 print(f"T{padding}: {t}s")
         write_result(benchmark_name, nrun, t)
 
+
 def run_dataload(con, type):
     benchmark_name = type + "_load_lineitem"
     if verbose:
@@ -88,10 +107,11 @@ def run_dataload(con, type):
     for nrun in range(nruns):
         t = 0.0
         start = time.time()
+        rel = con.sql(q)
         if type == 'pandas':
-            res = con.execute(q).df()
+            res = rel.df()
         elif type == 'arrow':
-            res = con.execute(q).arrow()
+            res = rel.arrow()
         end = time.time()
         t = float(end - start)
         del res
@@ -99,6 +119,7 @@ def run_dataload(con, type):
             padding = " " * len(str(nruns))
             print(f"T{padding}: {t}s")
         write_result(benchmark_name, nrun, t)
+
 
 def run_tpch(con, prefix):
     benchmark_name = f"{prefix}tpch"

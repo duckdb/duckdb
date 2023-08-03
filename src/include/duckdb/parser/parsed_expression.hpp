@@ -47,7 +47,7 @@ public:
 	bool IsScalar() const override;
 	bool HasParameter() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	//! Create a copy of this expression
@@ -64,6 +64,10 @@ public:
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+
+	static bool Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right);
+	static bool ListEquals(const vector<unique_ptr<ParsedExpression>> &left,
+	                       const vector<unique_ptr<ParsedExpression>> &right);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

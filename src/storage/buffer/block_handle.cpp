@@ -49,7 +49,7 @@ unique_ptr<Block> AllocateBlock(BlockManager &block_manager, unique_ptr<FileBuff
 		// re-usable buffer: re-use it
 		if (reusable_buffer->type == FileBufferType::BLOCK) {
 			// we can reuse the buffer entirely
-			auto &block = (Block &)*reusable_buffer;
+			auto &block = reinterpret_cast<Block &>(*reusable_buffer);
 			block.id = block_id;
 			return unique_ptr_cast<FileBuffer, Block>(std::move(reusable_buffer));
 		}

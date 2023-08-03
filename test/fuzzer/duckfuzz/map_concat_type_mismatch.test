@@ -1,0 +1,21 @@
+# name: test/fuzzer/duckfuzz/map_concat_type_mismatch.test
+# description: Type mismatch in map concat
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT map_concat(42, 42);
+----
+only takes map arguments
+
+statement error
+SELECT map_concat(map { 'a': 42 }, 42);
+----
+only takes map arguments
+
+query I
+SELECT map_concat(map { 'a': 42 }, NULL);
+----
+{a=42}

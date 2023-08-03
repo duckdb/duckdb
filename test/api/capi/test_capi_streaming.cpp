@@ -29,7 +29,6 @@ TEST_CASE("Test streaming results in C API", "[capi]") {
 	auto chunk = result->StreamChunk();
 
 	idx_t value = duckdb::DConstants::INVALID_INDEX;
-	idx_t chunk_count = 0;
 	while (chunk) {
 		auto old_value = value;
 
@@ -41,7 +40,6 @@ TEST_CASE("Test streaming results in C API", "[capi]") {
 			// one.
 			REQUIRE(value > old_value);
 		}
-		chunk_count++;
 		chunk = result->StreamChunk();
 	}
 }
@@ -98,4 +96,46 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	// this materializes the result
 	auto is_null = result->IsNull(0, 0);
 	REQUIRE(is_null == false);
+}
+
+TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+	CAPIPending pending;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	// test null handling
+	REQUIRE(duckdb_query_progress(nullptr) == -1.0);
+	duckdb_interrupt(nullptr);
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET threads=1"));
+	REQUIRE_NO_FAIL(tester.Query("create table tbl as select range a, mod(range,10) b from range(10000);"));
+	REQUIRE_NO_FAIL(tester.Query("create table tbl_2 as select range a from range(10000);"));
+	REQUIRE_NO_FAIL(tester.Query("set enable_progress_bar=true;"));
+	REQUIRE_NO_FAIL(tester.Query("set enable_progress_bar_print=false;"));
+	// test no progress before query
+	REQUIRE(duckdb_query_progress(tester.connection) == -1.0);
+	// test zero progress with query
+	REQUIRE(prepared.Prepare(tester, "select count(*) from tbl where a = (select min(a) from tbl_2)"));
+	REQUIRE(pending.PendingStreaming(prepared));
+	REQUIRE(duckdb_query_progress(tester.connection) == 0.0);
+
+	// test progress
+	while (duckdb_query_progress(tester.connection) == 0.0) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state == DUCKDB_PENDING_RESULT_NOT_READY);
+	}
+	REQUIRE(duckdb_query_progress(tester.connection) >= 0.0);
+
+	// test interrupt
+	duckdb_interrupt(tester.connection);
+	while (true) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state != DUCKDB_PENDING_RESULT_READY);
+		if (state == DUCKDB_PENDING_ERROR) {
+			break;
+		}
+	}
 }

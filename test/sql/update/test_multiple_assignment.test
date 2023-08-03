@@ -1,0 +1,81 @@
+# name: test/sql/update/test_multiple_assignment.test
+# description: Update with multiple assignment
+# group: [update]
+
+#        create table and insert some values
+# ---------------------------------------------------
+statement ok
+CREATE TABLE tbl (key INT, fruit VARCHAR, cost INT);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'apple', 2), (2, 'orange', 3);
+
+#                    simple case
+# ---------------------------------------------------
+statement ok
+UPDATE tbl SET (key, fruit, cost) = (1, 'pear', 2);
+
+query III
+SELECT * FROM tbl;
+----
+1	pear	2
+1	pear	2
+
+#                    ROW function
+# ---------------------------------------------------
+statement ok
+UPDATE tbl SET (key, fruit, cost) = (2, 'apple', 3);
+
+query III
+SELECT * FROM tbl;
+----
+2	apple	3
+2	apple	3
+
+#                      1 value
+# ---------------------------------------------------
+statement ok
+UPDATE tbl SET (key, fruit, cost) = 3;
+
+query III
+SELECT * FROM tbl;
+----
+3	3	3
+3	3	3
+
+#                   too few values
+# ---------------------------------------------------
+statement error
+UPDATE tbl SET (key, fruit, cost) = (1, 2);
+----
+Parser Error: Could not perform multiple assignment, target expects 3 values, only 2 were provided
+
+#                  too many values
+# ---------------------------------------------------
+statement error
+UPDATE tbl SET (key, fruit, cost) = (1, 2, 3, 4);
+----
+Parser Error: Could not perform multiple assignment, target only expects 3 values, 4 were provided
+
+#            functions should still work
+# ---------------------------------------------------
+statement ok
+UPDATE tbl SET (key, fruit, cost) = ADD(key, cost);
+
+query III
+SELECT * FROM tbl;
+----
+6	6	6
+6	6	6
+
+#                   empty lists
+# ---------------------------------------------------
+statement error
+UPDATE tbl SET () = (key, fruit);
+----
+Parser Error: syntax error at or near ")"
+
+statement error
+UPDATE tbl SET (key, fruit) = ();
+----
+Parser Error: syntax error at or near ")"

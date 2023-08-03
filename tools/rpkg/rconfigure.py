@@ -24,16 +24,20 @@ if 'DUCKDB_DEBUG_MOVE' in os.environ:
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
 
+
 def open_utf8(fpath, flags):
     import sys
+
     if sys.version_info[0] < 3:
         return open(fpath, flags)
     else:
         return open(fpath, flags, encoding="utf8")
 
+
 extension_list = ""
+
 for ext in extensions:
-    extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+    extension_list += ' -DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())
     extension_list += " -DDUCKDB_BUILD_LIBRARY"
 
 libraries = []
@@ -88,7 +92,7 @@ linenr = bool(os.getenv("DUCKDB_R_LINENR", ""))
 (source_list, include_list, original_sources) = package_build.build_package(target_dir, extensions, linenr, unity_build)
 
 # object list, relative paths
-script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
+script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
 duckdb_sources = [package_build.get_relative_path(os.path.join(script_path, 'src'), x) for x in source_list]
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 
@@ -123,7 +127,7 @@ with open_utf8(os.path.join('src', 'Makevars'), 'w+') as f:
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
-include_list += " -DDUCKDB_OVERRIDE_PLATFORM_POSTFIX=_rtools"
+include_list += " -DDUCKDB_PLATFORM_RTOOLS=1"
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")

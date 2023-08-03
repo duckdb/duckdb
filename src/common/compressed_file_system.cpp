@@ -115,28 +115,28 @@ void CompressedFile::Close() {
 }
 
 int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.ReadData(buffer, nr_bytes);
 }
 
 int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &compressed_file = (CompressedFile &)handle;
-	return compressed_file.WriteData((data_ptr_t)buffer, nr_bytes);
+	auto &compressed_file = handle.Cast<CompressedFile>();
+	return compressed_file.WriteData(data_ptr_cast(buffer), nr_bytes);
 }
 
 void CompressedFileSystem::Reset(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
 	compressed_file.Initialize(compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.child_handle->GetFileSize();
 }
 
 bool CompressedFileSystem::OnDiskFile(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.child_handle->OnDiskFile();
 }
 

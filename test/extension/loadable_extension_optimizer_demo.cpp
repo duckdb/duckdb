@@ -22,6 +22,11 @@ using namespace duckdb;
 #include <sys/types.h>
 #include <arpa/inet.h>
 
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
+#endif
+
 class WaggleExtension : public OptimizerExtension {
 public:
 	WaggleExtension() {
@@ -111,7 +116,7 @@ public:
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
 			ReadChecked(sockfd, buffer, chunk_len);
-			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
 			chunk.Deserialize(deserializer);

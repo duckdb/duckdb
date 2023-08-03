@@ -24,7 +24,9 @@
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/distinct_relation.hpp"
-#include "duckdb/main/relation/table_relation.hpp"
+#include "duckdb/main/relation/table_function_relation.hpp"
+
+#include "duckdb/common/enums/joinref_type.hpp"
 
 using namespace duckdb;
 using namespace cpp11;
@@ -300,9 +302,22 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
-                                       std::string join) {
+                                       std::string join, std::string join_ref_type) {
 	auto join_type = JoinType::INNER;
+	auto ref_type = JoinRefType::REGULAR;
 	unique_ptr<ParsedExpression> cond;
+
+	if (join_ref_type == "regular") {
+		ref_type = JoinRefType::REGULAR;
+	} else if (join_ref_type == "cross") {
+		ref_type = JoinRefType::CROSS;
+	} else if (join_ref_type == "positional") {
+		ref_type = JoinRefType::POSITIONAL;
+	} else if (join_ref_type == "asof") {
+		ref_type = JoinRefType::ASOF;
+	}
+
+	cpp11::writable::list prot = {left, right};
 
 	if (join == "left") {
 		join_type = JoinType::LEFT;
@@ -314,9 +329,19 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		join_type = JoinType::SEMI;
 	} else if (join == "anti") {
 		join_type = JoinType::ANTI;
-	} else if (join == "cross") {
-		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
-		return make_external<RelationWrapper>("duckdb_relation", res);
+	} else if (join == "cross" || ref_type == JoinRefType::POSITIONAL) {
+		if (ref_type != JoinRefType::POSITIONAL && ref_type != JoinRefType::CROSS) {
+			// users can only supply positional cross join, or cross join.
+			warning("Using `rel_join(join_ref_type = \"cross\")`");
+			ref_type = JoinRefType::CROSS;
+		}
+		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel, ref_type);
+		auto rel = make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
+		// if the user described filters, apply them on top of the cross product relation
+		if (conds.size() > 0) {
+			return rapi_rel_filter(rel, conds);
+		}
+		return rel;
 	}
 
 	if (conds.size() == 1) {
@@ -329,10 +354,7 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		cond = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
-
-	cpp11::writable::list prot = {left, right};
-
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type, ref_type);
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, res);
 }
 
@@ -464,10 +486,43 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_from_table(duckdb::conn_eptr_t con, const std::string schema_name,
                                              const std::string table_name) {
 	if (!con || !con.get() || !con->conn) {
-		stop("rel_from_df: Invalid connection");
+		stop("rel_from_table: Invalid connection");
 	}
 	auto desc = make_uniq<TableDescription>();
 	auto rel = con->conn->Table(schema_name, table_name);
 	cpp11::writable::list prot = {};
 	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel));
+}
+
+[[cpp11::register]] SEXP rapi_rel_from_table_function(duckdb::conn_eptr_t con, const std::string function_name,
+                                                      list positional_parameters_sexps, list named_parameters_sexps) {
+	if (!con || !con.get() || !con->conn) {
+		stop("rel_from_table_function: Invalid connection");
+	}
+	vector<Value> positional_parameters;
+
+	for (sexp parameter_sexp : positional_parameters_sexps) {
+		if (LENGTH(parameter_sexp) < 1) {
+			stop("rel_from_table_function: Can't have zero-length parameter");
+		}
+		positional_parameters.push_back(RApiTypes::SexpToValue(parameter_sexp, 0));
+	}
+
+	named_parameter_map_t named_parameters;
+
+	auto names = named_parameters_sexps.names();
+	if (names.size() != named_parameters_sexps.size()) {
+		stop("rel_from_table_function: Named parameters need names");
+	}
+	R_xlen_t named_parameter_idx = 0;
+	for (sexp parameter_sexp : named_parameters_sexps) {
+		if (LENGTH(parameter_sexp) != 1) {
+			stop("rel_from_table_function: Need scalar parameter");
+		}
+		named_parameters[names[named_parameter_idx]] = RApiTypes::SexpToValue(parameter_sexp, 0);
+		named_parameter_idx++;
+	}
+
+	auto rel = con->conn->TableFunction(function_name, std::move(positional_parameters), std::move(named_parameters));
+	return make_external<RelationWrapper>("duckdb_relation", std::move(rel));
 }

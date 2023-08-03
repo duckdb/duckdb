@@ -41,7 +41,8 @@ public:
 	string BaseToString(string result, const vector<string> &column_name_alias) const;
 	void Print();
 
-	virtual bool Equals(const TableRef *other) const;
+	virtual bool Equals(const TableRef &other) const;
+	static bool Equals(const unique_ptr<TableRef> &left, const unique_ptr<TableRef> &right);
 
 	virtual unique_ptr<TableRef> Copy() = 0;
 
@@ -63,7 +64,7 @@ public:
 		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -71,7 +72,7 @@ public:
 		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
 			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb

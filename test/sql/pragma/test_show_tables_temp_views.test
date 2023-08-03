@@ -1,0 +1,55 @@
+# name: test/sql/pragma/test_show_tables_temp_views.test
+# description: Test SHOW/DESCRIBE tables with views
+# group: [pragma]
+
+require noforcestorage
+
+statement ok
+CREATE TEMPORARY VIEW v1 AS SELECT 42 AS a
+
+query I
+SHOW TABLES
+----
+v1
+
+query IIIIII
+SHOW ALL TABLES
+----
+temp	main	v1	[a]	[INTEGER]	true
+
+statement ok
+CREATE VIEW v2 AS SELECT 42 AS b
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE VIEW s1.v3 AS SELECT 42 AS c
+
+query I
+SHOW TABLES
+----
+v1
+v2
+
+query IIIIII
+SHOW ALL TABLES
+----
+memory	main	v2	[b]	[INTEGER]	false
+memory	s1	v3	[c]	[INTEGER]	false
+temp	main	v1	[a]	[INTEGER]	true
+
+statement ok
+SET schema='s1';
+
+query I
+FROM v2
+----
+42
+
+query I
+SHOW TABLES
+----
+v1
+v2
+v3

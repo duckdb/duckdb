@@ -27,14 +27,14 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const ComparisonExpression *a, const ComparisonExpression *b);
+	static bool Equal(const ComparisonExpression &a, const ComparisonExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 
 public:
 	template <class T, class BASE>
@@ -42,5 +42,8 @@ public:
 		return StringUtil::Format("(%s %s %s)", entry.left->ToString(), ExpressionTypeToOperator(entry.type),
 		                          entry.right->ToString());
 	}
+
+private:
+	explicit ComparisonExpression(ExpressionType type);
 };
 } // namespace duckdb

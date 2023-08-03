@@ -35,10 +35,32 @@ class RowGroupSegmentTree;
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
 	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -109,7 +131,7 @@ public:
 
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
@@ -130,15 +152,15 @@ public:
 	CollectionScanState local_state;
 
 public:
-	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
 
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 
 private:
 	//! The column identifiers of the scan
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)

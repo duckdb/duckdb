@@ -30,11 +30,11 @@ hash_t BoundLambdaRefExpression::Hash() const {
 	return CombineHash(result, duckdb::Hash<uint64_t>(depth));
 }
 
-bool BoundLambdaRefExpression::Equals(const BaseExpression *other_p) const {
+bool BoundLambdaRefExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundLambdaRefExpression>();
+	auto &other = other_p.Cast<BoundLambdaRefExpression>();
 	return other.binding == binding && other.lambda_index == lambda_index && other.depth == depth;
 }
 

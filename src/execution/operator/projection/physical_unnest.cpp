@@ -65,8 +65,8 @@ void UnnestOperatorState::SetLongestListLength() {
 		if (vector_data.validity.RowIsValid(current_idx)) {
 
 			// check if this list is longer
-			auto list_data = (list_entry_t *)vector_data.data;
-			auto list_entry = list_data[current_idx];
+			auto list_data_entries = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+			auto list_entry = list_data_entries[current_idx];
 			if (list_entry.length > longest_list_length) {
 				longest_list_length = list_entry.length;
 			}
@@ -98,7 +98,7 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 template <class T>
 static void TemplatedUnnest(UnifiedVectorFormat &vector_data, idx_t start, idx_t end, Vector &result) {
 
-	auto source_data = (T *)vector_data.data;
+	auto source_data = UnifiedVectorFormat::GetData<T>(vector_data);
 	auto &source_mask = vector_data.validity;
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -261,37 +261,40 @@ static void UnnestLists(UnnestOperatorState &state, DataChunk &chunk, idx_t col_
 			// UNNEST(NULL)
 			chunk.SetCardinality(0);
 			break;
-		}
 
-		auto &vector_data = state.list_vector_data[col_idx];
-		auto current_idx = vector_data.sel->get_index(state.current_row);
+		} else {
 
-		if (!vector_data.validity.RowIsValid(current_idx)) {
-			UnnestNull(0, this_chunk_len, result_vector);
-			continue;
-		}
+			auto &vector_data = state.list_vector_data[col_idx];
+			auto current_idx = vector_data.sel->get_index(state.current_row);
 
-		auto list_data = (list_entry_t *)vector_data.data;
-		auto list_entry = list_data[current_idx];
+			if (!vector_data.validity.RowIsValid(current_idx)) {
+				UnnestNull(0, this_chunk_len, result_vector);
 
-		idx_t list_count = 0;
-		if (state.list_position < list_entry.length) {
-			// there are still list_count elements to unnest
-			list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
+			} else {
 
-			auto &list_vector = state.list_data.data[col_idx];
-			auto &child_vector = ListVector::GetEntry(list_vector);
-			auto list_size = ListVector::GetListSize(list_vector);
-			auto &child_vector_data = state.list_child_data[col_idx];
+				auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+				auto list_entry = list_data[current_idx];
 
-			auto base_offset = list_entry.offset + state.list_position;
-			UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
-			             result_vector);
-		}
+				idx_t list_count = 0;
+				if (state.list_position < list_entry.length) {
+					// there are still list_count elements to unnest
+					list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
 
-		// fill the rest with NULLs
-		if (list_count != this_chunk_len) {
-			UnnestNull(list_count, this_chunk_len, result_vector);
+					auto &list_vector = state.list_data.data[col_idx];
+					auto &child_vector = ListVector::GetEntry(list_vector);
+					auto list_size = ListVector::GetListSize(list_vector);
+					auto &child_vector_data = state.list_child_data[col_idx];
+
+					auto base_offset = list_entry.offset + state.list_position;
+					UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
+					             result_vector);
+				}
+
+				// fill the rest with NULLs
+				if (list_count != this_chunk_len) {
+					UnnestNull(list_count, this_chunk_len, result_vector);
+				}
+			}
 		}
 	}
 }
@@ -304,6 +307,11 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
+		// reset validities, if previous loop iteration contained UNNEST(NULL)
+		if (include_input) {
+			chunk.Reset();
+		}
+
 		// prepare the input data by executing any expressions and getting the
 		// UnifiedVectorFormat of each LIST vector (list_vector_data) and its child vector (list_child_data)
 		if (state.first_fetch) {
@@ -316,7 +324,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
-		// each UNNEST in the select_list contains a list (or NULL) for this row, find longest list
+		// each UNNEST in the select_list contains a list (or NULL) for this row, find the longest list
 		// because this length determines how many times we need to repeat for the current row
 		if (state.longest_list_length == DConstants::INVALID_INDEX) {
 			state.SetLongestListLength();

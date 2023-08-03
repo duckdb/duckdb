@@ -161,7 +161,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
+				throw BinderException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "timestampformat" || loption == "timestamp_format") {
 			auto format_string = StringValue::Get(kv.second);
@@ -173,7 +173,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
+				throw BinderException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "records") {
 			auto arg = StringValue::Get(kv.second);
@@ -184,7 +184,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else if (arg == "false") {
 				bind_data->options.record_type = JSONRecordType::VALUES;
 			} else {
-				throw InvalidInputException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
+				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
 			}
 		}
 	}
@@ -258,7 +258,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 			string hint =
 			    gstate.bind_data.auto_detect
 			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
-			          "'records' manually, or setting 'ignore_errors' to true."
+			          "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
+			          "reading multiple files with a different structure."
 			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
 			          "'ignore_errors' to true.";
 			lstate.ThrowTransformError(lstate.transform_options.object_index,

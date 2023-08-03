@@ -68,7 +68,7 @@ duckdb_blob FetchDefaultValue::Operation() {
 
 template <>
 bool FromCBlobCastWrapper::Operation(duckdb_blob input, duckdb_string &result) {
-	string_t input_str((const char *)input.data, input.size);
+	string_t input_str(const_char_ptr_cast(input.data), input.size);
 	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, duckdb_string>(input_str, result);
 }
 

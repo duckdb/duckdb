@@ -67,7 +67,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
       left_projection_map(left_projection_map_p), right_projection_map(std::move(right_projection_map_p)),
       index(index_p), conditions(std::move(cond)), join_type(join_type), lhs_first(lhs_first) {
 	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-	auto &tbl_scan = (PhysicalTableScan &)*right;
+	auto &tbl_scan = right->Cast<PhysicalTableScan>();
 	column_ids = std::move(column_ids_p);
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
@@ -109,7 +109,7 @@ unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ExecutionContext &
 
 void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                OperatorState &state_p) const {
-	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
+	auto &phy_tbl_scan = children[1]->Cast<PhysicalTableScan>();
 	auto &bind_tbl = phy_tbl_scan.bind_data->Cast<TableScanBindData>();
 	auto &transaction = DuckTransaction::Get(context.client, bind_tbl.table.catalog);
 	auto &state = state_p.Cast<IndexJoinOperatorState>();
@@ -139,7 +139,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 		}
 		state.rhs_chunk.Reset();
 		state.fetch_state = make_uniq<ColumnFetchState>();
-		Vector row_ids(LogicalType::ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
+		Vector row_ids(LogicalType::ROW_TYPE, data_ptr_cast(&fetch_rows[0]));
 		tbl.Fetch(transaction, state.rhs_chunk, fetch_ids, row_ids, output_sel_idx, *state.fetch_state);
 	}
 

@@ -1,0 +1,23 @@
+# name: test/sql/join/test_huge_nested_payloads.test_slow
+# description: Test join with nested types in a HUGE payload
+# group: [join]
+
+require parquet
+
+statement ok
+IMPORT DATABASE 'data/parquet-testing/malloy-smaller'
+
+statement ok
+    SELECT
+       hits_0.page."pageTitle" as "pageTitle",
+       COUNT(DISTINCT CONCAT(ga_sessions."__distinct_key", 'x', hits_0_outer.__row_id)) as "hits_count",
+       COUNT(DISTINCT CASE WHEN product_0."productQuantity">0
+       THEN CONCAT(ga_sessions."__distinct_key", 'x', hits_0_outer.__row_id) END) as "sold_count"
+    FROM (SELECT GEN_RANDOM_UUID() as __distinct_key, * FROM tbl2 as x) as ga_sessions
+    LEFT JOIN LATERAL (SELECT UNNEST(GENERATE_SERIES(1, length(ga_sessions."hits"),1)) as __row_id,
+        UNNEST(ga_sessions."hits"), 1 as ignoreme) as hits_0_outer(__row_id, hits_0,ignoreme) ON  hits_0_outer.ignoreme=1
+    LEFT JOIN LATERAL (SELECT UNNEST(hits_0."product"), 1 as ignoreme) as product_0_outer(product_0,ignoreme)
+        ON product_0_outer.ignoreme=1
+    WHERE ga_sessions.totals."transactionRevenue">0
+    GROUP BY 1
+    ORDER BY 2 desc NULLS LAST;

@@ -14,15 +14,15 @@ string BoundComparisonExpression::ToString() const {
 	return ComparisonExpression::ToString<BoundComparisonExpression, Expression>(*this);
 }
 
-bool BoundComparisonExpression::Equals(const BaseExpression *other_p) const {
+bool BoundComparisonExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundComparisonExpression>();
-	if (!Expression::Equals(left.get(), other.left.get())) {
+	auto &other = other_p.Cast<BoundComparisonExpression>();
+	if (!Expression::Equals(*left, *other.left)) {
 		return false;
 	}
-	if (!Expression::Equals(right.get(), other.right.get())) {
+	if (!Expression::Equals(*right, *other.right)) {
 		return false;
 	}
 	return true;

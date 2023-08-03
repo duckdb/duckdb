@@ -17,7 +17,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ConstantOrNullBindData &)other_p;
+		auto &other = other_p.Cast<ConstantOrNullBindData>();
 		return value == other.value;
 	}
 };

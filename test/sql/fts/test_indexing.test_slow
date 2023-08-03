@@ -6,6 +6,8 @@ require skip_reload
 
 require fts
 
+require noalternativeverify
+
 statement ok
 PRAGMA enable_verification
 
@@ -37,7 +39,7 @@ statement error
 PRAGMA create_fts_index('documents', 'id', 'body')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=true)
 
 # drop and re-create
 statement ok

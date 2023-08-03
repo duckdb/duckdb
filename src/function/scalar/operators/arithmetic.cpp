@@ -249,16 +249,15 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 
 static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
                                        const ScalarFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (DecimalArithmeticBindData *)bind_data_p;
-	writer.WriteField(bind_data->check_overflow);
+	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
+	writer.WriteField(bind_data.check_overflow);
 	writer.WriteSerializable(function.return_type);
 	writer.WriteRegularSerializableList(function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, FieldReader &reader,
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(PlanDeserializationState &state, FieldReader &reader,
                                                       ScalarFunction &bound_function) {
 	// re-change the function pointers
 	auto check_overflow = reader.ReadRequired<bool>();

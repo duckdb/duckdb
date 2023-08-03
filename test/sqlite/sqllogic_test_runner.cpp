@@ -94,6 +94,9 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	con->Query("SET pivot_filter_threshold=0");
+#endif
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
@@ -198,7 +201,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
-	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
+	if (script.find("test/sqlite/select") != string::npos) {
+		original_sqlite_test = true;
+	}
+	if (script.find("third_party/sqllogictest") != string::npos) {
 		original_sqlite_test = true;
 	}
 
@@ -514,6 +520,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
+			} else if (param == "noalternativeverify") {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				return;
+#endif
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {

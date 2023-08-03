@@ -42,8 +42,8 @@ string ConjunctionExpression::ToString() const {
 	return ToString<ConjunctionExpression, ParsedExpression>(*this);
 }
 
-bool ConjunctionExpression::Equal(const ConjunctionExpression *a, const ConjunctionExpression *b) {
-	return ExpressionUtil::SetEquals(a->children, b->children);
+bool ConjunctionExpression::Equal(const ConjunctionExpression &a, const ConjunctionExpression &b) {
+	return ExpressionUtil::SetEquals(a.children, b.children);
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {
@@ -65,18 +65,6 @@ void ConjunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> ConjunctionExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto result = make_uniq<ConjunctionExpression>(type);
 	result->children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	return std::move(result);
-}
-
-void ConjunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("children", children);
-}
-
-unique_ptr<ParsedExpression> ConjunctionExpression::FormatDeserialize(ExpressionType type,
-                                                                      FormatDeserializer &deserializer) {
-	auto result = make_uniq<ConjunctionExpression>(type);
-	result->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
 	return std::move(result);
 }
 

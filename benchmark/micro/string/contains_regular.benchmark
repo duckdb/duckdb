@@ -16,4 +16,4 @@ run
 SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'regular')
 
 result I
-688156
+687323

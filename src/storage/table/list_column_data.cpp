@@ -62,11 +62,11 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
-
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
+	state.last_offset = child_offset;
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -89,16 +89,19 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
-	auto data = FlatVector::GetData<uint64_t>(offset_vector);
-	auto last_entry = data[scan_count - 1];
+	UnifiedVectorFormat offsets;
+	offset_vector.ToUnifiedFormat(scan_count, offsets);
+	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
+	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
+		auto offset_index = offsets.sel->get_index(i);
 		result_data[i].offset = current_offset;
-		result_data[i].length = data[i] - current_offset - base_offset;
+		result_data[i].length = data[offset_index] - current_offset - base_offset;
 		current_offset += result_data[i].length;
 	}
 
@@ -108,9 +111,10 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
-		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <=
-		             child_column->start + child_column->GetMaxEntry());
+		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
+		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
+			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
+		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 	state.last_offset = last_entry;
@@ -166,7 +170,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	auto &list_validity = list_data.validity;
 
 	// construct the list_entry_t entries to append to the column data
-	auto input_offsets = (list_entry_t *)list_data.data;
+	auto input_offsets = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 
@@ -209,7 +213,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
-	vdata.data = (data_ptr_t)append_offsets.get();
+	vdata.data = data_ptr_cast(append_offsets.get());
 
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);
@@ -336,7 +340,7 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
 
-	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
+	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	checkpoint_state.child_state = std::move(child_state);
 	return base_state;
@@ -348,12 +352,13 @@ void ListColumnData::DeserializeColumn(Deserializer &source) {
 	child_column->DeserializeColumn(source);
 }
 
-void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
-	ColumnData::GetStorageInfo(row_group_index, col_path, result);
+void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+                                          vector<duckdb::ColumnSegmentInfo> &result) {
+	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetStorageInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
 	col_path.back() = 1;
-	child_column->GetStorageInfo(row_group_index, col_path, result);
+	child_column->GetColumnSegmentInfo(row_group_index, col_path, result);
 }
 
 } // namespace duckdb

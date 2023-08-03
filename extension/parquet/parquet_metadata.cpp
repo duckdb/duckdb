@@ -19,7 +19,7 @@ struct ParquetMetaDataBindData : public TableFunctionData {
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ParquetMetaDataBindData &)other_p;
+		auto &other = other_p.Cast<ParquetMetaDataBindData>();
 		return other.return_types == return_types && files == other.files;
 	}
 };

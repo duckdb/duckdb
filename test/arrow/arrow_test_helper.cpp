@@ -21,9 +21,9 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out);
+		ArrowConverter::ToArrowArray(*chunk, out, data.options);
 	} else {
-		ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE);
+		ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE, data.options);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = data.factory.result->Fetch();
@@ -63,7 +63,7 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 
 	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
 	stream_wrapper->number_of_rows = -1;
-	auto private_data = make_uniq<ArrowArrayStreamData>(factory);
+	auto private_data = make_uniq<ArrowArrayStreamData>(factory, factory.options);
 	stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 	stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
 	stream_wrapper->arrow_array_stream.get_last_error = ArrowArrayStreamGetLastError;
@@ -80,7 +80,7 @@ void ArrowTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapp
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, tz);
+	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
@@ -156,10 +156,11 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		return false;
 	}
 	// create the roundtrip factory
-	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
+	auto client_properties = con.context->GetClientProperties();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result);
+	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
+	                         client_properties);
 
 	// construct the arrow scan
 	auto params = ConstructArrowScan((uintptr_t)&factory, true);

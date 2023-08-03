@@ -48,9 +48,9 @@ Value UpdateInfo::GetValue(idx_t index) {
 
 	switch (type.id()) {
 	case LogicalTypeId::VALIDITY:
-		return Value::BOOLEAN(((bool *)tuple_data)[index]);
+		return Value::BOOLEAN(reinterpret_cast<bool *>(tuple_data)[index]);
 	case LogicalTypeId::INTEGER:
-		return Value::INTEGER(((int32_t *)tuple_data)[index]);
+		return Value::INTEGER(reinterpret_cast<int32_t *>(tuple_data)[index]);
 	default:
 		throw NotImplementedException("Unimplemented type for UpdateInfo::GetValue");
 	}
@@ -85,7 +85,7 @@ void UpdateInfo::Verify() {
 // Update Fetch
 //===--------------------------------------------------------------------===//
 static void MergeValidityInfo(UpdateInfo *current, ValidityMask &result_mask) {
-	auto info_data = (bool *)current->tuple_data;
+	auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		result_mask.Set(current->tuples[i], info_data[i]);
 	}
@@ -100,7 +100,7 @@ static void UpdateMergeValidity(transaction_t start_time, transaction_t transact
 
 template <class T>
 static void MergeUpdateInfo(UpdateInfo *current, T *result_data) {
-	auto info_data = (T *)current->tuple_data;
+	auto info_data = reinterpret_cast<T *>(current->tuple_data);
 	if (current->N == STANDARD_VECTOR_SIZE) {
 		// special case: update touches ALL tuples of this vector
 		// in this case we can just memcpy the data
@@ -241,7 +241,7 @@ void UpdateSegment::FetchCommitted(idx_t vector_index, Vector &result) {
 //===--------------------------------------------------------------------===//
 static void MergeUpdateInfoRangeValidity(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset,
                                          ValidityMask &result_mask) {
-	auto info_data = (bool *)current->tuple_data;
+	auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		auto tuple_idx = current->tuples[i];
 		if (tuple_idx < start) {
@@ -261,7 +261,7 @@ static void FetchCommittedRangeValidity(UpdateInfo *info, idx_t start, idx_t end
 
 template <class T>
 static void MergeUpdateInfoRange(UpdateInfo *current, idx_t start, idx_t end, idx_t result_offset, T *result_data) {
-	auto info_data = (T *)current->tuple_data;
+	auto info_data = reinterpret_cast<T *>(current->tuple_data);
 	for (idx_t i = 0; i < current->N; i++) {
 		auto tuple_idx = current->tuples[i];
 		if (tuple_idx < start) {
@@ -352,7 +352,7 @@ static void FetchRowValidity(transaction_t start_time, transaction_t transaction
                              Vector &result, idx_t result_idx) {
 	auto &result_mask = FlatVector::Validity(result);
 	UpdateInfo::UpdatesForTransaction(info, start_time, transaction_id, [&](UpdateInfo *current) {
-		auto info_data = (bool *)current->tuple_data;
+		auto info_data = reinterpret_cast<bool *>(current->tuple_data);
 		// FIXME: we could do a binary search in here
 		for (idx_t i = 0; i < current->N; i++) {
 			if (current->tuples[i] == row_idx) {
@@ -576,7 +576,7 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
                                      const SelectionVector &sel) {
 	auto &update_mask = FlatVector::Validity(update);
-	auto tuple_data = (bool *)update_info->tuple_data;
+	auto tuple_data = reinterpret_cast<bool *>(update_info->tuple_data);
 
 	if (!update_mask.AllValid()) {
 		for (idx_t i = 0; i < update_info->N; i++) {
@@ -590,7 +590,7 @@ static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, U
 	}
 
 	auto &base_mask = FlatVector::Validity(base_data);
-	auto base_tuple_data = (bool *)base_info->tuple_data;
+	auto base_tuple_data = reinterpret_cast<bool *>(base_info->tuple_data);
 	if (!base_mask.AllValid()) {
 		for (idx_t i = 0; i < base_info->N; i++) {
 			base_tuple_data[i] = base_mask.RowIsValidUnsafe(base_info->tuples[i]);
@@ -1045,10 +1045,10 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
                                   unsafe_unique_array<char> &data) {
 	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
-	auto update_info = (UpdateInfo *)data.get();
+	auto update_info = reinterpret_cast<UpdateInfo *>(data.get());
 	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
-	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->tuples = reinterpret_cast<sel_t *>((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
+	update_info->tuple_data = (data_ptr_cast(update_info)) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction.transaction_id;
 	return update_info;
 }

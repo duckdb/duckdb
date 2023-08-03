@@ -11,18 +11,21 @@ BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, uniqu
       lower(std::move(lower_p)), upper(std::move(upper_p)) {
 }
 
+BetweenExpression::BetweenExpression() : BetweenExpression(nullptr, nullptr, nullptr) {
+}
+
 string BetweenExpression::ToString() const {
 	return ToString<BetweenExpression, ParsedExpression>(*this);
 }
 
-bool BetweenExpression::Equal(const BetweenExpression *a, const BetweenExpression *b) {
-	if (!a->input->Equals(b->input.get())) {
+bool BetweenExpression::Equal(const BetweenExpression &a, const BetweenExpression &b) {
+	if (!a.input->Equals(*b.input)) {
 		return false;
 	}
-	if (!a->lower->Equals(b->lower.get())) {
+	if (!a.lower->Equals(*b.lower)) {
 		return false;
 	}
-	if (!a->upper->Equals(b->upper.get())) {
+	if (!a.upper->Equals(*b.upper)) {
 		return false;
 	}
 	return true;
@@ -44,21 +47,6 @@ unique_ptr<ParsedExpression> BetweenExpression::Deserialize(ExpressionType type,
 	auto input = source.ReadRequiredSerializable<ParsedExpression>();
 	auto lower = source.ReadRequiredSerializable<ParsedExpression>();
 	auto upper = source.ReadRequiredSerializable<ParsedExpression>();
-	return make_uniq<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
-}
-
-void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("input", *input);
-	serializer.WriteProperty("lower", *lower);
-	serializer.WriteProperty("upper", *upper);
-}
-
-unique_ptr<ParsedExpression> BetweenExpression::FormatDeserialize(ExpressionType type,
-                                                                  FormatDeserializer &deserializer) {
-	auto input = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("input");
-	auto lower = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("lower");
-	auto upper = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("upper");
 	return make_uniq<BetweenExpression>(std::move(input), std::move(lower), std::move(upper));
 }
 

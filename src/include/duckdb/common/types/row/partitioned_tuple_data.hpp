@@ -48,7 +48,6 @@ struct PartitionTupleDataAllocators {
 //! partitioning, e.g., radix, hive
 class PartitionedTupleData {
 public:
-	unique_ptr<PartitionedTupleData> CreateShared();
 	virtual ~PartitionedTupleData();
 
 public:
@@ -124,7 +123,11 @@ protected:
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
-		return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
+		if (allocators) {
+			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
+		} else {
+			return make_uniq<TupleDataCollection>(buffer_manager, layout);
+		}
 	}
 
 protected:
@@ -135,6 +138,18 @@ protected:
 	mutex lock;
 	shared_ptr<PartitionTupleDataAllocators> allocators;
 	vector<unique_ptr<TupleDataCollection>> partitions;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 } // namespace duckdb

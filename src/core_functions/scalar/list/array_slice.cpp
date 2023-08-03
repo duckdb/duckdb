@@ -28,7 +28,7 @@ template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (index < 0) {
-		if (-index > length) {
+		if (index < -length) {
 			return false;
 		}
 		index = length + index;
@@ -107,9 +107,9 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			auto bidx = bdata.sel->get_index(i);
 			auto eidx = edata.sel->get_index(i);
 
-			auto sliced = ((INPUT_TYPE *)sdata.data)[sidx];
-			auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
-			auto end = ((INDEX_TYPE *)edata.data)[eidx];
+			auto sliced = (UnifiedVectorFormat::GetData<INPUT_TYPE>(sdata))[sidx];
+			auto begin = (UnifiedVectorFormat::GetData<INDEX_TYPE>(bdata))[bidx];
+			auto end = (UnifiedVectorFormat::GetData<INDEX_TYPE>(edata))[eidx];
 
 			auto svalid = sdata.validity.RowIsValid(sidx);
 			auto bvalid = bdata.validity.RowIsValid(bidx);

@@ -45,7 +45,7 @@ logical_opt	<REGEX>:.*INDEX_SCAN.*
 statement error
 INSERT INTO integers VALUES (1, 1);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "i: 1" violates unique constraint
 
 restart
 
@@ -97,7 +97,7 @@ SELECT i FROM integers WHERE i + j = 2
 statement error
 INSERT INTO integers VALUES (1, 1);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "(i + j): 2" violates unique constraint
 
 statement ok
 DROP INDEX i_index;
@@ -141,7 +141,7 @@ SELECT i FROM integers WHERE j + i = 2
 statement error
 INSERT INTO integers VALUES (1, 1);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "(j + i): 2" violates unique constraint
 
 statement ok
 DROP INDEX i_index;
@@ -164,7 +164,7 @@ restart
 statement error
 INSERT INTO integers VALUES (1, 1);
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+Constraint Error: Duplicate key "(j + i): 2, j: 1, i: 1" violates unique constraint
 
 statement ok
 DROP INDEX i_index;

@@ -131,7 +131,11 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 
 unique_ptr<DBConfig> GetTestConfig() {
 	auto result = make_uniq<DBConfig>();
+#ifndef DUCKDB_ALTERNATIVE_VERIFY
 	result->options.checkpoint_wal_size = 0;
+#else
+	result->options.checkpoint_on_shutdown = false;
+#endif
 	result->options.allow_unsigned_extensions = true;
 	if (single_threaded) {
 		result->options.maximum_threads = 1;

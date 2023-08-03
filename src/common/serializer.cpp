@@ -10,7 +10,7 @@ string Deserializer::Read() {
 	}
 	auto buffer = make_unsafe_uniq_array<data_t>(size);
 	ReadData(buffer.get(), size);
-	return string((char *)buffer.get(), size);
+	return string(const_char_ptr_cast(buffer.get()), size);
 }
 
 void Deserializer::ReadStringVector(vector<string> &list) {

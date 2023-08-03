@@ -39,6 +39,8 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo() override;
+
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
 	bool IsDuckTable() const override {

@@ -23,6 +23,9 @@ class StreamQueryResult : public QueryResult {
 	friend class ClientContext;
 
 public:
+	static constexpr const QueryResultType TYPE = QueryResultType::STREAM_RESULT;
+
+public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
 	DUCKDB_API StreamQueryResult(StatementType statement_type, StatementProperties properties,

@@ -31,6 +31,9 @@ class MetaPipeline;
 //! execution plan
 class PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
+
+public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
 		estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
@@ -137,14 +140,14 @@ public:
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.
-	virtual void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
+	virtual SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                                  GlobalSinkState &gstate) const;
+	                                  OperatorSinkFinalizeInput &input) const;
 	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
-	//! This allows flushing of the current batch (e.g. to disk)
+	//! This allows flushing of the current batch (e.g. to disk) TODO: should this be able to block too?
 	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
@@ -152,6 +155,9 @@ public:
 
 	//! The maximum amount of memory the operator should use per thread.
 	static idx_t GetMaxThreadMemory(ClientContext &context);
+
+	//! Whether operator caching is allowed in the current execution context
+	static bool OperatorCachingAllowed(ExecutionContext &context);
 
 	virtual bool IsSink() const {
 		return false;
@@ -184,7 +190,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -192,7 +198,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

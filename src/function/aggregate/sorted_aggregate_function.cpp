@@ -28,7 +28,7 @@ struct SortedAggregateBindData : public FunctionData {
 		}
 		sorted_on_args = (children.size() == order_bys.orders.size());
 		for (size_t i = 0; sorted_on_args && i < children.size(); ++i) {
-			sorted_on_args = children[i]->Equals(order_bys.orders[i].expression.get());
+			sorted_on_args = children[i]->Equals(*order_bys.orders[i].expression);
 		}
 	}
 
@@ -49,7 +49,7 @@ struct SortedAggregateBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const SortedAggregateBindData &)other_p;
+		auto &other = other_p.Cast<SortedAggregateBindData>();
 		if (bind_info && other.bind_info) {
 			if (!bind_info->Equals(*other.bind_info)) {
 				return false;
@@ -253,13 +253,13 @@ struct SortedAggregateState {
 
 struct SortedAggregateFunction {
 	template <typename STATE>
-	static void Initialize(STATE *state) {
-		new (state) STATE();
+	static void Initialize(STATE &state) {
+		new (&state) STATE();
 	}
 
 	template <typename STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		state->~STATE();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
 	}
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
@@ -288,7 +288,7 @@ struct SortedAggregateFunction {
 		DataChunk sort_chunk;
 		ProjectInputs(inputs, order_bind, input_count, count, arg_chunk, sort_chunk);
 
-		const auto order_state = (SortedAggregateState *)state;
+		const auto order_state = reinterpret_cast<SortedAggregateState *>(state);
 		order_state->Update(order_bind, sort_chunk, arg_chunk);
 	}
 
@@ -310,7 +310,7 @@ struct SortedAggregateFunction {
 		states.ToUnifiedFormat(count, svdata);
 
 		// Size the selection vector for each state.
-		auto sdata = (SortedAggregateState **)svdata.data;
+		auto sdata = UnifiedVectorFormat::GetDataNoConst<SortedAggregateState *>(svdata);
 		for (idx_t i = 0; i < count; ++i) {
 			auto sidx = svdata.sel->get_index(i);
 			auto order_state = sdata[sidx];
@@ -345,10 +345,10 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
-		const auto order_bind = (SortedAggregateBindData *)aggr_input_data.bind_data;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &other = const_cast<STATE &>(source);
-		target->Combine(*order_bind, other);
+		target.Combine(order_bind, other);
 	}
 
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
@@ -359,7 +359,7 @@ struct SortedAggregateFunction {
 
 	static void Finalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                     const idx_t offset) {
-		const auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
+		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &buffer_manager = order_bind.buffer_manager;
 		RowLayout payload_layout;
 		payload_layout.Initialize(order_bind.arg_types);
@@ -370,11 +370,12 @@ struct SortedAggregateFunction {
 
 		//	 Reusable inner state
 		vector<data_t> agg_state(order_bind.function.state_size());
-		Vector agg_state_vec(Value::POINTER((idx_t)agg_state.data()));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
-		AggregateInputData aggr_bind_info(bind_info, Allocator::DefaultAllocator());
+		ArenaAllocator allocator(Allocator::DefaultAllocator());
+		AggregateInputData aggr_bind_info(bind_info, allocator);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind.function.initialize;
@@ -515,14 +516,6 @@ struct SortedAggregateFunction {
 
 		result.Verify(count);
 	}
-
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
-		throw NotImplementedException("FIXME: serialize sorted aggregate not supported");
-	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
-	                                            AggregateFunction &function) {
-		throw NotImplementedException("FIXME: deserialize sorted aggregate not supported");
-	}
 };
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
@@ -581,7 +574,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window, SortedAggregateFunction::Serialize, SortedAggregateFunction::Deserialize);
+	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);

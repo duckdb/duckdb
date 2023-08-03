@@ -15,6 +15,7 @@ add_subdirectory(functional)
 add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
+add_subdirectory(arrow)
 
 add_library(
   python_src OBJECT

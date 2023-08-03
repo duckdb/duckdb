@@ -33,7 +33,7 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 
 void duckdb_close(duckdb_database *database) {
 	if (database && *database) {
-		auto wrapper = (DatabaseData *)*database;
+		auto wrapper = reinterpret_cast<DatabaseData *>(*database);
 		delete wrapper;
 		*database = nullptr;
 	}
@@ -43,7 +43,7 @@ duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	if (!database || !out) {
 		return DuckDBError;
 	}
-	auto wrapper = (DatabaseData *)database;
+	auto wrapper = reinterpret_cast<DatabaseData *>(database);
 	Connection *connection;
 	try {
 		connection = new Connection(*wrapper->database);
@@ -54,16 +54,32 @@ duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
 	return DuckDBSuccess;
 }
 
+void duckdb_interrupt(duckdb_connection connection) {
+	if (!connection) {
+		return;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	conn->Interrupt();
+}
+
+double duckdb_query_progress(duckdb_connection connection) {
+	if (!connection) {
+		return -1;
+	}
+	Connection *conn = reinterpret_cast<Connection *>(connection);
+	return conn->context->GetProgress();
+}
+
 void duckdb_disconnect(duckdb_connection *connection) {
 	if (connection && *connection) {
-		Connection *conn = (Connection *)*connection;
+		Connection *conn = reinterpret_cast<Connection *>(*connection);
 		delete conn;
 		*connection = nullptr;
 	}
 }
 
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
-	Connection *conn = (Connection *)connection;
+	Connection *conn = reinterpret_cast<Connection *>(connection);
 	auto result = conn->Query(query);
 	return duckdb_translate_result(std::move(result), out);
 }

@@ -299,8 +299,9 @@ static bool FindValueStruct(const char *buf, idx_t len, idx_t &pos, Vector &varc
 	return false;
 }
 
-bool VectorStringToStruct::SplitStruct(string_t &input, vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-                                       string_map_t<idx_t> &child_names, vector<ValidityMask *> &child_masks) {
+bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors,
+                                       idx_t &row_idx, string_map_t<idx_t> &child_names,
+                                       vector<ValidityMask *> &child_masks) {
 	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
 	idx_t pos = 0;

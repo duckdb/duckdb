@@ -9,7 +9,7 @@ template <class T>
 void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                            data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                            const idx_t offset) {
-	auto source = (T *)vdata.data;
+	auto source = UnifiedVectorFormat::GetData<T>(vdata);
 	if (has_null) {
 		auto &validity = vdata.validity;
 		const data_t valid = nulls_first ? 1 : 0;
@@ -54,7 +54,7 @@ void TemplatedRadixScatter(UnifiedVectorFormat &vdata, const SelectionVector &se
 void RadixScatterStringVector(UnifiedVectorFormat &vdata, const SelectionVector &sel, idx_t add_count,
                               data_ptr_t *key_locations, const bool desc, const bool has_null, const bool nulls_first,
                               const idx_t prefix_len, idx_t offset) {
-	auto source = (string_t *)vdata.data;
+	auto source = UnifiedVectorFormat::GetData<string_t>(vdata);
 	if (has_null) {
 		auto &validity = vdata.validity;
 		const data_t valid = nulls_first ? 1 : 0;

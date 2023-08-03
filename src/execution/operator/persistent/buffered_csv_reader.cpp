@@ -186,8 +186,8 @@ static string TrimWhitespace(const string &col_name) {
 
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
-	auto nfkd = utf8proc_NFKD((const utf8proc_uint8_t *)col_name.c_str(), col_name.size());
-	const string col_name_nfkd = string((const char *)nfkd, strlen((const char *)nfkd));
+	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()), col_name.size());
+	const string col_name_nfkd = string(const_char_ptr_cast(nfkd), strlen(const_char_ptr_cast(nfkd)));
 	free(nfkd);
 
 	// only keep ASCII characters 0-9 a-z A-Z and replace spaces with regular whitespace

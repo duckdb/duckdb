@@ -9,12 +9,14 @@ add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
     buffered_json_reader.cpp
-    json-extension.cpp
+    json_extension.cpp
     json_common.cpp
+    json_enums.cpp
     json_functions.cpp
     json_scan.cpp
     json_serializer.cpp
     json_deserializer.cpp
+    serialize_json.cpp
     json_functions/copy_json.cpp
     json_functions/json_array_length.cpp
     json_functions/json_contains.cpp
@@ -31,7 +33,7 @@ set(JSON_EXTENSION_FILES
     json_functions/read_json_objects.cpp
     ${YYJSON_OBJECT_FILES})
 
-add_library(json_extension STATIC ${JSON_EXTENSION_FILES})
+build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(json ${PARAMETERS} ${JSON_EXTENSION_FILES})
 

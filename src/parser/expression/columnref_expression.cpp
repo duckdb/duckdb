@@ -10,6 +10,9 @@
 
 namespace duckdb {
 
+ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+}
+
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
     : ColumnRefExpression(table_name.empty() ? vector<string> {std::move(column_name)}
                                              : vector<string> {std::move(table_name), std::move(column_name)}) {
@@ -64,12 +67,12 @@ string ColumnRefExpression::ToString() const {
 	return result;
 }
 
-bool ColumnRefExpression::Equal(const ColumnRefExpression *a, const ColumnRefExpression *b) {
-	if (a->column_names.size() != b->column_names.size()) {
+bool ColumnRefExpression::Equal(const ColumnRefExpression &a, const ColumnRefExpression &b) {
+	if (a.column_names.size() != b.column_names.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->column_names.size(); i++) {
-		if (!StringUtil::CIEquals(a->column_names[i], b->column_names[i])) {
+	for (idx_t i = 0; i < a.column_names.size(); i++) {
+		if (!StringUtil::CIEquals(a.column_names[i], b.column_names[i])) {
 			return false;
 		}
 	}
@@ -96,18 +99,6 @@ void ColumnRefExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ColumnRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto column_names = reader.ReadRequiredList<string>();
-	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
-	return std::move(expression);
-}
-
-void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("column_names", column_names);
-}
-
-unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type,
-                                                                    FormatDeserializer &deserializer) {
-	auto column_names = deserializer.ReadProperty<vector<string>>("column_names");
 	auto expression = make_uniq<ColumnRefExpression>(std::move(column_names));
 	return std::move(expression);
 }

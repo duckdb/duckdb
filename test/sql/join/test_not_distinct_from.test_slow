@@ -1,0 +1,290 @@
+# name: test/sql/join/test_not_distinct_from.test_slow
+# description: Test join on is not distinct from query
+# group: [join]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+create table tbl_1 (a ${type}, b ${type})
+
+statement ok
+insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
+
+statement ok
+create table tbl_2 (b ${type})
+
+statement ok
+insert into tbl_2 values (1),(2),(NULL)
+
+query I
+SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
+----
+1
+2
+
+query I
+SELECT a from tbl_1 WHERE a IS NOT DISTINCT FROM b
+----
+NULL
+
+query II
+explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b)
+----
+physical_plan	<REGEX>:.*HASH_JOIN.*
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) ORDER BY 1
+----
+NULL	NULL
+1	1
+2	2
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b AND a <> tbl_2.b) ORDER BY 1
+----
+
+query II
+explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
+----
+physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
+
+query II rowsort
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
+----
+1	2
+1	NULL
+2	1
+2	NULL
+NULL	1
+NULL	2
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b AND a <> tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a <> tbl_2.b AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (tbl_2.b > a AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+
+statement ok
+DROP TABLE tbl_1;
+
+statement ok
+DROP TABLE tbl_2;
+
+endloop
+
+#Vector with vector
+query III
+select a.a, b.b, a.a IS NOT DISTINCT FROM b.b AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
+----
+NULL	NULL	True
+NULL	1	False
+NULL	2	False
+1	NULL	False
+1	1	True
+1	2	False
+2	NULL	False
+2	1	False
+2	2	True
+
+query III
+select a.a, b.b, a.a IS DISTINCT FROM b.b AS "Is Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a), (VALUES (1), (2), (NULL)) AS b (b) ORDER BY 1, 2;
+----
+NULL	NULL	False
+NULL	1	True
+NULL	2	True
+1	NULL	True
+1	1	False
+1	2	True
+2	NULL	True
+2	1	True
+2	2	False
+
+#constant with constant
+query I
+select null is not distinct from null;
+----
+True
+
+query I
+select null is distinct from null;
+----
+False
+
+# Vector with constant
+query II
+select a.a, a.a IS NOT DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	True
+2	False
+NULL	False
+
+query II
+select a.a, a.a IS DISTINCT FROM 1 AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	False
+2	True
+NULL	True
+
+query II
+select a.a, a.a IS NOT DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	False
+2	False
+NULL	True
+
+query II
+select a.a, a.a IS DISTINCT FROM NULL AS "Is Not Distinct From" FROM (VALUES (1), (2), (NULL)) AS a (a);
+----
+1	True
+2	True
+NULL	False
+
+# More types (all numeric types, strings, dates, times, timestamps, interval)
+statement ok
+CREATE TABLE test_types(a tinyint, b smallint, c integer, d bigint, e double, f real, g varchar);
+
+statement ok
+INSERT INTO test_types values (NULL,NULL,NULL,NULL,NULL,NULL,NULL),(1,1,1,1,1,1,'1'),(10,10,10,10,10,10,'10')
+
+query I
+select count(*) FROM test_types where a IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where b IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where c IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where d IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where e IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where f IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where g IS DISTINCT FROM NULL
+----
+2
+
+query I
+select count(*) FROM test_types where a IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where b IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where c IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where d IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where e IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where f IS NOT DISTINCT FROM NULL
+----
+1
+
+query I
+select count(*) FROM test_types where g IS NOT DISTINCT FROM NULL
+----
+1
+
+query T
+SELECT INTERVAL '30' DAY is distinct from NULL
+----
+True
+
+query T
+SELECT INTERVAL '30' DAY is not distinct from NULL
+----
+False
+
+# Use on a bigger table (~10K elements)
+statement ok
+create table tbl_1 (a integer, b integer)
+
+statement ok
+insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
+
+statement ok
+create table tbl_2 (b integer)
+
+statement ok
+insert into tbl_2 values (1),(2),(NULL)
+
+statement ok
+CREATE table big as select range a from range(10000);
+
+statement ok
+insert into big values (NULL)
+
+query I
+select count(*) from big  inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b)
+----
+3
+
+# Use with filter (e.g. SELECT x IS NOT DISTINCT FROM y FROM tbl WHERE z%2=0, where the expression filters like 50% of the rows)
+query I
+select count(*) from big  inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) where a >1  and a < 5000
+----
+1
+
+
+# Use with rowid column (non-flat and non-constant vector)
+query I
+select count(*) from big inner join tbl_2 on (big.rowid IS NOT DISTINCT FROM tbl_2.b)
+----
+2
+
+# Use in subqueries with correlated expressions
+query II
+SELECT a, (select count(*) from tbl_1 where tbl_1.a is distinct from t.b) from tbl_1 as t ORDER BY 1
+----
+NULL	2
+1	2
+2	3
+

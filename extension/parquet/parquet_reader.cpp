@@ -48,7 +48,7 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
@@ -58,7 +58,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto proto = CreateThriftProtocol(allocator, file_handle, false);
-	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
@@ -71,12 +71,15 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(file_size - 8);
 	transport.read((uint8_t *)buf.ptr, 8);
 
-	if (strncmp(buf.ptr + 4, "PAR1", 4) != 0) {
+	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
+		if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+			throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
+		}
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
 	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = *(uint32_t *)buf.ptr;
-	if (footer_len <= 0 || file_size < 12 + footer_len) {
+	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
+	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
 	auto metadata_pos = file_size - (footer_len + 8);
@@ -271,7 +274,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	}
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
 		child_list_t<LogicalType> child_types;
-		vector<duckdb::unique_ptr<ColumnReader>> child_readers;
+		vector<unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
@@ -287,7 +290,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			c_idx++;
 		}
 		D_ASSERT(!child_types.empty());
-		duckdb::unique_ptr<ColumnReader> result;
+		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 
 		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
@@ -399,8 +402,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-	auto root_reader = CreateReader();
-
+	root_reader = CreateReader();
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
@@ -429,7 +431,7 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
-      parquet_options(parquet_options_p) {
+      parquet_options(std::move(parquet_options_p)) {
 	file_name = std::move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
@@ -450,14 +452,13 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-
 	InitializeSchema();
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
+      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
 	InitializeSchema();
 }
 
@@ -483,8 +484,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 	unique_ptr<BaseStatistics> column_stats;
 	auto file_meta_data = GetFileMetadata();
-	auto root_reader = CreateReader();
-	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
+	auto column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = file_meta_data->row_groups[row_group_idx];
@@ -573,7 +573,7 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx) {
 	auto &group = GetGroup(state);
 	auto column_id = reader_data.column_ids[col_idx];
-	auto column_reader = ((StructColumnReader *)state.root_reader.get())->GetChildReader(column_id);
+	auto column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
 	// TODO move this to columnreader too
 	if (reader_data.filters) {
@@ -760,14 +760,14 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter_mask, idx_t count) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = (ConjunctionAndFilter &)filter;
+		auto &conjunction = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : conjunction.child_filters) {
 			ApplyFilter(v, *child_filter, filter_mask, count);
 		}
 		break;
 	}
 	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction = (ConjunctionOrFilter &)filter;
+		auto &conjunction = filter.Cast<ConjunctionOrFilter>();
 		parquet_filter_t or_mask;
 		for (auto &child_filter : conjunction.child_filters) {
 			parquet_filter_t child_mask = filter_mask;
@@ -778,7 +778,7 @@ static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &)filter;
+		auto &constant_filter = filter.Cast<ConstantFilter>();
 		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL:
 			FilterOperationSwitch<Equals>(v, constant_filter.constant, filter_mask, count);
@@ -831,7 +831,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		state.current_group++;
 		state.group_offset = 0;
 
-		auto &trans = (ThriftFileTransport &)*state.thrift_file_proto->getTransport();
+		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
 		state.current_group_prefetched = false;
 
@@ -846,8 +846,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 			auto file_col_idx = reader_data.column_ids[col_idx];
 
-			auto root_reader = ((StructColumnReader *)state.root_reader.get());
-			to_scan_compressed_bytes += root_reader->GetChildReader(file_col_idx)->TotalCompressedSize();
+			auto &root_reader = state.root_reader->Cast<StructColumnReader>();
+			to_scan_compressed_bytes += root_reader.GetChildReader(file_col_idx)->TotalCompressedSize();
 		}
 
 		auto &group = GetGroup(state);
@@ -880,14 +880,14 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// Prefetch column-wise
 				for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 					auto file_col_idx = reader_data.column_ids[col_idx];
-					auto root_reader = ((StructColumnReader *)state.root_reader.get());
+					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 					bool has_filter = false;
 					if (reader_data.filters) {
 						auto entry = reader_data.filters->filters.find(reader_data.column_mapping[col_idx]);
 						has_filter = entry != reader_data.filters->filters.end();
 					}
-					root_reader->GetChildReader(file_col_idx)->RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
+					root_reader.GetChildReader(file_col_idx)->RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
 
 				trans.FinalizeRegistration();
@@ -924,7 +924,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	auto define_ptr = (uint8_t *)state.define_buf.ptr;
 	auto repeat_ptr = (uint8_t *)state.repeat_buf.ptr;
 
-	auto root_reader = ((StructColumnReader *)state.root_reader.get());
+	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 	if (reader_data.filters) {
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
@@ -947,7 +947,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				auto result_idx = reader_data.column_mapping[id];
 
 				auto &result_vector = result.data[result_idx];
-				auto child_reader = root_reader->GetChildReader(file_col_idx);
+				auto child_reader = root_reader.GetChildReader(file_col_idx);
 				child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 				need_to_read[id] = false;
 
@@ -962,11 +962,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 			auto file_col_idx = reader_data.column_ids[col_idx];
 			if (filter_mask.none()) {
-				root_reader->GetChildReader(file_col_idx)->Skip(result.size());
+				root_reader.GetChildReader(file_col_idx)->Skip(result.size());
 				continue;
 			}
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
-			auto child_reader = root_reader->GetChildReader(file_col_idx);
+			auto child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 		}
 
@@ -982,7 +982,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 			auto file_col_idx = reader_data.column_ids[col_idx];
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
-			auto child_reader = root_reader->GetChildReader(file_col_idx);
+			auto child_reader = root_reader.GetChildReader(file_col_idx);
 			auto rows_read = child_reader->Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != result.size()) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",

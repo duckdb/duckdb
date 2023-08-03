@@ -49,6 +49,16 @@ static void CurrentSchemasFunction(DataChunk &input, ExpressionState &state, Vec
 	result.Reference(val);
 }
 
+// in_search_path
+static void InSearchPathFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	auto &context = state.GetContext();
+	auto &search_path = ClientData::Get(context).catalog_search_path;
+	BinaryExecutor::Execute<string_t, string_t, bool>(
+	    input.data[0], input.data[1], result, input.size(), [&](string_t db_name, string_t schema_name) {
+		    return search_path->SchemaInSearchPath(context, db_name.GetString(), schema_name.GetString());
+	    });
+}
+
 // txid_current
 static void TransactionIdCurrent(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &context = state.GetContext();
@@ -81,6 +91,10 @@ ScalarFunction CurrentDatabaseFun::GetFunction() {
 ScalarFunction CurrentSchemasFun::GetFunction() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	return ScalarFunction({LogicalType::BOOLEAN}, varchar_list_type, CurrentSchemasFunction);
+}
+
+ScalarFunction InSearchPathFun::GetFunction() {
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN, InSearchPathFunction);
 }
 
 ScalarFunction CurrentTransactionIdFun::GetFunction() {

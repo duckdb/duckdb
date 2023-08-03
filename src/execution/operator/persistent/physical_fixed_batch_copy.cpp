@@ -116,7 +116,7 @@ public:
 	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), op.children[0]->types);
 		collection->InitializeAppend(append_state);
 	}
 };
@@ -136,10 +136,10 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalFixedBatchCopy::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                     LocalSinkState &lstate) const {
-	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
-	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+SinkCombineResultType PhysicalFixedBatchCopy::Combine(ExecutionContext &context,
+                                                      OperatorSinkCombineInput &input) const {
+	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	gstate.rows_copied += state.rows_copied;
 	if (!gstate.any_finished) {
 		// signal that this thread is finished processing batches and that we should move on to Finalize
@@ -147,6 +147,8 @@ void PhysicalFixedBatchCopy::Combine(ExecutionContext &context, GlobalSinkState 
 		gstate.any_finished = true;
 	}
 	ExecuteTasks(context.client, gstate);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -225,16 +227,16 @@ SinkFinalizeType PhysicalFixedBatchCopy::FinalFlush(ClientContext &context, Glob
 }
 
 SinkFinalizeType PhysicalFixedBatchCopy::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
 	// repartition any remaining batches
-	RepartitionBatches(context, gstate_p, min_batch_index, true);
+	RepartitionBatches(context, input.global_state, min_batch_index, true);
 	// check if we have multiple tasks to execute
 	if (gstate.TaskCount() <= 1) {
 		// we don't - just execute the remaining task and finish flushing to disk
-		ExecuteTasks(context, gstate_p);
-		FinalFlush(context, gstate_p);
+		ExecuteTasks(context, input.global_state);
+		FinalFlush(context, input.global_state);
 		return SinkFinalizeType::READY;
 	}
 	// we have multiple tasks remaining - launch an event to execute the tasks in parallel
@@ -353,7 +355,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
+				current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
 			}
 			if (current_collection) {
 				current_collection->InitializeAppend(append_state);
@@ -373,7 +375,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 			}
 			// the collection is full - move it to the result and create a new one
 			gstate.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(current_collection)));
-			current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
+			current_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), children[0]->types);
 			current_collection->InitializeAppend(append_state);
 		}
 	}

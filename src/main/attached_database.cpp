@@ -87,11 +87,11 @@ bool AttachedDatabase::IsReadOnly() const {
 	return type == AttachedDatabaseType::READ_ONLY_DATABASE;
 }
 
-string AttachedDatabase::ExtractDatabaseName(const string &dbpath) {
+string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &fs) {
 	if (dbpath.empty() || dbpath == ":memory:") {
 		return "memory";
 	}
-	return FileSystem::ExtractBaseName(dbpath);
+	return fs.ExtractBaseName(dbpath);
 }
 
 void AttachedDatabase::Initialize() {
@@ -122,6 +122,14 @@ TransactionManager &AttachedDatabase::GetTransactionManager() {
 
 Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
+}
+
+bool AttachedDatabase::IsInitialDatabase() const {
+	return is_initial_database;
+}
+
+void AttachedDatabase::SetInitialDatabase() {
+	is_initial_database = true;
 }
 
 } // namespace duckdb

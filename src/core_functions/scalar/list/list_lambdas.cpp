@@ -8,6 +8,8 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -24,9 +26,22 @@ public:
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 		throw NotImplementedException("FIXME: list lambda serialize");
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: list lambda deserialize");
+	}
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const ScalarFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
+		serializer.WriteProperty("stype", bind_data.stype);
+		serializer.WriteOptionalProperty("lambda_expr", bind_data.lambda_expr);
+	}
+
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+		auto stype = deserializer.ReadProperty<LogicalType>("stype");
+		auto lambda_expr = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("lambda_expr");
+		return make_uniq<ListLambdaBindData>(stype, std::move(lambda_expr));
 	}
 };
 
@@ -35,12 +50,12 @@ ListLambdaBindData::ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Ex
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_uniq<ListLambdaBindData>(stype, lambda_expr->Copy());
+	return make_uniq<ListLambdaBindData>(stype, lambda_expr ? lambda_expr->Copy() : nullptr);
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
-	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
+	return Expression::Equals(lambda_expr, other.lambda_expr) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {
@@ -63,7 +78,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 	UnifiedVectorFormat lambda_data;
 	lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
 
-	auto lambda_values = (bool *)lambda_data.data;
+	auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
 	auto &lambda_validity = lambda_data.validity;
 
 	// compute the new lengths and offsets, and create a selection vector
@@ -167,7 +182,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	// get the lists data
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// get the lambda expression
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -321,18 +336,16 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 template <int64_t LAMBDA_PARAM_CNT>
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	if (bound_lambda_expr.parameter_count != LAMBDA_PARAM_CNT) {
 		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
 		                      " expects " + to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments.pop_back();
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<ListLambdaBindData>(bound_function.return_type, nullptr);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
@@ -355,7 +368,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 		throw BinderException("Invalid lambda expression!");
 	}
 
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
@@ -370,7 +383,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	}
 
 	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
 		auto cast_lambda_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
@@ -387,6 +400,8 @@ ScalarFunction ListTransformFun::GetFunction() {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
+	fun.format_serialize = ListLambdaBindData::FormatSerialize;
+	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 
@@ -396,6 +411,8 @@ ScalarFunction ListFilterFun::GetFunction() {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
+	fun.format_serialize = ListLambdaBindData::FormatSerialize;
+	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 

@@ -159,13 +159,15 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Dat
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                           LocalSinkState &lstate_p) const {
-	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
-	auto &gstate = gstate_p.Cast<PerfectHashAggregateGlobalState>();
+SinkCombineResultType PhysicalPerfectHashAggregate::Combine(ExecutionContext &context,
+                                                            OperatorSinkCombineInput &input) const {
+	auto &lstate = input.local_state.Cast<PerfectHashAggregateLocalState>();
+	auto &gstate = input.global_state.Cast<PerfectHashAggregateGlobalState>();
 
 	lock_guard<mutex> l(gstate.lock);
 	gstate.ht->Combine(*lstate.ht);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -186,7 +188,7 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 
 SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
                                                        OperatorSourceInput &input) const {
-	auto &state = (PerfectHashAggregateState &)input.global_state;
+	auto &state = input.global_state.Cast<PerfectHashAggregateState>();
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);

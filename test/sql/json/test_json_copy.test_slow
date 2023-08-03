@@ -192,13 +192,29 @@ copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
 Binder Error
 
 statement ok
-copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
 
 statement ok
 create table my_range (i bigint)
 
 statement ok
-copy my_range from '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+copy my_range from '__TEST_DIR__/my.json.gz' (COMPRESSION GZIP)
+
+# we can auto-detect even though we have compressed
+statement ok
+select * from '__TEST_DIR__/my.json.gz'
+
+# works with zstd too, but we skip this test for now
+# it works in CLI, but not in unittest for some reason (ZSTD is not in VirtualFileSystem::compressed_fs)
+mode skip
+
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json.zst' (COMPRESSION ZSTD)
+
+statement ok
+select * from '__TEST_DIR__/my.json.zst'
+
+mode unskip
 
 query I
 select * from my_range
@@ -248,8 +264,9 @@ set memory_limit='1gb'
 statement ok
 COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
 
+# 4gb should be enough for the rest
 statement ok
-reset memory_limit
+set memory_limit='4gb'
 
 query I
 PRAGMA tpch(1)

@@ -104,8 +104,10 @@ public:
 	//! Obtains a lock and calls Vacuum while holding that lock
 	void Vacuum();
 
-	//! Returns the string representation of an index
-	virtual string ToString() = 0;
+	//! Returns the string representation of an index, or only traverses and verifies the index
+	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;
+	//! Obtains a lock and calls VerifyAndToString while holding that lock
+	string VerifyAndToString(const bool only_verify);
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;
@@ -153,13 +155,13 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

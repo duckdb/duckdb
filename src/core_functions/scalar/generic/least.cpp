@@ -37,7 +37,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	{
 		UnifiedVectorFormat vdata;
 		args.data[0].ToUnifiedFormat(args.size(), vdata);
-		auto input_data = (T *)vdata.data;
+		auto input_data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < args.size(); i++) {
 			auto vindex = vdata.sel->get_index(i);
 			if (vdata.validity.RowIsValid(vindex)) {
@@ -59,7 +59,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 		UnifiedVectorFormat vdata;
 		args.data[col_idx].ToUnifiedFormat(args.size(), vdata);
 
-		auto input_data = (T *)vdata.data;
+		auto input_data = UnifiedVectorFormat::GetData<T>(vdata);
 		if (!vdata.validity.AllValid()) {
 			// potential new null entries: have to check the null mask
 			for (idx_t i = 0; i < args.size(); i++) {

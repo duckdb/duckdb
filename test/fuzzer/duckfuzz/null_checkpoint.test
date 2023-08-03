@@ -1,0 +1,11 @@
+# name: test/fuzzer/duckfuzz/null_checkpoint.test
+# description: NULL checkpoint
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CALL checkpoint(NULL)
+----
+Database cannot be NULL

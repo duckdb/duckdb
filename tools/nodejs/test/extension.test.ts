@@ -3,6 +3,10 @@ import {Database, DuckDbError, HttpError, TableData} from '..';
 import * as fs from 'fs';
 import * as assert from 'assert';
 import * as path from 'path';
+import chaiAsPromised from 'chai-as-promised';
+import chai, {expect} from "chai";
+
+chai.use(chaiAsPromised);
 
 const extension_base_path = "../../../build/release/extension";
 
@@ -26,6 +30,13 @@ function isHTTPException(err: DuckDbError): err is HttpError {
 
 // Note: test will pass on http request failing due to connection issues.
 const test_httpfs = async function (db: duckdb.Database) {
+    const promise = new Promise<void>((resolve, reject) =>
+        db.exec(`SELECT *
+                 FROM parquet_scan('http://localhost:1234/whatever.parquet')`, function (err: DuckDbError | null) {
+            err ? reject(err) : resolve()
+        }));
+    await chai.assert.isRejected(promise, 'IO Error: Connection error for HTTP HEAD');
+
     await new Promise<void>((resolve, reject) => db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;", function (err: null | Error, rows: TableData) {
         if (err) {
             if (err.message.startsWith("Unable to connect to URL")) {

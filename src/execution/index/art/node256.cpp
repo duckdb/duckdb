@@ -1,7 +1,5 @@
 #include "duckdb/execution/index/art/node256.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -10,13 +8,11 @@ namespace duckdb {
 
 Node256 &Node256::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_256).New());
-	node.type = (uint8_t)NType::NODE_256;
+	node = Node::GetAllocator(art, NType::NODE_256).New();
+	node.SetType((uint8_t)NType::NODE_256);
 	auto &n256 = Node256::Get(art, node);
 
 	n256.count = 0;
-	n256.prefix.Initialize();
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		n256.children[i].Reset();
 	}
@@ -27,7 +23,7 @@ Node256 &Node256::New(ART &art, Node &node) {
 void Node256::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 
 	auto &n256 = Node256::Get(art, node);
 
@@ -49,8 +45,6 @@ Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 	auto &n256 = Node256::New(art, node256);
 
 	n256.count = n48.count;
-	n256.prefix.Move(n48.prefix);
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
 			n256.children[i] = n48.children[n48.child_index[i]];
@@ -76,20 +70,21 @@ void Node256::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n256 = Node256::Get(art, node);
 
 	// ensure that there is no other child at the same byte
 	D_ASSERT(!n256.children[byte].IsSet());
 
 	n256.count++;
+	D_ASSERT(n256.count <= Node::NODE_256_CAPACITY);
 	n256.children[byte] = child;
 }
 
 void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n256 = Node256::Get(art, node);
 
 	// free the child and decrease the count
@@ -126,7 +121,6 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_256);
 	writer.Write<uint16_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write child block pointers
 	for (auto &child_block_pointer : child_block_pointers) {
@@ -137,10 +131,9 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node256::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint16_t>();
-	prefix.Deserialize(art, reader);
 
 	// read child block pointers
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -152,7 +145,7 @@ void Node256::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (children[i].IsSet()) {
-			Node::Vacuum(art, children[i], flags);
+			children[i].Vacuum(art, flags);
 		}
 	}
 }

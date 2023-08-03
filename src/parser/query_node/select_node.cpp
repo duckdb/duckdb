@@ -19,7 +19,7 @@ string SelectNode::ToString() const {
 	// search for a distinct modifier
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
 		if (modifiers[modifier_idx]->type == ResultModifierType::DISTINCT_MODIFIER) {
-			auto &distinct_modifier = (DistinctModifier &)*modifiers[modifier_idx];
+			auto &distinct_modifier = modifiers[modifier_idx]->Cast<DistinctModifier>();
 			result += "DISTINCT ";
 			if (!distinct_modifier.distinct_on_targets.empty()) {
 				result += "ON (";
@@ -120,22 +120,15 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	// FROM
-	if (from_table) {
-		// we have a FROM clause, compare to the other one
-		if (!from_table->Equals(other.from_table.get())) {
-			return false;
-		}
-	} else if (other.from_table) {
-		// we don't have a FROM clause, if the other statement has one they are
-		// not equal
+	if (!TableRef::Equals(from_table, other.from_table)) {
 		return false;
 	}
 	// WHERE
-	if (!BaseExpression::Equals(where_clause.get(), other.where_clause.get())) {
+	if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
 		return false;
 	}
 	// GROUP BY
-	if (!ExpressionUtil::ListEquals(groups.group_expressions, other.groups.group_expressions)) {
+	if (!ParsedExpression::ListEquals(groups.group_expressions, other.groups.group_expressions)) {
 		return false;
 	}
 	if (groups.grouping_sets != other.groups.grouping_sets) {
@@ -145,11 +138,11 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	// HAVING
-	if (!BaseExpression::Equals(having.get(), other.having.get())) {
+	if (!ParsedExpression::Equals(having, other.having)) {
 		return false;
 	}
 	// QUALIFY
-	if (!BaseExpression::Equals(qualify.get(), other.qualify.get())) {
+	if (!ParsedExpression::Equals(qualify, other.qualify)) {
 		return false;
 	}
 	return true;
@@ -192,35 +185,6 @@ void SelectNode::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(having);
 	writer.WriteOptional(sample);
 	writer.WriteOptional(qualify);
-}
-
-void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
-	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("select_list", select_list);
-	serializer.WriteOptionalProperty("from_table", from_table);
-	serializer.WriteOptionalProperty("where_clause", where_clause);
-	serializer.WriteProperty("group_expressions", groups.group_expressions);
-	serializer.WriteProperty("group_sets", groups.grouping_sets);
-	serializer.WriteProperty("aggregate_handling", aggregate_handling);
-	serializer.WriteOptionalProperty("having", having);
-	serializer.WriteOptionalProperty("sample", sample);
-	serializer.WriteOptionalProperty("qualify", qualify);
-}
-
-unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<SelectNode>();
-
-	deserializer.ReadProperty("select_list", result->select_list);
-	deserializer.ReadOptionalProperty("from_table", result->from_table);
-	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
-	deserializer.ReadProperty("group_expressions", result->groups.group_expressions);
-	deserializer.ReadProperty("group_sets", result->groups.grouping_sets);
-	deserializer.ReadProperty("aggregate_handling", result->aggregate_handling);
-	deserializer.ReadOptionalProperty("having", result->having);
-	deserializer.ReadOptionalProperty("sample", result->sample);
-	deserializer.ReadOptionalProperty("qualify", result->qualify);
-
-	return std::move(result);
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {

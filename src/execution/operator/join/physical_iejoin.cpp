@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality)
     : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond),
@@ -143,22 +143,24 @@ SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<IEJoinLocalState>();
+SinkCombineResultType PhysicalIEJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
 	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 
@@ -641,6 +643,8 @@ public:
 	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
 	      left_matches(nullptr), right_matches(nullptr) {
 		auto &allocator = Allocator::Get(context);
+		unprojected.Initialize(allocator, op.unprojected_types);
+
 		if (op.conditions.size() < 3) {
 			return;
 		}
@@ -696,6 +700,8 @@ public:
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
 
+	DataChunk unprojected;
+
 	// Outer joins
 	idx_t outer_idx;
 	idx_t outer_count;
@@ -703,13 +709,14 @@ public:
 	bool *right_matches;
 };
 
-void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, LocalSourceState &state_p) const {
+void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state_p) const {
 	auto &state = state_p.Cast<IEJoinLocalSourceState>();
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
 	const auto left_cols = children[0]->GetTypes().size();
+	auto &chunk = state.unprojected;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
 		SelectionVector rsel(STANDARD_VECTOR_SIZE);
@@ -720,6 +727,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 		}
 
 		// found matches: extract them
+
 		chunk.Reset();
 		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
 		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
@@ -762,6 +770,10 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 			}
 		}
 
+		//	We need all of the data to compute other predicates,
+		//	but we only return what is in the projection map
+		ProjectResult(chunk, result);
+
 		// found matches: mark the found matches if required
 		if (left_table.found_match) {
 			for (idx_t i = 0; i < result_count; i++) {
@@ -773,8 +785,8 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 				right_table.found_match[state.right_base + rsel[sel->get_index(i)]] = true;
 			}
 		}
-		chunk.Verify();
-	} while (chunk.size() == 0);
+		result.Verify();
+	} while (result.size() == 0);
 }
 
 class IEJoinGlobalSourceState : public GlobalSourceState {
@@ -961,15 +973,18 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
 			continue;
 		}
-		SliceSortedPayload(result, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
+		auto &chunk = ie_lstate.unprojected;
+		chunk.Reset();
+		SliceSortedPayload(chunk, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
 		                   count);
 
 		// Fill in NULLs to the right
-		for (auto col_idx = left_cols; col_idx < result.ColumnCount(); ++col_idx) {
-			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[col_idx], true);
+		for (auto col_idx = left_cols; col_idx < chunk.ColumnCount(); ++col_idx) {
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
+		ProjectResult(chunk, result);
 		result.SetCardinality(count);
 		result.Verify();
 
@@ -984,15 +999,18 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			continue;
 		}
 
-		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index,
-		                   ie_lstate.true_sel, count, left_cols);
+		auto &chunk = ie_lstate.unprojected;
+		chunk.Reset();
+		SliceSortedPayload(chunk, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index, ie_lstate.true_sel,
+		                   count, left_cols);
 
 		// Fill in NULLs to the left
 		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {
-			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[col_idx], true);
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
+		ProjectResult(chunk, result);
 		result.SetCardinality(count);
 		result.Verify();
 
@@ -1016,19 +1034,16 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
-	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 
 	// Build out LHS
+	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
 	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
-	// RHS depends on everything in LHS
-	child_meta_pipeline.AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
-
 	// Build out RHS
+	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
-	// Despite having the same sink, RHS needs its own PipelineFinishEvent
+	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
 	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
 }
 

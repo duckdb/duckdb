@@ -6,11 +6,23 @@ require skip_reload
 
 require httpfs
 
-mode skip
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+require-env S3_ATTACH_DB
 
 # ATTACH a DuckDB database over HTTPFS
 statement ok
-ATTACH 'https://github.com/duckdb/duckdb/raw/master/test/sql/storage_version/storage_version.db' AS db;
+ATTACH '${S3_ATTACH_DB}' AS db (READONLY 1);
 
 query IIIII
 SELECT * FROM db.integral_values

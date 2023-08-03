@@ -25,9 +25,15 @@ struct BoundPivotInfo {
 	vector<string> pivot_values;
 	//! The set of aggregate functions that is being executed
 	vector<unique_ptr<Expression>> aggregates;
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BoundPivotInfo FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class BoundPivotRef : public BoundTableRef {
+public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::PIVOT;
+
 public:
 	explicit BoundPivotRef() : BoundTableRef(TableReferenceType::PIVOT) {
 	}

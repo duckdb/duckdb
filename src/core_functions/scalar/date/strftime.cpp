@@ -25,7 +25,7 @@ struct StrfTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrfTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrfTimeBindData>();
 		return format_string == other.format_string;
 	}
 };
@@ -94,6 +94,16 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	return strftime;
 }
 
+StrpTimeFormat::StrpTimeFormat() {
+}
+
+StrpTimeFormat::StrpTimeFormat(const string &format_string) {
+	if (format_string.empty()) {
+		return;
+	}
+	StrTimeFormat::ParseFormatSpecifier(format_string, *this);
+}
+
 struct StrpTimeBindData : public FunctionData {
 	StrpTimeBindData(const StrpTimeFormat &format, const string &format_string)
 	    : formats(1, format), format_strings(1, format_string) {
@@ -111,7 +121,7 @@ struct StrpTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrpTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrpTimeBindData>();
 		return format_strings == other.format_strings;
 	}
 };

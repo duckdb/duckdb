@@ -35,13 +35,20 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
+private:
+	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, idx_t parameter_nr, LogicalType return_type,
+	                         shared_ptr<BoundParameterData> parameter_data);
 };
 
 } // namespace duckdb

@@ -467,7 +467,6 @@ TEST_CASE("Test C API config", "[capi]") {
 	REQUIRE(duckdb_create_config(&config) == DuckDBSuccess);
 	REQUIRE(duckdb_set_config(config, "access_mode", "invalid_access_mode") == DuckDBError);
 	REQUIRE(duckdb_set_config(config, "access_mode", "read_only") == DuckDBSuccess);
-	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBError);
 
 	auto dbdir = TestCreatePath("capi_read_only_db");
 
@@ -493,6 +492,13 @@ TEST_CASE("Test C API config", "[capi]") {
 
 	// now we can connect
 	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBSuccess);
+
+	// test unrecognized configuration
+	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBSuccess);
+	REQUIRE(((DBConfig *)config)->options.unrecognized_options["aaaa_invalidoption"] == "read_only");
+	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBError);
+	REQUIRE_THAT(error, Catch::Matchers::Contains("Unrecognized configuration property"));
+	duckdb_free(error);
 
 	// we can destroy the config right after duckdb_open
 	duckdb_destroy_config(&config);

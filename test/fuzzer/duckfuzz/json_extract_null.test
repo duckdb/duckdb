@@ -1,0 +1,13 @@
+# name: test/fuzzer/duckfuzz/json_extract_null.test
+# description: JSON Extract NULL
+# group: [duckfuzz]
+
+require json
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT json_extract('hello world', CAST(NULL AS json)) AS c1
+----
+JSON path cannot be NULL

@@ -33,8 +33,8 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	size_t compressed_size = 0;
 	compressed_size = s.MaxCompressedLength(uncompressed_size);
 	auto compressed_buf = make_unsafe_uniq_array<data_t>(compressed_size);
-	s.Compress((const char *)string.GetData(), uncompressed_size, (char *)compressed_buf.get(), &compressed_size);
-	string_t compressed_string((const char *)compressed_buf.get(), compressed_size);
+	s.Compress(string.GetData(), uncompressed_size, char_ptr_cast(compressed_buf.get()), &compressed_size);
+	string_t compressed_string(const_char_ptr_cast(compressed_buf.get()), compressed_size);
 
 	// store sizes
 	auto data_ptr = handle.Ptr();

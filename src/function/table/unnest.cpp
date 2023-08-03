@@ -18,7 +18,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const UnnestBindData &)other_p;
+		auto &other = other_p.Cast<UnnestBindData>();
 		return input_type == other.input_type;
 	}
 };

@@ -1,4 +1,6 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -20,7 +22,7 @@ idx_t Bit::ComputeBitstringLen(idx_t len) {
 }
 
 static inline idx_t GetBitPadding(const string_t &bit_string) {
-	auto data = (const_data_ptr_t)bit_string.GetData();
+	auto data = const_data_ptr_cast(bit_string.GetData());
 	D_ASSERT(idx_t(data[0]) <= 8);
 	return data[0];
 }
@@ -32,6 +34,13 @@ static inline idx_t GetBitSize(const string_t &str) {
 		throw ConversionException(error_message);
 	}
 	return str_len;
+}
+
+uint8_t Bit::GetFirstByte(const string_t &str) {
+	D_ASSERT(str.GetSize() > 1);
+
+	auto data = const_data_ptr_cast(str.GetData());
+	return data[1] & ((1 << (8 - data[0])) - 1);
 }
 
 void Bit::Finalize(string_t &str) {
@@ -61,7 +70,7 @@ void Bit::SetEmptyBitString(string_t &target, idx_t len) {
 
 // **** casting functions ****
 void Bit::ToString(string_t bits, char *output) {
-	auto data = (const_data_ptr_t)bits.GetData();
+	auto data = const_data_ptr_cast(bits.GetData());
 	auto len = bits.GetSize();
 
 	idx_t padding = GetBitPadding(bits);
@@ -84,7 +93,7 @@ string Bit::ToString(string_t str) {
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = (const_data_ptr_t)str.GetData();
+	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
 	str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -92,7 +101,7 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 			str_len++;
 		} else {
 			string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
-			                                  string((char *)data + i, 1));
+			                                  string(const_char_ptr_cast(data) + i, 1));
 			HandleCastError::AssignError(error, error_message);
 			return false;
 		}
@@ -107,7 +116,7 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 }
 
 void Bit::ToBit(string_t str, string_t &output_str) {
-	auto data = (const_data_ptr_t)str.GetData();
+	auto data = const_data_ptr_cast(str.GetData());
 	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 
@@ -143,6 +152,48 @@ string Bit::ToBit(string_t str) {
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
 	string_t output_str(buffer.get(), bit_len);
 	Bit::ToBit(str, output_str);
+	return output_str.GetString();
+}
+
+void Bit::BlobToBit(string_t blob, string_t &output_str) {
+	auto data = const_data_ptr_cast(blob.GetData());
+	auto output = output_str.GetDataWriteable();
+	idx_t size = blob.GetSize();
+
+	*output = 0; // No padding
+	memcpy(output + 1, data, size);
+}
+
+string Bit::BlobToBit(string_t blob) {
+	auto buffer = make_unsafe_uniq_array<char>(blob.GetSize() + 1);
+	string_t output_str(buffer.get(), blob.GetSize() + 1);
+	Bit::BlobToBit(blob, output_str);
+	return output_str.GetString();
+}
+
+void Bit::BitToBlob(string_t bit, string_t &output_blob) {
+	D_ASSERT(bit.GetSize() == output_blob.GetSize() + 1);
+
+	auto data = const_data_ptr_cast(bit.GetData());
+	auto output = output_blob.GetDataWriteable();
+	idx_t size = output_blob.GetSize();
+
+	output[0] = GetFirstByte(bit);
+	if (size > 2) {
+		++output;
+		// First byte in bitstring contains amount of padded bits,
+		// second byte in bitstring is the padded byte,
+		// therefore the rest of the data starts at data + 2 (third byte)
+		memcpy(output, data + 2, size - 1);
+	}
+}
+
+string Bit::BitToBlob(string_t bit) {
+	D_ASSERT(bit.GetSize() > 1);
+
+	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
+	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	Bit::BitToBlob(bit, output_str);
 	return output_str.GetString();
 }
 

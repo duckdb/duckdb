@@ -9,6 +9,11 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 #include <sstream>
 
@@ -51,42 +56,16 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-CreateTableInfo TableCatalogEntry::GetTableInfoForSerialization() const {
-	CreateTableInfo result;
-	result.catalog = catalog.GetName();
-	result.schema = schema.name;
-	result.table = name;
-	result.columns = columns.Copy();
-	result.constraints.reserve(constraints.size());
+unique_ptr<CreateInfo> TableCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateTableInfo>();
+	result->catalog = catalog.GetName();
+	result->schema = schema.name;
+	result->table = name;
+	result->columns = columns.Copy();
+	result->constraints.reserve(constraints.size());
 	std::for_each(constraints.begin(), constraints.end(),
-	              [&result](const unique_ptr<Constraint> &c) { result.constraints.emplace_back(c->Copy()); });
-	return result;
-}
-
-void TableCatalogEntry::Serialize(Serializer &serializer) const {
-	D_ASSERT(!internal);
-	const auto info = GetTableInfoForSerialization();
-	FieldWriter writer(serializer);
-	writer.WriteString(info.catalog);
-	writer.WriteString(info.schema);
-	writer.WriteString(info.table);
-	info.columns.Serialize(writer);
-	writer.WriteSerializableList(info.constraints);
-	writer.Finalize();
-}
-
-unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_uniq<CreateTableInfo>();
-
-	FieldReader reader(source);
-	info->catalog = reader.ReadRequired<string>();
-	info->schema = reader.ReadRequired<string>();
-	info->table = reader.ReadRequired<string>();
-	info->columns = ColumnList::Deserialize(reader);
-	info->constraints = reader.ReadRequiredSerializableList<Constraint>();
-	reader.Finalize();
-
-	return info;
+	              [&result](const unique_ptr<Constraint> &c) { result->constraints.emplace_back(c->Copy()); });
+	return std::move(result);
 }
 
 string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints) {
@@ -157,11 +136,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
 		}
-		if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
-		}
 		if (column.Generated()) {
 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+		} else if (column.DefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed
@@ -194,10 +172,6 @@ const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
 
-ColumnList &TableCatalogEntry::GetColumnsMutable() {
-	return columns;
-}
-
 const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
 	return columns.GetColumn(idx);
 }
@@ -206,6 +180,7 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 	return constraints;
 }
 
+// LCOV_EXCL_START
 DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
@@ -213,4 +188,122 @@ DataTable &TableCatalogEntry::GetStorage() {
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
 	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
 }
+
+// LCOV_EXCL_STOP
+
+static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+                             physical_index_set_t &bound_columns) {
+	if (bound_columns.size() <= 1) {
+		return;
+	}
+	idx_t found_column_count = 0;
+	physical_index_set_t found_columns;
+	for (idx_t i = 0; i < update.columns.size(); i++) {
+		if (bound_columns.find(update.columns[i]) != bound_columns.end()) {
+			// this column is referenced in the CHECK constraint
+			found_column_count++;
+			found_columns.insert(update.columns[i]);
+		}
+	}
+	if (found_column_count > 0 && found_column_count != bound_columns.size()) {
+		// columns in this CHECK constraint were referenced, but not all were part of the UPDATE
+		// add them to the scan and update set
+		for (auto &check_column_id : bound_columns) {
+			if (found_columns.find(check_column_id) != found_columns.end()) {
+				// column is already projected
+				continue;
+			}
+			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
+			auto &column = table.GetColumns().GetColumn(check_column_id);
+			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
+			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
+			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
+			get.column_ids.push_back(check_column_id.index);
+			update.columns.push_back(check_column_id);
+		}
+	}
+}
+
+static bool TypeSupportsRegularUpdate(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::UNION:
+		// lists and maps and unions don't support updates directly
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &entry : child_types) {
+			if (!TypeSupportsRegularUpdate(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
+	return {};
+}
+
+void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+                                              ClientContext &context) {
+	// check the constraints and indexes of the table to see if we need to project any additional columns
+	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
+	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
+	// if we are only updating one of the two columns we add the other one to the UPDATE set
+	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
+	for (auto &constraint : GetBoundConstraints()) {
+		if (constraint->type == ConstraintType::CHECK) {
+			auto &check = constraint->Cast<BoundCheckConstraint>();
+			// check constraint! check if we need to add any extra columns to the UPDATE clause
+			BindExtraColumns(*this, get, proj, update, check.bound_columns);
+		}
+	}
+	if (update.return_chunk) {
+		physical_index_set_t all_columns;
+		for (auto &column : GetColumns().Physical()) {
+			all_columns.insert(column.Physical());
+		}
+		BindExtraColumns(*this, get, proj, update, all_columns);
+	}
+	// for index updates we always turn any update into an insert and a delete
+	// we thus need all the columns to be available, hence we check if the update touches any index columns
+	// If the returning keyword is used, we need access to the whole row in case the user requests it.
+	// Therefore switch the update to a delete and insert.
+	update.update_is_del_and_insert = false;
+	TableStorageInfo table_storage_info = GetStorageInfo(context);
+	for (auto index : table_storage_info.index_info) {
+		for (auto &column : update.columns) {
+			if (index.column_set.find(column.index) != index.column_set.end()) {
+				update.update_is_del_and_insert = true;
+				break;
+			}
+		}
+	};
+
+	// we also convert any updates on LIST columns into delete + insert
+	for (auto &col_index : update.columns) {
+		auto &column = GetColumns().GetColumn(col_index);
+		if (!TypeSupportsRegularUpdate(column.Type())) {
+			update.update_is_del_and_insert = true;
+			break;
+		}
+	}
+
+	if (update.update_is_del_and_insert) {
+		// the update updates a column required by an index or requires returning the updated rows,
+		// push projections for all columns
+		physical_index_set_t all_columns;
+		for (auto &column : GetColumns().Physical()) {
+			all_columns.insert(column.Physical());
+		}
+		BindExtraColumns(*this, get, proj, update, all_columns);
+	}
+}
+
 } // namespace duckdb

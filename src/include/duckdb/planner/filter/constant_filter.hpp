@@ -16,6 +16,9 @@ namespace duckdb {
 
 class ConstantFilter : public TableFilter {
 public:
+	static constexpr const TableFilterType TYPE = TableFilterType::CONSTANT_COMPARISON;
+
+public:
 	ConstantFilter(ExpressionType comparison_type, Value constant);
 
 	//! The comparison type (e.g. COMPARE_EQUAL, COMPARE_GREATERTHAN, COMPARE_LESSTHAN, ...)
@@ -29,6 +32,8 @@ public:
 	bool Equals(const TableFilter &other) const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

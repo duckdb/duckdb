@@ -1,9 +1,8 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <cstdint>
-
-#define DUCKDB_STRINGIFY(x) #x
 
 namespace duckdb {
 
@@ -28,7 +27,7 @@ static unique_ptr<GlobalTableFunctionState> PragmaVersionInit(ClientContext &con
 }
 
 static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PragmaVersionData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<PragmaVersionData>();
 	if (data.finished) {
 		// finished returning values
 		return;
@@ -59,6 +58,13 @@ const char *DuckDB::LibraryVersion() {
 }
 
 string DuckDB::Platform() {
+#if defined(DUCKDB_CUSTOM_PLATFORM)
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_CUSTOM_PLATFORM);
+#endif
+#if defined(DUCKDB_WASM_VERSION)
+	// DuckDB-Wasm requires CUSTOM_PLATFORM to be defined
+	static_assert(0, "DUCKDB_WASM_VERSION should rely on CUSTOM_PLATFORM being provided");
+#endif
 	string os = "linux";
 #if INTPTR_MAX == INT64_MAX
 	string arch = "amd64";
@@ -87,10 +93,46 @@ string DuckDB::Platform() {
 	postfix = "_mingw";
 #endif
 // this is used for the windows R builds which use a separate build environment
-#ifdef DUCKDB_OVERRIDE_PLATFORM_POSTFIX
-	postfix = DUCKDB_STRINGIFY(DUCKDB_OVERRIDE_PLATFORM_POSTFIX);
+#ifdef DUCKDB_PLATFORM_RTOOLS
+	postfix = "_rtools";
 #endif
 	return os + "_" + arch + postfix;
+}
+
+struct PragmaPlatformData : public GlobalTableFunctionState {
+	PragmaPlatformData() : finished(false) {
+	}
+
+	bool finished;
+};
+
+static unique_ptr<FunctionData> PragmaPlatformBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("platform");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	return nullptr;
+}
+
+static unique_ptr<GlobalTableFunctionState> PragmaPlatformInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<PragmaPlatformData>();
+}
+
+static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.global_state->Cast<PragmaPlatformData>();
+	if (data.finished) {
+		// finished returning values
+		return;
+	}
+	output.SetCardinality(1);
+	output.SetValue(0, 0, DuckDB::Platform());
+	data.finished = true;
+}
+
+void PragmaPlatform::RegisterFunction(BuiltinFunctions &set) {
+	TableFunction pragma_platform("pragma_platform", {}, PragmaPlatformFunction);
+	pragma_platform.bind = PragmaPlatformBind;
+	pragma_platform.init_global = PragmaPlatformInit;
+	set.AddFunction(pragma_platform);
 }
 
 } // namespace duckdb

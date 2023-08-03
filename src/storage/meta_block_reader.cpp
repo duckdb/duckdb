@@ -43,10 +43,6 @@ ClientContext &MetaBlockReader::GetContext() {
 	return *context;
 }
 
-optional_ptr<Catalog> MetaBlockReader::GetCatalog() {
-	return catalog;
-}
-
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	auto &buffer_manager = block_manager.buffer_manager;
 
@@ -63,11 +59,6 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	next_block = Load<block_id_t>(handle.Ptr());
 	D_ASSERT(next_block >= -1);
 	offset = sizeof(block_id_t);
-}
-
-void MetaBlockReader::SetCatalog(Catalog &catalog_p) {
-	D_ASSERT(!catalog);
-	catalog = &catalog_p;
 }
 
 void MetaBlockReader::SetContext(ClientContext &context_p) {

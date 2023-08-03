@@ -17,7 +17,7 @@ static constexpr int64_t NANOSECONDS_PER_MICRO = 1000LL;
 
 static int64_t ImpalaTimestampToMicroseconds(const Int96 &impala_timestamp) {
 	int64_t days_since_epoch = impala_timestamp.value[2] - JULIAN_TO_UNIX_EPOCH_DAYS;
-	auto nanoseconds = Load<int64_t>((data_ptr_t)impala_timestamp.value);
+	auto nanoseconds = Load<int64_t>(const_data_ptr_cast(impala_timestamp.value));
 	auto microseconds = nanoseconds / NANOSECONDS_PER_MICRO;
 	return days_since_epoch * MICROSECONDS_PER_DAY + microseconds;
 }
@@ -35,7 +35,7 @@ Int96 TimestampToImpalaTimestamp(timestamp_t &ts) {
 	// first two uint32 in Int96 are nanoseconds since midnights
 	// last uint32 is number of days since year 4713 BC ("Julian date")
 	Int96 impala_ts;
-	Store<uint64_t>(ms_since_midnight * 1000000, (data_ptr_t)impala_ts.value);
+	Store<uint64_t>(ms_since_midnight * 1000000, data_ptr_cast(impala_ts.value));
 	impala_ts.value[2] = days_since_epoch + JULIAN_TO_UNIX_EPOCH_DAYS;
 	return impala_ts;
 }

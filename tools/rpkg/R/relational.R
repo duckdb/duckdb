@@ -212,13 +212,22 @@ expr_window_ <- function (window_function, partitions=list(), order_bys=list(), 
 #' rel2 <- rel_join(left, right, cond, "right")
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
+
 rel_inner_join <- function(left, right, conds) {
-  rel_join(left, right, conds, "inner")
+  rel_join(left, right, conds, "inner", "regular")
 }
 
-rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer", "cross", "semi", "anti")) {
+rel_join <- function(left, right, conds,
+                     join = c("inner", "left", "right", "outer", "cross", "semi", "anti"),
+                     join_ref_type = c("regular", "natural", "cross", "positional", "asof")) {
   join <- match.arg(join)
-  rapi_rel_join(left, right, conds, join)
+  join_ref_type <- match.arg(join_ref_type)
+  # the ref type is naturally regular. Users won't write rel_join(left, right, conds, "cross", "cross")
+  # so we update it here.
+  if (join == "cross" && join_ref_type == "regular") {
+    join_ref_type <- "cross"
+  }
+  rapi_rel_join(left, right, conds, join, join_ref_type)
 }
 
 #' UNION ALL on two DuckDB relation objects
@@ -367,7 +376,7 @@ rel_to_sql <- rapi_rel_to_sql
 
 
 
-#' Convert a duckdb table relation
+#' Create a duckdb table relation from a table name
 #' @param table the table name
 #' @return a duckdb relation
 #' @noRd
@@ -377,5 +386,18 @@ rel_to_sql <- rapi_rel_to_sql
 #' rel <- rel_from_table(con, "mtcars")
 rel_from_table <- function(con, table_name, schema_name="MAIN") {
     rapi_rel_from_table(con@conn_ref, schema_name, table_name)
+}
+
+#' Convert a duckdb relation from a table-producing function
+#' @param name the table function name
+#' @param positional_parameters the table function positional parameters list
+#' @param named_parameters the table function named parameters list
+#' @return a duckdb relation
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_table_function(con, 'generate_series', list(10L))
+rel_from_table_function <- function(con, function_name, positional_parameters = list(), named_parameters = list()) {
+    rapi_rel_from_table_function(con@conn_ref, function_name, positional_parameters, named_parameters)
 }
 

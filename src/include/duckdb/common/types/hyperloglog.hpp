@@ -12,6 +12,10 @@
 #include "duckdb/common/types/vector.hpp"
 #include "hyperloglog.hpp"
 
+namespace duckdb_hll {
+struct robj;
+}
+
 namespace duckdb {
 
 enum class HLLStorageType { UNCOMPRESSED = 1 };
@@ -58,9 +62,9 @@ public:
 	void AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]);
 
 private:
-	explicit HyperLogLog(void *hll);
+	explicit HyperLogLog(duckdb_hll::robj *hll);
 
-	void *hll;
+	duckdb_hll::robj *hll;
 	mutex lock;
 };
 } // namespace duckdb

@@ -106,8 +106,9 @@ shared_ptr<DuckDBPyConnection>
 PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
                                        const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
                                        FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
-                                       shared_ptr<DuckDBPyConnection> conn) {
-	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, type, null_handling, exception_handling);
+                                       bool side_effects, shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, type, null_handling, exception_handling,
+	                               side_effects);
 }
 
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value, bool by_name,
@@ -214,6 +215,10 @@ void PyConnectionWrapper::Close(shared_ptr<DuckDBPyConnection> conn) {
 	conn->Close();
 }
 
+void PyConnectionWrapper::Interrupt(shared_ptr<DuckDBPyConnection> conn) {
+	conn->Interrupt();
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Cursor();
 }
@@ -227,10 +232,13 @@ Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection>
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn,
-                                                           const py::object &columns, const py::object &sample_size,
-                                                           const py::object &maximum_depth) {
+                                                           const Optional<py::object> &columns,
+                                                           const Optional<py::object> &sample_size,
+                                                           const Optional<py::object> &maximum_depth,
+                                                           const Optional<py::str> &records,
+                                                           const Optional<py::str> &format) {
 
-	return conn->ReadJSON(filename, columns, sample_size, maximum_depth);
+	return conn->ReadJSON(filename, columns, sample_size, maximum_depth, records, format);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(

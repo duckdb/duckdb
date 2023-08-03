@@ -106,51 +106,15 @@ void DependencyManager::AlterObject(CatalogTransaction transaction, CatalogEntry
 	}
 	// add the new object to the dependents_map of each object that it depends on
 	auto &old_dependencies = dependencies_map[old_obj];
-	catalog_entry_vector_t to_delete;
 	for (auto &dep : old_dependencies) {
 		auto &dependency = dep.get();
-		if (dependency.type == CatalogType::TYPE_ENTRY) {
-			auto &user_type = dependency.Cast<TypeCatalogEntry>();
-			auto &table = new_obj.Cast<TableCatalogEntry>();
-			bool deleted_dependency = true;
-			for (auto &column : table.GetColumns().Logical()) {
-				if (column.Type() == user_type.user_type) {
-					deleted_dependency = false;
-					break;
-				}
-			}
-			if (deleted_dependency) {
-				to_delete.push_back(dependency);
-				continue;
-			}
-		}
 		dependents_map[dependency].insert(new_obj);
-	}
-	for (auto &dep : to_delete) {
-		auto &dependency = dep.get();
-		old_dependencies.erase(dependency);
-		dependents_map[dependency].erase(old_obj);
 	}
 
 	// We might have to add a type dependency
-	catalog_entry_vector_t to_add;
-	if (new_obj.type == CatalogType::TABLE_ENTRY) {
-		auto &table = new_obj.Cast<TableCatalogEntry>();
-		for (auto &column : table.GetColumns().Logical()) {
-			auto user_type_catalog = EnumType::GetCatalog(column.Type());
-			if (user_type_catalog) {
-				to_add.push_back(*user_type_catalog);
-			}
-		}
-	}
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
 	dependencies_map[new_obj] = old_dependencies;
-
-	for (auto &dependency : to_add) {
-		dependencies_map[new_obj].insert(dependency);
-		dependents_map[dependency].insert(new_obj);
-	}
 
 	for (auto &dependency : owned_objects_to_add) {
 		dependents_map[new_obj].insert(Dependency(dependency, DependencyType::DEPENDENCY_OWNS));
@@ -220,8 +184,8 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// Emplace guarantees that the same object cannot be inserted twice in the unordered_set
 	// In the case AddOwnership is called twice, because of emplace, the object will not be repeated in the set.
 	// We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted
-	dependents_map[owner].emplace(Dependency(entry, DependencyType::DEPENDENCY_OWNS));
-	dependents_map[entry].emplace(Dependency(owner, DependencyType::DEPENDENCY_OWNED_BY));
+	dependents_map[owner].emplace(entry, DependencyType::DEPENDENCY_OWNS);
+	dependents_map[entry].emplace(owner, DependencyType::DEPENDENCY_OWNED_BY);
 	dependencies_map[owner].emplace(entry);
 }
 

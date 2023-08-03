@@ -63,7 +63,7 @@ end
         # DuckDB "in memory database"
         connection = DBInterface.connect(DuckDB.DB)
         statement = DuckDB.Stmt(connection, "SELECT * FROM read_parquet(?, file_row_number=1)", DuckDB.StreamResult)
-        result = DBInterface.execute(statement, [joinpath("test", "resources", path)])
+        result = DBInterface.execute(statement, [joinpath(@__DIR__, "resources", path)])
         num_columns = length(result.types)
 
         while true

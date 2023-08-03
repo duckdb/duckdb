@@ -14,6 +14,9 @@ namespace duckdb {
 
 class IsNullFilter : public TableFilter {
 public:
+	static constexpr const TableFilterType TYPE = TableFilterType::IS_NULL;
+
+public:
 	IsNullFilter();
 
 public:
@@ -21,9 +24,14 @@ public:
 	string ToString(const string &column_name) override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class IsNotNullFilter : public TableFilter {
+public:
+	static constexpr const TableFilterType TYPE = TableFilterType::IS_NOT_NULL;
+
 public:
 	IsNotNullFilter();
 
@@ -32,6 +40,8 @@ public:
 	string ToString(const string &column_name) override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

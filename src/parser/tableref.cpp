@@ -40,9 +40,8 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 	return result;
 }
 
-bool TableRef::Equals(const TableRef *other) const {
-	return other && type == other->type && alias == other->alias &&
-	       SampleOptions::Equals(sample.get(), other->sample.get());
+bool TableRef::Equals(const TableRef &other) const {
+	return type == other.type && alias == other.alias && SampleOptions::Equals(sample.get(), other.sample.get());
 }
 
 void TableRef::Serialize(Serializer &serializer) const {
@@ -52,50 +51,6 @@ void TableRef::Serialize(Serializer &serializer) const {
 	writer.WriteOptional(sample);
 	Serialize(writer);
 	writer.Finalize();
-}
-
-void TableRef::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("alias", alias);
-	serializer.WriteOptionalProperty("sample", sample);
-}
-
-unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<TableReferenceType>("type");
-	auto alias = deserializer.ReadProperty<string>("alias");
-	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample");
-
-	unique_ptr<TableRef> result;
-
-	switch (type) {
-	case TableReferenceType::BASE_TABLE:
-		result = BaseTableRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::JOIN:
-		result = JoinRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::SUBQUERY:
-		result = SubqueryRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::TABLE_FUNCTION:
-		result = TableFunctionRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::EMPTY:
-		result = EmptyTableRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::EXPRESSION_LIST:
-		result = ExpressionListRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::PIVOT:
-		result = PivotRef::FormatDeserialize(deserializer);
-		break;
-	case TableReferenceType::CTE:
-	case TableReferenceType::INVALID:
-		throw InternalException("Unsupported type for TableRef::FormatDeserialize");
-	}
-	result->alias = alias;
-	result->sample = std::move(sample);
-	return result;
 }
 
 unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
@@ -147,6 +102,16 @@ void TableRef::CopyProperties(TableRef &target) const {
 
 void TableRef::Print() {
 	Printer::Print(ToString());
+}
+
+bool TableRef::Equals(const unique_ptr<TableRef> &left, const unique_ptr<TableRef> &right) {
+	if (left.get() == right.get()) {
+		return true;
+	}
+	if (!left || !right) {
+		return false;
+	}
+	return left->Equals(*right);
 }
 
 } // namespace duckdb

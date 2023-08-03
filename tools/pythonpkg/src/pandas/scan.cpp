@@ -74,7 +74,7 @@ idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
+	py::handle df(reinterpret_cast<PyObject *>(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
 
@@ -112,14 +112,14 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 }
 
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                      LocalTableFunctionState *lstate,
                                                      GlobalTableFunctionState *gstate) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	auto &parallel_state = gstate->Cast<PandasScanGlobalState>();
 	auto &state = lstate->Cast<PandasScanLocalState>();
 
@@ -139,7 +139,7 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 
 double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
                                           const GlobalTableFunctionState *gstate) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	if (bind_data.row_count == 0) {
 		return 100;
 	}
@@ -164,7 +164,7 @@ void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<PandasScanFunctionData>();
 	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
@@ -189,7 +189,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 
 unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context,
                                                                      const FunctionData *bind_data) {
-	auto &data = (PandasScanFunctionData &)*bind_data;
+	auto &data = bind_data->Cast<PandasScanFunctionData>();
 	return make_uniq<NodeStatistics>(data.row_count, data.row_count);
 }
 

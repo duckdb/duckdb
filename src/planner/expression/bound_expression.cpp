@@ -22,7 +22,7 @@ string BoundExpression::ToString() const {
 	return expr->ToString();
 }
 
-bool BoundExpression::Equals(const BaseExpression *other) const {
+bool BoundExpression::Equals(const BaseExpression &other) const {
 	return false;
 }
 hash_t BoundExpression::Hash() const {
