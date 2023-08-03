@@ -58,7 +58,7 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<ref
 		return ExpressionRewriter::ConstantOrNull(std::move(children), Value::BOOLEAN(false));
 	}
 
-	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+	if (!is_root || op.logical_type != LogicalOperatorType::LOGICAL_FILTER) {
 		return nullptr;
 	}
 
