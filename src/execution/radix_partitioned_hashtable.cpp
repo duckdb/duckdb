@@ -71,29 +71,23 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 struct RadixHTConfig {
 public:
 	explicit RadixHTConfig(ClientContext &context)
-	    : radix_bits(INITIAL_RADIX_BITS), sink_capacity(SinkCapacity(context)),
-	      maximum_radix_bits(MaximumRadixBits(context)) {
+	    : sink_radix_bits(INITIAL_SINK_RADIX_BITS), sink_capacity(SinkCapacity(context)) {
 	}
 
 	void SetRadixBits(idx_t radix_bits_p) {
-		D_ASSERT(radix_bits_p <= maximum_radix_bits);
-		if (radix_bits_p == maximum_radix_bits - 1) {
-			// If we're one bit off, we'll just go all the way
-			radix_bits_p = maximum_radix_bits;
-		}
-
+		radix_bits_p = MinValue(radix_bits_p, MAXIMUM_SINK_RADIX_BITS);
 		// Set with a compare-and-swap so we never decrement
 		idx_t current;
 		do {
-			current = radix_bits.load();
+			current = sink_radix_bits.load();
 			if (current >= radix_bits_p) {
 				break;
 			}
-		} while (!std::atomic_compare_exchange_weak(&radix_bits, &current, radix_bits_p));
+		} while (!std::atomic_compare_exchange_weak(&sink_radix_bits, &current, radix_bits_p));
 	}
 
 	idx_t GetRadixBits() const {
-		return radix_bits;
+		return sink_radix_bits;
 	}
 
 private:
@@ -114,12 +108,6 @@ private:
 		return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
 	}
 
-	static idx_t MaximumRadixBits(ClientContext &context) {
-		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		const auto thread_radix_bits = RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads));
-		return MinValue<idx_t>(thread_radix_bits + REPARTITION_RADIX_BITS * 2, RadixPartitioning::MAX_RADIX_BITS);
-	}
-
 private:
 	//! Assume (1 << 15) = 32KB L1 cache per core, divided by two because hyperthreading
 	static constexpr const idx_t L1_CACHE_SIZE = 32768 / 2;
@@ -128,22 +116,24 @@ private:
 	//! Assume (1 << 20) + (1 << 19) = 1.5MB L3 cache per core (shared), divided by two because hyperthreading
 	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
 
-	//! Radix bits to initialize with
-	static constexpr const idx_t INITIAL_RADIX_BITS = 3;
+	//! Sink radix bits to initialize with
+	static constexpr const idx_t INITIAL_SINK_RADIX_BITS = 3;
 
-	//! Current thread-global radix bits
-	atomic<idx_t> radix_bits;
+	//! Current thread-global sink radix bits
+	atomic<idx_t> sink_radix_bits;
+	//! Current thread-global abandon radix bits
+	atomic<idx_t> abandon_radix_bits;
 
 public:
 	//! Capacity of HTs during the Sink
 	const idx_t sink_capacity;
-	//! Maximum radix bits that we'll go to
-	const idx_t maximum_radix_bits;
 
 	//! If we fill this many blocks per partition, we trigger a repartition
 	static constexpr const double BLOCK_FILL_FACTOR = 1.8;
 	//! By how many bits to repartition if a repartition is triggered
 	static constexpr const idx_t REPARTITION_RADIX_BITS = 2;
+	//! Maximum Sink radix bits
+	static constexpr const idx_t MAXIMUM_SINK_RADIX_BITS = 7;
 };
 
 struct AggregatePartition {
@@ -290,7 +280,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
 		// We're approaching the memory limit, unpin the data
 		gstate.external = true;
-		gstate.config.SetRadixBits(config.maximum_radix_bits);
+		gstate.config.SetRadixBits(config.MAXIMUM_SINK_RADIX_BITS);
 
 		if (!lstate.abandoned_data) {
 			lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
@@ -590,7 +580,7 @@ void RadixHTGlobalSourceState::AssignTaskRange(RadixHTGlobalSinkState &sink, Rad
 			lstate.task = RadixHTSourceTaskType::SCAN;
 			lstate.scan_task_range.push_back(task_idx);
 			lstate.scan_status = RadixHTScanStatus::INIT;
-		} else {
+		} else if (sink.finalize_idx < partition_count) {
 			// We can just increment the atomic here, much simpler than assigning the scan task
 			task_idx = sink.finalize_idx++;
 			if (task_idx < partition_count) {
