@@ -62,8 +62,8 @@ public:
 	idx_t length;
 	time_t last_modified;
 
-	// If using full file download, this holds the cached file
-	shared_ptr<CachedFile> cached_file;
+	// When using full file download, the full file will be written to a cached file handle
+	unique_ptr<CachedFileHandle> cached_file_handle;
 
 	// Read info
 	idx_t buffer_available;

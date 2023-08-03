@@ -234,9 +234,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
 
-	if (!hfh.cached_file) {
-		throw InternalException("Did not find a cached file for full file downloading");
-	}
+	D_ASSERT(hfh.cached_file_handle);
 
 	std::function<duckdb_httplib_openssl::Result(void)> request([&]() {
 		D_ASSERT(hfh.state);
@@ -259,27 +257,21 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 			    if (hfh.state) {
 				    hfh.state->total_bytes_received += data_length;
 			    }
-			    if (!hfh.cached_file->data) {
-				    hfh.cached_file->data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
+			    if (!hfh.cached_file_handle->GetCapacity()) {
+				    hfh.cached_file_handle->AllocateBuffer(data_length);
 				    hfh.length = data_length;
-				    hfh.cached_file->capacity = data_length;
-				    memcpy(hfh.cached_file->data.get(), data, data_length);
+				    hfh.cached_file_handle->Write(data, data_length);
 			    } else {
-				    auto new_capacity = hfh.cached_file->capacity;
+				    auto new_capacity = hfh.cached_file_handle->GetCapacity();
 				    while (new_capacity < hfh.length + data_length) {
 					    new_capacity *= 2;
 				    }
-				    // Gotta eat your beans
-				    if (new_capacity != hfh.cached_file->capacity) {
-					    auto new_hfs_data =
-					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
-					    // copy the old data
-					    memcpy(new_hfs_data.get(), hfh.cached_file->data.get(), hfh.length);
-					    hfh.cached_file->capacity = new_capacity;
-					    hfh.cached_file->data = new_hfs_data;
+				    // Grow buffer when running out of space
+				    if (new_capacity != hfh.cached_file_handle->GetCapacity()) {
+					    hfh.cached_file_handle->GrowBuffer(new_capacity, hfh.length);
 				    }
 				    // We can just copy stuff
-				    memcpy(hfh.cached_file->data.get() + hfh.length, data, data_length);
+				    hfh.cached_file_handle->Write(data, data_length, hfh.length);
 				    hfh.length += data_length;
 			    }
 			    return true;
@@ -376,11 +368,11 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 
 	D_ASSERT(hfh.state);
-	if (hfh.cached_file) {
-		if (!hfh.cached_file->data) {
+	if (hfh.cached_file_handle) {
+		if (!hfh.cached_file_handle->Initialized()) {
 			throw InternalException("Cached file not initialized properly");
 		}
-		memcpy(buffer, hfh.cached_file->data.get() + location, nr_bytes);
+		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
 		hfh.file_offset = location + nr_bytes;
 		return;
 	}
@@ -622,25 +614,18 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 		}
 	}
 	if (state && (length == 0 || http_params.force_download)) {
-
-		// Lock cache and get or create cache entry
-		{
-			lock_guard<mutex> lock(state->cached_files_mutex);
-			auto &cache_entry_ref = state->cached_files[path];
-			if (cache_entry_ref) {
-				cached_file = cache_entry_ref;
-			} else {
-				cache_entry_ref = make_shared<CachedFile>();
-				cached_file = cache_entry_ref;
-			}
-		}
-
-		// Lock the file, and see if we need to download it
-		lock_guard<mutex> lock(cached_file->lock);
-		if (!cached_file->finished) {
+		auto &cache_entry = state->GetCachedFile(path);
+		cached_file_handle = cache_entry->GetHandle();
+		if (!cached_file_handle->Initialized()) {
 			// Try to fully download the file first
-			hfs.GetRequest(*this, path, {});
-			cached_file->finished = true;
+			auto full_download_result = hfs.GetRequest(*this, path, {});
+			if (full_download_result->code != 200) {
+				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
+				                    full_download_result->http_url, to_string(full_download_result->code),
+				                    full_download_result->error);
+			}
+			// Mark the file as initialized, unlocking it and allowing parallel reads
+			cached_file_handle->SetInitialized();
 		}
 	}
 
