@@ -162,6 +162,9 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"st_removerepeatedpoints", "spatial"},
                                                          {"st_geomfromgeojson", "spatial"},
                                                          {"st_readosm", "spatial"},
+                                                         {"st_reduceprecision", "spatial"},
+                                                         {"st_geomfromhexwkb", "spatial"},
+                                                         {"st_geomfromhexewkb", "spatial"},
                                                          {"st_numpoints", "spatial"}};
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {

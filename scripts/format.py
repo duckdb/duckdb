@@ -10,6 +10,19 @@ import subprocess
 import difflib
 import re
 from python_helpers import open_utf8
+from importlib import import_module
+from importlib.metadata import version
+
+try:
+    import_module('black')
+except ImportError as e:
+    print('you need to run `pip install black`', e)
+    exit(-1)
+
+ver = subprocess.check_output(('clang-format', '--version'), text=True)
+if '10.' not in ver:
+    print('you need to run `pip install clang_format==10.0.1.1 - `', ver)
+    exit(-1)
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
