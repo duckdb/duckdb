@@ -10,14 +10,15 @@ namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto logical_plan_opt = op.children[0]->ToString();
-	auto plan = CreatePlan(*op.children[0]);
-	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
+	auto logical_plan_opt = ((LogicalOperator*)op.children[0].get())->ToString();
+	LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+	auto plan = CreatePlan(*pop);
+	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE)
+	{
 		auto result = make_uniq<PhysicalExplainAnalyze>(op.types);
 		result->children.push_back(std::move(plan));
 		return std::move(result);
 	}
-
 	op.physical_plan = plan->ToString();
 	// the output of the explain
 	vector<string> keys, values;

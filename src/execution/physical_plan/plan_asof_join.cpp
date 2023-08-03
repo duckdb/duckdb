@@ -15,10 +15,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
+	LogicalOperator* left_pop = (LogicalOperator*)op.children[0].get();
+	auto left = CreatePlan(*left_pop);
+	LogicalOperator* right_pop = (LogicalOperator*)op.children[0].get();
+	auto right = CreatePlan(*right_pop);
 	D_ASSERT(left && right);
-
 	//	Validate
 	vector<idx_t> equi_indexes;
 	auto asof_idx = op.conditions.size();

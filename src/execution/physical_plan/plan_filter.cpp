@@ -10,9 +10,11 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op)
+{
 	D_ASSERT(op.children.size() == 1);
-	unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+	unique_ptr<PhysicalOperator> plan = CreatePlan(*pop);
 	if (!op.expressions.empty()) {
 		D_ASSERT(plan->types.size() > 0);
 		// create a filter if there is anything to filter

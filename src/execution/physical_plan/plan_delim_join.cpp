@@ -10,25 +10,31 @@
 
 namespace duckdb {
 
-static void GatherDelimScans(const PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans) {
-	if (op.type == PhysicalOperatorType::DELIM_SCAN) {
+static void GatherDelimScans(const PhysicalOperator &op, vector<const_reference<PhysicalOperator>> &delim_scans)
+{
+	if (op.physical_type == PhysicalOperatorType::DELIM_SCAN)
+	{
 		delim_scans.push_back(op);
 	}
-	for (auto &child : op.children) {
-		GatherDelimScans(*child, delim_scans);
+	for (auto &child : op.GetChildren())
+	{
+		GatherDelimScans(child, delim_scans);
 	}
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin &op)
+{
 	// first create the underlying join
 	auto plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 	// this should create a join, not a cross product
-	D_ASSERT(plan && plan->type != PhysicalOperatorType::CROSS_PRODUCT);
+	D_ASSERT(plan && plan->physical_type != PhysicalOperatorType::CROSS_PRODUCT);
 	// duplicate eliminated join
 	// first gather the scans on the duplicate eliminated data set from the RHS
 	vector<const_reference<PhysicalOperator>> delim_scans;
-	GatherDelimScans(*plan->children[1], delim_scans);
-	if (delim_scans.empty()) {
+	PhysicalOperator* pop = (PhysicalOperator*)(plan->children[1].get());
+	GatherDelimScans(*pop, delim_scans);
+	if (delim_scans.empty())
+	{
 		// no duplicate eliminated scans in the RHS!
 		// in this case we don't need to create a delim join
 		// just push the normal join
@@ -36,7 +42,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	}
 	vector<LogicalType> delim_types;
 	vector<unique_ptr<Expression>> distinct_groups, distinct_expressions;
-	for (auto &delim_expr : op.duplicate_eliminated_columns) {
+	for (auto &delim_expr : op.duplicate_eliminated_columns)
+	{
 		D_ASSERT(delim_expr->type == ExpressionType::BOUND_REF);
 		auto &bound_ref = delim_expr->Cast<BoundReferenceExpression>();
 		delim_types.push_back(bound_ref.return_type);
@@ -45,8 +52,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelimJoin 
 	// now create the duplicate eliminated join
 	auto delim_join = make_uniq<PhysicalDelimJoin>(op.types, std::move(plan), delim_scans, op.estimated_cardinality);
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	delim_join->distinct = make_uniq<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
-	                                                        std::move(distinct_groups), op.estimated_cardinality);
+	delim_join->distinct = make_uniq<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions), std::move(distinct_groups), op.estimated_cardinality);
 	return std::move(delim_join);
 }
 

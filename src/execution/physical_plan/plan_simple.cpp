@@ -12,40 +12,37 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 
-namespace duckdb {
-
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op) {
-	switch (op.type) {
+namespace duckdb
+{
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op)
+{
+	switch (op.logical_type)
+	{
 	case LogicalOperatorType::LOGICAL_ALTER:
-		return make_uniq<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(std::move(op.info)),
-		                                op.estimated_cardinality);
+		return make_uniq<PhysicalAlter>(unique_ptr_cast<ParseInfo, AlterInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_DROP:
-		return make_uniq<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)),
-		                               op.estimated_cardinality);
+		return make_uniq<PhysicalDrop>(unique_ptr_cast<ParseInfo, DropInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		return make_uniq<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)),
-		                                      op.estimated_cardinality);
-	case LogicalOperatorType::LOGICAL_VACUUM: {
-		auto result = make_uniq<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)),
-		                                        op.estimated_cardinality);
-		if (!op.children.empty()) {
-			auto child = CreatePlan(*op.children[0]);
+		return make_uniq<PhysicalTransaction>(unique_ptr_cast<ParseInfo, TransactionInfo>(std::move(op.info)), op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_VACUUM:
+	{
+		auto result = make_uniq<PhysicalVacuum>(unique_ptr_cast<ParseInfo, VacuumInfo>(std::move(op.info)), op.estimated_cardinality);
+		if (!op.children.empty())
+		{
+			LogicalOperator* pop = ((LogicalOperator*)op.children[0].get());
+			auto child = CreatePlan(*pop);
 			result->children.push_back(std::move(child));
 		}
 		return std::move(result);
 	}
 	case LogicalOperatorType::LOGICAL_LOAD:
-		return make_uniq<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)),
-		                               op.estimated_cardinality);
+		return make_uniq<PhysicalLoad>(unique_ptr_cast<ParseInfo, LoadInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_ATTACH:
-		return make_uniq<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(std::move(op.info)),
-		                                 op.estimated_cardinality);
+		return make_uniq<PhysicalAttach>(unique_ptr_cast<ParseInfo, AttachInfo>(std::move(op.info)), op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_DETACH:
-		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
-		                                 op.estimated_cardinality);
+		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)), op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}
 }
-
 } // namespace duckdb

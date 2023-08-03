@@ -5,11 +5,12 @@
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
-	auto plan = CreatePlan(*op.children[0]);
+	LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+	auto plan = CreatePlan(*pop);
 	auto &fs = FileSystem::GetFileSystem(context);
 	op.file_path = fs.ExpandPath(op.file_path, FileSystem::GetFileOpener(context));
-
-	if (op.use_tmp_file) {
+	if (op.use_tmp_file)
+	{
 		op.file_path += ".tmp";
 	}
 	// COPY from select statement to file
@@ -23,10 +24,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	copy->partition_columns = op.partition_columns;
 	copy->names = op.names;
 	copy->expected_types = op.expected_types;
-	if (op.function.parallel) {
+	if (op.function.parallel)
+	{
 		copy->parallel = op.function.parallel(context, *copy->bind_data);
 	}
-
 	copy->children.push_back(std::move(plan));
 	return std::move(copy);
 }

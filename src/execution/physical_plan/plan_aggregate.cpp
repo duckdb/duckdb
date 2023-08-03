@@ -119,11 +119,9 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	unique_ptr<PhysicalOperator> groupby;
 	D_ASSERT(op.children.size() == 1);
-
-	auto plan = CreatePlan(*op.children[0]);
-
+	LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+	auto plan = CreatePlan(*pop);
 	plan = ExtractAggregateExpressions(std::move(plan), op.expressions, op.groups);
-
 	if (op.groups.empty()) {
 		// no groups, check if we can use a simple aggregation
 		// special case: aggregate entire columns together
@@ -198,11 +196,11 @@ PhysicalPlanGenerator::ExtractAggregateExpressions(unique_ptr<PhysicalOperator> 
 			bound_aggr.filter = std::move(ref);
 		}
 	}
-	if (expressions.empty()) {
+	if (expressions.empty())
+	{
 		return child;
 	}
-	auto projection =
-	    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), child->estimated_cardinality);
+	auto projection = make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), child->estimated_cardinality);
 	projection->children.push_back(std::move(child));
 	return std::move(projection);
 }

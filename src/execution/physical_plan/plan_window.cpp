@@ -34,16 +34,9 @@ static bool IsStreamingWindow(unique_ptr<Expression> &expr) {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
-
-	auto plan = CreatePlan(*op.children[0]);
-#ifdef DEBUG
-	for (auto &expr : op.expressions) {
-		D_ASSERT(expr->IsWindow());
-	}
-#endif
-
+	LogicalOperator* pop = ((LogicalOperator*)op.children[0].get());
+	auto plan = CreatePlan(*pop);
 	op.estimated_cardinality = op.EstimateCardinality(context);
-
 	// Slice types
 	auto types = op.types;
 	const auto output_idx = types.size() - op.expressions.size();

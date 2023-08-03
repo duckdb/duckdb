@@ -4,17 +4,16 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAnyJoin &op)
+{
 	// first visit the child nodes
 	D_ASSERT(op.children.size() == 2);
 	D_ASSERT(op.condition);
-
-	auto left = CreatePlan(*op.children[0]);
-	auto right = CreatePlan(*op.children[1]);
-
+	LogicalOperator* left_pop = (LogicalOperator*)op.children[0].get();
+	auto left = CreatePlan(*left_pop);
+	LogicalOperator* right_pop = (LogicalOperator*)op.children[0].get();
+	auto right = CreatePlan(*right_pop);
 	// create the blockwise NL join
-	return make_uniq<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(op.condition),
-	                                          op.join_type, op.estimated_cardinality);
+	return make_uniq<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(op.condition), op.join_type, op.estimated_cardinality);
 }
-
 } // namespace duckdb

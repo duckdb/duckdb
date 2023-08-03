@@ -33,17 +33,21 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanCreateTableAs(ClientContext &conte
 	return create;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op)
+{
 	const auto &create_info = (CreateTableInfo &)*op.info->base;
 	auto &catalog = *op.info->schema.catalog;
 	auto existing_entry = catalog.GetEntry<TableCatalogEntry>(context, create_info.schema, create_info.table, true);
 	bool replace = op.info->Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT;
-	if ((!existing_entry || replace) && !op.children.empty()) {
-		auto plan = CreatePlan(*op.children[0]);
+	if ((!existing_entry || replace) && !op.children.empty())
+	{
+		LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+		auto plan = CreatePlan(*pop);
 		return op.schema.catalog->PlanCreateTableAs(context, op, std::move(plan));
-	} else {
+	}
+	else
+	{
 		return make_uniq<PhysicalCreateTable>(op, op.schema, std::move(op.info), op.estimated_cardinality);
 	}
 }
-
 } // namespace duckdb

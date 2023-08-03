@@ -9,13 +9,14 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op)
+{
 	D_ASSERT(op.children.size() == 1);
-	auto child = CreatePlan(*op.children[0]);
+	LogicalOperator* pop = (LogicalOperator*)op.children[0].get();
+	auto child = CreatePlan(*pop);
 	auto &distinct_targets = op.distinct_targets;
 	D_ASSERT(child);
 	D_ASSERT(!distinct_targets.empty());
-
 	auto &types = child->GetTypes();
 	vector<unique_ptr<Expression>> groups, aggregates, projections;
 	idx_t group_count = distinct_targets.size();

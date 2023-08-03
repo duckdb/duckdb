@@ -5,17 +5,13 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op)
+{
 	D_ASSERT(op.children.size() == 1);
-	auto plan = CreatePlan(*op.children[0]);
-
-#ifdef DEBUG
-	for (auto &expr : op.expressions) {
-		D_ASSERT(!expr->IsWindow());
-		D_ASSERT(!expr->IsAggregate());
-	}
-#endif
-	if (plan->types.size() == op.types.size()) {
+	LogicalOperator* pop = ((LogicalOperator*)op.children[0].get());
+	auto plan = CreatePlan(*pop);
+	if (plan->types.size() == op.types.size())
+	{
 		// check if this projection can be omitted entirely
 		// this happens if a projection simply emits the columns in the same order
 		// e.g. PROJECTION(#0, #1, #2, #3, ...)
