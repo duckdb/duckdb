@@ -12,7 +12,7 @@
 //
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/eval/CConstExprEvaluatorDefault.h"
-#include "duckdb/optimizer/cascade/operators/CExpression.h"
+ 
 
 using namespace gpopt;
 
@@ -36,9 +36,8 @@ CConstExprEvaluatorDefault::~CConstExprEvaluatorDefault()
 //		Returns the given expression after having increased its ref count
 //
 //---------------------------------------------------------------------------
-CExpression* CConstExprEvaluatorDefault::PexprEval(CExpression *pexpr)
+Expression* CConstExprEvaluatorDefault::PexprEval(Expression* pexpr)
 {
-	pexpr->AddRef();
 	return pexpr;
 }
 
