@@ -27,15 +27,14 @@ class CTaskId;
 
 class ITaskScheduler
 {
-private:
-	// private copy ctor
-	ITaskScheduler(const ITaskScheduler &);
-
 public:
 	// dummy ctor
 	ITaskScheduler()
 	{
 	}
+	
+	// private copy ctor
+	ITaskScheduler(const ITaskScheduler &) = delete;
 
 	// dummy dtor
 	virtual ~ITaskScheduler()
@@ -43,21 +42,19 @@ public:
 	}
 
 	// add task to waiting queue
-	virtual void Enqueue(CTask *) = 0;
+	virtual void Enqueue(CTask* task) = 0;
 
 	// get next task to execute
-	virtual CTask *Dequeue() = 0;
+	virtual CTask* Dequeue() = 0;
 
 	// check if task is waiting to be scheduled and remove it
-	virtual GPOS_RESULT Cancel(CTask *task) = 0;
+	virtual GPOS_RESULT Cancel(CTask* task) = 0;
 
 	// get number of waiting tasks
 	virtual ULONG GetQueueSize() = 0;
 
 	// check if task queue is empty
-	virtual BOOL IsEmpty() const = 0;
-
+	virtual bool IsEmpty() const = 0;
 };	// class ITaskScheduler
 }  // namespace gpos
-
 #endif

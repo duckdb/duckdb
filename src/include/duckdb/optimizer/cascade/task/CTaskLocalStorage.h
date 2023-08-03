@@ -12,13 +12,15 @@
 #define GPOS_CTaskLocalStorage_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CSyncHashtable.h"
+#include "duckdb/optimizer/cascade/task/CTaskLocalStorageObject.h"
+#include <unordered_map>
+#include "duckdb/common/unique_ptr.hpp"
+
+using namespace duckdb;
+using namespace std;
 
 namespace gpos
 {
-// fwd declaration
-class CTaskLocalStorageObject;
-
 //---------------------------------------------------------------------------
 //	@class:
 //		CTaskLocalStorage
@@ -31,60 +33,48 @@ class CTaskLocalStorageObject;
 class CTaskLocalStorage
 {
 public:
-	enum Etlsidx
-	{
-		EtlsidxTest,	 // unittest slot
-		EtlsidxOptCtxt,	 // optimizer context
-		EtlsidxInvalid,	 // used only for hashtable iteration
+	// hash table
+	unordered_map<Etlsidx, duckdb::unique_ptr<CTaskLocalStorageObject>, EtlsidxHash> m_hash_table;
 
-		EtlsidxSentinel
-	};
+public:
+	// invalid Etlsidx
+	static const Etlsidx m_invalid_idx;
 
+public:
 	// ctor
 	CTaskLocalStorage()
 	{
 	}
 
+	// no copy ctor
+	CTaskLocalStorage(const CTaskLocalStorage &) = delete;
+
 	// dtor
 	~CTaskLocalStorage();
 
 	// reset
-	void Reset(CMemoryPool *mp);
+	void Reset();
 
 	// accessors
-	void Store(CTaskLocalStorageObject *);
-	CTaskLocalStorageObject *Get(const Etlsidx);
+	void Store(duckdb::unique_ptr<CTaskLocalStorageObject> obj);
+	
+	CTaskLocalStorageObject* Get(const Etlsidx idx);
 
 	// delete object
-	void Remove(CTaskLocalStorageObject *);
+	void Remove(CTaskLocalStorageObject* obj);
 
 	// equality function -- used for hashtable
-	static BOOL
-	Equals(const CTaskLocalStorage::Etlsidx &idx,
-		   const CTaskLocalStorage::Etlsidx &idx_other)
+	static bool Equals(const Etlsidx &idx, const Etlsidx &idx_other)
 	{
 		return idx == idx_other;
 	}
 
 	// hash function
-	static ULONG
-	HashIdx(const CTaskLocalStorage::Etlsidx &idx)
+	static ULONG HashIdx(const Etlsidx &idx)
 	{
 		// keys are unique
 		return static_cast<ULONG>(idx);
 	}
-
-	// invalid Etlsidx
-	static const Etlsidx m_invalid_idx;
-
-private:
-	// hash table
-	CSyncHashtable<CTaskLocalStorageObject, Etlsidx> m_hash_table;
-
-	// private copy ctor
-	CTaskLocalStorage(const CTaskLocalStorage &);
-
 };	// class CTaskLocalStorage
 }  // namespace gpos
-
 #endif

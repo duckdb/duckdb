@@ -9,7 +9,7 @@
 #define GPOS_CTaskLocalStorageObject_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/task/CTaskLocalStorage.h"
+#include "duckdb/optimizer/cascade/common/CLink.h"
 
 namespace gpos
 {
@@ -24,18 +24,15 @@ namespace gpos
 //---------------------------------------------------------------------------
 class CTaskLocalStorageObject
 {
-private:
-	// private copy ctor
-	CTaskLocalStorageObject(const CTaskLocalStorageObject &);
-
 public:
 	// ctor
-	CTaskLocalStorageObject(CTaskLocalStorage::Etlsidx etlsidx)
+	CTaskLocalStorageObject(Etlsidx etlsidx)
 		: m_etlsidx(etlsidx)
 	{
-		GPOS_ASSERT(CTaskLocalStorage::EtlsidxSentinel > etlsidx &&
-					"TLS index out of range");
 	}
+
+	// no copy ctor
+	CTaskLocalStorageObject(const CTaskLocalStorageObject &) = delete;
 
 	// dtor
 	virtual ~CTaskLocalStorageObject()
@@ -43,8 +40,7 @@ public:
 	}
 
 	// accessor
-	const CTaskLocalStorage::Etlsidx &
-	idx() const
+	const Etlsidx & idx() const
 	{
 		return m_etlsidx;
 	}
@@ -53,14 +49,7 @@ public:
 	SLink m_link;
 
 	// key
-	const CTaskLocalStorage::Etlsidx m_etlsidx;
-
-#ifdef GPOS_DEBUG
-	// debug print
-	virtual IOstream &OsPrint(IOstream &os) const = 0;
-#endif	// GPOS_DEBUG
-
+	const Etlsidx m_etlsidx;
 };	// class CTaskLocalStorageObject
 }  // namespace gpos
-
 #endif

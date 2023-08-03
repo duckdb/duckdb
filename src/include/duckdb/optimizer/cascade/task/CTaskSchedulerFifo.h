@@ -12,6 +12,9 @@
 #include "duckdb/optimizer/cascade/common/CList.h"
 #include "duckdb/optimizer/cascade/task/CTask.h"
 #include "duckdb/optimizer/cascade/task/ITaskScheduler.h"
+#include <list>
+
+using namespace std;
 
 namespace gpos
 {
@@ -30,52 +33,46 @@ namespace gpos
 //		task scheduler.
 //
 //---------------------------------------------------------------------------
-
 class CTaskSchedulerFifo : public ITaskScheduler
 {
 private:
 	// task queue
-	CList<CTask> m_task_queue;
-
-	// private copy ctor
-	CTaskSchedulerFifo(const CTaskSchedulerFifo &);
+	list<CTask*> m_task_queue;
 
 public:
 	// ctor
 	CTaskSchedulerFifo()
 	{
-		m_task_queue.Init(GPOS_OFFSET(CTask, m_task_scheduler_link));
 	}
-
+	
+	// private copy ctor
+	CTaskSchedulerFifo(const CTaskSchedulerFifo &) = delete;
+	
 	// dtor
 	~CTaskSchedulerFifo()
 	{
 	}
 
 	// add task to waiting queue
-	void Enqueue(CTask *task);
+	void Enqueue(CTask* task) override;
 
 	// get next task to execute
-	CTask *Dequeue();
+	CTask* Dequeue() override;
 
 	// check if task is waiting to be scheduled and remove it
-	GPOS_RESULT Cancel(CTask *task);
+	GPOS_RESULT Cancel(CTask* task) override;
 
 	// get number of waiting tasks
-	ULONG
-	GetQueueSize()
+	ULONG GetQueueSize() override
 	{
-		return m_task_queue.Size();
+		return m_task_queue.size();
 	}
 
 	// check if task queue is empty
-	BOOL
-	IsEmpty() const
+	bool IsEmpty() const override
 	{
-		return m_task_queue.IsEmpty();
+		return m_task_queue.empty();
 	}
-
 };	// class CTaskSchedulerFifo
 }  // namespace gpos
-
 #endif

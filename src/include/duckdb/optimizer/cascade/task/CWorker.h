@@ -10,10 +10,9 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CList.h"
+#include "duckdb/optimizer/cascade/common/CStackObject.h"
 #include "duckdb/optimizer/cascade/common/CStackDescriptor.h"
 #include "duckdb/optimizer/cascade/common/CTimerUser.h"
-#include "duckdb/optimizer/cascade/task/CTask.h"
-#include "duckdb/optimizer/cascade/task/IWorker.h"
 
 namespace gpos
 {
@@ -28,14 +27,11 @@ class CTask;
 //		of control flow such as abort signal etc.
 //
 //---------------------------------------------------------------------------
-
-class CWorker : public IWorker
+class CWorker : public CStackObject
 {
-	friend class CAutoTaskProxy;
-
-private:
+public:
 	// current task
-	CTask *m_task;
+	CTask* m_task;
 
 	// available stack
 	ULONG m_stack_size;
@@ -43,40 +39,28 @@ private:
 	// start address of current thread's stack
 	const ULONG_PTR m_stack_start;
 
-	// execute single task
-	void Execute(CTask *task);
-
-	// check for abort request
-	void CheckForAbort(const CHAR *file, ULONG line_num);
-
-#ifdef GPOS_FPSIMULATOR
-	// simulate abort request, log abort injection
-	void SimulateAbort(const CHAR *file, ULONG line_num);
-#endif	// GPOS_FPSIMULATOR
-
-	// no copy ctor
-	CWorker(const CWorker &);
-
 public:
 	// ctor
 	CWorker(ULONG stack_size, ULONG_PTR stack_start);
-
+	
+	// no copy ctor
+	CWorker(const CWorker &) = delete;
+	
 	// dtor
 	virtual ~CWorker();
 
+public:
+	// execute single task
+	void Execute(CTask* task);
+
 	// stack start accessor
-	inline ULONG_PTR
-	GetStackStart() const
+	inline ULONG_PTR GetStackStart() const
 	{
 		return m_stack_start;
 	}
 
-	// stack check
-	BOOL CheckStackSize(ULONG request = 0) const;
-
 	// accessor
-	inline CTask *
-	GetTask()
+	inline CTask* GetTask() const
 	{
 		return m_task;
 	}
@@ -85,16 +69,10 @@ public:
 	SLink m_link;
 
 	// lookup worker in worker pool manager
-	static CWorker *
-	Self()
-	{
-		return dynamic_cast<CWorker *>(IWorker::Self());
-	}
+	static CWorker* Self();
 
 	// host system callback function to report abort requests
 	static bool (*abort_requested_by_system)(void);
-
 };	// class CWorker
 }  // namespace gpos
-
 #endif

@@ -31,44 +31,46 @@ private:
 	static ULONG_PTR m_counter;
 
 public:
+	struct CTaskIdHash
+	{
+		size_t operator()(const CTaskId &tid) const
+		{
+			return gpos::HashValue<ULONG_PTR>(&tid.m_task_id);
+		}
+	};
+
+public:
 	// ctor
 	CTaskId() : m_task_id(m_counter++)
 	{
 	}
 
 	// simple comparison
-	BOOL
-	Equals(const CTaskId &tid) const
+	bool Equals(const CTaskId &tid) const
 	{
 		return m_task_id == tid.m_task_id;
 	}
 
 	// comparison operator
-	inline BOOL
-	operator==(const CTaskId &tid) const
+	inline bool operator==(const CTaskId &tid) const
 	{
 		return this->Equals(tid);
 	}
 
 	// comparison function; used in hashtables
-	static BOOL
-	Equals(const CTaskId &tid, const CTaskId &other)
+	static bool Equals(const CTaskId &tid, const CTaskId &other)
 	{
 		return tid == other;
 	}
 
 	// primitive hash function
-	static ULONG
-	HashValue(const CTaskId &tid)
+	static ULONG HashValue(const CTaskId &tid)
 	{
 		return gpos::HashValue<ULONG_PTR>(&tid.m_task_id);
 	}
 
 	// invalid id
 	static const CTaskId m_invalid_tid;
-
 };	// class CTaskId
-
 }  // namespace gpos
-
 #endif

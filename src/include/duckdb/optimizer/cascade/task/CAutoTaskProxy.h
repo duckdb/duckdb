@@ -11,8 +11,10 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CList.h"
 #include "duckdb/optimizer/cascade/task/CTask.h"
-#include "duckdb/optimizer/cascade/task/CTaskContext.h"
 #include "duckdb/optimizer/cascade/task/CWorkerPoolManager.h"
+#include <list>
+
+using namespace std;
 
 namespace gpos
 {
@@ -29,73 +31,57 @@ namespace gpos
 class CAutoTaskProxy : CStackObject
 {
 private:
-	// memory pool
-	CMemoryPool *m_mp;
-
 	// worker pool
-	CWorkerPoolManager *m_pwpm;
+	CWorkerPoolManager* m_pwpm;
 
 	// task list
-	CList<CTask> m_list;
+	list<duckdb::unique_ptr<CTask>> m_list;
 
 	// propagate error of sub-task or not
-	BOOL m_propagate_error;
+	bool m_propagate_error;
 
 	// find finished task
-	GPOS_RESULT
-	FindFinished(CTask **task);
-
-	// no copy ctor
-	CAutoTaskProxy(const CAutoTaskProxy &);
-
-	// propagate the error from sub-task to current task
-	void PropagateError(CTask *sub_task);
-
-	// check error from sub-task
-	void CheckError(CTask *sub_task);
+	GPOS_RESULT FindFinished(CTask** task);
 
 public:
 	// ctor
-	CAutoTaskProxy(CMemoryPool *mp, CWorkerPoolManager *m_pwpm,
-				   BOOL propagate_error = true);
-
+	CAutoTaskProxy(CWorkerPoolManager* m_pwpm, bool propagate_error = true);
+	
+	// no copy ctor
+	CAutoTaskProxy(const CAutoTaskProxy &) = delete;
+	
 	// dtor
 	~CAutoTaskProxy();
 
 	// task count
-	ULONG
-	TaskCount()
+	ULONG TaskCount()
 	{
-		return m_list.Size();
+		return m_list.size();
 	}
 
 	// disable/enable error propagation
-	void
-	SetPropagateError(BOOL propagate_error)
+	void SetPropagateError(bool propagate_error)
 	{
 		m_propagate_error = propagate_error;
 	}
 
 	// create new task
-	CTask *Create(void *(*pfunc)(void *), void *argv, BOOL *cancel = NULL);
+	CTask* Create(void *(*pfunc)(void *), void *argv, bool *cancel = NULL);
 
 	// schedule task for execution
-	void Schedule(CTask *task);
+	void Schedule(CTask* task);
 
 	// execute task in thread owning ATP (synchronous execution)
-	void Execute(CTask *task);
+	void Execute(CTask* task);
 
 	// cancel task
-	void Cancel(CTask *task);
+	void Cancel(CTask* task);
 
 	// unregister and release task
-	void Destroy(CTask *task);
+	void Destroy(duckdb::unique_ptr<CTask> task);
 
 	// unregister and release all tasks
 	void DestroyAll();
-
 };	// class CAutoTaskProxy
-
 }  // namespace gpos
-
 #endif
