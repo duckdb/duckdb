@@ -20,6 +20,7 @@ class DatabaseInstance;
 
 struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
+	block_id_t block_id;
 	vector<uint8_t> free_blocks;
 };
 
@@ -46,8 +47,8 @@ public:
 	MetadataHandle AllocateHandle();
 	MetadataHandle Pin(MetadataPointer pointer);
 
-	idx_t GetDiskPointer(MetadataPointer pointer);
-	MetadataPointer FromDiskPointer(idx_t pointer);
+	MetaBlockPointer GetDiskPointer(MetadataPointer pointer, uint32_t offset = 0);
+	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 
 	//! Flush all blocks to disk
 	void Flush();

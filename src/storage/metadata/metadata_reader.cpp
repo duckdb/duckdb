@@ -43,7 +43,7 @@ void MetadataReader::ReadNextBlock() {
 	if (next_block == idx_t(-1)) {
 		has_next_block = false;
 	} else {
-		next_pointer = manager.FromDiskPointer(next_block);
+		next_pointer = manager.FromDiskPointer(MetaBlockPointer(next_block, 0));
 	}
 	offset = sizeof(block_id_t);
 	capacity = MetadataManager::METADATA_BLOCK_SIZE;

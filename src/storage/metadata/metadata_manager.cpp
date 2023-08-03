@@ -14,7 +14,7 @@ MetadataManager::~MetadataManager() {
 MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
 	// if not allocate a new block
-	if (!free_blocks.empty()) {
+	if (free_blocks.empty()) {
 		AllocateNewBlock();
 	}
 	D_ASSERT(!free_blocks.empty());
@@ -49,22 +49,24 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 void MetadataManager::AllocateNewBlock() {
 	free_blocks.push_back(blocks.size());
 	MetadataBlock new_block;
-	new_block.block = block_manager.RegisterBlock(GetNextBlockId());
+	buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, false, &new_block.block);
+	new_block.block_id = GetNextBlockId();
 	for(idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
 	blocks.push_back(std::move(new_block));
 }
 
-idx_t MetadataManager::GetDiskPointer(MetadataPointer pointer) {
-	idx_t result = blocks[pointer.block_index].block->BlockId();
-	result |= idx_t(pointer.index) << 56ULL;
-	return result;
+MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
+	idx_t block_pointer = blocks[pointer.block_index].block->BlockId();
+	block_pointer |= idx_t(pointer.index) << 56ULL;
+	return MetaBlockPointer(block_pointer, offset);
+
 }
 
-MetadataPointer MetadataManager::FromDiskPointer(idx_t pointer) {
-	auto block_id = block_id_t(pointer & (idx_t(0xFF) << 56ULL));
-	auto index = pointer >> 56ULL;
+MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
+	auto block_id = block_id_t(pointer.block_pointer & (idx_t(0xFF) << 56ULL));
+	auto index = pointer.block_pointer >> 56ULL;
 	for(idx_t i = 0; i < blocks.size(); i++) {
 		auto &block = blocks[i];
 		if (block.block->BlockId() == block_id) {
@@ -74,15 +76,19 @@ MetadataPointer MetadataManager::FromDiskPointer(idx_t pointer) {
 			return result;
 		}
 	}
-	throw InternalException("Failed to load pointer %llu, no metadata block with block id %llu\n", pointer, block_id);
+	throw InternalException("Failed to load pointer %llu, no metadata block with block id %llu\n", pointer.block_pointer, block_id);
 }
 
 void MetadataManager::Flush() {
-	throw InternalException("FIXME: Flush to disk");
+	// write the blocks of the metadata manager to disk
+	for(auto &block : blocks) {
+		auto handle = buffer_manager.Pin(block.block);
+		block_manager.Write(handle.GetFileBuffer(), block.block_id);
+	}
 }
 
 void MetadataManager::MarkWrittenBlocks() {
-	throw InternalException("FIXME: MarkWrittenBlocks");
+//	throw InternalException("FIXME: MarkWrittenBlocks");
 }
 
 block_id_t MetadataManager::GetNextBlockId() {

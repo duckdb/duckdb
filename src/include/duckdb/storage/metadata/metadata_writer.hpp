@@ -27,6 +27,8 @@ protected:
 private:
 	data_ptr_t Ptr();
 
+	void NextBlock();
+
 private:
 	MetadataManager &manager;
 	MetadataHandle block;

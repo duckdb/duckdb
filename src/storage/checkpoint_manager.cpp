@@ -50,7 +50,7 @@ MetadataWriter &SingleFileCheckpointWriter::GetMetadataWriter() {
 }
 
 MetadataManager &SingleFileCheckpointWriter::GetMetadataManager() {
-	throw InternalException("SingleFileCheckpointWriter::GetMetadataManager");
+	return GetBlockManager().GetMetadataManager();
 }
 
 unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(TableCatalogEntry &table) {
@@ -87,8 +87,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		WriteSchema(schema.get());
 	}
 	partial_block_manager.FlushPartialBlocks();
-	// flush the meta data to disk
-	metadata_manager.Flush();
 
 	// write a checkpoint flag to the WAL
 	// this protects against the rare event that the database crashes AFTER writing the file, but BEFORE truncating the

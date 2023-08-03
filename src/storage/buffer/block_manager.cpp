@@ -2,8 +2,13 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
+
+BlockManager::BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager),
+    metadata_manager(make_uniq<MetadataManager>(*this, buffer_manager)) {
+}
 
 shared_ptr<BlockHandle> BlockManager::RegisterBlock(block_id_t block_id, bool is_meta_block) {
 	lock_guard<mutex> lock(blocks_lock);
@@ -80,7 +85,7 @@ void BlockManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 }
 
 MetadataManager &BlockManager::GetMetadataManager() {
-	throw InternalException("FIXME: GetMetadataManager");
+	return *metadata_manager;
 }
 
 void BlockManager::Truncate() {

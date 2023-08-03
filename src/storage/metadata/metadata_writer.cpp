@@ -9,11 +9,32 @@ MetadataWriter::MetadataWriter(MetadataManager &manager) :
 }
 
 MetaBlockPointer MetadataWriter::GetBlockPointer() {
-	throw InternalException("MetaBlockPointer - GetBlockPointer");
+	if (capacity == 0) {
+		// no block read yet - fetch the next block
+		NextBlock();
+		D_ASSERT(capacity > 0);
+	}
+	return manager.GetDiskPointer(block.pointer, offset);
 }
 
 MetadataHandle MetadataWriter::NextHandle() {
 	return manager.AllocateHandle();
+}
+
+void MetadataWriter::NextBlock() {
+	// now we need to get a new block id
+	auto new_handle = NextHandle();
+
+	// write the block id of the new block to the start of the current block
+	if (capacity > 0) {
+		Store<idx_t>(manager.GetDiskPointer(new_handle.pointer).block_pointer, Ptr());
+	}
+	// now update the block id of the block
+	block = std::move(new_handle);
+	current_pointer = block.pointer;
+	offset = sizeof(idx_t);
+	capacity = MetadataManager::METADATA_BLOCK_SIZE;
+	Store<idx_t>(-1, Ptr());
 }
 
 void MetadataWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
@@ -28,19 +49,8 @@ void MetadataWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 			offset += copy_amount;
 			write_size -= copy_amount;
 		}
-		// now we need to get a new block id
-		auto new_handle = NextHandle();
-
-		// write the block id of the new block to the start of the current block
-		if (capacity > 0) {
-			Store<idx_t>(manager.GetDiskPointer(new_handle.pointer), Ptr());
-		}
-		// now update the block id of the block
-		block = std::move(new_handle);
-		current_pointer = block.pointer;
-		offset = sizeof(idx_t);
-		capacity = MetadataManager::METADATA_BLOCK_SIZE;
-		Store<idx_t>(-1, Ptr());
+		// move forward to the next block
+		NextBlock();
 	}
 	memcpy(Ptr() + offset, buffer, write_size);
 	offset += write_size;

@@ -451,12 +451,13 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	modified_blocks.clear();
 
+	auto &metadata_manager = GetMetadataManager();
 	if (!free_list_blocks.empty()) {
 		// there are blocks to write, either in the free_list or in the modified_blocks
 		// we write these blocks specifically to the free_list_blocks
 		// a normal MetadataWriter will fetch blocks to use from the free_list
 		// but since we are WRITING the free_list, this behavior is sub-optimal
-		FreeListBlockWriter writer(GetMetadataManager(), std::move(free_list_blocks));
+		FreeListBlockWriter writer(metadata_manager, std::move(free_list_blocks));
 
 		auto ptr = writer.GetBlockPointer();
 		D_ASSERT(ptr.offset == 0);
@@ -475,7 +476,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// no blocks in the free list
 		header.free_list = INVALID_BLOCK;
 	}
-	GetMetadataManager().Flush();
+	metadata_manager.Flush();
 	header.block_count = max_block;
 
 	auto &config = DBConfig::Get(db);

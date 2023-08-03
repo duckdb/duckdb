@@ -25,8 +25,7 @@ class MetadataManager;
 //! BlockManager creates and accesses blocks. The concrete types implements how blocks are stored.
 class BlockManager {
 public:
-	explicit BlockManager(BufferManager &buffer_manager) : buffer_manager(buffer_manager) {
-	}
+	explicit BlockManager(BufferManager &buffer_manager);
 	virtual ~BlockManager() = default;
 
 	//! The buffer manager
@@ -87,5 +86,7 @@ private:
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! A map to cache the BlockHandles of meta blocks
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> meta_blocks;
+	//! The metadata manager
+	unique_ptr<MetadataManager> metadata_manager;
 };
 } // namespace duckdb
