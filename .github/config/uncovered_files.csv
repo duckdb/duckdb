@@ -114,6 +114,7 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
+core_functions/aggregate/nested/list.cpp	4
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
 core_functions/scalar/date/date_part.cpp	17

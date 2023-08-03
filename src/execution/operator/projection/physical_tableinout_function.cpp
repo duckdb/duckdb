@@ -90,7 +90,7 @@ void PhysicalTableInOutFunction::AddProjectedColumnsFromOtherMapping(idx_t map_i
 	// Create a selection vector that maps from output row -> input row
 	UnifiedVectorFormat mapping_vector_data;
 	mapping_column.ToUnifiedFormat(intermediate.size(), mapping_vector_data);
-	auto mapping_data = (sel_t *)mapping_vector_data.data;
+	auto mapping_data = reinterpret_cast<sel_t *>(mapping_vector_data.data);
 	for (idx_t i = 0; i < intermediate.size(); i++) {
 		// The index in the input column that produced this output tuple
 		idx_t idx = mapping_vector_data.sel->get_index(i);

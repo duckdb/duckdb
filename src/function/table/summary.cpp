@@ -27,7 +27,7 @@ static OperatorResultType SummaryFunction(ExecutionContext &context, TableFuncti
 
 	uint32_t *in_out_mapping = nullptr;
 	if (data_p.add_in_out_mapping) {
-		auto &in_out_vec = output.data[input.ColumnCount()];
+		auto &in_out_vec = output.data.back();
 		in_out_mapping = FlatVector::GetData<uint32_t>(in_out_vec);
 	}
 
