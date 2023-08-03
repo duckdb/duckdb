@@ -7,6 +7,7 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/utils.h"
 #include "duckdb/optimizer/cascade/types.h"
+#include <assert.h>
 
 // using 16 addresses a line fits exactly into 80 characters
 #define GPOS_MEM_BPL 16
@@ -138,7 +139,7 @@ ULLONG gpos::Add(ULLONG first, ULLONG second)
 	{
 		// if addition result overflows, we have (a + b > gpos::ullong_max),
 		// then we need to check for  (a > gpos::ullong_max - b)
-		GPOS_RAISE(CException::ExmaSystem, CException::ExmiOverflow);
+		assert(false);
 	}
 	ULLONG res = first + second;
 	return res;
@@ -158,7 +159,7 @@ ULLONG gpos::Multiply(ULLONG first, ULLONG second)
 	{
 		// if multiplication result overflows, we have (a * b > gpos::ullong_max),
 		// then we need to check for  (a > gpos::ullong_max / b)
-		GPOS_RAISE(CException::ExmaSystem, CException::ExmiOverflow);
+		assert(false);
 	}
 	ULLONG res = first * second;
 	return res;
