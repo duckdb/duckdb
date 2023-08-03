@@ -63,7 +63,6 @@ void PreparedStatementData::Bind(case_insensitive_map_t<Value> values) {
 			    "Type mismatch for binding parameter with identifier %s, expected type %s but got type %s", identifier,
 			    it.second->return_type.ToString().c_str(), value.type().ToString().c_str());
 		}
-		// THIJS KIJK HIER
 		it.second->SetValue(value);
 	}
 }
