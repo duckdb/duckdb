@@ -8,45 +8,48 @@
 namespace duckdb {
 
 // Optionally push a PROJECTION operator
-unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types,
-                                                               vector<LogicalType> &target_types,
-                                                               unique_ptr<LogicalOperator> op) {
+unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalType> &source_types, vector<LogicalType> &target_types, unique_ptr<LogicalOperator> op)
+{
 	D_ASSERT(op);
 	// first check if we even need to cast
 	D_ASSERT(source_types.size() == target_types.size());
-	if (source_types == target_types) {
+	if (source_types == target_types)
+	{
 		// source and target types are equal: don't need to cast
 		return op;
 	}
 	// otherwise add casts
 	auto node = op.get();
-	if (node->type == LogicalOperatorType::LOGICAL_PROJECTION) {
+	if (node->logical_type == LogicalOperatorType::LOGICAL_PROJECTION)
+	{
 		// "node" is a projection; we can just do the casts in there
 		D_ASSERT(node->expressions.size() == source_types.size());
 		// add the casts to the selection list
 		for (idx_t i = 0; i < target_types.size(); i++) {
-			if (source_types[i] != target_types[i]) {
+			if (source_types[i] != target_types[i])
+			{
 				// differing types, have to add a cast
 				string alias = node->expressions[i]->alias;
-				node->expressions[i] =
-				    BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
+				node->expressions[i] = BoundCastExpression::AddCastToType(context, std::move(node->expressions[i]), target_types[i]);
 				node->expressions[i]->alias = alias;
 			}
 		}
 		return op;
-	} else {
+	}
+	else
+	{
 		// found a non-projection operator
 		// push a new projection containing the casts
-
 		// fetch the set of column bindings
 		auto setop_columns = op->GetColumnBindings();
 		D_ASSERT(setop_columns.size() == source_types.size());
-
 		// now generate the expression list
 		vector<unique_ptr<Expression>> select_list;
-		for (idx_t i = 0; i < target_types.size(); i++) {
+		for (idx_t i = 0; i < target_types.size(); i++)
+		{
 			unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>(source_types[i], setop_columns[i]);
-			if (source_types[i] != target_types[i]) {
+			if (source_types[i] != target_types[i])
+			{
 				// add a cast only if the source and target types are not equivalent
 				result = BoundCastExpression::AddCastToType(context, std::move(result), target_types[i]);
 			}
@@ -58,7 +61,8 @@ unique_ptr<LogicalOperator> Binder::CastLogicalOperatorToTypes(vector<LogicalTyp
 	}
 }
 
-unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node) {
+unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSetOperationNode &node)
+{
 	// Generate the logical plan for the left and right sides of the set operation
 	node.left_binder->plan_subquery = plan_subquery;
 	node.right_binder->plan_subquery = plan_subquery;

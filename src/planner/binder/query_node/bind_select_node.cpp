@@ -21,12 +21,14 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/parser/expression/conjunction_expression.hpp"
 
-namespace duckdb {
-
-unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
+namespace duckdb
+{
+unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr)
+{
 	// we treat the Distinct list as a order by
 	auto bound_expr = order_binder.Bind(std::move(expr));
-	if (!bound_expr) {
+	if (!bound_expr)
+	{
 		// DISTINCT ON non-integer constant
 		// remove the expression from the DISTINCT ON list
 		return nullptr;
@@ -35,12 +37,13 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 	return bound_expr;
 }
 
-unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder &order_binder,
-                                             unique_ptr<ParsedExpression> delimiter, const LogicalType &type,
-                                             Value &delimiter_value) {
+unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder &order_binder, unique_ptr<ParsedExpression> delimiter, const LogicalType &type, Value &delimiter_value)
+{
 	auto new_binder = Binder::CreateBinder(context, this, true);
-	if (delimiter->HasSubquery()) {
-		if (!order_binder.HasExtraList()) {
+	if (delimiter->HasSubquery()) 
+	{
+		if (!order_binder.HasExtraList())
+		{
 			throw BinderException("Subquery in LIMIT/OFFSET not supported in set operation");
 		}
 		return order_binder.CreateExtraReference(std::move(delimiter));
@@ -48,12 +51,14 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 	ExpressionBinder expr_binder(*new_binder, context);
 	expr_binder.target_type = type;
 	auto expr = expr_binder.Bind(delimiter);
-	if (expr->IsFoldable()) {
+	if (expr->IsFoldable())
+	{
 		//! this is a constant
 		delimiter_value = ExpressionExecutor::EvaluateScalar(context, *expr).CastAs(context, type);
 		return nullptr;
 	}
-	if (!new_binder->correlated_columns.empty()) {
+	if (!new_binder->correlated_columns.empty())
+	{
 		throw BinderException("Correlated columns not supported in LIMIT/OFFSET");
 	}
 	// move any correlated columns to this binder
@@ -63,7 +68,8 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, OrderBinder
 
 duckdb::unique_ptr<BoundResultModifier> Binder::BindLimit(OrderBinder &order_binder, LimitModifier &limit_mod) {
 	auto result = make_uniq<BoundLimitModifier>();
-	if (limit_mod.limit) {
+	if (limit_mod.limit)
+	{
 		Value val;
 		result->limit = BindDelimiter(context, order_binder, std::move(limit_mod.limit), LogicalType::BIGINT, val);
 		if (!result->limit) {
