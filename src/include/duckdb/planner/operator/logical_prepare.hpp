@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/unordered_map.hpp"
@@ -13,11 +12,13 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
-namespace duckdb {
+namespace duckdb
+{
 
 class TableCatalogEntry;
 
-class LogicalPrepare : public LogicalOperator {
+class LogicalPrepare : public LogicalOperator
+{
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PREPARE;
 
@@ -38,15 +39,18 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 protected:
-	void ResolveTypes() override {
+	void ResolveTypes() override
+	{
 		types.emplace_back(LogicalType::BOOLEAN);
 	}
 
-	bool RequireOptimizer() const override {
-		if (!prepared->properties.bound_all_parameters) {
+	bool RequireOptimizer() const override
+	{
+		if (!prepared->properties.bound_all_parameters)
+		{
 			return false;
 		}
-		return children[0]->RequireOptimizer();
+		return ((LogicalOperator*)children[0].get())->RequireOptimizer();
 	}
 };
 } // namespace duckdb

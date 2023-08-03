@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
@@ -15,40 +14,40 @@
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
-class LogicalGet : public LogicalOperator {
+class LogicalGet : public LogicalOperator
+{
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names);
+	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types, vector<string> returned_names);
 
 	//! The table index in the current bind context
 	idx_t table_index;
 	//! The function that is called
 	TableFunction function;
 	//! The bind data of the function
-	unique_ptr<FunctionData> bind_data;
+	duckdb::unique_ptr<FunctionData> bind_data;
 	//! The types of ALL columns that can be returned by the table function
-	vector<LogicalType> returned_types;
+	duckdb::vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
-	vector<string> names;
+	duckdb::vector<string> names;
 	//! Bound column IDs
-	vector<column_t> column_ids;
+	duckdb::vector<column_t> column_ids;
 	//! Columns that are used outside of the scan
-	vector<idx_t> projection_ids;
+	duckdb::vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
 	//! The set of input parameters for the table function
-	vector<Value> parameters;
+	duckdb::vector<Value> parameters;
 	//! The set of named input parameters for the table function
 	named_parameter_map_t named_parameters;
 	//! The set of named input table types for the table-in table-out function
-	vector<LogicalType> input_table_types;
+	duckdb::vector<LogicalType> input_table_types;
 	//! The set of named input table names for the table-in table-out function
-	vector<string> input_table_names;
+	duckdb::vector<string> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
-	vector<column_t> projected_input;
+	duckdb::vector<column_t> projected_input;
 
 	string GetName() const override;
 	string ParamsToString() const override;
@@ -56,14 +55,37 @@ public:
 	TableCatalogEntry *GetTable() const;
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override;
+	duckdb::vector<ColumnBinding> GetColumnBindings() override;
+	
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	
+	static duckdb::unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	
 	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override;
+
+public:
+	// derive join depth
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override
+	{
+		return 1;
+	}
+
+	CXformSet* PxfsCandidates() const override;
+
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+
+	// Rehydrate expression from a given cost context and child expressions
+	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
+
+	duckdb::unique_ptr<Operator> Copy() override;
+
+	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override;
+
+	duckdb::unique_ptr<Operator> CopywithNewChilds(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
 };
 } // namespace duckdb

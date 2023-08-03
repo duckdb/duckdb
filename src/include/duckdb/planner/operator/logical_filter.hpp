@@ -5,10 +5,10 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/optimizer/cascade/operators/CExpressionHandle.h"
 
 namespace duckdb {
 
@@ -28,7 +28,8 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
-	bool SplitPredicates() {
+	bool SplitPredicates()
+	{
 		return SplitPredicates(expressions);
 	}
 	//! Splits up the predicates of the LogicalFilter into a set of predicates
@@ -37,6 +38,21 @@ public:
 
 protected:
 	void ResolveTypes() override;
+
+public:
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override;
+	
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+
+	// Rehydrate expression from a given cost context and child expressions
+	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
+	
+public:
+	//-------------------------------------------------------------------------------------
+	// Transformations
+	//-------------------------------------------------------------------------------------
+	// candidate set of xforms
+	virtual CXformSet* PxfsCandidates() const override;
 };
 
 } // namespace duckdb

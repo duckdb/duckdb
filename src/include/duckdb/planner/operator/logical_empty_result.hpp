@@ -14,7 +14,8 @@ namespace duckdb {
 
 //! LogicalEmptyResult returns an empty result. This is created by the optimizer if it can reason that certain parts of
 //! the tree will always return an empty result.
-class LogicalEmptyResult : public LogicalOperator {
+class LogicalEmptyResult : public LogicalOperator
+{
 	LogicalEmptyResult();
 
 public:
@@ -29,18 +30,40 @@ public:
 	vector<ColumnBinding> bindings;
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override {
+	vector<ColumnBinding> GetColumnBindings() override
+	{
 		return bindings;
 	}
+	
 	void Serialize(FieldWriter &writer) const override;
+	
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-	idx_t EstimateCardinality(ClientContext &context) override {
+	
+	idx_t EstimateCardinality(ClientContext &context) override
+	{
 		return 0;
 	}
 
 protected:
-	void ResolveTypes() override {
+	void ResolveTypes() override
+	{
 		this->types = return_types;
 	}
+
+public:
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override;
+	
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
+
+	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
+
+public:
+	//-------------------------------------------------------------------------------------
+	// Transformations
+	//-------------------------------------------------------------------------------------
+	// candidate set of xforms
+	CXformSet* PxfsCandidates() const override;
 };
 } // namespace duckdb

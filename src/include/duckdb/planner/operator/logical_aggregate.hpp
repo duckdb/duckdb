@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
@@ -13,11 +12,12 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 
-namespace duckdb {
-
+namespace duckdb
+{
 //! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
 //! operator.
-class LogicalAggregate : public LogicalOperator {
+class LogicalAggregate : public LogicalOperator
+{
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY;
 

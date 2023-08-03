@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/planner/bound_query_node.hpp"
@@ -21,33 +20,28 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ORDER_BY;
 
 public:
-	explicit LogicalOrder(vector<BoundOrderByNode> orders)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
-	}
+	explicit LogicalOrder(vector<BoundOrderByNode> orders);
 
 	vector<BoundOrderByNode> orders;
+
 	vector<idx_t> projections;
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		auto child_bindings = children[0]->GetColumnBindings();
-		if (projections.empty()) {
-			return child_bindings;
-		}
+	vector<ColumnBinding> GetColumnBindings() override;
 
-		vector<ColumnBinding> result;
-		for (auto &col_idx : projections) {
-			result.push_back(child_bindings[col_idx]);
-		}
-		return result;
-	}
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override;
+	
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
 
 	void Serialize(FieldWriter &writer) const override;
+	
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
-	string ParamsToString() const override {
+	string ParamsToString() const override
+	{
 		string result = "ORDERS:\n";
-		for (idx_t i = 0; i < orders.size(); i++) {
+		for (idx_t i = 0; i < orders.size(); i++)
+		{
 			if (i > 0) {
 				result += "\n";
 			}

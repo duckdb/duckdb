@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/common/enums/join_type.hpp"
@@ -13,10 +12,13 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
-namespace duckdb {
+namespace duckdb
+{
+using namespace gpos;
 
 //! LogicalJoin represents a join between two relations
-class LogicalJoin : public LogicalOperator {
+class LogicalJoin : public LogicalOperator
+{
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INVALID;
 
@@ -25,6 +27,7 @@ public:
 
 	// Gets the set of table references that are reachable from this node
 	static void GetTableReferences(LogicalOperator &op, unordered_set<idx_t> &bindings);
+	
 	static void GetExpressionBindings(Expression &expr, unordered_set<idx_t> &bindings);
 
 	//! The type of the join (INNER, OUTER, etc...)
@@ -40,11 +43,19 @@ public:
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	
 	void Serialize(FieldWriter &writer) const override;
+	
 	static void Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
 	void ResolveTypes() override;
-};
 
+public:
+	//-------------------------------------------------------------------------------------
+	// Transformations
+	//-------------------------------------------------------------------------------------
+	// candidate set of xforms
+	CXformSet* PxfsCandidates() const override;
+};
 } // namespace duckdb
