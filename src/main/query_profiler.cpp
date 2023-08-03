@@ -613,11 +613,11 @@ void QueryProfiler::WriteToFile(const char *path, string &info) const {
 }
 
 unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(const PhysicalOperator &root, idx_t depth) {
-	if (OperatorRequiresProfiling(root.type)) {
+	if (OperatorRequiresProfiling(root.physical_type)) {
 		this->query_requires_profiling = true;
 	}
 	auto node = make_uniq<QueryProfiler::TreeNode>();
-	node->type = root.type;
+	node->type = root.physical_type;
 	node->name = root.GetName();
 	node->extra_info = root.ParamsToString();
 	node->depth = depth;
