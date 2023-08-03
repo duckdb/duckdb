@@ -736,3 +736,50 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	                                        "conversion: unterminated escape code at end of blob") == 0);
 	adbc_error.release(&adbc_error);
 }
+
+
+
+TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+
+	duckdb_adbc::AdbcStatement adbc_statement;
+
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	// Statement Prepare is a nop for us, so it should just work, although it just does some error checking.
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	REQUIRE(!SUCCESS(AdbcStatementPrepare(nullptr, &adbc_error)));
+
+	REQUIRE(std::strcmp(adbc_error.message, "Missing statement object") == 0);
+	adbc_error.release(&adbc_error);
+
+	AdbcStatementRelease(&adbc_statement, &adbc_error);
+	REQUIRE(!SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	REQUIRE(std::strcmp(adbc_error.message, "Invalid statement object") == 0);
+	adbc_error.release(&adbc_error);
+}
+
+//AdbcStatementPrepare
+
+//AdbcConnectionGetTableTypes
+
+//AdbcConnectionGetObjects

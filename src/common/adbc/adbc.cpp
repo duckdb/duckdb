@@ -585,16 +585,6 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 // this is a nop for us
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-
 	return ADBC_STATUS_OK;
 }
 

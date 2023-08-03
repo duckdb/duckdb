@@ -474,7 +474,12 @@ AdbcStatusCode AdbcStatementNew(struct AdbcConnection *connection, struct AdbcSt
 }
 
 AdbcStatusCode AdbcStatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	if (!statement->private_driver) {
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
 		return ADBC_STATUS_INVALID_STATE;
 	}
 	return statement->private_driver->StatementPrepare(statement, error);
