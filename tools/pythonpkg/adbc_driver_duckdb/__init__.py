@@ -29,7 +29,7 @@ __all__ = ["StatementOptions", "connect"]
 class StatementOptions(enum.Enum):
     """Statement options specific to the DuckDB driver."""
 
-    #: The number of rows per batch. Defaults to 1024.
+    #: The number of rows per batch. Defaults to 2048.
     BATCH_ROWS = "adbc.duckdb.query.batch_rows"
 
 
