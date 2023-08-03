@@ -24,8 +24,10 @@ public:
 
 private:
 	Value value;
+
 public:
 	LogicalType return_type;
+
 public:
 	void SetValue(Value val) {
 		value = std::move(val);

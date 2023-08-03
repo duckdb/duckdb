@@ -18,7 +18,7 @@ BoundParameterExpression::BoundParameterExpression(bound_parameter_map_t &global
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER, std::move(return_type)),
       identifier(std::move(identifier)) {
 	// check if we have already deserialized a parameter with this number
-	auto entry = global_parameter_set.find(identifier);
+	auto entry = global_parameter_set.find(this->identifier);
 	if (entry == global_parameter_set.end()) {
 		// we have not - store the entry we deserialized from this parameter expression
 		global_parameter_set[this->identifier] = parameter_data;
