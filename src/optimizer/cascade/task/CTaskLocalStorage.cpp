@@ -5,18 +5,18 @@
 //	@doc:
 //		Task-local storage implementation
 //---------------------------------------------------------------------------
+#include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/task/CTaskLocalStorage.h"
-#include "duckdb/optimizer/cascade/common/CSyncHashtableAccessByKey.h"
 #include "duckdb/optimizer/cascade/task/CTaskLocalStorageObject.h"
+#include "duckdb/common/unique_ptr.hpp"
+#include <memory>
 
 using namespace gpos;
-
-// shorthand for HT accessor
-typedef CSyncHashtableAccessByKey<CTaskLocalStorageObject, CTaskLocalStorage::Etlsidx> HashTableAccessor;
+using namespace std;
+using namespace duckdb;
 
 // invalid idx
-const CTaskLocalStorage::Etlsidx CTaskLocalStorage::m_invalid_idx = EtlsidxInvalid;
-
+const Etlsidx CTaskLocalStorage::m_invalid_idx = EtlsidxInvalid;
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -38,19 +38,10 @@ CTaskLocalStorage::~CTaskLocalStorage()
 //		(re-)init TLS
 //
 //---------------------------------------------------------------------------
-void
-CTaskLocalStorage::Reset(CMemoryPool *mp)
+void CTaskLocalStorage::Reset()
 {
 	// destroy old
-	m_hash_table.Cleanup();
-
-	// realloc
-	m_hash_table.Init(mp,
-					  128,	// number of hashbuckets
-					  GPOS_OFFSET(CTaskLocalStorageObject, m_link),
-					  GPOS_OFFSET(CTaskLocalStorageObject, m_etlsidx),
-					  &(CTaskLocalStorage::m_invalid_idx),
-					  CTaskLocalStorage::HashIdx, CTaskLocalStorage::Equals);
+	m_hash_table.clear();
 }
 
 
@@ -62,22 +53,10 @@ CTaskLocalStorage::Reset(CMemoryPool *mp)
 //		Store object in TLS
 //
 //---------------------------------------------------------------------------
-void
-CTaskLocalStorage::Store(CTaskLocalStorageObject *obj)
+void CTaskLocalStorage::Store(duckdb::unique_ptr<CTaskLocalStorageObject> obj)
 {
-	GPOS_ASSERT(NULL != obj);
-
-#ifdef GPOS_DEBUG
-	{
-		HashTableAccessor HashTableAccessor(m_hash_table, obj->idx());
-		GPOS_ASSERT(NULL == HashTableAccessor.Find() &&
-					"Duplicate TLS object key");
-	}
-#endif	// GPOS_DEBUG
-
-	m_hash_table.Insert(obj);
+	m_hash_table.insert(make_pair(obj->m_etlsidx, std::move(obj)));
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -87,13 +66,10 @@ CTaskLocalStorage::Store(CTaskLocalStorageObject *obj)
 //		Lookup object in TLS
 //
 //---------------------------------------------------------------------------
-CTaskLocalStorageObject *
-CTaskLocalStorage::Get(CTaskLocalStorage::Etlsidx idx)
+CTaskLocalStorageObject* CTaskLocalStorage::Get(Etlsidx idx)
 {
-	HashTableAccessor HashTableAccessor(m_hash_table, idx);
-	return HashTableAccessor.Find();
+	return m_hash_table.find(idx)->second.get();
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -103,14 +79,9 @@ CTaskLocalStorage::Get(CTaskLocalStorage::Etlsidx idx)
 //		Delete given object from TLS
 //
 //---------------------------------------------------------------------------
-void
-CTaskLocalStorage::Remove(CTaskLocalStorageObject *obj)
+void CTaskLocalStorage::Remove(CTaskLocalStorageObject* obj)
 {
-	GPOS_ASSERT(NULL != obj);
-
 	// lookup object
-	HashTableAccessor HashTableAccessor(m_hash_table, obj->idx());
-	GPOS_ASSERT(NULL != HashTableAccessor.Find() && "Object not found in TLS");
-
-	HashTableAccessor.Remove(obj);
+	auto itr = m_hash_table.find(obj->m_etlsidx);
+	m_hash_table.erase(itr);
 }

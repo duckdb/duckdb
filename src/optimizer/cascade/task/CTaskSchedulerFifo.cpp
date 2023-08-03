@@ -17,13 +17,11 @@ using namespace gpos;
 //		Add task to waiting queue
 //
 //---------------------------------------------------------------------------
-void
-CTaskSchedulerFifo::Enqueue(CTask *task)
+void CTaskSchedulerFifo::Enqueue(CTask* task)
 {
-	m_task_queue.Append(task);
-	task->SetStatus(CTask::EtsQueued);
+	m_task_queue.emplace_back(task);
+	task->SetStatus(EtsQueued);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -33,16 +31,13 @@ CTaskSchedulerFifo::Enqueue(CTask *task)
 //		Get next task to execute
 //
 //---------------------------------------------------------------------------
-CTask *
-CTaskSchedulerFifo::Dequeue()
+CTask* CTaskSchedulerFifo::Dequeue()
 {
-	GPOS_ASSERT(!m_task_queue.IsEmpty());
-
-	CTask *task = m_task_queue.RemoveHead();
-	task->SetStatus(CTask::EtsDequeued);
+	CTask* task = *(m_task_queue.begin());
+	m_task_queue.pop_front();
+	task->SetStatus(EtsDequeued);
 	return task;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -52,22 +47,20 @@ CTaskSchedulerFifo::Dequeue()
 //		Check if task is waiting to be scheduled and remove it
 //
 //---------------------------------------------------------------------------
-GPOS_RESULT
-CTaskSchedulerFifo::Cancel(CTask *task)
+GPOS_RESULT CTaskSchedulerFifo::Cancel(CTask* task)
 {
 	// iterate until found
-	CTask *task_it = m_task_queue.First();
-	while (NULL != task_it)
+	auto itr = m_task_queue.begin();
+	while (m_task_queue.end() != itr)
 	{
+		CTask* task_it = *itr;
 		if (task_it == task)
 		{
-			m_task_queue.Remove(task_it);
+			m_task_queue.erase(itr);
 			task_it->Cancel();
-
 			return GPOS_OK;
 		}
-		task_it = m_task_queue.Next(task_it);
+		++itr;
 	}
-
 	return GPOS_NOT_FOUND;
 }
