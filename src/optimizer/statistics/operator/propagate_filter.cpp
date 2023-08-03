@@ -8,14 +8,17 @@
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
-namespace duckdb {
-
-static bool IsCompareDistinct(ExpressionType type) {
+namespace duckdb
+{
+static bool IsCompareDistinct(ExpressionType type)
+{
 	return type == ExpressionType::COMPARE_DISTINCT_FROM || type == ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 }
 
-bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
+bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &val)
+{
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT)
+	{
 		return false;
 	}
 	auto &bound_constant = expr.Cast<BoundConstantExpression>();
@@ -23,37 +26,45 @@ bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &v
 	return Value::NotDistinctFrom(bound_constant.value, val);
 }
 
-bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val) {
-	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Value &val)
+{
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION)
+	{
 		return false;
 	}
 	auto &bound_function = expr.Cast<BoundFunctionExpression>();
 	return ConstantOrNull::IsConstantOrNull(bound_function, val);
 }
 
-void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding) {
+void StatisticsPropagator::SetStatisticsNotNull(ColumnBinding binding)
+{
 	auto entry = statistics_map.find(binding);
-	if (entry == statistics_map.end()) {
+	if (entry == statistics_map.end())
+	{
 		return;
 	}
 	entry->second->Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type,
-                                                  const Value &constant) {
+void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, ExpressionType comparison_type, const Value &constant)
+{
 	// regular comparisons removes all null values
-	if (!IsCompareDistinct(comparison_type)) {
+	if (!IsCompareDistinct(comparison_type))
+	{
 		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
-	if (!stats.GetType().IsNumeric()) {
+	if (!stats.GetType().IsNumeric())
+	{
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	if (!NumericStats::HasMinMax(stats)) {
+	if (!NumericStats::HasMinMax(stats))
+	{
 		// no stats available: skip this
 		return;
 	}
-	switch (comparison_type) {
+	switch (comparison_type)
+	{
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		// X < constant OR X <= constant
@@ -77,23 +88,27 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &stats, Express
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats,
-                                                  ExpressionType comparison_type) {
+void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseStatistics &rstats, ExpressionType comparison_type)
+{
 	// regular comparisons removes all null values
-	if (!IsCompareDistinct(comparison_type)) {
+	if (!IsCompareDistinct(comparison_type))
+	{
 		lstats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 		rstats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
 	}
 	D_ASSERT(lstats.GetType() == rstats.GetType());
-	if (!lstats.GetType().IsNumeric()) {
+	if (!lstats.GetType().IsNumeric())
+	{
 		// don't handle non-numeric columns here (yet)
 		return;
 	}
-	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats)) {
+	if (!NumericStats::HasMinMax(lstats) || !NumericStats::HasMinMax(rstats))
+	{
 		// no stats available: skip this
 		return;
 	}
-	switch (comparison_type) {
+	switch (comparison_type)
+	{
 	case ExpressionType::COMPARE_LESSTHAN:
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 		// LEFT < RIGHT OR LEFT <= RIGHT
@@ -102,13 +117,15 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 
 		// we know that left.max is AT MOST equal to right.max
 		// because any value in left that is BIGGER than right.max will not pass the filter
-		if (NumericStats::Max(lstats) > NumericStats::Max(rstats)) {
+		if (NumericStats::Max(lstats) > NumericStats::Max(rstats))
+		{
 			NumericStats::SetMax(lstats, NumericStats::Max(rstats));
 		}
 
 		// we also know that right.min is AT MOST equal to left.min
 		// because any value in right that is SMALLER than left.min will not pass the filter
-		if (NumericStats::Min(rstats) < NumericStats::Min(lstats)) {
+		if (NumericStats::Min(rstats) < NumericStats::Min(lstats))
+		{
 			NumericStats::SetMin(rstats, NumericStats::Min(lstats));
 		}
 		// so in our example, the bounds get updated as follows:
@@ -119,10 +136,12 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// LEFT > RIGHT OR LEFT >= RIGHT
 		// we know that every value of left is bigger (or equal to) every value in right
 		// this is essentially the inverse of the less than (or equal to) scenario
-		if (NumericStats::Max(rstats) > NumericStats::Max(lstats)) {
+		if (NumericStats::Max(rstats) > NumericStats::Max(lstats))
+		{
 			NumericStats::SetMax(rstats, NumericStats::Max(lstats));
 		}
-		if (NumericStats::Min(lstats) < NumericStats::Min(rstats)) {
+		if (NumericStats::Min(lstats) < NumericStats::Min(rstats))
+		{
 			NumericStats::SetMin(lstats, NumericStats::Min(rstats));
 		}
 		break;
@@ -133,15 +152,21 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 		// so if we have e.g. left = [-50, 250] and right = [-100, 100]
 		// the tighest bounds are [-50, 100]
 		// select the highest min
-		if (NumericStats::Min(lstats) > NumericStats::Min(rstats)) {
+		if (NumericStats::Min(lstats) > NumericStats::Min(rstats))
+		{
 			NumericStats::SetMin(rstats, NumericStats::Min(lstats));
-		} else {
+		}
+		else
+		{
 			NumericStats::SetMin(lstats, NumericStats::Min(rstats));
 		}
 		// select the lowest max
-		if (NumericStats::Max(lstats) < NumericStats::Max(rstats)) {
+		if (NumericStats::Max(lstats) < NumericStats::Max(rstats))
+		{
 			NumericStats::SetMax(rstats, NumericStats::Max(lstats));
-		} else {
+		}
+		else
+		{
 			NumericStats::SetMax(lstats, NumericStats::Max(rstats));
 		}
 		break;
@@ -150,61 +175,78 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type) {
+void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &right, ExpressionType comparison_type)
+{
 	// first check if either side is a bound column ref
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
-	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
 	}
-	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
 	BoundConstantExpression *constant = nullptr;
 	BoundColumnRefExpression *columnref = nullptr;
-	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		constant = (BoundConstantExpression *)&left;
 		columnref = (BoundColumnRefExpression *)&right;
 		comparison_type = FlipComparisonExpression(comparison_type);
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
+	}
+	else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT)
+	{
 		columnref = (BoundColumnRefExpression *)&left;
 		constant = (BoundConstantExpression *)&right;
-	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
+	}
+	else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF)
+	{
 		// comparison between two column refs
 		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
 		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
 		auto lentry = statistics_map.find(left_column_ref.binding);
 		auto rentry = statistics_map.find(right_column_ref.binding);
-		if (lentry == statistics_map.end() || rentry == statistics_map.end()) {
+		if (lentry == statistics_map.end() || rentry == statistics_map.end())
+		{
 			return;
 		}
 		UpdateFilterStatistics(*lentry->second, *rentry->second, comparison_type);
-	} else {
+	}
+	else
+	{
 		// unsupported filter
 		return;
 	}
-	if (constant && columnref) {
+	if (constant && columnref)
+	{
 		// comparison between columnref
 		auto entry = statistics_map.find(columnref->binding);
-		if (entry == statistics_map.end()) {
+		if (entry == statistics_map.end())
+		{
 			return;
 		}
 		UpdateFilterStatistics(*entry->second, comparison_type, constant->value);
 	}
 }
 
-void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
+void StatisticsPropagator::UpdateFilterStatistics(Expression &condition)
+{
 	// in filters, we check for constant comparisons with bound columns
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
-	switch (condition.GetExpressionClass()) {
-	case ExpressionClass::BOUND_BETWEEN: {
+	switch (condition.GetExpressionClass())
+	{
+	case ExpressionClass::BOUND_BETWEEN:
+	{
 		auto &between = condition.Cast<BoundBetweenExpression>();
 		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
 		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
 		break;
 	}
-	case ExpressionClass::BOUND_COMPARISON: {
+	case ExpressionClass::BOUND_COMPARISON:
+	{
 		auto &comparison = condition.Cast<BoundComparisonExpression>();
 		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.type);
 		break;
@@ -214,36 +256,42 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	}
 }
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr<LogicalOperator> *node_ptr)
+{
+	auto left_child = unique_ptr<LogicalOperator>((LogicalOperator*)filter.children[0].get());
 	// first propagate to the child
-	node_stats = PropagateStatistics(filter.children[0]);
-	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+	node_stats = PropagateStatistics(left_child);
+	if (filter.children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT)
+	{
 		ReplaceWithEmptyResult(*node_ptr);
 		return make_uniq<NodeStatistics>(0, 0);
 	}
-
 	// then propagate to each of the expressions
-	for (idx_t i = 0; i < filter.expressions.size(); i++) {
+	for (idx_t i = 0; i < filter.expressions.size(); i++)
+	{
 		auto &condition = filter.expressions[i];
 		PropagateExpression(condition);
-
-		if (ExpressionIsConstant(*condition, Value::BOOLEAN(true))) {
+		if (ExpressionIsConstant(*condition, Value::BOOLEAN(true)))
+		{
 			// filter is always true; it is useless to execute it
 			// erase this condition
 			filter.expressions.erase(filter.expressions.begin() + i);
 			i--;
-			if (filter.expressions.empty()) {
+			if (filter.expressions.empty())
+			{
 				// all conditions have been erased: remove the entire filter
-				*node_ptr = std::move(filter.children[0]);
+				*node_ptr = unique_ptr<LogicalOperator>((LogicalOperator*)filter.children[0].get());
 				break;
 			}
-		} else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+		}
+		else if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) || ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false)))
+		{
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
 			return make_uniq<NodeStatistics>(0, 0);
-		} else {
+		}
+		else
+		{
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);
 		}
@@ -251,5 +299,4 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	// the max cardinality of a filter is the cardinality of the input (i.e. no tuples get filtered)
 	return std::move(node_stats);
 }
-
 } // namespace duckdb

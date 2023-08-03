@@ -3,10 +3,11 @@
 
 namespace duckdb {
 
-unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalLimit &limit,
-                                                                     unique_ptr<LogicalOperator> *node_ptr) {
+unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalLimit &limit, unique_ptr<LogicalOperator> *node_ptr)
+{
+	auto child = unique_ptr<LogicalOperator>((LogicalOperator*)limit.children[0].get());
 	// propagate statistics in the child node
-	PropagateStatistics(limit.children[0]);
+	PropagateStatistics(child);
 	// return the node stats, with as expected cardinality the amount specified in the limit
 	return make_uniq<NodeStatistics>(limit.limit_val, limit.limit_val);
 }
