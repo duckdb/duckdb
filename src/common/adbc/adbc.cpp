@@ -68,17 +68,6 @@ struct DuckDBAdbcStatementWrapper {
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 };
 
-AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const char *error_message) {
-	if (!error) {
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
-	if (!result) {
-		SetError(error, error_message);
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
-	return ADBC_STATUS_OK;
-}
-
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
                                     struct AdbcError *error) {
 	AdbcStatement statement;
@@ -142,18 +131,18 @@ AdbcStatusCode CheckResult(duckdb_state &res, AdbcError *error, const char *erro
 }
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {
-	auto status = SetErrorMaybe(database, error, "Missing database object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!database) {
+		SetError(error, "Missing database object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	database->private_data = nullptr;
 	// you can't malloc a struct with a non-trivial C++ constructor
 	// and std::string has a non-trivial constructor. so we need
 	// to use new and delete rather than malloc and free.
 	auto wrapper = new DuckDBAdbcDatabaseWrapper;
-	status = SetErrorMaybe(wrapper, error, "Allocation error");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!wrapper) {
+		SetError(error, "Allocation error");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	database->private_data = wrapper;
 	auto res = duckdb_create_config(&wrapper->config);
@@ -184,14 +173,13 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const 
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
                                  struct AdbcError *error) {
-	auto status = SetErrorMaybe(database, error, "Missing database object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!database) {
+		SetError(error, "Missing database object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	status = SetErrorMaybe(key, error, "Missing key");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!key) {
+		SetError(error, "Missing key");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
@@ -272,9 +260,9 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 }
 
 AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError *error) {
-	auto status = SetErrorMaybe(connection, error, "Missing connection object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!connection) {
+		SetError(error, "Missing connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	connection->private_data = nullptr;
@@ -412,17 +400,17 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 	if (!error) {
 		return ADBC_STATUS_UNKNOWN;
 	}
-	auto status_code = SetErrorMaybe(connection, error, "Connection is missing");
-	if (status_code != ADBC_STATUS_OK) {
-		return status_code;
+	if (!connection) {
+		SetError(error, "Missing connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status_code = SetErrorMaybe(connection->private_data, error, "Connection is invalid");
-	if (status_code != ADBC_STATUS_OK) {
-		return status_code;
+	if (!connection->private_data) {
+		SetError(error, "Connection is invalid");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status_code = SetErrorMaybe(out, error, "Output parameter was not provided");
-	if (status_code != ADBC_STATUS_OK) {
-		return status_code;
+	if (!out) {
+		SetError(error, "Output parameter was not provided");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	// If 'info_codes' is NULL, we should output all the info codes we recognize
@@ -496,17 +484,17 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                               struct AdbcError *error) {
-	auto status = SetErrorMaybe(database, error, "Missing database");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!database) {
+		SetError(error, "Missing database object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(database->private_data, error, "Invalid database");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!database->private_data) {
+		SetError(error, "Invalid database");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(connection, error, "Missing connection");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!connection) {
+		SetError(error, "Missing connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto database_wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 
@@ -582,20 +570,19 @@ void stream_schema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input,
                       struct AdbcError *error, IngestionMode ingestion_mode) {
 
-	auto status = SetErrorMaybe(connection, error, "Invalid connection");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!connection) {
+		SetError(error, "Missing connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!input) {
+		SetError(error, "Missing input arrow stream pointer");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!table_name) {
+		SetError(error, "Missing database object name");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	status = SetErrorMaybe(input, error, "Missing input arrow stream pointer");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-
-	status = SetErrorMaybe(table_name, error, "Missing database object name");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
 	auto cconn = (duckdb::Connection *)connection;
 
 	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
@@ -629,27 +616,25 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	if (!error) {
 		return ADBC_STATUS_UNKNOWN;
 	}
-	auto status = SetErrorMaybe(connection, error, "Missing connection object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!connection) {
+		SetError(error, "Missing connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	status = SetErrorMaybe(connection->private_data, error, "Invalid connection object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!connection->private_data) {
+		SetError(error, "Invalid connection object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	statement->private_data = nullptr;
 
 	auto statement_wrapper = (DuckDBAdbcStatementWrapper *)malloc(sizeof(DuckDBAdbcStatementWrapper));
-	status = SetErrorMaybe(statement_wrapper, error, "Allocation error");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement_wrapper) {
+		SetError(error, "Allocation error");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	statement->private_data = statement_wrapper;
@@ -663,49 +648,44 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 }
 
 AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
+	if (!statement || !statement->private_data) {
+		return ADBC_STATUS_OK;
 	}
-	if (statement && statement->private_data) {
-		auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-		if (wrapper->statement) {
-			duckdb_destroy_prepare(&wrapper->statement);
-			wrapper->statement = nullptr;
-		}
-		if (wrapper->result) {
-			duckdb_destroy_arrow(&wrapper->result);
-			wrapper->result = nullptr;
-		}
-		if (wrapper->ingestion_stream.release) {
-			wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
-			wrapper->ingestion_stream.release = nullptr;
-		}
-		if (wrapper->ingestion_table_name) {
-			free(wrapper->ingestion_table_name);
-			wrapper->ingestion_table_name = nullptr;
-		}
-		free(statement->private_data);
-		statement->private_data = nullptr;
+	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
+	if (wrapper->statement) {
+		duckdb_destroy_prepare(&wrapper->statement);
+		wrapper->statement = nullptr;
 	}
+	if (wrapper->result) {
+		duckdb_destroy_arrow(&wrapper->result);
+		wrapper->result = nullptr;
+	}
+	if (wrapper->ingestion_stream.release) {
+		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+		wrapper->ingestion_stream.release = nullptr;
+	}
+	if (wrapper->ingestion_table_name) {
+		free(wrapper->ingestion_table_name);
+		wrapper->ingestion_table_name = nullptr;
+	}
+	free(statement->private_data);
+	statement->private_data = nullptr;
 	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-	status = SetErrorMaybe(schema, error, "Missing schema object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!schema) {
+		SetError(error, "Missing schema object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that
@@ -714,7 +694,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	if (res != DuckDBSuccess) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	return status;
+	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::unique_ptr<duckdb::QueryResult> &result,
@@ -759,16 +739,14 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (!error) {
 		return ADBC_STATUS_UNKNOWN;
 	}
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 
 	// TODO: Set affected rows, careful with early return
@@ -848,36 +826,29 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 // this is a nop for us
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char *query, struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-	status = SetErrorMaybe(query, error, "Missing query");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!query) {
+		SetError(error, "Missing query");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
@@ -888,51 +859,47 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 
 AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray *values, struct ArrowSchema *schemas,
                              struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!values) {
+		SetError(error, "Missing values object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(values, error, "Missing values object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!schemas) {
+		SetError(error, "Invalid schemas object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(schemas, error, "Missing schemas object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
+
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	if (wrapper->ingestion_stream.release) {
 		// Free the stream that was previously bound
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
 	}
-	status = BatchToArrayStream(values, schemas, &wrapper->ingestion_stream, error);
-	if (status != ADBC_STATUS_OK) {
-		return status;
-	}
-	return ADBC_STATUS_OK;
+	auto status = BatchToArrayStream(values, schemas, &wrapper->ingestion_stream, error);
+	return status;
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,
                                    struct AdbcError *error) {
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(values, error, "Missing stream object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!values) {
+		SetError(error, "Missing values object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	if (wrapper->ingestion_stream.release) {
 		// Release any resources currently held by the ingestion stream before we overwrite it
@@ -945,18 +912,19 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 
 AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *key, const char *value,
                                   struct AdbcError *error) {
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement->private_data) {
+		SetError(error, "Invalid statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	status = SetErrorMaybe(key, error, "Missing key object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!key) {
+		SetError(error, "Missing key object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_TABLE) == 0) {

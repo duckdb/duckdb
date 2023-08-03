@@ -398,8 +398,9 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 
 	AdbcStatusCode status = ADBC_STATUS_OK;
 	// No error passed in
+	// This is not an error, this only means we can't provide a message
 	status = AdbcStatementBind(&adbc_statement, &prepared_array, &prepared_schema, nullptr);
-	REQUIRE(status != ADBC_STATUS_OK);
+	REQUIRE(status == ADBC_STATUS_OK);
 
 	// No statement
 	status = AdbcStatementBind(nullptr, &prepared_array, &prepared_schema, &adbc_error);
@@ -426,7 +427,7 @@ TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
 	ArrowSchema result;
 	result.release = nullptr;
 	status = AdbcStatementGetParameterSchema(&adbc_statement, &result, nullptr);
-	REQUIRE(status != ADBC_STATUS_OK);
+	REQUIRE(status == ADBC_STATUS_OK);
 
 	// No statement
 	status = AdbcStatementGetParameterSchema(nullptr, &result, &adbc_error);
