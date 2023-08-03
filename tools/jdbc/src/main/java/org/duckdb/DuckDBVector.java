@@ -53,11 +53,11 @@ class DuckDBVector {
         this.nullmask = nullmask;
     }
     private final DuckDBColumnTypeMetaData meta;
-    protected DuckDBColumnType duckdb_type;
-    protected int length;
-    protected boolean[] nullmask;
-    protected ByteBuffer constlen_data = null;
-    protected Object[] varlen_data = null;
+    protected final DuckDBColumnType duckdb_type;
+    final int length;
+    private final boolean[] nullmask;
+    private ByteBuffer constlen_data = null;
+    private Object[] varlen_data = null;
 
     Object getObject(int idx) throws SQLException {
         if (check_and_null(idx)) {
@@ -328,7 +328,7 @@ class DuckDBVector {
         return buf;
     }
 
-    private boolean check_and_null(int idx) {
+    protected boolean check_and_null(int idx) {
         return nullmask[idx];
     }
 
