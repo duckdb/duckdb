@@ -336,12 +336,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->value_map = std::move(planner.value_map);
 	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 
-	if (!planner.properties.bound_all_parameters) {
+	if (!planner.properties.bound_all_parameters)
+	{
 		return result;
 	}
-#ifdef DEBUG
-	plan->Verify(*this);
-#endif
 	unique_ptr<PhysicalOperator> physical_plan;
 	if (config.enable_optimizer && plan->RequireOptimizer())
 	{
@@ -349,19 +347,17 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		if(statement_type == StatementType::SELECT_STATEMENT)
 		{
 			Cascade cascade = Cascade(*this);
-			physical_plan = cascade.Optimize(std::move(plan));
+			unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
+			physical_plan = cascade.Optimize(std::move(logical_plan));
 		}
 		else
 		{
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));
 			D_ASSERT(plan);
-#ifdef DEBUG
-			plan->Verify(*this);
-#endif
 			// now convert logical query plan into a physical query plan
 			PhysicalPlanGenerator physical_planner(*this);
-			physical_plan = physical_planner.CreatePlan(std::move(plan));
+			physical_plan = physical_planner.CreatePlan(unique_ptr_cast<Operator, LogicalOperator>(std::move(plan)));
 		}
 		profiler.EndPhase();
 	}
@@ -429,7 +425,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 		auto get_method =
 		    config.result_collector ? config.result_collector : PhysicalResultCollector::GetResultCollector;
 		collector = get_method(*this, statement);
-		D_ASSERT(collector->type == PhysicalOperatorType::RESULT_COLLECTOR);
+		D_ASSERT(collector->physical_type == PhysicalOperatorType::RESULT_COLLECTOR);
 		executor.Initialize(std::move(collector));
 	} else {
 		executor.Initialize(*statement.plan);
@@ -492,38 +488,38 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	return std::move(parser.statements);
 }
 
-void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
+void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements)
+{
 	auto lock = LockContext();
-
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(*lock, statements);
 }
 
-unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
+unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query)
+{
 	auto lock = LockContext();
 
 	auto statements = ParseStatementsInternal(*lock, query);
-	if (statements.size() != 1) {
+	if (statements.size() != 1)
+	{
 		throw Exception("ExtractPlan can only prepare a single statement");
 	}
 
 	unique_ptr<LogicalOperator> plan;
-	RunFunctionInTransactionInternal(*lock, [&]() {
+	RunFunctionInTransactionInternal(*lock, [&]()
+	{
 		Planner planner(*this);
 		planner.CreatePlan(std::move(statements[0]));
 		D_ASSERT(planner.plan);
-
-		plan = std::move(planner.plan);
-
-		if (config.enable_optimizer) {
+		plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(planner.plan));
+		if (config.enable_optimizer)
+		{
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));
 		}
-
 		ColumnBindingResolver resolver;
 		resolver.Verify(*plan);
 		resolver.VisitOperator(*plan);
-
 		plan->ResolveOperatorTypes();
 	});
 	return plan;
