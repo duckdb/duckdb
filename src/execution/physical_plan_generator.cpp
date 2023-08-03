@@ -67,7 +67,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	op.estimated_cardinality = op.EstimateCardinality(context);
 	unique_ptr<PhysicalOperator> plan = nullptr;
 
-	switch (op.type) {
+	switch (op.logical_type) {
 	case LogicalOperatorType::LOGICAL_GET:
 		plan = CreatePlan(op.Cast<LogicalGet>());
 		break;

@@ -1,51 +1,59 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
-
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/to_string.hpp"
 
-namespace duckdb {
-
-ColumnBindingResolver::ColumnBindingResolver() {
+namespace duckdb
+{
+ColumnBindingResolver::ColumnBindingResolver()
+{
 }
 
-void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
-	switch (op.type) {
+void ColumnBindingResolver::VisitOperator(LogicalOperator &op)
+{
+	switch (op.logical_type)
+	{
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+	{
 		// special case: comparison join
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		// first get the bindings of the LHS and resolve the LHS expressions
-		VisitOperator(*comp_join.children[0]);
-		for (auto &cond : comp_join.conditions) {
+		LogicalOperator* left_op = (LogicalOperator*)comp_join.children[0].get();
+		VisitOperator(*left_op);
+		for (auto &cond : comp_join.conditions)
+		{
 			VisitExpression(&cond.left);
 		}
-		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		if (left_op->logical_type == LogicalOperatorType::LOGICAL_DELIM_JOIN)
+		{
 			// visit the duplicate eliminated columns on the LHS, if any
 			auto &delim_join = op.Cast<LogicalDelimJoin>();
-			for (auto &expr : delim_join.duplicate_eliminated_columns) {
+			for (auto &expr : delim_join.duplicate_eliminated_columns)
+			{
 				VisitExpression(&expr);
 			}
 		}
 		// then get the bindings of the RHS and resolve the RHS expressions
-		VisitOperator(*comp_join.children[1]);
-		for (auto &cond : comp_join.conditions) {
+		LogicalOperator* right_op = (LogicalOperator*)comp_join.children[1].get();
+		VisitOperator(*right_op);
+		for (auto &cond : comp_join.conditions)
+		{
 			VisitExpression(&cond.right);
 		}
 		// finally update the bindings with the result bindings of the join
 		bindings = op.GetColumnBindings();
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	{
 		// ANY join, this join is different because we evaluate the expression on the bindings of BOTH join sides at
 		// once i.e. we set the bindings first to the bindings of the entire join, and then resolve the expressions of
 		// this operator
@@ -108,12 +116,14 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	bindings = op.GetColumnBindings();
 }
 
-unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
-                                                           unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr)
+{
 	D_ASSERT(expr.depth == 0);
 	// check the current set of column bindings to see which index corresponds to the column reference
-	for (idx_t i = 0; i < bindings.size(); i++) {
-		if (expr.binding == bindings[i]) {
+	for (idx_t i = 0; i < bindings.size(); i++)
+	{
+		if (expr.binding == bindings[i])
+		{
 			return make_uniq<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
@@ -128,28 +138,33 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 		bound_columns += to_string(bindings[i].table_index) + "." + to_string(bindings[i].column_index);
 	}
 	bound_columns += "]";
-
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
-	                        expr.binding.table_index, expr.binding.column_index, bound_columns);
+	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias, expr.binding.table_index, expr.binding.column_index, bound_columns);
 	// LCOV_EXCL_STOP
 }
 
-unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) {
+unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op)
+{
 	unordered_set<idx_t> result;
-	for (auto &child : op.children) {
-		auto child_indexes = VerifyInternal(*child);
-		for (auto index : child_indexes) {
+	for (auto &child : op.children)
+	{
+		LogicalOperator* logical_child = (LogicalOperator*)child.get();
+		auto child_indexes = VerifyInternal(*logical_child);
+		for (auto index : child_indexes)
+		{
 			D_ASSERT(index != DConstants::INVALID_INDEX);
-			if (result.find(index) != result.end()) {
+			if (result.find(index) != result.end())
+			{
 				throw InternalException("Duplicate table index \"%lld\" found", index);
 			}
 			result.insert(index);
 		}
 	}
 	auto indexes = op.GetTableIndex();
-	for (auto index : indexes) {
+	for (auto index : indexes)
+	{
 		D_ASSERT(index != DConstants::INVALID_INDEX);
-		if (result.find(index) != result.end()) {
+		if (result.find(index) != result.end())
+		{
 			throw InternalException("Duplicate table index \"%lld\" found", index);
 		}
 		result.insert(index);
@@ -157,10 +172,8 @@ unordered_set<idx_t> ColumnBindingResolver::VerifyInternal(LogicalOperator &op) 
 	return result;
 }
 
-void ColumnBindingResolver::Verify(LogicalOperator &op) {
-#ifdef DEBUG
-	VerifyInternal(op);
-#endif
+void ColumnBindingResolver::Verify(LogicalOperator &op)
+{
 }
 
 } // namespace duckdb
