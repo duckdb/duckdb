@@ -24,7 +24,8 @@ class CachedFile : public std::enable_shared_from_this<CachedFile> {
 
 public:
 	unique_ptr<CachedFileHandle> GetHandle() {
-		return make_uniq<CachedFileHandle>(shared_from_this());
+		auto this_ptr = shared_from_this();
+		return make_uniq<CachedFileHandle>(this_ptr);
 	}
 
 private:
@@ -41,7 +42,7 @@ private:
 //! Handle to a CachedFile
 class CachedFileHandle {
 public:
-	explicit CachedFileHandle(shared_ptr<CachedFile> file_p);
+	explicit CachedFileHandle(shared_ptr<CachedFile>& file_p);
 
 	//! allocate a buffer for the file
 	void AllocateBuffer(idx_t size);

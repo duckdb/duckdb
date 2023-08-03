@@ -35,6 +35,7 @@ common/file_system.cpp	19
 common/fsst.cpp	7
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
+common/http_state.cpp	36
 common/local_file_system.cpp	16
 common/multi_file_reader.cpp	15
 common/operator/cast_operators.cpp	72
@@ -475,7 +476,7 @@ main/connection.cpp	38
 main/database.cpp	39
 main/database_manager.cpp	3
 main/database_path_and_type.cpp	5
-main/db_instance_cache.cpp	26
+main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
