@@ -67,7 +67,7 @@ public:
 		REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
 		                                                table_name.c_str(), &adbc_error)));
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &arrow_stream, &adbc_error)));
+		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 		REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 	}
@@ -778,8 +778,28 @@ TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
-//AdbcStatementPrepare
+TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
 
-//AdbcConnectionGetTableTypes
+	// Create Arrow Result
+	auto input_data = db.Query("SELECT 42");
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data);
 
-//AdbcConnectionGetObjects
+	ArrowArrayStream arrow_stream;
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	AdbcConnectionGetTableTypes(&db.adbc_connection,&arrow_stream,&adbc_error);
+
+	db.CreateTable("result", arrow_stream);
+
+	DuckDB db_check(db.path);
+	Connection con(db_check);
+	auto res = con.Query("Select * from result");
+	REQUIRE (res->ColumnCount() == 1);
+	REQUIRE (res->GetValue(0,0).ToString() == "BASE TABLE");
+	db.arrow_stream.release = nullptr;
+}
