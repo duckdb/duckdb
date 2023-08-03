@@ -123,7 +123,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	// set up the dependencies within this MetaPipeline
 	for (auto &pipeline : pipelines) {
 		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
+		if (source->physical_type == PhysicalOperatorType::TABLE_SCAN) {
 			// we have to reset the source here (in the main thread), because some of our clients (looking at you, R)
 			// do not like it when threads other than the main thread call into R, for e.g., arrow scans
 			pipeline->ResetSource(true);
@@ -521,7 +521,7 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 } // LCOV_EXCL_STOP
 
 bool Executor::HasResultCollector() {
-	return physical_plan->type == PhysicalOperatorType::RESULT_COLLECTOR;
+	return physical_plan->physical_type == PhysicalOperatorType::RESULT_COLLECTOR;
 }
 
 unique_ptr<QueryResult> Executor::GetResult() {
