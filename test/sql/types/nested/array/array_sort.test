@@ -36,7 +36,7 @@ WITH
 	b(i) AS (SELECT ${COLLECTION_INNER}(a1.i, a2.i) FROM a as a1, a as a2),
 	c(i) AS (SELECT ${COLLECTION_MIDDLE}(b1.i, b2.i) FROM b as b1, b as b2)
 SELECT ${COLLECTION_OUTER}(c1.i, c2.i) FROM c as c1, c as c2
-ORDER BY 1 DESC;
+ORDER BY 1 ASC;
 ----
 [[[0, 0], [0, 0]], [[0, 0], [0, 0]]]
 [[[0, 0], [0, 0]], [[0, 0], [0, 1]]]

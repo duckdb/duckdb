@@ -303,18 +303,21 @@ void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary, idx_t 
 	} else if (auxiliary.GetBufferType() == VectorBufferType::ARRAY_BUFFER) {
 		auto &buffer = auxiliary.Cast<VectorArrayBuffer>();
 		auto array_size = buffer.GetArraySize();
-		auto new_multiplier = current_multiplier * array_size;
 		auto &child = buffer.GetChild();
 		auto data = child.GetData();
 		if (!data) {
 			//! Nested type
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()), true,
-			                  new_multiplier);
+			                  current_multiplier);
 			to_resize.emplace_back(arrays);
+
+			// The child vectors of ArrayTypes always have to be (size * array_size), so we need to multiply the
+			// multiplier by the array size
+			auto new_multiplier = current_multiplier * array_size;
 			FindChildren(to_resize, *child.GetAuxiliary(), new_multiplier);
 		} else {
 			DataArrays arrays(child, data, child.GetBuffer().get(), GetTypeIdSize(child.GetType().InternalType()),
-			                  false, new_multiplier);
+			                  false, current_multiplier);
 			to_resize.emplace_back(arrays);
 		}
 	}
@@ -1454,19 +1457,23 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 
 	if (type.InternalType() == PhysicalType::ARRAY) {
 		auto &child = ArrayVector::GetEntry(*vector);
-		auto array_size = ArrayType::GetSize(type);
-		auto child_count = count * array_size;
-
 		D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
-		SelectionVector child_sel(child_count);
-		for (idx_t i = 0; i < count; i++) {
-			auto oidx = sel->get_index(i);
-			for (idx_t j = 0; j < array_size; j++) {
-				child_sel.set_index(i * array_size + j, oidx * array_size + j);
-			}
-		}
+		auto array_size = ArrayType::GetSize(type);
 
-		Vector::Verify(child, child_sel, child_count);
+		if(vtype == VectorType::CONSTANT_VECTOR) {
+			child.Verify(array_size);
+		} else {
+			auto child_count = count * array_size;
+			SelectionVector child_sel(child_count);
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel->get_index(i);
+				for (idx_t j = 0; j < array_size; j++) {
+					child_sel.set_index(i * array_size + j, oidx * array_size + j);
+				}
+			}
+
+			Vector::Verify(child, child_sel, child_count);
+		}
 	}
 
 	if (type.InternalType() == PhysicalType::STRUCT) {
@@ -1662,8 +1669,9 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		}
 
 		// Reference the child vector
-		auto &child = ArrayVector::GetEntry(vector);
-		child.Reference(ArrayVector::GetEntry(source));
+		auto &target_child = ArrayVector::GetEntry(vector);
+		auto &source_child = ArrayVector::GetEntry(source);
+		target_child.Reference(source_child);
 
 		// Only take the element at the given position
 		auto array_size = ArrayType::GetSize(source_type);
@@ -1671,8 +1679,8 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		for (idx_t i = 0; i < array_size; i++) {
 			sel.set_index(i, array_size * position + i);
 		}
-		child.Slice(sel, array_size);
-		child.Flatten(array_size); // since its constant we only have to flatten this much
+		target_child.Slice(sel, array_size);
+		target_child.Flatten(array_size); // since its constant we only have to flatten this much
 
 		vector.SetVectorType(VectorType::CONSTANT_VECTOR);
 		vector.validity.Set(0, true);

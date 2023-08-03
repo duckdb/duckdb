@@ -697,7 +697,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	}
 
 	// if need slicing (true)
-	/*
+	
 	SelectionVector sel(total_length);
 	//begin
 	idx_t entry = 0;
@@ -719,11 +719,10 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	sliced_child_vector.ToUnifiedFormat(total_length, child_vector_data);
 	child_function.function(child_meta_data, child_vector_data, sliced_child_vector, 0,
 	                        total_length);
-	*/
 
 	// If not need slicing (false)
-	child_vector.ToUnifiedFormat(total_length, child_vector_data);
-	child_function.function(child_meta_data, child_vector_data, child_vector, first_offset, total_length);
+	//child_vector.ToUnifiedFormat(total_length, child_vector_data);
+	//child_function.function(child_meta_data, child_vector_data, child_vector, first_offset, total_length);
 
 	meta_data.child_list_size = current_list_size;
 }

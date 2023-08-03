@@ -167,7 +167,7 @@ static void HeapGatherArrayVector(Vector &v, const idx_t vcount, const Selection
 			key_locations[i] += array_size * sizeof(idx_t);
 		}
 
-		auto array_start = i * array_size; // TODO: is it i or col_idx here?
+		auto array_start = col_idx * array_size;
 		auto elem_remaining = array_size;
 
 		idx_t offset_in_byte = 0;
