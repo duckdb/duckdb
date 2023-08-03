@@ -3471,10 +3471,10 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("varchar_array", trio("🦆🦆🦆🦆🦆🦆", "goose", null, ""));
         correct_answer_map.put("nested_int_array", trio(emptyList(), asList(42, 999, null, null, -42), null,
                                                         emptyList(), asList(42, 999, null, null, -42)));
-        correct_answer_map.put(
-            "struct_of_arrays",
-            asList("{'a': NULL, 'b': NULL}",
-                   "{'a': [42, 999, NULL, NULL, -42], 'b': [🦆🦆🦆🦆🦆🦆, goose, NULL, ]}", null));
+        correct_answer_map.put("struct_of_arrays", asList(mapOf("a", null, "b", null),
+                                                          mapOf("a", asList(42, 999, null, null, -42), "b",
+                                                                asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")),
+                                                          null));
         correct_answer_map.put("array_of_structs",
                                trio("{'a': NULL, 'b': NULL}", "{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}", null));
         correct_answer_map.put("bool", asList(false, true, null));
