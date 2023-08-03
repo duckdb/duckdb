@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -32,5 +33,12 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
+
+public:
+	vector<ColumnBinding> getColumnBinding() override
+	{
+		vector<ColumnBinding> v;
+		return v;
+	}
 };
 } // namespace duckdb

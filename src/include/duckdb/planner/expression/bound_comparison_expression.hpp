@@ -9,10 +9,13 @@
 #pragma once
 
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
-namespace duckdb {
+namespace duckdb
+{
 
-class BoundComparisonExpression : public Expression {
+class BoundComparisonExpression : public Expression
+{
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_COMPARISON;
 
@@ -33,5 +36,15 @@ public:
 
 public:
 	static LogicalType BindComparison(LogicalType left_type, LogicalType right_type);
+
+public:
+	vector<ColumnBinding> getColumnBinding() override
+	{
+		vector<ColumnBinding> v;
+		v = left->getColumnBinding();
+		vector<ColumnBinding> v1 = right->getColumnBinding();
+		v.insert(v1.begin(), v1.end(), v.end());
+		return v;
+	}
 };
 } // namespace duckdb
