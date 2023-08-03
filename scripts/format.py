@@ -39,6 +39,7 @@ extensions = [
     '.test_coverage',
     '.benchmark',
     '.py',
+    '.java',
 ]
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension', 'scripts']
 ignored_files = [
@@ -233,6 +234,7 @@ format_commands = {
     '.cc': cpp_format_command,
     '.txt': cmake_format_command,
     '.py': 'black --quiet - --skip-string-normalization --line-length 120 --stdin-filename',
+    '.java': cpp_format_command,
 }
 
 difference_files = []
