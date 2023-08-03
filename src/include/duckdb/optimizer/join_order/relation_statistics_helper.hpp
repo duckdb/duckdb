@@ -47,9 +47,9 @@ public:
 public:
 	static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
 	                                   BaseStatistics &base_stats);
-	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-	                                  BaseStatistics &base_stats);
-	//!
+	//	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
+	//	                                  BaseStatistics &base_stats);
+	//! Extract Statistics from a LogicalGet.
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context);
 	//! Create the statistics for a projection using the statistics of the operator that sits underneath the

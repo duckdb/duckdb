@@ -502,6 +502,9 @@ optimizer/join_order/cardinality_estimator.cpp	43
 optimizer/join_order/join_node.cpp	18
 optimizer/join_order/join_order_optimizer.cpp	96
 optimizer/join_order/query_graph.cpp	2
+optimizer/join_order/relation_manager.cpp	4
+optimizer/join_order/query_graph_manager.cpp	3
+optimizer/join_order/estimated_properties.cpp	7
 optimizer/matcher/expression_matcher.cpp	2
 optimizer/pullup/pullup_projection.cpp	4
 optimizer/pushdown/pushdown_inner_join.cpp	2

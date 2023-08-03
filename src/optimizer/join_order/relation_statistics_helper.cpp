@@ -115,11 +115,6 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 				idx_t cardinality_with_and_filter = RelationStatisticsHelper::InspectConjunctionAND(
 				    base_table_cardinality, it.first, filter, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
-			} else if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
-				auto &filter = it.second->Cast<ConjunctionOrFilter>();
-				idx_t cardinality_with_or_filter = RelationStatisticsHelper::InspectConjunctionOR(
-				    base_table_cardinality, it.first, filter, *column_statistics);
-				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
@@ -325,28 +320,37 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 	return cardinality_after_filters;
 }
 
-idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-                                                     BaseStatistics &base_stats) {
-	auto has_equality_filter = false;
-	auto cardinality_after_filters = cardinality;
-	for (auto &child_filter : filter.child_filters) {
-		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
-			continue;
-		}
-		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
-		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-			auto column_count = base_stats.GetDistinctCount();
-			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
-			if (has_equality_filter) {
-				cardinality_after_filters += increment;
-			} else {
-				cardinality_after_filters = increment;
-			}
-			has_equality_filter = true;
-		}
-	}
-	D_ASSERT(cardinality_after_filters > 0);
-	return cardinality_after_filters;
-}
+// TODO: Currently only simple AND filters are pushed into table scans.
+//  When OR filters are pushed this function can be added
+// idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter
+// &filter,
+//                                                     BaseStatistics &base_stats) {
+//	auto has_equality_filter = false;
+//	auto cardinality_after_filters = cardinality;
+//	for (auto &child_filter : filter.child_filters) {
+//		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
+//			continue;
+//		}
+//		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
+//		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
+//			auto column_count = base_stats.GetDistinctCount();
+//			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
+//			if (has_equality_filter) {
+//				cardinality_after_filters += increment;
+//			} else {
+//				cardinality_after_filters = increment;
+//			}
+//			has_equality_filter = true;
+//		}
+//		if (child_filter->filter_type == TableFilterType::CONJUNCTION_AND) {
+//			auto &and_filter = child_filter->Cast<ConjunctionAndFilter>();
+//			cardinality_after_filters = RelationStatisticsHelper::InspectConjunctionAND(
+//			    cardinality_after_filters, column_index, and_filter, base_stats);
+//			continue;
+//		}
+//	}
+//	D_ASSERT(cardinality_after_filters > 0);
+//	return cardinality_after_filters;
+//}
 
 } // namespace duckdb

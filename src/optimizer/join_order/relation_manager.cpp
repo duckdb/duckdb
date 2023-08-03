@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/operator/list.hpp"
 
 #include <cmath>
 
@@ -331,6 +330,8 @@ vector<unique_ptr<FilterInfo>> RelationManager::ExtractEdges(LogicalOperator &op
 	return filters_and_bindings;
 }
 
+// LCOV_EXCL_START
+
 void RelationManager::PrintRelationStats() {
 #ifdef DEBUG
 	string to_print;
@@ -349,5 +350,7 @@ void RelationManager::PrintRelationStats() {
 	}
 #endif
 }
+
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
