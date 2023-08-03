@@ -23,15 +23,7 @@
 #define assert_H
 
 // retail assert; available in all builds
-#define GPOS_RTL_ASSERT(x) \
-	((x) ? ((void) 0) : gpos::CException::Raise(__FILE__, __LINE__, gpos::CException::ExmaSystem, gpos::CException::ExmiAssert, __FILE__, __LINE__, GPOS_WSZ_LIT(#x)))
-
-#ifdef GPOS_DEBUG
-	// standard debug assert; maps to retail assert in debug builds only
-	#define GPOS_ASSERT(x) GPOS_RTL_ASSERT(x)
-#else
-	#define GPOS_ASSERT(x) ;
-#endif
+#define GPOS_ASSERT(x) ;
 
 // implication assert
 #define GPOS_ASSERT_IMP(x, y) GPOS_ASSERT(!(x) || (y))
@@ -44,8 +36,5 @@
 
 // debug assert, with message
 #define GPOS_ASSERT_MSG(x, msg) GPOS_ASSERT((x) && (msg))
-
-// retail assert, with message
-#define GPOS_RTL_ASSERT_MSG(x, msg) GPOS_RTL_ASSERT((x) && (msg))
 
 #endif

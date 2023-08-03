@@ -19,22 +19,17 @@
 
 #define GPOS_SIZEOF(x) ((gpos::ULONG) sizeof(x))
 #define GPOS_ARRAY_SIZE(x) (GPOS_SIZEOF(x) / GPOS_SIZEOF(x[0]))
-#define GPOS_OFFSET(T, M) ((gpos::ULONG)(SIZE_T) & (((T *) 0x1)->M) - 1)
+#define GPOS_OFFSET(T, M) ((gpos::ULONG)(SIZE_T) &(((T *) 0x8)->M) - 8)
 
 /* wide character string literate */
 #define GPOS_WSZ_LIT(x) L##x
-
-// failpoint simulation is enabled on debug build
-#ifdef GPOS_DEBUG
-#define GPOS_FPSIMULATOR 1
-#endif	// GPOS_DEBUG
 
 namespace gpos
 {
 // Basic types to be used instead of built-ins
 // Add types as needed;
-
 typedef unsigned char BYTE;
+
 typedef char CHAR;
 // ignore signed char for the moment
 
@@ -44,7 +39,6 @@ typedef wchar_t WCHAR;
 typedef bool BOOL;
 
 // numeric types
-
 typedef size_t SIZE_T;
 typedef ssize_t SSIZE_T;
 typedef mode_t MODE_T;
@@ -132,13 +126,11 @@ typedef std::nothrow_t NO_THROW;
 enum GPOS_RESULT
 {
 	GPOS_OK = 0,
-
 	GPOS_FAILED = 1,
 	GPOS_OOM = 2,
 	GPOS_NOT_FOUND = 3,
 	GPOS_TIMEOUT = 4
 };
-
 
 // enum for locale encoding
 enum ELocale
@@ -146,9 +138,7 @@ enum ELocale
 	ELocInvalid,  // invalid key for hashtable iteration
 	ElocEnUS_Utf8,
 	ElocGeDE_Utf8,
-
 	ElocSentinel
 };
 }  // namespace gpos
-
 #endif

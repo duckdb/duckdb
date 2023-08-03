@@ -13,7 +13,6 @@
 #define GPOS_utils_H
 
 #include "duckdb/optimizer/cascade/common/clibwrapper.h"
-#include "duckdb/optimizer/cascade/error/CException.h"
 #include "duckdb/optimizer/cascade/io/COstreamBasic.h"
 #include "duckdb/optimizer/cascade/types.h"
 
@@ -101,9 +100,7 @@ HashValue(const T *pt)
 }
 
 // generic hash function for pointer types -- use e.g. when address is ID of object
-template <class T>
-inline ULONG
-HashPtr(const T *pt)
+template <class T> inline ULONG HashPtr(const T* pt)
 {
 	return HashByteArray((BYTE *) &pt, GPOS_SIZEOF(void *));
 }
