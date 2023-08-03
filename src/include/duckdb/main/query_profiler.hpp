@@ -128,13 +128,24 @@ public:
 	DUCKDB_API QueryProfiler(ClientContext &context);
 
 public:
-	struct TreeNode {
+	struct TreeNode
+	{
 		PhysicalOperatorType type;
 		string name;
 		string extra_info;
 		OperatorInformation info;
 		vector<unique_ptr<TreeNode>> children;
 		idx_t depth = 0;
+
+		vector<const_reference<TreeNode>> GetChildren() const
+		{
+			vector<const_reference<TreeNode>> result;
+			for (auto &child : children)
+			{
+				result.push_back(*(TreeNode*)child.get());
+			}
+			return result;
+		}
 	};
 
 	// Propagate save_location, enabled, detailed_enabled and automatic_print_format.
