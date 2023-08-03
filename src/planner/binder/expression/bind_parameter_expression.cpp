@@ -17,10 +17,11 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	if (binder.parameters->parameter_data.count(parameter_id)) {
 		// it has! emit a constant directly
 		auto &data = binder.parameters->parameter_data[parameter_id];
-		auto constant = make_uniq<BoundConstantExpression>(data.value);
+		auto constant = make_uniq<BoundConstantExpression>(data.GetValue());
 		constant->alias = expr.alias;
 		return BindResult(std::move(constant));
 	}
+
 	auto entry = binder.parameters->parameters.find(parameter_id);
 	if (entry == binder.parameters->parameters.end()) {
 		// no entry yet: create a new one

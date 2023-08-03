@@ -63,7 +63,8 @@ void PreparedStatementData::Bind(case_insensitive_map_t<Value> values) {
 			    "Type mismatch for binding parameter with identifier %s, expected type %s but got type %s", identifier,
 			    it.second->return_type.ToString().c_str(), value.type().ToString().c_str());
 		}
-		it.second->value = value;
+		// THIJS KIJK HIER
+		it.second->SetValue(value);
 	}
 }
 
@@ -75,7 +76,7 @@ bool PreparedStatementData::TryGetType(const string &identifier, LogicalType &re
 	if (it->second->return_type.id() != LogicalTypeId::INVALID) {
 		result = it->second->return_type;
 	} else {
-		result = it->second->value.type();
+		result = it->second->GetValue().type();
 	}
 	return true;
 }

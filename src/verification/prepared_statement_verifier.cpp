@@ -54,10 +54,10 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		// check if the value already exists
 		idx_t index = values.size();
 		auto identifier = std::to_string(index + 1);
-		auto result = std::find_if(values.begin(), values.end(),
-		                           [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
+		const auto predicate = [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
 			                           return pair.second->Equals(*child.get());
-		                           });
+		                           };
+		auto result = std::find_if(values.begin(), values.end(), predicate);
 		if (result == values.end()) {
 			// If it doesn't exist yet, add it
 			values[identifier] = std::move(child);

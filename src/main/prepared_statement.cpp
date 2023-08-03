@@ -63,7 +63,7 @@ case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes
 		auto &identifier = it.first;
 		D_ASSERT(data->value_map.count(identifier));
 		D_ASSERT(it.second);
-		expected_types[identifier] = it.second->value.type();
+		expected_types[identifier] = it.second->GetValue().type();
 	}
 	return expected_types;
 }

@@ -84,14 +84,14 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
 		auto &identifier = kv.first;
-		auto &parameter_data = kv.second;
+		auto &param = kv.second;
 		// check if the type of the parameter could be resolved
-		if (!parameter_data->return_type.IsValid()) {
+		if (!param->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		parameter_data->value = Value(parameter_data->return_type);
-		value_map[identifier] = parameter_data;
+		param->SetValue(Value(param->return_type));
+		value_map[identifier] = param;
 	}
 }
 

@@ -16,15 +16,25 @@
 namespace duckdb {
 
 struct BoundParameterData {
+public:
 	BoundParameterData() {
 	}
 	explicit BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
 
+private:
 	Value value;
-	LogicalType return_type;
-
 public:
+	LogicalType return_type;
+public:
+	void SetValue(Value val) {
+		value = std::move(val);
+	}
+
+	const Value &GetValue() const {
+		return value;
+	}
+
 	void Serialize(Serializer &serializer) const {
 		FieldWriter writer(serializer);
 		value.Serialize(writer.GetSerializer());
