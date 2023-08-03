@@ -397,9 +397,6 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
-	}
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -613,9 +610,6 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
-	}
 	if (!connection) {
 		SetError(error, "Missing connection object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -736,9 +730,6 @@ static AdbcStatusCode IngestToTableFromBoundStream(DuckDBAdbcStatementWrapper *s
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
-	if (!error) {
-		return ADBC_STATUS_UNKNOWN;
-	}
 	if (!statement) {
 		SetError(error, "Missing statement object");
 		return ADBC_STATUS_INVALID_ARGUMENT;
