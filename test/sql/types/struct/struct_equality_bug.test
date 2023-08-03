@@ -1,0 +1,21 @@
+# name: test/sql/types/struct/struct_equality_bug.test
+# description: Test struct equality bug
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table integers(i integer);
+
+statement ok
+INSERT INTO integers VALUES (1),(1),(3),(20),(20),(20);
+
+# This is where the bug manifested, histogram creates 'k' and 'v' child names, map_entries expects 'key' and 'value'
+# this difference should not mather in the slightest
+query I
+select unnest(map_entries(histogram(i))) FROM integers;
+----
+{'k': 1, 'v': 2}
+{'k': 3, 'v': 1}
+{'k': 20, 'v': 3}
