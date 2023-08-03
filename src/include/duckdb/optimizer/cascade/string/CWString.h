@@ -29,12 +29,12 @@ namespace gpos
 //---------------------------------------------------------------------------
 class CWString : public CWStringBase
 {
-protected:
+public:
 	// null-terminated wide character buffer
-	WCHAR *m_w_str_buffer;
+	WCHAR* m_w_str_buffer;
 
 	// appends the contents of a buffer to the current string
-	virtual void AppendBuffer(const WCHAR *w_str_buffer) = 0;
+	virtual void AppendBuffer(const WCHAR* w_str_buffer) = 0;
 
 public:
 	// ctor
@@ -46,29 +46,25 @@ public:
 	}
 
 	// returns the wide character buffer storing the string
-	const WCHAR *GetBuffer() const;
+	const WCHAR* GetBuffer() const;
 
 	// appends a string
-	void Append(const CWStringBase *str);
+	void Append(const CWStringBase* str);
 
 	// appends a formatted string
-	virtual void AppendFormat(const WCHAR *format, ...) = 0;
+	virtual void AppendFormat(const WCHAR* format, ...) = 0;
 
 	// appends a string and replaces character with string
-	virtual void AppendEscape(const CWStringBase *str, WCHAR wc,
-							  const WCHAR *w_str_replace) = 0;
+	virtual void AppendEscape(const CWStringBase* str, WCHAR wc, const WCHAR* w_str_replace) = 0;
 
 	// appends a null terminated character array
-	virtual void AppendCharArray(const CHAR *sz) = 0;
+	virtual void AppendCharArray(const CHAR* sz) = 0;
 
 	// appends a null terminated wide character array
-	virtual void AppendWideCharArray(const WCHAR *w_str) = 0;
+	virtual void AppendWideCharArray(const WCHAR* w_str) = 0;
 
 	// resets string
 	virtual void Reset() = 0;
 };
 }  // namespace gpos
-
 #endif	// !GPOS_CWString_H
-
-// EOF

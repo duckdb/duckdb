@@ -8,6 +8,7 @@
 #ifndef GPOS_CWStringBase_H
 #define GPOS_CWStringBase_H
 
+#include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/clibwrapper.h"
 #include "duckdb/optimizer/cascade/types.h"
 
@@ -16,10 +17,11 @@
 
 #define WCHAR_EOS GPOS_WSZ_LIT('\0')
 
+using namespace std;
+
 namespace gpos
 {
 class CWStringConst;
-class CMemoryPool;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -38,11 +40,7 @@ class CMemoryPool;
 //---------------------------------------------------------------------------
 class CWStringBase
 {
-private:
-	// private copy ctor
-	CWStringBase(const CWStringBase &);
-
-protected:
+public:
 	// represents end-of-wide-string character
 	static const WCHAR m_empty_wcstr;
 
@@ -50,49 +48,52 @@ protected:
 	ULONG m_length;
 
 	// whether string owns its memory and should take care of deallocating it at destruction time
-	BOOL m_owns_memory;
+	bool m_owns_memory;
 
 	// checks whether the string is byte-wise equal to a given string literal
-	virtual BOOL Equals(const WCHAR *w_str_buffer) const;
+	virtual bool Equals(const WCHAR* w_str_buffer) const;
 
 public:
 	// ctor
-	CWStringBase(ULONG length, BOOL owns_memory)
+	CWStringBase(ULONG length, bool owns_memory)
 		: m_length(length), m_owns_memory(owns_memory)
 	{
 	}
-
+	
+	// private copy ctor
+	CWStringBase(const CWStringBase &) = delete;
+	
 	// dtor
 	virtual ~CWStringBase()
 	{
 	}
 
 	// deep copy of the string
-	virtual CWStringConst *Copy(CMemoryPool *mp) const;
+	virtual shared_ptr<CWStringConst> Copy() const;
 
 	// accessors
 	virtual ULONG Length() const;
 
 	// checks whether the string is byte-wise equal to another string
-	virtual BOOL Equals(const CWStringBase *str) const;
+	virtual bool Equals(const CWStringBase* str) const;
 
 	// checks whether the string contains any characters
-	virtual BOOL IsEmpty() const;
+	virtual bool IsEmpty() const;
 
 	// checks whether a string is properly null-terminated
 	bool IsValid() const;
 
 	// equality operator
-	BOOL operator==(const CWStringBase &str) const;
+	bool operator==(const CWStringBase &str) const;
 
 	// returns the wide character buffer storing the string
-	virtual const WCHAR *GetBuffer() const = 0;
+	virtual const WCHAR* GetBuffer() const = 0;
 
 	// returns the index of the first occurrence of a character, -1 if not found
 	INT Find(WCHAR wc) const;
 
 	// checks if a character is escaped
-	BOOL HasEscapedCharAt(ULONG offset) const;
+	bool HasEscapedCharAt(ULONG offset) const;
 
 	// count how many times the character appears in string
 	ULONG CountOccurrencesOf(const WCHAR wc) const;
