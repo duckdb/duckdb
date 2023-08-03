@@ -50,7 +50,7 @@
         "type": "vector<string>"
       },
       {
-        "name": "type",
+        "name": "fk_type",
         "type": "ForeignKeyType",
         "property": "info.type"
       },
