@@ -55,6 +55,7 @@ public:
 
 	MetaBlockPointer GetDiskPointer(MetadataPointer pointer, uint32_t offset = 0);
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
+	MetadataPointer RegisterDiskPointer(MetaBlockPointer pointer);
 
 	//! Flush all blocks to disk
 	void Flush();
@@ -71,10 +72,14 @@ protected:
 	BufferManager &buffer_manager;
 	vector<MetadataBlock> blocks;
 	vector<idx_t> free_blocks;
+	unordered_map<block_id_t, idx_t> block_map;
 
 protected:
 	void AllocateNewBlock();
 	block_id_t GetNextBlockId();
+
+	void AddBlock(MetadataBlock new_block);
+	void AddAndRegisterBlock(MetadataBlock block);
 
 };
 

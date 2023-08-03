@@ -45,6 +45,8 @@ struct MetaBlockPointer {
 	bool IsValid() {
 		return block_pointer != DConstants::INVALID_INDEX;
 	}
+	block_id_t GetBlockId();
+	uint32_t GetBlockIndex();
 };
 
 } // namespace duckdb

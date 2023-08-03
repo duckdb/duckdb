@@ -12,10 +12,15 @@
 
 namespace duckdb {
 
+enum class BlockReaderType {
+	EXISTING_BLOCKS,
+	REGISTER_BLOCKS
+};
+
 class MetadataReader : public Deserializer {
 public:
 	MetadataReader(MetadataManager &manager, MetadataPointer next_pointer);
-	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer);
+	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
 
 public:
 	//! Read content of size read_size into the buffer
@@ -32,8 +37,11 @@ private:
 
 	void ReadNextBlock();
 
+	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
+
 private:
 	MetadataManager &manager;
+	BlockReaderType type;
 	MetadataHandle block;
 	MetadataPointer next_pointer;
 	bool has_next_block;

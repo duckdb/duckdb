@@ -54,29 +54,58 @@ void MetadataManager::AllocateNewBlock() {
 	for(idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
+	AddBlock(std::move(new_block));
+}
+
+void MetadataManager::AddBlock(MetadataBlock new_block) {
+	if (block_map.find(new_block.block_id) != block_map.end()) {
+		throw InternalException("Block id with id %llu already exists", new_block.block_id);
+	}
+	block_map[new_block.block_id] = blocks.size();
 	blocks.push_back(std::move(new_block));
+}
+
+void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
+	if (block.block) {
+		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
+	}
+	block.block = block_manager.RegisterBlock(block.block_id);
+	AddBlock(std::move(block));
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
 	idx_t block_pointer = blocks[pointer.block_index].block_id;
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
+}
 
+block_id_t MetaBlockPointer::GetBlockId() {
+	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));;
+}
+
+uint32_t MetaBlockPointer::GetBlockIndex() {
+	return block_pointer >> 56ULL;
 }
 
 MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
-	auto block_id = block_id_t(pointer.block_pointer & ~(idx_t(0xFF) << 56ULL));
-	auto index = pointer.block_pointer >> 56ULL;
-	for(idx_t i = 0; i < blocks.size(); i++) {
-		auto &block = blocks[i];
-		if (block.block->BlockId() == block_id) {
-			MetadataPointer result;
-			result.block_index = i;
-			result.index = index;
-			return result;
-		}
+	auto block_id = pointer.GetBlockId();
+	auto index = pointer.GetBlockIndex();
+	auto entry = block_map.find(block_id);
+	if (entry == block_map.end()) {
+		throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
 	}
-	throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
+	MetadataPointer result;
+	result.block_index = entry->second;
+	result.index = index;
+	return result;
+}
+
+MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
+	auto block_id = pointer.GetBlockId();
+	MetadataBlock block;
+	block.block_id = block_id;
+	AddAndRegisterBlock(block);
+	return FromDiskPointer(pointer);
 }
 
 idx_t MetadataManager::BlockCount() {
@@ -102,8 +131,14 @@ void MetadataManager::Deserialize(Deserializer &source) {
 	auto block_count = source.Read<uint64_t>();
 	for(idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Deserialize(source);
-		block.block = block_manager.RegisterBlock(block.block_id);
-		blocks.push_back(std::move(block));
+		auto entry = block_map.find(block.block_id);
+		if (entry == block_map.end()) {
+			// block does not exist yet
+			AddAndRegisterBlock(std::move(block));
+		} else {
+			// block was already created - only copy over the free list
+			blocks[entry->second].free_blocks = block.free_blocks;
+		}
 	}
 }
 

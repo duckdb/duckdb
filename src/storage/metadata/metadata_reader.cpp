@@ -3,11 +3,19 @@
 namespace duckdb {
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer) :
-	manager(manager), next_pointer(pointer), has_next_block(true), offset(0), capacity(0) {
+	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), offset(0), capacity(0) {
 }
 
-MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer) :
-	manager(manager), next_pointer(manager.FromDiskPointer(pointer)), has_next_block(true), offset(0), capacity(0) {
+MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type) :
+	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), offset(0), capacity(0) {
+}
+
+MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
+	if (type == BlockReaderType::EXISTING_BLOCKS) {
+		return manager.FromDiskPointer(pointer);
+	} else {
+		return manager.RegisterDiskPointer(pointer);
+	}
 }
 
 void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
@@ -42,7 +50,7 @@ void MetadataReader::ReadNextBlock() {
 	if (next_block == idx_t(-1)) {
 		has_next_block = false;
 	} else {
-		next_pointer = manager.FromDiskPointer(MetaBlockPointer(next_block, 0));
+		next_pointer = FromDiskPointer(MetaBlockPointer(next_block, 0));
 	}
 	offset = sizeof(block_id_t);
 	capacity = MetadataManager::METADATA_BLOCK_SIZE;
