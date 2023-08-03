@@ -81,16 +81,16 @@ MainHeader MainHeader::Deserialize(Deserializer &source) {
 
 void DatabaseHeader::Serialize(Serializer &ser) {
 	ser.Write<uint64_t>(iteration);
-	ser.Write<block_id_t>(meta_block);
-	ser.Write<block_id_t>(free_list);
+	ser.Write<idx_t>(meta_block);
+	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
 }
 
 DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
 	DatabaseHeader header;
 	header.iteration = source.Read<uint64_t>();
-	header.meta_block = source.Read<block_id_t>();
-	header.free_list = source.Read<block_id_t>();
+	header.meta_block = source.Read<idx_t>();
+	header.free_list = source.Read<idx_t>();
 	header.block_count = source.Read<uint64_t>();
 	return header;
 }
@@ -460,7 +460,6 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		FreeListBlockWriter writer(metadata_manager, std::move(free_list_blocks));
 
 		auto ptr = writer.GetBlockPointer();
-		D_ASSERT(ptr.offset == 0);
 		header.free_list = ptr.block_pointer;
 
 		writer.Write<uint64_t>(free_list.size());
@@ -474,7 +473,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		}
 	} else {
 		// no blocks in the free list
-		header.free_list = INVALID_BLOCK;
+		header.free_list = DConstants::INVALID_INDEX;
 	}
 	metadata_manager.Flush();
 	header.block_count = max_block;
@@ -491,7 +490,9 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	Store<DatabaseHeader>(header, header_buffer.buffer);
+	BufferedSerializer serializer;
+	header.Serialize(serializer);
+	memcpy(header_buffer.buffer, serializer.blob.data.get(), serializer.blob.size);
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);

@@ -58,14 +58,14 @@ void MetadataManager::AllocateNewBlock() {
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
-	idx_t block_pointer = blocks[pointer.block_index].block->BlockId();
+	idx_t block_pointer = blocks[pointer.block_index].block_id;
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
 
 }
 
 MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
-	auto block_id = block_id_t(pointer.block_pointer & (idx_t(0xFF) << 56ULL));
+	auto block_id = block_id_t(pointer.block_pointer & ~(idx_t(0xFF) << 56ULL));
 	auto index = pointer.block_pointer >> 56ULL;
 	for(idx_t i = 0; i < blocks.size(); i++) {
 		auto &block = blocks[i];
@@ -76,7 +76,7 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 			return result;
 		}
 	}
-	throw InternalException("Failed to load pointer %llu, no metadata block with block id %llu\n", pointer.block_pointer, block_id);
+	throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
 }
 
 void MetadataManager::Flush() {

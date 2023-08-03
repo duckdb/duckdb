@@ -7,8 +7,7 @@ MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer
 }
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer) :
-	manager(manager) {
-	throw InternalException("FIXME: MetadataReader from block pointer");
+	manager(manager), next_pointer(manager.FromDiskPointer(pointer)), has_next_block(true), offset(0), capacity(0) {
 }
 
 void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {

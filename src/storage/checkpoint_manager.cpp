@@ -120,7 +120,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 }
 
 MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
-	throw InternalException("SingleFileCheckpointReader::GetMetadataManager");
+	return storage.block_manager->GetMetadataManager();
 }
 
 void SingleFileCheckpointReader::LoadFromStorage() {

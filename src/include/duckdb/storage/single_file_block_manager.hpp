@@ -99,11 +99,11 @@ private:
 	//! The list of blocks that will be added to the free list
 	unordered_set<block_id_t> modified_blocks;
 	//! The current meta block id
-	block_id_t meta_block;
+	idx_t meta_block;
 	//! The current maximum block id, this id will be given away first after the free_list runs out
 	block_id_t max_block;
 	//! The block id where the free list can be found
-	block_id_t free_list_id;
+	idx_t free_list_id;
 	//! The current header iteration count
 	uint64_t iteration_count;
 	//! The storage manager options
