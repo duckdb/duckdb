@@ -57,6 +57,12 @@ duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types_
 		return nullptr;
 	}
 	duckdb::LogicalType **member_types = (duckdb::LogicalType **)member_types_p;
+	for (idx_t i = 0; i < member_count; i++) {
+		if (!member_names[i] || !member_types[i]) {
+			return nullptr;
+		}
+	}
+
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
 	duckdb::child_list_t<duckdb::LogicalType> members;
 
