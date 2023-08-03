@@ -9,6 +9,11 @@ BoundResultModifier::BoundResultModifier(ResultModifierType type) : type(type) {
 BoundResultModifier::~BoundResultModifier() {
 }
 
+BoundOrderByNode::BoundOrderByNode(const BoundOrderByNode &other)
+	: type(other.type), null_order(other.null_order), expression(unique_ptr<Expression>(other.expression.get()))
+{		
+}
+
 BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression)
     : type(type), null_order(null_order), expression(std::move(expression)) {
 }

@@ -1,5 +1,5 @@
 #include "duckdb/planner/expression.hpp"
-
+#include "duckdb/optimizer/cascade/operators/CExpressionHandle.h"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -10,10 +10,12 @@
 namespace duckdb {
 
 Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
-    : BaseExpression(type, expression_class), return_type(std::move(return_type)) {
+    : BaseExpression(type, expression_class), return_type(std::move(return_type))
+{
 }
 
-Expression::~Expression() {
+Expression::~Expression()
+{
 }
 
 bool Expression::IsAggregate() const {
@@ -85,6 +87,14 @@ bool Expression::HasSubquery() const {
 	bool has_subquery = false;
 	ExpressionIterator::EnumerateChildren(*this, [&](const Expression &child) { has_subquery |= child.HasSubquery(); });
 	return has_subquery;
+}
+
+ULONG Expression::HashValue(const Expression* exp)
+{
+	ULONG hash = duckdb::Hash<uint32_t>((uint32_t)exp->type);
+	hash = CombineHashes(hash, duckdb::Hash<uint8_t>((uint8_t)exp->return_type.id()));
+	ExpressionIterator::EnumerateChildren(*exp, [&](const Expression &child) { hash = CombineHashes(HashValue(&child), hash); });
+	return hash;
 }
 
 hash_t Expression::Hash() const {

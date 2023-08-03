@@ -1,5 +1,4 @@
 #include "duckdb/planner/logical_operator.hpp"
-
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
@@ -8,28 +7,46 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/optimizer/cascade/base/CUtils.h"
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
 
-namespace duckdb {
-
+namespace duckdb
+{
 const uint64_t PLAN_SERIALIZATION_VERSION = 1;
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type)
-    : type(type), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : has_estimated_cardinality(false)
+{
+	logical_type = type;
+	estimated_cardinality = 0;
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(std::move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : has_estimated_cardinality(false)
+{
+	logical_type = type;
+	this->expressions = std::move(expressions);
+	estimated_cardinality = 0;
 }
 
-LogicalOperator::~LogicalOperator() {
+LogicalOperator::~LogicalOperator()
+{
 }
 
-vector<ColumnBinding> LogicalOperator::GetColumnBindings() {
+CReqdProp* LogicalOperator::PrpCreate() const
+{
+	return new CReqdPropRelational();
+}
+
+vector<ColumnBinding> LogicalOperator::GetColumnBindings()
+{
 	return {ColumnBinding(0, 0)};
 }
 
 string LogicalOperator::GetName() const {
-	return LogicalOperatorToString(type);
+	return LogicalOperatorToString(logical_type);
 }
 
 string LogicalOperator::ParamsToString() const {
@@ -43,19 +60,8 @@ string LogicalOperator::ParamsToString() const {
 	return result;
 }
 
-void LogicalOperator::ResolveOperatorTypes() {
-
-	types.clear();
-	// first resolve child types
-	for (auto &child : children) {
-		child->ResolveOperatorTypes();
-	}
-	// now resolve the types for this operator
-	ResolveTypes();
-	D_ASSERT(types.size() == GetColumnBindings().size());
-}
-
-vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
+vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count)
+{
 	vector<ColumnBinding> result;
 	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
@@ -77,15 +83,18 @@ vector<LogicalType> LogicalOperator::MapTypes(const vector<LogicalType> &types, 
 	}
 }
 
-vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings,
-                                                   const vector<idx_t> &projection_map) {
-	if (projection_map.empty()) {
+vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &bindings, const vector<idx_t> &projection_map)
+{
+	if (projection_map.empty())
+	{
 		return bindings;
-	} else {
+	}
+	else
+	{
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
-		for (auto index : projection_map) {
-			D_ASSERT(index < bindings.size());
+		for (auto index : projection_map)
+		{
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
@@ -97,66 +106,8 @@ string LogicalOperator::ToString() const {
 	return renderer.ToString(*this);
 }
 
-void LogicalOperator::Verify(ClientContext &context) {
-#ifdef DEBUG
-	// verify expressions
-	for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
-		auto str = expressions[expr_idx]->ToString();
-		// verify that we can (correctly) copy this expression
-		auto copy = expressions[expr_idx]->Copy();
-		auto original_hash = expressions[expr_idx]->Hash();
-		auto copy_hash = copy->Hash();
-		// copy should be identical to original
-		D_ASSERT(expressions[expr_idx]->ToString() == copy->ToString());
-		D_ASSERT(original_hash == copy_hash);
-		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), copy.get()));
-
-		D_ASSERT(!Expression::Equals(expressions[expr_idx].get(), nullptr));
-		for (idx_t other_idx = 0; other_idx < expr_idx; other_idx++) {
-			// comparison with other expressions
-			auto other_hash = expressions[other_idx]->Hash();
-			bool expr_equal = Expression::Equals(expressions[expr_idx].get(), expressions[other_idx].get());
-			if (original_hash != other_hash) {
-				// if the hashes are not equal the expressions should not be equal either
-				D_ASSERT(!expr_equal);
-			}
-		}
-		D_ASSERT(!str.empty());
-
-		// verify that serialization + deserialization round-trips correctly
-		if (expressions[expr_idx]->HasParameter()) {
-			continue;
-		}
-		BufferedSerializer serializer;
-		// We are serializing a query plan
-		serializer.is_query_plan = true;
-		try {
-			expressions[expr_idx]->Serialize(serializer);
-		} catch (NotImplementedException &ex) {
-			// ignore for now (FIXME)
-			return;
-		}
-
-		auto data = serializer.GetData();
-		auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-
-		PlanDeserializationState state(context);
-		auto deserialized_expression = Expression::Deserialize(deserializer, state);
-		// FIXME: expressions might not be equal yet because of statistics propagation
-		continue;
-		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), deserialized_expression.get()));
-		D_ASSERT(expressions[expr_idx]->Hash() == deserialized_expression->Hash());
-	}
-	D_ASSERT(!ToString().empty());
-	for (auto &child : children) {
-		child->Verify(context);
-	}
-#endif
-}
-
-void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
-	D_ASSERT(child);
-	children.push_back(std::move(child));
+void LogicalOperator::Verify(ClientContext &context)
+{
 }
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
@@ -165,34 +116,42 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 		return estimated_cardinality;
 	}
 	idx_t max_cardinality = 0;
-	for (auto &child : children) {
-		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
+	for (auto &child : children)
+	{
+		LogicalOperator* logical_child = (LogicalOperator*)(child.get());
+		max_cardinality = MaxValue(logical_child->EstimateCardinality(context), max_cardinality);
 	}
 	has_estimated_cardinality = true;
 	estimated_cardinality = max_cardinality;
 	return estimated_cardinality;
 }
 
+ULONG LogicalOperator::HashValue() const
+{
+	ULONG oid = (ULONG)logical_type;
+	return gpos::HashValue<ULONG>(&oid);
+}
+
 void LogicalOperator::Print() {
 	Printer::Print(ToString());
 }
 
-void LogicalOperator::Serialize(Serializer &serializer) const {
+void LogicalOperator::Serialize(Serializer &serializer) const
+{
 	FieldWriter writer(serializer);
-	writer.WriteField<LogicalOperatorType>(type);
+	writer.WriteField<LogicalOperatorType>(logical_type);
 	writer.WriteSerializableList(children);
 
 	Serialize(writer);
 	writer.Finalize();
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer, PlanDeserializationState &gstate) {
+unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deserializer, PlanDeserializationState &gstate)
+{
 	unique_ptr<LogicalOperator> result;
-
 	FieldReader reader(deserializer);
 	auto type = reader.ReadRequired<LogicalOperatorType>();
 	auto children = reader.ReadRequiredSerializableList<LogicalOperator>(gstate);
-
 	LogicalDeserializationState state(gstate, type, children);
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
@@ -358,25 +317,43 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");
 	}
-
 	reader.Finalize();
-	result->children = std::move(children);
-
+	result->children.clear();
+	for (auto &child : children)
+	{
+		result->children.emplace_back(std::move(child));
+	}
 	return result;
 }
 
-vector<idx_t> LogicalOperator::GetTableIndex() const {
+//---------------------------------------------------------------------------
+//	@function:
+//		CLogical::PdpCreate
+//
+//	@doc:
+//		Create base container of derived properties
+//
+//---------------------------------------------------------------------------
+CDrvdProp* LogicalOperator::PdpCreate()
+{
+	return new CDrvdPropRelational();
+}
+
+vector<idx_t> LogicalOperator::GetTableIndex() const
+{
 	return vector<idx_t> {};
 }
 
-unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
+unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const
+{
 	BufferedSerializer logical_op_serializer;
-	try {
+	try
+	{
 		this->Serialize(logical_op_serializer);
-	} catch (NotImplementedException &ex) {
-		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
-		                              "be serializable: " +
-		                              std::string(ex.what()));
+	}
+	catch (NotImplementedException &ex)
+	{
+		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to be serializable: " + std::string(ex.what()));
 	}
 	auto data = logical_op_serializer.GetData();
 	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
@@ -385,4 +362,111 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 	return op_copy;
 }
 
+//---------------------------------------------------------------------------
+//	@function:
+//		CLogical::PkcDeriveKeysPassThru
+//
+//	@doc:
+//		Addref and return keys of n-th child
+//
+//---------------------------------------------------------------------------
+CKeyCollection* LogicalOperator::PkcDeriveKeysPassThru(CExpressionHandle &exprhdl, ULONG ulChild)
+{
+	CKeyCollection* pkcLeft = exprhdl.GetRelationalProperties(ulChild)->GetKeyCollection();
+	// key collection may be NULL
+	return pkcLeft;
+}
+
+CKeyCollection* LogicalOperator::DeriveKeyCollection(CExpressionHandle &exprhdl)
+{
+	return nullptr;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		LogicalOperator::DeriveJoinDepth
+//
+//	@doc:
+//		Derive join depth
+//
+//---------------------------------------------------------------------------
+ULONG LogicalOperator::DeriveJoinDepth(CExpressionHandle &exprhdl)
+{
+	const ULONG arity = exprhdl.Arity();
+	// sum-up join depth of all relational children
+	ULONG ulDepth = 0;
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		if (!exprhdl.FScalarChild(ul))
+		{
+			ulDepth = ulDepth + exprhdl.DeriveJoinDepth(ul);
+		}
+	}
+	return ulDepth;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		LogicalOperator::PpcDeriveConstraintPassThru
+//
+//	@doc:
+//		Shorthand to addref and pass through constraint from a given child
+//
+//---------------------------------------------------------------------------
+CPropConstraint* LogicalOperator::PpcDeriveConstraintPassThru(CExpressionHandle &exprhdl, ULONG ulChild)
+{
+	// return constraint property of child
+	CPropConstraint* ppc = exprhdl.DerivePropertyConstraint(ulChild);
+	return ppc;
+}
+
+//---------------------------------------------------------------------------
+//	@function:
+//		LogicalOperator::PpcDeriveConstraintFromPredicates
+//
+//	@doc:
+//		Derive constraint property when expression has relational children and
+//		scalar children (predicates)
+//
+//---------------------------------------------------------------------------
+CPropConstraint* LogicalOperator::PpcDeriveConstraintFromPredicates(CExpressionHandle &exprhdl)
+{
+	vector<vector<ColumnBinding>> pdrgpcrs;
+	vector<Expression*> pdrgpcnstr;
+	// collect constraint properties from relational children
+	// and predicates from scalar children
+	ULONG arity = exprhdl.Arity(0);
+	for (ULONG ul = 0; ul < arity; ul++)
+	{
+		CPropConstraint* ppc = exprhdl.DerivePropertyConstraint(ul);
+		// equivalence classes coming from child
+		vector<vector<ColumnBinding>> pdrgpcrsChild = ppc->PdrgpcrsEquivClasses();
+		// merge with the equivalence classes we have so far
+		vector<vector<ColumnBinding>> pdrgpcrsMerged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrsChild);
+		pdrgpcrs = pdrgpcrsMerged;
+		// constraint coming from child
+		Expression* pcnstr = ppc->Pcnstr();
+		if (NULL != pcnstr)
+		{
+			pdrgpcnstr.push_back(pcnstr);
+		}
+	}
+	arity = exprhdl.Arity(1);
+	for (ULONG ul = 0; ul < arity; ul++)
+	{	
+		Expression* pexprScalar = exprhdl.PexprScalarExactChild(ul);
+		vector<ColumnBinding> v = pexprScalar->getColumnBinding();
+		vector<vector<ColumnBinding>> pdrgpcrsChild;
+		pdrgpcrsChild = CUtils::AddEquivClassToArray(v, pdrgpcrsChild);
+		if (NULL != pexprScalar)
+		{
+			pdrgpcnstr.push_back(pexprScalar);
+			// merge with the equivalence classes we have so far
+			vector<vector<ColumnBinding>> pdrgpcrsMerged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrsChild);
+			pdrgpcrs = pdrgpcrsMerged;
+		}
+	}
+	Expression* pcnstrNew = new BoundConjunctionExpression(ExpressionType::CONJUNCTION_AND);
+	return new CPropConstraint(pdrgpcrs, pcnstrNew);
+}
 } // namespace duckdb

@@ -1,29 +1,36 @@
 #include "duckdb/planner/logical_operator_visitor.hpp"
-
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 
-namespace duckdb {
-
-void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op) {
+namespace duckdb
+{
+void LogicalOperatorVisitor::VisitOperator(LogicalOperator &op)
+{
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
 }
 
-void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op) {
-	for (auto &child : op.children) {
-		VisitOperator(*child);
+void LogicalOperatorVisitor::VisitOperatorChildren(LogicalOperator &op)
+{
+	for (auto &child : op.children)
+	{
+		LogicalOperator* input = (LogicalOperator*)child.get();
+		VisitOperator(*input);
 	}
 }
 
-void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
-                                                  const std::function<void(unique_ptr<Expression> *child)> &callback) {
-	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op, const std::function<void(unique_ptr<Expression> *child)> &callback)
+{
+	switch (op.logical_type)
+	{
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
+	{
 		auto &get = op.Cast<LogicalExpressionGet>();
-		for (auto &expr_list : get.expressions) {
-			for (auto &expr : expr_list) {
+		for (auto &expr_list : get.expressions)
+		{
+			for (auto &expr : expr_list)
+			{
 				callback(&expr);
 			}
 		}
@@ -68,7 +75,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		if (op.logical_type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			auto &delim_join = op.Cast<LogicalDelimJoin>();
 			for (auto &expr : delim_join.duplicate_eliminated_columns) {
 				callback(&expr);

@@ -11,79 +11,87 @@
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 
-namespace duckdb {
-
-Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context) {
+namespace duckdb
+{
+Planner::Planner(ClientContext &context) : binder(Binder::CreateBinder(context)), context(context)
+{
 }
 
-static void CheckTreeDepth(const LogicalOperator &op, idx_t max_depth, idx_t depth = 0) {
-	if (depth >= max_depth) {
+static void CheckTreeDepth(const Operator &op, idx_t max_depth, idx_t depth = 0)
+{
+	if (depth >= max_depth)
+	{
 		throw ParserException("Maximum tree depth of %lld exceeded in logical planner", max_depth);
 	}
-	for (auto &child : op.children) {
+	for (auto &child : op.children)
+	{
 		CheckTreeDepth(*child, max_depth, depth + 1);
 	}
 }
 
-void Planner::CreatePlan(SQLStatement &statement) {
+void Planner::CreatePlan(SQLStatement &statement)
+{
 	auto &profiler = QueryProfiler::Get(context);
 	auto parameter_count = statement.n_param;
-
 	BoundParameterMap bound_parameters(parameter_data);
-
 	// first bind the tables and columns to the catalog
 	bool parameters_resolved = true;
-	try {
+	try
+	{
 		profiler.StartPhase("binder");
 		binder->parameters = &bound_parameters;
 		auto bound_statement = binder->Bind(statement);
 		profiler.EndPhase();
-
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
 		this->plan = std::move(bound_statement.plan);
-
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
-	} catch (const ParameterNotResolvedException &ex) {
+	}
+	catch (const ParameterNotResolvedException &ex)
+	{
 		// parameter types could not be resolved
 		this->names = {"unknown"};
 		this->types = {LogicalTypeId::UNKNOWN};
 		this->plan = nullptr;
 		parameters_resolved = false;
-	} catch (const Exception &ex) {
+	}
+	catch (const Exception &ex)
+	{
 		auto &config = DBConfig::GetConfig(context);
-
 		this->plan = nullptr;
-		for (auto &extension_op : config.operator_extensions) {
-			auto bound_statement =
-			    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
-			if (bound_statement.plan != nullptr) {
+		for (auto &extension_op : config.operator_extensions)
+		{
+			auto bound_statement = extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
+			if (bound_statement.plan != nullptr)
+			{
 				this->names = bound_statement.names;
 				this->types = bound_statement.types;
 				this->plan = std::move(bound_statement.plan);
 				break;
 			}
 		}
-
-		if (!this->plan) {
+		if (!this->plan)
+		{
 			throw;
 		}
-	} catch (std::exception &ex) {
+	}
+	catch (std::exception &ex)
+	{
 		throw;
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
 	properties.bound_all_parameters = parameters_resolved;
-
 	Planner::VerifyPlan(context, plan, &bound_parameters.parameters);
-
 	// set up a map of parameter number -> value entries
-	for (auto &kv : bound_parameters.parameters) {
+	for (auto &kv : bound_parameters.parameters)
+	{
 		auto parameter_index = kv.first;
 		auto &parameter_data = kv.second;
 		// check if the type of the parameter could be resolved
-		if (!parameter_data->return_type.IsValid()) {
+		if (!parameter_data->return_type.IsValid())
+		{
 			properties.bound_all_parameters = false;
 			continue;
 		}
@@ -92,7 +100,8 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	}
 }
 
-shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement) {
+shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement)
+{
 	auto copied_statement = statement->Copy();
 	// create a plan of the underlying statement
 	CreatePlan(std::move(statement));
@@ -107,9 +116,11 @@ shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLSta
 	return prepared_data;
 }
 
-void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
+void Planner::CreatePlan(unique_ptr<SQLStatement> statement)
+{
 	D_ASSERT(statement);
-	switch (statement->type) {
+	switch (statement->type)
+	{
 	case StatementType::SELECT_STATEMENT:
 	case StatementType::INSERT_STATEMENT:
 	case StatementType::COPY_STATEMENT:
@@ -141,8 +152,10 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	}
 }
 
-static bool OperatorSupportsSerialization(LogicalOperator &op) {
-	switch (op.type) {
+static bool OperatorSupportsSerialization(Operator &op)
+{
+	switch (op.logical_type)
+	{
 	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
@@ -166,40 +179,46 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	default:
 		break;
 	}
-	for (auto &child : op.children) {
-		if (!OperatorSupportsSerialization(*child)) {
+	for (auto &child : op.children)
+	{
+		if (!OperatorSupportsSerialization(*((LogicalOperator*)child.get())))
+		{
 			return false;
 		}
 	}
 	return true;
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
-	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<Operator> &op, bound_parameter_map_t *map)
+{
+	if (!op || !ClientConfig::GetConfig(context).verify_serializer)
+	{
 		return;
 	}
 	//! SELECT only for now
-	if (!OperatorSupportsSerialization(*op)) {
+	if (!OperatorSupportsSerialization(*op))
+	{
 		return;
 	}
-
 	BufferedSerializer serializer;
 	serializer.is_query_plan = true;
-	try {
+	try
+	{
 		op->Serialize(serializer);
-	} catch (NotImplementedException &ex) {
+	}
+	catch (NotImplementedException &ex)
+	{
 		// ignore for now (FIXME)
 		return;
 	}
 	auto data = serializer.GetData();
 	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-
 	PlanDeserializationState state(context);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-	if (map) {
+	if (map)
+	{
 		*map = std::move(state.parameter_data);
 	}
 	op = std::move(new_plan);
 }
-
 } // namespace duckdb
