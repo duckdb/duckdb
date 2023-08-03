@@ -344,7 +344,7 @@ bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator *op) {
 unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
 	auto op = input_op.get();
 	// pass through single child operators
-	while (op->children.size() > 0) {
+	while (!op->children.empty()) {
 		if (op->children.size() == 2) {
 			switch (op->type) {
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {

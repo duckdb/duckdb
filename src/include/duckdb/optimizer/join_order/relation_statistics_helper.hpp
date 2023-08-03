@@ -46,9 +46,9 @@ public:
 
 public:
 	static idx_t InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
-	                                   unique_ptr<BaseStatistics> base_stats);
+	                                   BaseStatistics &base_stats);
 	static idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-	                                  unique_ptr<BaseStatistics> base_stats);
+	                                  BaseStatistics &base_stats);
 	//!
 	static RelationStats ExtractGetStats(LogicalGet &get, ClientContext &context);
 	static RelationStats ExtractDelimGetStats(LogicalDelimGet &delim_get, ClientContext &context);
@@ -65,7 +65,7 @@ public:
 	                                                       vector<RelationStats> relation_stats);
 	//! Called after reordering a query plan with potentially 2+ relations.
 	static RelationStats CombineStatsOfNonReorderableOperator(LogicalOperator &op, vector<RelationStats> child_stats);
-	static void CopyRelationStats(RelationStats &to, RelationStats from);
+	static void CopyRelationStats(RelationStats &to, const RelationStats &from);
 
 private:
 };

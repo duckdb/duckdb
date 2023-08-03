@@ -53,9 +53,9 @@ public:
 
 	//! Extract the set of relations referred to inside an expression
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
-	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
+	void AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 
-	void AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats);
+	void AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, const RelationStats &stats);
 	vector<unique_ptr<SingleJoinRelation>> GetRelations();
 
 	const vector<RelationStats> GetRelationStats();

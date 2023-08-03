@@ -18,7 +18,7 @@ static ExpressionBinding GetChildColumnBinding(Expression *expr) {
 		// TODO: Other expression classes that can have 0 children?
 		auto &func = expr->Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
-		if (func.children.size() == 0) {
+		if (func.children.empty()) {
 			ret.found_expression = true;
 			ret.expression_is_constant = true;
 			return ret;
@@ -113,14 +113,13 @@ RelationStats RelationStatisticsHelper::ExtractGetStats(LogicalGet &get, ClientC
 			if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
 				auto &filter = it.second->Cast<ConjunctionAndFilter>();
 				idx_t cardinality_with_and_filter = RelationStatisticsHelper::InspectConjunctionAND(
-				    base_table_cardinality, it.first, filter, std::move(column_statistics));
+				    base_table_cardinality, it.first, filter, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 			} else if (column_statistics && it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
 				auto &filter = it.second->Cast<ConjunctionOrFilter>();
 				idx_t cardinality_with_or_filter = RelationStatisticsHelper::InspectConjunctionOR(
-				    base_table_cardinality, it.first, filter, std::move(column_statistics));
+				    base_table_cardinality, it.first, filter, *column_statistics);
 				cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
-			} else {
 			}
 		}
 		// if the above code didn't find an equality filter (i.e country_code = "[us]")
@@ -200,7 +199,7 @@ RelationStats RelationStatisticsHelper::ExtractDummyScanStats(LogicalDummyScan &
 	return stats;
 }
 
-void RelationStatisticsHelper::CopyRelationStats(RelationStats &to, RelationStats from) {
+void RelationStatisticsHelper::CopyRelationStats(RelationStats &to, const RelationStats &from) {
 	to.column_distinct_count = from.column_distinct_count;
 	to.column_names = from.column_names;
 	to.cardinality = from.cardinality;
@@ -299,8 +298,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 }
 
 idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index,
-                                                      ConjunctionAndFilter &filter,
-                                                      unique_ptr<BaseStatistics> base_stats) {
+                                                      ConjunctionAndFilter &filter, BaseStatistics &base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter.child_filters) {
@@ -311,10 +309,7 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
 			continue;
 		}
-		auto column_count = 0;
-		if (base_stats) {
-			column_count = base_stats->GetDistinctCount();
-		}
+		auto column_count = base_stats.GetDistinctCount();
 		auto filtered_card = cardinality;
 		// column_count = 0 when there is no column count (i.e parquet scans)
 		if (column_count > 0) {
@@ -331,7 +326,7 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 }
 
 idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
-                                                     unique_ptr<BaseStatistics> base_stats) {
+                                                     BaseStatistics &base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter.child_filters) {
@@ -340,10 +335,7 @@ idx_t RelationStatisticsHelper::InspectConjunctionOR(idx_t cardinality, idx_t co
 		}
 		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
 		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
-			auto column_count = cardinality_after_filters;
-			if (base_stats) {
-				column_count = base_stats->GetDistinctCount();
-			}
+			auto column_count = base_stats.GetDistinctCount();
 			auto increment = MaxValue<idx_t>(((cardinality + column_count - 1) / column_count), 1);
 			if (has_equality_filter) {
 				cardinality_after_filters += increment;

@@ -30,7 +30,7 @@ idx_t RelationManager::NumRelations() {
 }
 
 void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
-                                           RelationStats stats) {
+                                           const RelationStats &stats) {
 	auto relation = make_uniq<SingleJoinRelation>(op, parent, stats);
 	auto relation_id = relations.size();
 
@@ -42,7 +42,8 @@ void RelationManager::AddAggregateRelation(LogicalOperator &op, optional_ptr<Log
 	relations.push_back(std::move(relation));
 }
 
-void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent, RelationStats stats) {
+void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent,
+                                  const RelationStats &stats) {
 
 	// if parent is null, then this is a root relation
 	// if parent is not null, it should have multiple children
@@ -114,7 +115,7 @@ static bool HasNonReorderableChild(LogicalOperator &op) {
 			}
 		}
 	}
-	return tmp->children.size() == 0;
+	return tmp->children.empty();
 }
 
 bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
@@ -167,7 +168,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		}
 
 		auto combined_stats = RelationStatisticsHelper::CombineStatsOfNonReorderableOperator(*op, children_stats);
-		if (datasource_filters.size() > 0) {
+		if (!datasource_filters.empty()) {
 			combined_stats.cardinality =
 			    (idx_t)MaxValue(combined_stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
@@ -223,7 +224,7 @@ bool RelationManager::ExtractJoinRelations(LogicalOperator &input_op,
 		auto stats = RelationStatisticsHelper::ExtractGetStats(get, context);
 		// if there is another logical filter that could not be pushed down into the
 		// table scan, apply another selectivity.
-		if (datasource_filters.size() > 0) {
+		if (!datasource_filters.empty()) {
 			stats.cardinality =
 			    (idx_t)MaxValue(stats.cardinality * RelationStatisticsHelper::DEFAULT_SELECTIVITY, (double)1);
 		}
