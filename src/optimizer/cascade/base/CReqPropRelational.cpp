@@ -1,19 +1,16 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CReqdPropRelational.cpp
+//		CReqPropRelational.cpp
 //
 //	@doc:
 //		Required relational properties;
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/base/CColRefSet.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
-#include "duckdb/optimizer/cascade/base/CUtils.h"
+
 #include "duckdb/optimizer/cascade/engine/CEngine.h"
-#include "duckdb/optimizer/cascade/operators/CExpression.h"
 #include "duckdb/optimizer/cascade/operators/CExpressionHandle.h"
-#include "duckdb/optimizer/cascade/operators/CLogical.h"
 
 using namespace gpopt;
 
@@ -26,7 +23,6 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CReqdPropRelational::CReqdPropRelational()
-	: m_pcrsStat(NULL), m_pexprPartPred(NULL)
 {
 }
 
@@ -38,26 +34,12 @@ CReqdPropRelational::CReqdPropRelational()
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CReqdPropRelational::CReqdPropRelational(CColRefSet *pcrs)
-	: m_pcrsStat(pcrs), m_pexprPartPred(NULL)
+CReqdPropRelational::CReqdPropRelational(duckdb::vector<ColumnBinding> pcrs)
 {
-	GPOS_ASSERT(NULL != pcrs);
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CReqdPropRelational::CReqdPropRelational
-//
-//	@doc:
-//		Ctor
-//
-//---------------------------------------------------------------------------
-CReqdPropRelational::CReqdPropRelational(CColRefSet *pcrs,
-										 CExpression *pexprPartPred)
-	: m_pcrsStat(pcrs), m_pexprPartPred(pexprPartPred)
-{
-	GPOS_ASSERT(NULL != pcrs);
-	GPOS_ASSERT_IMP(NULL != pexprPartPred, pexprPartPred->Pop()->FScalar());
+	for(auto &child : pcrs)
+	{
+		m_pcrsStat.emplace_back(child.table_index, child.column_index);
+	}
 }
 
 //---------------------------------------------------------------------------
@@ -70,8 +52,6 @@ CReqdPropRelational::CReqdPropRelational(CColRefSet *pcrs,
 //---------------------------------------------------------------------------
 CReqdPropRelational::~CReqdPropRelational()
 {
-	CRefCount::SafeRelease(m_pcrsStat);
-	CRefCount::SafeRelease(m_pexprPartPred);
 }
 
 //---------------------------------------------------------------------------
@@ -82,25 +62,10 @@ CReqdPropRelational::~CReqdPropRelational()
 //		Compute required props
 //
 //---------------------------------------------------------------------------
-void
-CReqdPropRelational::Compute(CMemoryPool *mp, CExpressionHandle &exprhdl,
-							 CReqdProp *prpInput, ULONG child_index,
-							 CDrvdPropArray *,	// pdrgpdpCtxt
-							 ULONG				// ulOptReq
-)
+void CReqdPropRelational::Compute(CExpressionHandle &exprhdl, CReqdProp* prpInput, ULONG child_index, duckdb::vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq)
 {
-	GPOS_CHECK_ABORT;
-
-	CReqdPropRelational *prprelInput =
-		CReqdPropRelational::GetReqdRelationalProps(prpInput);
-	CLogical *popLogical = CLogical::PopConvert(exprhdl.Pop());
-
-	m_pcrsStat =
-		popLogical->PcrsStat(mp, exprhdl, prprelInput->PcrsStat(), child_index);
-	m_pexprPartPred = popLogical->PexprPartPred(
-		mp, exprhdl, prprelInput->PexprPartPred(), child_index);
-
-	exprhdl.DeriveProducerStats(child_index, m_pcrsStat);
+	CReqdPropRelational* prprelInput = CReqdPropRelational::GetReqdRelationalProps(prpInput);
+	m_pcrsStat = ((LogicalOperator*)exprhdl.Pop())->GetColumnBindings();
 }
 
 //---------------------------------------------------------------------------
@@ -111,10 +76,9 @@ CReqdPropRelational::Compute(CMemoryPool *mp, CExpressionHandle &exprhdl,
 //		Short hand for conversion
 //
 //---------------------------------------------------------------------------
-CReqdPropRelational *
-CReqdPropRelational::GetReqdRelationalProps(CReqdProp *prp)
+CReqdPropRelational* CReqdPropRelational::GetReqdRelationalProps(CReqdProp* prp)
 {
-	return dynamic_cast<CReqdPropRelational *>(prp);
+	return (CReqdPropRelational*)prp;
 }
 
 
@@ -126,19 +90,13 @@ CReqdPropRelational::GetReqdRelationalProps(CReqdProp *prp)
 //		Return difference from given properties
 //
 //---------------------------------------------------------------------------
-CReqdPropRelational *
-CReqdPropRelational::PrprelDifference(CMemoryPool *mp,
-									  CReqdPropRelational *prprel)
+CReqdPropRelational* CReqdPropRelational::PrprelDifference(CReqdPropRelational* prprel)
 {
-	GPOS_ASSERT(NULL != prprel);
-
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
-	pcrs->Union(m_pcrsStat);
-	pcrs->Difference(prprel->PcrsStat());
-
-	return GPOS_NEW(mp) CReqdPropRelational(pcrs);
+	duckdb::vector<ColumnBinding> pcrs;
+	duckdb::vector<ColumnBinding> v2 = prprel->PcrsStat();
+	std::set_difference(m_pcrsStat.begin(), m_pcrsStat.end(), v2.begin(), v2.end(), pcrs.begin());
+	return new CReqdPropRelational(pcrs);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -148,28 +106,7 @@ CReqdPropRelational::PrprelDifference(CMemoryPool *mp,
 //		Return true if property container is empty
 //
 //---------------------------------------------------------------------------
-BOOL
-CReqdPropRelational::IsEmpty() const
+bool CReqdPropRelational::IsEmpty() const
 {
-	return m_pcrsStat->Size() == 0;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CReqdPropRelational::OsPrint
-//
-//	@doc:
-//		Print function
-//
-//---------------------------------------------------------------------------
-IOstream &
-CReqdPropRelational::OsPrint(IOstream &os) const
-{
-	os << "req stat columns: [" << *m_pcrsStat << "]";
-	if (NULL != m_pexprPartPred)
-	{
-		os << ", partition predicate: " << *m_pexprPartPred;
-	}
-
-	return os;
+	return m_pcrsStat.size() == 0;
 }

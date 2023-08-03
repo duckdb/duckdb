@@ -7,12 +7,7 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/base/CReqdProp.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/operators/COperator.h"
-
-#ifdef GPOS_DEBUG
-#include "duckdb/optimizer/cascade/error/CAutoTrace.h"
-#include "duckdb/optimizer/cascade/base/COptCtxt.h"
-#endif	// GPOS_DEBUG
+#include "duckdb/optimizer/cascade/operators/Operator.h"
 
 using namespace gpopt;
 

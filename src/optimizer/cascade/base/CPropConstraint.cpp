@@ -7,10 +7,9 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/base/CPropConstraint.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/error/CAutoTrace.h"
-#include "duckdb/optimizer/cascade/base/CColRefSetIter.h"
-#include "duckdb/optimizer/cascade/base/CConstraintConjunction.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
+#include <algorithm>
+#include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 using namespace gpopt;
 
@@ -22,11 +21,10 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CPropConstraint::CPropConstraint(CMemoryPool *mp, CColRefSetArray *pdrgpcrs, CConstraint *pcnstr)
-	: m_pdrgpcrs(pdrgpcrs), m_phmcrcrs(NULL), m_pcnstr(pcnstr)
+CPropConstraint::CPropConstraint(duckdb::vector<duckdb::vector<ColumnBinding>> pdrgpcrs, Expression* pcnstr)
+	: m_pdrgpcrs(pdrgpcrs), m_pcnstr(pcnstr)
 {
-	GPOS_ASSERT(NULL != pdrgpcrs);
-	InitHashMap(mp);
+	InitHashMap();
 }
 
 //---------------------------------------------------------------------------
@@ -39,9 +37,6 @@ CPropConstraint::CPropConstraint(CMemoryPool *mp, CColRefSetArray *pdrgpcrs, CCo
 //---------------------------------------------------------------------------
 CPropConstraint::~CPropConstraint()
 {
-	m_pdrgpcrs->Release();
-	CRefCount::SafeRelease(m_phmcrcrs);
-	CRefCount::SafeRelease(m_pcnstr);
 }
 
 //---------------------------------------------------------------------------
@@ -52,30 +47,18 @@ CPropConstraint::~CPropConstraint()
 //		Initialize mapping between columns and equivalence classes
 //
 //---------------------------------------------------------------------------
-void
-CPropConstraint::InitHashMap(CMemoryPool *mp)
+void CPropConstraint::InitHashMap()
 {
-	GPOS_ASSERT(NULL == m_phmcrcrs);
-	const ULONG ulEquiv = m_pdrgpcrs->Size();
-
+	const ULONG ulEquiv = m_pdrgpcrs.size();
 	// m_phmcrcrs is only needed when storing equivalent columns
-	if (0 != ulEquiv)
-	{
-		m_phmcrcrs = GPOS_NEW(mp) ColRefToColRefSetMap(mp);
-	}
 	for (ULONG ul = 0; ul < ulEquiv; ul++)
 	{
-		CColRefSet *pcrs = (*m_pdrgpcrs)[ul];
-
-		CColRefSetIter crsi(*pcrs);
-		while (crsi.Advance())
+		duckdb::vector<ColumnBinding> pcrs = m_pdrgpcrs[ul];
+		auto it = pcrs.begin();
+		while (it != pcrs.end())
 		{
-			pcrs->AddRef();
-#ifdef GPOS_DEBUG
-			BOOL fres =
-#endif	//GPOS_DEBUG
-				m_phmcrcrs->Insert(crsi.Pcr(), pcrs);
-			GPOS_ASSERT(fres);
+			m_phmcrcrs.insert(make_pair((*it).HashValue(), pcrs));
+			++it;
 		}
 	}
 }
@@ -88,12 +71,12 @@ CPropConstraint::InitHashMap(CMemoryPool *mp)
 //		Is this a contradiction
 //
 //---------------------------------------------------------------------------
-BOOL
-CPropConstraint::FContradiction() const
+BOOL CPropConstraint::FContradiction() const
 {
-	return (NULL != m_pcnstr && m_pcnstr->FContradiction());
+	return (NULL != m_pcnstr);
 }
 
+/*
 //---------------------------------------------------------------------------
 //	@function:
 //		CPropConstraint::PexprScalarMappedFromEquivCols
@@ -103,55 +86,41 @@ CPropConstraint::FContradiction() const
 //		on its equivalent columns
 //
 //---------------------------------------------------------------------------
-CExpression *
-CPropConstraint::PexprScalarMappedFromEquivCols(
-	CMemoryPool *mp, CColRef *colref,
-	CPropConstraint *constraintsForOuterRefs) const
+Expression* CPropConstraint::PexprScalarMappedFromEquivCols(ColumnBinding colref, CPropConstraint* constraintsForOuterRefs) const
 {
-	if (NULL == m_pcnstr || NULL == m_phmcrcrs)
+	if (NULL == m_pcnstr || m_phmcrcrs.size())
 	{
 		return NULL;
 	}
-	CColRefSet *pcrs = m_phmcrcrs->Find(colref);
-	CColRefSet *equivOuterRefs = NULL;
-
-	if (NULL != constraintsForOuterRefs &&
-		NULL != constraintsForOuterRefs->m_phmcrcrs)
+	duckdb::vector<ColumnBinding> pcrs = (*(m_phmcrcrs.find(colref))).second;
+	duckdb::vector<ColumnBinding> equivOuterRefs;
+	if (NULL != constraintsForOuterRefs && 0 != constraintsForOuterRefs->m_phmcrcrs.size())
 	{
-		equivOuterRefs = constraintsForOuterRefs->m_phmcrcrs->Find(colref);
+		equivOuterRefs = (*(constraintsForOuterRefs->m_phmcrcrs.find(colref))).second;
 	}
-
-	if ((NULL == pcrs || 1 == pcrs->Size()) &&
-		(NULL == equivOuterRefs || 1 == equivOuterRefs->Size()))
+	if ((0 == pcrs.size() || 1 == pcrs.size()) && (0 == equivOuterRefs.size() || 1 == equivOuterRefs.size()))
 	{
 		// we have no columns that are equivalent to 'colref'
 		return NULL;
 	}
-
 	// get constraints for all other columns in this equivalence class
 	// except the current column
-	CColRefSet *pcrsEquiv = GPOS_NEW(mp) CColRefSet(mp);
-	pcrsEquiv->Include(pcrs);
-	if (NULL != equivOuterRefs)
+	duckdb::vector<ColumnBinding> pcrsEquiv;
+	pcrsEquiv.insert(pcrsEquiv.end(), pcrs.begin(), pcrs.end());
+	if (0 != equivOuterRefs.size())
 	{
-		pcrsEquiv->Include(equivOuterRefs);
+		pcrsEquiv.insert(pcrsEquiv.end(), equivOuterRefs.begin(), equivOuterRefs.end());
 	}
-	pcrsEquiv->Exclude(colref);
-
+	auto iter = std::find(pcrsEquiv.begin(), pcrsEquiv.end(), colref);
+	pcrsEquiv.erase(iter);
 	// local constraints on the equivalent column(s)
-	CConstraint *pcnstr = m_pcnstr->Pcnstr(mp, pcrsEquiv);
-	CConstraint *pcnstrFromOuterRefs = NULL;
-
-	if (NULL != constraintsForOuterRefs &&
-		NULL != constraintsForOuterRefs->m_pcnstr)
+	Expression* pcnstr = m_pcnstr->Pcnstr(mp, pcrsEquiv);
+	Expression* pcnstrFromOuterRefs = NULL;
+	if (NULL != constraintsForOuterRefs && NULL != constraintsForOuterRefs->m_pcnstr)
 	{
 		// constraints that exist in the outer scope
-		pcnstrFromOuterRefs =
-			constraintsForOuterRefs->m_pcnstr->Pcnstr(mp, pcrsEquiv);
+		pcnstrFromOuterRefs = constraintsForOuterRefs->m_pcnstr->Pcnstr(mp, pcrsEquiv);
 	}
-	pcrsEquiv->Release();
-	CRefCount::SafeRelease(equivOuterRefs);
-
 	// combine local and outer ref constraints, if we have any, into pcnstr
 	if (NULL == pcnstr && NULL == pcnstrFromOuterRefs)
 	{
@@ -168,57 +137,13 @@ CPropConstraint::PexprScalarMappedFromEquivCols(
 	{
 		// constraints from both local and outer refs, make a conjunction
 		// and store it in pcnstr
-		CConstraintArray *conjArray = GPOS_NEW(mp) CConstraintArray(mp);
-
-		conjArray->Append(pcnstr);
-		conjArray->Append(pcnstrFromOuterRefs);
-		pcnstrFromOuterRefs = NULL;
-		pcnstr = GPOS_NEW(mp) CConstraintConjunction(mp, conjArray);
+		pcnstr = GPOS_NEW(mp) BoundConjunctionExpression(ExpressionType::CONJUNCTION_AND, make_uniq<Expression>(pcnstr), make_uniq<Expression>(pcnstrFromOuterRefs));
 	}
-
 	// Now, pcnstr contains constraints on columns that are equivalent
 	// to 'colref'. These constraints may be local or in an outer scope.
 	// Generate a copy of all these constraints for the current column.
-	CConstraint *pcnstrCol = pcnstr->PcnstrRemapForColumn(mp, colref);
-	CExpression *pexprScalar = pcnstrCol->PexprScalar(mp);
-	pexprScalar->AddRef();
-
-	pcnstr->Release();
-	GPOS_ASSERT(NULL == pcnstrFromOuterRefs);
-	pcnstrCol->Release();
-
-	return pexprScalar;
+	Expression *pcnstrCol = pcnstr->PcnstrRemapForColumn(mp, colref);
+	Expression* pexprScalar = pcnstrCol->PexprScalar(mp);
+	return pcnstr;
 }
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CPropConstraint::OsPrint
-//
-//	@doc:
-//		debug print
-//
-//---------------------------------------------------------------------------
-IOstream &
-CPropConstraint::OsPrint(IOstream &os) const
-{
-	const ULONG length = m_pdrgpcrs->Size();
-	if (0 < length)
-	{
-		os << "Equivalence Classes: { ";
-
-		for (ULONG ul = 0; ul < length; ul++)
-		{
-			CColRefSet *pcrs = (*m_pdrgpcrs)[ul];
-			os << "(" << *pcrs << ") ";
-		}
-
-		os << "} ";
-	}
-
-	if (NULL != m_pcnstr)
-	{
-		os << "Constraint:" << *m_pcnstr;
-	}
-
-	return os;
-}
+*/

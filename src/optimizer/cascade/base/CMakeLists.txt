@@ -1,0 +1,24 @@
+add_library_unity(
+    base
+    OBJECT
+    CAutoOptCtxt.cpp
+    CCostContext.cpp
+    CDrvdProp.cpp
+    CDrvdPropCtxtPlan.cpp
+    CDrvdPropPlan.cpp
+    CDrvdPropRelational.cpp
+    CEnfdOrder.cpp
+    CFunctionalDependency.cpp
+    CKeyCollection.cpp
+    COptCtxt.cpp
+    COptimizationContext.cpp
+    COrderSpec.cpp
+    CPropConstraint.cpp
+    CQueryContext.cpp
+    CReqdProp.cpp
+    CReqdPropPlan.cpp
+    CReqPropRelational.cpp
+    CUtils.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:base>
+    PARENT_SCOPE)

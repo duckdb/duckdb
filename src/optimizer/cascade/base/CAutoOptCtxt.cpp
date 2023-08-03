@@ -10,9 +10,10 @@
 #include "duckdb/optimizer/cascade/cost/ICostModel.h"
 #include "duckdb/optimizer/cascade/eval/CConstExprEvaluatorDefault.h"
 #include "duckdb/optimizer/cascade/optimizer/COptimizerConfig.h"
+#include "duckdb/optimizer/cascade/task/CTask.h"
 
-using namespace gpopt;
-
+namespace gpopt
+{
 //---------------------------------------------------------------------------
 //	@function:
 //		CAutoOptCtxt::CAutoOptCtxt
@@ -22,20 +23,20 @@ using namespace gpopt;
 //		Create and install default optimizer context
 //
 //---------------------------------------------------------------------------
-CAutoOptCtxt::CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExprEvaluator *pceeval, COptimizerConfig *optimizer_config)
+CAutoOptCtxt::CAutoOptCtxt(IConstExprEvaluator* pceeval, COptimizerConfig* optimizer_config)
 {
 	if (NULL == optimizer_config)
 	{
 		// create default statistics configuration
-		optimizer_config = COptimizerConfig::PoconfDefault(mp);
+		optimizer_config = COptimizerConfig::PoconfDefault();
 	}
 	if (NULL == pceeval)
 	{
 		// use the default constant expression evaluator which cannot evaluate any expression
-		pceeval = GPOS_NEW(mp) CConstExprEvaluatorDefault();
+		pceeval = new CConstExprEvaluatorDefault();
 	}
-	COptCtxt *poctxt = COptCtxt::PoctxtCreate(mp, md_accessor, pceeval, optimizer_config);
-	ITask::Self()->GetTls().Store(poctxt);
+	duckdb::unique_ptr<COptCtxt> poctxt = COptCtxt::PoctxtCreate(pceeval, optimizer_config);
+	CTask::Self()->GetTls().Store(std::move(poctxt));
 }
 
 //---------------------------------------------------------------------------
@@ -47,23 +48,18 @@ CAutoOptCtxt::CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExpr
 //		Create and install default optimizer context with the given cost model
 //
 //---------------------------------------------------------------------------
-CAutoOptCtxt::CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExprEvaluator *pceeval, ICostModel *pcm)
+CAutoOptCtxt::CAutoOptCtxt(IConstExprEvaluator* pceeval, ICostModel* pcm)
 {
-	GPOS_ASSERT(NULL != pcm);
-
 	// create default statistics configuration
-	COptimizerConfig *optimizer_config =
-		COptimizerConfig::PoconfDefault(mp, pcm);
-
+	COptimizerConfig* optimizer_config = COptimizerConfig::PoconfDefault(pcm);
 	if (NULL == pceeval)
 	{
 		// use the default constant expression evaluator which cannot evaluate any expression
-		pceeval = GPOS_NEW(mp) CConstExprEvaluatorDefault();
+		pceeval = new CConstExprEvaluatorDefault();
 	}
-
-	COptCtxt *poctxt =
-		COptCtxt::PoctxtCreate(mp, md_accessor, pceeval, optimizer_config);
-	ITask::Self()->GetTls().Store(poctxt);
+	duckdb::unique_ptr<COptCtxt> poctxt = COptCtxt::PoctxtCreate(pceeval, optimizer_config);
+	duckdb::unique_ptr<CTaskLocalStorageObject> tl = unique_ptr_cast<COptCtxt, CTaskLocalStorageObject>(std::move(poctxt));
+	CTask::Self()->GetTls().Store(std::move(tl));
 }
 
 //---------------------------------------------------------------------------
@@ -77,9 +73,7 @@ CAutoOptCtxt::CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExpr
 //---------------------------------------------------------------------------
 CAutoOptCtxt::~CAutoOptCtxt()
 {
-	CTaskLocalStorageObject *ptlsobj =
-		ITask::Self()->GetTls().Get(CTaskLocalStorage::EtlsidxOptCtxt);
-	ITask::Self()->GetTls().Remove(ptlsobj);
-
-	GPOS_DELETE(ptlsobj);
+	// CTaskLocalStorageObject* ptlsobj = CTask::Self()->GetTls().Get(EtlsidxOptCtxt);
+	// CTask::Self()->GetTls().Remove(ptlsobj);
+}
 }

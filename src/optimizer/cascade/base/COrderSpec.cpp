@@ -6,81 +6,12 @@
 //		Specification of order property
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/base/COrderSpec.h"
-#include "duckdb/optimizer/cascade/base/CColRefSet.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
-#include "duckdb/optimizer/cascade/operators/CPhysicalSort.h"
-#include "duckdb/optimizer/cascade/error/CAutoTrace.h"
-#include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
+#include "duckdb/optimizer/cascade/base/CReqdPropPlan.h"
 
 using namespace gpopt;
-using namespace gpmd;
-
-// string encoding of null treatment
-const CHAR rgszNullCode[][16] = {"Auto", "NULLsFirst", "NULLsLast"};
-GPOS_CPL_ASSERT(COrderSpec::EntSentinel == GPOS_ARRAY_SIZE(rgszNullCode));
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::COrderExpression::COrderExpression
-//
-//	@doc:
-//		Ctor
-//
-//---------------------------------------------------------------------------
-COrderSpec::COrderExpression::COrderExpression(gpmd::IMDId *mdid, const CColRef *colref, ENullTreatment ent)
-	: m_mdid(mdid), m_pcr(colref), m_ent(ent)
-{
-	GPOS_ASSERT(NULL != colref);
-	GPOS_ASSERT(mdid->IsValid());
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::COrderExpression::~COrderExpression
-//
-//	@doc:
-//		Dtor
-//
-//---------------------------------------------------------------------------
-COrderSpec::COrderExpression::~COrderExpression()
-{
-	m_mdid->Release();
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::COrderExpression::Matches
-//
-//	@doc:
-//		Check if order expression equal to given one;
-//
-//---------------------------------------------------------------------------
-BOOL COrderSpec::COrderExpression::Matches(const COrderExpression *poe) const
-{
-	GPOS_ASSERT(NULL != poe);
-
-	return poe->m_mdid->Equals(m_mdid) && poe->m_pcr == m_pcr && poe->m_ent == m_ent;
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::COrderExpression::OsPrint
-//
-//	@doc:
-//		Print order expression
-//
-//---------------------------------------------------------------------------
-IOstream& COrderSpec::COrderExpression::OsPrint(IOstream &os) const
-{
-	os << "( ";
-	m_mdid->OsPrint(os);
-	os << ", ";
-	m_pcr->OsPrint(os);
-	os << ", " << rgszNullCode[m_ent] << " )";
-
-	return os;
-}
+using namespace duckdb;
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -90,11 +21,9 @@ IOstream& COrderSpec::COrderExpression::OsPrint(IOstream &os) const
 //		Ctor
 //
 //---------------------------------------------------------------------------
-COrderSpec::COrderSpec(CMemoryPool *mp) : m_mp(mp), m_pdrgpoe(NULL)
+COrderSpec::COrderSpec()
 {
-	m_pdrgpoe = GPOS_NEW(mp) COrderExpressionArray(mp);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -106,9 +35,7 @@ COrderSpec::COrderSpec(CMemoryPool *mp) : m_mp(mp), m_pdrgpoe(NULL)
 //---------------------------------------------------------------------------
 COrderSpec::~COrderSpec()
 {
-	m_pdrgpoe->Release();
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -118,13 +45,10 @@ COrderSpec::~COrderSpec()
 //		Append order expression;
 //
 //---------------------------------------------------------------------------
-void
-COrderSpec::Append(gpmd::IMDId *mdid, const CColRef *colref, ENullTreatment ent)
+void COrderSpec::Append(OrderType type, OrderByNullType null_order, Expression* expr)
 {
-	COrderExpression *poe = GPOS_NEW(m_mp) COrderExpression(mdid, colref, ent);
-	m_pdrgpoe->Append(poe);
+	m_pdrgpoe.emplace_back(type, null_order, duckdb::unique_ptr<Expression>(expr));
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -134,17 +58,11 @@ COrderSpec::Append(gpmd::IMDId *mdid, const CColRef *colref, ENullTreatment ent)
 //		Check for equality between order specs
 //
 //---------------------------------------------------------------------------
-BOOL
-COrderSpec::Matches(const COrderSpec *pos) const
+bool COrderSpec::Matches(COrderSpec* pos) const
 {
-	BOOL fMatch =
-		m_pdrgpoe->Size() == pos->m_pdrgpoe->Size() && FSatisfies(pos);
-
-	GPOS_ASSERT_IMP(fMatch, pos->FSatisfies(this));
-
+	bool fMatch = m_pdrgpoe.size() == pos->m_pdrgpoe.size() && FSatisfies(pos);
 	return fMatch;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -154,20 +72,16 @@ COrderSpec::Matches(const COrderSpec *pos) const
 //		Check if this order spec satisfies the given one
 //
 //---------------------------------------------------------------------------
-BOOL
-COrderSpec::FSatisfies(const COrderSpec *pos) const
+bool COrderSpec::FSatisfies(COrderSpec* pos) const
 {
-	const ULONG arity = pos->m_pdrgpoe->Size();
-	BOOL fSatisfies = (m_pdrgpoe->Size() >= arity);
-
+	const ULONG arity = pos->m_pdrgpoe.size();
+	bool fSatisfies = (m_pdrgpoe.size() >= arity);
 	for (ULONG ul = 0; fSatisfies && ul < arity; ul++)
 	{
-		fSatisfies = (*m_pdrgpoe)[ul]->Matches((*(pos->m_pdrgpoe))[ul]);
+		fSatisfies = m_pdrgpoe[ul].Equals(pos->m_pdrgpoe[ul]);
 	}
-
 	return fSatisfies;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -177,20 +91,17 @@ COrderSpec::FSatisfies(const COrderSpec *pos) const
 //		Add required enforcers enforcers to dynamic array
 //
 //---------------------------------------------------------------------------
-void COrderSpec::AppendEnforcers(CMemoryPool* mp, CExpressionHandle &exprhdl, CReqdPropPlan* prpp, CExpressionArray* pdrgpexpr, unique_ptr<LogicalOperator> pexpr)
+void COrderSpec::AppendEnforcers(CExpressionHandle &exprhdl, CReqdPropPlan* prpp, duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexpr, duckdb::unique_ptr<Operator> pexpr)
 {
-	GPOS_ASSERT(NULL != prpp);
-	GPOS_ASSERT(NULL != mp);
-	GPOS_ASSERT(NULL != pdrgpexpr);
-	GPOS_ASSERT(NULL != pexpr);
-	GPOS_ASSERT(this == prpp->Peo()->PosRequired() && "required plan properties don't match enforced order spec");
-	AddRef();
-	vector<BoundOrderByNode> order;
-	auto pexprSort = GPOS_NEW(mp) LogicalOrder(order);
+	duckdb::vector<idx_t> projections;
+	for(idx_t i = 0; i < prpp->m_pcrs.size(); i++)
+	{
+		projections.emplace_back(i);
+	}
+	auto pexprSort = make_uniq<PhysicalOrder>(pexpr->types, prpp->m_peo->m_pos->m_pdrgpoe, projections, 0);
 	pexprSort->AddChild(std::move(pexpr));
-	pdrgpexpr->Append(pexprSort);
+	pdrgpexpr.push_back(std::move(pexprSort));
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -203,58 +114,13 @@ void COrderSpec::AppendEnforcers(CMemoryPool* mp, CExpressionHandle &exprhdl, CR
 ULONG COrderSpec::HashValue() const
 {
 	ULONG ulHash = 0;
-	ULONG arity = m_pdrgpoe->Size();
-
+	ULONG arity = m_pdrgpoe.size();
 	for (ULONG ul = 0; ul < arity; ul++)
 	{
-		COrderExpression *poe = (*m_pdrgpoe)[ul];
-		ulHash =
-			gpos::CombineHashes(ulHash, gpos::HashPtr<CColRef>(poe->Pcr()));
+		auto& poe = m_pdrgpoe[ul];
+		ulHash = gpos::CombineHashes(ulHash, gpos::HashPtr<BoundOrderByNode>(&poe));
 	}
-
 	return ulHash;
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::PosCopyWithRemappedColumns
-//
-//	@doc:
-//		Return a copy of the order spec with remapped columns
-//
-//---------------------------------------------------------------------------
-COrderSpec* COrderSpec::PosCopyWithRemappedColumns(CMemoryPool* mp, UlongToColRefMap* colref_mapping, BOOL must_exist)
-{
-	COrderSpec* pos = GPOS_NEW(mp) COrderSpec(mp);
-	const ULONG num_cols = m_pdrgpoe->Size();
-	for (ULONG ul = 0; ul < num_cols; ul++)
-	{
-		COrderExpression *poe = (*m_pdrgpoe)[ul];
-		IMDId *mdid = poe->GetMdIdSortOp();
-		mdid->AddRef();
-		const CColRef* colref = poe->Pcr();
-		ULONG id = colref->Id();
-		CColRef *pcrMapped = colref_mapping->Find(&id);
-		if (NULL == pcrMapped)
-		{
-			if (must_exist)
-			{
-				CColumnFactory* col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
-				// not found in hashmap, so create a new colref and add to hashmap
-				pcrMapped = col_factory->PcrCopy(colref);
-				BOOL result = colref_mapping->Insert(GPOS_NEW(mp) ULONG(id), pcrMapped);
-				GPOS_ASSERT(result);
-			}
-			else
-			{
-				pcrMapped = const_cast<CColRef *>(colref);
-			}
-		}
-		COrderSpec::ENullTreatment ent = poe->Ent();
-		pos->Append(mdid, pcrMapped, ent);
-	}
-	return pos;
 }
 
 //---------------------------------------------------------------------------
@@ -265,26 +131,22 @@ COrderSpec* COrderSpec::PosCopyWithRemappedColumns(CMemoryPool* mp, UlongToColRe
 //		Return a copy of the order spec after excluding the given columns
 //
 //---------------------------------------------------------------------------
-COrderSpec* COrderSpec::PosExcludeColumns(CMemoryPool *mp, CColRefSet *pcrs)
+COrderSpec* COrderSpec::PosExcludeColumns(duckdb::vector<ColumnBinding> pcrs)
 {
-	GPOS_ASSERT(NULL != pcrs);
-	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
-	const ULONG num_cols = m_pdrgpoe->Size();
+	COrderSpec* pos = new COrderSpec();
+	const ULONG num_cols = m_pdrgpoe.size();
 	for (ULONG ul = 0; ul < num_cols; ul++)
 	{
-		COrderExpression* poe = (*m_pdrgpoe)[ul];
-		const CColRef* colref = poe->Pcr();
-		if (pcrs->FMember(colref))
+		auto& poe = m_pdrgpoe[ul];
+		ColumnBinding colref = ((BoundColumnRefExpression*)poe.expression.get())->binding;
+		if (std::find(pcrs.begin(), pcrs.end(), colref) != pcrs.end())
 		{
 			continue;
 		}
-		IMDId* mdid = poe->GetMdIdSortOp();
-		mdid->AddRef();
-		pos->Append(mdid, colref, poe->Ent());
+		pos->Append(poe.type, poe.null_order, poe.expression.get());
 	}
 	return pos;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -294,18 +156,15 @@ COrderSpec* COrderSpec::PosExcludeColumns(CMemoryPool *mp, CColRefSet *pcrs)
 //		Extract columns from order spec into the given column set
 //
 //---------------------------------------------------------------------------
-void
-COrderSpec::ExtractCols(CColRefSet *pcrs) const
+void COrderSpec::ExtractCols(duckdb::vector<ColumnBinding> pcrs) const
 {
-	GPOS_ASSERT(NULL != pcrs);
-
-	const ULONG ulOrderExprs = m_pdrgpoe->Size();
+	const ULONG ulOrderExprs = m_pdrgpoe.size();
 	for (ULONG ul = 0; ul < ulOrderExprs; ul++)
 	{
-		pcrs->Include((*m_pdrgpoe)[ul]->Pcr());
+		ColumnBinding cell = ((BoundColumnRefExpression*)m_pdrgpoe[ul].expression.get())->binding;
+		pcrs.emplace_back(cell.table_index, cell.column_index);
 	}
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -315,15 +174,12 @@ COrderSpec::ExtractCols(CColRefSet *pcrs) const
 //		Extract colref set from order components
 //
 //---------------------------------------------------------------------------
-CColRefSet *
-COrderSpec::PcrsUsed(CMemoryPool *mp) const
+duckdb::vector<ColumnBinding> COrderSpec::PcrsUsed() const
 {
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
+	duckdb::vector<ColumnBinding> pcrs;
 	ExtractCols(pcrs);
-
 	return pcrs;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -333,19 +189,15 @@ COrderSpec::PcrsUsed(CMemoryPool *mp) const
 //		Extract colref set from order specs in the given array
 //
 //---------------------------------------------------------------------------
-CColRefSet *
-COrderSpec::GetColRefSet(CMemoryPool *mp, COrderSpecArray *pdrgpos)
+duckdb::vector<ColumnBinding> COrderSpec::GetColRefSet(duckdb::vector<COrderSpec*> pdrgpos)
 {
-	GPOS_ASSERT(NULL != pdrgpos);
-
-	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
-	const ULONG ulOrderSpecs = pdrgpos->Size();
+	duckdb::vector<ColumnBinding> pcrs;
+	const ULONG ulOrderSpecs = pdrgpos.size();
 	for (ULONG ulSpec = 0; ulSpec < ulOrderSpecs; ulSpec++)
 	{
-		COrderSpec *pos = (*pdrgpos)[ulSpec];
+		COrderSpec* pos = pdrgpos[ulSpec];
 		pos->ExtractCols(pcrs);
 	}
-
 	return pcrs;
 }
 
@@ -358,59 +210,23 @@ COrderSpec::GetColRefSet(CMemoryPool *mp, COrderSpecArray *pdrgpos)
 //		passed columns
 //
 //---------------------------------------------------------------------------
-COrderSpecArray *
-COrderSpec::PdrgposExclude(CMemoryPool *mp, COrderSpecArray *pdrgpos,
-						   CColRefSet *pcrsToExclude)
+duckdb::vector<COrderSpec*> COrderSpec::PdrgposExclude(duckdb::vector<COrderSpec*> pdrgpos, duckdb::vector<ColumnBinding> pcrsToExclude)
 {
-	GPOS_ASSERT(NULL != pdrgpos);
-	GPOS_ASSERT(NULL != pcrsToExclude);
-
-	if (0 == pcrsToExclude->Size())
+	if (0 == pcrsToExclude.size())
 	{
 		// no columns to exclude
-		pdrgpos->AddRef();
 		return pdrgpos;
 	}
-
-	COrderSpecArray *pdrgposNew = GPOS_NEW(mp) COrderSpecArray(mp);
-	const ULONG ulOrderSpecs = pdrgpos->Size();
+	duckdb::vector<COrderSpec*> pdrgposNew;
+	const ULONG ulOrderSpecs = pdrgpos.size();
 	for (ULONG ulSpec = 0; ulSpec < ulOrderSpecs; ulSpec++)
 	{
-		COrderSpec *pos = (*pdrgpos)[ulSpec];
-		COrderSpec *posNew = pos->PosExcludeColumns(mp, pcrsToExclude);
-		pdrgposNew->Append(posNew);
+		COrderSpec* pos = pdrgpos[ulSpec];
+		COrderSpec* posNew = pos->PosExcludeColumns(pcrsToExclude);
+		pdrgposNew.push_back(posNew);
 	}
-
 	return pdrgposNew;
 }
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::OsPrint
-//
-//	@doc:
-//		Print order spec
-//
-//---------------------------------------------------------------------------
-IOstream &
-COrderSpec::OsPrint(IOstream &os) const
-{
-	const ULONG arity = m_pdrgpoe->Size();
-	if (0 == arity)
-	{
-		os << "<empty>";
-	}
-	else
-	{
-		for (ULONG ul = 0; ul < arity; ul++)
-		{
-			(*m_pdrgpoe)[ul]->OsPrint(os) << " ";
-		}
-	}
-
-	return os;
-}
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -420,30 +236,24 @@ COrderSpec::OsPrint(IOstream &os) const
 //		 Matching function over order spec arrays
 //
 //---------------------------------------------------------------------------
-BOOL
-COrderSpec::Equals(const COrderSpecArray *pdrgposFirst,
-				   const COrderSpecArray *pdrgposSecond)
+bool COrderSpec::Equals(duckdb::vector<COrderSpec*> pdrgposFirst, duckdb::vector<COrderSpec*> pdrgposSecond)
 {
-	if (NULL == pdrgposFirst || NULL == pdrgposSecond)
+	if (0 == pdrgposFirst.size() || 0 == pdrgposFirst.size())
 	{
-		return (NULL == pdrgposFirst && NULL == pdrgposSecond);
+		return (0 == pdrgposFirst.size() && 0 == pdrgposFirst.size());
 	}
-
-	if (pdrgposFirst->Size() != pdrgposSecond->Size())
+	if (pdrgposFirst.size() != pdrgposSecond.size())
 	{
 		return false;
 	}
-
-	const ULONG size = pdrgposFirst->Size();
-	BOOL fMatch = true;
+	const ULONG size = pdrgposFirst.size();
+	bool fMatch = true;
 	for (ULONG ul = 0; fMatch && ul < size; ul++)
 	{
-		fMatch = (*pdrgposFirst)[ul]->Matches((*pdrgposSecond)[ul]);
+		fMatch = pdrgposFirst[ul]->Matches(pdrgposSecond[ul]);
 	}
-
 	return fMatch;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -453,45 +263,13 @@ COrderSpec::Equals(const COrderSpecArray *pdrgposFirst,
 //		 Combine hash values of a maximum number of entries
 //
 //---------------------------------------------------------------------------
-ULONG
-COrderSpec::HashValue(const COrderSpecArray *pdrgpos, ULONG ulMaxSize)
+ULONG COrderSpec::HashValue(const duckdb::vector<COrderSpec*> pdrgpos, ULONG ulMaxSize)
 {
-	GPOS_ASSERT(NULL != pdrgpos);
-	ULONG size = std::min(ulMaxSize, pdrgpos->Size());
-
+	ULONG size = std::min(ulMaxSize, (ULONG)pdrgpos.size());
 	ULONG ulHash = 0;
 	for (ULONG ul = 0; ul < size; ul++)
 	{
-		ulHash = gpos::CombineHashes(ulHash, (*pdrgpos)[ul]->HashValue());
+		ulHash = gpos::CombineHashes(ulHash, pdrgpos[ul]->HashValue());
 	}
-
 	return ulHash;
-}
-
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COrderSpec::OsPrint
-//
-//	@doc:
-//		 Print array of order spec objects
-//
-//---------------------------------------------------------------------------
-IOstream &
-COrderSpec::OsPrint(IOstream &os, const COrderSpecArray *pdrgpos)
-{
-	const ULONG size = pdrgpos->Size();
-	os << "[";
-	if (0 < size)
-	{
-		for (ULONG ul = 0; ul < size - 1; ul++)
-		{
-			(void) (*pdrgpos)[ul]->OsPrint(os);
-			os << ", ";
-		}
-
-		(void) (*pdrgpos)[size - 1]->OsPrint(os);
-	}
-
-	return os << "]";
 }
