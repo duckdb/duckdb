@@ -7,6 +7,7 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/io/CFileWriter.h"
 #include <fcntl.h>
+#include <assert.h>
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/io/ioutils.h"
 
@@ -34,9 +35,7 @@ CFileWriter::CFileWriter() : CFileDescriptor(), m_file_size(0)
 //---------------------------------------------------------------------------
 void CFileWriter::Open(const CHAR *file_path, ULONG permission_bits)
 {
-	GPOS_ASSERT(NULL != file_path);
 	OpenFile(file_path, O_CREAT | O_WRONLY | O_RDONLY | O_TRUNC, permission_bits);
-	GPOS_ASSERT(0 == ioutils::FileSize(file_path));
 	m_file_size = 0;
 }
 
@@ -64,9 +63,6 @@ void CFileWriter::Close()
 //---------------------------------------------------------------------------
 void CFileWriter::Write(const BYTE *read_buffer, const ULONG_PTR write_size)
 {
-	GPOS_ASSERT(CFileDescriptor::IsFileOpen() && "Attempt to write to invalid file descriptor");
-	GPOS_ASSERT(0 < write_size);
-	GPOS_ASSERT(NULL != read_buffer);
 	ULONG_PTR bytes_left_to_write = write_size;
 	while (0 < bytes_left_to_write)
 	{
@@ -79,12 +75,10 @@ void CFileWriter::Write(const BYTE *read_buffer, const ULONG_PTR write_size)
 			// in case an interrupt was received we retry
 			if (EINTR == errno)
 			{
-				GPOS_CHECK_ABORT;
 				continue;
 			}
-			GPOS_RAISE(CException::ExmaSystem, CException::ExmiIOError, errno);
+			assert(false);
 		}
-		GPOS_ASSERT(current_byte <= (INT_PTR) bytes_left_to_write);
 		// increase file size
 		m_file_size += current_byte;
 		read_buffer += current_byte;
