@@ -1,5 +1,4 @@
 #include "duckdb/optimizer/cse_optimizer.hpp"
-
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -7,8 +6,8 @@
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/binder.hpp"
 
-namespace duckdb {
-
+namespace duckdb
+{
 //! The CSENode contains information about a common subexpression; how many times it occurs, and the column index in the
 //! underlying projection
 struct CSENode {
@@ -34,7 +33,7 @@ struct CSEReplacementState {
 };
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
-	switch (op.type) {
+	switch (op.logical_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		ExtractCommonSubExpresions(op);

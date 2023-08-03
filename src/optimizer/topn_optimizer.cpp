@@ -4,27 +4,31 @@
 #include "duckdb/planner/operator/logical_top_n.hpp"
 #include "duckdb/common/limits.hpp"
 
-namespace duckdb {
+namespace duckdb
+{
 
-unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
-	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op)
+{
+	if (op->logical_type == LogicalOperatorType::LOGICAL_LIMIT && op->children[0]->logical_type == LogicalOperatorType::LOGICAL_ORDER_BY)
+	{
 		auto &limit = op->Cast<LogicalLimit>();
-		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
-
+		auto &order_by = ((LogicalOperator*)op->children[0].get())->Cast<LogicalOrder>();
 		// This optimization doesn't apply when OFFSET is present without LIMIT
 		// Or if offset is not constant
-		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
+		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset)
+		{
 			auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
-			topn->AddChild(std::move(order_by.children[0]));
+			topn->AddChild(unique_ptr_cast<Operator, LogicalOperator>(std::move(order_by.children[0])));
 			op = std::move(topn);
 		}
-	} else {
-		for (auto &child : op->children) {
-			child = Optimize(std::move(child));
+	}
+	else
+	{
+		for (auto &child : op->children)
+		{
+			child = Optimize(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 		}
 	}
 	return op;
 }
-
 } // namespace duckdb

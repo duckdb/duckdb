@@ -9,7 +9,7 @@ unique_ptr<LogicalOperator> ExpressionHeuristics::Rewrite(unique_ptr<LogicalOper
 }
 
 void ExpressionHeuristics::VisitOperator(LogicalOperator &op) {
-	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+	if (op.logical_type == LogicalOperatorType::LOGICAL_FILTER) {
 		// reorder all filter expressions
 		if (op.expressions.size() > 1) {
 			ReorderExpressions(op.expressions);

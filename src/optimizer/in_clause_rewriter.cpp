@@ -10,21 +10,25 @@
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
-	if (op->children.size() == 1) {
-		root = std::move(op->children[0]);
+unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op)
+{
+	if (op->children.size() == 1)
+	{
+		root = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
 		VisitOperatorExpressions(*op);
 		op->children[0] = std::move(root);
 	}
-
-	for (auto &child : op->children) {
-		child = Rewrite(std::move(child));
+	for (auto &child : op->children)
+	{
+		child = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)child.get()));
 	}
 	return op;
 }
 
-unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
+unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr)
+{
+	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN)
+	{
 		return nullptr;
 	}
 	D_ASSERT(root);
@@ -33,30 +37,30 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
-	for (idx_t i = 1; i < expr.children.size(); i++) {
-		if (!expr.children[i]->IsFoldable()) {
+	for (idx_t i = 1; i < expr.children.size(); i++)
+	{
+		if (!expr.children[i]->IsFoldable())
+		{
 			// non-scalar expression
 			all_scalar = false;
 		}
 	}
-	if (expr.children.size() == 2) {
+	if (expr.children.size() == 2)
+	{
 		// only one child
 		// IN: turn into X = 1
 		// NOT IN: turn into X <> 1
-		return make_uniq<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL
-		                                                          : ExpressionType::COMPARE_NOTEQUAL,
-		                                            std::move(expr.children[0]), std::move(expr.children[1]));
+		return make_uniq<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL, std::move(expr.children[0]), std::move(expr.children[1]));
 	}
-	if (expr.children.size() < 6 || !all_scalar) {
+	if (expr.children.size() < 6 || !all_scalar)
+	{
 		// low amount of children or not all scalar
 		// IN: turn into (X = 1 OR X = 2 OR X = 3...)
 		// NOT IN: turn into (X <> 1 AND X <> 2 AND X <> 3 ...)
-		auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR
-		                                                                       : ExpressionType::CONJUNCTION_AND);
-		for (idx_t i = 1; i < expr.children.size(); i++) {
-			conjunction->children.push_back(make_uniq<BoundComparisonExpression>(
-			    is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL,
-			    expr.children[0]->Copy(), std::move(expr.children[i])));
+		auto conjunction = make_uniq<BoundConjunctionExpression>(is_regular_in ? ExpressionType::CONJUNCTION_OR : ExpressionType::CONJUNCTION_AND);
+		for (idx_t i = 1; i < expr.children.size(); i++)
+		{
+			conjunction->children.push_back(make_uniq<BoundComparisonExpression>(is_regular_in ? ExpressionType::COMPARE_EQUAL : ExpressionType::COMPARE_NOTEQUAL, expr.children[0]->Copy(), std::move(expr.children[i])));
 		}
 		return std::move(conjunction);
 	}
@@ -67,16 +71,17 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	auto collection = make_uniq<ColumnDataCollection>(context, types);
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
-
 	DataChunk chunk;
 	chunk.Initialize(context, types);
-	for (idx_t i = 1; i < expr.children.size(); i++) {
+	for (idx_t i = 1; i < expr.children.size(); i++)
+	{
 		// resolve this expression to a constant
 		auto value = ExpressionExecutor::EvaluateScalar(context, *expr.children[i]);
 		idx_t index = chunk.size();
 		chunk.SetCardinality(chunk.size() + 1);
 		chunk.SetValue(0, index, value);
-		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size()) {
+		if (chunk.size() == STANDARD_VECTOR_SIZE || i + 1 == expr.children.size())
+		{
 			// chunk full: append to chunk collection
 			collection->Append(append_state, chunk);
 			chunk.Reset();
@@ -85,24 +90,20 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// now generate a ChunkGet that scans this collection
 	auto chunk_index = optimizer.binder.GenerateTableIndex();
 	auto chunk_scan = make_uniq<LogicalColumnDataGet>(chunk_index, types, std::move(collection));
-
 	// then we generate the MARK join with the chunk scan on the RHS
 	auto join = make_uniq<LogicalComparisonJoin>(JoinType::MARK);
 	join->mark_index = chunk_index;
-	join->AddChild(std::move(root));
-	join->AddChild(std::move(chunk_scan));
+	join->AddChild(unique_ptr_cast<LogicalOperator, Operator>(std::move(root)));
+	join->AddChild(unique_ptr_cast<LogicalOperator, Operator>(std::move(chunk_scan)));
 	// create the JOIN condition
 	JoinCondition cond;
 	cond.left = std::move(expr.children[0]);
-
 	cond.right = make_uniq<BoundColumnRefExpression>(in_type, ColumnBinding(chunk_index, 0));
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(std::move(cond));
 	root = std::move(join);
-
 	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
-	unique_ptr<Expression> result =
-	    make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(chunk_index, 0));
+	unique_ptr<Expression> result = make_uniq<BoundColumnRefExpression>("IN (...)", LogicalType::BOOLEAN, ColumnBinding(chunk_index, 0));
 	if (!is_regular_in) {
 		// NOT IN: invert
 		auto invert = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);

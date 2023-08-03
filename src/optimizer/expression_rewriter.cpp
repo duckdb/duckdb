@@ -59,7 +59,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 	to_apply_rules.clear();
 	for (auto &rule : rules) {
-		if (rule->logical_root && !rule->logical_root->Match(op.type)) {
+		if (rule->logical_root && !rule->logical_root->Match(op.logical_type)) {
 			// this rule does not apply to this type of LogicalOperator
 			continue;
 		}
@@ -73,7 +73,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
-	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
+	if (op.logical_type == LogicalOperatorType::LOGICAL_FILTER) {
 		auto &filter = op.Cast<LogicalFilter>();
 		filter.SplitPredicates();
 	}
