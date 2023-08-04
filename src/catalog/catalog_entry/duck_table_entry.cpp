@@ -46,7 +46,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 		                     storage.db, nullptr, index_block->block_id, index_block->offset);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, nullptr);
+		                     storage.db);
 		if (!storage.IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}

@@ -415,7 +415,7 @@ void ReplayState::ReplayCreateIndex() {
 	switch (index_info.index_type) {
 	case IndexType::ART: {
 		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions,
-		                       index_info.constraint_type, data_table.db, nullptr);
+		                       index_info.constraint_type, data_table.db);
 		break;
 	}
 	default:

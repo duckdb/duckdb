@@ -35,7 +35,7 @@ public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-	    AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr,
+	    AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr = nullptr,
 	    const idx_t block_id = DConstants::INVALID_INDEX, const idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 

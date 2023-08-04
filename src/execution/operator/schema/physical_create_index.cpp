@@ -56,7 +56,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                     info->constraint_type, storage.db, nullptr);
+		                                     info->constraint_type, storage.db);
 		break;
 	}
 	default:
@@ -73,7 +73,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                    info->constraint_type, storage.db, nullptr);
+		                                    info->constraint_type, storage.db);
 		break;
 	}
 	default:
@@ -88,7 +88,7 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateIndex::SinkDefault(Vector &row_identifiers, OperatorSinkInput &input) const {
+SinkResultType PhysicalCreateIndex::SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const {
 
 	auto &l_state = input.local_state.Cast<CreateIndexLocalSinkState>();
 	auto count = l_state.key_chunk.size();
@@ -144,7 +144,7 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (sorted) {
 		return SinkSorted(row_identifiers, input);
 	}
-	return SinkDefault(row_identifiers, input);
+	return SinkUnsorted(row_identifiers, input);
 }
 
 SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {

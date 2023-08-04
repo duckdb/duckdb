@@ -38,7 +38,7 @@ public:
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
 	//! Whether the pipeline sorts the data prior to index creation
-	bool sorted;
+	const bool sorted;
 
 public:
 	//! Source interface, NOP for this operator
@@ -55,7 +55,7 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	//! Sink for unsorted data: insert iteratively
-	SinkResultType SinkDefault(Vector &row_identifiers, OperatorSinkInput &input) const;
+	SinkResultType SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const;
 	//! Sink for sorted data: build + merge
 	SinkResultType SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const;
 
