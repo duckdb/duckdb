@@ -499,11 +499,11 @@ ORDER BY 1;
 ----
 NULL	NULL
 -infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
-0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'doy': 74, 'julian': 1705428}
-1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1, 'julian': 2448623}
-1992-03-03	{'weekday': 2, 'isodow': 2, 'doy': 63, 'julian': 2448685}
-1992-05-05	{'weekday': 2, 'isodow': 2, 'doy': 126, 'julian': 2448748}
-2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581}
+0044-03-15 (BC)	{'weekday': 5, 'isodow': 5, 'doy': 74, 'julian': 1705428.0}
+1992-01-01	{'weekday': 3, 'isodow': 3, 'doy': 1, 'julian': 2448623.0}
+1992-03-03	{'weekday': 2, 'isodow': 2, 'doy': 63, 'julian': 2448685.0}
+1992-05-05	{'weekday': 2, 'isodow': 2, 'doy': 126, 'julian': 2448748.0}
+2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581.0}
 infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
 
 # ISO parts

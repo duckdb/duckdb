@@ -98,8 +98,9 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<BaseS
 }
 
 struct DatePart {
-	template <class T, class OP>
-	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats) {
+	template <class T, class OP, class TR = int64_t>
+	static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<BaseStatistics> &child_stats,
+	                                                              const LogicalType &stats_type = LogicalType::BIGINT) {
 		// we can only propagate complex date part stats if the child has stats
 		auto &nstats = child_stats[0];
 		if (!NumericStats::HasMinMax(nstats)) {
@@ -115,11 +116,11 @@ struct DatePart {
 		if (!Value::IsFinite(min) || !Value::IsFinite(max)) {
 			return nullptr;
 		}
-		auto min_part = OP::template Operation<T, int64_t>(min);
-		auto max_part = OP::template Operation<T, int64_t>(max);
-		auto result = NumericStats::CreateEmpty(LogicalType::BIGINT);
-		NumericStats::SetMin(result, Value::BIGINT(min_part));
-		NumericStats::SetMax(result, Value::BIGINT(max_part));
+		TR min_part = OP::template Operation<T, TR>(min);
+		TR max_part = OP::template Operation<T, TR>(max);
+		auto result = NumericStats::CreateEmpty(stats_type);
+		NumericStats::SetMin(result, Value(min_part));
+		NumericStats::SetMax(result, Value(max_part));
 		result.CopyValidity(child_stats[0]);
 		return result.ToUnique();
 	}
@@ -503,12 +504,12 @@ struct DatePart {
 	struct JulianDayOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return 0;
+			return Timestamp::GetJulianDay(input);
 		}
 
 		template <class T>
 		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
-			return PropagateDatePartStatistics<T, JulianDayOperator>(input.child_stats);
+			return PropagateDatePartStatistics<T, JulianDayOperator, double>(input.child_stats, LogicalType::DOUBLE);
 		}
 	};
 
@@ -562,6 +563,7 @@ struct DatePart {
 					break;
 				case DatePartSpecifier::JULIAN_DAY:
 					mask |= JD;
+					break;
 				case DatePartSpecifier::MICROSECONDS:
 				case DatePartSpecifier::MILLISECONDS:
 				case DatePartSpecifier::SECOND:
@@ -581,62 +583,69 @@ struct DatePart {
 
 		template <typename P>
 		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
-			return part_values[int(part)];
+			static const auto BEGIN_DOUBLE = size_t(DatePartSpecifier::JULIAN_DAY);
+			auto idx = size_t(part);
+			if (idx < BEGIN_DOUBLE) {
+				return part_values[idx];
+			} else {
+				return part_values[idx - BEGIN_DOUBLE];
+			}
 		}
 
-		template <class TA, class TR>
-		static inline void Operation(TR **part_values, const TA &input, const idx_t idx, const part_mask_t mask) {
-			TR *part_data;
+		template <class TA>
+		static inline void Operation(int64_t **bigint_values, double **double_values, const TA &input, const idx_t idx,
+		                             const part_mask_t mask) {
+			int64_t *bigint_data;
 			// YMD calculations
 			int32_t yyyy = 1970;
 			int32_t mm = 0;
 			int32_t dd = 1;
 			if (mask & YMD) {
 				Date::Convert(input, yyyy, mm, dd);
-				part_data = HasPartValue(part_values, DatePartSpecifier::YEAR);
-				if (part_data) {
-					part_data[idx] = yyyy;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::YEAR);
+				if (bigint_data) {
+					bigint_data[idx] = yyyy;
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::MONTH);
-				if (part_data) {
-					part_data[idx] = mm;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::MONTH);
+				if (bigint_data) {
+					bigint_data[idx] = mm;
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::DAY);
-				if (part_data) {
-					part_data[idx] = dd;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::DAY);
+				if (bigint_data) {
+					bigint_data[idx] = dd;
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::DECADE);
-				if (part_data) {
-					part_data[idx] = DecadeOperator::DecadeFromYear(yyyy);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::DECADE);
+				if (bigint_data) {
+					bigint_data[idx] = DecadeOperator::DecadeFromYear(yyyy);
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY);
-				if (part_data) {
-					part_data[idx] = CenturyOperator::CenturyFromYear(yyyy);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::CENTURY);
+				if (bigint_data) {
+					bigint_data[idx] = CenturyOperator::CenturyFromYear(yyyy);
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM);
-				if (part_data) {
-					part_data[idx] = MillenniumOperator::MillenniumFromYear(yyyy);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::MILLENNIUM);
+				if (bigint_data) {
+					bigint_data[idx] = MillenniumOperator::MillenniumFromYear(yyyy);
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER);
-				if (part_data) {
-					part_data[idx] = QuarterOperator::QuarterFromMonth(mm);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::QUARTER);
+				if (bigint_data) {
+					bigint_data[idx] = QuarterOperator::QuarterFromMonth(mm);
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::ERA);
-				if (part_data) {
-					part_data[idx] = EraOperator::EraFromYear(yyyy);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::ERA);
+				if (bigint_data) {
+					bigint_data[idx] = EraOperator::EraFromYear(yyyy);
 				}
 			}
 
 			// Week calculations
 			if (mask & DOW) {
 				auto isodow = Date::ExtractISODayOfTheWeek(input);
-				part_data = HasPartValue(part_values, DatePartSpecifier::DOW);
-				if (part_data) {
-					part_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::DOW);
+				if (bigint_data) {
+					bigint_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW);
-				if (part_data) {
-					part_data[idx] = isodow;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::ISODOW);
+				if (bigint_data) {
+					bigint_data[idx] = isodow;
 				}
 			}
 
@@ -645,36 +654,36 @@ struct DatePart {
 				int32_t ww = 0;
 				int32_t iyyy = 0;
 				Date::ExtractISOYearWeek(input, iyyy, ww);
-				part_data = HasPartValue(part_values, DatePartSpecifier::WEEK);
-				if (part_data) {
-					part_data[idx] = ww;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::WEEK);
+				if (bigint_data) {
+					bigint_data[idx] = ww;
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::ISOYEAR);
-				if (part_data) {
-					part_data[idx] = iyyy;
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::ISOYEAR);
+				if (bigint_data) {
+					bigint_data[idx] = iyyy;
 				}
-				part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK);
-				if (part_data) {
-					part_data[idx] = YearWeekOperator::YearWeekFromParts(iyyy, ww);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::YEARWEEK);
+				if (bigint_data) {
+					bigint_data[idx] = YearWeekOperator::YearWeekFromParts(iyyy, ww);
 				}
 			}
 
 			if (mask & EPOCH) {
-				part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
-				if (part_data) {
-					part_data[idx] = Date::Epoch(input);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::EPOCH);
+				if (bigint_data) {
+					bigint_data[idx] = Date::Epoch(input);
 				}
 			}
 			if (mask & DOY) {
-				part_data = HasPartValue(part_values, DatePartSpecifier::DOY);
-				if (part_data) {
-					part_data[idx] = Date::ExtractDayOfTheYear(input);
+				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::DOY);
+				if (bigint_data) {
+					bigint_data[idx] = Date::ExtractDayOfTheYear(input);
 				}
 			}
 			if (mask & JD) {
-				part_data = HasPartValue(part_values, DatePartSpecifier::JULIAN_DAY);
-				if (part_data) {
-					part_data[idx] = Date::ExtractJulianDay(input);
+				auto double_data = HasPartValue(double_values, DatePartSpecifier::JULIAN_DAY);
+				if (double_data) {
+					double_data[idx] = Date::ExtractJulianDay(input);
 				}
 			}
 		}
@@ -1068,50 +1077,50 @@ int64_t DatePart::TimezoneOperator::Operation(dtime_t input) {
 }
 
 template <>
-int64_t DatePart::JulianDayOperator::Operation(date_t input) {
+double DatePart::JulianDayOperator::Operation(date_t input) {
 	return Date::ExtractJulianDay(input);
 }
 
 template <>
-int64_t DatePart::JulianDayOperator::Operation(timestamp_t input) {
-	return Date::ExtractJulianDay(Timestamp::GetDate(input));
+double DatePart::JulianDayOperator::Operation(interval_t input) {
+	throw NotImplementedException("interval units \"julian\" not recognized");
 }
 
 template <>
-double DatePart::JulianDayOperator::Operation(timestamp_t input) {
-	return Timestamp::GetJulianDay(input);
+double DatePart::JulianDayOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"julian\" not recognized");
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &input, const idx_t idx,
-                                         const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const dtime_t &input,
+                                         const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
-		part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MICROSECONDS);
 		if (part_data) {
 			part_data[idx] = micros;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MILLISECONDS);
 		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::SECOND);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::SECOND);
 		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MINUTE);
 		if (part_data) {
 			part_data[idx] = MinutesOperator::Operation<dtime_t, int64_t>(input);
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::HOUR);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::HOUR);
 		if (part_data) {
 			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::EPOCH);
 		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
 			;
@@ -1119,15 +1128,15 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 	}
 
 	if (mask & ZONE) {
-		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::TIMEZONE);
 		if (part_data) {
 			part_data[idx] = 0;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_HOUR);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::TIMEZONE_HOUR);
 		if (part_data) {
 			part_data[idx] = 0;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_MINUTE);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::TIMEZONE_MINUTE);
 		if (part_data) {
 			part_data[idx] = 0;
 		}
@@ -1135,63 +1144,63 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_t &input, const idx_t idx,
-                                         const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const timestamp_t &input,
+                                         const idx_t idx, const part_mask_t mask) {
 	date_t d;
 	dtime_t t;
 	Timestamp::Convert(input, d, t);
 
 	// Both define epoch, and the correct value is the sum.
 	// So mask it out and compute it separately.
-	Operation(part_values, d, idx, mask & ~EPOCH);
-	Operation(part_values, t, idx, mask & ~EPOCH);
+	Operation(bigint_values, double_values, d, idx, mask & ~EPOCH);
+	Operation(bigint_values, double_values, t, idx, mask & ~EPOCH);
 
 	if (mask & EPOCH) {
-		auto part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		auto part_data = HasPartValue(bigint_values, DatePartSpecifier::EPOCH);
 		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<timestamp_t, int64_t>(input);
 		}
 	}
 
 	if (mask & JD) {
-		auto part_data = HasPartValue(part_values, DatePartSpecifier::JULIAN_DAY);
+		auto part_data = HasPartValue(double_values, DatePartSpecifier::JULIAN_DAY);
 		if (part_data) {
-			part_data[idx] = JulianDayOperator::Operation<date_t, int64_t>(d);
+			part_data[idx] = JulianDayOperator::Operation<timestamp_t, double>(input);
 		}
 	}
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t &input, const idx_t idx,
-                                         const part_mask_t mask) {
+void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const interval_t &input,
+                                         const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
 	if (mask & YMD) {
 		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
-		part_data = HasPartValue(part_values, DatePartSpecifier::YEAR);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::YEAR);
 		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_YEAR;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MONTH);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MONTH);
 		if (part_data) {
 			part_data[idx] = mm;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::DAY);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::DAY);
 		if (part_data) {
 			part_data[idx] = input.days;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::DECADE);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::DECADE);
 		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_DECADE;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::CENTURY);
 		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_CENTURY;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MILLENNIUM);
 		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_MILLENIUM;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::QUARTER);
 		if (part_data) {
 			part_data[idx] = mm / Interval::MONTHS_PER_QUARTER + 1;
 		}
@@ -1199,30 +1208,30 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t
 
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
-		part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MICROSECONDS);
 		if (part_data) {
 			part_data[idx] = micros;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MILLISECONDS);
 		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::SECOND);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::SECOND);
 		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::MINUTE);
 		if (part_data) {
 			part_data[idx] = MinutesOperator::Operation<interval_t, int64_t>(input);
 		}
-		part_data = HasPartValue(part_values, DatePartSpecifier::HOUR);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::HOUR);
 		if (part_data) {
 			part_data[idx] = HoursOperator::Operation<interval_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		part_data = HasPartValue(bigint_values, DatePartSpecifier::EPOCH);
 		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
 		}
@@ -1276,8 +1285,6 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	case DatePartSpecifier::TIMEZONE_HOUR:
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return DatePart::TimezoneOperator::template Operation<T, int64_t>(element);
-	case DatePartSpecifier::JULIAN_DAY:
-		return DatePart::JulianDayOperator::template Operation<T, int64_t>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
@@ -1319,8 +1326,18 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 		bound_function.arguments.erase(bound_function.arguments.begin());
 		bound_function.name = "julian";
 		bound_function.return_type = LogicalType::DOUBLE;
-		bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>;
-		bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>;
+		switch (arguments[0]->return_type.id()) {
+		case LogicalType::TIMESTAMP:
+			bound_function.function = DatePart::UnaryFunction<timestamp_t, double, DatePart::JulianDayOperator>;
+			bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<timestamp_t>;
+			break;
+		case LogicalType::DATE:
+			bound_function.function = DatePart::UnaryFunction<date_t, double, DatePart::JulianDayOperator>;
+			bound_function.statistics = DatePart::JulianDayOperator::template PropagateStatistics<date_t>;
+			break;
+		default:
+			throw BinderException("%s can only take DATE or TIMESTAMP arguments", bound_function.name);
+		}
 		break;
 	default:
 		break;
@@ -1331,23 +1348,22 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 
 ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
                                              scalar_function_t interval_func, function_statistics_t date_stats,
-                                             function_statistics_t ts_stats,
-                                             const LogicalType &result_type = LogicalType::BIGINT) {
+                                             function_statistics_t ts_stats) {
 	ScalarFunctionSet operator_set;
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, result_type, std::move(date_func), nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, std::move(date_func), nullptr, nullptr, date_stats));
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::TIMESTAMP}, result_type, std::move(ts_func), nullptr, nullptr, ts_stats));
-	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, result_type, std::move(interval_func)));
+	    ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr, nullptr, ts_stats));
+	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
 	return operator_set;
 }
 
-template <class OP, class RESULT = int64_t>
-static ScalarFunctionSet GetDatePartFunction(const LogicalType &result_type = LogicalType::BIGINT) {
+template <class OP>
+static ScalarFunctionSet GetDatePartFunction() {
 	return GetGenericDatePartFunction(
-	    DatePart::UnaryFunction<date_t, RESULT, OP>, DatePart::UnaryFunction<timestamp_t, RESULT, OP>,
-	    ScalarFunction::UnaryFunction<interval_t, RESULT, OP>, OP::template PropagateStatistics<date_t>,
-	    OP::template PropagateStatistics<timestamp_t>, result_type);
+	    DatePart::UnaryFunction<date_t, int64_t, OP>, DatePart::UnaryFunction<timestamp_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<interval_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
+	    OP::template PropagateStatistics<timestamp_t>);
 }
 
 ScalarFunctionSet GetGenericTimePartFunction(scalar_function_t date_func, scalar_function_t ts_func,
@@ -1408,6 +1424,10 @@ struct DayNameOperator {
 struct StructDatePart {
 	using part_codes_t = vector<DatePartSpecifier>;
 
+	static const auto BEGIN_BIGINT = size_t(DatePartSpecifier::YEAR);
+	static const auto BEGIN_DOUBLE = size_t(DatePartSpecifier::JULIAN_DAY);
+	static const auto BEGIN_INVALID = size_t(DatePartSpecifier::JULIAN_DAY) + 1;
+
 	struct BindData : public VariableReturnBindData {
 		part_codes_t part_codes;
 
@@ -1451,7 +1471,8 @@ struct StructDatePart {
 				}
 				name_collision_set.insert(part_name);
 				part_codes.emplace_back(part_code);
-				struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
+				const auto part_type = (size_t(part_code) >= BEGIN_DOUBLE) ? LogicalType::DOUBLE : LogicalType::BIGINT;
+				struct_children.emplace_back(make_pair(part_name, part_type));
 			}
 		} else {
 			throw BinderException("%s can only take constant lists of part names", bound_function.name);
@@ -1470,7 +1491,10 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		vector<int64_t *> part_values(int(DatePartSpecifier::JULIAN_DAY) + 1, nullptr);
+		vector<int64_t *> vec_bigints(size_t(BEGIN_DOUBLE), nullptr);
+		auto part_bigints = vec_bigints.data();
+		vector<double *> vec_doubles(BEGIN_INVALID - size_t(BEGIN_DOUBLE), nullptr);
+		auto part_doubles = vec_doubles.data();
 		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
 
 		auto &child_entries = StructVector::GetEntries(result);
@@ -1497,12 +1521,16 @@ struct StructDatePart {
 					ConstantVector::SetNull(*child_entry, false);
 					const auto part_index = size_t(info.part_codes[col]);
 					if (owners[part_index] == col) {
-						part_values[part_index] = ConstantVector::GetData<int64_t>(*child_entry);
+						if (part_index < size_t(BEGIN_DOUBLE)) {
+							part_bigints[part_index - BEGIN_BIGINT] = ConstantVector::GetData<int64_t>(*child_entry);
+						} else {
+							part_doubles[part_index - BEGIN_DOUBLE] = ConstantVector::GetData<double>(*child_entry);
+						}
 					}
 				}
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
 				if (Value::IsFinite(tdata[0])) {
-					DatePart::StructOperator::Operation(part_values.data(), tdata[0], 0, part_mask);
+					DatePart::StructOperator::Operation(part_bigints, part_doubles, tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
 						ConstantVector::SetNull(*child_entry, true);
@@ -1535,7 +1563,11 @@ struct StructDatePart {
 				// Pre-multiplex
 				const auto part_index = size_t(info.part_codes[col]);
 				if (owners[part_index] == col) {
-					part_values[part_index] = FlatVector::GetData<int64_t>(*child_entry);
+					if (part_index < size_t(BEGIN_DOUBLE)) {
+						part_bigints[part_index - BEGIN_BIGINT] = FlatVector::GetData<int64_t>(*child_entry);
+					} else {
+						part_doubles[part_index - BEGIN_DOUBLE] = FlatVector::GetData<double>(*child_entry);
+					}
 				}
 			}
 
@@ -1543,7 +1575,7 @@ struct StructDatePart {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
 					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(part_values.data(), tdata[idx], i, part_mask);
+						DatePart::StructOperator::Operation(part_bigints, part_doubles, tdata[idx], i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(*child_entry).SetInvalid(i);
@@ -1775,10 +1807,10 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 	using OP = DatePart::JulianDayOperator;
 
 	ScalarFunctionSet operator_set;
-	auto date_func = DatePart::UnaryFunction<date_t, int64_t, OP>;
+	auto date_func = DatePart::UnaryFunction<date_t, double, OP>;
 	auto date_stats = OP::template PropagateStatistics<date_t>;
 	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::DATE}, LogicalType::BIGINT, date_func, nullptr, nullptr, date_stats));
+	    ScalarFunction({LogicalType::DATE}, LogicalType::DOUBLE, date_func, nullptr, nullptr, date_stats));
 	auto ts_func = DatePart::UnaryFunction<timestamp_t, double, OP>;
 	auto ts_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(
@@ -1789,14 +1821,14 @@ ScalarFunctionSet JulianDayFun::GetFunctions() {
 
 ScalarFunctionSet DatePartFun::GetFunctions() {
 	ScalarFunctionSet date_part;
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT, DatePartFunction<date_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
+	                                     DatePartFunction<date_t>, DatePartBind));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
 	                                     DatePartFunction<timestamp_t>, DatePartBind));
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT,
+	                                     DatePartFunction<dtime_t>, DatePartBind));
 	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
-	                                     DatePartFunction<interval_t>));
+	                                     DatePartFunction<interval_t>, DatePartBind));
 
 	// struct variants
 	date_part.AddFunction(StructDatePart::GetFunction<date_t>(LogicalType::DATE));
