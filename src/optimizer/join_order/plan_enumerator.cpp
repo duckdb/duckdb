@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -123,7 +124,7 @@ unique_ptr<JoinNode> PlanEnumerator::CreateJoinTree(JoinRelationSet &set,
 
 	auto cost = cost_model.ComputeCost(left, right);
 	auto result = make_uniq<JoinNode>(set, best_connection, left, right, cost);
-	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<double>(set);
+	result->cardinality = cost_model.cardinality_estimator.EstimateCardinalityWithSet<idx_t>(set);
 	return result;
 }
 

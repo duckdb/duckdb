@@ -30,7 +30,7 @@ public:
 	//! the whole Join Order Optimizer can start exhibiting undesired behavior.
 	double cost;
 	//! used only to populate logical operators with estimated caridnalities after the best join plan has been found.
-	double cardinality;
+	idx_t cardinality;
 
 	//! Create an intermediate node in the join tree. base_cardinality = estimated_props.cardinality
 	JoinNode(JoinRelationSet &set, optional_ptr<NeighborInfo> info, JoinNode &left, JoinNode &right, double cost);

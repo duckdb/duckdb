@@ -294,7 +294,6 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 
 idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t column_index,
                                                       ConjunctionAndFilter &filter, BaseStatistics &base_stats) {
-	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
 	for (auto &child_filter : filter.child_filters) {
 		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
@@ -312,10 +311,6 @@ idx_t RelationStatisticsHelper::InspectConjunctionAND(idx_t cardinality, idx_t c
 			filtered_card = (cardinality + column_count - 1) / column_count;
 			cardinality_after_filters = filtered_card;
 		}
-		if (has_equality_filter) {
-			cardinality_after_filters = MinValue(filtered_card, cardinality_after_filters);
-		}
-		has_equality_filter = true;
 	}
 	return cardinality_after_filters;
 }
