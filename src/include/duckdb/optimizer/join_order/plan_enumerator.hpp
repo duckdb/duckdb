@@ -53,7 +53,7 @@ private:
 
 	bool full_plan_found;
 	bool must_update_full_plan;
-	unordered_set<std::string> join_nodes_in_full_plan;
+	unordered_set<string> join_nodes_in_full_plan;
 
 	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
 	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,

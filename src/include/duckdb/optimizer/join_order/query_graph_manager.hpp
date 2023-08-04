@@ -101,7 +101,7 @@ private:
 	void GetColumnBinding(Expression &expression, ColumnBinding &binding);
 
 	bool ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings);
-	bool LeftCardLessThanRight(LogicalOperator *op);
+	bool LeftCardLessThanRight(LogicalOperator &op);
 
 	void CreateHyperGraphEdges();
 

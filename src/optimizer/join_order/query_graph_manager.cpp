@@ -333,12 +333,12 @@ unique_ptr<LogicalOperator> QueryGraphManager::RewritePlan(unique_ptr<LogicalOpe
 	return plan;
 }
 
-bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator *op) {
-	D_ASSERT(op->children.size() == 2);
-	if (op->children[0]->has_estimated_cardinality && op->children[1]->has_estimated_cardinality) {
-		return op->children[0]->estimated_cardinality < op->children[1]->estimated_cardinality;
+bool QueryGraphManager::LeftCardLessThanRight(LogicalOperator &op) {
+	D_ASSERT(op.children.size() == 2);
+	if (op.children[0]->has_estimated_cardinality && op.children[1]->has_estimated_cardinality) {
+		return op.children[0]->estimated_cardinality < op.children[1]->estimated_cardinality;
 	}
-	return op->children[0]->EstimateCardinality(context) < op->children[1]->EstimateCardinality(context);
+	return op.children[0]->EstimateCardinality(context) < op.children[1]->EstimateCardinality(context);
 }
 
 unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr<LogicalOperator> input_op) {
@@ -350,7 +350,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 				auto &join = op->Cast<LogicalComparisonJoin>();
 				if (join.join_type == JoinType::INNER) {
-					if (LeftCardLessThanRight(op)) {
+					if (LeftCardLessThanRight(*op)) {
 						std::swap(op->children[0], op->children[1]);
 						for (auto &cond : join.conditions) {
 							std::swap(cond.left, cond.right);
@@ -372,7 +372,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-				if (LeftCardLessThanRight(op)) {
+				if (LeftCardLessThanRight(*op)) {
 					std::swap(op->children[0], op->children[1]);
 				}
 				break;
@@ -386,7 +386,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 						join.join_type = JoinType::RIGHT;
 						std::swap(join.children[0], join.children[1]);
 					}
-				} else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(op)) {
+				} else if (join.join_type == JoinType::INNER && LeftCardLessThanRight(*op)) {
 					std::swap(join.children[0], join.children[1]);
 				}
 				break;

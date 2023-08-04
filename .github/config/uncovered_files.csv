@@ -506,7 +506,8 @@ optimizer/join_order/query_graph.cpp	2
 optimizer/join_order/relation_manager.cpp	4
 optimizer/join_order/query_graph_manager.cpp	3
 optimizer/join_order/estimated_properties.cpp	16
-optimizer/join_order/plan_enumerator.cpp	4
+optimizer/join_order/plan_enumerator.cpp	8
+optimizer/join_order/relation_statistics_helper.cpp	2
 optimizer/matcher/expression_matcher.cpp	2
 optimizer/pullup/pullup_projection.cpp	4
 optimizer/pushdown/pushdown_inner_join.cpp	2
