@@ -697,19 +697,19 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	}
 
 	// if need slicing (true)
-	
+
 	SelectionVector sel(total_length);
-	//begin
+	// begin
 	idx_t entry = 0;
 	for (idx_t i = offset; i < offset + copy_count; i++) {
-	    auto idx = unified_array_data.sel->get_index(i);
-	    if (!unified_array_data.validity.RowIsValid(idx)) {
-	        continue;
-	    }
-	    for (idx_t k = 0; k < array_size; k++) {
-	        //			child_sel.set_index(entry++, list_data[idx].offset + k);
-	        sel.set_index(entry++, (idx * array_size) + k);
-	    }
+		auto idx = unified_array_data.sel->get_index(i);
+		if (!unified_array_data.validity.RowIsValid(idx)) {
+			continue;
+		}
+		for (idx_t k = 0; k < array_size; k++) {
+			//			child_sel.set_index(entry++, list_data[idx].offset + k);
+			sel.set_index(entry++, (idx * array_size) + k);
+		}
 	}
 	// end
 
@@ -717,12 +717,11 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	sliced_child_vector.Flatten(total_length);
 
 	sliced_child_vector.ToUnifiedFormat(total_length, child_vector_data);
-	child_function.function(child_meta_data, child_vector_data, sliced_child_vector, 0,
-	                        total_length);
+	child_function.function(child_meta_data, child_vector_data, sliced_child_vector, 0, total_length);
 
 	// If not need slicing (false)
-	//child_vector.ToUnifiedFormat(total_length, child_vector_data);
-	//child_function.function(child_meta_data, child_vector_data, child_vector, first_offset, total_length);
+	// child_vector.ToUnifiedFormat(total_length, child_vector_data);
+	// child_function.function(child_meta_data, child_vector_data, child_vector, first_offset, total_length);
 
 	meta_data.child_list_size = current_list_size;
 }

@@ -1456,11 +1456,22 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	}
 
 	if (type.InternalType() == PhysicalType::ARRAY) {
+		// Arrays have the following invariants
+		// 1. The child vector is either a FLAT_VECTOR or a CONSTANT_VECTOR
+		// 2. if the array vector is a CONSTANT_VECTOR, the child vector is a FLAT_VECTOR
+		// 3. if the array vector is a FLAT_VECTOR, the child vector is a FLAT_VECTOR with array_size * count length
+		// 4. if the child vector is a CONSTANT_VECTOR, it must be NULL, or array_size = 1.
+
 		auto &child = ArrayVector::GetEntry(*vector);
-		D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
 		auto array_size = ArrayType::GetSize(type);
 
-		if(vtype == VectorType::CONSTANT_VECTOR) {
+		if (child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			D_ASSERT(ConstantVector::IsNull(child) || array_size == 1);
+		} else {
+			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
+		}
+
+		if (vtype == VectorType::CONSTANT_VECTOR) {
 			child.Verify(array_size);
 		} else {
 			auto child_count = count * array_size;
@@ -2346,6 +2357,20 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		return ArrayVector::GetTotalSize(child);
 	}
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetInnerSize();
+}
+
+void ArrayVector::AllocateFakeListEntries(Vector &vector) {
+	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
+	auto array_size = ArrayType::GetSize(vector.GetType());
+	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;
+	vector.buffer = VectorBuffer::CreateStandardVector(LogicalType::HUGEINT, array_count);
+	vector.data = vector.buffer->GetData();
+
+	if (ArrayType::GetChildType(vector.GetType()).InternalType() == PhysicalType::ARRAY) {
+		// nested array: generate fake list entries for the child vector as well
+		auto &child_vector = ArrayVector::GetEntry(vector);
+		ArrayVector::AllocateFakeListEntries(child_vector);
+	}
 }
 
 } // namespace duckdb

@@ -43,8 +43,7 @@ SELECT * FROM t1 ORDER BY c DESC
 
 # Sorting
 statement ok
-CREATE OR REPLACE TABLE t1 AS SELECT * FROM 
-(VALUES (array_value(6, NULL)), (array_value(1, 2)), (array_value(NULL,NULL)), (array_value(NULL, 3)));
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM  (VALUES (array_value(6, NULL)), (array_value(1, 2)), (array_value(NULL,NULL)), (array_value(NULL, 3)));
 
 query I
 SELECT * FROM t1 ORDER BY 1 DESC;

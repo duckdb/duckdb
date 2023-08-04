@@ -28,13 +28,13 @@ SELECT DISTINCT * FROM t1 ORDER BY ALL;
 
 # Nested case with ARRAY in ARRAY
 statement ok
-CREATE OR REPLACE TABLE t1(i INTEGER, a INTEGER[3][3])
+CREATE OR REPLACE TABLE t1(i INTEGER, a INTEGER[][3])
 
 statement ok
 INSERT INTO t1 
 SELECT 
 	i, 
-	array_value(array_value(i, i + 1, i + 2), array_value(i + 3, i + 4, i + 5), array_value(i + 6,i + 7,i + 8)) 
+	array_value(list_value(i, i + 1, i + 2), list_value(i + 3, i + 4, i + 5), list_value(i + 6,i + 7,i + 8)) 
 FROM range(0,9*9,9) as r(i);
 
 query II
@@ -51,3 +51,16 @@ SELECT DISTINCT * FROM t1 ORDER BY ALL;
 72	[[72, 73, 74], [75, 76, 77], [78, 79, 80]]
 
 # Nested case with LIST
+
+
+
+
+# ListWithinList
+# StructWithinList
+# TemplateWithinList
+# ArrayWithinList
+
+# ListWithinArray
+# StructWithinArray
+# TemplateWithinArray
+# ArrayWithinArray

@@ -32,10 +32,6 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	if (num_rows == 1) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-
 	result.Verify(args.size());
 }
 

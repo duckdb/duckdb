@@ -22,7 +22,7 @@ SELECT array_value(i -1, i, i + 1) FROM range(4,1,-1) as r(i) ORDER BY 1 ASC;
 [3, 4, 5]
 
 # Nested sorting
-# Test all combinations of array/list nesting (up to 3 levels)
+# Test combinations of array/list nesting (up to 3 levels)
 
 foreach COLLECTION_OUTER array_value list_value
 

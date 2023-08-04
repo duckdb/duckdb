@@ -88,59 +88,6 @@ void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, con
 	}
 }
 
-// To help with templated array/list vector functions
-template <class COLLECTION_TYPE>
-inline static void SetInnerVectorSize(Vector &v, idx_t new_size) = delete;
-
-template <>
-inline void SetInnerVectorSize<ListVector>(Vector &v, idx_t new_size) {
-	return ListVector::SetListSize(v, new_size);
-}
-
-template <>
-inline void SetInnerVectorSize<ArrayVector>(Vector &v, idx_t new_size) {
-	// Dont need to do anything, arrays are always fixed size
-}
-
-template <class COLLECTION_TYPE>
-inline static idx_t GetInnerVectorSize(const Vector &v) = delete;
-
-template <>
-inline idx_t GetInnerVectorSize<ListVector>(const Vector &v) {
-	return ListVector::GetListSize(v);
-}
-
-template <>
-inline idx_t GetInnerVectorSize<ArrayVector>(const Vector &v) {
-	return ArrayVector::GetTotalSize(v);
-}
-
-template <class COLLECTION_TYPE>
-static void ReserveInnerVectorSize(Vector &v, idx_t new_size) = delete;
-
-template <>
-inline void ReserveInnerVectorSize<ListVector>(Vector &v, idx_t new_size) {
-	return ListVector::Reserve(v, new_size);
-}
-
-template <>
-inline void ReserveInnerVectorSize<ArrayVector>(Vector &v, idx_t new_size) {
-	// Dont need to do anything, arrays are always fixed size
-}
-
-template <class T>
-inline constexpr bool IsList() = delete;
-
-template <>
-inline constexpr bool IsList<ListVector>() {
-	return true;
-}
-
-template <>
-inline constexpr bool IsList<ArrayVector>() {
-	return false;
-}
-
 static inline idx_t StringHeapSize(const string_t &val) {
 	return val.IsInlined() ? 0 : val.GetSize();
 }
@@ -198,8 +145,8 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		D_ASSERT(source_format.child_formats.size() == 1);
 		auto &child_source_v = ListVector::GetEntry(source_v);
 		auto &child_format = source_format.child_formats[0];
-		TupleDataCollection::WithinListHeapComputeSizes<ListVector>(heap_sizes_v, child_source_v, child_format,
-		                                                            append_sel, append_count, source_vector_data);
+		TupleDataCollection::WithinCollectionHeapComputeSizes(heap_sizes_v, child_source_v, child_format, append_sel,
+		                                                      append_count, source_vector_data);
 		break;
 	}
 	case PhysicalType::ARRAY: {
@@ -215,8 +162,8 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		D_ASSERT(source_format.child_formats.size() == 1);
 		auto &child_source_v = ArrayVector::GetEntry(source_v);
 		auto &child_format = source_format.child_formats[0];
-		TupleDataCollection::WithinListHeapComputeSizes<ArrayVector>(heap_sizes_v, child_source_v, child_format,
-		                                                             append_sel, append_count, source_vector_data);
+		TupleDataCollection::WithinCollectionHeapComputeSizes(heap_sizes_v, child_source_v, child_format, append_sel,
+		                                                      append_count, source_vector_data);
 		break;
 	}
 	default:
@@ -224,57 +171,43 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	}
 }
 
-template <class COLLECTION_VECTOR>
-void TupleDataCollection::WithinListHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                     TupleDataVectorFormat &source_format,
-                                                     const SelectionVector &append_sel, const idx_t append_count,
-                                                     const UnifiedVectorFormat &list_data) {
+void TupleDataCollection::WithinCollectionHeapComputeSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                                           TupleDataVectorFormat &source_format,
+                                                           const SelectionVector &append_sel, const idx_t append_count,
+                                                           const UnifiedVectorFormat &list_data) {
 	auto type = source_v.GetType().InternalType();
 	if (TypeIsConstantSize(type)) {
-		TupleDataCollection::ComputeFixedWithinListHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
-		                                                     append_count, list_data);
+		TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
+		                                                           append_count, list_data);
 		return;
 	}
-
 	switch (type) {
 	case PhysicalType::VARCHAR:
-		TupleDataCollection::StringWithinListComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
-		                                                      append_count, list_data);
+		TupleDataCollection::StringWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
+		                                                            append_count, list_data);
 		break;
 	case PhysicalType::STRUCT:
-		TupleDataCollection::StructWithinListComputeHeapSizes<COLLECTION_VECTOR>(heap_sizes_v, source_v, source_format,
-		                                                                         append_sel, append_count, list_data);
+		TupleDataCollection::StructWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format, append_sel,
+		                                                            append_count, list_data);
 		break;
 	case PhysicalType::LIST:
-		TupleDataCollection::ListWithinListComputeHeapSizes<COLLECTION_VECTOR>(heap_sizes_v, source_v, source_format,
-		                                                                       append_sel, append_count, list_data);
+		TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format,
+		                                                                append_sel, append_count, list_data);
 		break;
 	case PhysicalType::ARRAY:
-		TupleDataCollection::ListWithinListComputeHeapSizes<COLLECTION_VECTOR>(heap_sizes_v, source_v, source_format,
-		                                                                       append_sel, append_count, list_data);
+		TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(heap_sizes_v, source_v, source_format,
+		                                                                append_sel, append_count, list_data);
 		break;
 	default:
 		throw NotImplementedException("WithinListHeapComputeSizes for %s", EnumUtil::ToString(source_v.GetType().id()));
 	}
 }
 
-// Instantiate the template functions
-template void TupleDataCollection::WithinListHeapComputeSizes<ListVector>(Vector &heap_sizes_v, const Vector &source_v,
-                                                                          TupleDataVectorFormat &source_format,
-                                                                          const SelectionVector &append_sel,
-                                                                          const idx_t append_count,
-                                                                          const UnifiedVectorFormat &list_data);
-
-template void TupleDataCollection::WithinListHeapComputeSizes<ArrayVector>(Vector &heap_sizes_v, const Vector &source_v,
-                                                                           TupleDataVectorFormat &source_format,
-                                                                           const SelectionVector &append_sel,
-                                                                           const idx_t append_count,
-                                                                           const UnifiedVectorFormat &list_data);
-
-void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                          TupleDataVectorFormat &source_format,
-                                                          const SelectionVector &append_sel, const idx_t append_count,
-                                                          const UnifiedVectorFormat &list_data) {
+void TupleDataCollection::ComputeFixedWithinCollectionHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                                                TupleDataVectorFormat &source_format,
+                                                                const SelectionVector &append_sel,
+                                                                const idx_t append_count,
+                                                                const UnifiedVectorFormat &list_data) {
 	// List data
 	const auto list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
@@ -301,10 +234,11 @@ void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, 
 	}
 }
 
-void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                           TupleDataVectorFormat &source_format,
-                                                           const SelectionVector &append_sel, const idx_t append_count,
-                                                           const UnifiedVectorFormat &list_data) {
+void TupleDataCollection::StringWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                                                 TupleDataVectorFormat &source_format,
+                                                                 const SelectionVector &append_sel,
+                                                                 const idx_t append_count,
+                                                                 const UnifiedVectorFormat &list_data) {
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
@@ -345,11 +279,11 @@ void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	}
 }
 
-template <class COLLECTION_VECTOR>
-void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                           TupleDataVectorFormat &source_format,
-                                                           const SelectionVector &append_sel, const idx_t append_count,
-                                                           const UnifiedVectorFormat &list_data) {
+void TupleDataCollection::StructWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                                                 TupleDataVectorFormat &source_format,
+                                                                 const SelectionVector &append_sel,
+                                                                 const idx_t append_count,
+                                                                 const UnifiedVectorFormat &list_data) {
 	// List data
 	const auto list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
@@ -376,18 +310,10 @@ void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 		auto &struct_source = *struct_sources[struct_col_idx];
 		auto &struct_format = source_format.child_formats[struct_col_idx];
-		TupleDataCollection::WithinListHeapComputeSizes<COLLECTION_VECTOR>(heap_sizes_v, struct_source, struct_format,
-		                                                                   append_sel, append_count, list_data);
+		TupleDataCollection::WithinCollectionHeapComputeSizes(heap_sizes_v, struct_source, struct_format, append_sel,
+		                                                      append_count, list_data);
 	}
 }
-
-template void TupleDataCollection::StructWithinListComputeHeapSizes<ListVector>(
-    Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source_format,
-    const SelectionVector &append_sel, const idx_t append_count, const UnifiedVectorFormat &list_data);
-
-template void TupleDataCollection::StructWithinListComputeHeapSizes<ArrayVector>(
-    Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source_format,
-    const SelectionVector &append_sel, const idx_t append_count, const UnifiedVectorFormat &list_data);
 
 static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &source_format,
                                 const SelectionVector &combined_sel, const idx_t count) {
@@ -415,11 +341,11 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 	}
 }
 
-template <class COLLECTION_VECTOR>
-void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
-                                                         TupleDataVectorFormat &source_format,
-                                                         const SelectionVector &append_sel, const idx_t append_count,
-                                                         const UnifiedVectorFormat &list_data) {
+void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v,
+                                                                     TupleDataVectorFormat &source_format,
+                                                                     const SelectionVector &append_sel,
+                                                                     const idx_t append_count,
+                                                                     const UnifiedVectorFormat &list_data) {
 	// List data (of the list Vector that "source_v" is in)
 	const auto list_sel = *list_data.sel;
 	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
@@ -455,7 +381,11 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 			sum_of_sizes += child_list_length;
 		}
 	}
-	const auto child_list_child_count = MaxValue<idx_t>(sum_of_sizes, GetInnerVectorSize<COLLECTION_VECTOR>(source_v));
+
+	// TODO: Template this
+	const auto child_list_child_count = MaxValue<idx_t>(
+	    sum_of_sizes, source_v.GetType().InternalType() == PhysicalType::LIST ? ListVector::GetListSize(source_v)
+	                                                                          : ArrayVector::GetTotalSize(source_v));
 
 	// Target
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
@@ -525,22 +455,17 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 
 	// Combine the selection vectors
 	D_ASSERT(source_format.child_formats.size() == 1);
-	auto &child_source = COLLECTION_VECTOR::GetEntry(source_v);
+
+	// TODO: Template this?
+	auto &child_source = source_v.GetType().InternalType() == PhysicalType::LIST ? ListVector::GetEntry(source_v)
+	                                                                             : ArrayVector::GetEntry(source_v);
+
 	ApplySliceRecursive(child_source, child_format, combined_sel, child_list_child_count);
 
 	// Recurse
-	TupleDataCollection::WithinListHeapComputeSizes<COLLECTION_VECTOR>(
-	    heap_sizes_v, child_source, child_format, append_sel, append_count, combined_child_list_data);
+	TupleDataCollection::WithinCollectionHeapComputeSizes(heap_sizes_v, child_source, child_format, append_sel,
+	                                                      append_count, combined_child_list_data);
 }
-
-// Instantiate the template functions
-template void TupleDataCollection::ListWithinListComputeHeapSizes<ListVector>(
-    Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source_format,
-    const SelectionVector &append_sel, const idx_t append_count, const UnifiedVectorFormat &list_data);
-
-template void TupleDataCollection::ListWithinListComputeHeapSizes<ArrayVector>(
-    Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source_format,
-    const SelectionVector &append_sel, const idx_t append_count, const UnifiedVectorFormat &list_data);
 
 void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                   const SelectionVector &append_sel, const idx_t append_count) const {
@@ -672,7 +597,10 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 	}
 }
 
-template <class COLLECTION_VECTOR>
+//------------------------------------------------------------------------------
+// List Scatter
+//------------------------------------------------------------------------------
+
 static void TupleDataListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                  const SelectionVector &append_sel, const idx_t append_count,
                                  const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
@@ -693,7 +621,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
-	// Set validity of the LIST/ARRAY in this layout, and store pointer to where it's stored
+	// Set validity of the LIST in this layout, and store pointer to where it's stored
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
@@ -711,20 +639,68 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_source = COLLECTION_VECTOR::GetEntry(source);
+	auto &child_source = ListVector::GetEntry(source);
 	auto &child_format = source_format.child_formats[0];
 	const auto &child_function = child_functions[0];
 	child_function.function(child_source, child_format, append_sel, append_count, layout, row_locations, heap_locations,
 	                        col_idx, source_format.data, child_function.child_functions);
 }
 
-template <class T>
-static void TupleDataTemplatedWithinListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
-                                                const SelectionVector &append_sel, const idx_t append_count,
-                                                const TupleDataLayout &layout, Vector &row_locations,
-                                                Vector &heap_locations, const idx_t col_idx,
-                                                const UnifiedVectorFormat &list_data,
-                                                const vector<TupleDataScatterFunction> &child_functions) {
+static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+                                  const SelectionVector &append_sel, const idx_t append_count,
+                                  const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
+                                  const idx_t col_idx, const UnifiedVectorFormat &dummy_arg,
+                                  const vector<TupleDataScatterFunction> &child_functions) {
+	// Source
+	// The Array vector has fake list_entry_t's set by this point, so this is fine
+	const auto &source_data = source_format.data;
+	const auto source_sel = *source_data.sel;
+	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
+	const auto &validity = source_data.validity;
+
+	// Target
+	auto target_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+	auto target_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+	// Set validity of the LIST in this layout, and store pointer to where it's stored
+	const auto offset_in_row = layout.GetOffsets()[col_idx];
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto source_idx = source_sel.get_index(append_sel.get_index(i));
+		if (validity.RowIsValid(source_idx)) {
+			auto &target_heap_location = target_heap_locations[i];
+			Store<data_ptr_t>(target_heap_location, target_locations[i] + offset_in_row);
+
+			// Store list length and skip over it
+			Store<uint64_t>(data[source_idx].length, target_heap_location);
+			target_heap_location += sizeof(uint64_t);
+		} else {
+			ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+		}
+	}
+
+	// Recurse
+	D_ASSERT(child_functions.size() == 1);
+	auto &child_source = ArrayVector::GetEntry(source);
+	auto &child_format = source_format.child_formats[0];
+	const auto &child_function = child_functions[0];
+	child_function.function(child_source, child_format, append_sel, append_count, layout, row_locations, heap_locations,
+	                        col_idx, source_format.data, child_function.child_functions);
+}
+
+//------------------------------------------------------------------------------
+
+template <class COLLECTION, class T>
+static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+                                                      const SelectionVector &append_sel, const idx_t append_count,
+                                                      const TupleDataLayout &layout, Vector &row_locations,
+                                                      Vector &heap_locations, const idx_t col_idx,
+                                                      const UnifiedVectorFormat &list_data,
+                                                      const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
@@ -774,12 +750,13 @@ static void TupleDataTemplatedWithinListScatter(const Vector &source, const Tupl
 	}
 }
 
-static void TupleDataStructWithinListScatter(const Vector &source, const TupleDataVectorFormat &source_format,
-                                             const SelectionVector &append_sel, const idx_t append_count,
-                                             const TupleDataLayout &layout, Vector &row_locations,
-                                             Vector &heap_locations, const idx_t col_idx,
-                                             const UnifiedVectorFormat &list_data,
-                                             const vector<TupleDataScatterFunction> &child_functions) {
+template <class COLLECTION>
+static void TupleDataStructWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
+                                                   const SelectionVector &append_sel, const idx_t append_count,
+                                                   const TupleDataLayout &layout, Vector &row_locations,
+                                                   Vector &heap_locations, const idx_t col_idx,
+                                                   const UnifiedVectorFormat &list_data,
+                                                   const vector<TupleDataScatterFunction> &child_functions) {
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
@@ -832,8 +809,9 @@ static void TupleDataStructWithinListScatter(const Vector &source, const TupleDa
 	}
 }
 
-template <class COLLECTION_VECTOR>
-static void TupleDataListWithinListScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
+template <class PARENT_COLLECTION, class CHILD_COLLECTION>
+static void
+TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
                                            const SelectionVector &append_sel, const idx_t append_count,
                                            const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
                                            const idx_t col_idx, const UnifiedVectorFormat &list_data,
@@ -886,7 +864,7 @@ static void TupleDataListWithinListScatter(const Vector &child_list, const Tuple
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_vec = COLLECTION_VECTOR::GetEntry(child_list);
+	auto &child_vec = CHILD_COLLECTION::GetEntry(child_list);
 	auto &child_format = child_list_format.child_formats[0];
 	auto &combined_child_list_data = child_format.combined_list_data->combined_data;
 	const auto &child_function = child_functions[0];
@@ -894,78 +872,126 @@ static void TupleDataListWithinListScatter(const Vector &child_list, const Tuple
 	                        col_idx, combined_child_list_data, child_function.child_functions);
 }
 
+//------------------------------------------------------------------------------
+// Get Scatter Function
+//------------------------------------------------------------------------------
 template <class T>
-tuple_data_scatter_function_t TupleDataGetScatterFunction(WithinNested within) {
-	return within != WithinNested::NO ? TupleDataTemplatedWithinListScatter<T> : TupleDataTemplatedScatter<T>;
+tuple_data_scatter_function_t TupleDataGetScatterFunction(WithinCollection within_collection) {
+	switch (within_collection) {
+	case WithinCollection::NO:
+		return TupleDataTemplatedScatter<T>;
+	case WithinCollection::ARRAY:
+		return TupleDataTemplatedWithinCollectionScatter<ArrayVector, T>;
+	case WithinCollection::LIST:
+		return TupleDataTemplatedWithinCollectionScatter<ListVector, T>;
+	default:
+		throw NotImplementedException("Unimplemented within collection type");
+	}
 }
 
-TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type, WithinNested within) {
+TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalType &type,
+                                                                 WithinCollection within_collection) {
 	TupleDataScatterFunction result;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		result.function = TupleDataGetScatterFunction<bool>(within);
+		result.function = TupleDataGetScatterFunction<bool>(within_collection);
 		break;
 	case PhysicalType::INT8:
-		result.function = TupleDataGetScatterFunction<int8_t>(within);
+		result.function = TupleDataGetScatterFunction<int8_t>(within_collection);
 		break;
 	case PhysicalType::INT16:
-		result.function = TupleDataGetScatterFunction<int16_t>(within);
+		result.function = TupleDataGetScatterFunction<int16_t>(within_collection);
 		break;
 	case PhysicalType::INT32:
-		result.function = TupleDataGetScatterFunction<int32_t>(within);
+		result.function = TupleDataGetScatterFunction<int32_t>(within_collection);
 		break;
 	case PhysicalType::INT64:
-		result.function = TupleDataGetScatterFunction<int64_t>(within);
+		result.function = TupleDataGetScatterFunction<int64_t>(within_collection);
 		break;
 	case PhysicalType::INT128:
-		result.function = TupleDataGetScatterFunction<hugeint_t>(within);
+		result.function = TupleDataGetScatterFunction<hugeint_t>(within_collection);
 		break;
 	case PhysicalType::UINT8:
-		result.function = TupleDataGetScatterFunction<uint8_t>(within);
+		result.function = TupleDataGetScatterFunction<uint8_t>(within_collection);
 		break;
 	case PhysicalType::UINT16:
-		result.function = TupleDataGetScatterFunction<uint16_t>(within);
+		result.function = TupleDataGetScatterFunction<uint16_t>(within_collection);
 		break;
 	case PhysicalType::UINT32:
-		result.function = TupleDataGetScatterFunction<uint32_t>(within);
+		result.function = TupleDataGetScatterFunction<uint32_t>(within_collection);
 		break;
 	case PhysicalType::UINT64:
-		result.function = TupleDataGetScatterFunction<uint64_t>(within);
+		result.function = TupleDataGetScatterFunction<uint64_t>(within_collection);
 		break;
 	case PhysicalType::FLOAT:
-		result.function = TupleDataGetScatterFunction<float>(within);
+		result.function = TupleDataGetScatterFunction<float>(within_collection);
 		break;
 	case PhysicalType::DOUBLE:
-		result.function = TupleDataGetScatterFunction<double>(within);
+		result.function = TupleDataGetScatterFunction<double>(within_collection);
 		break;
 	case PhysicalType::INTERVAL:
-		result.function = TupleDataGetScatterFunction<interval_t>(within);
+		result.function = TupleDataGetScatterFunction<interval_t>(within_collection);
 		break;
 	case PhysicalType::VARCHAR:
-		result.function = TupleDataGetScatterFunction<string_t>(within);
+		result.function = TupleDataGetScatterFunction<string_t>(within_collection);
 		break;
 	case PhysicalType::STRUCT: {
-		result.function = within != WithinNested::NO ? TupleDataStructWithinListScatter : TupleDataStructScatter;
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataStructScatter;
+			break;
+		case WithinCollection::LIST:
+			result.function = TupleDataStructWithinCollectionScatter<ListVector>;
+			break;
+		case WithinCollection::ARRAY:
+			result.function = TupleDataStructWithinCollectionScatter<ArrayVector>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented within collection type");
+		}
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			result.child_functions.push_back(GetScatterFunction(child_type.second, within));
+			result.child_functions.push_back(GetScatterFunction(child_type.second, within_collection));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		result.function =
-		    within != WithinNested::NO ? TupleDataListWithinListScatter<ListVector> : TupleDataListScatter<ListVector>;
-		result.child_functions.emplace_back(GetScatterFunction(ListType::GetChildType(type), WithinNested::LIST));
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataListScatter;
+			break;
+		case WithinCollection::LIST:
+			result.function = TupleDataCollectionWithinCollectionScatter<ListVector, ListVector>;
+			break;
+		case WithinCollection::ARRAY:
+			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector, ListVector>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented within collection type");
+		}
+		result.child_functions.emplace_back(GetScatterFunction(ListType::GetChildType(type), WithinCollection::LIST));
 		break;
 	case PhysicalType::ARRAY:
-		result.function = within != WithinNested::NO ? TupleDataListWithinListScatter<ArrayVector>
-		                                             : TupleDataListScatter<ArrayVector>;
-		result.child_functions.emplace_back(GetScatterFunction(ArrayType::GetChildType(type), WithinNested::ARRAY));
-		break;
-	default:
-		throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataArrayScatter;
+			break;
+		case WithinCollection::LIST:
+			result.function = TupleDataCollectionWithinCollectionScatter<ListVector, ArrayVector>;
+			break;
+		case WithinCollection::ARRAY:
+			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector, ArrayVector>;
+			break;
+		default:
+			throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
+		}
+		result.child_functions.emplace_back(GetScatterFunction(ArrayType::GetChildType(type), WithinCollection::ARRAY));
 	}
 	return result;
 }
+
+//-------------------------------------------------------------------------------
+// Gather
+//-------------------------------------------------------------------------------
 
 void TupleDataCollection::Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count,
                                  DataChunk &result, const SelectionVector &target_sel) const {
@@ -1072,7 +1098,9 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 	}
 }
 
-template <class COLLECTION_VECTOR>
+//------------------------------------------------------------------------------
+// List Gather
+//------------------------------------------------------------------------------
 static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                                 const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                                 const SelectionVector &target_sel, Vector &dummy_vector,
@@ -1111,35 +1139,93 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 			source_heap_location += sizeof(uint64_t);
 
 			// Initialize list entry, and increment offset
-			if (IsList<COLLECTION_VECTOR>()) {
-				target_list_entries[target_idx] = {target_list_offset, list_length};
-				target_list_offset += list_length;
-			}
+			target_list_entries[target_idx] = {target_list_offset, list_length};
+			target_list_offset += list_length;
+		} else {
+			source_heap_validity.SetInvalid(source_idx);
+			target_validity.SetInvalid(target_idx);
+		}
+	}
+	auto list_size_before = ListVector::GetListSize(target);
+	ListVector::Reserve(target, list_size_before + target_list_offset);
+	ListVector::SetListSize(target, list_size_before + target_list_offset);
+
+	// Recurse
+	D_ASSERT(child_functions.size() == 1);
+	const auto &child_function = child_functions[0];
+	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
+	                        ListVector::GetEntry(target), target_sel, target, child_function.child_functions);
+}
+
+static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
+                                 const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
+                                 const SelectionVector &target_sel, Vector &dummy_vector,
+                                 const vector<TupleDataGatherFunction> &child_functions) {
+	// Source
+	auto source_locations = FlatVector::GetData<data_ptr_t>(row_locations);
+
+	// Setup fake list_entry_t's for the target
+	ArrayVector::AllocateFakeListEntries(target);
+
+	// Target
+	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
+	auto &target_validity = FlatVector::Validity(target);
+
+	// Precompute mask indexes
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+	// Load pointers to the data from the row
+	Vector heap_locations(LogicalType::POINTER);
+	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
+	auto &source_heap_validity = FlatVector::Validity(heap_locations);
+
+	const auto offset_in_row = layout.GetOffsets()[col_idx];
+	uint64_t target_list_offset = 0;
+	for (idx_t i = 0; i < scan_count; i++) {
+		const auto source_idx = scan_sel.get_index(i);
+		const auto target_idx = target_sel.get_index(i);
+
+		const auto &source_row = source_locations[source_idx];
+		ValidityBytes row_mask(source_row);
+		if (row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+			auto &source_heap_location = source_heap_locations[source_idx];
+			source_heap_location = Load<data_ptr_t>(source_row + offset_in_row);
+
+			// Load list size and skip over
+			const auto list_length = Load<uint64_t>(source_heap_location);
+			source_heap_location += sizeof(uint64_t);
+
+			// Initialize list entry, and increment offset
+			target_list_entries[target_idx] = {target_list_offset, list_length};
+			target_list_offset += list_length;
 		} else {
 			source_heap_validity.SetInvalid(source_idx);
 			target_validity.SetInvalid(target_idx);
 		}
 	}
 
-	idx_t list_size_before = 0;
-	if (IsList<COLLECTION_VECTOR>()) {
-		list_size_before = GetInnerVectorSize<COLLECTION_VECTOR>(target);
-		ReserveInnerVectorSize<COLLECTION_VECTOR>(target, list_size_before + target_list_offset);
-		SetInnerVectorSize<COLLECTION_VECTOR>(target, list_size_before + target_list_offset);
-	}
+	auto list_size_before = 0; // ListVector::GetListSize(target);
+	// ListVector::Reserve(target, list_size_before + target_list_offset);
+	// ListVector::SetListSize(target, list_size_before + target_list_offset);
+
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, list_size_before, scan_sel, scan_count,
-	                        COLLECTION_VECTOR::GetEntry(target), target_sel, target, child_function.child_functions);
+	                        ArrayVector::GetEntry(target), target_sel, target, child_function.child_functions);
 }
 
-template <class T, class COLLECTION_VECTOR>
-static void TupleDataTemplatedWithinListGather(const TupleDataLayout &layout, Vector &heap_locations,
-                                               const idx_t list_size_before, const SelectionVector &scan_sel,
-                                               const idx_t scan_count, Vector &target,
-                                               const SelectionVector &target_sel, Vector &list_vector,
-                                               const vector<TupleDataGatherFunction> &child_functions) {
+//------------------------------------------------------------------------------
+// Collection Gather
+//------------------------------------------------------------------------------
+template <class COLLECTION, class T>
+static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
+                                                     const idx_t list_size_before, const SelectionVector &scan_sel,
+                                                     const idx_t scan_count, Vector &target,
+                                                     const SelectionVector &target_sel, Vector &list_vector,
+                                                     const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 	auto &source_heap_validity = FlatVector::Validity(heap_locations);
@@ -1158,17 +1244,8 @@ static void TupleDataTemplatedWithinListGather(const TupleDataLayout &layout, Ve
 			continue;
 		}
 
-		idx_t list_length;
-		if (IsList<COLLECTION_VECTOR>()) {
-			list_length = list_entries[target_sel.get_index(i)].length;
-		} else {
-			// TODO: This doesnt work, because we get passed a combined list vector that has type int128,
-			// not the original list type.
-			if (list_vector.GetType().InternalType() != PhysicalType::ARRAY) {
-				throw NotImplementedException("TODO: implement this");
-			}
-			list_length = ArrayType::GetSize(list_vector.GetType());
-		}
+		const auto &list_length = list_entries[target_sel.get_index(i)].length;
+
 		// Initialize validity mask
 		auto &source_heap_location = source_heap_locations[source_idx];
 		ValidityBytes source_mask(source_heap_location);
@@ -1191,11 +1268,12 @@ static void TupleDataTemplatedWithinListGather(const TupleDataLayout &layout, Ve
 	}
 }
 
-static void TupleDataStructWithinListGather(const TupleDataLayout &layout, Vector &heap_locations,
-                                            const idx_t list_size_before, const SelectionVector &scan_sel,
-                                            const idx_t scan_count, Vector &target, const SelectionVector &target_sel,
-                                            Vector &list_vector,
-                                            const vector<TupleDataGatherFunction> &child_functions) {
+template <class COLLECTION>
+static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
+                                                  const idx_t list_size_before, const SelectionVector &scan_sel,
+                                                  const idx_t scan_count, Vector &target,
+                                                  const SelectionVector &target_sel, Vector &list_vector,
+                                                  const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 	auto &source_heap_validity = FlatVector::Validity(heap_locations);
@@ -1239,11 +1317,59 @@ static void TupleDataStructWithinListGather(const TupleDataLayout &layout, Vecto
 	}
 }
 
-template <class COLLECTION_VECTOR>
-static void TupleDataListWithinListGather(const TupleDataLayout &layout, Vector &heap_locations,
-                                          const idx_t list_size_before, const SelectionVector &scan_sel,
-                                          const idx_t scan_count, Vector &target, const SelectionVector &target_sel,
-                                          Vector &list_vector, const vector<TupleDataGatherFunction> &child_functions) {
+template <class COLLECTION>
+struct CollectionVector {
+	static idx_t GetSize(Vector &collection) = delete;
+	static idx_t GetSizeBefore(Vector &collection) = delete;
+	static Vector &GetEntry(Vector &collection) = delete;
+	static void Reserve(Vector &collection, const idx_t new_capacity) = delete;
+	static void SetSize(Vector &collection, const idx_t new_size) = delete;
+};
+
+template <>
+struct CollectionVector<ArrayVector> {
+	static idx_t GetSize(Vector &collection) {
+		return ArrayVector::GetTotalSize(collection);
+	}
+	static idx_t GetSizeBefore(Vector &collection) {
+		return 0;
+	}
+	static Vector &GetEntry(Vector &collection) {
+		return ArrayVector::GetEntry(collection);
+	}
+	static void Reserve(Vector &collection, const idx_t new_capacity) {
+		// do nothing
+	}
+	static void SetSize(Vector &collection, const idx_t new_size) {
+		// do nothing
+	}
+};
+
+template <>
+struct CollectionVector<ListVector> {
+	static idx_t GetSize(Vector &collection) {
+		return ListVector::GetListSize(collection);
+	}
+	static idx_t GetSizeBefore(Vector &collection) {
+		return ListVector::GetListSize(collection);
+	}
+	static Vector &GetEntry(Vector &collection) {
+		return ListVector::GetEntry(collection);
+	}
+	static void Reserve(Vector &collection, const idx_t new_capacity) {
+		ListVector::Reserve(collection, new_capacity);
+	}
+	static void SetSize(Vector &collection, const idx_t new_size) {
+		ListVector::SetListSize(collection, new_size);
+	}
+};
+
+template <class CHILD_COLLECTION>
+static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
+                                                      const idx_t list_size_before, const SelectionVector &scan_sel,
+                                                      const idx_t scan_count, Vector &target,
+                                                      const SelectionVector &target_sel, Vector &list_vector,
+                                                      const vector<TupleDataGatherFunction> &child_functions) {
 	// Source
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 	auto &source_heap_validity = FlatVector::Validity(heap_locations);
@@ -1251,19 +1377,13 @@ static void TupleDataListWithinListGather(const TupleDataLayout &layout, Vector 
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
-
-	idx_t child_list_size_before;
-	if (IsList<COLLECTION_VECTOR>()) {
-		child_list_size_before = GetInnerVectorSize<COLLECTION_VECTOR>(target);
-	} else {
-		child_list_size_before = 0;
-	}
+	const auto child_list_size_before = CollectionVector<CHILD_COLLECTION>::GetSizeBefore(target);
 
 	// List parent
 	const auto list_entries = FlatVector::GetData<list_entry_t>(list_vector);
 
 	// We need to create a vector that has the combined list sizes (hugeint_t has same size as list_entry_t)
-	Vector combined_list_vector(target.GetType());
+	Vector combined_list_vector(LogicalType::HUGEINT);
 	auto combined_list_entries = FlatVector::GetData<list_entry_t>(combined_list_vector);
 
 	uint64_t target_offset = list_size_before;
@@ -1274,12 +1394,7 @@ static void TupleDataListWithinListGather(const TupleDataLayout &layout, Vector 
 			continue;
 		}
 
-		idx_t list_length;
-		if (IsList<COLLECTION_VECTOR>()) {
-			list_length = list_entries[target_sel.get_index(i)].length;
-		} else {
-			list_length = ArrayType::GetSize(list_vector.GetType());
-		}
+		const auto &list_length = list_entries[target_sel.get_index(i)].length;
 
 		// Initialize validity mask and skip over it
 		auto &source_heap_location = source_heap_locations[source_idx];
@@ -1291,124 +1406,148 @@ static void TupleDataListWithinListGather(const TupleDataLayout &layout, Vector 
 		source_heap_location += list_length * sizeof(uint64_t);
 
 		// Set the offset of the combined list entry
-		if (IsList<COLLECTION_VECTOR>()) {
-			auto &combined_list_entry = combined_list_entries[target_sel.get_index(i)];
-			combined_list_entry.offset = target_child_offset;
+		auto &combined_list_entry = combined_list_entries[target_sel.get_index(i)];
+		combined_list_entry.offset = target_child_offset;
 
-			// Load the child validity and data belonging to this list entry
-			for (idx_t child_i = 0; child_i < list_length; child_i++) {
-				if (source_mask.RowIsValidUnsafe(child_i)) {
-					auto &target_list_entry = target_list_entries[target_offset + child_i];
-					target_list_entry.offset = target_child_offset;
-					target_list_entry.length = Load<uint64_t>(source_data_location + child_i * sizeof(uint64_t));
-					target_child_offset += target_list_entry.length;
-				} else {
-					target_validity.SetInvalid(target_offset + child_i);
-				}
-			}
-			// Set the length of the combined list entry
-			combined_list_entry.length = target_child_offset - combined_list_entry.offset;
-		} else {
-			for (idx_t child_i = 0; child_i < list_length; child_i++) {
-				if (source_mask.RowIsValidUnsafe(child_i)) {
-					// There are no list_entry_t's to restore, so we just need to increment the offset
-					auto child_length = Load<uint64_t>(source_data_location + child_i * sizeof(uint64_t));
-					target_child_offset += child_length;
-				} else {
-					target_validity.SetInvalid(target_offset + child_i);
-				}
+		// Load the child validity and data belonging to this list entry
+		for (idx_t child_i = 0; child_i < list_length; child_i++) {
+			if (source_mask.RowIsValidUnsafe(child_i)) {
+				auto &target_list_entry = target_list_entries[target_offset + child_i];
+				target_list_entry.offset = target_child_offset;
+				target_list_entry.length = Load<uint64_t>(source_data_location + child_i * sizeof(uint64_t));
+				target_child_offset += target_list_entry.length;
+			} else {
+				target_validity.SetInvalid(target_offset + child_i);
 			}
 		}
+
+		// Set the length of the combined list entry
+		combined_list_entry.length = target_child_offset - combined_list_entry.offset;
 
 		target_offset += list_length;
 	}
 
-	ReserveInnerVectorSize<COLLECTION_VECTOR>(target, target_child_offset);
-	SetInnerVectorSize<COLLECTION_VECTOR>(target, target_child_offset);
+	CollectionVector<CHILD_COLLECTION>::Reserve(target, target_child_offset);
+	CollectionVector<CHILD_COLLECTION>::SetSize(target, target_child_offset);
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                        COLLECTION_VECTOR::GetEntry(target), target_sel, combined_list_vector,
+	                        CHILD_COLLECTION::GetEntry(target), target_sel, combined_list_vector,
 	                        child_function.child_functions);
 }
 
+//------------------------------------------------------------------------------
+// Get Gather Function
+//------------------------------------------------------------------------------
+
 template <class T>
-tuple_data_gather_function_t TupleDataGetGatherFunction(WithinNested within) {
-	switch (within) {
-	case WithinNested::NO:
+tuple_data_gather_function_t TupleDataGetGatherFunction(WithinCollection within_collection) {
+	switch (within_collection) {
+	case WithinCollection::NO:
 		return TupleDataTemplatedGather<T>;
-	case WithinNested::LIST:
-		return TupleDataTemplatedWithinListGather<T, ListVector>;
-	case WithinNested::ARRAY:
-		return TupleDataTemplatedWithinListGather<T, ArrayVector>;
+	case WithinCollection::LIST:
+		return TupleDataTemplatedWithinCollectionGather<ListVector, T>;
+	case WithinCollection::ARRAY:
+		return TupleDataTemplatedWithinCollectionGather<ArrayVector, T>;
 	default:
-		throw NotImplementedException("Unimplemented WITHIN type");
+		throw NotImplementedException("Unimplemented collection type");
 	}
 }
 
-TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type, WithinNested within) {
+TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType &type,
+                                                               WithinCollection within_collection) {
 	TupleDataGatherFunction result;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		result.function = TupleDataGetGatherFunction<bool>(within);
+		result.function = TupleDataGetGatherFunction<bool>(within_collection);
 		break;
 	case PhysicalType::INT8:
-		result.function = TupleDataGetGatherFunction<int8_t>(within);
+		result.function = TupleDataGetGatherFunction<int8_t>(within_collection);
 		break;
 	case PhysicalType::INT16:
-		result.function = TupleDataGetGatherFunction<int16_t>(within);
+		result.function = TupleDataGetGatherFunction<int16_t>(within_collection);
 		break;
 	case PhysicalType::INT32:
-		result.function = TupleDataGetGatherFunction<int32_t>(within);
+		result.function = TupleDataGetGatherFunction<int32_t>(within_collection);
 		break;
 	case PhysicalType::INT64:
-		result.function = TupleDataGetGatherFunction<int64_t>(within);
+		result.function = TupleDataGetGatherFunction<int64_t>(within_collection);
 		break;
 	case PhysicalType::INT128:
-		result.function = TupleDataGetGatherFunction<hugeint_t>(within);
+		result.function = TupleDataGetGatherFunction<hugeint_t>(within_collection);
 		break;
 	case PhysicalType::UINT8:
-		result.function = TupleDataGetGatherFunction<uint8_t>(within);
+		result.function = TupleDataGetGatherFunction<uint8_t>(within_collection);
 		break;
 	case PhysicalType::UINT16:
-		result.function = TupleDataGetGatherFunction<uint16_t>(within);
+		result.function = TupleDataGetGatherFunction<uint16_t>(within_collection);
 		break;
 	case PhysicalType::UINT32:
-		result.function = TupleDataGetGatherFunction<uint32_t>(within);
+		result.function = TupleDataGetGatherFunction<uint32_t>(within_collection);
 		break;
 	case PhysicalType::UINT64:
-		result.function = TupleDataGetGatherFunction<uint64_t>(within);
+		result.function = TupleDataGetGatherFunction<uint64_t>(within_collection);
 		break;
 	case PhysicalType::FLOAT:
-		result.function = TupleDataGetGatherFunction<float>(within);
+		result.function = TupleDataGetGatherFunction<float>(within_collection);
 		break;
 	case PhysicalType::DOUBLE:
-		result.function = TupleDataGetGatherFunction<double>(within);
+		result.function = TupleDataGetGatherFunction<double>(within_collection);
 		break;
 	case PhysicalType::INTERVAL:
-		result.function = TupleDataGetGatherFunction<interval_t>(within);
+		result.function = TupleDataGetGatherFunction<interval_t>(within_collection);
 		break;
 	case PhysicalType::VARCHAR:
-		result.function = TupleDataGetGatherFunction<string_t>(within);
+		result.function = TupleDataGetGatherFunction<string_t>(within_collection);
 		break;
 	case PhysicalType::STRUCT: {
-		result.function = within != WithinNested::NO ? TupleDataStructWithinListGather : TupleDataStructGather;
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataStructGather;
+			break;
+		case WithinCollection::LIST:
+			result.function = TupleDataStructWithinCollectionGather<ListVector>;
+			break;
+		case WithinCollection::ARRAY:
+			result.function = TupleDataStructWithinCollectionGather<ArrayVector>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented collection type");
+		}
 		for (const auto &child_type : StructType::GetChildTypes(type)) {
-			result.child_functions.push_back(GetGatherFunction(child_type.second, within));
+			result.child_functions.push_back(GetGatherFunction(child_type.second, within_collection));
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		result.function =
-		    within != WithinNested::NO ? TupleDataListWithinListGather<ListVector> : TupleDataListGather<ListVector>;
-		result.child_functions.push_back(GetGatherFunction(ListType::GetChildType(type), WithinNested::LIST));
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataListGather;
+			break;
+		case WithinCollection::LIST:
+		case WithinCollection::ARRAY:
+			result.function = TupleDataCollectionWithinCollectionGather<ListVector>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented collection type");
+		}
+		result.child_functions.push_back(GetGatherFunction(ListType::GetChildType(type), WithinCollection::LIST));
 		break;
 	case PhysicalType::ARRAY:
-		result.function =
-		    within != WithinNested::NO ? TupleDataListWithinListGather<ArrayVector> : TupleDataListGather<ArrayVector>;
-		result.child_functions.push_back(GetGatherFunction(ArrayType::GetChildType(type), WithinNested::ARRAY));
+		switch (within_collection) {
+		case WithinCollection::NO:
+			result.function = TupleDataArrayGather;
+			break;
+		case WithinCollection::LIST:
+		case WithinCollection::ARRAY:
+			result.function = TupleDataCollectionWithinCollectionGather<ArrayVector>;
+			break;
+		default:
+			throw NotImplementedException("Unimplemented collection type");
+		}
+		result.child_functions.push_back(GetGatherFunction(ArrayType::GetChildType(type), WithinCollection::ARRAY));
 		break;
 	default:
 		throw InternalException("Unsupported type for TupleDataCollection::GetGatherFunction");
