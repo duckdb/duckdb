@@ -677,15 +677,17 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	source.ToUnifiedFormat(offset + copy_count, unified_array_data);
 
 	// find the first non-NULL entry
+	/*
 	idx_t first_offset = 0;
 	for (idx_t i = offset; i < offset + copy_count; i++) {
-		auto idx = unified_array_data.sel->get_index(i);
-		if (!unified_array_data.validity.RowIsValid(idx)) {
-			continue;
-		}
-		first_offset = idx * array_size;
-		break;
+	    auto idx = unified_array_data.sel->get_index(i);
+	    if (!unified_array_data.validity.RowIsValid(idx)) {
+	        continue;
+	    }
+	    first_offset = idx * array_size;
+	    break;
 	}
+	*/
 
 	idx_t total_length = 0;
 	for (idx_t i = offset; i < offset + copy_count; i++) {

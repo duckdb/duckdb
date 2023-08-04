@@ -646,6 +646,10 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 	                        col_idx, source_format.data, child_function.child_functions);
 }
 
+//------------------------------------------------------------------------------
+// Array Scatter
+//------------------------------------------------------------------------------
+
 static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                   const SelectionVector &append_sel, const idx_t append_count,
                                   const TupleDataLayout &layout, Vector &row_locations, Vector &heap_locations,
@@ -693,8 +697,9 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 }
 
 //------------------------------------------------------------------------------
-
-template <class COLLECTION, class T>
+// Collection Scatter
+//------------------------------------------------------------------------------
+template <class T>
 static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                                       const SelectionVector &append_sel, const idx_t append_count,
                                                       const TupleDataLayout &layout, Vector &row_locations,
@@ -750,7 +755,6 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &source, cons
 	}
 }
 
-template <class COLLECTION>
 static void TupleDataStructWithinCollectionScatter(const Vector &source, const TupleDataVectorFormat &source_format,
                                                    const SelectionVector &append_sel, const idx_t append_count,
                                                    const TupleDataLayout &layout, Vector &row_locations,
@@ -809,7 +813,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 	}
 }
 
-template <class PARENT_COLLECTION, class CHILD_COLLECTION>
+template <class COLLECTION>
 static void
 TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const TupleDataVectorFormat &child_list_format,
                                            const SelectionVector &append_sel, const idx_t append_count,
@@ -864,7 +868,7 @@ TupleDataCollectionWithinCollectionScatter(const Vector &child_list, const Tuple
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
-	auto &child_vec = CHILD_COLLECTION::GetEntry(child_list);
+	auto &child_vec = COLLECTION::GetEntry(child_list);
 	auto &child_format = child_list_format.child_formats[0];
 	auto &combined_child_list_data = child_format.combined_list_data->combined_data;
 	const auto &child_function = child_functions[0];
@@ -881,9 +885,8 @@ tuple_data_scatter_function_t TupleDataGetScatterFunction(WithinCollection withi
 	case WithinCollection::NO:
 		return TupleDataTemplatedScatter<T>;
 	case WithinCollection::ARRAY:
-		return TupleDataTemplatedWithinCollectionScatter<ArrayVector, T>;
 	case WithinCollection::LIST:
-		return TupleDataTemplatedWithinCollectionScatter<ListVector, T>;
+		return TupleDataTemplatedWithinCollectionScatter<T>;
 	default:
 		throw NotImplementedException("Unimplemented within collection type");
 	}
@@ -941,10 +944,8 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 			result.function = TupleDataStructScatter;
 			break;
 		case WithinCollection::LIST:
-			result.function = TupleDataStructWithinCollectionScatter<ListVector>;
-			break;
 		case WithinCollection::ARRAY:
-			result.function = TupleDataStructWithinCollectionScatter<ArrayVector>;
+			result.function = TupleDataStructWithinCollectionScatter;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented within collection type");
@@ -960,10 +961,10 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 			result.function = TupleDataListScatter;
 			break;
 		case WithinCollection::LIST:
-			result.function = TupleDataCollectionWithinCollectionScatter<ListVector, ListVector>;
+			result.function = TupleDataCollectionWithinCollectionScatter<ListVector>;
 			break;
 		case WithinCollection::ARRAY:
-			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector, ListVector>;
+			result.function = TupleDataCollectionWithinCollectionScatter<ListVector>;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented within collection type");
@@ -976,15 +977,18 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 			result.function = TupleDataArrayScatter;
 			break;
 		case WithinCollection::LIST:
-			result.function = TupleDataCollectionWithinCollectionScatter<ListVector, ArrayVector>;
+			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector>;
 			break;
 		case WithinCollection::ARRAY:
-			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector, ArrayVector>;
+			result.function = TupleDataCollectionWithinCollectionScatter<ArrayVector>;
 			break;
 		default:
-			throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
+			throw NotImplementedException("Unimplemented within collection type");
 		}
 		result.child_functions.emplace_back(GetScatterFunction(ArrayType::GetChildType(type), WithinCollection::ARRAY));
+		break;
+	default:
+		throw InternalException("Unsupported type for TupleDataCollection::GetScatterFunction");
 	}
 	return result;
 }
@@ -1220,7 +1224,7 @@ static void TupleDataArrayGather(const TupleDataLayout &layout, Vector &row_loca
 //------------------------------------------------------------------------------
 // Collection Gather
 //------------------------------------------------------------------------------
-template <class COLLECTION, class T>
+template <class T>
 static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                      const idx_t list_size_before, const SelectionVector &scan_sel,
                                                      const idx_t scan_count, Vector &target,
@@ -1268,7 +1272,6 @@ static void TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &layo
 	}
 }
 
-template <class COLLECTION>
 static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                   const idx_t list_size_before, const SelectionVector &scan_sel,
                                                   const idx_t scan_count, Vector &target,
@@ -1458,9 +1461,8 @@ tuple_data_gather_function_t TupleDataGetGatherFunction(WithinCollection within_
 	case WithinCollection::NO:
 		return TupleDataTemplatedGather<T>;
 	case WithinCollection::LIST:
-		return TupleDataTemplatedWithinCollectionGather<ListVector, T>;
 	case WithinCollection::ARRAY:
-		return TupleDataTemplatedWithinCollectionGather<ArrayVector, T>;
+		return TupleDataTemplatedWithinCollectionGather<T>;
 	default:
 		throw NotImplementedException("Unimplemented collection type");
 	}
@@ -1518,10 +1520,8 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 			result.function = TupleDataStructGather;
 			break;
 		case WithinCollection::LIST:
-			result.function = TupleDataStructWithinCollectionGather<ListVector>;
-			break;
 		case WithinCollection::ARRAY:
-			result.function = TupleDataStructWithinCollectionGather<ArrayVector>;
+			result.function = TupleDataStructWithinCollectionGather;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented collection type");
