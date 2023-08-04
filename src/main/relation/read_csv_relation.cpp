@@ -42,9 +42,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	}
 
 	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
-	if (files.empty()) {
-		throw BinderException("read_csv requires at least one file to match the pattern");
-	}
+	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
 	options["auto_detect"] = Value::BOOLEAN(true);
