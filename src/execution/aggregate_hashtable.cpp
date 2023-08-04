@@ -501,6 +501,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	auto other_data = other.partitioned_data->GetUnpartitioned();
 	Combine(*other_data);
 
+	// Inherit ownership to all stored aggregate allocators
 	stored_allocators.emplace_back(other.aggregate_allocator);
 	for (const auto &stored_allocator : other.stored_allocators) {
 		stored_allocators.emplace_back(stored_allocator);

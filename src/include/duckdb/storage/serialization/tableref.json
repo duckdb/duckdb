@@ -63,7 +63,8 @@
         "optional": true
       },
       {
-        "name": "type",
+        "name": "join_type",
+        "property": "type",
         "type": "JoinType"
       },
       {
@@ -99,10 +100,6 @@
       {
         "name": "function",
         "type": "ParsedExpression*"
-      },
-      {
-        "name": "alias",
-        "type": "string"
       },
       {
         "name": "column_name_alias",

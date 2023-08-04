@@ -71,9 +71,8 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 struct RadixHTConfig {
 public:
 	explicit RadixHTConfig(ClientContext &context)
-	    : sink_radix_bits(INITIAL_SINK_RADIX_BITS), sink_capacity(SinkCapacity(context)),
-	      maximum_sink_radix_bits(MaximumSinkRadixBits(context)),
-	      external_radix_bits(ExternalRadixBits(maximum_sink_radix_bits)) {
+	    : sink_radix_bits(INITIAL_SINK_RADIX_BITS), maximum_sink_radix_bits(MaximumSinkRadixBits(context)),
+	      external_radix_bits(ExternalRadixBits(maximum_sink_radix_bits)), sink_capacity(SinkCapacity(context)) {
 	}
 
 	void SetRadixBits(idx_t radix_bits_p) {
@@ -100,6 +99,15 @@ private:
 		} while (!std::atomic_compare_exchange_weak(&sink_radix_bits, &current, radix_bits_p));
 	}
 
+	static idx_t MaximumSinkRadixBits(ClientContext &context) {
+		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_SINK_RADIX_BITS);
+	}
+
+	static idx_t ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
+		return MinValue(maximum_sink_radix_bits_p + EXTERNAL_RADIX_BITS_INCREMENT, MAXIMUM_SINK_RADIX_BITS);
+	}
+
 	static idx_t SinkCapacity(ClientContext &context) {
 		// Get active and maximum number of threads
 		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -115,15 +123,6 @@ private:
 
 		// Capacity must be at least the minimum capacity
 		return MaxValue<idx_t>(capacity, GroupedAggregateHashTable::InitialCapacity());
-	}
-
-	static idx_t MaximumSinkRadixBits(ClientContext &context) {
-		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_SINK_RADIX_BITS);
-	}
-
-	static idx_t ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
-		return MinValue(maximum_sink_radix_bits_p + EXTERNAL_RADIX_BITS_INCREMENT, MAXIMUM_SINK_RADIX_BITS);
 	}
 
 private:
@@ -143,14 +142,14 @@ private:
 
 	//! Current thread-global sink radix bits
 	atomic<idx_t> sink_radix_bits;
-
-public:
-	//! Capacity of HTs during the Sink
-	const idx_t sink_capacity;
 	//! Maximum Sink radix bits (set based on number of threads)
 	const idx_t maximum_sink_radix_bits;
 	//! Radix bits if we go external
 	const idx_t external_radix_bits;
+
+public:
+	//! Capacity of HTs during the Sink
+	const idx_t sink_capacity;
 
 	//! If we fill this many blocks per partition, we trigger a repartition
 	static constexpr const double BLOCK_FILL_FACTOR = 1.8;

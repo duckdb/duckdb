@@ -268,7 +268,7 @@ struct AppendableRList {
 	idx_t size = 0;
 };
 
-bool FetchArrowChunk(ChunkScanState &scan_state, ArrowOptions options, AppendableRList &batches_list,
+bool FetchArrowChunk(ChunkScanState &scan_state, ClientProperties options, AppendableRList &batches_list,
                      ArrowArray &arrow_data, ArrowSchema &arrow_schema, SEXP batch_import_from_c, SEXP arrow_namespace,
                      idx_t chunk_size) {
 	auto count = ArrowUtil::FetchChunk(scan_state, options, chunk_size, &arrow_data);
@@ -301,13 +301,12 @@ bool FetchArrowChunk(ChunkScanState &scan_state, ArrowOptions options, Appendabl
 	AppendableRList batches_list;
 
 	QueryResultChunkScanState scan_state(*result);
-	auto arrow_options = result->GetArrowOptions(*result);
-	while (FetchArrowChunk(scan_state, arrow_options, batches_list, arrow_data, arrow_schema, batch_import_from_c,
-	                       arrow_namespace, chunk_size)) {
+	while (FetchArrowChunk(scan_state, result->client_properties, batches_list, arrow_data, arrow_schema,
+	                       batch_import_from_c, arrow_namespace, chunk_size)) {
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, result->client_properties);
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table

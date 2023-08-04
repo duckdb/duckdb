@@ -28,7 +28,7 @@
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parser_extension.hpp"
 #include "duckdb/planner/operator_extension.hpp"
-#include "duckdb/common/arrow/arrow_options.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
 class BufferPool;

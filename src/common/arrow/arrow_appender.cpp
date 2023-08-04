@@ -14,7 +14,7 @@ namespace duckdb {
 // ArrowAppender
 //===--------------------------------------------------------------------===//
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, ArrowOptions options)
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, ClientProperties options)
     : types(std::move(types_p)) {
 	for (auto &type : types) {
 		auto entry = ArrowAppender::InitializeChild(type, initial_capacity, options);
@@ -179,14 +179,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<string_t>>(append_data);
 		} else {
 			InitializeAppenderForType<ArrowVarcharData<string_t, ArrowVarcharConverter, uint32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::UUID:
-		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		} else {
 			InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, uint32_t>>(append_data);
@@ -228,7 +228,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 }
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, idx_t capacity,
-                                                           ArrowOptions &options) {
+                                                           ClientProperties &options) {
 	auto result = make_uniq<ArrowAppendData>(options);
 	InitializeFunctionPointers(*result, type);
 
