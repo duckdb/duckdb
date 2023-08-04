@@ -3,11 +3,11 @@
 namespace duckdb {
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer) :
-	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), index(0), offset(0), capacity(0) {
+	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), index(0), offset(0), next_offset(sizeof(block_id_t)), capacity(0) {
 }
 
 MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type) :
-	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0), capacity(0) {
+	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0), next_offset(pointer.offset), capacity(0) {
 }
 
 MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
@@ -24,15 +24,16 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 		// first read what we can from this block
 		idx_t to_read = capacity - offset;
 		if (to_read > 0) {
-			memcpy(buffer, Ptr() + offset, to_read);
+			memcpy(buffer, Ptr(), to_read);
 			read_size -= to_read;
 			buffer += to_read;
+			offset += read_size;
 		}
 		// then move to the next block
 		ReadNextBlock();
 	}
 	// we have enough left in this block to read from the buffer
-	memcpy(buffer, Ptr() + offset, read_size);
+	memcpy(buffer, Ptr(), read_size);
 	offset += read_size;
 }
 
@@ -47,18 +48,29 @@ void MetadataReader::ReadNextBlock() {
 	block = manager.Pin(next_pointer);
 	index = next_pointer.index;
 
-	idx_t next_block = Load<idx_t>(Ptr());
+	idx_t next_block = Load<idx_t>(BasePtr());
 	if (next_block == idx_t(-1)) {
 		has_next_block = false;
 	} else {
 		next_pointer = FromDiskPointer(MetaBlockPointer(next_block, 0));
 	}
-	offset = sizeof(block_id_t);
+	if (next_offset < sizeof(block_id_t)) {
+		next_offset = sizeof(block_id_t);
+	}
+	if (next_offset > MetadataManager::METADATA_BLOCK_SIZE) {
+		throw InternalException("next_offset cannot be bigger than block size");
+	}
+	offset = next_offset;
+	next_offset = sizeof(block_id_t);
 	capacity = MetadataManager::METADATA_BLOCK_SIZE;
 }
 
-data_ptr_t MetadataReader::Ptr() {
+data_ptr_t MetadataReader::BasePtr() {
 	return block.handle.Ptr() + index * MetadataManager::METADATA_BLOCK_SIZE;
+}
+
+data_ptr_t MetadataReader::Ptr() {
+	return BasePtr() + offset;
 }
 
 }

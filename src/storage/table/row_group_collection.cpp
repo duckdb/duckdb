@@ -67,7 +67,7 @@ AttachedDatabase &RowGroupCollection::GetAttached() {
 }
 
 MetadataManager &RowGroupCollection::GetMetadataManager() {
-	throw InternalException("Get metadata manager");
+	return GetBlockManager().GetMetadataManager();
 }
 
 //===--------------------------------------------------------------------===//

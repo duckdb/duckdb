@@ -33,6 +33,7 @@ public:
 	}
 
 private:
+	data_ptr_t BasePtr();
 	data_ptr_t Ptr();
 
 	void ReadNextBlock();
@@ -47,6 +48,7 @@ private:
 	bool has_next_block;
 	idx_t index;
 	idx_t offset;
+	idx_t next_offset;
 	idx_t capacity;
 };
 
