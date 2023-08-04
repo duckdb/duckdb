@@ -19,7 +19,8 @@ class Value;
 //! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
-	FileOpener() : file_path(string()) {}
+	FileOpener() : file_path(string()) {
+	}
 	virtual ~FileOpener() {};
 
 	virtual bool TryGetCurrentSetting(const string &key, Value &result) = 0;
