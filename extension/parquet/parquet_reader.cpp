@@ -72,6 +72,9 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.read((uint8_t *)buf.ptr, 8);
 
 	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
+		if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+			throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
+		}
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
 	// read four-byte footer length from just before the end magic bytes
@@ -399,8 +402,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-	auto root_reader = CreateReader();
-
+	root_reader = CreateReader();
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
@@ -450,7 +452,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-
 	InitializeSchema();
 }
 
@@ -483,7 +484,6 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 	unique_ptr<BaseStatistics> column_stats;
 	auto file_meta_data = GetFileMetadata();
-	auto root_reader = CreateReader();
 	auto column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {

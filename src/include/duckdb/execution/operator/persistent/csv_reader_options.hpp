@@ -147,6 +147,8 @@ struct BufferedCSVReaderOptions {
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BufferedCSVReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
 
 	void SetCompression(const string &compression);
 	void SetHeader(bool has_header);

@@ -1,26 +1,17 @@
-from pyduckdb.spark.exception import ContributionsAcceptedError
+from ..exception import ContributionsAcceptedError
 
-from typing import (
-    TYPE_CHECKING,
-    List,
-    Optional,
-    Union,
-    Tuple,
-    overload
-)
-from duckdb import (
-    StarExpression,
-    ColumnExpression
-)
+from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload
+from duckdb import StarExpression, ColumnExpression
 
-from pyduckdb.spark.sql.readwriter import DataFrameWriter
-from pyduckdb.spark.sql.types import Row, StructType
-from pyduckdb.spark.sql.type_utils import duckdb_to_spark_schema
-from pyduckdb.spark.sql.column import Column
+from .readwriter import DataFrameWriter
+from .types import Row, StructType
+from .type_utils import duckdb_to_spark_schema
+from .column import Column
 import duckdb
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.session import SparkSession
+    from .session import SparkSession
+
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
@@ -39,7 +30,7 @@ class DataFrame:
 
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
         if columnName in self.relation:
-	        # We want to replace the existing column with this new expression
+            # We want to replace the existing column with this new expression
             cols = []
             for x in self.relation.columns:
                 if x.casefold() == columnName.casefold():
@@ -54,7 +45,7 @@ class DataFrame:
 
     def select(self, *cols) -> "DataFrame":
         cols = list(cols)
-        if (len(cols) == 1):
+        if len(cols) == 1:
             cols = cols[0]
         if isinstance(cols, list):
             projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
@@ -103,7 +94,7 @@ class DataFrame:
 
     @property
     def schema(self) -> StructType:
-        """Returns the schema of this :class:`DataFrame` as a :class:`pyspark.sql.types.StructType`.
+        """Returns the schema of this :class:`DataFrame` as a :class:`pyduckdb.spark.sql.types.StructType`.
 
         .. versionadded:: 1.3.0
 
@@ -141,11 +132,11 @@ class DataFrame:
         """
         if isinstance(item, str):
             return self.item
-        #elif isinstance(item, Column):
+        # elif isinstance(item, Column):
         #    return self.filter(item)
-        #elif isinstance(item, (list, tuple)):
+        # elif isinstance(item, (list, tuple)):
         #    return self.select(*item)
-        #elif isinstance(item, int):
+        # elif isinstance(item, int):
         #    jc = self._jdf.apply(self.columns[item])
         #    return Column(jc)
         else:
@@ -162,9 +153,7 @@ class DataFrame:
         [Row(age=2), Row(age=5)]
         """
         if name not in self.relation.columns:
-            raise AttributeError(
-                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
-            )
+            raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
         return Column(duckdb.ColumnExpression(name))
 
     @property
@@ -198,6 +187,5 @@ class DataFrame:
         rows = [Row(**dict(zip(columns, x))) for x in result]
         return rows
 
-__all__ = [
-    "DataFrame"
-]
+
+__all__ = ["DataFrame"]

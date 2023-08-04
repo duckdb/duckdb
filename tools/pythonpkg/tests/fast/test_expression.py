@@ -1,10 +1,6 @@
 import duckdb
 import pytest
-from duckdb.typing import (
-    INTEGER,
-    VARCHAR,
-    TIMESTAMP
-)
+from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
 from duckdb import (
     Expression,
     BinaryFunctionExpression,
@@ -12,13 +8,11 @@ from duckdb import (
     ColumnExpression,
     StarExpression,
     FunctionExpression,
-    CaseExpression
+    CaseExpression,
 )
-from pyduckdb.value.constant import (
-    Value,
-    IntegerValue
-)
+from pyduckdb.value.constant import Value, IntegerValue
 import datetime
+
 
 class TestExpression(object):
     def test_constant_expression(self):
@@ -26,12 +20,14 @@ class TestExpression(object):
 
         val = Value(5, INTEGER)
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c
-        """)
+        """
+        )
 
         constant = ConstantExpression(val)
 
@@ -42,12 +38,14 @@ class TestExpression(object):
     def test_column_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c
-        """)
+        """
+        )
         column = ColumnExpression('a')
         rel2 = rel.select(column)
         res = rel2.fetchall()
@@ -62,12 +60,14 @@ class TestExpression(object):
 
         val = Value(5, INTEGER)
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c
-        """)
+        """
+        )
 
         constant = ConstantExpression(val)
         col = ColumnExpression('b')
@@ -75,16 +75,18 @@ class TestExpression(object):
 
         rel = rel.select(expr, expr)
         res = rel.fetchall()
-        assert res == [(7,7)]
+        assert res == [(7, 7)]
 
     def test_binary_function_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 5 as b
-        """)
+        """
+        )
         function = BinaryFunctionExpression("-", ColumnExpression('b'), ColumnExpression('a'))
         rel2 = rel.select(function)
         res = rel2.fetchall()
@@ -93,23 +95,27 @@ class TestExpression(object):
     def test_negate_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select 5 as a
-        """)
+        """
+        )
         col = ColumnExpression('a')
-        col = -col;
+        col = -col
         rel = rel.select(col)
         res = rel.fetchall()
         assert res == [(-5,)]
-    
+
     def test_subtract_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 3 as a,
                 1 as b
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 - col2
@@ -120,11 +126,13 @@ class TestExpression(object):
     def test_multiply_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 3 as a,
                 2 as b
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 * col2
@@ -135,11 +143,13 @@ class TestExpression(object):
     def test_division_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 5 as a,
                 2 as b
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 / col2
@@ -155,11 +165,13 @@ class TestExpression(object):
     def test_modulus_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 5 as a,
                 2 as b
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 % col2
@@ -170,14 +182,16 @@ class TestExpression(object):
     def test_power_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 5 as a,
                 2 as b
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
-        expr = col1 ** col2
+        expr = col1**col2
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(25,)]
@@ -185,12 +199,14 @@ class TestExpression(object):
     def test_equality_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 5 as a,
                 2 as b,
                 5 as c
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         col3 = ColumnExpression('c')
@@ -203,12 +219,14 @@ class TestExpression(object):
     def test_inequality_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 5 as a,
                 2 as b,
                 5 as c
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         col3 = ColumnExpression('c')
@@ -221,13 +239,15 @@ class TestExpression(object):
     def test_comparison_expressions(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c,
                 3 as d
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         col3 = ColumnExpression('c')
@@ -268,9 +288,11 @@ class TestExpression(object):
     def test_expression_alias(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select 1 as a
-        """)
+        """
+        )
         col = ColumnExpression('a')
         col = col.alias('b')
 
@@ -279,12 +301,14 @@ class TestExpression(object):
 
     def test_star_expression(self):
         con = duckdb.connect()
-        
-        rel = con.sql("""
+
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b
-        """)
+        """
+        )
         star = StarExpression()
         rel2 = rel.select(star)
         res = rel2.fetchall()
@@ -296,15 +320,16 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(2,)]
 
-
     def test_struct_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b
-        """)
+        """
+        )
 
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -313,21 +338,23 @@ class TestExpression(object):
         rel = rel.select(expr)
         res = rel.fetchall()
         assert res == [({'a': 1, 'b': 2},)]
-    
+
     def test_function_expression(self):
         con = duckdb.connect()
 
         def my_simple_func(a: int, b: int, c: int) -> int:
             return a + b + c
-        
+
         con.create_function('my_func', my_simple_func)
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c
-        """)
+        """
+        )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         col3 = ColumnExpression('c')
@@ -339,12 +366,14 @@ class TestExpression(object):
     def test_case_expression(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select
                 1 as a,
                 2 as b,
                 3 as c,
-        """)
+        """
+        )
 
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -371,7 +400,9 @@ class TestExpression(object):
         assert res == [(42,)]
 
         # CASE WHEN col3 = col3 THEN 21 WHEN col3 > col1 THEN col3 ELSE col2
-        case4 = CaseExpression(col3 == col3, ConstantExpression(IntegerValue(21))).when(col3 > col1, col3).otherwise(col2)
+        case4 = (
+            CaseExpression(col3 == col3, ConstantExpression(IntegerValue(21))).when(col3 > col1, col3).otherwise(col2)
+        )
         rel2 = rel.select(case4)
         res = rel2.fetchall()
         assert res == [(21,)]

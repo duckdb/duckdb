@@ -28,16 +28,21 @@ PrimitiveType = Union[bool, float, int, str]
 
 NonUDFType = Literal[0]
 
+
 class SupportsIAdd(Protocol):
-    def __iadd__(self, other: "SupportsIAdd") -> "SupportsIAdd": ...
+    def __iadd__(self, other: "SupportsIAdd") -> "SupportsIAdd":
+        ...
+
 
 class SupportsOrdering(Protocol):
-    def __lt__(self, other: "SupportsOrdering") -> bool: ...
+    def __lt__(self, other: "SupportsOrdering") -> bool:
+        ...
 
-class SizedIterable(Protocol, Sized, Iterable[T_co]): ...
+
+class SizedIterable(Protocol, Sized, Iterable[T_co]):
+    ...
+
 
 S = TypeVar("S", bound=SupportsOrdering)
 
-NumberOrArray = TypeVar(
-    "NumberOrArray", float, int, complex, int32, int64, float32, float64, ndarray
-)
+NumberOrArray = TypeVar("NumberOrArray", float, int, complex, int32, int64, float32, float64, ndarray)

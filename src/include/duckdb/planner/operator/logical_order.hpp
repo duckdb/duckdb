@@ -21,51 +21,23 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ORDER_BY;
 
 public:
-	explicit LogicalOrder(vector<BoundOrderByNode> orders)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
-	}
+	explicit LogicalOrder(vector<BoundOrderByNode> orders);
 
 	vector<BoundOrderByNode> orders;
 	vector<idx_t> projections;
 
 public:
-	vector<ColumnBinding> GetColumnBindings() override {
-		auto child_bindings = children[0]->GetColumnBindings();
-		if (projections.empty()) {
-			return child_bindings;
-		}
-
-		vector<ColumnBinding> result;
-		for (auto &col_idx : projections) {
-			result.push_back(child_bindings[col_idx]);
-		}
-		return result;
-	}
+	vector<ColumnBinding> GetColumnBindings() override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
-	string ParamsToString() const override {
-		string result = "ORDERS:\n";
-		for (idx_t i = 0; i < orders.size(); i++) {
-			if (i > 0) {
-				result += "\n";
-			}
-			result += orders[i].expression->GetName();
-		}
-		return result;
-	}
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+
+	string ParamsToString() const override;
 
 protected:
-	void ResolveTypes() override {
-		const auto child_types = children[0]->types;
-		if (projections.empty()) {
-			types = child_types;
-		} else {
-			for (auto &col_idx : projections) {
-				types.push_back(child_types[col_idx]);
-			}
-		}
-	}
+	void ResolveTypes() override;
 };
 } // namespace duckdb

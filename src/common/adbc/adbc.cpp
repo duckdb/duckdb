@@ -52,12 +52,14 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 
 namespace duckdb_adbc {
 
+enum class IngestionMode { CREATE = 0, APPEND = 1 };
 struct DuckDBAdbcStatementWrapper {
 	::duckdb_connection connection;
 	::duckdb_arrow result;
 	::duckdb_prepared_statement statement;
 	char *ingestion_table_name;
 	ArrowArrayStream *ingestion_stream;
+	IngestionMode ingestion_mode = IngestionMode::CREATE;
 };
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
                                     struct AdbcError *error);
@@ -200,14 +202,15 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	if (db_schema == nullptr) {
+		// if schema is not set, we use the default schema
+		db_schema = "main";
+	}
 	if (catalog != nullptr && strlen(catalog) > 0) {
 		// In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now,
 		// scream.
 		SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
 		return ADBC_STATUS_NOT_IMPLEMENTED;
-	} else if (db_schema == nullptr) {
-		SetError(error, "AdbcConnectionGetTableSchema: must provide db_schema");
-		return ADBC_STATUS_INVALID_ARGUMENT;
 	} else if (table_name == nullptr) {
 		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -428,7 +431,7 @@ void stream_schema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
 }
 
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input,
-                      struct AdbcError *error) {
+                      struct AdbcError *error, IngestionMode ingestion_mode) {
 
 	auto status = SetErrorMaybe(connection, error, "Invalid connection");
 	if (status != ADBC_STATUS_OK) {
@@ -446,12 +449,11 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	}
 	auto cconn = (duckdb::Connection *)connection;
 
-	auto has_table = cconn->TableInfo(table_name);
 	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
 	                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
-	                                                      duckdb::Value::POINTER((uintptr_t)get_schema)});
+	                                                      duckdb::Value::POINTER((uintptr_t)input->get_schema)});
 	try {
-		if (!has_table) {
+		if (ingestion_mode == IngestionMode::CREATE) {
 			// We create the table based on an Arrow Scanner
 			arrow_scan->Create(table_name);
 		} else {
@@ -505,6 +507,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->result = nullptr;
 	statement_wrapper->ingestion_stream = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
+	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
 	return ADBC_STATUS_OK;
 }
 
@@ -557,7 +560,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (wrapper->ingestion_stream && wrapper->ingestion_table_name) {
 		auto stream = wrapper->ingestion_stream;
 		wrapper->ingestion_stream = nullptr;
-		return Ingest(wrapper->connection, wrapper->ingestion_table_name, stream, error);
+		return Ingest(wrapper->connection, wrapper->ingestion_table_name, stream, error, wrapper->ingestion_mode);
 	}
 
 	auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
@@ -643,6 +646,18 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 		wrapper->ingestion_table_name = strdup(value);
 		return ADBC_STATUS_OK;
 	}
+	if (strcmp(key, ADBC_INGEST_OPTION_MODE) == 0) {
+		if (strcmp(value, ADBC_INGEST_OPTION_MODE_CREATE) == 0) {
+			wrapper->ingestion_mode = IngestionMode::CREATE;
+			return ADBC_STATUS_OK;
+		} else if (strcmp(value, ADBC_INGEST_OPTION_MODE_APPEND) == 0) {
+			wrapper->ingestion_mode = IngestionMode::APPEND;
+			return ADBC_STATUS_OK;
+		} else {
+			SetError(error, "Invalid ingestion mode");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+	}
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 
@@ -672,6 +687,10 @@ AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArra
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
+	if (depth != 0) {
+		SetError(error, "Depth parameter not yet supported");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
 	if (catalog != nullptr) {
 		if (strcmp(catalog, "duckdb") == 0) {
 			SetError(error, "catalog must be NULL or 'duckdb'");

@@ -1,0 +1,89 @@
+# name: test/sql/index/art/scan/test_art_scan_coverage.test
+# description: Test edge cases during index scans
+# group: [scan]
+
+statement ok
+CREATE TABLE tab0(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT)
+
+statement ok
+INSERT INTO tab0 VALUES(0,25,74.4,'vvcgn',47,57.68,'ymlye')
+
+statement ok
+INSERT INTO tab0 VALUES(1,72,81.64,'zsnbm',42,74.55,'tzagd')
+
+statement ok
+INSERT INTO tab0 VALUES(2,45,38.39,'dmsso',87,29.20,'ywydk')
+
+statement ok
+INSERT INTO tab0 VALUES(3,81,97.79,'tdbjm',48,89.67,'hvaol')
+
+statement ok
+INSERT INTO tab0 VALUES(4,17,18.5,'ddcya',66,87.1,'ndulx')
+
+statement ok
+INSERT INTO tab0 VALUES(5,46,83.75,'khqpe',31,31.98,'hzpio')
+
+statement ok
+INSERT INTO tab0 VALUES(6,85,8.45,'ugwie',30,22.61,'klsxt')
+
+statement ok
+INSERT INTO tab0 VALUES(7,36,54.34,'pflrv',18,61.89,'vrltg')
+
+statement ok
+INSERT INTO tab0 VALUES(8,47,41.84,'plpkl',76,65.31,'yzivj')
+
+statement ok
+INSERT INTO tab0 VALUES(9,76,63.21,'uakya',80,80.58,'ocfgj')
+
+statement ok
+CREATE TABLE tab1(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT, col5 TEXT)
+
+statement ok
+CREATE INDEX idx_tab1_0 on tab1 (col0)
+
+statement ok
+CREATE INDEX idx_tab1_1 on tab1 (col1)
+
+statement ok
+CREATE INDEX idx_tab1_3 on tab1 (col3)
+
+statement ok
+CREATE INDEX idx_tab1_4 on tab1 (col4)
+
+statement ok
+INSERT INTO tab1 SELECT * FROM tab0
+
+statement ok
+DELETE FROM tab1 WHERE col3 = 54 AND col1 <= 76.83
+
+query I rowsort label-empty
+SELECT pk FROM tab1 WHERE col3 = 54 AND col1 <= 76.83
+----
+
+query I rowsort label-225
+SELECT pk FROM tab1 WHERE NOT (col3 = 54 AND col1 <= 76.83)
+----
+10 values hashing to e20b902b49a98b1a05ed62804c757f94
+
+statement ok
+DELETE FROM tab1 WHERE (col4 > 71.47) OR col0 IN (98,26,25,60)
+
+query I rowsort label-empty
+SELECT pk FROM tab1 WHERE (col4 > 71.47) OR col0 IN (98,26,25,60)
+----
+
+query I rowsort label-240
+SELECT pk FROM tab1 WHERE NOT ((col4 > 71.47) OR col0 IN (98,26,25,60))
+----
+2
+5
+6
+7
+8
+
+statement ok
+DELETE FROM tab1 WHERE ((col0 > 32) AND col0 < 87)
+
+query I rowsort label-empty
+SELECT pk FROM tab1 WHERE ((col0 > 32) AND col0 < 87)
+----

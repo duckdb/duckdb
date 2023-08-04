@@ -292,29 +292,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
 		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
-		// We add a catalog dependency
-		auto type_dependency = EnumType::GetCatalog(column.Type());
-
-		if (type_dependency) {
-			// Only if the USER comes from a create type
-			if (!schema.catalog.IsTemporaryCatalog()) {
-				// If it is not a TEMP table we add a dependency
-				result->dependencies.AddDependency(*type_dependency);
-			} else {
-				auto enum_type = type_dependency->user_type;
-				auto &enum_entries = EnumType::GetValuesInsertOrder(enum_type);
-				auto enum_size = EnumType::GetSize(enum_type);
-				Vector copy_enum_entries_vec(LogicalType::VARCHAR, enum_size);
-				auto copy_enum_entries_ptr = FlatVector::GetData<string_t>(copy_enum_entries_vec);
-				auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries);
-				for (idx_t enum_idx = 0; enum_idx < enum_size; enum_idx++) {
-					copy_enum_entries_ptr[enum_idx] =
-					    StringVector::AddStringOrBlob(copy_enum_entries_vec, enum_entries_ptr[enum_idx]);
-				}
-				auto copy_type = LogicalType::ENUM(EnumType::GetTypeName(enum_type), copy_enum_entries_vec, enum_size);
-				column.SetType(copy_type);
-			}
-		}
 	}
 	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;

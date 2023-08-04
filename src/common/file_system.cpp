@@ -71,11 +71,11 @@ string FileSystem::GetEnvVariable(const string &name) {
 }
 
 bool FileSystem::IsPathAbsolute(const string &path) {
-	auto path_separator = FileSystem::PathSeparator();
+	auto path_separator = PathSeparator(path);
 	return PathMatched(path, path_separator);
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator(const string &path) {
 	return "/";
 }
 
@@ -167,7 +167,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 	return result;
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator(const string &path) {
 	return "\\";
 }
 
@@ -210,11 +210,11 @@ string FileSystem::GetWorkingDirectory() {
 
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
+	return a + PathSeparator(a) + b;
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
-	auto separator_str = PathSeparator();
+	auto separator_str = PathSeparator(path);
 	char separator = separator_str[0];
 	if (separator == '/') {
 		// on unix-based systems we only accept / as a separator
@@ -229,7 +229,7 @@ string FileSystem::ExtractName(const string &path) {
 		return string();
 	}
 	auto normalized_path = ConvertSeparators(path);
-	auto sep = PathSeparator();
+	auto sep = PathSeparator(path);
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
 	return splits.back();
@@ -383,6 +383,10 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 
 void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
+	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
 }
 
 vector<string> FileSystem::ListSubSystems() {

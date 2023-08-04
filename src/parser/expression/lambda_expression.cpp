@@ -8,6 +8,9 @@
 
 namespace duckdb {
 
+LambdaExpression::LambdaExpression() : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA) {
+}
+
 LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr)
     : ParsedExpression(ExpressionType::LAMBDA, ExpressionClass::LAMBDA), lhs(std::move(lhs)), expr(std::move(expr)) {
 }
@@ -41,19 +44,6 @@ void LambdaExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> LambdaExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto lhs = reader.ReadRequiredSerializable<ParsedExpression>();
 	auto expr = reader.ReadRequiredSerializable<ParsedExpression>();
-	return make_uniq<LambdaExpression>(std::move(lhs), std::move(expr));
-}
-
-void LambdaExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("lhs", *lhs);
-	serializer.WriteProperty("expr", *expr);
-}
-
-unique_ptr<ParsedExpression> LambdaExpression::FormatDeserialize(ExpressionType type,
-                                                                 FormatDeserializer &deserializer) {
-	auto lhs = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("lhs");
-	auto expr = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expr");
 	return make_uniq<LambdaExpression>(std::move(lhs), std::move(expr));
 }
 

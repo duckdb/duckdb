@@ -652,7 +652,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) 
 		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("%s.%s", names[0], name)}));
 	}
 	if (ContainsColumnByName(name)) {
-		return make_uniq<DuckDBPyRelation>(rel->Project({name}));
+		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("\"%s\"", name)}));
 	}
 	throw py::attribute_error(StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 }
@@ -680,6 +680,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		dtype = JoinType::LEFT;
 	} else {
 		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
+	}
+	auto alias = GetAlias();
+	auto other_alias = other->GetAlias();
+	if (StringUtil::CIEquals(alias, other_alias)) {
+		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
+		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
 	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
 }

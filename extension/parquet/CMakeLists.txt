@@ -15,6 +15,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     parquet_statistics.cpp
+    serialize_parquet.cpp
     zstd_file_system.cpp
     column_reader.cpp)
 
@@ -51,7 +52,8 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_opt.cpp)
 endif()
 
-add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+build_static_extension(parquet ${PARQUET_EXTENSION_FILES})
+
 set(PARAMETERS "-warnings")
 build_loadable_extension(parquet ${PARAMETERS} ${PARQUET_EXTENSION_FILES})
 

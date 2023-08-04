@@ -36,39 +36,40 @@ from .types import (
 )
 
 _sqltype_to_spark_class = {
-    'boolean' : BooleanType,
-    'utinyint' : UnsignedByteType,
-    'tinyint' : ByteType,
-    'usmallint' : UnsignedShortType,
-    'smallint' : ShortType,
-    'uinteger' : UnsignedIntegerType,
-    'integer' : IntegerType,
-    'ubigint' : UnsignedLongType,
-    'bigint' : LongType,
-    'hugeint' : HugeIntegerType,
-    'varchar' : StringType,
-    'blob' : BinaryType,
-    'bit' : BitstringType,
-    'uuid' : UUIDType,
-    'date' : DateType,
-    'time' : TimeNTZType,
-    'time with time zone' : TimeType,
-    'timestamp' : TimestampNTZType,
-    'timestamp with time zone' : TimestampType,
-    'timestamp_ms' : TimestampNanosecondNTZType,
-    'timestamp_ns' : TimestampMilisecondNTZType,
-    'timestamp_s' : TimestampSecondNTZType,
-    'interval' : DayTimeIntervalType,
+    'boolean': BooleanType,
+    'utinyint': UnsignedByteType,
+    'tinyint': ByteType,
+    'usmallint': UnsignedShortType,
+    'smallint': ShortType,
+    'uinteger': UnsignedIntegerType,
+    'integer': IntegerType,
+    'ubigint': UnsignedLongType,
+    'bigint': LongType,
+    'hugeint': HugeIntegerType,
+    'varchar': StringType,
+    'blob': BinaryType,
+    'bit': BitstringType,
+    'uuid': UUIDType,
+    'date': DateType,
+    'time': TimeNTZType,
+    'time with time zone': TimeType,
+    'timestamp': TimestampNTZType,
+    'timestamp with time zone': TimestampType,
+    'timestamp_ms': TimestampNanosecondNTZType,
+    'timestamp_ns': TimestampMilisecondNTZType,
+    'timestamp_s': TimestampSecondNTZType,
+    'interval': DayTimeIntervalType,
     'list': ArrayType,
-    'struct' : StructType,
-    'map' : MapType,
+    'struct': StructType,
+    'map': MapType,
     # union
     # enum
     # null (???)
-    'float' : FloatType,
-    'double' : DoubleType,
-    'decimal' : DecimalType
+    'float': FloatType,
+    'double': DoubleType,
+    'decimal': DecimalType,
 }
+
 
 def convert_nested_type(dtype: DuckDBPyType) -> DataType:
     id = dtype.id
@@ -84,6 +85,7 @@ def convert_nested_type(dtype: DuckDBPyType) -> DataType:
         return MapType(convert_type(dtype.key), convert_type(dtype.value))
     raise NotImplementedError
 
+
 def convert_type(dtype: DuckDBPyType) -> DataType:
     id = dtype.id
     if id in ['list', 'struct', 'map']:
@@ -95,6 +97,7 @@ def convert_type(dtype: DuckDBPyType) -> DataType:
         return DecimalType(precision, scale)
     spark_type = _sqltype_to_spark_class[id]
     return spark_type()
+
 
 def duckdb_to_spark_schema(names: List[str], types: List[DuckDBPyType]) -> StructType:
     fields = [StructField(name, dtype) for name, dtype in zip(names, [convert_type(x) for x in types])]

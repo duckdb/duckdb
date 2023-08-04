@@ -224,7 +224,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	DefineMethod({"sql", "query", "from_query"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	             py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 
 	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
 	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),

@@ -1,3 +1,5 @@
+#include <array>
+#include <vector>
 #include "../common.h"
 
 using namespace odbc_test;
@@ -46,12 +48,68 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		auto &entry = expected_data[i].first;
 		METADATA_CHECK(hstmt, i + 1, entry.col_name.c_str(), entry.col_name.length(), entry.col_type,
 		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
-		if (expected_data[i].second.empty()) {
-			DATA_CHECK(hstmt, i + 1, nullptr);
-			continue;
-		}
-		DATA_CHECK(hstmt, i + 1, expected_data[i].second.c_str());
+		DATA_CHECK(hstmt, i + 1, expected_data[i].second);
 	}
+
+	// Test SQLGetTypeInfo with SQL_ALL_TYPES and data_type
+	SQLINTEGER data_type;
+	SQLLEN row_count = 0;
+	SQLLEN len_or_ind_ptr;
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_INTEGER, &data_type, sizeof(data_type), &len_or_ind_ptr);
+	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
+
+	SQLINTEGER data_types[] = {
+	    SQL_CHAR,
+	    SQL_BIT,
+	    SQL_TINYINT,
+	    SQL_SMALLINT,
+	    SQL_INTEGER,
+	    SQL_BIGINT,
+	    SQL_TYPE_DATE,
+	    SQL_TYPE_TIME,
+	    SQL_TYPE_TIMESTAMP,
+	    SQL_DECIMAL,
+	    SQL_NUMERIC,
+	    SQL_FLOAT,
+	    SQL_DOUBLE,
+	    SQL_VARCHAR,
+	    SQL_VARBINARY,
+	    SQL_INTERVAL_YEAR,
+	    SQL_INTERVAL_MONTH,
+	    SQL_INTERVAL_DAY,
+	    SQL_INTERVAL_HOUR,
+	    SQL_INTERVAL_MINUTE,
+	    SQL_INTERVAL_SECOND,
+	    SQL_INTERVAL_YEAR_TO_MONTH,
+	    SQL_INTERVAL_DAY_TO_HOUR,
+	    SQL_INTERVAL_DAY_TO_MINUTE,
+	    SQL_INTERVAL_DAY_TO_SECOND,
+	    SQL_INTERVAL_HOUR_TO_MINUTE,
+	    SQL_INTERVAL_HOUR_TO_SECOND,
+	    SQL_INTERVAL_MINUTE_TO_SECOND,
+	};
+
+	while (SQLFetch(hstmt) != SQL_NO_DATA) {
+		REQUIRE(data_type == data_types[row_count]);
+		row_count++;
+	}
+
+	// When type is not supported, SQLGetTypeInfo returns SQL_SUCCESS_WITH_INFO
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, &data_type, sizeof(data_type), &len_or_ind_ptr);
+	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
+
+	SQLRETURN ret;
+	while ((ret = SQLFetch(hstmt)) != SQL_NO_DATA) {
+		std::string state, message;
+		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
+		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+		REQUIRE(state == "07006");
+		REQUIRE(duckdb::StringUtil::Contains(message, "Unsupported type"));
+		row_count++;
+	}
+
+	// unbind column
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, nullptr, 0, nullptr);
 }
 
 static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
@@ -83,7 +141,14 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 		if (ret == SQL_NO_DATA) {
 			break;
 		}
-		ODBC_CHECK(ret, "SQLFetch");
+		if (ret == SQL_SUCCESS_WITH_INFO) {
+			std::string state, message;
+			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+			REQUIRE(state == "07006");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+		} else {
+			ODBC_CHECK(ret, "SQLFetch");
+		}
 		fetch_count++;
 
 		DATA_CHECK(hstmt, 1, "memory");
@@ -94,7 +159,7 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 			DATA_CHECK(hstmt, 3, "bool_table");
 			break;
 		case 2:
-			DATA_CHECK(hstmt, 3, "byte_table");
+			DATA_CHECK(hstmt, 3, "bytea_table");
 			break;
 		case 3:
 			DATA_CHECK(hstmt, 3, "interval_table");
@@ -151,23 +216,32 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 
 	std::vector<std::array<std::string, 4>> expected_data = {
 	    {"bool_table", "id", "13", "INTEGER"},      {"bool_table", "t", "25", "VARCHAR"},
-	    {"bool_table", "b", "10", "BOOLEAN"},       {"byte_table", "id", "13", "INTEGER"},
-	    {"byte_table", "t", "26", "BLOB"},          {"interval_table", "id", "13", "INTEGER"},
+	    {"bool_table", "b", "10", "BOOLEAN"},       {"bytea_table", "id", "13", "INTEGER"},
+	    {"bytea_table", "t", "26", "BLOB"},         {"interval_table", "id", "13", "INTEGER"},
 	    {"interval_table", "iv", "27", "INTERVAL"}, {"interval_table", "d", "25", "VARCHAR"},
 	    {"lo_test_table", "id", "13", "INTEGER"},   {"lo_test_table", "large_data", "26", "BLOB"},
 	    {"test_table_1", "id", "13", "INTEGER"},    {"test_table_1", "t", "25", "VARCHAR"},
 	    {"test_view", "id", "13", "INTEGER"},       {"test_view", "t", "25", "VARCHAR"}};
 
 	for (int i = 0; i < expected_data.size(); i++) {
-		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+		SQLRETURN ret = SQLFetch(hstmt);
+		if (ret == SQL_SUCCESS_WITH_INFO) {
+			std::string state, message;
+			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+			REQUIRE(state == "07006");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
+			ret = SQL_SUCCESS;
+		} else {
+			ODBC_CHECK(ret, "SQLFetch");
+		}
 
 		auto &entry = expected_data[i];
-		DATA_CHECK(hstmt, 1, nullptr);
+		DATA_CHECK(hstmt, 1, "");
 		DATA_CHECK(hstmt, 2, "main");
-		DATA_CHECK(hstmt, 3, entry[0].c_str());
-		DATA_CHECK(hstmt, 4, entry[1].c_str());
-		DATA_CHECK(hstmt, 5, entry[2].c_str());
-		DATA_CHECK(hstmt, 6, entry[3].c_str());
+		DATA_CHECK(hstmt, 3, entry[0]);
+		DATA_CHECK(hstmt, 4, entry[1]);
+		DATA_CHECK(hstmt, 5, entry[2]);
+		DATA_CHECK(hstmt, 6, entry[3]);
 	}
 }
 

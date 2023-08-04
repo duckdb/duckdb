@@ -75,17 +75,17 @@ SELECT a[0:1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 query T
 SELECT a[0:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-[42, 43]
+[42, 43, 44]
 
 query T
 SELECT a[-3:-1] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-[42, 43]
+[42, 43, 44]
 
 query T
 SELECT a[-5:] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)
 ----
-NULL
+[42, 43, 44]
 
 query T
 SELECT a[:5] FROM (VALUES (LIST_VALUE(42, 43, 44))) tbl(a)

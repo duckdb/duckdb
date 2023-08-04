@@ -7,13 +7,14 @@ import re
 import sys
 from python_helpers import open_utf8
 
-bison_location     = "bison"
-base_dir           = 'third_party/libpg_query/grammar'
-pg_dir             = 'third_party/libpg_query'
-namespace          = 'duckdb_libpgquery'
+bison_location = "bison"
+base_dir = 'third_party/libpg_query/grammar'
+pg_dir = 'third_party/libpg_query'
+namespace = 'duckdb_libpgquery'
 
 counterexamples = False
 run_update = False
+verbose = False
 for arg in sys.argv[1:]:
     if arg.startswith("--bison="):
         bison_location = arg.replace("--bison=", "")
@@ -27,25 +28,33 @@ for arg in sys.argv[1:]:
         pg_dir = arg.split("=")[1] + pg_dir
     elif arg.startswith("--namespace"):
         namespace = arg.split("=")[1]
+    elif arg.startswith("--verbose"):
+        verbose = True
     else:
-        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples, --bison=/loc/to/bison, --custom_dir_prefix, --namespace")
+        raise Exception(
+            "Unrecognized argument: "
+            + arg
+            + ", expected --counterexamples, --bison=/loc/to/bison, --custom_dir_prefix, --namespace, --verbose"
+        )
 
-template_file      = os.path.join(base_dir, 'grammar.y')
-target_file        = os.path.join(base_dir, 'grammar.y.tmp')
-header_file        = os.path.join(base_dir, 'grammar.hpp')
-source_file        = os.path.join(base_dir, 'grammar.cpp')
-type_dir           = os.path.join(base_dir, 'types')
-rule_dir           = os.path.join(base_dir, 'statements')
-result_source      = os.path.join(base_dir, 'grammar_out.cpp')
-result_header      = os.path.join(base_dir, 'grammar_out.hpp')
-target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.cpp')
-target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.hpp')
-kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
+template_file = os.path.join(base_dir, 'grammar.y')
+target_file = os.path.join(base_dir, 'grammar.y.tmp')
+header_file = os.path.join(base_dir, 'grammar.hpp')
+source_file = os.path.join(base_dir, 'grammar.cpp')
+type_dir = os.path.join(base_dir, 'types')
+rule_dir = os.path.join(base_dir, 'statements')
+result_source = os.path.join(base_dir, 'grammar_out.cpp')
+result_header = os.path.join(base_dir, 'grammar_out.hpp')
+target_source_loc = os.path.join(pg_dir, 'src_backend_parser_gram.cpp')
+target_header_loc = os.path.join(pg_dir, 'include/parser/gram.hpp')
+kwlist_header = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
+
 
 # parse the keyword lists
 def read_list_from_file(fname):
     with open_utf8(fname, 'r') as f:
         return [x.strip() for x in f.read().split('\n') if len(x.strip()) > 0]
+
 
 kwdir = os.path.join(base_dir, 'keywords')
 unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'unreserved_keywords.list'))
@@ -54,11 +63,13 @@ func_name_keywords = read_list_from_file(os.path.join(kwdir, 'func_name_keywords
 type_name_keywords = read_list_from_file(os.path.join(kwdir, 'type_name_keywords.list'))
 reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
 
+
 def strip_p(x):
     if x.endswith("_P"):
         return x[:-2]
     else:
         return x
+
 
 unreserved_keywords.sort(key=lambda x: strip_p(x))
 colname_keywords.sort(key=lambda x: strip_p(x))
@@ -94,20 +105,28 @@ kwlist.sort(key=lambda x: strip_p(x[0]))
 
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
-kwtext = """
-namespace """ + namespace + """ {
+kwtext = (
+    """
+namespace """
+    + namespace
+    + """ {
 #define PG_KEYWORD(a,b,c) {a,b,c},
 
 const PGScanKeyword ScanKeywords[] = {
 """
+)
 for tpl in kwlist:
     kwtext += 'PG_KEYWORD("%s", %s, %s)\n' % (strip_p(tpl[0]).lower(), tpl[0], tpl[1])
-kwtext += """
+kwtext += (
+    """
 };
 
 const int NumScanKeywords = lengthof(ScanKeywords);
-} // namespace """ + namespace + """
+} // namespace """
+    + namespace
+    + """
 """
+)
 
 with open_utf8(kwlist_header, 'w+') as f:
     f.write(kwtext)
@@ -119,6 +138,7 @@ with open_utf8(template_file, 'r') as f:
     text = f.read()
 
 # now perform a series of replacements in the file to construct the final yacc file
+
 
 def get_file_contents(fpath, add_line_numbers=False):
     with open_utf8(fpath, 'r') as f:
@@ -168,6 +188,7 @@ for ur in unreserved_keywords:
         exit(1)
     unreserved_dict[ur] = True
 
+
 def add_to_other_keywords(kw, list_name):
     global unreserved_dict
     global reserved_dict
@@ -179,6 +200,7 @@ def add_to_other_keywords(kw, list_name):
         print("Keyword " + kw + " is marked as both reserved and " + list_name)
         exit(1)
     other_dict[kw] = True
+
 
 for cr in colname_keywords:
     add_to_other_keywords(cr, "colname")
@@ -210,6 +232,7 @@ kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_name_keyword
 kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
 text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
 
+
 # types
 def concat_dir(dname, extension, add_line_numbers=False):
     result = ""
@@ -222,6 +245,7 @@ def concat_dir(dname, extension, add_line_numbers=False):
                 continue
             result += get_file_contents(fpath, add_line_numbers)
     return result
+
 
 type_definitions = concat_dir(type_dir, ".yh")
 # add statement types as well
@@ -246,10 +270,12 @@ if counterexamples:
     cmd += ["-Wcounterexamples"]
 if run_update:
     cmd += ["--update"]
+if verbose:
+    cmd += ["--verbose"]
 cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
 proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-res = proc.wait(timeout=10) # ensure CI does not hang as was seen when running with Bison 3.x release.
+res = proc.wait(timeout=10)  # ensure CI does not hang as was seen when running with Bison 3.x release.
 
 if res != 0:
     text = proc.stderr.read().decode('utf8')
@@ -261,7 +287,9 @@ if res != 0:
         print("On a Macbook you can obtain this using \"brew install bison\"")
     if counterexamples and 'time limit exceeded' in text:
         print("---------------------------------------------------------------------")
-        print("The counterexamples time limit was exceeded. This likely means that no useful counterexample was generated.")
+        print(
+            "The counterexamples time limit was exceeded. This likely means that no useful counterexample was generated."
+        )
         print("")
         print("The counterexamples time limit can be increased by setting the TIME_LIMIT environment variable, e.g.:")
         print("export TIME_LIMIT=100")

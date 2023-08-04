@@ -4,17 +4,19 @@ import pytest
 
 pyarrow = pytest.importorskip('pyarrow')
 
-def f(cur, i, data):    
+
+def f(cur, i, data):
     cur.execute(f"create table t_{i} as select * from data")
     return cur.execute(f"select * from t_{i}").arrow()
 
+
 def test_6584():
     pool = ThreadPoolExecutor(max_workers=2)
-    data = pyarrow.Table.from_pydict({"a": [1,2,3]})
+    data = pyarrow.Table.from_pydict({"a": [1, 2, 3]})
     c = duckdb.connect()
     futures = []
     for i in range(2):
-        fut = pool.submit(f, c.cursor(), i,data)
+        fut = pool.submit(f, c.cursor(), i, data)
         futures.append(fut)
 
     for fut in futures:

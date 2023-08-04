@@ -7,14 +7,17 @@ visualizer_d3 = os.path.join(visualizer_dir, 'd3.js')
 visualizer_script = os.path.join(visualizer_dir, 'script.js')
 visualizer_header = os.path.join(visualizer_dir, 'include', 'visualizer_constants.hpp')
 
+
 def open_utf8(fpath, flags):
     import sys
+
     if sys.version_info[0] < 3:
         return open(fpath, flags)
     else:
         return open(fpath, flags, encoding="utf8")
 
-def get_byte_array(fpath, add_null_terminator = True):
+
+def get_byte_array(fpath, add_null_terminator=True):
     with open(fpath, 'rb') as f:
         text = bytearray(f.read())
     result_text = ""
@@ -28,6 +31,7 @@ def get_byte_array(fpath, add_null_terminator = True):
     if add_null_terminator:
         result_text += ", 0"
     return result_text
+
 
 def write_file(fname, varname):
     result = "const uint8_t %s[] = {" % (varname,) + get_byte_array(fname) + "};\n"
@@ -77,5 +81,6 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
     with open_utf8(visualizer_header, 'w+') as f:
         f.write(result)
+
 
 create_visualizer_header()

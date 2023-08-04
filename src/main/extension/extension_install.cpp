@@ -4,7 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -27,6 +29,9 @@ bool ExtensionHelper::IsRelease(const string &version_tag) {
 }
 
 const string ExtensionHelper::GetVersionDirectoryName() {
+#ifdef DUCKDB_WASM_VERSION
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_WASM_VERSION);
+#endif
 	if (IsRelease(DuckDB::LibraryVersion())) {
 		return NormalizeVersionTag(DuckDB::LibraryVersion());
 	} else {
@@ -51,7 +56,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
-			auto sep = fs.PathSeparator();
+			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
 			D_ASSERT(!splits.empty());
 			string extension_directory_prefix;
@@ -152,6 +157,9 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
                                                const string &local_path, const string &extension, bool force_install) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	throw PermissionException("Installing external extensions is disabled through a compile time flag");
+#else
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
@@ -236,6 +244,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 
 	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 	fs.MoveFile(temp_path, local_extension_path);
+#endif
 #endif
 }
 

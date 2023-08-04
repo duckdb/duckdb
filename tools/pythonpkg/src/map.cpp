@@ -25,7 +25,7 @@ struct MapFunctionData : public TableFunctionData {
 	vector<string> in_names, out_names;
 };
 
-static py::handle FunctionCall(NumpyResultConversion &conversion, const vector<string> &names, PyObject *function) {
+static py::object FunctionCall(NumpyResultConversion &conversion, const vector<string> &names, PyObject *function) {
 	py::dict in_numpy_dict;
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
@@ -40,7 +40,7 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, const vector<s
 		throw InvalidInputException("Python error. See above for a stack trace.");
 	}
 
-	py::handle df(df_obj);
+	auto df = py::reinterpret_steal<py::object>(df_obj);
 	if (df.is_none()) { // no return, probably modified in place
 		throw InvalidInputException("No return value from Python function");
 	}
@@ -140,8 +140,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	if (explicit_schema != Py_None) {
 		return BindExplicitSchema(std::move(data_uptr), explicit_schema, return_types, names);
 	}
-
-	NumpyResultConversion conversion(data.in_types, 0);
+	NumpyResultConversion conversion(data.in_types, 0, context.GetClientProperties());
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
@@ -169,7 +168,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	auto &data = data_p.bind_data->Cast<MapFunctionData>();
 
 	D_ASSERT(input.GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input.size());
+	NumpyResultConversion conversion(data.in_types, input.size(), context.client.GetClientProperties());
 	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);

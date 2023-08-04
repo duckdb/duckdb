@@ -46,7 +46,7 @@
 
 // Load the generated header file containing our list of extension headers
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-#include "generated_extension_loader.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 //		 these can be removed
@@ -150,10 +150,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (auto &ext : LINKED_EXTENSIONS) {
-		if (extensions.find(ext) != extensions.end()) {
-			LoadExtensionInternal(db, ext, true);
-		}
+	for (auto &ext : linked_extensions) {
+		LoadExtensionInternal(db, ext, true);
 	}
 #endif
 }
@@ -173,6 +171,19 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
 		}
 		result = con.Query("LOAD " + extension);
+		if (result->HasError()) {
+			result->Print();
+			return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		}
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+#endif
+
+#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
+	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, extension)) {
+		Connection con(db);
+		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
+		                        ".duckdb_extension'");
 		if (result->HasError()) {
 			result->Print();
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;

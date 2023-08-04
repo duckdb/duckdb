@@ -58,20 +58,33 @@ RowLike = TypeVar("RowLike", List[Any], Tuple[Any, ...], pyduckdb.spark.sql.type
 
 SQLBatchedUDFType = Literal[100]
 
+
 class SupportsOpen(Protocol):
-    def open(self, partition_id: int, epoch_id: int) -> bool: ...
+    def open(self, partition_id: int, epoch_id: int) -> bool:
+        ...
+
 
 class SupportsProcess(Protocol):
-    def process(self, row: pyduckdb.spark.sql.types.Row) -> None: ...
+    def process(self, row: pyduckdb.spark.sql.types.Row) -> None:
+        ...
+
 
 class SupportsClose(Protocol):
-    def close(self, error: Exception) -> None: ...
+    def close(self, error: Exception) -> None:
+        ...
+
 
 class UserDefinedFunctionLike(Protocol):
     func: Callable[..., Any]
     evalType: int
     deterministic: bool
+
     @property
-    def returnType(self) -> pyduckdb.spark.sql.types.DataType: ...
-    def __call__(self, *args: ColumnOrName) -> Column: ...
-    def asNondeterministic(self) -> "UserDefinedFunctionLike": ...
+    def returnType(self) -> pyduckdb.spark.sql.types.DataType:
+        ...
+
+    def __call__(self, *args: ColumnOrName) -> Column:
+        ...
+
+    def asNondeterministic(self) -> "UserDefinedFunctionLike":
+        ...

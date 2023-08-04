@@ -55,7 +55,7 @@ void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handl
 	}
 }
 
-void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) {
+void DATA_CHECK(HSTMT &hstmt, SQLSMALLINT col_num, const std::string expected_content) {
 	SQLCHAR content[256];
 	SQLLEN content_len;
 
@@ -63,13 +63,13 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 	SQLRETURN ret = SQLGetData(hstmt, col_num, SQL_C_CHAR, content, sizeof(content), &content_len);
 	ODBC_CHECK(ret, "SQLGetData");
 	if (content_len == SQL_NULL_DATA) {
-		REQUIRE(expected_content == nullptr);
+		REQUIRE(expected_content.empty());
 		return;
 	}
-	REQUIRE(STR_EQUAL(ConvertToCString(content), expected_content));
+	REQUIRE(ConvertToString(content) == expected_content);
 }
 
-void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
+void METADATA_CHECK(HSTMT &hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
                     SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable) {
 	SQLCHAR col_name[256];
@@ -168,26 +168,30 @@ void EXEC_SQL(HSTMT hstmt, const std::string &query) {
 	EXECUTE_AND_CHECK("SQLExecDirect (" + query + ")", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
 }
 
-void InitializeDatabase(HSTMT hstmt) {
+void InitializeDatabase(HSTMT &hstmt) {
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS test_table_1;");
 	EXEC_SQL(hstmt, "CREATE TABLE test_table_1 (id integer PRIMARY KEY, t varchar(20));");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (1, 'foo');");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (2, 'bar');");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (3, 'foobar');");
 
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS bool_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE bool_table (id integer, t varchar(5), b boolean);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (1, 'yeah', true);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (2, 'yes', true);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (3, 'true', true);");
-	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (4, 'false', false)");
+	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (4, 'false', false);");
 	EXEC_SQL(hstmt, "INSERT INTO bool_table VALUES (5, 'not', false);");
 
-	EXEC_SQL(hstmt, "CREATE TABLE byte_table (id integer, t blob);");
-	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (1, '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x10'::blob);");
-	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (2, 'bar');");
-	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (3, 'foobar');");
-	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (4, 'foo');");
-	EXEC_SQL(hstmt, "INSERT INTO byte_table VALUES (5, 'barf');");
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS bytea_table;");
+	EXEC_SQL(hstmt, "CREATE TABLE bytea_table (id integer, t blob);");
+	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (1, '\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x10'::blob);");
+	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (2, 'bar');");
+	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (3, 'foobar');");
+	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (4, 'foo');");
+	EXEC_SQL(hstmt, "INSERT INTO bytea_table VALUES (5, 'barf');");
 
+	EXEC_SQL(hstmt, "DROP TABLE IF EXISTS interval_table;");
 	EXEC_SQL(hstmt, "CREATE TABLE interval_table(id integer, iv interval, d varchar(100));");
 	EXEC_SQL(hstmt, "INSERT INTO interval_table VALUES (1, '1 day', 'one day');");
 	EXEC_SQL(hstmt, "INSERT INTO interval_table VALUES (2, '10 seconds', 'ten secs');");
@@ -202,6 +206,7 @@ std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
 	std::map<SQLSMALLINT, SQLULEN> types_map;
 
 	types_map[SQL_VARCHAR] = 256;
+	types_map[SQL_CHAR] = 0;
 	types_map[SQL_BIGINT] = 20;
 	types_map[SQL_INTEGER] = 11;
 	types_map[SQL_SMALLINT] = 5;
@@ -210,6 +215,10 @@ std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
 
 SQLCHAR *ConvertToSQLCHAR(const char *str) {
 	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str));
+}
+
+SQLCHAR *ConvertToSQLCHAR(const std::string &str) {
+	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str.c_str()));
 }
 
 std::string ConvertToString(SQLCHAR *str) {
@@ -222,6 +231,19 @@ const char *ConvertToCString(SQLCHAR *str) {
 
 SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr) {
 	return reinterpret_cast<SQLPOINTER>(static_cast<uintptr_t>(ptr));
+}
+
+SQLPOINTER ConvertToSQLPOINTER(const char *str) {
+	return reinterpret_cast<SQLPOINTER>(const_cast<char *>(str));
+}
+
+std::string ConvertHexToString(SQLCHAR val[16], int precision) {
+	std::stringstream ss;
+	ss << std::hex << std::uppercase << std::setfill('0');
+	for (int i = 0; i < precision; i++) {
+		ss << std::setw(2) << static_cast<unsigned int>(val[i]);
+	}
+	return ss.str().substr(0, precision);
 }
 
 } // namespace odbc_test

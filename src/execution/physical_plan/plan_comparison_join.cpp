@@ -237,7 +237,7 @@ static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
@@ -278,8 +278,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 	}
 
+	bool can_merge = has_range > 0;
+	bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
+	switch (op.join_type) {
+	case JoinType::SEMI:
+	case JoinType::ANTI:
+	case JoinType::MARK:
+		can_merge = can_merge && op.conditions.size() == 1;
+		can_iejoin = false;
+		break;
+	default:
+		break;
+	}
+
+	//	TODO: Extend PWMJ to handle all comparisons and projection maps
+	const auto prefer_range_joins = (ClientConfig::GetConfig(context).prefer_range_joins && can_iejoin);
+
 	unique_ptr<PhysicalOperator> plan;
-	if (has_equality) {
+	if (has_equality && !prefer_range_joins) {
 		// check if we can use an index join
 		if (PlanIndexJoin(context, op, plan, left, right)) {
 			return plan;
@@ -289,22 +305,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		CheckForPerfectJoinOpt(op, perfect_join_stats);
 		plan = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
 		                                   op.join_type, op.left_projection_map, op.right_projection_map,
-		                                   std::move(op.delim_types), op.estimated_cardinality, perfect_join_stats);
+		                                   std::move(op.mark_types), op.estimated_cardinality, perfect_join_stats);
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
-		bool can_merge = has_range > 0;
-		bool can_iejoin = has_range >= 2 && recursive_cte_tables.empty();
-		switch (op.join_type) {
-		case JoinType::SEMI:
-		case JoinType::ANTI:
-		case JoinType::MARK:
-			can_merge = can_merge && op.conditions.size() == 1;
-			can_iejoin = false;
-			break;
-		default:
-			break;
-		}
 		if (left->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD ||
 		    right->estimated_cardinality <= NESTED_LOOP_JOIN_THRESHOLD) {
 			can_iejoin = false;
@@ -332,6 +336,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 	}
 	return plan;
+}
+
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparisonJoin &op) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return PlanAsOfJoin(op);
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		return PlanComparisonJoin(op);
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+		return PlanDelimJoin(op);
+	default:
+		throw InternalException("Unrecognized operator type for LogicalComparisonJoin");
+	}
 }
 
 } // namespace duckdb

@@ -35,7 +35,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## CI for pull requests
 
-* Pull requests will need to be pass all continous integration checks before merging.
+* Pull requests will need to be pass all continuous integration checks before merging.
 * For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
 * Submitting changes to a open pull requests will move it to 'draft' state.
 * Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
@@ -70,8 +70,8 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 11.0.1, installable through `python3 -m pip install clang-format==11.0.1`
-* `clang_format` enforces these rules automatically, use `make format-fix` to run the formatter.
+* To make sure the formatting is consistent, please use version 10.0.1, installable through `python3 -m pip install clang-format==10.0.1.1`
+* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
 ## C++ Guidelines

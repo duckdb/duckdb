@@ -17,6 +17,7 @@
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/core_functions/scalar/union_functions.hpp"
+#include "duckdb/core_functions/scalar/debug_functions.hpp"
 
 namespace duckdb {
 
@@ -72,7 +73,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayDistinctFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayFilterFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArrayReverseSortFun),
-	DUCKDB_SCALAR_FUNCTION_ALIAS(ArraySliceFun),
+	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySliceFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ArraySortFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayTransformFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ArrayUniqueFun),
@@ -137,9 +138,9 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(EnumRangeFun),
 	DUCKDB_SCALAR_FUNCTION(EnumRangeBoundaryFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EpochFun),
-	DUCKDB_SCALAR_FUNCTION_SET(EpochNanosecondsFun),
-	DUCKDB_SCALAR_FUNCTION_SET(EpochMicrosecondsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EpochMsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(EpochNsFun),
+	DUCKDB_SCALAR_FUNCTION_SET(EpochUsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EraFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
 	DUCKDB_SCALAR_FUNCTION(EvenFun),
@@ -199,7 +200,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(ListFilterFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListPackFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListReverseSortFun),
-	DUCKDB_SCALAR_FUNCTION(ListSliceFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ListSliceFun),
 	DUCKDB_SCALAR_FUNCTION_SET(ListSortFun),
 	DUCKDB_SCALAR_FUNCTION(ListTransformFun),
 	DUCKDB_SCALAR_FUNCTION(ListUniqueFun),
@@ -309,6 +310,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneHourFun),
 	DUCKDB_SCALAR_FUNCTION_SET(TimezoneMinuteFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ToBaseFun),
 	DUCKDB_SCALAR_FUNCTION(ToBase64Fun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(ToBinaryFun),
 	DUCKDB_SCALAR_FUNCTION(ToDaysFun),
@@ -339,6 +341,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_AGGREGATE_FUNCTION(VarPopFun),
 	DUCKDB_AGGREGATE_FUNCTION(VarSampFun),
 	DUCKDB_AGGREGATE_FUNCTION_ALIAS(VarianceFun),
+	DUCKDB_SCALAR_FUNCTION(VectorTypeFun),
 	DUCKDB_SCALAR_FUNCTION(VersionFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(WeekDayFun),

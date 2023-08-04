@@ -394,6 +394,7 @@ struct ListValue {
 struct UnionValue {
 	DUCKDB_API static const Value &GetValue(const Value &value);
 	DUCKDB_API static uint8_t GetTag(const Value &value);
+	DUCKDB_API static const LogicalType &GetType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

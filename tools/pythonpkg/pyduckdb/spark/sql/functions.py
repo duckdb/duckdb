@@ -1,23 +1,15 @@
 from .column import Column
-from typing import (
-    Any
-)
+from typing import Any
 
 import duckdb
 
-from duckdb import (
-    CaseExpression,
-    ConstantExpression,
-    ColumnExpression,
-    FunctionExpression,
-    Expression
-)
-from ._typing import (
-	ColumnOrName
-)
+from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
+from ._typing import ColumnOrName
+
 
 def col(column: str):
     return Column(ColumnExpression(column))
+
 
 def when(condition: "Column", value: Any) -> Column:
     if not isinstance(condition, Column):
@@ -26,20 +18,26 @@ def when(condition: "Column", value: Any) -> Column:
     expr = CaseExpression(condition.expr, v)
     return Column(expr)
 
+
 def _inner_expr_or_val(val):
     return val.expr if isinstance(val, Column) else val
+
 
 def struct(*cols: Column) -> Column:
     return Column(FunctionExpression('struct_pack', *[_inner_expr_or_val(x) for x in cols]))
 
+
 def lit(col: Any) -> Column:
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
 
+
 def _invoke_function(function: str, *arguments):
-	return Column(FunctionExpression(function, *arguments))
+    return Column(FunctionExpression(function, *arguments))
+
 
 def _to_column(col: ColumnOrName) -> Column:
-	return col.expr if isinstance(col, Column) else ColumnExpression(col)
+    return col.expr if isinstance(col, Column) else ColumnExpression(col)
+
 
 def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
     r"""Replace all substrings of the specified string value that match regexp with rep.
@@ -53,4 +51,3 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     [Row(d='-----')]
     """
     return _invoke_function("regexp_replace", _to_column(str), pattern, replacement)
-
