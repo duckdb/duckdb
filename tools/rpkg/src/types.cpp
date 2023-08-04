@@ -8,6 +8,26 @@
 
 using namespace duckdb;
 
+RType::RType() : id_(RTypeId::UNKNOWN) {
+}
+
+RType::RType(RTypeId id) : id_(id) {
+}
+
+RType::RType(const RType &other) : id_(other.id_) {
+}
+
+RType::RType(RType &&other) noexcept : id_(other.id_) {
+}
+
+RTypeId RType::id() const {
+	return id_;
+}
+
+bool RType::operator==(const RType &rhs) const {
+	return id_ == rhs.id_;
+}
+
 RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;

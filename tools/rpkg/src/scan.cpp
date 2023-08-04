@@ -80,9 +80,10 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		data_ptr_t coldata_ptr = nullptr;
 
 		names.push_back(df_names[col_idx]);
-		rtypes.push_back(RApiTypes::DetectRType(coldata, integer64));
+		auto rtype = RApiTypes::DetectRType(coldata, integer64);
+		rtypes.push_back(rtype);
 
-		switch (rtypes[col_idx]) {
+		switch (rtype.id()) {
 		case RType::LOGICAL:
 			duckdb_col_type = LogicalType::BOOLEAN;
 			coldata_ptr = (data_ptr_t)LOGICAL_POINTER(coldata);
@@ -249,7 +250,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		}
 
 		auto coldata_ptr = bind_data.data_ptrs[src_df_col_idx];
-		switch (bind_data.rtypes[src_df_col_idx]) {
+		switch (bind_data.rtypes[src_df_col_idx].id()) {
 		case RType::LOGICAL: {
 			auto data_ptr = (int *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);

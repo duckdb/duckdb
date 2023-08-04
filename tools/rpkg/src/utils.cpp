@@ -99,7 +99,7 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 
 Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	auto rtype = RApiTypes::DetectRType(valsexp, false); // TODO
-	switch (rtype) {
+	switch (rtype.id()) {
 	case RType::LOGICAL: {
 		auto lgl_val = INTEGER_POINTER(valsexp)[idx];
 		return RBooleanType::IsNull(lgl_val) ? Value(LogicalType::BOOLEAN) : Value::BOOLEAN(lgl_val);

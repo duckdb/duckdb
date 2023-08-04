@@ -16,7 +16,7 @@ struct DuckDBAltrepListEntryWrapper {
 	duckdb::unsafe_unique_array<data_t> data;
 };
 
-enum class RType {
+enum class RTypeId {
 	UNKNOWN,
 	LOGICAL,
 	INTEGER,
@@ -39,6 +39,57 @@ enum class RType {
 	INTEGER64,
 	LIST_OF_NULLS,
 	BLOB,
+};
+
+struct RType {
+	RType();
+	RType(RTypeId id); // NOLINT: Allow implicit conversion from `RTypeId`
+	RType(const RType &other);
+	RType(RType &&other) noexcept;
+
+	RTypeId id() const;
+
+	// copy assignment
+	inline RType &operator=(const RType &other) {
+		id_ = other.id_;
+		return *this;
+	}
+	// move assignment
+	inline RType &operator=(RType &&other) noexcept {
+		id_ = other.id_;
+		return *this;
+	}
+
+	bool operator==(const RType &rhs) const;
+	inline bool operator!=(const RType &rhs) const {
+		return !(*this == rhs);
+	}
+
+	static constexpr const RTypeId UNKNOWN = RTypeId::UNKNOWN;
+	static constexpr const RTypeId LOGICAL = RTypeId::LOGICAL;
+	static constexpr const RTypeId INTEGER = RTypeId::INTEGER;
+	static constexpr const RTypeId NUMERIC = RTypeId::NUMERIC;
+	static constexpr const RTypeId STRING = RTypeId::STRING;
+	static constexpr const RTypeId FACTOR = RTypeId::FACTOR;
+	static constexpr const RTypeId DATE = RTypeId::DATE;
+	static constexpr const RTypeId DATE_INTEGER = RTypeId::DATE_INTEGER;
+	static constexpr const RTypeId TIMESTAMP = RTypeId::TIMESTAMP;
+	static constexpr const RTypeId TIME_SECONDS = RTypeId::TIME_SECONDS;
+	static constexpr const RTypeId TIME_MINUTES = RTypeId::TIME_MINUTES;
+	static constexpr const RTypeId TIME_HOURS = RTypeId::TIME_HOURS;
+	static constexpr const RTypeId TIME_DAYS = RTypeId::TIME_DAYS;
+	static constexpr const RTypeId TIME_WEEKS = RTypeId::TIME_WEEKS;
+	static constexpr const RTypeId TIME_SECONDS_INTEGER = RTypeId::TIME_SECONDS_INTEGER;
+	static constexpr const RTypeId TIME_MINUTES_INTEGER = RTypeId::TIME_MINUTES_INTEGER;
+	static constexpr const RTypeId TIME_HOURS_INTEGER = RTypeId::TIME_HOURS_INTEGER;
+	static constexpr const RTypeId TIME_DAYS_INTEGER = RTypeId::TIME_DAYS_INTEGER;
+	static constexpr const RTypeId TIME_WEEKS_INTEGER = RTypeId::TIME_WEEKS_INTEGER;
+	static constexpr const RTypeId INTEGER64 = RTypeId::INTEGER64;
+	static constexpr const RTypeId LIST_OF_NULLS = RTypeId::LIST_OF_NULLS;
+	static constexpr const RTypeId BLOB = RTypeId::BLOB;
+
+private:
+	RTypeId id_;
 };
 
 struct RApiTypes {
