@@ -445,3 +445,32 @@ class TestReadCSV(object):
         rel.show()
         res = rel.fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
+
+    def test_read_csv_combined(self):
+        CSV_FILE=TestFile('stress_test.csv')
+        COLUMNS= {
+            'result': 'VARCHAR',
+            'table': 'BIGINT',
+            '_time': 'TIMESTAMPTZ',
+            '_measurement': 'VARCHAR',
+            'bench_test': 'VARCHAR',
+            'flight_id': 'VARCHAR',
+            'flight_status': 'VARCHAR',
+            'log_level': 'VARCHAR',
+            'sys_uuid': 'VARCHAR',
+            'message': 'VARCHAR'
+        }
+
+        rel = duckdb.read_csv(CSV_FILE, header=True, skiprows=1, delimiter=",", quotechar='"', escapechar="\\", dtype=COLUMNS)
+        res = rel.fetchall()
+
+        rel2 = duckdb.sql(rel.sql_query())
+        res2 = rel2.fetchall()
+
+        # Assert that the results are the same
+        assert res == res2
+
+        # And assert that the columns and types of the relations are the same
+        assert rel.columns == rel2.columns
+        assert rel.types == rel2.types
+
