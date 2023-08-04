@@ -111,8 +111,9 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
-		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
-		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
+		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT 
+			&& child_entry.GetType().InternalType() != PhysicalType::ARRAY 
+			&& state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
 			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
 		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
