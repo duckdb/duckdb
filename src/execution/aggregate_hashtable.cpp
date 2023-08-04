@@ -40,8 +40,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
-      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)),
-      is_finalized(false) {
+      radix_bits(radix_bits), count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -167,7 +166,6 @@ void GroupedAggregateHashTable::SetRadixBits(idx_t radix_bits_p) {
 }
 
 void GroupedAggregateHashTable::Resize(idx_t size) {
-	D_ASSERT(!is_finalized);
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 	D_ASSERT(IsPowerOfTwo(size));
 	if (size < capacity) {
@@ -236,7 +234,6 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 
 idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload,
                                           const unsafe_vector<idx_t> &filter) {
-	D_ASSERT(!is_finalized);
 	if (groups.size() == 0) {
 		return 0;
 	}
@@ -308,7 +305,6 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
                                                             Vector &addresses_v, SelectionVector &new_groups_out) {
-	D_ASSERT(!is_finalized);
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
 	D_ASSERT(state.ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -509,8 +505,6 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 }
 
 void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
-	D_ASSERT(!is_finalized);
-
 	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout.GetAggrWidth());
 	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout.GetDataWidth());
 	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout.GetRowWidth());

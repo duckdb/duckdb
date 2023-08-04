@@ -185,9 +185,6 @@ private:
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
-	//! Whether this HT has been finalized (pointer table and data blocks have been unpinned)
-	bool is_finalized;
-
 private:
 	//! Disabled the copy constructor
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
