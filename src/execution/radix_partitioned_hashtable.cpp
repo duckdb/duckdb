@@ -71,7 +71,7 @@ unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(Client
 struct RadixHTConfig {
 public:
 	explicit RadixHTConfig(ClientContext &context)
-	    : sink_radix_bits(INITIAL_SINK_RADIX_BITS), maximum_sink_radix_bits(MaximumSinkRadixBits(context)),
+	    : sink_radix_bits(InitialSinkRadixBits(context)), maximum_sink_radix_bits(MaximumSinkRadixBits(context)),
 	      external_radix_bits(ExternalRadixBits(maximum_sink_radix_bits)), sink_capacity(SinkCapacity(context)) {
 	}
 
@@ -79,7 +79,7 @@ public:
 		SetRadixBitsInternal(MinValue(radix_bits_p, maximum_sink_radix_bits));
 	}
 
-	void SetRadixBitsExternal() {
+	void SetRadixBitsToExternal() {
 		SetRadixBitsInternal(external_radix_bits);
 	}
 
@@ -99,13 +99,18 @@ private:
 		} while (!std::atomic_compare_exchange_weak(&sink_radix_bits, &current, radix_bits_p));
 	}
 
+	static idx_t InitialSinkRadixBits(ClientContext &context) {
+		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_INITIAL_SINK_RADIX_BITS);
+	}
+
 	static idx_t MaximumSinkRadixBits(ClientContext &context) {
 		const idx_t active_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_SINK_RADIX_BITS);
+		return MinValue(RadixPartitioning::RadixBits(NextPowerOfTwo(active_threads)), MAXIMUM_FINAL_SINK_RADIX_BITS);
 	}
 
 	static idx_t ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p) {
-		return MinValue(maximum_sink_radix_bits_p + EXTERNAL_RADIX_BITS_INCREMENT, MAXIMUM_SINK_RADIX_BITS);
+		return MinValue(maximum_sink_radix_bits_p + EXTERNAL_RADIX_BITS_INCREMENT, MAXIMUM_FINAL_SINK_RADIX_BITS);
 	}
 
 	static idx_t SinkCapacity(ClientContext &context) {
@@ -134,9 +139,9 @@ private:
 	static constexpr const idx_t L3_CACHE_SIZE = 1572864 / 2;
 
 	//! Sink radix bits to initialize with
-	static constexpr const idx_t INITIAL_SINK_RADIX_BITS = 3;
+	static constexpr const idx_t MAXIMUM_INITIAL_SINK_RADIX_BITS = 3;
 	//! Maximum Sink radix bits (independent of threads)
-	static constexpr const idx_t MAXIMUM_SINK_RADIX_BITS = 7;
+	static constexpr const idx_t MAXIMUM_FINAL_SINK_RADIX_BITS = 7;
 	//! By how many radix bits to increment if we go external
 	static constexpr const idx_t EXTERNAL_RADIX_BITS_INCREMENT = 3;
 
@@ -301,7 +306,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
 		// We're approaching the memory limit, unpin the data
 		gstate.external = true;
-		gstate.config.SetRadixBitsExternal();
+		gstate.config.SetRadixBitsToExternal();
 
 		if (!lstate.abandoned_data) {
 			lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
