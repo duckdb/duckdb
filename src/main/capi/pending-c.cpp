@@ -86,6 +86,9 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	switch (return_value) {
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
+	case PendingExecutionResult::ALL_TASKS_BLOCKED:
+		// TODO: for now we don't expose this in the C API, but we probably want to?
+		return DUCKDB_PENDING_RESULT_NOT_READY;
 	case PendingExecutionResult::RESULT_NOT_READY:
 		return DUCKDB_PENDING_RESULT_NOT_READY;
 	default:

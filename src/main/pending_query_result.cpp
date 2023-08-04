@@ -55,7 +55,17 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	while (ExecuteTaskInternal(lock) == PendingExecutionResult::RESULT_NOT_READY) {
+	while (true) {
+		auto res = ExecuteTaskInternal(lock);
+		if (res == PendingExecutionResult::RESULT_NOT_READY) {
+			continue;
+		}
+		if (res == PendingExecutionResult::ALL_TASKS_BLOCKED) {
+			// TODO: This is a special case where no useful work can be done, this can be used by to prevent
+			//  unnecessary busy waiting, for now we just busy wait.
+			continue;
+		}
+		break;
 	}
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);
