@@ -14,6 +14,24 @@ def TestFile(name):
     return filename
 
 
+@pytest.fixture
+def create_temp_csv(tmp_path):
+    # Create temporary CSV files
+    file1_content = """1
+2
+3"""
+    file2_content = """4
+5
+6"""
+    file1_path = tmp_path / "file1.csv"
+    file2_path = tmp_path / "file2.csv"
+
+    file1_path.write_text(file1_content)
+    file2_path.write_text(file2_content)
+
+    return file1_path, file2_path
+
+
 class TestReadCSV(object):
     def test_using_connection_wrapper(self):
         rel = duckdb.read_csv(TestFile('category.csv'))
@@ -418,3 +436,12 @@ class TestReadCSV(object):
         assert CountedObject.instance_count == 0
         scoped_objects(duckdb_cursor)
         assert CountedObject.instance_count == 0
+
+    def test_read_csv_glob(self, tmp_path, create_temp_csv):
+        file1_path, file2_path = create_temp_csv
+
+        # Use the temporary file paths to read CSV files
+        rel = duckdb.read_csv(f'{tmp_path}/file*.csv')
+        rel.show()
+        res = rel.fetchall()
+        assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
