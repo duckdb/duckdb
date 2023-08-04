@@ -887,6 +887,9 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		throw InternalException("Cannot S3 Glob without FileOpener");
 	}
 
+	// Set file path in the opener
+	opener->file_path = glob_pattern;
+
 	// Trim any query parameters from the string
 	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
 
