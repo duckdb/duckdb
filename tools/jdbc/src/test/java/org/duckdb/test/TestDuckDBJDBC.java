@@ -3324,7 +3324,12 @@ public class TestDuckDBJDBC {
 
             DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) connection);
 
-            ResultSet rs = stmt.executeQuery("SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type");
+            try (ResultSet rs = stmt.executeQuery(
+                     "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
+                rs.next();
+                assertEquals(rs.getObject(1), "{world=bar, hello=foo}");
+                assertEquals(rs.getObject(2), "\\xAA");
+            }
         }
     }
 
@@ -3332,18 +3337,22 @@ public class TestDuckDBJDBC {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement();) {
             DuckDBNative.duckdb_jdbc_create_extension_type((DuckDBConnection) conn);
 
-            stmt.execute("CREATE TABLE test (foo test_type);");
-            stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'});");
+            stmt.execute("CREATE TABLE test (foo test_type, bar byte_test_type);");
+            stmt.execute("INSERT INTO test VALUES ({\"hello\": 'foo', \"world\": 'bar'}, '\\xAA');");
 
             try (ResultSet rs = stmt.executeQuery("SELECT * FROM test")) {
                 ResultSetMetaData meta = rs.getMetaData();
-                assertEquals(meta.getColumnCount(), 1);
+                assertEquals(meta.getColumnCount(), 2);
+
                 assertEquals(meta.getColumnName(1), "foo");
                 assertEquals(meta.getColumnTypeName(1), "test_type");
                 assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+                assertEquals(meta.getColumnClassName(1), "java.lang.String");
 
-                assertTrue(rs.next());
-                assertEquals(rs.getObject(1), "{world=bar, hello=foo}");
+                assertEquals(meta.getColumnName(2), "bar");
+                assertEquals(meta.getColumnTypeName(2), "byte_test_type");
+                assertEquals(meta.getColumnType(2), Types.JAVA_OBJECT);
+                assertEquals(meta.getColumnClassName(2), "java.lang.String");
             }
         }
     }

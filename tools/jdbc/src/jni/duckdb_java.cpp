@@ -1214,5 +1214,10 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extens
 	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
 	catalog.CreateType(*connection->context, info);
 
+	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
+	byte_test_type_type.SetAlias("byte_test_type");
+	CreateTypeInfo byte_test_type("byte_test_type", byte_test_type_type);
+	catalog.CreateType(*connection->context, byte_test_type);
+
 	connection->Commit();
 }
