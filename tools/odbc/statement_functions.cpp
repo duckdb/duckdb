@@ -223,10 +223,11 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 	memcpy((char *)target_value_ptr, val_str.c_str() + last_len, out_len);
 
 	if (out_len == (size_t)buffer_length) {
-		ret = SQL_SUCCESS_WITH_INFO;
+		ret = duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
+		                                  "Not all the data for the specified column could be retrieved, the length of the data remaining in the specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.", duckdb::SQLStateType::ST_01004,
+		                                  hstmt->dbc->GetDataSourceName());
 		out_len = buffer_length - 1;
 		last_len += out_len;
-		hstmt->error_messages.emplace_back("SQLGetData returned with info.");
 	} else {
 		last_len = 0;
 	}
@@ -318,8 +319,9 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			if ((out_len % 2) != 0) {
 				out_len -= 1;
 			}
-			ret = SQL_SUCCESS_WITH_INFO;
-			hstmt->error_messages.emplace_back("SQLGetData returned with info.");
+			ret = duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
+			                            "Not all the data for the specified column could be retrieved, the length of the data remaining in the specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.", duckdb::SQLStateType::ST_01004,
+			                            hstmt->dbc->GetDataSourceName());
 		}
 		memcpy((char *)target_value_ptr, (char *)utf16_str.c_str(), out_len);
 
@@ -787,8 +789,8 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 	}
 	// TODO other types
 	default:
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", "Unsupported type",
-		                                   SQLStateType::ST_07006, hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", "Data type not supported",
+		                                   SQLStateType::ST_HY004, hstmt->dbc->GetDataSourceName());
 	} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 }
 
@@ -825,13 +827,13 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 	}
 
 	if (input_output_type != SQL_PARAM_INPUT) {
-		hstmt->error_messages.emplace_back("Output parameters are not supported.");
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Only SQL_PARAM_INPUT is supported.",
+		                           SQLStateType::ST_HYC00, hstmt->dbc->GetDataSourceName());
 	}
 	/* check input parameters */
 	if (parameter_number < 1) {
-		hstmt->error_messages.emplace_back("Invalid descriptor index.");
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Invalid descriptor index.",
+		                           SQLStateType::ST_07009, hstmt->dbc->GetDataSourceName());
 	}
 	idx_t param_idx = parameter_number - 1;
 
@@ -850,8 +852,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 
 	if (ipd_record->SetSqlDataType(parameter_type) == SQL_ERROR ||
 	    apd_record->SetSqlDataType(value_type) == SQL_ERROR) {
-		hstmt->error_messages.emplace_back("Error while binding parameter/value type.");
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Invalid data type.",
+		                           SQLStateType::ST_HY004, hstmt->dbc->GetDataSourceName());
 	}
 
 	apd_record->sql_desc_data_ptr = parameter_value_ptr;

@@ -33,8 +33,6 @@ struct OdbcHandle {
 	OdbcHandle &operator=(const OdbcHandle &other);
 
 	OdbcHandleType type;
-	// appending all error messages into it
-	vector<std::string> error_messages;
 
 	duckdb::unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
@@ -151,6 +149,7 @@ public:
 	DescRecord *GetDescRecord(idx_t param_idx);
 	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
 	                       SQLINTEGER buffer_length);
+
 	void Clear();
 	void Reset();
 	void Copy(OdbcHandleDesc &other);

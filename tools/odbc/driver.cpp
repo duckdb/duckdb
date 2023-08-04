@@ -114,8 +114,9 @@ static SQLUINTEGER ExtractMajorVersion(SQLPOINTER value_ptr) {
 SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                 SQLINTEGER string_length) {
 	duckdb::OdbcHandleEnv *env = nullptr;
-	if (ConvertEnvironment(environment_handle, env) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	switch (attribute) {
@@ -128,8 +129,9 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 			// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 			return SQL_SUCCESS;
 		default:
-			env->error_messages.emplace_back("ODBC version not supported.");
-			return SQL_ERROR;
+			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
+			                                   "ODBC version not supported: " + std::to_string(major_version),
+			                                   SQLStateType::ST_HY092, "");
 		}
 	}
 	case SQL_ATTR_CONNECTION_POOLING:
@@ -144,21 +146,25 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		default:
 			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
 			                                   "Connection pooling not supported: " + std::to_string(attribute),
-			                                   SQLStateType::ST_HY092, "");
+			                                   SQLStateType::ST_HYC00, "");
 		}
 	case SQL_ATTR_CP_MATCH:
-		env->error_messages.emplace_back("Optional feature not supported.");
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+		                                   "Optional feature not implemented.",
+		                                   SQLStateType::ST_HY092, "");
 	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */
 		switch (*(SQLINTEGER *)value_ptr) {
 		case SQL_TRUE:
 			return SQL_SUCCESS;
 		default:
-			env->error_messages.emplace_back("Optional feature not supported.");
-			return SQL_ERROR;
+			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+			                                   "Optional feature not implemented.",
+			                                   SQLStateType::ST_HY092, "");
 		}
 	default:
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
+		                                   "Invalid attribute value",
+		                                   SQLStateType::ST_HY024, "");
 	}
 }
 
@@ -183,8 +189,9 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		*(SQLINTEGER *)value_ptr = SQL_TRUE;
 		break;
 	case SQL_ATTR_CP_MATCH:
-		env->error_messages.emplace_back("Optional feature not supported.");
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLGetEnvAttr",
+		                                   "Optional feature not implemented.",
+		                                   SQLStateType::ST_HYC00, "");
 	}
 	return SQL_SUCCESS;
 }
@@ -503,16 +510,24 @@ SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQL
 SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *server_name,
                                  SQLSMALLINT buffer_length1, SQLSMALLINT *name_length1_ptr, SQLCHAR *description,
                                  SQLSMALLINT buffer_length2, SQLSMALLINT *name_length2_ptr) {
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
-	env->error_messages.emplace_back("Driver Manager only function");
-	return SQL_ERROR;
+	duckdb::OdbcHandleEnv *env = nullptr;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDataSources", "Driver Manager only function", SQLStateType::ST_HY000, "");
 }
 
 SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
                              SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr,
                              SQLCHAR *driver_attributes, SQLSMALLINT buffer_length2,
                              SQLSMALLINT *attributes_length_ptr) {
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
-	env->error_messages.emplace_back("Driver Manager only function");
-	return SQL_ERROR;
+	duckdb::OdbcHandleEnv *env = nullptr;
+	SQLRETURN ret = ConvertEnvironment(environment_handle, env);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
+
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDrivers", "Driver Manager only function", SQLStateType::ST_HY000, "");
 }
