@@ -229,8 +229,9 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	// verify numeric info value type and null value pointer
 	if (duckdb::ApiInfo::IsNumericInfoType(info_type) && info_value_ptr == nullptr) {
 		duckdb::OdbcHandleDbc *dbc = nullptr;
-		if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-			return SQL_ERROR;
+		SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+		if (ret != SQL_SUCCESS) {
+			return ret;
 		}
 
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLGetInfo",
@@ -487,10 +488,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_DATA_SOURCE_NAME: {
-		duckdb::OdbcHandleDbc *dbc = nullptr;
-		if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-			return SQL_ERROR;
-		}
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
 
 		duckdb::OdbcUtils::WriteString(dbc->GetDataSourceName(), (SQLCHAR *)info_value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -501,10 +503,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_DATABASE_NAME: {
-		duckdb::OdbcHandleDbc *dbc = nullptr;
-		if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-			return SQL_ERROR;
-		}
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
 
 		std::string db_name = dbc->GetDatabaseName();
 		if (db_name == ":memory:") {
@@ -534,20 +537,24 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	case SQL_DBMS_VER: {
 		SQLHDBC stmt;
 
-		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &stmt))) {
+		SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &stmt);
+		if (!SQL_SUCCEEDED(ret)) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS))) {
-			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(SQLFetch(stmt))) {
-			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
-			return SQL_ERROR;
+			return ret;
 		}
 
-		SQLRETURN ret;
+		ret = SQLExecDirect(stmt, (SQLCHAR *)"SELECT library_version FROM pragma_version()", SQL_NTS);
+		if (!SQL_SUCCEEDED(ret)) {
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
+			return ret;
+		}
+
+		ret = SQLFetch(stmt);
+		if (!SQL_SUCCEEDED(ret)) {
+			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
+			return ret;
+		}
+
 		if (string_length_ptr) {
 			SQLLEN len_ptr;
 			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, &len_ptr);
@@ -557,7 +564,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		}
 		if (!SQL_SUCCEEDED(ret)) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
-			return SQL_ERROR;
+			return ret;
 		}
 
 		duckdb::FreeHandle(SQL_HANDLE_STMT, stmt);
@@ -712,26 +719,33 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 	case SQL_KEYWORDS: {
 		SQLHSTMT hstmt;
 
-		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &hstmt))) {
+		SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &hstmt);
+		if (!SQL_SUCCEEDED(ret)) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
-			return SQL_ERROR;
+			return ret;
 		}
-		if (!SQL_SUCCEEDED(SQLExecDirect(
-		        hstmt, (SQLCHAR *)"SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category='reserved'",
-		        SQL_NTS))) {
+		ret = SQLExecDirect(
+		    hstmt, (SQLCHAR *)"SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category='reserved'",
+		    SQL_NTS);
+		if (!SQL_SUCCEEDED(ret)) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
-			return SQL_ERROR;
+			return ret;
 		}
 
-		SQLRETURN rc;
 		const size_t keyword_size = 100;
 		SQLCHAR *keyword = (SQLCHAR *)malloc(sizeof(SQLCHAR) * keyword_size);
 		std::string reserved_keywords;
-		while ((rc = SQLFetch(hstmt)) != SQL_NO_DATA) {
-			if (!SQL_SUCCEEDED(SQLGetData(hstmt, 1, SQL_C_CHAR, keyword, keyword_size, nullptr))) {
+		while ((ret = SQLFetch(hstmt)) != SQL_NO_DATA) {
+			if (!SQL_SUCCEEDED(ret)) {
 				duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
 				free(keyword);
-				return SQL_ERROR;
+				return ret;
+			}
+			ret = SQLGetData(hstmt, 1, SQL_C_CHAR, keyword, keyword_size, nullptr);
+			if (!SQL_SUCCEEDED(ret)) {
+				duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
+				free(keyword);
+				return ret;
 			}
 			reserved_keywords += std::string((char *)keyword) + ",";
 		}
@@ -1008,10 +1022,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	default:
-		duckdb::OdbcHandleDbc *dbc = nullptr;
-		if (ConvertConnection(connection_handle, dbc) != SQL_SUCCESS) {
-			return SQL_ERROR;
-		}
+	duckdb::OdbcHandleDbc *dbc = nullptr;
+	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
+	}
 
 		// return SQL_SUCCESS, but with a record message
 		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", "Unrecognized attribute.",
@@ -1033,18 +1048,21 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
  */
 SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
 	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(static_cast<duckdb::OdbcHandle *>(handle), SQL_ERROR, "SQLEndTran", "Invalid handle type, must be SQL_HANDLE_DBC.",
+		                                   SQLStateType::INVALID_ATTR_OPTION_ID, "");
 	}
 
 	duckdb::OdbcHandleDbc *dbc = nullptr;
-	if (ConvertConnection(handle, dbc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertConnection(handle, dbc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	switch (completion_type) {
 	case SQL_COMMIT:
 		// it needs to materialize the result set because ODBC can still fetch after a commit
 		if (dbc->MaterializeResult() != SQL_SUCCESS) {
+			// TODO add a proper error message
 			// for some reason we couldn't materialize the result set
 			return SQL_ERROR;
 		}
@@ -1063,7 +1081,8 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 			                                   dbc->GetDataSourceName());
 		}
 	default:
-		return SQL_ERROR;
+		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", "Invalid completion type.",
+		                                   SQLStateType::INVALID_TRANSACTION_OP_CODE, dbc->GetDataSourceName());
 	}
 }
 

@@ -21,10 +21,12 @@ SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
                                 SQLSMALLINT *sub_type_ptr, SQLLEN *length_ptr, SQLSMALLINT *precision_ptr,
                                 SQLSMALLINT *scale_ptr, SQLSMALLINT *nullable_ptr) {
 	duckdb::OdbcHandleDesc *desc = nullptr;
-	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertDescriptor(descriptor_handle, desc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
+	// TODO: per the docs record number 0 is the bookmark record, so we should support that
 	if (rec_number < 1) {
 		return SQL_ERROR;
 	}
@@ -67,8 +69,9 @@ SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
                                 SQLSMALLINT sub_type, SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale,
                                 SQLPOINTER data_ptr, SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
 	duckdb::OdbcHandleDesc *desc = nullptr;
-	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertDescriptor(descriptor_handle, desc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (desc->IsIRD()) {
@@ -114,8 +117,9 @@ SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
 SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
                                   SQLPOINTER value_ptr, SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	duckdb::OdbcHandleDesc *desc = nullptr;
-	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertDescriptor(descriptor_handle, desc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (duckdb::ApiInfo::IsNumericDescriptorField(field_identifier) && value_ptr == nullptr) {
@@ -462,8 +466,9 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
                                   SQLPOINTER value_ptr, SQLINTEGER buffer_length) {
 	duckdb::OdbcHandleDesc *desc = nullptr;
-	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertDescriptor(descriptor_handle, desc);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	return desc->SetDescField(rec_number, field_identifier, value_ptr, buffer_length);
