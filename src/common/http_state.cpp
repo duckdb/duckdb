@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile>& file_p) {
+CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
 	// If the file was not yet initialized, we need to grab a lock.
 	if (!file_p->initialized) {
 		lock = make_uniq<lock_guard<mutex>>(file_p->lock);

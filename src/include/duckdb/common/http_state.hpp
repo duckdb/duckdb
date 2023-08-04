@@ -42,7 +42,7 @@ private:
 //! Handle to a CachedFile
 class CachedFileHandle {
 public:
-	explicit CachedFileHandle(shared_ptr<CachedFile>& file_p);
+	explicit CachedFileHandle(shared_ptr<CachedFile> &file_p);
 
 	//! allocate a buffer for the file
 	void AllocateBuffer(idx_t size);
