@@ -39,6 +39,10 @@ enum class RTypeId {
 	INTEGER64,
 	LIST_OF_NULLS,
 	BLOB,
+
+	// No RType equivalent
+	BYTE,
+	LIST,
 };
 
 struct RType {
@@ -52,11 +56,13 @@ struct RType {
 	// copy assignment
 	inline RType &operator=(const RType &other) {
 		id_ = other.id_;
+		aux_ = other.aux_;
 		return *this;
 	}
 	// move assignment
 	inline RType &operator=(RType &&other) noexcept {
 		id_ = other.id_;
+		std::swap(aux_, other.aux_);
 		return *this;
 	}
 
@@ -88,8 +94,12 @@ struct RType {
 	static constexpr const RTypeId LIST_OF_NULLS = RTypeId::LIST_OF_NULLS;
 	static constexpr const RTypeId BLOB = RTypeId::BLOB;
 
+	static RType LIST(const RType &child);
+	RType GetListChildType() const;
+
 private:
 	RTypeId id_;
+	child_list_t<RType> aux_;
 };
 
 struct RApiTypes {

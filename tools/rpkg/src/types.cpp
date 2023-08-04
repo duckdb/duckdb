@@ -14,10 +14,10 @@ RType::RType() : id_(RTypeId::UNKNOWN) {
 RType::RType(RTypeId id) : id_(id) {
 }
 
-RType::RType(const RType &other) : id_(other.id_) {
+RType::RType(const RType &other) : id_(other.id_), aux_(other.aux_) {
 }
 
-RType::RType(RType &&other) noexcept : id_(other.id_) {
+RType::RType(RType &&other) noexcept : id_(other.id_), aux_(std::move(other.aux_)) {
 }
 
 RTypeId RType::id() const {
@@ -25,7 +25,18 @@ RTypeId RType::id() const {
 }
 
 bool RType::operator==(const RType &rhs) const {
-	return id_ == rhs.id_;
+	return id_ == rhs.id_ && aux_ == rhs.aux_;
+}
+
+RType RType::LIST(const RType &child) {
+	RType out = RType(RTypeId::LIST);
+	out.aux_.push_back(std::make_pair("", child));
+	return out;
+}
+
+RType RType::GetListChildType() const {
+	D_ASSERT(id_ == RTypeId::LIST);
+	return aux_.front().second;
 }
 
 RType RApiTypes::DetectRType(SEXP v, bool integer64) {
@@ -79,6 +90,8 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		return RType::LOGICAL;
 	} else if (TYPEOF(v) == INTSXP) {
 		return RType::INTEGER;
+	} else if (TYPEOF(v) == RAWSXP) {
+		return RTypeId::BYTE;
 	} else if (TYPEOF(v) == REALSXP) {
 		if (integer64 && Rf_inherits(v, "integer64")) {
 			return RType::INTEGER64;
@@ -91,30 +104,40 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 			return RType::BLOB;
 		}
 
-		R_xlen_t len = Rf_length(v);
-		R_xlen_t i = 0;
-		for (; i < len; ++i) {
-			auto elt = VECTOR_ELT(v, i);
-			if (TYPEOF(elt) == RAWSXP) {
-				break;
+		if (Rf_inherits(v, "data.frame")) {
+			return RType::UNKNOWN;
+		} else {
+			R_xlen_t len = Rf_xlength(v);
+			R_xlen_t i = 0;
+			auto type = RType();
+			for (; i < len; ++i) {
+				auto elt = VECTOR_ELT(v, i);
+				if (elt != R_NilValue) {
+					type = DetectRType(elt, integer64);
+					break;
+				}
 			}
-			if (elt != R_NilValue) {
-				return RType::UNKNOWN;
+
+			if (i == len) {
+				return RType::LIST_OF_NULLS;
 			}
-		}
 
-		if (i == len) {
-			return RType::LIST_OF_NULLS;
-		}
-
-		for (; i < len; ++i) {
-			auto elt = VECTOR_ELT(v, i);
-			if (TYPEOF(elt) != RAWSXP && elt != R_NilValue) {
-				return RType::UNKNOWN;
+			for (; i < len; ++i) {
+				auto elt = VECTOR_ELT(v, i);
+				if (elt != R_NilValue) {
+					auto new_type = DetectRType(elt, integer64);
+					if (new_type != type) {
+						return RType::UNKNOWN;
+					}
+				}
 			}
-		}
 
-		return RType::BLOB;
+			if (type == RTypeId::BYTE) {
+				return RType::BLOB;
+			}
+
+			return RType::LIST(type);
+		}
 	}
 	return RType::UNKNOWN;
 }
