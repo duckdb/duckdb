@@ -12,7 +12,8 @@ public class DuckDBAppender implements AutoCloseable {
         if (con == null) {
             throw new SQLException("Invalid connection");
         }
-        appender_ref = DuckDBNative.duckdb_jdbc_create_appender(con.conn_ref, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));
+        appender_ref = DuckDBNative.duckdb_jdbc_create_appender(
+            con.conn_ref, schemaName.getBytes(StandardCharsets.UTF_8), tableName.getBytes(StandardCharsets.UTF_8));
     }
 
     public void beginRow() throws SQLException {
@@ -73,5 +74,4 @@ public class DuckDBAppender implements AutoCloseable {
             appender_ref = null;
         }
     }
-
 }

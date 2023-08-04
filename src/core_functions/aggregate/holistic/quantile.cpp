@@ -37,8 +37,6 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
 
-using FrameBounds = std::pair<idx_t, idx_t>;
-
 template <typename SAVE_TYPE>
 struct QuantileState {
 	using SaveType = SAVE_TYPE;
@@ -89,7 +87,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	idx_t j = 0;
 
 	//  Copy overlapping indices
-	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
+	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
 		auto idx = index[p];
 
 		//  Shift down into any hole
@@ -98,7 +96,7 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 		}
 
 		//  Skip overlapping values
-		if (frame.first <= idx && idx < frame.second) {
+		if (frame.start <= idx && idx < frame.end) {
 			++j;
 		}
 	}
@@ -106,15 +104,15 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	//  Insert new indices
 	if (j > 0) {
 		// Overlap: append the new ends
-		for (auto f = frame.first; f < prev.first; ++f, ++j) {
+		for (auto f = frame.start; f < prev.start; ++f, ++j) {
 			index[j] = f;
 		}
-		for (auto f = prev.second; f < frame.second; ++f, ++j) {
+		for (auto f = prev.end; f < frame.end; ++f, ++j) {
 			index[j] = f;
 		}
 	} else {
 		//  No overlap: overwrite with new values
-		for (auto f = frame.first; f < frame.second; ++f, ++j) {
+		for (auto f = frame.start; f < frame.end; ++f, ++j) {
 			index[j] = f;
 		}
 	}
@@ -124,17 +122,17 @@ static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBou
 	D_ASSERT(index);
 
 	idx_t j = 0;
-	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
+	for (idx_t p = 0; p < (prev.end - prev.start); ++p) {
 		auto idx = index[p];
 		if (j != p) {
 			break;
 		}
 
-		if (frame.first <= idx && idx < frame.second) {
+		if (frame.start <= idx && idx < frame.end) {
 			++j;
 		}
 	}
-	index[j] = frame.second - 1;
+	index[j] = frame.end - 1;
 
 	return j;
 }
@@ -560,7 +558,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -572,11 +570,11 @@ struct QuantileScalarOperation : public QuantileOperation {
 		const auto q = bind_data.quantiles[0];
 
 		bool replace = false;
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				Interpolator<DISCRETE> interp(q, prev_pos, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {
@@ -720,7 +718,7 @@ struct QuantileListOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 
@@ -731,11 +729,11 @@ struct QuantileListOperation : public QuantileOperation {
 		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
 		// For a single element list, this reduces to the scalar case.
 		std::pair<idx_t, idx_t> replaceable {state.pos, 0};
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				for (const auto &q : bind_data.order) {
 					const auto &quantile = bind_data.quantiles[q];
 					Interpolator<DISCRETE> interp(quantile, prev_pos, false);
@@ -1062,7 +1060,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
-		state.SetPos(frame.second - frame.first);
+		state.SetPos(frame.end - frame.start);
 
 		auto index = state.w.data();
 		D_ASSERT(index);
@@ -1085,11 +1083,11 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		const float q = 0.5;
 
 		bool replace = false;
-		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.first) == included(prev.second)) {
+			if (included.AllValid() || included(prev.start) == included(prev.end)) {
 				Interpolator<false> interp(q, prev_pos, false);
 				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 				if (replace) {

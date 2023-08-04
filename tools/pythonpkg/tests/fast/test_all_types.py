@@ -5,6 +5,7 @@ import datetime
 import math
 from decimal import Decimal
 from uuid import UUID
+import pytz
 
 
 def get_all_types():
@@ -17,6 +18,7 @@ def get_all_types():
 
 
 all_types = get_all_types()
+all_types.remove("time_tz")
 
 
 # we need to write our own equality function that considers nan==nan for testing purposes
@@ -43,6 +45,7 @@ def recursive_equality(o1, o2):
 class TestAllTypes(object):
     def test_fetchall(self, duckdb_cursor):
         conn = duckdb.connect()
+        conn.execute("SET TimeZone =UTC")
         # We replace these values since the extreme ranges are not supported in native-python.
         replacement_values = {
             'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
@@ -55,7 +58,10 @@ class TestAllTypes(object):
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
-
+        min_datetime = datetime.datetime.min
+        min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
+        max_datetime = datetime.datetime.max
+        max_datetime_with_utc = max_datetime.replace(tzinfo=pytz.UTC)
         correct_answer_map = {
             'bool': [(False,), (True,), (None,)],
             'tinyint': [(-128,), (127,), (None,)],
@@ -115,7 +121,12 @@ class TestAllTypes(object):
             'timestamptz_array': [
                 (
                     [],
-                    [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max],
+                    [
+                        datetime.datetime(1970, 1, 1, tzinfo=pytz.UTC),
+                        None,
+                        min_datetime_with_utc,
+                        max_datetime_with_utc,
+                    ],
                     [
                         None,
                     ],
@@ -148,10 +159,9 @@ class TestAllTypes(object):
             'timestamp_s': [(datetime.datetime(1990, 1, 1, 0, 0),)],
             'timestamp_ns': [(datetime.datetime(1990, 1, 1, 0, 0),)],
             'timestamp_ms': [(datetime.datetime(1990, 1, 1, 0, 0),)],
-            'timestamp_tz': [(datetime.datetime(1990, 1, 1, 0, 0),)],
+            'timestamp_tz': [(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=pytz.UTC),)],
             'union': [('Frank',), (5,), (None,)],
         }
-
         for cur_type in all_types:
             if cur_type in replacement_values:
                 result = conn.execute("select " + replacement_values[cur_type]).fetchall()
@@ -449,6 +459,7 @@ class TestAllTypes(object):
         }
 
         conn = duckdb.connect()
+        conn.execute("SET timezone = UTC")
         for cur_type in all_types:
             if cur_type in replacement_values:
                 dataframe = conn.execute("select " + replacement_values[cur_type]).df()

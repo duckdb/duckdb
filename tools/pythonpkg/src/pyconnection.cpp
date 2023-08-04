@@ -203,7 +203,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "");
+	             py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none());
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -542,7 +542,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, co
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
 	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
+	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 	{
@@ -907,21 +907,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	if (alias.empty()) {
-		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
-	}
-	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
-It can only be used to run individual SELECT statements, and converts the result of that SELECT
-statement into a Relation object.
-Use duckdb.sql to run arbitrary SQL queries.)";
-	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias, const py::object &params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -930,11 +916,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, s
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
-	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT &&
+	    py::none().is(params)) {
 		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(
 		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
-	auto res = ExecuteInternal(query);
+	auto res = ExecuteInternal(query, params);
 	if (!res) {
 		return nullptr;
 	}
@@ -1104,7 +1091,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
 	auto stream_factory =
-	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->config);
+	    make_uniq<PythonTableArrowArrayStreamFactory>(arrow_object.ptr(), connection->context->GetClientProperties());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
@@ -1317,9 +1304,9 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(co
 }
 
 static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
-                            vector<unique_ptr<ParsedExpression>> &children, ClientConfig &config) {
+                            vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties) {
 	string name = "arrow_" + StringUtil::GenerateRandomName();
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), config);
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties);
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -1332,7 +1319,7 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
 }
 
-static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientConfig &config,
+static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, ClientProperties &client_properties,
                                            py::object &current_frame) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
@@ -1345,7 +1332,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 	if (DuckDBPyConnection::IsPandasDataframe(entry)) {
 		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = ArrowTableFromDataframe(entry);
-			CreateArrowScan(table, *table_function, children, config);
+			CreateArrowScan(table, *table_function, children, client_properties);
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -1356,7 +1343,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		}
 
 	} else if (DuckDBPyConnection::IsAcceptedArrowObject(entry)) {
-		CreateArrowScan(entry, *table_function, children, config);
+		CreateArrowScan(entry, *table_function, children, client_properties);
 	} else if (DuckDBPyRelation::IsRelation(entry)) {
 		auto pyrel = py::cast<DuckDBPyRelation *>(entry);
 		// create a subquery from the underlying relation object
@@ -1367,11 +1354,11 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		return std::move(subquery);
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
-		CreateArrowScan(arrow_dataset, *table_function, children, config);
+		CreateArrowScan(arrow_dataset, *table_function, children, client_properties);
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
-		CreateArrowScan(arrow_dataset, *table_function, children, config);
+		CreateArrowScan(arrow_dataset, *table_function, children, client_properties);
 	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
 		string name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
@@ -1427,11 +1414,12 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 	auto py_table_name = py::str(table_name);
 	// Here we do an exhaustive search on the frame lineage
 	auto current_frame = py::module::import("inspect").attr("currentframe")();
+	auto client_properties = context.GetClientProperties();
 	while (hasattr(current_frame, "f_locals")) {
 		auto local_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_locals"));
 		// search local dictionary
 		if (local_dict) {
-			auto result = TryReplacement(local_dict, py_table_name, context.config, current_frame);
+			auto result = TryReplacement(local_dict, py_table_name, client_properties, current_frame);
 			if (result) {
 				return result;
 			}
@@ -1439,7 +1427,7 @@ static unique_ptr<TableRef> ScanReplacement(ClientContext &context, const string
 		// search global dictionary
 		auto global_dict = py::reinterpret_borrow<py::dict>(current_frame.attr("f_globals"));
 		if (global_dict) {
-			auto result = TryReplacement(global_dict, py_table_name, context.config, current_frame);
+			auto result = TryReplacement(global_dict, py_table_name, client_properties, current_frame);
 			if (result) {
 				return result;
 			}

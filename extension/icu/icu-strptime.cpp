@@ -273,26 +273,7 @@ struct ICUStrptime : public ICUDateFunc {
 				    }
 
 				    // Now get the parts in the given time zone
-				    date_t d;
-				    dtime_t t;
-				    Timestamp::Convert(result, d, t);
-
-				    int32_t data[7];
-				    Date::Convert(d, data[0], data[1], data[2]);
-				    calendar->set(UCAL_EXTENDED_YEAR, data[0]); // strptime doesn't understand eras
-				    calendar->set(UCAL_MONTH, data[1] - 1);
-				    calendar->set(UCAL_DATE, data[2]);
-
-				    Time::Convert(t, data[3], data[4], data[5], data[6]);
-				    calendar->set(UCAL_HOUR_OF_DAY, data[3]);
-				    calendar->set(UCAL_MINUTE, data[4]);
-				    calendar->set(UCAL_SECOND, data[5]);
-
-				    int32_t millis = data[6] / Interval::MICROS_PER_MSEC;
-				    uint64_t micros = data[6] % Interval::MICROS_PER_MSEC;
-				    calendar->set(UCAL_MILLISECOND, millis);
-
-				    result = GetTime(calendar, micros);
+				    result = FromNaive(calendar, result);
 			    }
 
 			    return result;
