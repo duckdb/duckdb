@@ -403,7 +403,7 @@ unique_ptr<LogicalOperator> QueryGraphManager::LeftRightOptimizations(unique_ptr
 			op = op->children[0].get();
 		}
 	}
-	return std::move(input_op);
+	return input_op;
 }
 
 } // namespace duckdb
