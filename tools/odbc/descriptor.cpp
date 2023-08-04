@@ -484,11 +484,16 @@ SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_
 	for (auto stmt : source_desc->dbc->vec_stmt_ref) {
 		if (target_desc == stmt->row_desc->ird.get()) {
 			target_desc->error_messages.emplace_back("Cannot modify an implementation row descriptor.");
-			return SQL_ERROR;
+			return duckdb::SetDiagnosticRecord(target_desc, SQL_ERROR, "SQLCopyDesc",
+			                                   target_desc->error_messages.back(), duckdb::SQLStateType::ST_HY016,
+			                                   target_desc->dbc->GetDataSourceName());
 		}
 		if (source_desc == stmt->row_desc->ird.get()) {
 			if (!stmt->IsPrepared()) {
 				source_desc->error_messages.emplace_back("Associated statement is not prepared.");
+				return duckdb::SetDiagnosticRecord(source_desc, SQL_ERROR, "SQLCopyDesc",
+				                                   source_desc->error_messages.back(), duckdb::SQLStateType::ST_HY007,
+				                                   source_desc->dbc->GetDataSourceName());
 				return SQL_ERROR;
 			}
 		}

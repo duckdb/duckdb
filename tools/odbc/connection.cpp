@@ -20,7 +20,8 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	}
 
 	// TODO: If value_ptr is NULL shouldn't we return the length of the attribute, instead of returning SQL_ERROR?
-	// From the docs: "If ValuePtr is NULL, StringLengthPtr will still return the total number of bytes (excluding the null-termination character for character data) available to return in the buffer pointed to by ValuePtr."
+	// From the docs: "If ValuePtr is NULL, StringLengthPtr will still return the total number of bytes (excluding the
+	// null-termination character for character data) available to return in the buffer pointed to by ValuePtr."
 	if (!value_ptr) {
 		return SQL_ERROR;
 	}
@@ -37,8 +38,8 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		if (value_ptr == nullptr) {
 			*string_length_ptr = dbc->sql_attr_current_catalog.size();
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLGetConnectAttr",
-			                                   "Catalog attribute with null value pointer.",
-			                                   SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
+			                                   "Catalog attribute with null value pointer.", SQLStateType::ST_HY024,
+			                                   dbc->GetDataSourceName());
 		}
 
 		ret = SQL_SUCCESS;
@@ -49,7 +50,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			ret = SQL_SUCCESS_WITH_INFO;
 			out_len = buffer_length - 1;
 			return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLGetConnectAttr",
-			                                   "Catalog attribute length mismatch.", SQLStateType::STR_LEN_MISMATCH,
+			                                   "Catalog attribute length mismatch.", SQLStateType::ST_22026,
 			                                   dbc->GetDataSourceName());
 		}
 
@@ -100,7 +101,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	}
 	default:
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLGetConnectAttr", "Attribute not supported.",
-		                                   SQLStateType::INVALID_ATTR_OPTION_ID, dbc->GetDataSourceName());
+		                                   SQLStateType::ST_HY092, dbc->GetDataSourceName());
 	}
 }
 
@@ -164,7 +165,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			return SQL_SUCCESS;
 		}
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", "Invalid access mode.",
-		                                   SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
+		                                   SQLStateType::ST_HY024, dbc->GetDataSourceName());
 	}
 #ifdef SQL_ATTR_ASYNC_DBC_EVENT
 	case SQL_ATTR_ASYNC_DBC_EVENT:
@@ -178,13 +179,13 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 #endif
 	case SQL_ATTR_ASYNC_ENABLE: {
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr",
-		                                   "DuckDB does not support asynchronous events.",
-		                                   SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
+		                                   "DuckDB does not support asynchronous events.", SQLStateType::ST_HY024,
+		                                   dbc->GetDataSourceName());
 	}
 	case SQL_ATTR_AUTO_IPD:
 	case SQL_ATTR_CONNECTION_DEAD: {
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", "Read-only attribute.",
-		                                   SQLStateType::INVALID_ATTR_OPTION_ID, dbc->GetDataSourceName());
+		                                   SQLStateType::ST_HY092, dbc->GetDataSourceName());
 	}
 	case SQL_ATTR_CONNECTION_TIMEOUT:
 		return SQL_SUCCESS;
@@ -192,7 +193,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		if (dbc->conn) {
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr",
 			                                   "Connection already established, the database name could not be set.",
-			                                   SQLStateType::INVALID_CONNECTION_STR_ATTR, dbc->GetDataSourceName());
+			                                   SQLStateType::ST_01S00, dbc->GetDataSourceName());
 		}
 		if (string_length == SQL_NTS) {
 			dbc->sql_attr_current_catalog = std::string((char *)value_ptr);
@@ -216,8 +217,8 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	}
 	default:
 		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
-		                                   "Option value changed:" + std::to_string(attribute),
-		                                   SQLStateType::OPTION_VALUE_CHANGED, dbc->GetDataSourceName());
+		                                   "Option value changed:" + std::to_string(attribute), SQLStateType::ST_01S02,
+		                                   dbc->GetDataSourceName());
 	}
 }
 
@@ -235,8 +236,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		}
 
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLGetInfo",
-		                                   "Invalid null value pointer for numeric info type.",
-		                                   SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
+		                                   "Invalid null value pointer for numeric info type.", SQLStateType::ST_HY024,
+		                                   dbc->GetDataSourceName());
 	}
 
 	// Default strings: YES or NO
@@ -488,11 +489,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_DATA_SOURCE_NAME: {
-	duckdb::OdbcHandleDbc *dbc = nullptr;
-	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
+		duckdb::OdbcHandleDbc *dbc = nullptr;
+		SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+		if (ret != SQL_SUCCESS) {
+			return ret;
+		}
 
 		duckdb::OdbcUtils::WriteString(dbc->GetDataSourceName(), (SQLCHAR *)info_value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -503,11 +504,11 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	case SQL_DATABASE_NAME: {
-	duckdb::OdbcHandleDbc *dbc = nullptr;
-	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
+		duckdb::OdbcHandleDbc *dbc = nullptr;
+		SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+		if (ret != SQL_SUCCESS) {
+			return ret;
+		}
 
 		std::string db_name = dbc->GetDatabaseName();
 		if (db_name == ":memory:") {
@@ -725,8 +726,7 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 			return ret;
 		}
 		ret = SQLExecDirect(
-		    hstmt, (SQLCHAR *)"SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category='reserved'",
-		    SQL_NTS);
+		    hstmt, (SQLCHAR *)"SELECT keyword_name FROM duckdb_keywords() WHERE keyword_category='reserved'", SQL_NTS);
 		if (!SQL_SUCCEEDED(ret)) {
 			duckdb::FreeHandle(SQL_HANDLE_STMT, hstmt);
 			return ret;
@@ -1022,15 +1022,15 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
 		return SQL_SUCCESS;
 	}
 	default:
-	duckdb::OdbcHandleDbc *dbc = nullptr;
-	SQLRETURN ret = ConvertConnection(connection_handle, dbc);
-	if (ret != SQL_SUCCESS) {
-		return ret;
-	}
+		duckdb::OdbcHandleDbc *dbc = nullptr;
+		SQLRETURN ret = ConvertConnection(connection_handle, dbc);
+		if (ret != SQL_SUCCESS) {
+			return ret;
+		}
 
 		// return SQL_SUCCESS, but with a record message
 		return duckdb::SetDiagnosticRecord(dbc, SQL_SUCCESS, "SQLGetInfo", "Unrecognized attribute.",
-		                                   SQLStateType::INVALID_ATTR_OPTION_ID, dbc->GetDataSourceName());
+		                                   SQLStateType::ST_HY092, dbc->GetDataSourceName());
 	}
 } // end SQLGetInfo
 
@@ -1048,8 +1048,8 @@ SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, 
  */
 SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
 	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
-		return duckdb::SetDiagnosticRecord(static_cast<duckdb::OdbcHandle *>(handle), SQL_ERROR, "SQLEndTran", "Invalid handle type, must be SQL_HANDLE_DBC.",
-		                                   SQLStateType::INVALID_ATTR_OPTION_ID, "");
+		return duckdb::SetDiagnosticRecord(static_cast<duckdb::OdbcHandle *>(handle), SQL_ERROR, "SQLEndTran",
+		                                   "Invalid handle type, must be SQL_HANDLE_DBC.", SQLStateType::ST_HY092, "");
 	}
 
 	duckdb::OdbcHandleDbc *dbc = nullptr;
@@ -1077,12 +1077,11 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 			return SQL_SUCCESS;
 		} catch (duckdb::Exception &ex) {
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", std::string(ex.what()),
-			                                   SQLStateType::SQLENDTRAN_ASYNC_FUNCT_EXECUTION,
-			                                   dbc->GetDataSourceName());
+			                                   SQLStateType::ST_HY115, dbc->GetDataSourceName());
 		}
 	default:
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLEndTran", "Invalid completion type.",
-		                                   SQLStateType::INVALID_TRANSACTION_OP_CODE, dbc->GetDataSourceName());
+		                                   SQLStateType::ST_HY012, dbc->GetDataSourceName());
 	}
 }
 
