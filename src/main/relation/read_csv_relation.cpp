@@ -9,6 +9,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -40,15 +41,22 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
 
+	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+	if (files.empty()) {
+		throw BinderException("read_csv requires at least one file to match the pattern");
+	}
+
+	auto &file_name = files[0];
 	options["auto_detect"] = Value::BOOLEAN(true);
 	BufferedCSVReaderOptions csv_options;
-	csv_options.file_path = csv_file;
+	csv_options.file_path = file_name;
 	vector<string> empty;
 
 	vector<LogicalType> unused_types;
 	vector<string> unused_names;
 	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
 	// Run the auto-detect, populating the options with the detected settings
+
 	BufferedCSVReader reader(*context, csv_options);
 
 	auto &types = reader.GetTypes();
