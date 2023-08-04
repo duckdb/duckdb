@@ -14,7 +14,7 @@ const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 
 class ADBCTestDatabase {
 public:
-	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
+	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
 		duckdb_adbc::InitiliazeADBCError(&adbc_error);
 		path = TestCreatePath(path_parameter);
 		REQUIRE(duckdb_lib);
@@ -45,6 +45,7 @@ public:
 		DuckDB db(path);
 		Connection con(db);
 		return ArrowTestHelper::RunArrowComparison(con, query, arrow_stream);
+		arrow_stream.release = nullptr;
 	}
 
 	ArrowArrayStream &Query(const string &query) {
@@ -70,6 +71,8 @@ public:
 		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 		REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+		input_data.release = nullptr;
+		arrow_stream.release = nullptr;
 	}
 
 	duckdb_adbc::AdbcError adbc_error;
@@ -780,7 +783,7 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	ADBCTestDatabase db;
+	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
 
 	// Create Arrow Result
 	auto input_data = db.Query("SELECT 42");
@@ -808,42 +811,33 @@ void TestFilters(ADBCTestDatabase &db, duckdb_adbc::AdbcError &adbc_error, idx_t
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "bla", nullptr, nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		db.arrow_stream.release = nullptr;
 		DuckDB db_check(db.path);
 		Connection con(db_check);
 		auto res = con.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
-		db.arrow_stream.release = nullptr;
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, "bla", nullptr, nullptr, &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		db.arrow_stream.release = nullptr;
 		DuckDB db_check(db.path);
 		Connection con(db_check);
 		auto res = con.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
-		db.arrow_stream.release = nullptr;
 	}
 	{
 		ArrowArrayStream arrow_stream;
 		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, nullptr, nullptr, "bla", &arrow_stream,
 		                         &adbc_error);
 		db.CreateTable("result", arrow_stream);
-		db.arrow_stream.release = nullptr;
 		DuckDB db_check(db.path);
 		Connection con(db_check);
 		auto res = con.Query("Select * from result");
 		REQUIRE(res->RowCount() == 0);
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
-		db.arrow_stream.release = nullptr;
 	}
 }
 
@@ -856,7 +850,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
 
 	{
-		ADBCTestDatabase db;
+		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
 		// Create Arrow Result
 		auto input_data = db.Query("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
@@ -874,7 +868,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		auto res = con.Query("Select * from result");
 		REQUIRE(res->ColumnCount() == 1);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
 	}
@@ -899,7 +892,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(res->ColumnCount() == 2);
 		REQUIRE(res->GetValue(0, 0).ToString() == "main");
 		REQUIRE(res->GetValue(1, 0).ToString() == "[{'table_name': my_table}]");
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_TABLES);
 	}
@@ -926,7 +918,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(
 		    res->GetValue(1, 0).ToString() ==
 		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_COLUMNS);
 	}
@@ -952,7 +943,6 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE(
 		    res->GetValue(1, 0).ToString() ==
 		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
-		db.arrow_stream.release = nullptr;
 		db.Query("Drop table result;");
 		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_ALL);
 	}
@@ -991,7 +981,5 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		                         &arrow_stream, &adbc_error);
 		REQUIRE(std::strcmp(adbc_error.message, "connection can't be null") == 0);
 		adbc_error.release(&adbc_error);
-
-		db.arrow_stream.release = nullptr;
 	}
 }
