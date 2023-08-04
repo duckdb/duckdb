@@ -26,7 +26,7 @@ public:
 };
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 1:
