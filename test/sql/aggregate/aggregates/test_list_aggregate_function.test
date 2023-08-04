@@ -71,7 +71,6 @@ SELECT LIST(str) FROM varch GROUP BY g ORDER BY g
 # LIST
 # one level nested LIST
 
-
 statement ok
 CREATE TABLE nested_lists (g INTEGER, i INTEGER[])
 

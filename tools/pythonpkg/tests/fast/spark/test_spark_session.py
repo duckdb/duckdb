@@ -1,4 +1,6 @@
 import pytest
+
+_ = pytest.importorskip("pyduckdb.spark")
 from pyduckdb.spark.sql import SparkSession
 
 
@@ -48,8 +50,7 @@ class TestSparkSession(object):
         active_session = spark.getActiveSession()
 
     def test_read(self, spark):
-        with pytest.raises(NotImplementedError):
-            reader = spark.read
+        reader = spark.read
 
     def test_write(self, spark):
         df = spark.sql('select 42')

@@ -7,6 +7,7 @@ on:
 env:
   GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
   TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number }}]"
+  PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
   create_or_label_issue:
@@ -45,12 +46,6 @@ jobs:
             echo "LABEL=needs triage" >> $GITHUB_ENV
             echo "UNLABEL=needs label" >> $GITHUB_ENV
           fi
-          
-      - name: Get public issue title safely
-        run: |
-          cat << "Eebaefae2quoManoh2yi" >> $GITHUB_ENV
-          PUBLIC_ISSUE_TITLE=${{ github.event.issue.title }}
-          Eebaefae2quoManoh2yi
 
       - name: Create or label issue
         run: |
