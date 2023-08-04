@@ -63,7 +63,7 @@ public:
 	//! Flush all blocks to disk
 	void Flush();
 
-	void MarkWrittenBlocks();
+	void MarkBlocksAsModified();
 
 	idx_t BlockCount();
 
@@ -76,6 +76,7 @@ protected:
 	vector<MetadataBlock> blocks;
 	vector<idx_t> free_blocks;
 	unordered_map<block_id_t, idx_t> block_map;
+	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
 	void AllocateNewBlock();
@@ -83,7 +84,6 @@ protected:
 
 	void AddBlock(MetadataBlock new_block);
 	void AddAndRegisterBlock(MetadataBlock block);
-
 };
 
 } // namespace duckdb

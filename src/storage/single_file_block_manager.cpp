@@ -260,6 +260,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		multi_use_blocks[block_id] = usage_count;
 	}
 	GetMetadataManager().Deserialize(reader);
+	GetMetadataManager().MarkBlocksAsModified();
 }
 
 bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {

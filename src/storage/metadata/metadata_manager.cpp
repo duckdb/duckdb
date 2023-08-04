@@ -192,6 +192,7 @@ idx_t MetadataBlock::FreeBlocksToInteger() {
 }
 
 void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
+	free_blocks.clear();
 	if (free_list == 0) {
 		return;
 	}
@@ -204,10 +205,34 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 	}
 }
 
+void MetadataManager::MarkBlocksAsModified() {
+	if (!modified_blocks.empty()) {
+		// for any blocks that were modified in the last checkpoint - set them to free blocks currently
+		for(auto &kv : modified_blocks) {
+			auto block_id = kv.first;
+			idx_t modified_list = kv.second;
+			auto entry = block_map.find(block_id);
+			D_ASSERT(entry != block_map.end());
+			auto &block = blocks[entry->second];
+			idx_t current_free_blocks = block.FreeBlocksToInteger();
+			// merge the current set of free blocks with the modified blocks
+			idx_t new_free_blocks = current_free_blocks | modified_list;
+			// FIXME: if new_free_blocks is ALL blocks - mark entire block as free
+			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
+				// if new free_blocks is all blocks - mark entire block as modified
+				throw InternalException("FIXME: mark all blocks as modified");
+			}
+			// set the new set of free blocks
+			block.FreeBlocksFromInteger(new_free_blocks);
+		}
 
-
-void MetadataManager::MarkWrittenBlocks() {
-//	throw InternalException("FIXME: MarkWrittenBlocks");
+	}
+	modified_blocks.clear();
+	for(auto &block : blocks) {
+		idx_t free_list = block.FreeBlocksToInteger();
+		idx_t occupied_list = ~free_list;
+		modified_blocks[block.block_id] = occupied_list;
+	}
 }
 
 block_id_t MetadataManager::GetNextBlockId() {
