@@ -22,6 +22,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
+	case ExpressionClass::BOUND_AGGREGATE:
+		result = BoundAggregateExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_BETWEEN:
 		result = BoundBetweenExpression::FormatDeserialize(deserializer);
 		break;
@@ -46,6 +49,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	case ExpressionClass::BOUND_DEFAULT:
 		result = BoundDefaultExpression::FormatDeserialize(deserializer);
 		break;
+	case ExpressionClass::BOUND_FUNCTION:
+		result = BoundFunctionExpression::FormatDeserialize(deserializer);
+		break;
 	case ExpressionClass::BOUND_LAMBDA:
 		result = BoundLambdaExpression::FormatDeserialize(deserializer);
 		break;
@@ -63,6 +69,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 		break;
 	case ExpressionClass::BOUND_UNNEST:
 		result = BoundUnnestExpression::FormatDeserialize(deserializer);
+		break;
+	case ExpressionClass::BOUND_WINDOW:
+		result = BoundWindowExpression::FormatDeserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of Expression!");

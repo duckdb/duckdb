@@ -372,6 +372,9 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
 	                                                table_name.c_str(), &adbc_error)));
 
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
+
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
@@ -415,6 +418,9 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
 	                                                table_name.c_str(), &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
@@ -462,6 +468,8 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
 	                                                table_name.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
@@ -496,6 +504,8 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
 	                                                table_name.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
+	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
@@ -600,12 +610,6 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
 	REQUIRE(std::strcmp(adbc_error.message,
 	                    "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string") == 0);
-	adbc_error.release(&adbc_error);
-
-	// Test null schema name
-	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, nullptr, "duckdb_indexes", &arrow_schema,
-	                                              &adbc_error)));
-	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide db_schema") == 0);
 	adbc_error.release(&adbc_error);
 
 	// Empty schema should be fine

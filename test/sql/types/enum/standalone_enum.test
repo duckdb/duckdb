@@ -1,0 +1,34 @@
+# name: test/sql/types/enum/standalone_enum.test
+# description: Test stand-alone enums
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'hello'::ENUM('world', 'hello');
+----
+hello
+
+statement ok
+CREATE TABLE test AS SELECT 'hello'::ENUM('world', 'hello') AS h;
+
+query I
+SELECT * FROM test
+----
+hello
+
+statement error
+SELECT 'hello'::ENUM;
+----
+Enum needs a set of entries
+
+statement error
+SELECT 'hello'::ENUM(42);
+----
+Enum type requires a set of strings as type modifiers
+
+statement error
+SELECT 'hello'::ENUM('zzz', 42);
+----
+Enum type requires a set of strings as type modifiers

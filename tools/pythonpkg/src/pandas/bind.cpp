@@ -9,13 +9,14 @@ namespace {
 
 struct PandasBindColumn {
 public:
-	PandasBindColumn(py::handle name, py::handle type, py::handle column) : name(name), type(type), handle(column) {
+	PandasBindColumn(py::handle name, py::handle type, py::object column)
+	    : name(name), type(type), handle(std::move(column)) {
 	}
 
 public:
 	py::handle name;
 	py::handle type;
-	py::handle handle;
+	py::object handle;
 };
 
 struct PandasDataFrameBind {
@@ -27,7 +28,7 @@ public:
 	}
 	PandasBindColumn operator[](idx_t index) const {
 		D_ASSERT(index < names.size());
-		auto column = getter(names[index]);
+		auto column = py::reinterpret_borrow<py::object>(getter(names[index]));
 		auto type = types[index];
 		auto name = names[index];
 		return PandasBindColumn(name, type, column);
@@ -43,7 +44,7 @@ private:
 
 }; // namespace
 
-static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &bind_data,
+static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &bind_data,
                               const ClientContext &context) {
 	LogicalType column_type;
 	auto &column = column_p.handle;
@@ -75,7 +76,7 @@ static LogicalType BindColumn(PandasBindColumn column_p, PandasColumnBindData &b
 				enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
 			}
 			D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
-			column_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
+			column_type = LogicalType::ENUM(enum_entries_vec, size);
 			auto pandas_col = py::array(column.attr("cat").attr("codes"));
 			bind_data.internal_categorical_type = string(py::str(pandas_col.attr("dtype")));
 			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(pandas_col);
@@ -132,7 +133,8 @@ void Pandas::Bind(const ClientContext &context, py::handle df_p, vector<PandasCo
 		PandasColumnBindData bind_data;
 
 		names.emplace_back(py::str(df.names[col_idx]));
-		auto column_type = BindColumn(df[col_idx], bind_data, context);
+		auto column = df[col_idx];
+		auto column_type = BindColumn(column, bind_data, context);
 
 		return_types.push_back(column_type);
 		bind_columns.push_back(std::move(bind_data));

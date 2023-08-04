@@ -27,9 +27,9 @@ private:
 	void FindCandidates(unique_ptr<LogicalOperator> &op, vector<DelimCandidate> &candidates);
 	void FindJoinWithDelimGet(unique_ptr<LogicalOperator> &op, DelimCandidate &candidate);
 	//! Remove joins with a DelimGet
-	bool RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+	bool RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
 	                            unique_ptr<LogicalOperator> &join, bool &all_equality_conditions);
-	bool RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
+	bool RemoveInequalityJoinWithDelimGet(LogicalComparisonJoin &delim_join, const idx_t delim_get_count,
 	                                      unique_ptr<LogicalOperator> &join,
 	                                      const vector<ReplacementBinding> &replacement_bindings);
 

@@ -9,20 +9,6 @@
 
 namespace duckdb {
 
-StackChecker::StackChecker(Transformer &transformer_p, idx_t stack_usage_p)
-    : transformer(transformer_p), stack_usage(stack_usage_p) {
-	transformer.stack_depth += stack_usage;
-}
-
-StackChecker::~StackChecker() {
-	transformer.stack_depth -= stack_usage;
-}
-
-StackChecker::StackChecker(StackChecker &&other) noexcept
-    : transformer(other.transformer), stack_usage(other.stack_usage) {
-	other.stack_usage = 0;
-}
-
 Transformer::Transformer(ParserOptions &options)
     : parent(nullptr), options(options), stack_depth(DConstants::INVALID_INDEX) {
 }
@@ -59,7 +45,7 @@ void Transformer::InitializeStackCheck() {
 	stack_depth = 0;
 }
 
-StackChecker Transformer::StackCheck(idx_t extra_stack) {
+StackChecker<Transformer> Transformer::StackCheck(idx_t extra_stack) {
 	auto &root = RootTransformer();
 	D_ASSERT(root.stack_depth != DConstants::INVALID_INDEX);
 	if (root.stack_depth + extra_stack >= options.max_expression_depth) {
@@ -67,7 +53,7 @@ StackChecker Transformer::StackCheck(idx_t extra_stack) {
 		                      "increase the maximum expression depth.",
 		                      options.max_expression_depth);
 	}
-	return StackChecker(root, extra_stack);
+	return StackChecker<Transformer>(root, extra_stack);
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode &stmt) {

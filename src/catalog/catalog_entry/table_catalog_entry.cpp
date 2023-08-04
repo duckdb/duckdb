@@ -172,10 +172,6 @@ const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }
 
-ColumnList &TableCatalogEntry::GetColumnsMutable() {
-	return columns;
-}
-
 const ColumnDefinition &TableCatalogEntry::GetColumn(LogicalIndex idx) {
 	return columns.GetColumn(idx);
 }

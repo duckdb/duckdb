@@ -107,7 +107,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			                                  group_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
 
 			// dependencies: base_finish -> pipeline_event -> group_finish
-			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_event);
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_finish_event);
 			group_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
 
 			// add pipeline stack to event map

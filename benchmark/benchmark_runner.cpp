@@ -173,17 +173,16 @@ void print_help() {
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
-void LoadInterpretedBenchmarks() {
+void LoadInterpretedBenchmarks(FileSystem &fs) {
 	// load interpreted benchmarks
-	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	listFiles(*fs, "benchmark", [](const string &path) {
+	listFiles(fs, "benchmark", [](const string &path) {
 		if (endsWith(path, ".benchmark")) {
 			new InterpretedBenchmark(path);
 		}
 	});
 }
 
-string parse_root_dir_or_default(const int arg_counter, char const *const *arg_values) {
+string parse_root_dir_or_default(const int arg_counter, char const *const *arg_values, FileSystem &fs) {
 	// check if the user specified a different root directory
 	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
 		string arg = arg_values[arg_index];
@@ -194,10 +193,10 @@ string parse_root_dir_or_default(const int arg_counter, char const *const *arg_v
 				exit(1);
 			}
 			auto path = arg_values[arg_index + 1];
-			if (FileSystem::IsPathAbsolute(path)) {
+			if (fs.IsPathAbsolute(path)) {
 				return path;
 			} else {
-				return FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), path);
+				return fs.JoinPath(FileSystem::GetWorkingDirectory(), path);
 			}
 		}
 	}
@@ -335,11 +334,12 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	// Set the working directory. We need to scan this before loading the benchmarks or parsing the other arguments
-	string root_dir = parse_root_dir_or_default(argc, argv);
+	string root_dir = parse_root_dir_or_default(argc, argv, *fs);
 	FileSystem::SetWorkingDirectory(root_dir);
 	// load interpreted benchmarks before doing anything else
-	LoadInterpretedBenchmarks();
+	LoadInterpretedBenchmarks(*fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
 	if (configuration_error != ConfigurationError::None) {

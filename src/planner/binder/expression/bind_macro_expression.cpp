@@ -1,11 +1,11 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
+#include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
-
-#include "duckdb/function/scalar_macro_function.hpp"
 
 namespace duckdb {
 
@@ -79,8 +79,10 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	new_macro_binding->arguments = &positionals;
 	macro_binding = new_macro_binding.get();
 
-	// replace current expression with stored macro expression, and replace params
+	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
+
+	// now replace the parameters
 	ReplaceMacroParametersRecursive(expr);
 
 	// bind the unfolded macro

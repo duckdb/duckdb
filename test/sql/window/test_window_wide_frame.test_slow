@@ -4,7 +4,6 @@
 
 require skip_reload
 
-
 statement ok
 PRAGMA enable_verification
 
@@ -15,8 +14,7 @@ statement ok
 CREATE TABLE flog AS
 	SELECT (random() * 100)::INTEGER AS laufzeit
 	, TIMESTAMP '2020-10-15 16:45:00' + INTERVAL (random() * 15 * 60) SECOND AS "timestamp"
-	FROM range(26000)
-;
+	FROM range(26000);
 
 query III
 select timestamp

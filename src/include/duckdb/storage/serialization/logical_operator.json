@@ -352,7 +352,7 @@
   {
     "class": "LogicalComparisonJoin",
     "base": "LogicalOperator",
-    "enum": "LOGICAL_COMPARISON_JOIN",
+    "enum": ["LOGICAL_ASOF_JOIN", "LOGICAL_COMPARISON_JOIN", "LOGICAL_DELIM_JOIN"],
     "members": [
       {
         "name": "join_type",
@@ -377,6 +377,10 @@
       {
         "name": "mark_types",
         "type": "vector<LogicalType>"
+      },
+      {
+        "name": "duplicate_eliminated_columns",
+        "type": "vector<Expression*>"
       }
     ],
     "constructor": ["join_type", "type"]
@@ -792,5 +796,39 @@
         "type": "BoundPivotInfo"
       }
     ]
+  },
+  {
+    "class": "LogicalGet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_GET",
+    "custom_implementation": true
+  },
+  {
+    "class": "LogicalCopyToFile",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COPY_TO_FILE",
+    "custom_implementation": true
+  },
+  {
+    "class": "LogicalCreateIndex",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CREATE_INDEX",
+    "members": [
+      {
+        "name": "info",
+        "type": "CreateInfo*"
+      },
+      {
+        "name": "unbound_expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["$ClientContext", "info", "unbound_expressions"]
+  },
+  {
+    "class": "LogicalExtensionOperator",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXTENSION_OPERATOR",
+    "custom_implementation": true
   }
 ]
