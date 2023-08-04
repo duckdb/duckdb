@@ -16,6 +16,7 @@ build/coverage/test/unittest "[coverage]"
 build/coverage/test/unittest "[intraquery]"
 build/coverage/test/unittest "[interquery]"
 build/coverage/test/unittest "[detailed_profiler]"
+build/coverage/test/unittest "[filter]"
 build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
 python3 tools/shell/shell-test.py build/coverage/duckdb
 
