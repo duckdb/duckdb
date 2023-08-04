@@ -141,7 +141,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			break;
 		case RType::DATE:
 			if (!IS_NUMERIC(coldata)) {
-				cpp11::stop("DATE should really be integer");
+				cpp11::stop("DATE should really be numeric");
 			}
 			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
 			duckdb_col_type = LogicalType::DATE;
