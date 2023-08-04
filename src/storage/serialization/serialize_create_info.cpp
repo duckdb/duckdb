@@ -160,13 +160,13 @@ unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(FormatDeserializer &de
 void CreateTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	CreateInfo::FormatSerialize(serializer);
 	serializer.WriteProperty("name", name);
-	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("logical_type", type);
 }
 
 unique_ptr<CreateInfo> CreateTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTypeInfo>(new CreateTypeInfo());
 	deserializer.ReadProperty("name", result->name);
-	deserializer.ReadProperty("type", result->type);
+	deserializer.ReadProperty("logical_type", result->type);
 	return std::move(result);
 }
 

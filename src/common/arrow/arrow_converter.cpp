@@ -15,7 +15,7 @@
 
 namespace duckdb {
 
-void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ArrowOptions options) {
+void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options) {
 	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options));
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
@@ -70,10 +70,10 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 	child.dictionary = nullptr;
 }
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ArrowOptions &options);
+                    const ClientProperties &options);
 
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       const ArrowOptions &options) {
+                       const ClientProperties &options) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -88,7 +88,7 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ArrowOptions &options) {
+                    const ClientProperties &options) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		child.format = "b";
@@ -128,7 +128,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
-		if (options.offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "U";
 		} else {
 			child.format = "u";
@@ -138,7 +138,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tdD";
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		child.format = "ttu";
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -176,7 +175,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT: {
-		if (options.offset_size == ArrowOffsetSize::LARGE) {
+		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
@@ -280,12 +279,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	default:
-		throw InternalException("Unsupported Arrow type " + type.ToString());
+		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
 	}
 }
 
 void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-                                   const vector<string> &names, const ArrowOptions &options) {
+                                   const vector<string> &names, const ClientProperties &options) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();

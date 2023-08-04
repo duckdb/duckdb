@@ -62,7 +62,7 @@ struct ArrowVarcharData {
 		auto last_offset = offset_data[append_data.row_count];
 		idx_t max_offset = append_data.row_count + to - from;
 		if (max_offset > NumericLimits<uint32_t>::Maximum() &&
-		    append_data.options.offset_size == ArrowOffsetSize::REGULAR) {
+		    append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR) {
 			throw InvalidInputException("Arrow Appender: The maximum total string size for regular string buffers is "
 			                            "%u but the offset of %lu exceeds this.",
 			                            NumericLimits<uint32_t>::Maximum(), max_offset);
