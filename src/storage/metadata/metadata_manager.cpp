@@ -49,7 +49,7 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 void MetadataManager::AllocateNewBlock() {
 	free_blocks.push_back(blocks.size());
 	MetadataBlock new_block;
-	buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, false, &new_block.block);
+	buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = GetNextBlockId();
 	for(idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
