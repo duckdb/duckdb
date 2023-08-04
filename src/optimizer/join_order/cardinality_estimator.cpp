@@ -7,6 +7,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -255,7 +256,12 @@ double CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set
 
 template <>
 idx_t CardinalityEstimator::EstimateCardinalityWithSet(JoinRelationSet &new_set) {
-	return (idx_t)EstimateCardinalityWithSet<double>(new_set);
+	auto cardinality_as_double = EstimateCardinalityWithSet<double>(new_set);
+	auto max = NumericLimits<idx_t>::Maximum();
+	if (cardinality_as_double > max) {
+		return max;
+	}
+	return (idx_t)cardinality_as_double;
 }
 
 bool SortTdoms(const RelationsToTDom &a, const RelationsToTDom &b) {
