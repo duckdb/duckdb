@@ -27,9 +27,30 @@ BoundCastExpression::BoundCastExpression(ClientContext &context, unique_ptr<Expr
       bound_cast(BindCastFunction(context, child->return_type, return_type)) {
 }
 
+static bool CastTypesAreEqual(const LogicalType &a, const LogicalType &b) {
+	if (a.id() == LogicalTypeId::STRUCT && a.id() == b.id()) {
+		if (a != b) {
+			return false;
+		}
+		// Equality does not factor in names, now check if the names are equal
+		auto &a_children = StructType::GetChildTypes(a);
+		auto &b_children = StructType::GetChildTypes(b);
+		D_ASSERT(a_children.size() == b_children.size());
+		for (idx_t i = 0; i < a_children.size(); i++) {
+			auto &a_name = a_children[i].first;
+			auto &b_name = b_children[i].first;
+			if (!StringUtil::CIEquals(a_name, b_name)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	return a == b;
+}
+
 unique_ptr<Expression> AddCastExpressionInternal(unique_ptr<Expression> expr, const LogicalType &target_type,
                                                  BoundCastInfo bound_cast, bool try_cast) {
-	if (expr->return_type == target_type) {
+	if (CastTypesAreEqual(expr->return_type, target_type)) {
 		return expr;
 	}
 	auto &expr_type = expr->return_type;
