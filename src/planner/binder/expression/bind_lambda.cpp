@@ -104,8 +104,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
                                                      unique_ptr<Expression> &replacement,
                                                      vector<unique_ptr<Expression>> &captures,
-                                                     LogicalType &list_child_type) {
-
+                                                     LogicalType &list_child_type, idx_t &index_offset) {
 	// check if the original expression is a lambda parameter
 	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
@@ -126,13 +125,19 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			                                        lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
 
 		} else {
-			// refers to current lambda parameter
-			replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 0);
+			if (bound_lambda_ref.binding.column_index == 1) {
+				// account for the index column
+				index_offset = 2;
+				// refers to the index parameter
+				replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 1);
+			} else {
+				// refers to current lambda parameter
+				replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 0);
+			}
 		}
 
 	} else {
 		// always at least the current lambda parameter
-		idx_t index_offset = 1;
 		if (lambda_bindings) {
 			index_offset += lambda_bindings->size();
 		}
@@ -161,7 +166,8 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 		auto original = std::move(expr);
 		unique_ptr<Expression> replacement;
 
-		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type);
+		idx_t index_offset = 1;
+		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type, index_offset);
 
 		// replace the expression
 		expr = std::move(replacement);

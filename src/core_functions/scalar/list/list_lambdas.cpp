@@ -197,6 +197,28 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	types.push_back(child_vector.GetType());
 	types.push_back(child_vector.GetType());
 
+	auto &func_bound_expr = lambda_expr->Cast<BoundFunctionExpression>();
+	if (func_bound_expr.children.size() == 2) {
+		// An index is passed to the lambda function, so we need to push back the type of the index
+		types.push_back(child_vector.GetType());
+
+		Vector index_child_vector(child_vector.GetType());
+		index_child_vector.SetVectorType(VectorType::FLAT_VECTOR);
+
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			auto lists_index = lists_data.sel->get_index(row_idx);
+			const auto &list_entry = list_entries[lists_index];
+
+			idx_t i = 1;
+			for (idx_t child_idx = list_entry.offset; child_idx < list_entry.length + list_entry.offset; child_idx++) {
+				index_child_vector.SetValue(child_idx, Value::UBIGINT(i));
+			}
+		}
+
+		args.data[2].Reference(index_child_vector);
+
+	}
+
 	// skip the list column
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		columns.emplace_back();
@@ -224,6 +246,29 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	DataChunk lambda_chunk;
 	input_chunk.InitializeEmpty(types);
 	lambda_chunk.Initialize(Allocator::DefaultAllocator(), result_types);
+
+	if (func_bound_expr.children.size() == 2) {
+		// An index is passed to the lambda function, so we need to create a vector with the indexes
+		SelectionVector index_sel(lists_size);
+
+		Vector index_child_vector(child_vector.GetType());
+		index_child_vector.SetVectorType(VectorType::FLAT_VECTOR);
+
+		for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+			auto lists_index = lists_data.sel->get_index(row_idx);
+			const auto &list_entry = list_entries[lists_index];
+
+			idx_t i = 1;
+			for (idx_t child_idx = list_entry.offset; child_idx < list_entry.length + list_entry.offset; child_idx++) {
+				index_child_vector.SetValue(child_idx, Value::UBIGINT(i));
+				index_sel.set_index(child_idx, i++ - 1);
+			}
+		}
+		// set the index child vector
+		Vector index_vector(index_child_vector, index_sel, lists_size);
+		index_vector.Flatten(lists_size);
+		input_chunk.data[2].Reference(index_vector);
+	}
 
 	// loop over the child entries and create chunks to be executed by the expression executor
 	idx_t elem_cnt = 0;
@@ -355,6 +400,9 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
+	if (bound_lambda_expr.parameter_count == 2) {
+		return ListLambdaBind<2>(context, bound_function, arguments);
+	}
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
 

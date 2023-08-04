@@ -128,7 +128,8 @@ protected:
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
-	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type);
+	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
+	                                   idx_t &index_offset);
 	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
 	                          unique_ptr<Expression> &expr);
 
