@@ -128,7 +128,8 @@ OperatorResultType PhysicalTableInOutFunction::ExecuteWithMapping(ExecutionConte
 		break;
 	}
 	default: {
-		throw NotImplementedException("Executing Table in-out functions with a non-constant mapping is not supported yet");
+		throw NotImplementedException(
+		    "Executing Table in-out functions with a non-constant mapping is not supported yet");
 	}
 	}
 
