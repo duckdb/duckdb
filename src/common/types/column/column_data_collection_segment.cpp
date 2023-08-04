@@ -201,10 +201,7 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 
 	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
-		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
-		if (child_count != vcount * ArrayType::GetSize(vector_type)) {
-			throw InternalException("Column Data Collection: mismatch in fixed size list child sizes");
-		}
+		ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {

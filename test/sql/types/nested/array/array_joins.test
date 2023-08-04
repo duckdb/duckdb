@@ -50,17 +50,47 @@ SELECT DISTINCT * FROM t1 ORDER BY ALL;
 63	[[63, 64, 65], [66, 67, 68], [69, 70, 71]]
 72	[[72, 73, 74], [75, 76, 77], [78, 79, 80]]
 
-# Nested case with LIST
 
 
+foreach COLLECTION array_value list_value
+
+statement ok
+CREATE OR REPLACE TABLE t1 AS SELECT * FROM (
+	VALUES 
+	(1, ${COLLECTION}(1,2)),
+	(2, ${COLLECTION}(NULL,5)),
+	(3, NULL),
+) as t(i, a);
+
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT * FROM (
+	VALUES 
+	(1, ${COLLECTION}(4,5)),
+	(2, ${COLLECTION}(8,9)),
+	(3, ${COLLECTION}(6,7)),
+	(4, ${COLLECTION}(1,2))
+) as t(i, a);
+
+query III
+SELECT * FROM t1 JOIN t2 USING (i) ORDER BY ALL;
+----
+1	[1, 2]		[4, 5]
+2	[NULL, 5]	[8, 9]
+3	NULL		[6, 7]
+
+query IIII
+SELECT * FROM t1 JOIN t2 ON t1.a = t2.a ORDER BY ALL;
+----
+1	[1, 2]	4	[1, 2]
 
 
-# ListWithinList
-# StructWithinList
-# TemplateWithinList
-# ArrayWithinList
+query III
+SELECT * FROM t1 FULL OUTER JOIN t2 USING (i) ORDER BY ALL;
+----
+1	[1, 2]		[4, 5]
+2	[NULL, 5]	[8, 9]
+3	NULL		[6, 7]
+4	NULL		[1, 2]
 
-# ListWithinArray
-# StructWithinArray
-# TemplateWithinArray
-# ArrayWithinArray
+
+endloop
