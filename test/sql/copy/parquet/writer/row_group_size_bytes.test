@@ -28,6 +28,12 @@ select max(row_group_num_rows) from parquet_metadata('__TEST_DIR__/tbl.parquet')
 ----
 16384
 
+# also test that we set this thing
+query T
+select min(row_group_bytes) != 0 from parquet_metadata('__TEST_DIR__/tbl.parquet')
+----
+1
+
 # and also just integer values
 # we set the memory limit to be half as big, and we get a max row group size of half what we had before
 statement ok

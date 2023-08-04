@@ -1,0 +1,48 @@
+name: Update Mirror Issue
+on:
+  issues:
+    types:
+      - closed
+      - reopened
+
+env:
+  GH_TOKEN: ${{ secrets.DUCKDBLABS_BOT_TOKEN }}
+  TITLE_PREFIX: "[duckdb/#${{ github.event.issue.number }}]"
+
+jobs:
+  update_mirror_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get mirror issue number
+        run: |
+          gh issue list --repo duckdblabs/duckdb-internal --json title,number --jq ".[] | select(.title | startswith(\"$TITLE_PREFIX\")).number" > mirror_issue_number.txt
+          echo "MIRROR_ISSUE_NUMBER=$(cat mirror_issue_number.txt)" >> $GITHUB_ENV
+
+      - name: Print whether mirror issue exists
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" == "" ]; then
+            echo "Mirror issue with title prefix '$TITLE_PREFIX' does not exist yet"
+          else
+            echo "Mirror issue with title prefix '$TITLE_PREFIX' exists with number $MIRROR_ISSUE_NUMBER"
+          fi
+
+      - name: Add comment with status to mirror issue
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
+            gh issue comment --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --body "The issue has been ${{ github.event.action }}."
+          fi
+
+      - name: Add closed label to mirror issue
+        if: github.event.action == 'closed'
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
+            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "public closed" --remove-label "public reopened"
+          fi
+
+      - name: Reopen mirror issue and add reopened label
+        if: github.event.action == 'reopened'
+        run: |
+          if [ "$MIRROR_ISSUE_NUMBER" != "" ]; then
+            gh issue reopen --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER
+            gh issue edit --repo duckdblabs/duckdb-internal $MIRROR_ISSUE_NUMBER --add-label "public reopened" --remove-label "public closed"
+          fi

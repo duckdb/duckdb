@@ -24,13 +24,14 @@ if out_file is not None:
 con = duckdb.connect()
 
 types = {
-    'varchar' :			10_000_000,
-    'time' :    		1_500_000,
-    'bool' :			10_000_000,
-    'large_enum' :		1_500_000,
-    'varchar_array' :	1_500_000,
-    'struct' :			1_500_000
+    'varchar': 10_000_000,
+    'time': 1_500_000,
+    'bool': 10_000_000,
+    'large_enum': 1_500_000,
+    'varchar_array': 1_500_000,
+    'struct': 1_500_000,
 }
+
 
 def create_tables(con, types):
     for type, table_size in types.items():
@@ -43,12 +44,7 @@ def create_tables(con, types):
         )
 
 
-result_collectors = {
-    "native": "fetchall",
-    "pandas": "df",
-    "arrow": "arrow",
-    "numpy": "fetchnumpy"
-}
+result_collectors = {"native": "fetchall", "pandas": "df", "arrow": "arrow", "numpy": "fetchnumpy"}
 
 create_tables(con, types)
 

@@ -52,7 +52,7 @@ common/row_operations/row_match.cpp	4
 common/serializer/binary_deserializer.cpp	12
 common/serializer/binary_serializer.cpp	21
 common/serializer/buffered_deserializer.cpp	3
-common/serializer/buffered_file_reader.cpp	9
+common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
@@ -114,7 +114,6 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
-core_functions/aggregate/nested/list.cpp	2
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
 core_functions/scalar/date/date_part.cpp	17
@@ -258,7 +257,7 @@ function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
 function/scalar/struct/struct_extract.cpp	3
-function/scalar/system/aggregate_export.cpp	8
+function/scalar/system/aggregate_export.cpp	10
 function/scalar_function.cpp	7
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	229
@@ -331,7 +330,7 @@ include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
 include/duckdb/common/enum_util.hpp	3
 include/duckdb/common/exception.hpp	22
-include/duckdb/common/field_writer.hpp	4
+include/duckdb/common/field_writer.hpp	5
 include/duckdb/common/gzip_file_system.hpp	3
 include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
@@ -397,6 +396,7 @@ include/duckdb/main/capi/cast/from_decimal.hpp	2
 include/duckdb/main/capi/cast/to_decimal.hpp	38
 include/duckdb/main/client_context.hpp	2
 include/duckdb/main/client_context_file_opener.hpp	3
+include/duckdb/main/chunk_scan_state.hpp	4
 include/duckdb/main/connection.hpp	32
 include/duckdb/main/connection_manager.hpp	3
 include/duckdb/main/database.hpp	2
@@ -449,10 +449,12 @@ include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
+main/chunk_scan_state.cpp	21
 main/capi/appender-c.cpp	3
 main/capi/arrow-c.cpp	5
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
+main/chunk_scan_state/query_result.cpp	28
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
@@ -693,7 +695,7 @@ planner/joinside.cpp	12
 planner/logical_operator.cpp	30
 planner/operator/logical_aggregate.cpp	3
 planner/operator/logical_column_data_get.cpp	2
-planner/operator/logical_copy_to_file.cpp	36
+planner/operator/logical_copy_to_file.cpp	37
 planner/operator/logical_create_index.cpp	2
 planner/operator/logical_cross_product.cpp	2
 planner/operator/logical_cteref.cpp	2
@@ -705,7 +707,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	7
+planner/operator/logical_extension_operator.cpp	18
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
@@ -748,6 +750,7 @@ storage/data_table.cpp	46
 storage/index.cpp	3
 storage/local_storage.cpp	10
 storage/magic_bytes.cpp	2
+storage/meta_block_reader.cpp	3
 storage/optimistic_data_writer.cpp	4
 storage/partial_block_manager.cpp	26
 storage/single_file_block_manager.cpp	15

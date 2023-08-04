@@ -20,7 +20,7 @@ SinkFinalizeType PhysicalNumpyBatchCollector::Finalize(Pipeline &pipeline, Event
 	auto &types = gstate.data.Types();
 	{
 		py::gil_scoped_acquire gil;
-		result = make_uniq<NumpyResultConversion>(types, total_tuple_count);
+		result = make_uniq<NumpyResultConversion>(types, total_tuple_count, context.GetClientProperties());
 		result->SetCardinality(total_tuple_count);
 	}
 	if (total_tuple_count == 0) {

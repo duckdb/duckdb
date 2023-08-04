@@ -60,7 +60,7 @@ private:
 	py::dict FillDictionary(NumpyResultConversion &conversion);
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
-	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch);
+	bool FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch);
 
 	PandasDataFrame FrameFromNumpy(bool date_as_object, const py::handle &o);
 
@@ -74,8 +74,6 @@ private:
 
 	unique_ptr<QueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-
-	string timezone_config;
 
 	bool result_closed = false;
 };

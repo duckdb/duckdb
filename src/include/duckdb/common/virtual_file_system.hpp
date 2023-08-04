@@ -68,6 +68,8 @@ public:
 
 	void SetDisabledFileSystems(const vector<string> &names) override;
 
+	string PathSeparator(const string &path) override;
+
 private:
 	FileSystem &FindFileSystem(const string &path);
 	FileSystem &FindFileSystemInternal(const string &path);

@@ -69,9 +69,15 @@ public:
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
 		return function.verify_serialization;
-	};
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 
 protected:
 	void ResolveTypes() override;
+
+private:
+	LogicalGet();
 };
 } // namespace duckdb
