@@ -39,8 +39,7 @@ class TransactionManager;
 class ReplayState {
 public:
 	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
-	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false),
-	      checkpoint_id(INVALID_BLOCK) {
+	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false) {
 	}
 
 	AttachedDatabase &db;
@@ -49,7 +48,7 @@ public:
 	Deserializer &source;
 	optional_ptr<TableCatalogEntry> current_table;
 	bool deserialize_only;
-	block_id_t checkpoint_id;
+	MetaBlockPointer checkpoint_id;
 
 public:
 	void ReplayEntry(WALType entry_type);

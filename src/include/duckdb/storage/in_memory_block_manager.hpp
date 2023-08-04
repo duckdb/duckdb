@@ -29,7 +29,7 @@ public:
 	block_id_t GetFreeBlockId() override {
 		throw InternalException("Cannot perform IO in in-memory database - GetFreeBlockId!");
 	}
-	bool IsRootBlock(block_id_t root) override {
+	bool IsRootBlock(MetaBlockPointer root) override {
 		throw InternalException("Cannot perform IO in in-memory database - IsRootBlock!");
 	}
 	void MarkBlockAsFree(block_id_t block_id) override {

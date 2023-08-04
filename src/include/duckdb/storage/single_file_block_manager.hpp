@@ -45,7 +45,7 @@ public:
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
-	bool IsRootBlock(block_id_t root) override;
+	bool IsRootBlock(MetaBlockPointer root) override;
 	//! Mark a block as free (immediately re-writeable)
 	void MarkBlockAsFree(block_id_t block_id) override;
 	//! Mark a block as modified (re-writeable after a checkpoint)

@@ -262,8 +262,8 @@ void SingleFileBlockManager::LoadFreeList() {
 	GetMetadataManager().Deserialize(reader);
 }
 
-bool SingleFileBlockManager::IsRootBlock(block_id_t root) {
-	return root == meta_block;
+bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {
+	return root.block_pointer == meta_block;
 }
 
 block_id_t SingleFileBlockManager::GetFreeBlockId() {
