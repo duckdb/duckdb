@@ -345,10 +345,40 @@ test_that("relational count(a) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("a")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("n", list())
         expr_set_alias(tmp_expr, "n")
@@ -356,8 +386,24 @@ test_that("relational count(a) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("n")
+        expr_set_alias(tmp_expr, "n")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(a = seq(1, 6, by = 1), n = rep(1L, 6L))
@@ -373,10 +419,40 @@ test_that("relational count(b) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("b")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("n", list())
         expr_set_alias(tmp_expr, "n")
@@ -384,8 +460,24 @@ test_that("relational count(b) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("n")
+        expr_set_alias(tmp_expr, "n")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(b = 2, n = 6L)
@@ -401,10 +493,40 @@ test_that("relational count(g) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("g")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("n", list())
         expr_set_alias(tmp_expr, "n")
@@ -412,8 +534,24 @@ test_that("relational count(g) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("n")
+        expr_set_alias(tmp_expr, "n")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(g = 1:3, n = 1:3)
@@ -429,10 +567,40 @@ test_that("relational count(g, a) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("g"), expr_reference("a")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("n", list())
         expr_set_alias(tmp_expr, "n")
@@ -440,8 +608,29 @@ test_that("relational count(g, a) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("n")
+        expr_set_alias(tmp_expr, "n")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(g = c(1L, 2L, 2L, 3L, 3L, 3L), a = seq(1, 6, by = 1), n = rep(1L, 6L))
@@ -457,10 +646,40 @@ test_that("relational count(b, g) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("b"), expr_reference("g")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("n", list())
         expr_set_alias(tmp_expr, "n")
@@ -468,8 +687,29 @@ test_that("relational count(b, g) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("n")
+        expr_set_alias(tmp_expr, "n")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(b = rep(2, 3L), g = 1:3, n = 1:3)
@@ -9431,10 +9671,40 @@ test_that("relational summarise(c = mean(a), .by = b) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("b")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("mean", list(expr_reference("a")))
         expr_set_alias(tmp_expr, "c")
@@ -9442,8 +9712,24 @@ test_that("relational summarise(c = mean(a), .by = b) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("c")
+        expr_set_alias(tmp_expr, "c")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(b = 2, c = 3.5)
@@ -9458,10 +9744,40 @@ test_that("relational summarise(c = mean(a), .by = g) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("g")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- expr_function("mean", list(expr_reference("a")))
         expr_set_alias(tmp_expr, "c")
@@ -9469,8 +9785,24 @@ test_that("relational summarise(c = mean(a), .by = g) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("c")
+        expr_set_alias(tmp_expr, "c")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(g = 1:3, c = c(1, 2.5, 5))
@@ -9517,10 +9849,40 @@ test_that("relational summarise(c = 1, .by = g) order-preserving", {
   df1 <- data.frame(a = seq(1, 6, by = 1), b = rep(2, 6L), g = c(1L, 2L, 2L, 3L, 3L, 3L))
 
   rel1 <- rel_from_df(con, df1, experimental = experimental)
-  rel2 <- rel_aggregate(
+  rel2 <- rel_project(
     rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("b")
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_window(expr_function("row_number", list()), list(), list(), offset_expr = NULL, default_expr = NULL)
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      }
+    )
+  )
+  rel3 <- rel_aggregate(
+    rel2,
     groups = list(expr_reference("g")),
     aggregates = list(
+      {
+        tmp_expr <- expr_function("min", list(expr_reference("___row_number")))
+        expr_set_alias(tmp_expr, "___row_number")
+        tmp_expr
+      },
       {
         tmp_expr <- if ("experimental" %in% names(formals(expr_constant))) {
           expr_constant(1, experimental = experimental)
@@ -9532,8 +9894,24 @@ test_that("relational summarise(c = 1, .by = g) order-preserving", {
       }
     )
   )
-  rel2
-  out <- rel_to_altrep(rel2)
+  rel4 <- rel_order(rel3, list(expr_reference("___row_number")))
+  rel5 <- rel_project(
+    rel4,
+    list(
+      {
+        tmp_expr <- expr_reference("g")
+        expr_set_alias(tmp_expr, "g")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_reference("c")
+        expr_set_alias(tmp_expr, "c")
+        tmp_expr
+      }
+    )
+  )
+  rel5
+  out <- rel_to_altrep(rel5)
   expect_equal(
     out,
     data.frame(g = 1:3, c = rep(1, 3L))
