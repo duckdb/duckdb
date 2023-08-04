@@ -87,12 +87,26 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	case PendingExecutionResult::RESULT_READY:
 		return DUCKDB_PENDING_RESULT_READY;
 	case PendingExecutionResult::ALL_TASKS_BLOCKED:
-		// TODO: for now we don't expose this in the C API, but we probably want to?
-		return DUCKDB_PENDING_RESULT_NOT_READY;
+		return DUCKDB_PENDING_ALL_TASKS_BLOCKED;
 	case PendingExecutionResult::RESULT_NOT_READY:
 		return DUCKDB_PENDING_RESULT_NOT_READY;
 	default:
 		return DUCKDB_PENDING_ERROR;
+	}
+}
+
+bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state) {
+	switch (pending_state) {
+	case DUCKDB_PENDING_RESULT_READY:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_READY);
+	case DUCKDB_PENDING_ALL_TASKS_BLOCKED:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::ALL_TASKS_BLOCKED);
+	case DUCKDB_PENDING_RESULT_NOT_READY:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::RESULT_NOT_READY);
+	case DUCKDB_PENDING_ERROR:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
+	default:
+		return PendingQueryResult::IsFinished(PendingExecutionResult::EXECUTION_ERROR);
 	}
 }
 

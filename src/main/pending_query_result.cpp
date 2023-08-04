@@ -55,17 +55,8 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	while (true) {
-		auto res = ExecuteTaskInternal(lock);
-		if (res == PendingExecutionResult::RESULT_NOT_READY) {
-			continue;
-		}
-		if (res == PendingExecutionResult::ALL_TASKS_BLOCKED) {
-			// TODO: This is a special case where no useful work can be done, this can be used by to prevent
-			//  unnecessary busy waiting, for now we just busy wait.
-			continue;
-		}
-		break;
+	// Busy wait while task is not finished
+	while (!IsFinished(ExecuteTaskInternal(lock))) {
 	}
 	if (HasError()) {
 		return make_uniq<MaterializedQueryResult>(error);
@@ -82,6 +73,18 @@ unique_ptr<QueryResult> PendingQueryResult::Execute() {
 
 void PendingQueryResult::Close() {
 	context.reset();
+}
+
+bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
+	if (result == PendingExecutionResult::RESULT_NOT_READY) {
+		return false;
+	} else if (result == PendingExecutionResult::ALL_TASKS_BLOCKED) {
+		// Currently, the default behaviour for ALL_TASKS_BLOCKED, is to return not finished. However, note that in
+		// some cases this can be handled with a special case to do other work while all tasks are blocked.
+		return false;
+	} else {
+		return true;
+	}
 }
 
 } // namespace duckdb
