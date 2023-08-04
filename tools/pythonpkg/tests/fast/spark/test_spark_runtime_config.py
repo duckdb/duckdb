@@ -1,5 +1,7 @@
 import pytest
 
+_ = pytest.importorskip("pyduckdb.spark")
+
 
 class TestSparkRuntimeConfig(object):
     def test_spark_runtime_config(self, spark):
