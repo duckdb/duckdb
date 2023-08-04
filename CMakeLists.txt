@@ -553,8 +553,10 @@ endfunction()
 
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
-  if(NOT("${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL ""))
-    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE="${TEST_WITH_LOADABLE_EXTENSION}")
+  if(NOT "${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL "")
+    string(REPLACE ";"  "," COMMA_SEPARATED_EXTENSIONS "${TEST_WITH_LOADABLE_EXTENSION}")
+    # Note: weird commas are for easy substring matching in c++
+    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
     add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
   endif()
   if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
