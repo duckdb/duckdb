@@ -23,7 +23,7 @@ void TableDataReader::ReadTableData() {
 
 	// deserialize each of the individual row groups
 	info.data->row_group_count = reader.Read<uint64_t>();
-	info.data->block_pointer = reader.GetBlockPointer();
+	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

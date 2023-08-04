@@ -109,10 +109,10 @@ optional_ptr<Node> Node256::GetNextChild(uint8_t &byte) {
 	return nullptr;
 }
 
-MetaBlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
+BlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
 
 	// recurse into children and retrieve child block pointers
-	vector<MetaBlockPointer> child_block_pointers;
+	vector<BlockPointer> child_block_pointers;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		child_block_pointers.push_back(children[i].Serialize(art, writer));
 	}
@@ -124,7 +124,7 @@ MetaBlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
 
 	// write child block pointers
 	for (auto &child_block_pointer : child_block_pointers) {
-		writer.Write(child_block_pointer.block_pointer);
+		writer.Write(child_block_pointer.block_id);
 		writer.Write(child_block_pointer.offset);
 	}
 

@@ -54,7 +54,7 @@ public:
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
 	//! Serialize this node
-	MetaBlockPointer Serialize(ART &art, MetadataWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize this node
 	void Deserialize(MetadataReader &reader);
 

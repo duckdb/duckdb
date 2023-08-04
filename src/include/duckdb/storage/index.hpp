@@ -126,9 +126,9 @@ public:
 	}
 
 	//! Serializes the index and returns the pair of block_id offset positions
-	virtual MetaBlockPointer Serialize(MetadataWriter &writer);
+	virtual BlockPointer Serialize(MetadataWriter &writer);
 	//! Returns the serialized data pointer to the block and offset of the serialized index
-	MetaBlockPointer GetSerializedDataPointer() const {
+	BlockPointer GetSerializedDataPointer() const {
 		return serialized_data_pointer;
 	}
 
@@ -140,7 +140,7 @@ protected:
 	//! Lock used for any changes to the index
 	mutex lock;
 	//! Pointer to serialized index data
-	MetaBlockPointer serialized_data_pointer;
+	BlockPointer serialized_data_pointer;
 
 private:
 	//! Bound expressions used during expression execution

@@ -21,12 +21,13 @@ class MetadataReader : public Deserializer {
 public:
 	MetadataReader(MetadataManager &manager, MetadataPointer next_pointer);
 	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
+	MetadataReader(MetadataManager &manager, BlockPointer pointer);
 
 public:
 	//! Read content of size read_size into the buffer
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
 
-	MetaBlockPointer GetBlockPointer();
+	MetaBlockPointer GetMetaBlockPointer();
 
 	MetadataManager &GetMetadataManager() {
 		return manager;

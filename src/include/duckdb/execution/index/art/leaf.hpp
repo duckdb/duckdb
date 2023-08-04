@@ -70,7 +70,7 @@ public:
 	static string VerifyAndToString(ART &art, Node &node);
 
 	//! Serialize the leaf
-	static MetaBlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
+	static BlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
 	//! Deserialize the leaf
 	static void Deserialize(ART &art, Node &node, MetadataReader &reader);
 

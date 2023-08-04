@@ -96,7 +96,7 @@ public:
 	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte, const bool deserialize = true) const;
 
 	//! Serialize the node
-	MetaBlockPointer Serialize(ART &art, MetadataWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize the node
 	void Deserialize(ART &art);
 

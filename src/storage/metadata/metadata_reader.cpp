@@ -10,6 +10,11 @@ MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointe
 	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0), next_offset(pointer.offset), capacity(0) {
 }
 
+MetadataReader::MetadataReader(MetadataManager &manager, BlockPointer pointer) :
+	MetadataReader(manager, MetadataManager::FromBlockPointer(pointer)) {
+
+}
+
 MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
 	if (type == BlockReaderType::EXISTING_BLOCKS) {
 		return manager.FromDiskPointer(pointer);
@@ -37,7 +42,7 @@ void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	offset += read_size;
 }
 
-MetaBlockPointer MetadataReader::GetBlockPointer() {
+MetaBlockPointer MetadataReader::GetMetaBlockPointer() {
 	return manager.GetDiskPointer(block.pointer, offset);
 }
 

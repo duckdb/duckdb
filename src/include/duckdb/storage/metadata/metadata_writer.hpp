@@ -21,7 +21,8 @@ public:
 
 	void Flush();
 
-	MetaBlockPointer GetBlockPointer();
+	BlockPointer GetBlockPointer();
+	MetaBlockPointer GetMetaBlockPointer();
 
 protected:
 	virtual MetadataHandle NextHandle();

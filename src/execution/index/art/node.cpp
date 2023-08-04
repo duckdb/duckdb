@@ -20,16 +20,16 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 Node::Node(MetadataReader &reader) {
-	idx_t block_pointer = reader.Read<idx_t>();
+	block_id_t block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint32_t>();
 	Reset();
 
-	if (block_pointer == DConstants::INVALID_INDEX) {
+	if (block_id == INVALID_BLOCK) {
 		return;
 	}
 
 	SetSerialized();
-	SetPtr(block_pointer, offset);
+	SetPtr(block_id, offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -224,9 +224,9 @@ optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deseri
 // (De)serialization
 //===--------------------------------------------------------------------===//
 
-MetaBlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
+BlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
 	if (!IsSet()) {
-		return MetaBlockPointer();
+		return BlockPointer();
 	}
 	if (IsSerialized()) {
 		Deserialize(art);
@@ -254,7 +254,7 @@ MetaBlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
 void Node::Deserialize(ART &art) {
 	D_ASSERT(IsSet() && IsSerialized());
 
-	MetaBlockPointer pointer(GetBufferId(), GetOffset());
+	BlockPointer pointer(GetBufferId(), GetOffset());
 	MetadataReader reader(art.table_io_manager.GetMetadataManager(), pointer);
 	Reset();
 	SetType(reader.Read<uint8_t>());

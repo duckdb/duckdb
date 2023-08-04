@@ -76,7 +76,7 @@ public:
 	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
 	//! Serialize this node
-	MetaBlockPointer Serialize(ART &art, MetadataWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize this node
 	void Deserialize(MetadataReader &reader);
 

@@ -33,7 +33,7 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, MetaBlockPointer pointer)
+         AttachedDatabase &db, BlockPointer pointer)
 
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type) {
 
@@ -54,7 +54,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	serialized_data_pointer = pointer;
 	if (pointer.IsValid()) {
 		tree->SetSerialized();
-		tree->SetPtr(pointer.block_pointer, pointer.offset);
+		tree->SetPtr(pointer.block_id, pointer.offset);
 		tree->Deserialize(*this);
 	}
 
@@ -968,13 +968,13 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Serialization
 //===--------------------------------------------------------------------===//
 
-MetaBlockPointer ART::Serialize(MetadataWriter &writer) {
+BlockPointer ART::Serialize(MetadataWriter &writer) {
 
 	lock_guard<mutex> l(lock);
 	if (tree->IsSet()) {
 		serialized_data_pointer = tree->Serialize(*this, writer);
 	} else {
-		serialized_data_pointer = MetaBlockPointer();
+		serialized_data_pointer = BlockPointer();
 	}
 
 	return serialized_data_pointer;

@@ -108,6 +108,28 @@ MetadataPointer MetadataManager::RegisterDiskPointer(MetaBlockPointer pointer) {
 	return FromDiskPointer(pointer);
 }
 
+BlockPointer MetadataManager::ToBlockPointer(MetaBlockPointer meta_pointer) {
+	BlockPointer result;
+	result.block_id = meta_pointer.GetBlockId();
+	result.offset = meta_pointer.GetBlockIndex() * MetadataManager::METADATA_BLOCK_SIZE + meta_pointer.offset;
+	D_ASSERT(result.offset < MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT);
+	return result;
+}
+
+MetaBlockPointer MetadataManager::FromBlockPointer(BlockPointer block_pointer) {
+	if (!block_pointer.IsValid()) {
+		return MetaBlockPointer();
+	}
+	idx_t index = block_pointer.offset / MetadataManager::METADATA_BLOCK_SIZE;
+	auto offset = block_pointer.offset % MetadataManager::METADATA_BLOCK_SIZE;
+	D_ASSERT(index < MetadataManager::METADATA_BLOCK_COUNT);
+	D_ASSERT(offset < MetadataManager::METADATA_BLOCK_SIZE);
+	MetaBlockPointer result;
+	result.block_pointer = idx_t(block_pointer.block_id) | index << 56ULL;
+	result.offset = offset;
+	return result;
+}
+
 idx_t MetadataManager::BlockCount() {
 	return blocks.size();
 }

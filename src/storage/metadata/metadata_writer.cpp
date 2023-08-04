@@ -8,9 +8,13 @@ MetadataWriter::MetadataWriter(MetadataManager &manager) :
 
 }
 
-MetaBlockPointer MetadataWriter::GetBlockPointer() {
-	if (capacity == 0) {
-		// no block read yet - fetch the next block
+BlockPointer MetadataWriter::GetBlockPointer() {
+	return MetadataManager::ToBlockPointer(GetMetaBlockPointer());
+}
+
+MetaBlockPointer MetadataWriter::GetMetaBlockPointer() {
+	if (offset >= capacity) {
+		// at the end of the block - fetch the next block
 		NextBlock();
 		D_ASSERT(capacity > 0);
 	}

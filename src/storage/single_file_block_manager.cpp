@@ -455,7 +455,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// but since we are WRITING the free_list, this behavior is sub-optimal
 		FreeListBlockWriter writer(metadata_manager, std::move(free_list_blocks));
 
-		auto ptr = writer.GetBlockPointer();
+		auto ptr = writer.GetMetaBlockPointer();
 		header.free_list = ptr.block_pointer;
 
 		writer.Write<uint64_t>(free_list.size());

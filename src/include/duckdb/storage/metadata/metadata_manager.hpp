@@ -57,6 +57,9 @@ public:
 	MetadataPointer FromDiskPointer(MetaBlockPointer pointer);
 	MetadataPointer RegisterDiskPointer(MetaBlockPointer pointer);
 
+	static BlockPointer ToBlockPointer(MetaBlockPointer meta_pointer);
+	static MetaBlockPointer FromBlockPointer(BlockPointer block_pointer);
+
 	//! Flush all blocks to disk
 	void Flush();
 

@@ -23,7 +23,7 @@
 namespace duckdb {
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, MetaBlockPointer index_block = MetaBlockPointer()) {
+                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -55,7 +55,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
-                       IndexConstraintType constraint_type, MetaBlockPointer index_block = MetaBlockPointer()) {
+                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
 	vector<PhysicalIndex> new_keys;
 	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {

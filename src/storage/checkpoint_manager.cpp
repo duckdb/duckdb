@@ -74,7 +74,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	table_metadata_writer = make_uniq<MetadataWriter>(metadata_manager);
 
 	// get the id of the first meta block
-	auto meta_block = metadata_writer->GetBlockPointer();
+	auto meta_block = metadata_writer->GetMetaBlockPointer();
 
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
@@ -341,7 +341,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
 	auto &metadata_writer = GetMetadataWriter();
 	index_catalog.Serialize(metadata_writer);
 	// Serialize the Block id and offset of root node
-	metadata_writer.Write(root_offset.block_pointer);
+	metadata_writer.Write(root_offset.block_id);
 	metadata_writer.Write(root_offset.offset);
 }
 
@@ -359,7 +359,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 
 	// we deserialize the index lazily, i.e., we do not need to load any node information
 	// except the root block id and offset
-	auto root_block_pointer = reader.Read<idx_t>();
+	auto root_block_id = reader.Read<block_id_t>();
 	auto root_offset = reader.Read<uint32_t>();
 
 	// obtain the expressions of the ART from the index metadata
@@ -401,7 +401,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
 		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          index_info.constraint_type, storage.db, MetaBlockPointer(root_block_pointer, root_offset));
+		                          index_info.constraint_type, storage.db, BlockPointer(root_block_id, root_offset));
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
@@ -485,8 +485,8 @@ void CheckpointReader::ReadTableData(ClientContext &context, MetadataReader &rea
 	// Get any indexes block info
 	idx_t num_indexes = reader.Read<idx_t>();
 	for (idx_t i = 0; i < num_indexes; i++) {
-		auto idx_block_id = reader.Read<idx_t>();
-		auto idx_offset = reader.Read<idx_t>();
+		auto idx_block_id = reader.Read<block_id_t>();
+		auto idx_offset = reader.Read<uint32_t>();
 		bound_info.indexes.emplace_back(idx_block_id, idx_offset);
 	}
 }

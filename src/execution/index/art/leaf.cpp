@@ -313,7 +313,7 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 	return str;
 }
 
-MetaBlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
+BlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		auto block_pointer = writer.GetBlockPointer();
@@ -337,7 +337,7 @@ MetaBlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 	}
 
 	// write child block pointer
-	writer.Write(child_block_pointer.block_pointer);
+	writer.Write(child_block_pointer.block_id);
 	writer.Write(child_block_pointer.offset);
 
 	return block_pointer;

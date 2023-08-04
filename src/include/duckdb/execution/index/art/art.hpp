@@ -35,7 +35,7 @@ public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-	    AttachedDatabase &db, MetaBlockPointer block = MetaBlockPointer());
+	    AttachedDatabase &db, BlockPointer block = BlockPointer());
 	~ART() override;
 
 	//! Root of the tree
@@ -77,7 +77,7 @@ public:
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
 	//! Serializes the index and returns the pair of block_id offset positions
-	MetaBlockPointer Serialize(MetadataWriter &writer) override;
+	BlockPointer Serialize(MetadataWriter &writer) override;
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

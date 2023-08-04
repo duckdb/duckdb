@@ -83,7 +83,7 @@ public:
 		return block_manager;
 	}
 	MetadataManager &GetMetadataManager() override {
-		throw InternalException("FIXME: GetMetadataManager");
+		return block_manager.GetMetadataManager();
 	}
 };
 
