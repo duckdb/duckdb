@@ -203,7 +203,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "");
+	             py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none());
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -908,21 +908,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	if (alias.empty()) {
-		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
-	}
-	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
-It can only be used to run individual SELECT statements, and converts the result of that SELECT
-statement into a Relation object.
-Use duckdb.sql to run arbitrary SQL queries.)";
-	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias, const py::object &params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -931,11 +917,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, s
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
-	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT &&
+	    py::none().is(params)) {
 		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(
 		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
-	auto res = ExecuteInternal(query);
+	auto res = ExecuteInternal(query, params);
 	if (!res) {
 		return nullptr;
 	}
