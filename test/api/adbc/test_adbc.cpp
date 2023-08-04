@@ -45,7 +45,6 @@ public:
 		DuckDB db(path);
 		Connection con(db);
 		return ArrowTestHelper::RunArrowComparison(con, query, arrow_stream);
-		arrow_stream.release = nullptr;
 	}
 
 	ArrowArrayStream &Query(const string &query) {
