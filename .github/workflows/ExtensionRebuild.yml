@@ -53,7 +53,7 @@ jobs:
       if: !use_old_extension_config
       shell: bash
       run: |
-        echo -e 'duckdb_extension_load( ${{ inputs.extension_name }} GIT_URL ${{ inputs.extension_repo }} GIT_TAG ${{ inputs.extension_ref }} DONT_LINK)' > duckdb-old/.github/config/vcpkg_extensions.cmake
+        echo -e 'duckdb_extension_load( ${{ inputs.extension_name }} GIT_URL ${{ inputs.extension_repo }} GIT_TAG ${{ inputs.extension_ref }} DONT_LINK)' > duckdb-old/.github/config/out_of_tree_extensions.cmake
 
     - name: Override config (CSV)
       if: use_old_extension_config
