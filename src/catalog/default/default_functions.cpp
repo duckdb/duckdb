@@ -98,6 +98,8 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "fmod", {"x", "y", nullptr}, "(x-y*floor(x/y))"},
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
+	{DEFAULT_SCHEMA, "geomean", {"x", nullptr}, "exp(avg(ln(x)))"},
+	{DEFAULT_SCHEMA, "geometric_mean", {"x", nullptr}, "geomean(x)"},
 
     // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
     {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
