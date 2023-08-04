@@ -153,6 +153,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
 			duckdb_col_type = LogicalType::DATE;
 			break;
+		case RType::LIST_OF_NULLS:
 		case RType::BLOB:
 			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			duckdb_col_type = LogicalType::BLOB;
@@ -368,13 +369,12 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
+		case RType::LIST_OF_NULLS:
 		case RType::BLOB: {
 			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, v, this_count);
 			break;
 		}
-		case RType::LIST_OF_NULLS:
-			break;
 		default:
 			cpp11::stop("rapi_execute: Unsupported column type for scan");
 		}

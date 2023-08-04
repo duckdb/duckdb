@@ -192,7 +192,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	case RType::LIST_OF_NULLS:
-		return Value();
+		return Value(LogicalType::BLOB);
 	case RType::BLOB: {
 		auto ts_val = VECTOR_ELT(valsexp, idx);
 		return Rf_isNull(ts_val) ? Value(LogicalType::BLOB) : Value::BLOB(RAW(ts_val), Rf_xlength(ts_val));
