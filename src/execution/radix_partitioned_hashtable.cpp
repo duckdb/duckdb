@@ -406,12 +406,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstat
 		for (idx_t i = 0; i < n_partitions; i++) {
 			gstate.partitions.emplace_back(make_uniq<AggregatePartition>(std::move(uncombined_partition_data[i])));
 			if (single_ht) {
+				gstate.finalize_idx++;
 				gstate.partitions.back()->finalized = true;
 			}
-		}
-
-		if (single_ht) {
-			gstate.finalize_idx = n_partitions;
 		}
 	} else {
 		gstate.count_before_combining = 0;
@@ -737,11 +734,6 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		}
 		gstate.finished = true;
 		return SourceResultType::HAVE_MORE_OUTPUT;
-	}
-
-	if (sink.count_before_combining == 0) {
-		gstate.finished = true;
-		return SourceResultType::FINISHED;
 	}
 
 	while (!gstate.finished && chunk.size() == 0) {
