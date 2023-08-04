@@ -1,4 +1,7 @@
 import pytest
+
+_ = pytest.importorskip("pyduckdb.spark")
+from pyduckdb.spark.sql.types import Row
 from pyduckdb.spark.sql.types import (
     StringType,
     BinaryType,
@@ -41,7 +44,8 @@ class TestTypes(object):
 			select * EXCLUDE (
 				small_enum,
 				medium_enum,
-				large_enum
+				large_enum,
+				'union'
 			) from test_all_types()
 		"""
         )

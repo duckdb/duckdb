@@ -1,4 +1,7 @@
 import pytest
+
+_ = pytest.importorskip("pyduckdb.spark")
+
 from pyduckdb.spark.sql.types import (
     LongType,
     StructType,
