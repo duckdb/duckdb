@@ -182,12 +182,7 @@ public:
 	using ScannerPtr = unique_ptr<RowDataCollectionScanner>;
 	using Task = std::pair<WindowPartitionSourceState *, ScannerPtr>;
 
-	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
-	    : context(context_p), gsink(gsink_p), next_build(0) {
-		auto &hash_groups = gsink.global_partition->hash_groups;
-		unfinished = hash_groups.empty() ? 1 : hash_groups.size();
-		built.resize(unfinished);
-	}
+	WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p);
 
 	//! Get the next task
 	Task NextTask(idx_t hash_bin);
@@ -202,28 +197,48 @@ public:
 	vector<HashGroupSourcePtr> built;
 	//! Serialise access to the built hash groups
 	mutable mutex built_lock;
-	//! The number of unfinished hash groups
-	atomic<idx_t> unfinished;
+	//! The number of unfinished tasks
+	atomic<idx_t> tasks_remaining;
 
 public:
 	idx_t MaxThreads() override {
-		// If there is only one partition, we have to process it on one thread.
-		if (!gsink.global_partition->grouping_data) {
-			return 1;
-		}
-
-		// If there is not a lot of data, process serially.
-		if (gsink.global_partition->count < STANDARD_ROW_GROUPS_SIZE) {
-			return 1;
-		}
-
-		return gsink.global_partition->hash_groups.size();
+		return tasks_remaining;
 	}
 
 private:
 	Task CreateTask(idx_t hash_bin);
 	Task StealWork();
 };
+
+WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, WindowGlobalSinkState &gsink_p)
+    : context(context_p), gsink(gsink_p), next_build(0), tasks_remaining(0) {
+	auto &hash_groups = gsink.global_partition->hash_groups;
+
+	auto &gpart = gsink.global_partition;
+	if (hash_groups.empty()) {
+		//	OVER()
+		built.resize(1);
+		if (gpart->rows) {
+			tasks_remaining += gpart->rows->blocks.size();
+		}
+	} else {
+		built.resize(hash_groups.size());
+		for (auto &hash_group : hash_groups) {
+			if (!hash_group) {
+				continue;
+			}
+			auto &global_sort_state = *hash_group->global_sort;
+			if (global_sort_state.sorted_blocks.empty()) {
+				continue;
+			}
+
+			D_ASSERT(global_sort_state.sorted_blocks.size() == 1);
+			auto &sb = *global_sort_state.sorted_blocks[0];
+			auto &sd = *sb.payload_data;
+			tasks_remaining += sd.data_blocks.size();
+		}
+	}
+}
 
 // Per-bin evaluation state (build and evaluate)
 class WindowPartitionSourceState {
@@ -317,6 +332,7 @@ unique_ptr<RowDataCollectionScanner> WindowPartitionSourceState::GetScanner() co
 			return nullptr;
 		}
 		//	Second pass can flush
+		--gsource.tasks_remaining;
 		return make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, external, block_idx, true);
 	}
 	return nullptr;
@@ -474,8 +490,8 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::CreateTask(idx_t hash_bin
 }
 
 WindowGlobalSourceState::Task WindowGlobalSourceState::StealWork() {
-	lock_guard<mutex> built_guard(built_lock);
 	for (idx_t hash_bin = 0; hash_bin < built.size(); ++hash_bin) {
+		lock_guard<mutex> built_guard(built_lock);
 		auto &partition_source = built[hash_bin];
 		if (!partition_source) {
 			continue;
@@ -501,13 +517,15 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 	if (hash_bin < bin_count) {
 		//	Lock and delete when all blocks have been scanned
 		//	We do this here instead of in NextScan so the WindowLocalSourceState
-		//	has a chance to delete its state objects,
+		//	has a chance to delete its state objects first,
 		//	which may reference the partition_source
+
+		//	Delete data outside the lock in case it is slow
+		HashGroupSourcePtr killed;
 		lock_guard<mutex> built_guard(built_lock);
 		auto &partition_source = built[hash_bin];
 		if (partition_source && !partition_source->unscanned) {
-			partition_source.reset();
-			--unfinished;
+			killed = std::move(partition_source);
 		}
 	}
 
@@ -521,9 +539,6 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 					return result;
 				}
 			}
-
-			//	Empty hash groups are immediately finished
-			--unfinished;
 		}
 
 		//	OVER() doesn't have a hash_group
@@ -532,12 +547,11 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 			if (result.second) {
 				return result;
 			}
-			--unfinished;
 		}
 	}
 
 	//	Work stealing
-	while (unfinished) {
+	while (tasks_remaining) {
 		auto result = StealWork();
 		if (result.second) {
 			return result;

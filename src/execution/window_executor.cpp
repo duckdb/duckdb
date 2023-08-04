@@ -295,8 +295,6 @@ struct WindowBoundariesState {
 
 	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size);
 
-	void UpdateValid(const WindowInputColumn &range_collection, const ValidityMask &order_mask);
-
 	void Update(const idx_t row_idx, const WindowInputColumn &range_collection, const idx_t chunk_idx,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
@@ -332,75 +330,28 @@ struct WindowBoundariesState {
 //===--------------------------------------------------------------------===//
 // WindowBoundariesState
 //===--------------------------------------------------------------------===//
-void WindowBoundariesState::UpdateValid(const WindowInputColumn &range_collection, const ValidityMask &order_mask) {
-	// Find valid ordering values for the new partition
-	// so we can exclude NULLs from RANGE expression computations
-	valid_start = partition_start;
-	valid_end = partition_end;
-
-	if ((valid_start < valid_end) && has_preceding_range) {
-		// Exclude any leading NULLs
-		if (range_collection.CellIsNull(valid_start)) {
-			idx_t n = 1;
-			valid_start = FindNextStart(order_mask, valid_start + 1, valid_end, n);
-		}
-	}
-
-	if ((valid_start < valid_end) && has_following_range) {
-		// Exclude any trailing NULLs
-		if (range_collection.CellIsNull(valid_end - 1)) {
-			idx_t n = 1;
-			valid_end = FindPrevStart(order_mask, valid_start, valid_end, n);
-		}
-
-		//	Reset range hints
-		prev.start = valid_start;
-		prev.end = valid_end;
-	}
-}
-
 void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn &range_collection,
                                    const idx_t chunk_idx, WindowInputExpression &boundary_start,
                                    WindowInputExpression &boundary_end, const ValidityMask &partition_mask,
                                    const ValidityMask &order_mask) {
-	// determine partition and peer group boundaries to ultimately figure out window size
-	const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
-	const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
-
-	//	Out of order evaluation?
-	if (next_pos != row_idx && partition_count) {
-		//	Go back as far as the previous partition start
-		idx_t n = 1;
-		partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
-
-		//	Go forward as far as the end of the input
-		n = 1;
-		partition_end = FindNextStart(partition_mask, partition_start + 1, input_size, n);
-
-		//	Is it a new peer?
-		if (!is_peer) {
-			peer_start = row_idx;
-		}
-
-		//	If we need peers, find the last one
-		if (needs_peer) {
-			peer_end = partition_end;
-			if (order_count) {
-				idx_t n = 1;
-				peer_end = FindNextStart(order_mask, peer_start + 1, partition_end, n);
-			}
-		}
-
-		UpdateValid(range_collection, order_mask);
-	}
-	next_pos = row_idx + 1;
 
 	if (partition_count + order_count > 0) {
 
+		// determine partition and peer group boundaries to ultimately figure out window size
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+		const auto is_jump = (next_pos != row_idx);
+
 		// when the partition changes, recompute the boundaries
-		if (!is_same_partition) {
+		if (!is_same_partition || is_jump) {
 			partition_start = row_idx;
 			peer_start = row_idx;
+
+			if (is_jump) {
+				//	Go back as far as the previous partition start
+				idx_t n = 1;
+				partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
+			}
 
 			// find end of partition
 			partition_end = input_size;
@@ -409,7 +360,30 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 				partition_end = FindNextStart(partition_mask, partition_start + 1, input_size, n);
 			}
 
-			UpdateValid(range_collection, order_mask);
+			// Find valid ordering values for the new partition
+			// so we can exclude NULLs from RANGE expression computations
+			valid_start = partition_start;
+			valid_end = partition_end;
+
+			if ((valid_start < valid_end) && has_preceding_range) {
+				// Exclude any leading NULLs
+				if (range_collection.CellIsNull(valid_start)) {
+					idx_t n = 1;
+					valid_start = FindNextStart(order_mask, valid_start + 1, valid_end, n);
+				}
+			}
+
+			if ((valid_start < valid_end) && has_following_range) {
+				// Exclude any trailing NULLs
+				if (range_collection.CellIsNull(valid_end - 1)) {
+					idx_t n = 1;
+					valid_end = FindPrevStart(order_mask, valid_start, valid_end, n);
+				}
+
+				//	Reset range hints
+				prev.start = valid_start;
+				prev.end = valid_end;
+			}
 		} else if (!is_peer) {
 			peer_start = row_idx;
 		}
@@ -427,6 +401,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		partition_end = input_size;
 		peer_end = partition_end;
 	}
+	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
 	window_start = -1;
