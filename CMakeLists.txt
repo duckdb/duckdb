@@ -901,7 +901,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/extension/extension_config.cmake)
 # the sqllogictest "require" statement load the loadable extensions instead of the baked in static one
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK} AND ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK}" AND "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS}")
     list(APPEND TEST_WITH_LOADABLE_EXTENSION ${EXT_NAME})
   endif()
 endforeach()
@@ -925,7 +925,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
-  if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT "${VCPKG_BUILD}")
+  if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json" AND NOT DEFINED VCPKG_BUILD)
     message(WARNING "Extension '${EXT_NAME}' has a vcpkg.json, but build was not run with VCPKG. If build fails, check out VCPKG build instructions in 'duckdb/extension/README.md' or try manually installing the dependencies in ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json")
   endif()
 

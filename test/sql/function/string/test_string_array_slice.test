@@ -108,18 +108,18 @@ NULL
 query T
 SELECT array_slice('hello', NULL, length+NULL) FROM strings
 ----
-hello
-hello
-hello
-hello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT array_slice('hello', off+1, NULL+off) FROM strings
 ----
-hello
-ello
-hello
-ello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT array_slice(NULL::varchar, NULL, length+NULL) FROM strings
@@ -132,10 +132,10 @@ NULL
 query T
 SELECT array_slice('hello', NULL, NULL+NULL) FROM strings
 ----
-hello
-hello
-hello
-hello
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT array_slice(NULL::varchar, off, NULL+off) FROM strings
@@ -157,8 +157,8 @@ NULL
 query T
 SELECT array_slice(s, -2, NULL) FROM strings
 ----
-lo
-ld
+NULL
+NULL
 NULL
 NULL
 
@@ -175,9 +175,9 @@ NULL
 query T
 SELECT array_slice(s, -4, -2) FROM strings
 ----
-el
-or
-NULL
+ell
+orl
+(empty)
 NULL
 
 # length 0
@@ -193,9 +193,9 @@ NULL
 query T
 SELECT array_slice(s, 2, NULL) FROM strings
 ----
-ello
-orld
-(empty)
+NULL
+NULL
+NULL
 NULL
 
 # very large offset and length
@@ -218,15 +218,15 @@ NULL
 query T
 SELECT array_slice(s, (-2147483646-1), -1) FROM strings
 ----
-NULL
-NULL
-NULL
+hello
+world
+b
 NULL
 
 query T
 SELECT array_slice(s, (-2147483646-1), -2147483647) FROM strings
 ----
-NULL
-NULL
-NULL
+(empty)
+(empty)
+(empty)
 NULL

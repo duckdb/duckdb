@@ -325,6 +325,7 @@ typedef struct PGAIndices {
 	bool is_slice; /* true if slice (i.e., colon present) */
 	PGNode *lidx;  /* slice lower bound, if any */
 	PGNode *uidx;  /* subscript, or slice upper bound if any */
+	PGNode *step;  /* slice step, if any */
 } PGAIndices;
 
 /*

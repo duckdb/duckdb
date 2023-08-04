@@ -70,14 +70,14 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	auto small_enum_ptr = FlatVector::GetData<string_t>(small_enum);
 	small_enum_ptr[0] = StringVector::AddStringOrBlob(small_enum, "DUCK_DUCK_ENUM");
 	small_enum_ptr[1] = StringVector::AddStringOrBlob(small_enum, "GOOSE");
-	result.emplace_back(LogicalType::ENUM("small_enum", small_enum, 2), "small_enum");
+	result.emplace_back(LogicalType::ENUM(small_enum, 2), "small_enum");
 
 	Vector medium_enum(LogicalType::VARCHAR, 300);
 	auto medium_enum_ptr = FlatVector::GetData<string_t>(medium_enum);
 	for (idx_t i = 0; i < 300; i++) {
 		medium_enum_ptr[i] = StringVector::AddStringOrBlob(medium_enum, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
+	result.emplace_back(LogicalType::ENUM(medium_enum, 300), "medium_enum");
 
 	if (use_large_enum) {
 		// this is a big one... not sure if we should push this one here, but it's required for completeness
@@ -86,13 +86,13 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 		for (idx_t i = 0; i < 70000; i++) {
 			large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
 		}
-		result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 70000), "large_enum");
+		result.emplace_back(LogicalType::ENUM(large_enum, 70000), "large_enum");
 	} else {
 		Vector large_enum(LogicalType::VARCHAR, 2);
 		auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
 		large_enum_ptr[0] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(0));
 		large_enum_ptr[1] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(69999));
-		result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 2), "large_enum");
+		result.emplace_back(LogicalType::ENUM(large_enum, 2), "large_enum");
 	}
 
 	// arrays

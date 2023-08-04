@@ -115,8 +115,6 @@ public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
 
-	string ExtractTimezone() const;
-
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer;
 	}

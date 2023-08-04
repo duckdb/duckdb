@@ -63,13 +63,4 @@ ClientContext &BufferedFileReader::GetContext() {
 	return *context;
 }
 
-optional_ptr<Catalog> BufferedFileReader::GetCatalog() {
-	return catalog;
-}
-
-void BufferedFileReader::SetCatalog(Catalog &catalog_p) {
-	D_ASSERT(!catalog);
-	this->catalog = &catalog_p;
-}
-
 } // namespace duckdb

@@ -19,7 +19,7 @@
 namespace duckdb {
 
 static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
-                                     const ArrowOptions &options) {
+                                     const ClientProperties &options) {
 	ArrowSchema schema;
 	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
@@ -31,7 +31,7 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ArrowOptions &options) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -45,7 +45,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ArrowOp
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 
 	// Create the stream factory from the Table object
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.config);
+	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(table.ptr(), context.GetClientProperties());
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -107,13 +107,11 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		ArrowOptions options;
+		ClientProperties options;
 
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
-			auto client_properties = context.GetClientProperties();
-			options.time_zone = client_properties.time_zone;
-			options.offset_size = client_properties.arrow_offset_size;
+			options = context.GetClientProperties();
 		}
 
 		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
@@ -156,16 +154,17 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 	return func;
 }
 
-static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling) {
+static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptionHandling exception_handling,
+                                              const ClientProperties &client_properties) {
 	// Through the capture of the lambda, we have access to the function pointer
 	// We just need to make sure that it doesn't get garbage collected
 	scalar_function_t func = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 		py::gil_scoped_acquire gil;
 
 		// owning references
-		vector<py::handle> python_objects;
+		vector<py::object> python_objects;
 		vector<PyObject *> python_results;
-		python_results.reserve(input.size());
+		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -173,7 +172,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 				// Fill the tuple with the arguments for this row
 				auto &column = input.data[i];
 				auto value = column.GetValue(row);
-				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType());
+				bundled_parameters[i] = PythonObject::FromValue(value, column.GetType(), client_properties);
 			}
 
 			// Call the function
@@ -190,8 +189,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			}
-			python_objects.push_back(py::handle(ret));
-			python_results.push_back(ret);
+			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
+			python_results[row] = ret;
 		}
 
 		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
@@ -310,12 +309,13 @@ public:
 		}
 	}
 
-	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects) {
+	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects,
+	                           const ClientProperties &client_properties) {
 		scalar_function_t func;
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
 		} else {
-			func = CreateNativeFunction(udf.ptr(), exception_handling);
+			func = CreateNativeFunction(udf.ptr(), exception_handling, client_properties);
 		}
 		FunctionSideEffects function_side_effects =
 		    side_effects ? FunctionSideEffects::HAS_SIDE_EFFECTS : FunctionSideEffects::NO_SIDE_EFFECTS;
@@ -338,8 +338,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
 	data.OverrideParameters(parameters);
 	data.OverrideReturnType(return_type);
 	data.Verify();
-
-	return data.GetFunction(udf, exception_handling, side_effects);
+	return data.GetFunction(udf, exception_handling, side_effects, connection->context->GetClientProperties());
 }
 
 } // namespace duckdb
