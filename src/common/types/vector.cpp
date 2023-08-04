@@ -2365,12 +2365,6 @@ void ArrayVector::AllocateFakeListEntries(Vector &vector) {
 	auto array_count = ArrayVector::GetTotalSize(vector) / array_size;
 	vector.buffer = VectorBuffer::CreateStandardVector(LogicalType::HUGEINT, array_count);
 	vector.data = vector.buffer->GetData();
-
-	if (ArrayType::GetChildType(vector.GetType()).InternalType() == PhysicalType::ARRAY) {
-		// nested array: generate fake list entries for the child vector as well
-		auto &child_vector = ArrayVector::GetEntry(vector);
-		ArrayVector::AllocateFakeListEntries(child_vector);
-	}
 }
 
 } // namespace duckdb

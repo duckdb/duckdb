@@ -1319,6 +1319,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 
 template <class COLLECTION>
 struct CollectionVector {
+	static void Setup(Vector &collection) = delete;
 	static idx_t GetSize(Vector &collection) = delete;
 	static idx_t GetSizeBefore(Vector &collection) = delete;
 	static Vector &GetEntry(Vector &collection) = delete;
@@ -1328,6 +1329,9 @@ struct CollectionVector {
 
 template <>
 struct CollectionVector<ArrayVector> {
+	static void Setup(Vector &collection) {
+		ArrayVector::AllocateFakeListEntries(collection);
+	}
 	static idx_t GetSize(Vector &collection) {
 		return ArrayVector::GetTotalSize(collection);
 	}
@@ -1347,6 +1351,9 @@ struct CollectionVector<ArrayVector> {
 
 template <>
 struct CollectionVector<ListVector> {
+	static void Setup(Vector &collection) {
+		// do nothing
+	}
 	static idx_t GetSize(Vector &collection) {
 		return ListVector::GetListSize(collection);
 	}
@@ -1364,7 +1371,7 @@ struct CollectionVector<ListVector> {
 	}
 };
 
-template <class CHILD_COLLECTION>
+template <class COLLECTION>
 static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &layout, Vector &heap_locations,
                                                       const idx_t list_size_before, const SelectionVector &scan_sel,
                                                       const idx_t scan_count, Vector &target,
@@ -1374,10 +1381,13 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 	auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 	auto &source_heap_validity = FlatVector::Validity(heap_locations);
 
+	// Setup
+	CollectionVector<COLLECTION>::Setup(target);
+
 	// Target
 	auto target_list_entries = FlatVector::GetData<list_entry_t>(target);
 	auto &target_validity = FlatVector::Validity(target);
-	const auto child_list_size_before = CollectionVector<CHILD_COLLECTION>::GetSizeBefore(target);
+	const auto child_list_size_before = CollectionVector<COLLECTION>::GetSizeBefore(target);
 
 	// List parent
 	const auto list_entries = FlatVector::GetData<list_entry_t>(list_vector);
@@ -1427,14 +1437,14 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 		target_offset += list_length;
 	}
 
-	CollectionVector<CHILD_COLLECTION>::Reserve(target, target_child_offset);
-	CollectionVector<CHILD_COLLECTION>::SetSize(target, target_child_offset);
+	CollectionVector<COLLECTION>::Reserve(target, target_child_offset);
+	CollectionVector<COLLECTION>::SetSize(target, target_child_offset);
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
 	const auto &child_function = child_functions[0];
 	child_function.function(layout, heap_locations, child_list_size_before, scan_sel, scan_count,
-	                        CHILD_COLLECTION::GetEntry(target), target_sel, combined_list_vector,
+	                        COLLECTION::GetEntry(target), target_sel, combined_list_vector,
 	                        child_function.child_functions);
 }
 
