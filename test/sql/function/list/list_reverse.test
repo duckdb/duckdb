@@ -1,3 +1,6 @@
+# name: test/sql/function/list/list_reverse.test
+# group: [list]
+
 statement ok
 PRAGMA enable_verification
 
