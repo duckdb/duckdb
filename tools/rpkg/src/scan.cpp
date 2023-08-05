@@ -135,6 +135,9 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		case RType::BLOB:
 			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
 			break;
+		case RTypeId::LIST:
+			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
+			break;
 		default:
 			cpp11::stop("rapi_execute: Unsupported column type for bind");
 		}
