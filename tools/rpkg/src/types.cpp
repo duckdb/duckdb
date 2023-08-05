@@ -28,6 +28,40 @@ bool RType::operator==(const RType &rhs) const {
 	return id_ == rhs.id_ && aux_ == rhs.aux_;
 }
 
+RType RType::FACTOR(cpp11::strings levels) {
+	RType out = RType(RTypeId::FACTOR);
+	for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
+		out.aux_.push_back(std::make_pair(levels[level_idx], RType()));
+	}
+	return out;
+}
+
+Vector RType::GetFactorLevels() const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	Vector duckdb_levels(LogicalType::VARCHAR, aux_.size());
+	auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
+	for (R_xlen_t level_idx = 0; level_idx < aux_.size(); level_idx++) {
+		levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, aux_[level_idx].first);
+	}
+	return duckdb_levels;
+}
+
+size_t RType::GetFactorLevelsCount() const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	return aux_.size();
+}
+
+Value RType::GetFactorValue(int r_value) const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	bool is_null = RIntegerType::IsNull(r_value);
+	if (!is_null) {
+		auto str_val = aux_[r_value - 1].first;
+		return Value(str_val);
+	} else {
+		return Value(LogicalType::VARCHAR);
+	}
+}
+
 RType RType::LIST(const RType &child) {
 	RType out = RType(RTypeId::LIST);
 	out.aux_.push_back(std::make_pair("", child));
@@ -85,7 +119,7 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 			return RType::UNKNOWN;
 		}
 	} else if (Rf_isFactor(v) && TYPEOF(v) == INTSXP) {
-		return RType::FACTOR;
+		return RType::FACTOR(GET_LEVELS(v));
 	} else if (TYPEOF(v) == LGLSXP) {
 		return RType::LOGICAL;
 	} else if (TYPEOF(v) == INTSXP) {

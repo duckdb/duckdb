@@ -76,7 +76,6 @@ struct RType {
 	static constexpr const RTypeId INTEGER = RTypeId::INTEGER;
 	static constexpr const RTypeId NUMERIC = RTypeId::NUMERIC;
 	static constexpr const RTypeId STRING = RTypeId::STRING;
-	static constexpr const RTypeId FACTOR = RTypeId::FACTOR;
 	static constexpr const RTypeId DATE = RTypeId::DATE;
 	static constexpr const RTypeId DATE_INTEGER = RTypeId::DATE_INTEGER;
 	static constexpr const RTypeId TIMESTAMP = RTypeId::TIMESTAMP;
@@ -93,6 +92,11 @@ struct RType {
 	static constexpr const RTypeId INTEGER64 = RTypeId::INTEGER64;
 	static constexpr const RTypeId LIST_OF_NULLS = RTypeId::LIST_OF_NULLS;
 	static constexpr const RTypeId BLOB = RTypeId::BLOB;
+
+	static RType FACTOR(cpp11::strings levels);
+	Vector GetFactorLevels() const;
+	size_t GetFactorLevelsCount() const;
+	Value GetFactorValue(int r_value) const;
 
 	static RType LIST(const RType &child);
 	RType GetListChildType() const;

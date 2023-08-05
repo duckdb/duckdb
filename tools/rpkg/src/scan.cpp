@@ -100,16 +100,11 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			duckdb_col_type = LogicalType::BIGINT;
 			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
 			break;
-		case RType::FACTOR: {
+		case RTypeId::FACTOR: {
 			// TODO What about factors that use numeric?
 			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			strings levels = GET_LEVELS(coldata);
-			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
-			auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
-			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
-				levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, (string)levels[level_idx]);
-			}
-			duckdb_col_type = LogicalType::ENUM(duckdb_levels, levels.size());
+			auto duckdb_levels = rtype.GetFactorLevels();
+			duckdb_col_type = LogicalType::ENUM(duckdb_levels, rtype.GetFactorLevelsCount());
 			break;
 		}
 		case RType::STRING:
@@ -284,7 +279,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 
 			break;
 		}
-		case RType::FACTOR: {
+		case RTypeId::FACTOR: {
 			auto data_ptr = (int *)coldata_ptr + sexp_offset;
 			switch (v.GetType().InternalType()) {
 			case PhysicalType::UINT8:

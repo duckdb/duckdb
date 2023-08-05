@@ -121,16 +121,9 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
 		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
 	}
-	case RType::FACTOR: {
+	case RTypeId::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
-		auto levels = GET_LEVELS(valsexp);
-		bool is_null = RIntegerType::IsNull(int_val);
-		if (!is_null) {
-			auto str_val = STRING_ELT(levels, int_val - 1);
-			return Value(CHAR(str_val));
-		} else {
-			return Value(LogicalType::VARCHAR);
-		}
+		return rtype.GetFactorValue(int_val);
 	}
 	case RType::TIMESTAMP: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
