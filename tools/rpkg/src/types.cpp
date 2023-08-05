@@ -176,6 +176,53 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 	return RType::UNKNOWN;
 }
 
+LogicalType RApiTypes::LogicalTypeFromRType(const RType &rtype, bool experimental) {
+	switch (rtype.id()) {
+	case RType::LOGICAL:
+		return LogicalType::BOOLEAN;
+	case RType::INTEGER:
+		return LogicalType::INTEGER;
+	case RType::NUMERIC:
+		return LogicalType::DOUBLE;
+	case RType::INTEGER64:
+		return LogicalType::BIGINT;
+	case RTypeId::FACTOR: {
+		auto duckdb_levels = rtype.GetFactorLevels();
+		return LogicalType::ENUM(duckdb_levels, rtype.GetFactorLevelsCount());
+	}
+	case RType::STRING:
+		if (experimental) {
+			return RStringsType::Get();
+		} else {
+			return LogicalType::VARCHAR;
+		}
+		break;
+	case RType::TIMESTAMP:
+		return LogicalType::TIMESTAMP;
+	case RType::TIME_SECONDS:
+	case RType::TIME_MINUTES:
+	case RType::TIME_HOURS:
+	case RType::TIME_DAYS:
+	case RType::TIME_WEEKS:
+		return LogicalType::TIME;
+	case RType::TIME_SECONDS_INTEGER:
+	case RType::TIME_MINUTES_INTEGER:
+	case RType::TIME_HOURS_INTEGER:
+	case RType::TIME_DAYS_INTEGER:
+	case RType::TIME_WEEKS_INTEGER:
+		return LogicalType::TIME;
+	case RType::DATE:
+		return LogicalType::DATE;
+	case RType::DATE_INTEGER:
+		return LogicalType::DATE;
+	case RType::LIST_OF_NULLS:
+	case RType::BLOB:
+		return LogicalType::BLOB;
+	default:
+		cpp11::stop("rapi_execute: Unsupported column type for bind");
+	}
+}
+
 string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
 
 	if (stype.GetAlias() == R_STRING_TYPE_NAME) {

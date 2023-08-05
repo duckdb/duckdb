@@ -108,6 +108,7 @@ private:
 
 struct RApiTypes {
 	static RType DetectRType(SEXP v, bool integer64);
+	static LogicalType LogicalTypeFromRType(const RType &rtype, bool experimental);
 	static string DetectLogicalType(const LogicalType &stype, const char *caller);
 	static Value SexpToValue(SEXP valsexp, R_len_t idx);
 	static SEXP ValueToSexp(Value &val, string &timezone_config);
