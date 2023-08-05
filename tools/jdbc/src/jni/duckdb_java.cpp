@@ -1,4 +1,6 @@
 #include "org_duckdb_DuckDBNative.h"
+#include "duckdb/common/enum_util.hpp"
+#include "utf8proc_wrapper.hpp"
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -448,8 +450,6 @@ struct StatementHolder {
 	duckdb::unique_ptr<PreparedStatement> stmt;
 };
 
-#include "utf8proc_wrapper.hpp"
-
 JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1prepare(JNIEnv *env, jclass, jobject conn_ref_buf,
                                                                              jbyteArray query_j) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
@@ -664,7 +664,8 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 		}
 	} break;
 	default:
-		return logical_type.ToString();
+		// this intentionally ignores aliases, so we know how to load the data on the java side
+		return EnumUtil::ToString(logical_type.id());
 	}
 }
 
