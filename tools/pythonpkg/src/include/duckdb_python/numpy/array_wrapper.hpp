@@ -61,7 +61,8 @@ public:
 
 class NumpyResultConversion {
 public:
-	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity, ClientProperties client_properties);
+	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity,
+	                      const ClientProperties &client_properties);
 
 public:
 	py::list &InsertCategory(idx_t col_idx);

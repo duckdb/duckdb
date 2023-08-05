@@ -824,11 +824,11 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 }
 
 NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity,
-                                             ClientProperties client_properties)
+                                             const ClientProperties &client_properties)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
-		owned_data.emplace_back(type, std::move(client_properties));
+		owned_data.emplace_back(type, client_properties);
 	}
 	Resize(initial_capacity);
 }
