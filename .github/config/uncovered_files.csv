@@ -64,7 +64,7 @@ common/tree_renderer.cpp	9
 common/types.cpp	88
 common/extra_type_info.cpp	34
 common/virtual_file_system.cpp	32
-common/types/batched_data_collection.cpp	11
+common/types/batched_data_collection.cpp	39
 common/types/bit.cpp	9
 common/types/blob.cpp	3
 common/types/chunk_collection.cpp	94
@@ -455,6 +455,7 @@ main/capi/arrow-c.cpp	5
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
 main/chunk_scan_state/query_result.cpp	28
+main/chunk_scan_state/batched_data_collection.cpp	31
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
