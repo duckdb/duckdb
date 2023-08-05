@@ -921,19 +921,21 @@ Use duckdb.sql to run arbitrary SQL queries.)";
 	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias, const py::object &params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	auto statements = connection->ExtractStatements(query);
 	if (alias.empty()) {
 		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
-	if (statements.size() == 1 && statements[0]->type == StatementType::SELECT_STATEMENT) {
+	Parser parser(connection->context->GetParserOptions());
+	parser.ParseQuery(query);
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT &&
+	    py::none().is(params)) {
 		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(
-		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statements[0])), alias));
+		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
-	auto res = ExecuteInternal(query);
+	auto res = ExecuteInternal(query, params);
 	if (!res) {
 		return nullptr;
 	}
