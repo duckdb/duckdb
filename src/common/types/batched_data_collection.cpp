@@ -103,7 +103,7 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	return result;
 }
 
-const vector<LogicalType> BatchedDataCollection::Types() const {
+const vector<LogicalType> &BatchedDataCollection::Types() const {
 	return types;
 }
 
@@ -130,12 +130,17 @@ idx_t BatchedDataCollection::IndexToBatchIndex(idx_t index) const {
 }
 
 idx_t BatchedDataCollection::BatchSize(idx_t batch_index) const {
+	auto &collection = Batch(batch_index);
+	return collection.Count();
+}
+
+const ColumnDataCollection &BatchedDataCollection::Batch(idx_t batch_index) const {
 	auto entry = data.find(batch_index);
 	if (entry == data.end()) {
 		throw InternalException("This batched data collection does not contain a collection for batch_index %d",
 		                        batch_index);
 	}
-	return entry->second->Count();
+	return *entry->second;
 }
 
 BatchedChunkIteratorRange BatchedDataCollection::BatchRange(idx_t begin_idx, idx_t end_idx) {

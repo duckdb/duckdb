@@ -58,7 +58,7 @@ public:
 	DUCKDB_API idx_t Count() const;
 
 	//! Inspect the types of the collection
-	DUCKDB_API const vector<LogicalType> Types() const;
+	DUCKDB_API const vector<LogicalType> &Types() const;
 
 	//! Inspect how many batches this collection contains
 	DUCKDB_API idx_t BatchCount() const;
@@ -68,6 +68,9 @@ public:
 
 	//! Inspect how big a given batch is
 	DUCKDB_API idx_t BatchSize(idx_t batch_index) const;
+
+	//! Inspect a given batch through a const reference
+	const ColumnDataCollection &Batch(idx_t batch_index) const;
 
 	//! Create an iterator range from the provided indices
 	BatchedChunkIteratorRange BatchRange(idx_t begin = 0, idx_t end = DConstants::INVALID_INDEX);
@@ -90,4 +93,5 @@ private:
 	//! The last batch collection that was inserted into
 	CachedCollection last_collection;
 };
+
 } // namespace duckdb
