@@ -43,6 +43,7 @@ enum class RTypeId {
 	// No RType equivalent
 	BYTE,
 	LIST,
+	STRUCT,
 };
 
 struct RType {
@@ -100,6 +101,9 @@ struct RType {
 
 	static RType LIST(const RType &child);
 	RType GetListChildType() const;
+
+	static RType STRUCT(child_list_t<RType> &&children);
+	child_list_t<RType> GetStructChildTypes() const;
 
 private:
 	RTypeId id_;

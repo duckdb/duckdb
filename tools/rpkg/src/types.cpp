@@ -73,6 +73,17 @@ RType RType::GetListChildType() const {
 	return aux_.front().second;
 }
 
+RType RType::STRUCT(child_list_t<RType> &&children) {
+	RType out = RType(RTypeId::LIST);
+	std::swap(out.aux_, children);
+	return out;
+}
+
+child_list_t<RType> RType::GetStructChildTypes() const {
+	D_ASSERT(id_ == RTypeId::STRUCT);
+	return aux_;
+}
+
 RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
