@@ -3486,8 +3486,8 @@ public class TestDuckDBJDBC {
                                                           mapOf("a", asList(42, 999, null, null, -42), "b",
                                                                 asList("🦆🦆🦆🦆🦆🦆", "goose", null, "")),
                                                           null));
-        correct_answer_map.put("array_of_structs",
-                               trio(mapOf("a", null, "b", null), mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        correct_answer_map.put("array_of_structs", trio(mapOf("a", null, "b", null),
+                                                        mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
         correct_answer_map.put("bool", asList(false, true, null));
         correct_answer_map.put("tinyint", asList((byte) -128, (byte) 127, null));
         correct_answer_map.put("smallint", asList((short) -32768, (short) 32767, null));
@@ -3518,8 +3518,8 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("small_enum", asList("DUCK_DUCK_ENUM", "GOOSE", null));
         correct_answer_map.put("medium_enum", asList("enum_0", "enum_299", null));
         correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
-        correct_answer_map.put("struct",
-                               asList(mapOf("a", null, "b", null), mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
+        correct_answer_map.put(
+            "struct", asList(mapOf("a", null, "b", null), mapOf("a", 42, "b", "🦆🦆🦆🦆🦆🦆"), null));
         correct_answer_map.put("map",
                                asList(mapOf(), mapOf("key1", "🦆🦆🦆🦆🦆🦆", "key2", "goose"), null));
         correct_answer_map.put("union", asList("Frank", (short) 5, null));
