@@ -108,3 +108,17 @@ test_that("structs give the same results via Arrow", {
     )
   ))
 })
+
+test_that("nested lists of atomic values can be written", {
+  skip_if_not_installed("vctrs")
+
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  df <- vctrs::data_frame(a = 1:3, b = list(4:6, 2:3, 1L))
+  dbWriteTable(con, "df", df)
+  expect_equal(dbReadTable(con, "df"), df)
+
+  duckdb_register(con, "df_reg", df)
+  expect_equal(dbReadTable(con, "df_reg"), df)
+})

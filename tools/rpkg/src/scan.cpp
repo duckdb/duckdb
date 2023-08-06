@@ -8,14 +8,34 @@ using namespace cpp11;
 
 template <class SRC, class DST, class RTYPE>
 static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
-	auto result_data = FlatVector::GetData<DST>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
 			result_mask.SetInvalid(i);
 		} else {
+			auto result_data = FlatVector::GetData<DST>(result);
 			result_data[i] = RTYPE::Convert(val);
+		}
+	}
+}
+
+void AppendListColumnSegment(SEXP *source_data, Vector &result, idx_t count) {
+	auto &result_mask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source_data[i];
+		if (RSexpType::IsNull(val)) {
+			result_mask.SetInvalid(i);
+		} else {
+			auto result_data = FlatVector::GetData<list_entry_t>(result);
+			// FIXME: Use vec_size() equivalent here
+			auto len = Rf_length(val);
+			result_data[i].offset = ListVector::GetListSize(result);
+			for (R_len_t i = 0; i < len; i++) {
+				auto item = RApiTypes::SexpToValue(val, i);
+				ListVector::PushBack(result, item);
+			}
+			result_data[i].length = len;
 		}
 	}
 }
@@ -229,7 +249,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		}
 
 		auto coldata_ptr = bind_data.data_ptrs[src_df_col_idx];
-		switch (bind_data.rtypes[src_df_col_idx].id()) {
+		auto rtype = bind_data.rtypes[src_df_col_idx];
+		switch (rtype.id()) {
 		case RType::LOGICAL: {
 			auto data_ptr = (int *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
@@ -353,6 +374,11 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		case RType::BLOB: {
 			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
 			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, v, this_count);
+			break;
+		}
+		case RTypeId::LIST: {
+			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
+			AppendListColumnSegment(data_ptr, v, this_count);
 			break;
 		}
 		default:
