@@ -353,10 +353,10 @@ bool RStringSexpType::IsNull(SEXP val) {
 	return val == NA_STRING;
 }
 
-string_t RRawSexpType::Convert(SEXP val) {
-	return string_t((char *)RAW(val), Rf_xlength(val));
+bool RSexpType::IsNull(SEXP val) {
+	return val == R_NilValue;
 }
 
-bool RRawSexpType::IsNull(SEXP val) {
-	return val == R_NilValue;
+string_t RRawSexpType::Convert(SEXP val) {
+	return string_t((char *)RAW(val), Rf_xlength(val));
 }

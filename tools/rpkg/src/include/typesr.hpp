@@ -191,9 +191,12 @@ struct RStringSexpType {
 	static bool IsNull(SEXP val);
 };
 
-struct RRawSexpType {
-	static string_t Convert(SEXP val);
+struct RSexpType {
 	static bool IsNull(SEXP val);
+};
+
+struct RRawSexpType : public RSexpType {
+	static string_t Convert(SEXP val);
 };
 
 } // namespace duckdb
