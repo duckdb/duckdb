@@ -165,7 +165,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		return_types.push_back(RApiTypes::LogicalTypeFromRType(rtype, experimental));
 		data_ptrs.push_back(coldata_ptr);
 	}
-	auto row_count = Rf_length(VECTOR_ELT(df, 0));
+	auto row_count = RApiTypes::GetVecSize(rtypes[0], VECTOR_ELT(df, 0));
 	return make_uniq<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
 }
 
