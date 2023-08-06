@@ -5,6 +5,7 @@ import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBConnection;
 import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBNative;
+import org.duckdb.DuckDBPreparedStatement;
 import org.duckdb.DuckDBResultSet;
 import org.duckdb.DuckDBResultSetMetaData;
 import org.duckdb.DuckDBStruct;
@@ -79,7 +80,6 @@ import static java.time.temporal.ChronoField.YEAR_OF_ERA;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
-import static java.util.stream.Collectors.toMap;
 
 public class TestDuckDBJDBC {
 
@@ -2741,32 +2741,32 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_json() throws Exception {
-        DuckDBConnection conn = DriverManager.getConnection("jdbc:duckdb:").unwrap(DuckDBConnection.class);
+        Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 
         try (Statement stmt = conn.createStatement()) {
-            ResultSet rs = stmt.executeQuery("select [1, 5]::JSON");
+            DuckDBResultSet rs = stmt.executeQuery("select [1, 5]::JSON").unwrap(DuckDBResultSet.class);
             rs.next();
             assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
-            JsonNode jsonNode = (JsonNode) rs.getObject(1);
+            JsonNode jsonNode = (JsonNode) rs.getJsonObject(1);
             assertTrue(jsonNode.isArray());
             assertEquals(jsonNode.toString(), "[1,5]");
         }
 
         try (Statement stmt = conn.createStatement()) {
-            ResultSet rs = stmt.executeQuery("select '{\"key\": \"value\"}'::JSON");
+            DuckDBResultSet rs = stmt.executeQuery("select '{\"key\": \"value\"}'::JSON").unwrap(DuckDBResultSet.class);
             rs.next();
             assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
-            JsonNode jsonNode = (JsonNode) rs.getObject(1);
+            JsonNode jsonNode = (JsonNode) rs.getJsonObject(1);
             assertTrue(jsonNode.isObject());
             assertEquals(jsonNode.toString(),
                          "{\"key\": \"value\"}"); // this isn't valid json output, must load json extension for that
         }
 
         try (Statement stmt = conn.createStatement()) {
-            ResultSet rs = stmt.executeQuery("select '\"hello\"'::JSON");
+            DuckDBResultSet rs = stmt.executeQuery("select '\"hello\"'::JSON").unwrap(DuckDBResultSet.class);
             rs.next();
             assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
-            JsonNode jsonNode = (JsonNode) rs.getObject(1);
+            JsonNode jsonNode = (JsonNode) rs.getJsonObject(1);
             assertTrue(jsonNode.isString());
             assertEquals(jsonNode.toString(), "\"hello\"");
         }
