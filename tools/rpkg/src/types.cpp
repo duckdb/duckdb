@@ -74,7 +74,7 @@ RType RType::GetListChildType() const {
 }
 
 RType RType::STRUCT(child_list_t<RType> &&children) {
-	RType out = RType(RTypeId::LIST);
+	RType out = RType(RTypeId::STRUCT);
 	std::swap(out.aux_, children);
 	return out;
 }
@@ -150,7 +150,19 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 		}
 
 		if (Rf_inherits(v, "data.frame")) {
-			return RType::UNKNOWN;
+			child_list_t<RType> child_types;
+			R_xlen_t ncol = Rf_length(v);
+			SEXP names = GET_NAMES(v);
+
+			for (R_xlen_t i = 0; i < ncol; ++i) {
+				RType child = DetectRType(VECTOR_ELT(v, i), integer64);
+				if (child == RType::UNKNOWN) {
+					return (RType::UNKNOWN);
+				}
+				child_types.push_back(std::make_pair(CHAR(STRING_ELT(names, i)), child));
+			}
+
+			return RType::STRUCT(std::move(child_types));
 		} else {
 			R_xlen_t len = Rf_xlength(v);
 			R_xlen_t i = 0;
