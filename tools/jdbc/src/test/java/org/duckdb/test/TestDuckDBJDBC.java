@@ -968,7 +968,8 @@ public class TestDuckDBJDBC {
             "INSERT INTO b VALUES ('varchary', true, 6, 42, 666, 42.666, 666.42,"
             +
             " '1970-01-02', '01:00:34', '1970-01-03 03:42:23', 42.2, 1.23456789, 987654321012345.6, 111112222233333.44444, "
-            + " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 18446744073709551616, 'yeah'::BLOB)");
+            +
+            " -4, 200, 50001, 4000111222, 18446744073709551615, 18446744073709551616, 18446744073709551616, 'yeah'::BLOB)");
 
         PreparedStatement ps = conn.prepareStatement("SELECT * FROM b");
         ResultSet rs = ps.executeQuery();
@@ -3422,8 +3423,8 @@ public class TestDuckDBJDBC {
         correct_answer_map.put("bigint", asList(-9223372036854775808L, 9223372036854775807L, null));
         correct_answer_map.put("hugeint", asList(new BigInteger("-170141183460469231731687303715884105727"),
                                                  new BigInteger("170141183460469231731687303715884105727"), null));
-        correct_answer_map.put("uhugeint", asList(new BigInteger("0"),
-                                                  new BigInteger("340282366920938463463374607431768211455"), null));
+        correct_answer_map.put(
+            "uhugeint", asList(new BigInteger("0"), new BigInteger("340282366920938463463374607431768211455"), null));
         correct_answer_map.put("utinyint", asList((short) 0, (short) 255, null));
         correct_answer_map.put("usmallint", asList(0, 65535, null));
         correct_answer_map.put("uint", asList(0L, 4294967295L, null));
