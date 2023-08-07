@@ -83,15 +83,15 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
-		auto parameter_index = kv.first;
-		auto &parameter_data = kv.second;
+		auto &identifier = kv.first;
+		auto &param = kv.second;
 		// check if the type of the parameter could be resolved
-		if (!parameter_data->return_type.IsValid()) {
+		if (!param->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		parameter_data->value = Value(parameter_data->return_type);
-		value_map[parameter_index] = parameter_data;
+		param->SetValue(Value(param->return_type));
+		value_map[identifier] = param;
 	}
 }
 
@@ -153,7 +153,8 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	return op.SupportSerialization();
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+                         optional_ptr<bound_parameter_map_t> map) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	// if alternate verification is enabled we run the original operator
 	return;
