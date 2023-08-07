@@ -45,13 +45,13 @@ class TestFetchNested(object):
 
         # Nested Lists
         compare_results(
-            "SELECT LIST(le) as a FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t order by all",
+            "SELECT LIST(le) as a FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t",
             [[[0, 2, 4], [1, 3]]],
         )
 
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
-            "SELECT list (lllle) as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t) as t1) as t2) as t3 order by all",
+            "SELECT list (lllle)  as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t) as t1) as t2) as t3",
             [[[[[[0, 2, 4], [1, 3]]]]]],
         )
 
