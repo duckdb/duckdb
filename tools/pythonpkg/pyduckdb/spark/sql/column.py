@@ -7,6 +7,8 @@ if TYPE_CHECKING:
 
 from duckdb import ConstantExpression, ColumnExpression, FunctionExpression, Expression
 
+from duckdb.typing import DuckDBPyType
+
 __all__ = ["Column"]
 
 
@@ -114,8 +116,13 @@ class Column:
         expr = self.expr.otherwise(v)
         return Column(expr)
 
-    def cast(self, type: DataType) -> "Column":
-        return Column(self.expr.cast(type.duckdb_type))
+    def cast(self, dataType: Union[DataType, str]) -> "Column":
+        if isinstance(dataType, str):
+            # Try to construct a default DuckDBPyType from it
+            internal_type = DuckDBPyType(dataType)
+        else:
+            internal_type = dataType.duckdb_type
+        return Column(self.expr.cast(internal_type))
 
     # logistic operators
     def __eq__(  # type: ignore[override]
