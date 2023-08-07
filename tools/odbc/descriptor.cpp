@@ -94,33 +94,38 @@ SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
 	if (rec_number > desc->header.sql_desc_count) {
 		desc->AddMoreRecords(rec_number);
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
 	if (type == SQL_DATETIME || type == SQL_INTERVAL) {
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0))) {
-			return SQL_ERROR;
+		ret = desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0);
+		if (!SQL_SUCCEEDED(ret)) {
+			return ret;
 		}
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0))) {
-		return SQL_ERROR;
+	ret = desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0);
+	if (!SQL_SUCCEEDED(ret)) {
+		return ret;
 	}
-	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0))) {
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
+	ret = desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0);
+	return ret;
 }
 
 SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
@@ -467,9 +472,7 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	}
 	default:
 		return ReturnInvalidFieldIdentifier(false, desc);
-
 	}
-	return SQL_ERROR;
 }
 
 SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
@@ -501,7 +504,6 @@ SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_
 				return duckdb::SetDiagnosticRecord(source_desc, SQL_ERROR, "SQLCopyDesc",
 				                                   "Associated statement is not prepared.", duckdb::SQLStateType::ST_HY007,
 				                                   source_desc->dbc->GetDataSourceName());
-				return SQL_ERROR;
 			}
 		}
 	}
@@ -847,20 +849,20 @@ DescRecord::DescRecord(const DescRecord &other) {
 	sql_desc_updatable = other.sql_desc_updatable;
 }
 
-SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
-	sql_desc_type = value_type;
-	if (OdbcInterval::IsIntervalType(value_type)) {
-		sql_desc_type = SQL_INTERVAL;
-		sql_desc_concise_type = value_type;
-		auto interval_code = OdbcInterval::GetIntervalCode(value_type);
-		if (interval_code == SQL_ERROR) {
-			return SQL_ERROR;
-		}
-		sql_desc_datetime_interval_code = interval_code;
-	}
-
-	return SQL_SUCCESS;
-}
+//SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
+//	sql_desc_type = value_type;
+//	if (OdbcInterval::IsIntervalType(value_type)) {
+//		sql_desc_type = SQL_INTERVAL;
+//		sql_desc_concise_type = value_type;
+//		auto interval_code = OdbcInterval::GetIntervalCode(value_type);
+//		if (interval_code == SQL_ERROR) {
+//			return interval_code;
+//		}
+//		sql_desc_datetime_interval_code = interval_code;
+//	}
+//
+//	return SQL_SUCCESS;
+//}
 
 SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 	sql_desc_type = sql_desc_concise_type = type;

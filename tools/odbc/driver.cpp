@@ -18,34 +18,34 @@ using std::string;
 
 SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	if (!handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
-		auto *hdl = (duckdb::OdbcHandleDbc *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleDbc *>(handle);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC: {
-		auto *hdl = (duckdb::OdbcHandleDesc *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleDesc *>(handle);
 		hdl->dbc->ResetStmtDescriptors(hdl);
 		delete hdl;
-		return SQL_ERROR;
+		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_ENV: {
-		auto *hdl = (duckdb::OdbcHandleEnv *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleEnv *>(handle);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_STMT: {
-		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
+		auto *hdl = static_cast<duckdb::OdbcHandleStmt *>(handle);
 		hdl->dbc->EraseStmtRef(hdl);
 		delete hdl;
 		return SQL_SUCCESS;
 	}
 	default:
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 }
 
@@ -72,7 +72,8 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
 		D_ASSERT(input_handle);
-		auto *env = (duckdb::OdbcHandleEnv *)input_handle;
+
+		auto *env = static_cast<duckdb::OdbcHandleEnv *>(input_handle);
 		D_ASSERT(env->type == duckdb::OdbcHandleType::ENV);
 		*output_handle_ptr = new duckdb::OdbcHandleDbc(env);
 		return SQL_SUCCESS;
@@ -82,20 +83,20 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle
 		return SQL_SUCCESS;
 	case SQL_HANDLE_STMT: {
 		D_ASSERT(input_handle);
-		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		auto *dbc = static_cast<duckdb::OdbcHandleDbc *>(input_handle);
 		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
 		*output_handle_ptr = new duckdb::OdbcHandleStmt(dbc);
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC: {
 		D_ASSERT(input_handle);
-		auto *dbc = (duckdb::OdbcHandleDbc *)input_handle;
+		auto *dbc = static_cast<duckdb::OdbcHandleDbc *>(input_handle);
 		D_ASSERT(dbc->type == duckdb::OdbcHandleType::DBC);
 		*output_handle_ptr = new duckdb::OdbcHandleDesc(dbc);
 		return SQL_SUCCESS;
 	}
 	default:
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 }
 
@@ -135,10 +136,7 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		}
 	}
 	case SQL_ATTR_CONNECTION_POOLING:
-		if (env) {
-			return SQL_ERROR;
-		}
-		switch ((SQLINTEGER)(intptr_t)value_ptr) {
+		switch (static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr))) {
 		case SQL_CP_OFF:
 		case SQL_CP_ONE_PER_DRIVER:
 		case SQL_CP_ONE_PER_HENV:
@@ -146,7 +144,7 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		default:
 			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
 			                                   "Connection pooling not supported: " + std::to_string(attribute),
-			                                   SQLStateType::ST_HYC00, "");
+			                                   SQLStateType::ST_HY092, "");
 		}
 	case SQL_ATTR_CP_MATCH:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
