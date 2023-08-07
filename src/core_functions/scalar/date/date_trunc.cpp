@@ -643,6 +643,7 @@ static function_statistics_t DateTruncStats(DatePartSpecifier type) {
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return PropagateDateTruncStatistics<TA, TR, DateTrunc::DayOperator>;
 	case DatePartSpecifier::HOUR:
 		return PropagateDateTruncStatistics<TA, TR, DateTrunc::HourOperator>;
@@ -687,6 +688,7 @@ static unique_ptr<FunctionData> DateTruncBind(ClientContext &context, ScalarFunc
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		switch (bound_function.arguments[1].id()) {
 		case LogicalType::TIMESTAMP:
 			bound_function.function = DateTruncFunction<timestamp_t, date_t>;

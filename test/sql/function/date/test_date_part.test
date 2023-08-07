@@ -506,6 +506,11 @@ NULL	NULL
 2022-01-01	{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581.0}
 infinity	{'weekday': NULL, 'isodow': NULL, 'doy': NULL, 'julian': NULL}
 
+query I
+SELECT DATE_PART(['weekday', 'isodow', 'doy', 'julian'], '2022-01-01'::DATE) AS parts
+----
+{'weekday': 6, 'isodow': 6, 'doy': 1, 'julian': 2459581.0}
+
 # ISO parts
 query II
 SELECT d, DATE_PART(['isoyear', 'week', 'yearweek'], d) AS parts

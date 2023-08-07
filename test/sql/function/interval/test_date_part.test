@@ -87,10 +87,19 @@ statement error
 SELECT era(i) FROM intervals;
 
 statement error
+SELECT julian(i) FROM intervals;
+
+statement error
 SELECT extract(era from i) FROM intervals;
 
 statement error
+SELECT extract(julian from i) FROM intervals;
+
+statement error
 SELECT date_part('era', i) FROM intervals;
+
+statement error
+SELECT date_part('julian', i) FROM intervals;
 
 statement error
 SELECT date_part('offset', i) FROM intervals;
