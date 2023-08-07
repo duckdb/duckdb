@@ -12,32 +12,32 @@ SELECT ${f}(NULL);
 NULL
 
 query I
-SELECT ${f}(ARRAY[]);
+SELECT ${f}([]);
 ----
 []
 
 query I
-SELECT ${f}(ARRAY[NULL]);
+SELECT ${f}([NULL]);
 ----
 [NULL]
 
 query I
-SELECT ${f}(ARRAY[1, 42, 2]);
+SELECT ${f}([1, 42, 2]);
 ----
 [2, 42, 1]
 
 query I
-SELECT ${f}(ARRAY[1, 42, NULL, 2]);
+SELECT ${f}([1, 42, NULL, 2]);
 ----
 [2, NULL, 42, 1]
 
 query I
-SELECT ${f}(${f}(ARRAY[1, 3, 3, 42, 117, 69, NULL]));
+SELECT ${f}(${f}([1, 3, 3, 42, 117, 69, NULL]));
 ----
 [1, 3, 3, 42, 117, 69, NULL]
 
 query I
-SELECT ${f} (ARRAY[[1, 2 ,42], [3, 4]]);
+SELECT ${f} ([[1, 2 ,42], [3, 4]]);
 ----
 [[3, 4], [1, 2, 42]]
 
@@ -120,7 +120,7 @@ statement error
 SELECT ${f}(42)
 
 statement error
-SELECT ${f} (ARRAY[1, 3, 2, 42, 117,, NULL])
+SELECT ${f} ([1, 3, 2, 42, 117,, NULL])
 
 statement ok
 CREATE TABLE palindromes (s VARCHAR);
@@ -144,4 +144,141 @@ tattarrattat
 statement ok
 DROP TABLE palindromes;
 
+query I
+WITH example AS (
+  SELECT [1, 2, 3] AS arr UNION ALL
+  SELECT [4, 5] AS arr UNION ALL
+  SELECT [] AS arr
+)
+SELECT
+  ${f}(arr) AS reverse_arr
+FROM example;
+----
+[3, 2, 1]
+[5, 4]
+[]
+
+
 endloop
+
+# test incorrect syntax
+
+foreach f list_reverse array_reverse
+
+statement error
+SELECT ${f}()
+
+statement error
+SELECT ${f}(*)
+
+statement error
+SELECT ${f}([1, 2], 2)
+
+endloop
+
+# test incorrect parameter type
+
+foreach f list_reverse array_reverse
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+
+statement error
+SELECT ${f}(NULL::${type})
+
+endloop
+
+endloop
+
+
+# list constant tests
+
+foreach f list_reverse array_reverse
+
+query I
+SELECT ${f}([1, 42, 39, 58])
+----
+[58, 39, 42, 1]
+
+query I
+SELECT ${f}([1, NULL, 42, 39, NULL, 58])
+----
+[58, NULL, 39, 42, NULL, 1]
+
+
+query I
+SELECT ${f}([1, 42, -39, 58, -1, 18])
+----
+[18, -1, 58, -39, 42, 1]
+
+query I
+SELECT ${f}(${f}([11, -100, 678]))
+----
+[11, -100, 678]
+
+endloop
+
+
+# list column tests
+
+foreach f list_reverse array_reverse
+
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT ${f}(i) FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
+query I
+SELECT (i).${f}() FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
+endloop
+
+# Nested list and very Large list
+
+foreach f list_reverse array_reverse
+
+query I
+SELECT ${f}([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
+----
+[[1, 2, 3], [], [NULL], NULL, [1, 2], [1]]
+
+query I
+SELECT ([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]]).${f}()
+----
+[[1, 2, 3], [], [NULL], NULL, [1, 2], [1]]
+
+
+statement ok
+CREATE OR REPLACE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+query T
+with cte0 as (
+  select g, ${f}(l) l from lists
+), cte1 as (
+  select g, unnest(l) i from cte0
+), cte2 as (
+  select g, i, lead(g, 1) over () lg, lead(i, 1) over () li from cte1
+)
+select count(*)
+from cte2
+where g = lg
+  and lg not null
+  and li > i
+----
+0
+
+endloop
+
