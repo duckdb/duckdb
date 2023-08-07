@@ -73,13 +73,11 @@ public:
 protected:
 	BlockManager &block_manager;
 	BufferManager &buffer_manager;
-	vector<MetadataBlock> blocks;
-	vector<idx_t> free_blocks;
-	unordered_map<block_id_t, idx_t> block_map;
+	unordered_map<block_id_t, MetadataBlock> blocks;
 	unordered_map<block_id_t, idx_t> modified_blocks;
 
 protected:
-	void AllocateNewBlock();
+	block_id_t AllocateNewBlock();
 	block_id_t GetNextBlockId();
 
 	void AddBlock(MetadataBlock new_block);

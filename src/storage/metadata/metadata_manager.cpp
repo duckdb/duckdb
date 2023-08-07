@@ -13,23 +13,29 @@ MetadataManager::~MetadataManager() {
 
 MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
-	// if not allocate a new block
-	if (free_blocks.empty()) {
-		AllocateNewBlock();
+	// if not allocate a new bloc
+	block_id_t free_block = INVALID_BLOCK;
+	for(auto &kv : blocks) {
+		auto &block = kv.second;
+		D_ASSERT(kv.first == block.block_id);
+		if (!block.free_blocks.empty()) {
+			free_block = kv.first;
+			break;
+		}
 	}
-	D_ASSERT(!free_blocks.empty());
+	if (free_block == INVALID_BLOCK) {
+		free_block = AllocateNewBlock();
+	}
+	D_ASSERT(free_block != INVALID_BLOCK);
 
 	// select the first free metadata block we can find
 	MetadataPointer pointer;
-	pointer.block_index = free_blocks.front();
-	auto &block = blocks[pointer.block_index];
+	pointer.block_index = free_block;
+	auto &block = blocks[free_block];
 	D_ASSERT(!block.free_blocks.empty());
 	pointer.index = block.free_blocks.back();
 	// mark the block as used
 	block.free_blocks.pop_back();
-	if (block.free_blocks.empty()) {
-		free_blocks.erase(free_blocks.begin());
-	}
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	// pin the block
 	return Pin(pointer);
@@ -46,23 +52,24 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	return handle;
 }
 
-void MetadataManager::AllocateNewBlock() {
-	free_blocks.push_back(blocks.size());
+block_id_t MetadataManager::AllocateNewBlock() {
+	auto new_block_id = GetNextBlockId();
+
 	MetadataBlock new_block;
 	buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
-	new_block.block_id = GetNextBlockId();
+	new_block.block_id = new_block_id;
 	for(idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
 	AddBlock(std::move(new_block));
+	return new_block_id;
 }
 
 void MetadataManager::AddBlock(MetadataBlock new_block) {
-	if (block_map.find(new_block.block_id) != block_map.end()) {
+	if (blocks.find(new_block.block_id) != blocks.end()) {
 		throw InternalException("Block id with id %llu already exists", new_block.block_id);
 	}
-	block_map[new_block.block_id] = blocks.size();
-	blocks.push_back(std::move(new_block));
+	blocks[new_block.block_id] = std::move(new_block);
 }
 
 void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
@@ -74,7 +81,8 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
-	idx_t block_pointer = blocks[pointer.block_index].block_id;
+	D_ASSERT(blocks[pointer.block_index].block_id == pointer.block_index);
+	idx_t block_pointer = idx_t(pointer.block_index);
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
 }
@@ -90,12 +98,12 @@ uint32_t MetaBlockPointer::GetBlockIndex() {
 MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	auto index = pointer.GetBlockIndex();
-	auto entry = block_map.find(block_id);
-	if (entry == block_map.end()) {
+	auto entry = blocks.find(block_id);
+	if (entry == blocks.end()) {
 		throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
 	}
 	MetadataPointer result;
-	result.block_index = entry->second;
+	result.block_index = block_id;
 	result.index = index;
 	return result;
 }
@@ -136,7 +144,8 @@ idx_t MetadataManager::BlockCount() {
 
 void MetadataManager::Flush() {
 	// write the blocks of the metadata manager to disk
-	for(auto &block : blocks) {
+	for(auto &kv : blocks) {
+		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
 		// FIXME: zero-initialize any free blocks
 //		for(auto &free_block : free_blocks) {
@@ -148,8 +157,8 @@ void MetadataManager::Flush() {
 
 void MetadataManager::Serialize(Serializer &serializer) {
 	serializer.Write<uint64_t>(blocks.size());
-	for(auto &block : blocks) {
-		block.Serialize(serializer);
+	for(auto &kv : blocks) {
+		kv.second.Serialize(serializer);
 	}
 }
 
@@ -157,13 +166,13 @@ void MetadataManager::Deserialize(Deserializer &source) {
 	auto block_count = source.Read<uint64_t>();
 	for(idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Deserialize(source);
-		auto entry = block_map.find(block.block_id);
-		if (entry == block_map.end()) {
+		auto entry = blocks.find(block.block_id);
+		if (entry == blocks.end()) {
 			// block does not exist yet
 			AddAndRegisterBlock(std::move(block));
 		} else {
 			// block was already created - only copy over the free list
-			blocks[entry->second].free_blocks = std::move(block.free_blocks);
+			entry->second.free_blocks = std::move(block.free_blocks);
 		}
 	}
 }
@@ -211,24 +220,26 @@ void MetadataManager::MarkBlocksAsModified() {
 		for(auto &kv : modified_blocks) {
 			auto block_id = kv.first;
 			idx_t modified_list = kv.second;
-			auto entry = block_map.find(block_id);
-			D_ASSERT(entry != block_map.end());
-			auto &block = blocks[entry->second];
+			auto entry = blocks.find(block_id);
+			D_ASSERT(entry != blocks.end());
+			auto &block = entry->second;
 			idx_t current_free_blocks = block.FreeBlocksToInteger();
 			// merge the current set of free blocks with the modified blocks
 			idx_t new_free_blocks = current_free_blocks | modified_list;
-			// FIXME: if new_free_blocks is ALL blocks - mark entire block as free
 			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
 				// if new free_blocks is all blocks - mark entire block as modified
-				throw InternalException("FIXME: mark all blocks as modified");
+				block_manager.MarkBlockAsModified(block_id);
+				blocks.erase(entry);
+			} else {
+				// set the new set of free blocks
+				block.FreeBlocksFromInteger(new_free_blocks);
 			}
-			// set the new set of free blocks
-			block.FreeBlocksFromInteger(new_free_blocks);
 		}
 
 	}
 	modified_blocks.clear();
-	for(auto &block : blocks) {
+	for(auto &kv : blocks) {
+		auto &block = kv.second;
 		idx_t free_list = block.FreeBlocksToInteger();
 		idx_t occupied_list = ~free_list;
 		modified_blocks[block.block_id] = occupied_list;
