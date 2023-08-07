@@ -6,9 +6,12 @@ name Insert ART
 group art
 
 load
-CREATE TABLE temp AS SELECT (random() * 1000000)::INT AS id FROM range(10000000);
+CREATE TABLE temp AS SELECT (range * 9876983769044::INT128 % 10000000)::INT64 AS id FROM range(10000000);
 CREATE TABLE art (id INTEGER);
 CREATE INDEX idx ON art USING ART(id);
 
 run
-INSERT INTO art (SELECT id + ((random() * 1000000)::INT) FROM temp);
+INSERT INTO art (SELECT id FROM temp);
+
+cleanup
+DELETE FROM art;
