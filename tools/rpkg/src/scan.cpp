@@ -6,6 +6,55 @@
 using namespace duckdb;
 using namespace cpp11;
 
+data_ptr_t GetColDataPtr(const RType &rtype, SEXP coldata) {
+	switch (rtype.id()) {
+	case RType::LOGICAL:
+		return (data_ptr_t)LOGICAL_POINTER(coldata);
+	case RType::INTEGER:
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::NUMERIC:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::INTEGER64:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RTypeId::FACTOR:
+		// TODO What about factors that use numeric?
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::STRING:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RType::TIMESTAMP:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::TIME_SECONDS:
+	case RType::TIME_MINUTES:
+	case RType::TIME_HOURS:
+	case RType::TIME_DAYS:
+	case RType::TIME_WEEKS:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::TIME_SECONDS_INTEGER:
+	case RType::TIME_MINUTES_INTEGER:
+	case RType::TIME_HOURS_INTEGER:
+	case RType::TIME_DAYS_INTEGER:
+	case RType::TIME_WEEKS_INTEGER:
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::DATE:
+		if (!IS_NUMERIC(coldata)) {
+			cpp11::stop("DATE should really be integer");
+		}
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::DATE_INTEGER:
+		if (!IS_INTEGER(coldata)) {
+			cpp11::stop("DATE_INTEGER should really be integer");
+		}
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::LIST_OF_NULLS:
+	case RType::BLOB:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RTypeId::LIST:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	default:
+		cpp11::stop("rapi_execute: Unsupported column type for bind");
+	}
+}
+
 struct DedupPointerEnumType {
 	static bool IsNull(SEXP val) {
 		return val == NA_STRING;
@@ -244,75 +293,14 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 	vector<data_ptr_t> data_ptrs;
 
 	for (R_xlen_t col_idx = 0; col_idx < df.size(); col_idx++) {
-		auto coldata = df[col_idx];
-		data_ptr_t coldata_ptr = nullptr;
-
 		names.push_back(df_names[col_idx]);
+
+		auto coldata = df[col_idx];
 		auto rtype = RApiTypes::DetectRType(coldata, integer64);
 		rtypes.push_back(rtype);
-
-		switch (rtype.id()) {
-		case RType::LOGICAL:
-			coldata_ptr = (data_ptr_t)LOGICAL_POINTER(coldata);
-			break;
-		case RType::INTEGER:
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::NUMERIC:
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::INTEGER64:
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RTypeId::FACTOR:
-			// TODO What about factors that use numeric?
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::STRING:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
-			break;
-		case RType::TIMESTAMP:
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::TIME_SECONDS:
-		case RType::TIME_MINUTES:
-		case RType::TIME_HOURS:
-		case RType::TIME_DAYS:
-		case RType::TIME_WEEKS:
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::TIME_SECONDS_INTEGER:
-		case RType::TIME_MINUTES_INTEGER:
-		case RType::TIME_HOURS_INTEGER:
-		case RType::TIME_DAYS_INTEGER:
-		case RType::TIME_WEEKS_INTEGER:
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::DATE:
-			if (!IS_NUMERIC(coldata)) {
-				cpp11::stop("DATE should really be integer");
-			}
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::DATE_INTEGER:
-			if (!IS_INTEGER(coldata)) {
-				cpp11::stop("DATE_INTEGER should really be integer");
-			}
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::LIST_OF_NULLS:
-		case RType::BLOB:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
-			break;
-		case RTypeId::LIST:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
-			break;
-		default:
-			cpp11::stop("rapi_execute: Unsupported column type for bind");
-		}
-
 		return_types.push_back(RApiTypes::LogicalTypeFromRType(rtype, experimental));
-		data_ptrs.push_back(coldata_ptr);
+
+		data_ptrs.push_back(GetColDataPtr(rtype, coldata));
 	}
 	auto row_count = RApiTypes::GetVecSize(rtypes[0], VECTOR_ELT(df, 0));
 	return make_uniq<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
