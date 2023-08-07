@@ -81,6 +81,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -4400,6 +4401,39 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PRAGMA_CALL")) {
 		return PragmaType::PRAGMA_CALL;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value) {
+	switch(value) {
+	case PreparedParamType::AUTO_INCREMENT:
+		return "AUTO_INCREMENT";
+	case PreparedParamType::POSITIONAL:
+		return "POSITIONAL";
+	case PreparedParamType::NAMED:
+		return "NAMED";
+	case PreparedParamType::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO_INCREMENT")) {
+		return PreparedParamType::AUTO_INCREMENT;
+	}
+	if (StringUtil::Equals(value, "POSITIONAL")) {
+		return PreparedParamType::POSITIONAL;
+	}
+	if (StringUtil::Equals(value, "NAMED")) {
+		return PreparedParamType::NAMED;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return PreparedParamType::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

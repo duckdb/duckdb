@@ -892,6 +892,27 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	}
 }
 
+void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
+
+	input.ToUnifiedFormat(count, data.unified);
+
+	if (input.GetType().InternalType() == PhysicalType::LIST) {
+		auto &child = ListVector::GetEntry(input);
+		auto child_count = ListVector::GetListSize(input);
+		data.children.emplace_back();
+		Vector::RecursiveToUnifiedFormat(child, child_count, data.children.back());
+
+	} else if (input.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &children = StructVector::GetEntries(input);
+		for (idx_t i = 0; i < children.size(); i++) {
+			data.children.emplace_back();
+		}
+		for (idx_t i = 0; i < children.size(); i++) {
+			Vector::RecursiveToUnifiedFormat(*children[i], count, data.children[i]);
+		}
+	}
+}
+
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
