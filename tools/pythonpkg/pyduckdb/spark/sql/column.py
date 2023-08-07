@@ -5,7 +5,7 @@ from pyduckdb.spark.sql.types import DataType
 if TYPE_CHECKING:
     from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
 
-from duckdb import BinaryFunctionExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
+from duckdb import ConstantExpression, ColumnExpression, FunctionExpression, Expression
 
 __all__ = ["Column"]
 

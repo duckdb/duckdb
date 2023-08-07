@@ -417,6 +417,13 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
+	duckdb::vector<duckdb::unique_ptr<ParsedExpression>> expressions;
+	expressions.push_back(duckdb::make_uniq<duckdb::ColumnRefExpression>("i"));
+	duckdb::vector<duckdb::string> aliases;
+	aliases.push_back("j");
+
+	REQUIRE_NOTHROW(result = tbl->Select(std::move(expressions), aliases)->Query("test", "SELECT * FROM test"));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	// add a projection
 	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Query("test", "SELECT * FROM test"));
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));

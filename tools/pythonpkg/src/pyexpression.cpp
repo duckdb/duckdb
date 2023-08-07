@@ -142,17 +142,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::BinaryFunctionExpression(const string &function_name,
-                                                                            shared_ptr<DuckDBPyExpression> arg_one,
-                                                                            shared_ptr<DuckDBPyExpression> arg_two) {
-	vector<unique_ptr<ParsedExpression>> children;
-
-	children.push_back(arg_one->GetExpression().Copy());
-	children.push_back(arg_two->GetExpression().Copy());
-	return InternalFunctionExpression(function_name, std::move(children));
-}
-
-static void PopulateExcludeList(case_insensitive_set_t &exclude, py::list list) {
+static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list &list) {
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
 			exclude.insert(std::string(py::str(item)));
@@ -170,7 +160,7 @@ static void PopulateExcludeList(case_insensitive_set_t &exclude, py::list list) 
 	}
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(py::list exclude_list) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(const py::list &exclude_list) {
 	case_insensitive_set_t exclude;
 	auto star = make_uniq<duckdb::StarExpression>();
 	PopulateExcludeList(star->exclude_list, exclude_list);
@@ -233,7 +223,8 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::CaseExpression(const DuckDBPy
 	return std::move(case_expr);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name, py::args args) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name,
+                                                                      const py::args &args) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto arg : args) {
 		shared_ptr<DuckDBPyExpression> py_expr;

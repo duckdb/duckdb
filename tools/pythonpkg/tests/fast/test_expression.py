@@ -1,15 +1,7 @@
 import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
-from duckdb import (
-    Expression,
-    BinaryFunctionExpression,
-    ConstantExpression,
-    ColumnExpression,
-    StarExpression,
-    FunctionExpression,
-    CaseExpression,
-)
+from duckdb import Expression, ConstantExpression, ColumnExpression, StarExpression, FunctionExpression, CaseExpression
 from pyduckdb.value.constant import Value, IntegerValue
 import datetime
 
@@ -87,7 +79,7 @@ class TestExpression(object):
                 5 as b
         """
         )
-        function = BinaryFunctionExpression("-", ColumnExpression('b'), ColumnExpression('a'))
+        function = FunctionExpression("-", ColumnExpression('b'), ColumnExpression('a'))
         rel2 = rel.select(function)
         res = rel2.fetchall()
         assert res == [(4,)]
@@ -333,7 +325,7 @@ class TestExpression(object):
 
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
-        expr = BinaryFunctionExpression('struct_pack', col1, col2).alias('struct')
+        expr = FunctionExpression('struct_pack', col1, col2).alias('struct')
 
         rel = rel.select(expr)
         res = rel.fetchall()
