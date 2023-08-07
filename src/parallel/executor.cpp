@@ -470,8 +470,7 @@ PendingExecutionResult Executor::ExecuteTask() {
 		if (!task) {
 			scheduler.GetTaskFromProducer(*producer, task);
 		}
-		if (!task && !to_be_rescheduled_tasks.empty()) {
-			D_ASSERT(!HasError());
+		if (!task && !HasError() && !to_be_rescheduled_tasks.empty()) {
 			// there are no tasks to be scheduled and there are tasks blocked
 			return PendingExecutionResult::ALL_TASKS_BLOCKED;
 		}
