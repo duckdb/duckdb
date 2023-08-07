@@ -104,6 +104,22 @@ void AppendListColumnSegment(const RType &rtype, SEXP *source_data, idx_t sexp_o
 }
 
 void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t coldata_ptr, idx_t sexp_offset, Vector &v,
+                            idx_t this_count);
+
+void AppendStructColumnSegment(const RType &rtype, bool experimental, SEXP source_data, idx_t sexp_offset,
+                               Vector &result, idx_t count) {
+	// No NULL values for STRUCTs.
+	auto &child_entries = StructVector::GetEntries(result);
+	auto child_rtypes = rtype.GetStructChildTypes();
+	for (size_t i = 0; i < child_entries.size(); ++i) {
+		auto coldata = VECTOR_ELT(source_data, i);
+		auto const &child_rtype = child_rtypes[i].second;
+		auto coldata_ptr = GetColDataPtr(child_rtype, coldata);
+		AppendAnyColumnSegment(child_rtype, experimental, coldata_ptr, sexp_offset, *child_entries[i], count);
+	}
+}
+
+void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t coldata_ptr, idx_t sexp_offset, Vector &v,
                             idx_t this_count) {
 	switch (rtype.id()) {
 	case RType::LOGICAL: {
@@ -234,6 +250,11 @@ void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t co
 	case RTypeId::LIST: {
 		auto data_ptr = (SEXP *)coldata_ptr;
 		AppendListColumnSegment(rtype, data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RTypeId::STRUCT: {
+		auto data_ptr = (SEXP)coldata_ptr;
+		AppendStructColumnSegment(rtype, experimental, data_ptr, sexp_offset, v, this_count);
 		break;
 	}
 	default:
