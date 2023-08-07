@@ -5,9 +5,8 @@ namespace duckdb {
 
 CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
                      idx_t &global_csv_current_position, idx_t file_number_p)
-    : context(context), first_buffer(true), file_number(file_number_p) {
-	this->handle = AllocateBuffer(buffer_size_p);
-
+    : context(context), first_buffer(true), file_number(file_number_p), can_seek(file_handle.CanSeek()) {
+	AllocateBuffer(buffer_size_p);
 	auto buffer = Ptr();
 	actual_size = file_handle.Read(buffer, buffer_size_p);
 	global_csv_start = global_csv_current_position;
@@ -18,35 +17,57 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 	last_buffer = file_handle.FinishedReading();
 }
 
-CSVBuffer::CSVBuffer(ClientContext &context, BufferHandle buffer_p, idx_t buffer_size_p, idx_t actual_size_p,
-                     bool final_buffer, idx_t global_csv_current_position, idx_t file_number_p)
-    : context(context), handle(std::move(buffer_p)), actual_size(actual_size_p), last_buffer(final_buffer),
-      global_csv_start(global_csv_current_position), file_number(file_number_p) {
+CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size,
+                     idx_t global_csv_current_position, idx_t file_number_p)
+    : context(context), global_csv_start(global_csv_current_position), file_number(file_number_p),
+      can_seek(file_handle.CanSeek()) {
+	AllocateBuffer(buffer_size);
+	actual_size = file_handle.Read(handle.Ptr(), buffer_size);
+	last_buffer = file_handle.FinishedReading();
 }
 
 shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
                                       idx_t file_number_p) {
-	auto next_buffer = AllocateBuffer(buffer_size);
-	idx_t next_buffer_actual_size = file_handle.Read(next_buffer.Ptr(), buffer_size);
-	if (next_buffer_actual_size == 0) {
+	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
+	                                              global_csv_current_position + actual_size, file_number_p);
+	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
 	}
-
-	auto next_csv_buffer =
-	    make_shared<CSVBuffer>(context, std::move(next_buffer), buffer_size, next_buffer_actual_size,
-	                           file_handle.FinishedReading(), global_csv_current_position, file_number_p);
-	global_csv_current_position += next_buffer_actual_size;
 	return next_csv_buffer;
 }
 
-BufferHandle CSVBuffer::AllocateBuffer(idx_t buffer_size) {
+void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	return buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size));
+	bool can_destroy = can_seek;
+	handle = buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, buffer_size), can_destroy, &block);
 }
 
 idx_t CSVBuffer::GetBufferSize() {
 	return actual_size;
+}
+
+void CSVBuffer::Reload(CSVFileHandle &file_handle) {
+	AllocateBuffer(actual_size);
+	file_handle.Seek(global_csv_start);
+	file_handle.Read(handle.Ptr(), actual_size);
+}
+
+void CSVBuffer::Pin(CSVFileHandle &file_handle) {
+	if (can_seek && !handle.IsValid()) {
+		// We have to reload it from disk
+		block = nullptr;
+		Reload(file_handle);
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	handle = buffer_manager.Pin(block);
+}
+
+void CSVBuffer::Unpin() {
+	if (handle.IsValid()) {
+		auto &buffer_manager = BufferManager::GetBufferManager(context);
+		buffer_manager.Unpin(block);
+	}
 }
 
 idx_t CSVBuffer::GetStart() {

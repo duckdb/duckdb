@@ -18,15 +18,17 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 }
 
 void CSVBufferManager::Initialize() {
-	file_handle->Reset();
-	global_csv_pos = 0;
-	for (idx_t i = 0; i < skip_rows; i++) {
-		file_handle->ReadLine();
-	}
 	if (cache_buffers) {
-		cached_buffers.emplace_back(make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0));
-		last_buffer = cached_buffers.front();
+		if (cached_buffers.empty()) {
+			cached_buffers.emplace_back(make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0));
+			last_buffer = cached_buffers.front();
+		}
 	} else {
+		file_handle->Reset();
+		global_csv_pos = 0;
+		for (idx_t i = 0; i < skip_rows; i++) {
+			file_handle->ReadLine();
+		}
 		last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0);
 	}
 	start_pos = last_buffer->GetStart();
@@ -52,9 +54,12 @@ shared_ptr<CSVBuffer> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection
 			if (!ReadNextAndCacheIt()) {
 				return nullptr;
 			}
+			return cached_buffers[pos];
 		}
+		cached_buffers[pos]->Pin(*file_handle);
 		return cached_buffers[pos];
 	} else {
+		D_ASSERT(0);
 		if (pos < cached_buffers.size()) {
 			auto buffer = cached_buffers[pos];
 			// Invalidate this buffer
@@ -85,14 +90,16 @@ char CSVBufferIterator::GetNextChar() {
 		if (cur_buffer_idx == 0) {
 			cur_pos = buffer_manager->GetStartPos();
 		}
-		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, false);
+		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+
 		if (!cur_buffer) {
 			return '\0';
 		}
 	}
 	// If we finished the current buffer we try to get a new one
 	if (cur_pos >= cur_buffer->GetBufferSize()) {
-		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, false);
+		cur_buffer->Unpin();
+		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 		if (!cur_buffer) {
 			return '\0';
 		}
@@ -107,6 +114,9 @@ bool CSVBufferIterator::Finished() {
 }
 
 void CSVBufferIterator::Reset() {
+	if (cur_buffer) {
+		cur_buffer->Unpin();
+	}
 	cur_buffer_idx = 0;
 	cur_buffer = nullptr;
 	buffer_manager->Initialize();

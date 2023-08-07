@@ -19,6 +19,20 @@ static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
 //! And if it's a compressed file we can't use the actual size of the file
 static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
 
+class CSVBufferHandle {
+public:
+	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p)
+	    : handle(std::move(handle_p)), actual_size(actual_size_p) {
+
+	                                   };
+	//! Handle created during allocation
+	BufferHandle handle;
+	const idx_t actual_size;
+	char *Ptr() {
+		return char_ptr_cast(handle.Ptr());
+	}
+};
+
 class CSVBuffer {
 public:
 	//! Constructor for Initial Buffer
@@ -26,8 +40,8 @@ public:
 	          idx_t &global_csv_current_position, idx_t file_number);
 
 	//! Constructor for `Next()` Buffers
-	CSVBuffer(ClientContext &context, BufferHandle handle, idx_t buffer_size_p, idx_t actual_size_p, bool final_buffer,
-	          idx_t global_csv_current_position, idx_t file_number);
+	CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size, idx_t global_csv_current_position,
+	          idx_t file_number_p);
 
 	//! Creates a new buffer with the next part of the CSV File
 	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
@@ -49,16 +63,18 @@ public:
 
 	idx_t GetFileNumber();
 
-	BufferHandle AllocateBuffer(idx_t buffer_size);
+	//! Allocates internal buffer, sets 'block' and 'handle' variables.
+	void AllocateBuffer(idx_t buffer_size);
 
-	char *Ptr() {
-		return char_ptr_cast(handle.Ptr());
-	}
+	void Reload(CSVFileHandle &file_handle);
+	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
+	//! Scan it from the disk file again.
+	void Pin(CSVFileHandle &file_handle);
+	//! Wrapper for the unpin
+	void Unpin();
 
 private:
 	ClientContext &context;
-
-	BufferHandle handle;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
 	idx_t actual_size;
 	//! We need to check for Byte Order Mark, to define the start position of this buffer
@@ -72,5 +88,11 @@ private:
 	idx_t global_csv_start = 0;
 	//! Number of the file that is in this buffer
 	idx_t file_number = 0;
+	//! If we can seek in the file or not.
+	//! If we can't seek, this means we can't destroy the buffers
+	bool can_seek;
+	//! -------- Allocated Block ---------//
+	//! Block created in allocation
+	shared_ptr<BlockHandle> block;
 };
 } // namespace duckdb

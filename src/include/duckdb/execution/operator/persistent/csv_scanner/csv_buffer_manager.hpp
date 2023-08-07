@@ -21,7 +21,7 @@ class CSVBuffer;
 class CSVBufferManager {
 public:
 	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, CSVReaderOptions &options,
-	                 bool cache_buffers = false);
+	                 bool cache_buffers = true);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	shared_ptr<CSVBuffer> GetBuffer(idx_t pos, bool auto_detection);
@@ -69,5 +69,6 @@ private:
 	idx_t cur_buffer_idx = 0;
 	shared_ptr<CSVBufferManager> buffer_manager;
 	shared_ptr<CSVBuffer> cur_buffer;
+	BufferHandle cur_buffer_handle;
 };
 } // namespace duckdb
