@@ -435,6 +435,8 @@ Value DUCKDB_API Value::CreateValue(int64_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(hugeint_t value);
 template <>
+Value DUCKDB_API Value::CreateValue(uhugeint_t value);
+template <>
 Value DUCKDB_API Value::CreateValue(date_t value);
 template <>
 Value DUCKDB_API Value::CreateValue(dtime_t value);
@@ -486,6 +488,8 @@ DUCKDB_API uint64_t Value::GetValue() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValue() const;
 template <>
+DUCKDB_API uhugeint_t Value::GetValue() const;
+template <>
 DUCKDB_API string Value::GetValue() const;
 template <>
 DUCKDB_API float Value::GetValue() const;
@@ -514,6 +518,8 @@ template <>
 DUCKDB_API int64_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API hugeint_t Value::GetValueUnsafe() const;
+template <>
+DUCKDB_API uhugeint_t Value::GetValueUnsafe() const;
 template <>
 DUCKDB_API uint8_t Value::GetValueUnsafe() const;
 template <>

@@ -448,6 +448,9 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::HUGEINT:
 		TemplatedCreateValues<hugeint_t, string_t>(doc, vals, value_v, count);
 		break;
+	case LogicalTypeId::UHUGEINT:
+		TemplatedCreateValues<uhugeint_t, string_t>(doc, vals, value_v, count);
+		break;
 	case LogicalTypeId::UTINYINT:
 		TemplatedCreateValues<uint8_t, uint64_t>(doc, vals, value_v, count);
 		break;
