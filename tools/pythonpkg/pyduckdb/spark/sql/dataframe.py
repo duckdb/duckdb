@@ -55,6 +55,70 @@ class DataFrame:
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
 
+    def filter(self, condition: "ColumnOrName") -> "DataFrame":
+        """Filters rows using the given condition.
+
+        :func:`where` is an alias for :func:`filter`.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        condition : :class:`Column` or str
+            a :class:`Column` of :class:`types.BooleanType`
+            or a string of SQL expressions.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Filtered DataFrame.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([
+        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+
+        Filter by :class:`Column` instances.
+
+        >>> df.filter(df.age > 3).show()
+        +---+----+
+        |age|name|
+        +---+----+
+        |  5| Bob|
+        +---+----+
+        >>> df.where(df.age == 2).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  2|Alice|
+        +---+-----+
+
+        Filter by SQL expression in a string.
+
+        >>> df.filter("age > 3").show()
+        +---+----+
+        |age|name|
+        +---+----+
+        |  5| Bob|
+        +---+----+
+        >>> df.where("age = 2").show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  2|Alice|
+        +---+-----+
+        """
+        if isinstance(condition, str):
+            raise NotImplementedError("filter condition as a SQL string is not supported yet")
+        elif isinstance(condition, Column):
+            
+        else:
+            raise TypeError("Please provide either a SQL string or a Column as filter condition")
+        
+
     def select(self, *cols) -> "DataFrame":
         cols = list(cols)
         if len(cols) == 1:
