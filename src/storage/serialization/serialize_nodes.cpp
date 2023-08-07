@@ -85,6 +85,7 @@ BoundPivotInfo BoundPivotInfo::FormatDeserialize(FormatDeserializer &deserialize
 	return result;
 }
 
+
 void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("has_delimiter", has_delimiter);
 	serializer.WriteProperty("delimiter", delimiter);
