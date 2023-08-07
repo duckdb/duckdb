@@ -76,8 +76,7 @@ void PendingQueryResult::Close() {
 }
 
 bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
-	if (result == PendingExecutionResult::RESULT_READY ||
-	    result == PendingExecutionResult::EXECUTION_ERROR) {
+	if (result == PendingExecutionResult::RESULT_READY || result == PendingExecutionResult::EXECUTION_ERROR) {
 		return true;
 	}
 	return false;
