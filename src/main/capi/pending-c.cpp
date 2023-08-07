@@ -2,12 +2,17 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
+using duckdb::case_insensitive_map_t;
 using duckdb::make_uniq;
+using duckdb::optional_ptr;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
+using duckdb::Value;
 
 duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
                                               duckdb_pending_result *out_result, bool allow_streaming) {
@@ -17,6 +22,7 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	auto result = new PendingStatementWrapper();
 	result->allow_streaming = allow_streaming;
+
 	try {
 		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {

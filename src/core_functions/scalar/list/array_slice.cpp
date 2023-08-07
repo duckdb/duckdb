@@ -308,6 +308,12 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	auto count = args.size();
 
 	Vector &list_or_str_vector = args.data[0];
+	if (list_or_str_vector.GetType().id() == LogicalTypeId::SQLNULL) {
+		auto &result_validity = FlatVector::Validity(result);
+		result_validity.SetInvalid(0);
+		return;
+	}
+
 	Vector &begin_vector = args.data[1];
 	Vector &end_vector = args.data[2];
 
