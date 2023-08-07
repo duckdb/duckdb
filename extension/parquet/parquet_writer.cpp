@@ -250,14 +250,21 @@ void VerifyUniqueNames(const vector<string> &names) {
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec, ChildFieldIDs field_ids_p)
+                             CompressionCodec::type codec, ChildFieldIDs field_ids_p, string encryption_key_p)
     : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
-      field_ids(std::move(field_ids_p)) {
+      field_ids(std::move(field_ids_p)), encryption_key(std::move(encryption_key_p)) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-	// parquet files start with the string "PAR1"
-	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	if (encryption_key.empty()) {
+		// parquet files start with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	} else {
+		// encrypted parquet files start with the string "PARE"
+		writer->WriteData(const_data_ptr_cast("PARE"), 4);
+		// we only support this one for now, not "AES_GCM_CTR_V1"
+		file_meta_data.encryption_algorithm.__isset.AES_GCM_V1 = true;
+	}
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
 
@@ -390,8 +397,13 @@ void ParquetWriter::Finalize() {
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
-	// parquet files also end with the string "PAR1"
-	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	if (encryption_key.empty()) {
+		// parquet files also end with the string "PAR1"
+		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	} else {
+		// encrypted parquet files also end with the string "PARE"
+		writer->WriteData(const_data_ptr_cast("PARE"), 4);
+	}
 
 	// flush to disk
 	writer->Sync();

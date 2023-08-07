@@ -71,6 +71,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
+	string encryption_key;
 	MultiFileReaderOptions file_options;
 
 public:

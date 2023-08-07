@@ -2,8 +2,9 @@
 // otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
-#include "mbedtls/sha256.h"
+#include "mbedtls/aes.h"
 #include "mbedtls/pk.h"
+#include "mbedtls/sha256.h"
 
 #include <stdexcept>
 
@@ -25,49 +26,77 @@ openssl dgst -binary -sha256 dummy > hash
 openssl pkeyutl -sign -in hash -inkey private.pem -pkeyopt digest:sha256 -out dummy.sign
 */
 
+MbedTlsAesContext MbedTlsAesContext::CreateEncryptionContext(const std::string &key) {
+	MbedTlsAesContext result;
+	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
+	mbedtls_aes_init(context);
+	if (mbedtls_aes_setkey_enc(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
+		throw runtime_error("Invalid AES key length");
+	}
+	return result;
+}
 
-void MbedTlsWrapper::ComputeSha256Hash(const char* in, size_t in_len, char* out) {
+MbedTlsAesContext MbedTlsAesContext::CreateDecryptionContext(const std::string &key) {
+	MbedTlsAesContext result;
+	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
+	mbedtls_aes_init(context);
+	if (mbedtls_aes_setkey_dec(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
+		throw runtime_error("Invalid AES key length");
+	}
+	return result;
+}
+
+MbedTlsAesContext::~MbedTlsAesContext() {
+	mbedtls_aes_free(reinterpret_cast<mbedtls_aes_context *>(context_ptr));
+}
+
+void MbedTlsWrapper::ComputeSha256Hash(const char *in, size_t in_len, char *out) {
 
 	mbedtls_sha256_context sha_context;
 	mbedtls_sha256_init(&sha_context);
-	if(mbedtls_sha256_starts(&sha_context, false) || mbedtls_sha256_update(&sha_context, (const unsigned char*) in, in_len) || mbedtls_sha256_finish(&sha_context, (unsigned char*)out)) {
+	if (mbedtls_sha256_starts(&sha_context, false) ||
+	    mbedtls_sha256_update(&sha_context, reinterpret_cast<const unsigned char *>(in), in_len) ||
+	    mbedtls_sha256_finish(&sha_context, reinterpret_cast<unsigned char *>(out))) {
 		throw runtime_error("SHA256 Error");
 	}
 	mbedtls_sha256_free(&sha_context);
 }
 
-string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
+string MbedTlsWrapper::ComputeSha256Hash(const string &file_content) {
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_BYTES);
-	ComputeSha256Hash(file_content.data(), file_content.size(), (char*)hash.data());
+	ComputeSha256Hash(file_content.data(), file_content.size(), (char *)hash.data());
 	return hash;
 }
 
-bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature, const std::string &sha256_hash) {
+bool MbedTlsWrapper::IsValidSha256Signature(const std::string &pubkey, const std::string &signature,
+                                            const std::string &sha256_hash) {
 
 	if (signature.size() != 256 || sha256_hash.size() != 32) {
-		throw std::runtime_error("Invalid input lengths, expected signature length 256, got " + to_string(signature.size()) + ", hash length 32, got " + to_string(sha256_hash.size()));
+		throw std::runtime_error("Invalid input lengths, expected signature length 256, got " +
+		                         to_string(signature.size()) + ", hash length 32, got " +
+		                         to_string(sha256_hash.size()));
 	}
 
 	mbedtls_pk_context pk_context;
 	mbedtls_pk_init(&pk_context);
 
-	if (mbedtls_pk_parse_public_key( &pk_context,
-	                                    (const unsigned char*) pubkey.c_str(),pubkey.size() + 1 )) {
+	if (mbedtls_pk_parse_public_key(&pk_context, reinterpret_cast<const unsigned char *>(pubkey.c_str()),
+	                                pubkey.size() + 1)) {
 		throw runtime_error("RSA public key import error");
 	}
 
 	// actually verify
 	bool valid = mbedtls_pk_verify(&pk_context, MBEDTLS_MD_SHA256,
-	                               (const unsigned char*) sha256_hash.data(), sha256_hash.size(),
-	                          (const unsigned char*)signature.data(), signature.length()) == 0;
+	                               reinterpret_cast<const unsigned char *>(sha256_hash.data()), sha256_hash.size(),
+	                               reinterpret_cast<const unsigned char *>(signature.data()), signature.length()) == 0;
 
 	mbedtls_pk_free(&pk_context);
 	return valid;
 }
 
 // used in s3fs
-void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* message, size_t message_len, char* out) {
+void MbedTlsWrapper::Hmac256(const char *key, size_t key_len, const char *message, size_t message_len, char *out) {
 	mbedtls_md_context_t hmac_ctx;
 	const mbedtls_md_info_t *md_type = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 	if (!md_type) {
@@ -75,10 +104,24 @@ void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* messag
 	}
 
 	if (mbedtls_md_setup(&hmac_ctx, md_type, 1) ||
-	    mbedtls_md_hmac_starts(&hmac_ctx, (const unsigned char *) key, key_len) ||
-	    mbedtls_md_hmac_update(&hmac_ctx, (const unsigned char *)message, message_len) ||
-	    mbedtls_md_hmac_finish(&hmac_ctx, (unsigned char *) out)) {
+	    mbedtls_md_hmac_starts(&hmac_ctx, reinterpret_cast<const unsigned char *>(key), key_len) ||
+	    mbedtls_md_hmac_update(&hmac_ctx, reinterpret_cast<const unsigned char *>(message), message_len) ||
+	    mbedtls_md_hmac_finish(&hmac_ctx, reinterpret_cast<unsigned char *>(out))) {
 		throw runtime_error("HMAC256 Error");
 	}
 	mbedtls_md_free(&hmac_ctx);
+}
+
+void MbedTlsWrapper::Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
+	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_ENCRYPT, in_len,
+	                          iv, in, in) != 0) {
+		throw runtime_error("Invalid AES input length");
+	}
+}
+
+void MbedTlsWrapper::Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
+	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_DECRYPT, in_len,
+	                          iv, in, in) != 0) {
+		throw runtime_error("Invalid AES input length");
+	}
 }

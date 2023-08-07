@@ -1,41 +1,37 @@
 #include "parquet_reader.hpp"
-#include "parquet_timestamp.hpp"
-#include "parquet_statistics.hpp"
-#include "column_reader.hpp"
 
 #include "boolean_column_reader.hpp"
-#include "row_number_column_reader.hpp"
-#include "cast_column_reader.hpp"
 #include "callback_column_reader.hpp"
+#include "cast_column_reader.hpp"
+#include "column_reader.hpp"
+#include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "parquet_file_metadata_cache.hpp"
+#include "parquet_statistics.hpp"
+#include "parquet_timestamp.hpp"
+#include "row_number_column_reader.hpp"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-
 #include "thrift_tools.hpp"
-
-#include "parquet_file_metadata_cache.hpp"
-
-#include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
-#include "duckdb/common/pair.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #endif
 
-#include <sstream>
 #include <cassert>
 #include <chrono>
 #include <cstring>
+#include <sstream>
 
 namespace duckdb {
 
@@ -54,7 +50,8 @@ CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetc
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
+static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
+                                                         const string &encryption_key) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto proto = CreateThriftProtocol(allocator, file_handle, false);
@@ -69,19 +66,27 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	buf.zero();
 
 	transport.SetLocation(file_size - 8);
-	transport.read((uint8_t *)buf.ptr, 8);
+	transport.read(buf.ptr, 8);
 
+	bool encrypted;
 	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
-		if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
-			throw InvalidInputException("Encrypted Parquet files are not supported for file '%s'", file_handle.path);
-		}
+		encrypted = false;
+	} else if (memcmp(buf.ptr + 4, "PARE", 4) != 0) {
+		encrypted = true;
+	} else {
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
+
 	// read four-byte footer length from just before the end magic bytes
 	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
 	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
+
+	if (encrypted) {
+		
+	}
+
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
@@ -443,12 +448,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(allocator, *file_handle);
+		metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_key);
 	} else {
 		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetadata(allocator, *file_handle);
+			metadata = LoadMetadata(allocator, *file_handle, parquet_options.encryption_key);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}

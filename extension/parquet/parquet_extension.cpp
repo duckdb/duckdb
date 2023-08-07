@@ -21,6 +21,8 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -35,8 +37,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -123,6 +123,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 	static constexpr const idx_t BYTES_PER_ROW = 1024;
 	idx_t row_group_size_bytes;
 
+	//! Master Encryption Key (MEK), optional
+	string encryption_key;
+
 	ChildFieldIDs field_ids;
 };
 
@@ -179,6 +182,7 @@ public:
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+		table_function.named_parameters["encryption_key"] = LogicalType::VARCHAR;
 		MultiFileReader::AddParameters(table_function);
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
@@ -208,6 +212,8 @@ public:
 				parquet_options.binary_as_string = true;
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = true;
+			} else if (loption == "encryption_key") {
+				parquet_options.encryption_key = option.second[0].ToString();
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}
@@ -638,7 +644,7 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 		break;
 	default: // LCOV_EXCL_START
 		throw InternalException("Unexpected type in GetChildNameToTypeMap");
-	} // LCOV_EXCL_STOP
+	}        // LCOV_EXCL_STOP
 	return name_to_type_map;
 }
 
@@ -663,7 +669,7 @@ static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child
 		break;
 	default: // LCOV_EXCL_START
 		throw InternalException("Unexpected type in GetChildNamesAndTypes");
-	} // LCOV_EXCL_STOP
+	}        // LCOV_EXCL_STOP
 }
 
 static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
@@ -818,6 +824,12 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 				}
 				GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, name_to_type_map);
 			}
+		} else if (loption == "encryption_key") {
+			const auto roption = option.second[0].ToString();
+			if (roption.empty()) {
+				throw BinderException("Parquet encryption_key cannot be empty!");
+			}
+			bind_data->encryption_key = roption;
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -836,8 +848,9 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                                                parquet_bind.codec, parquet_bind.field_ids.Copy());
+	global_state->writer =
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
+	                             parquet_bind.field_ids.Copy(), parquet_bind.encryption_key);
 	return std::move(global_state);
 }
 
