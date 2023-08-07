@@ -50,6 +50,9 @@ data_ptr_t GetColDataPtr(const RType &rtype, SEXP coldata) {
 		return (data_ptr_t)DATAPTR_RO(coldata);
 	case RTypeId::LIST:
 		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RTypeId::STRUCT:
+		// Will bind child columns dynamically. Could also optimize by descending early and recording.
+		return (data_ptr_t)coldata;
 	default:
 		cpp11::stop("rapi_execute: Unsupported column type for bind");
 	}
