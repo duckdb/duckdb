@@ -309,7 +309,7 @@ typedef enum {
 	DUCKDB_PENDING_RESULT_READY = 0,
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
 	DUCKDB_PENDING_ERROR = 2,
-	DUCKDB_PENDING_ALL_TASKS_BLOCKED = 3
+	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 
 //===--------------------------------------------------------------------===//

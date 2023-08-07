@@ -458,8 +458,8 @@ bool Executor::ExecutionIsFinished() {
 }
 
 PendingExecutionResult Executor::ExecuteTask() {
-	// Only executor should return ALL_TASKS_BLOCKED
-	D_ASSERT(execution_result != PendingExecutionResult::ALL_TASKS_BLOCKED);
+	// Only executor should return NO_TASKS_AVAILABLE
+	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
 		return execution_result;
 	}
@@ -470,9 +470,9 @@ PendingExecutionResult Executor::ExecuteTask() {
 		if (!task) {
 			scheduler.GetTaskFromProducer(*producer, task);
 		}
-		if (!task && !HasError() && !to_be_rescheduled_tasks.empty()) {
+		if (!task && !HasError()) {
 			// there are no tasks to be scheduled and there are tasks blocked
-			return PendingExecutionResult::ALL_TASKS_BLOCKED;
+			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}
 		if (task) {
 			// if we have a task, partially process it

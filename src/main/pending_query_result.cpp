@@ -78,9 +78,7 @@ void PendingQueryResult::Close() {
 bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
 	if (result == PendingExecutionResult::RESULT_NOT_READY) {
 		return false;
-	} else if (result == PendingExecutionResult::ALL_TASKS_BLOCKED) {
-		// Currently, the default behaviour for ALL_TASKS_BLOCKED, is to return not finished. However, note that in
-		// some cases this can be handled with a special case to do other work while all tasks are blocked.
+	} else if (result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
 		return false;
 	} else {
 		return true;
