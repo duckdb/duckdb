@@ -55,7 +55,7 @@ PendingExecutionResult PendingQueryResult::ExecuteTaskInternal(ClientContextLock
 
 unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &lock) {
 	CheckExecutableInternal(lock);
-	// Busy wait while task is not finished
+	// Busy wait while execution is not finished
 	while (!IsFinished(ExecuteTaskInternal(lock))) {
 	}
 	if (HasError()) {
@@ -76,13 +76,11 @@ void PendingQueryResult::Close() {
 }
 
 bool PendingQueryResult::IsFinished(PendingExecutionResult result) {
-	if (result == PendingExecutionResult::RESULT_NOT_READY) {
-		return false;
-	} else if (result == PendingExecutionResult::NO_TASKS_AVAILABLE) {
-		return false;
-	} else {
+	if (result == PendingExecutionResult::RESULT_READY ||
+	    result == PendingExecutionResult::EXECUTION_ERROR) {
 		return true;
 	}
+	return false;
 }
 
 } // namespace duckdb
