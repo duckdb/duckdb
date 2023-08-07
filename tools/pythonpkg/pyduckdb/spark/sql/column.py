@@ -11,6 +11,13 @@ from duckdb.typing import DuckDBPyType
 
 __all__ = ["Column"]
 
+def _func_op(name: str, doc: str = "") -> Callable[["Column"], "Column"]:
+    def _(self: "Column") -> "Column":
+        njc = getattr(self.expr, name)(self.expr)
+        return Column(njc)
+
+    _.__doc__ = doc
+    return _
 
 def _bin_op(
     name: str,
@@ -72,6 +79,14 @@ class Column:
     # arithmetic operators
     def __neg__(self):
         return Column(-self.expr)
+
+    # `and`, `or`, `not` cannot be overloaded in Python,
+    # so use bitwise operators as boolean operators
+    __and__ = _bin_op("and")
+    __or__ = _bin_op("or")
+    __invert__ = _func_op("not")
+    __rand__ = _bin_op("and")
+    __ror__ = _bin_op("or")
 
     __add__ = _bin_op("__add__")
 

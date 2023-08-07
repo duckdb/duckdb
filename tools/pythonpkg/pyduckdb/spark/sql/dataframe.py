@@ -111,13 +111,9 @@ class DataFrame:
         |  2|Alice|
         +---+-----+
         """
-        if isinstance(condition, str):
-            raise NotImplementedError("filter condition as a SQL string is not supported yet")
-        elif isinstance(condition, Column):
-            
-        else:
-            raise TypeError("Please provide either a SQL string or a Column as filter condition")
-        
+        cond = condition.expr if isinstance(condition, Column) else condition
+        rel = self.relation.filter(cond)
+        return DataFrame(rel, self.session)
 
     def select(self, *cols) -> "DataFrame":
         cols = list(cols)
