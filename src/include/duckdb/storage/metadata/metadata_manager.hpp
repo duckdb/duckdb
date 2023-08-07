@@ -80,7 +80,7 @@ protected:
 	block_id_t AllocateNewBlock();
 	block_id_t GetNextBlockId();
 
-	void AddBlock(MetadataBlock new_block);
+	void AddBlock(MetadataBlock new_block, bool if_exists = false);
 	void AddAndRegisterBlock(MetadataBlock block);
 };
 

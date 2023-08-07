@@ -65,8 +65,11 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	return new_block_id;
 }
 
-void MetadataManager::AddBlock(MetadataBlock new_block) {
+void MetadataManager::AddBlock(MetadataBlock new_block, bool if_exists) {
 	if (blocks.find(new_block.block_id) != blocks.end()) {
+		if (if_exists) {
+			return;
+		}
 		throw InternalException("Block id with id %llu already exists", new_block.block_id);
 	}
 	blocks[new_block.block_id] = std::move(new_block);
@@ -77,7 +80,7 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 		throw InternalException("Calling AddAndRegisterBlock on block that already exists");
 	}
 	block.block = block_manager.RegisterBlock(block.block_id);
-	AddBlock(std::move(block));
+	AddBlock(std::move(block), true);
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
