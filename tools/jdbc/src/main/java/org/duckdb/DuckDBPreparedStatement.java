@@ -385,7 +385,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("Prepare something first");
         }
 
-        if (returnsResultSet || select_result.isFinished()) {
+        if (returnsResultSet || returnsNothing || select_result.isFinished()) {
             return -1;
         }
         return update_result;
