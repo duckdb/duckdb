@@ -200,6 +200,16 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		auto ts_val = VECTOR_ELT(valsexp, idx);
 		return Rf_isNull(ts_val) ? Value(LogicalType::BLOB) : Value::BLOB(RAW(ts_val), Rf_xlength(ts_val));
 	}
+	case RTypeId::STRUCT: {
+		child_list_t<Value> child_values;
+		auto ncol = Rf_length(valsexp);
+		auto child_rtypes = rtype.GetStructChildTypes();
+		for (R_len_t col = 0; col < ncol; ++col) {
+			auto value = SexpToValue(VECTOR_ELT(valsexp, col), idx);
+			child_values.push_back(std::make_pair(child_rtypes[col].first, value));
+		}
+		return Value::STRUCT(std::move(child_values));
+	}
 	default:
 		cpp11::stop("duckdb_sexp_to_value: Unsupported type");
 		return Value();
