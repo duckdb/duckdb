@@ -55,6 +55,7 @@ static LogicalType GetJSONType(StructNames &const_struct_names, const LogicalTyp
 		return LogicalType::UBIGINT;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::HUGEINT:
 		return LogicalType::DOUBLE;
 	// The nested types need to conform as well
@@ -206,6 +207,14 @@ struct CreateJSONValue<string_t, string_t> {
 template <>
 struct CreateJSONValue<hugeint_t, string_t> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const hugeint_t &input) {
+		const auto input_string = input.ToString();
+		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
+	}
+};
+
+template <>
+struct CreateJSONValue<uhugeint_t, string_t> {
+	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const uhugeint_t &input) {
 		const auto input_string = input.ToString();
 		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
 	}
