@@ -7,7 +7,8 @@ using namespace duckdb;
 using namespace cpp11;
 
 template <class SRC, class DST, class RTYPE>
-static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
+static void AppendColumnSegment(SRC *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
+	source_data += sexp_offset;
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
@@ -20,7 +21,8 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-void AppendListColumnSegment(SEXP *source_data, Vector &result, idx_t count) {
+void AppendListColumnSegment(SEXP *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
+	source_data += sexp_offset;
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
@@ -252,51 +254,51 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		auto rtype = bind_data.rtypes[src_df_col_idx];
 		switch (rtype.id()) {
 		case RType::LOGICAL: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, int, RIntegerType>(data_ptr, sexp_offset, v, this_count);
 
 			break;
 		}
 		case RType::NUMERIC: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, double, RDoubleType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::INTEGER64: {
-			auto data_ptr = (int64_t *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, v, this_count);
+			auto data_ptr = (int64_t *)coldata_ptr;
+			AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::STRING: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
+			auto data_ptr = (SEXP *)coldata_ptr;
 
 			if (bind_data.experimental) {
 				D_ASSERT(v.GetType().id() == LogicalTypeId::POINTER);
-				AppendColumnSegment<SEXP, uintptr_t, DedupPointerEnumType>(data_ptr, v, this_count);
+				AppendColumnSegment<SEXP, uintptr_t, DedupPointerEnumType>(data_ptr, sexp_offset, v, this_count);
 			} else {
-				AppendColumnSegment<SEXP, string_t, RStringSexpType>(data_ptr, v, this_count);
+				AppendColumnSegment<SEXP, string_t, RStringSexpType>(data_ptr, sexp_offset, v, this_count);
 			}
 
 			break;
 		}
 		case RTypeId::FACTOR: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
+			auto data_ptr = (int *)coldata_ptr;
 			switch (v.GetType().InternalType()) {
 			case PhysicalType::UINT8:
-				AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
 				break;
 
 			case PhysicalType::UINT16:
-				AppendColumnSegment<int, uint16_t, RFactorType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint16_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
 				break;
 
 			case PhysicalType::UINT32:
-				AppendColumnSegment<int, uint32_t, RFactorType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint32_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
 				break;
 
 			default:
@@ -306,79 +308,79 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 			break;
 		}
 		case RType::TIMESTAMP: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_SECONDS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_MINUTES: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_HOURS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_DAYS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_WEEKS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_SECONDS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_MINUTES_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_HOURS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_DAYS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::TIME_WEEKS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::DATE: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
+			auto data_ptr = (double *)coldata_ptr;
+			AppendColumnSegment<double, date_t, RDateType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::DATE_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
+			auto data_ptr = (int *)coldata_ptr;
+			AppendColumnSegment<int, date_t, RDateType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RType::LIST_OF_NULLS:
 		case RType::BLOB: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, v, this_count);
+			auto data_ptr = (SEXP *)coldata_ptr;
+			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		case RTypeId::LIST: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			AppendListColumnSegment(data_ptr, v, this_count);
+			auto data_ptr = (SEXP *)coldata_ptr;
+			AppendListColumnSegment(data_ptr, sexp_offset, v, this_count);
 			break;
 		}
 		default:
