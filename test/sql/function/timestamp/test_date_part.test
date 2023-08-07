@@ -315,11 +315,6 @@ ORDER BY 1;
 
 # Day parts
 query II
-SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy'], ts) AS parts
-FROM timestamps
-ORDER BY 1;
-----
-query II
 SELECT ts::DATE AS d, DATE_PART(['weekday', 'isodow','doy', 'julian'], ts) AS parts
 FROM timestamps
 ORDER BY 1;
