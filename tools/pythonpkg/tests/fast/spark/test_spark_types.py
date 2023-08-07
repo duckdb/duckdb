@@ -28,6 +28,7 @@ from pyduckdb.spark.sql.types import (
     LongType,
     UnsignedLongType,
     HugeIntegerType,
+    UnsignedHugeIntegerType,
     DayTimeIntervalType,
     ArrayType,
     MapType,
@@ -40,7 +41,7 @@ class TestTypes(object):
     def test_all_types_schema(self, spark):
         # Create DataFrame
         df = spark.sql(
-            """
+		"""
 			select * EXCLUDE (
 				small_enum,
 				medium_enum,
@@ -58,6 +59,7 @@ class TestTypes(object):
                 StructField('int', IntegerType(), True),
                 StructField('bigint', LongType(), True),
                 StructField('hugeint', HugeIntegerType(), True),
+                StructField('uhugeint', UnsignedHugeIntegerType(), True),
                 StructField('utinyint', UnsignedByteType(), True),
                 StructField('usmallint', UnsignedShortType(), True),
                 StructField('uint', UnsignedIntegerType(), True),

@@ -16,6 +16,7 @@ from duckdb.typing import (
     BIGINT,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     UUID,
     FLOAT,
     DOUBLE,
@@ -51,6 +52,7 @@ class TestType(object):
         assert str(BIGINT) == 'BIGINT'
         assert str(UBIGINT) == 'UBIGINT'
         assert str(HUGEINT) == 'HUGEINT'
+        assert str(UHUGEINT) == 'UHUGEINT'
         assert str(UUID) == 'UUID'
         assert str(FLOAT) == 'FLOAT'
         assert str(DOUBLE) == 'DOUBLE'

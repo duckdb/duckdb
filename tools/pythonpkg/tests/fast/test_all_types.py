@@ -52,6 +52,7 @@ all_types = [
     "int",
     "bigint",
     "hugeint",
+    "uhugeint",
     "utinyint",
     "usmallint",
     "uint",

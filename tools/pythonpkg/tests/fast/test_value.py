@@ -14,6 +14,7 @@ from pyduckdb.value.constant import (
     IntegerValue,
     LongValue,
     HugeIntegerValue,
+    UnsignedHugeIntegerValue,
     FloatValue,
     DoubleValue,
     DecimalValue,
@@ -81,6 +82,7 @@ class TestValue(object):
             (INTEGER, IntegerValue(-1), -1),
             (BIGINT, LongValue(-1), -1),
             (HUGEINT, HugeIntegerValue(-1), -1),
+            (UHUGEINT, UnsignedHugeIntegerValue(24350352345), 24350352345),
             (FLOAT, FloatValue(1.8349000215530396), 1.8349000215530396),
             (DOUBLE, DoubleValue(0.23234234234), 0.23234234234),
             (
