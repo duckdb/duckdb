@@ -87,8 +87,63 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	result.upper = uint64_t(result_u128 >> 64);
 	result.lower = uint64_t(result_u128 & 0xffffffffffffffff);
 #else
-	// TODO: implement
-	throw InternalException("TryMultiply on UHUGEINT not implemented for systems without __uint128_t support");
+	// split values into 4 32-bit parts
+	uint64_t top[4] = {lhs.upper >> 32, lhs.upper & 0xffffffff, lhs.lower >> 32, lhs.lower & 0xffffffff};
+	uint64_t bottom[4] = {rhs.upper >> 32, rhs.upper & 0xffffffff, rhs.lower >> 32, rhs.lower & 0xffffffff};
+	uint64_t products[4][4];
+
+	// multiply each component of the values
+	for (int y = 3; y > -1; y--) {
+		for (int x = 3; x > -1; x--) {
+			products[3 - x][y] = top[x] * bottom[y];
+		}
+	}
+
+	// if any of these products are set to a non-zero value, there is always an overflow
+	if (products[2][1] || products[1][0] || products[2][0]) {
+		return false;
+	}
+
+	// if the high bits of any of these are set, there is always an overflow
+	if (products[1][1] & 0xffffffff00000000 || products[3][0] & 0xffffffff00000000 ||
+	    products[3][3] & 0xffffffff00000000 || products[3][2] & 0xffffffff00000000 ||
+	    products[3][1] & 0xffffffff00000000 || products[2][2] & 0xffffffff00000000 ||
+	    products[0][0] & 0xffffffff00000000) {
+		return false;
+	}
+
+	// first row
+	uint64_t fourth32 = (products[0][3] & 0xffffffff);
+	uint64_t third32 = (products[0][2] & 0xffffffff) + (products[0][3] >> 32);
+	uint64_t second32 = (products[0][1] & 0xffffffff) + (products[0][2] >> 32);
+	uint64_t first32 = (products[0][0] & 0xffffffff) + (products[0][1] >> 32);
+
+	// second row
+	third32 += (products[1][3] & 0xffffffff);
+	second32 += (products[1][2] & 0xffffffff) + (products[1][3] >> 32);
+	first32 += (products[1][1] & 0xffffffff) + (products[1][2] >> 32);
+
+	// third row
+	second32 += (products[2][3] & 0xffffffff);
+	first32 += (products[2][2] & 0xffffffff) + (products[2][3] >> 32);
+
+	// fourth row
+	first32 += (products[3][3] & 0xffffffff);
+
+	// move carry to next digit
+	third32 += fourth32 >> 32;
+	second32 += third32 >> 32;
+	first32 += second32 >> 32;
+
+	// remove carry from current digit
+	fourth32 &= 0xffffffff;
+	third32 &= 0xffffffff;
+	second32 &= 0xffffffff;
+	first32 &= 0xffffffff;
+
+	// combine components
+	result.lower = (third32 << 32) | fourth32;
+	result.upper = (first32 << 32) | second32;
 #endif
 	return true;
 }
