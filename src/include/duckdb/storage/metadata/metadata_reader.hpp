@@ -12,15 +12,13 @@
 
 namespace duckdb {
 
-enum class BlockReaderType {
-	EXISTING_BLOCKS,
-	REGISTER_BLOCKS
-};
+enum class BlockReaderType { EXISTING_BLOCKS, REGISTER_BLOCKS };
 
 class MetadataReader : public Deserializer {
 public:
 	MetadataReader(MetadataManager &manager, MetadataPointer next_pointer);
-	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
+	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
+	               BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
 	MetadataReader(MetadataManager &manager, BlockPointer pointer);
 
 public:

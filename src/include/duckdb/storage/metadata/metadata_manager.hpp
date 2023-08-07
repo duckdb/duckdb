@@ -46,6 +46,7 @@ public:
 	static constexpr const idx_t METADATA_BLOCK_SIZE = 4088;
 	//! The amount of metadata blocks per storage block
 	static constexpr const idx_t METADATA_BLOCK_COUNT = 64;
+
 public:
 	MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager);
 	~MetadataManager();

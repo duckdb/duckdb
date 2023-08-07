@@ -2,17 +2,18 @@
 
 namespace duckdb {
 
-MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer) :
-	manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), index(0), offset(0), next_offset(sizeof(block_id_t)), capacity(0) {
+MetadataReader::MetadataReader(MetadataManager &manager, MetadataPointer pointer)
+    : manager(manager), type(BlockReaderType::EXISTING_BLOCKS), next_pointer(pointer), has_next_block(true), index(0),
+      offset(0), next_offset(sizeof(block_id_t)), capacity(0) {
 }
 
-MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type) :
-	manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0), next_offset(pointer.offset), capacity(0) {
+MetadataReader::MetadataReader(MetadataManager &manager, MetaBlockPointer pointer, BlockReaderType type)
+    : manager(manager), type(type), next_pointer(FromDiskPointer(pointer)), has_next_block(true), index(0), offset(0),
+      next_offset(pointer.offset), capacity(0) {
 }
 
-MetadataReader::MetadataReader(MetadataManager &manager, BlockPointer pointer) :
-	MetadataReader(manager, MetadataManager::FromBlockPointer(pointer)) {
-
+MetadataReader::MetadataReader(MetadataManager &manager, BlockPointer pointer)
+    : MetadataReader(manager, MetadataManager::FromBlockPointer(pointer)) {
 }
 
 MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
@@ -78,4 +79,4 @@ data_ptr_t MetadataReader::Ptr() {
 	return BasePtr() + offset;
 }
 
-}
+} // namespace duckdb

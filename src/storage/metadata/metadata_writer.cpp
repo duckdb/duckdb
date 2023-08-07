@@ -3,9 +3,7 @@
 
 namespace duckdb {
 
-MetadataWriter::MetadataWriter(MetadataManager &manager) :
-	manager(manager), capacity(0), offset(0) {
-
+MetadataWriter::MetadataWriter(MetadataManager &manager) : manager(manager), capacity(0), offset(0) {
 }
 
 BlockPointer MetadataWriter::GetBlockPointer() {
@@ -75,4 +73,4 @@ data_ptr_t MetadataWriter::Ptr() {
 	return BasePtr() + offset;
 }
 
-}
+} // namespace duckdb

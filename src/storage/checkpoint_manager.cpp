@@ -138,7 +138,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	con.BeginTransaction();
 	// create the MetadataReader to read from the storage
 	MetadataReader reader(metadata_manager, meta_block);
-//	reader.SetContext(*con.context);
+	//	reader.SetContext(*con.context);
 	LoadCheckpoint(*con.context, reader);
 	con.Commit();
 }
@@ -471,8 +471,7 @@ void CheckpointReader::ReadTable(ClientContext &context, MetadataReader &reader)
 	catalog.CreateTable(context, *bound_info);
 }
 
-void CheckpointReader::ReadTableData(ClientContext &context, MetadataReader &reader,
-                                     BoundCreateTableInfo &bound_info) {
+void CheckpointReader::ReadTableData(ClientContext &context, MetadataReader &reader, BoundCreateTableInfo &bound_info) {
 	auto block_pointer = reader.Read<idx_t>();
 	auto offset = reader.Read<uint64_t>();
 

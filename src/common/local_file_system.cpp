@@ -268,7 +268,9 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 			throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
 		}
 		if (bytes_read == 0) {
-			throw IOException("Could not read enough bytes from file \"%s\": attempted to read %llu bytes from location %llu", handle.path, nr_bytes, location);
+			throw IOException(
+			    "Could not read enough bytes from file \"%s\": attempted to read %llu bytes from location %llu",
+			    handle.path, nr_bytes, location);
 		}
 		read_buffer += bytes_read;
 		nr_bytes -= bytes_read;

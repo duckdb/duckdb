@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-MetadataManager::MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager) :
-	block_manager(block_manager), buffer_manager(buffer_manager) {
+MetadataManager::MetadataManager(BlockManager &block_manager, BufferManager &buffer_manager)
+    : block_manager(block_manager), buffer_manager(buffer_manager) {
 }
 
 MetadataManager::~MetadataManager() {
@@ -15,7 +15,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
 	// if not allocate a new bloc
 	block_id_t free_block = INVALID_BLOCK;
-	for(auto &kv : blocks) {
+	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		D_ASSERT(kv.first == block.block_id);
 		if (!block.free_blocks.empty()) {
@@ -58,7 +58,7 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	MetadataBlock new_block;
 	buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = new_block_id;
-	for(idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
+	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
 	AddBlock(std::move(new_block));
@@ -91,7 +91,8 @@ MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32
 }
 
 block_id_t MetaBlockPointer::GetBlockId() {
-	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));;
+	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));
+	;
 }
 
 uint32_t MetaBlockPointer::GetBlockIndex() {
@@ -103,7 +104,8 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 	auto index = pointer.GetBlockIndex();
 	auto entry = blocks.find(block_id);
 	if (entry == blocks.end()) {
-		throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id, index, pointer.block_pointer);
+		throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id,
+		                        index, pointer.block_pointer);
 	}
 	MetadataPointer result;
 	result.block_index = block_id;
@@ -147,27 +149,28 @@ idx_t MetadataManager::BlockCount() {
 
 void MetadataManager::Flush() {
 	// write the blocks of the metadata manager to disk
-	for(auto &kv : blocks) {
+	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
 		// FIXME: zero-initialize any free blocks
-//		for(auto &free_block : free_blocks) {
-//			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0, MetadataManager::METADATA_BLOCK_SIZE);
-//		}
+		//		for(auto &free_block : free_blocks) {
+		//			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
+		//MetadataManager::METADATA_BLOCK_SIZE);
+		//		}
 		block_manager.Write(handle.GetFileBuffer(), block.block_id);
 	}
 }
 
 void MetadataManager::Serialize(Serializer &serializer) {
 	serializer.Write<uint64_t>(blocks.size());
-	for(auto &kv : blocks) {
+	for (auto &kv : blocks) {
 		kv.second.Serialize(serializer);
 	}
 }
 
 void MetadataManager::Deserialize(Deserializer &source) {
 	auto block_count = source.Read<uint64_t>();
-	for(idx_t i = 0; i < block_count; i++) {
+	for (idx_t i = 0; i < block_count; i++) {
 		auto block = MetadataBlock::Deserialize(source);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
@@ -195,7 +198,7 @@ MetadataBlock MetadataBlock::Deserialize(Deserializer &source) {
 
 idx_t MetadataBlock::FreeBlocksToInteger() {
 	idx_t result = 0;
-	for(idx_t i = 0; i < free_blocks.size(); i++) {
+	for (idx_t i = 0; i < free_blocks.size(); i++) {
 		D_ASSERT(free_blocks[i] < idx_t(64));
 		idx_t mask = idx_t(1) << idx_t(free_blocks[i]);
 		result |= mask;
@@ -208,7 +211,7 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 	if (free_list == 0) {
 		return;
 	}
-	for(idx_t i = 64; i > 0; i--) {
+	for (idx_t i = 64; i > 0; i--) {
 		auto index = i - 1;
 		idx_t mask = idx_t(1) << index;
 		if (free_list & mask) {
@@ -220,7 +223,7 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 void MetadataManager::MarkBlocksAsModified() {
 	if (!modified_blocks.empty()) {
 		// for any blocks that were modified in the last checkpoint - set them to free blocks currently
-		for(auto &kv : modified_blocks) {
+		for (auto &kv : modified_blocks) {
 			auto block_id = kv.first;
 			idx_t modified_list = kv.second;
 			auto entry = blocks.find(block_id);
@@ -238,10 +241,9 @@ void MetadataManager::MarkBlocksAsModified() {
 				block.FreeBlocksFromInteger(new_free_blocks);
 			}
 		}
-
 	}
 	modified_blocks.clear();
-	for(auto &kv : blocks) {
+	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		idx_t free_list = block.FreeBlocksToInteger();
 		idx_t occupied_list = ~free_list;
@@ -253,4 +255,4 @@ block_id_t MetadataManager::GetNextBlockId() {
 	return block_manager.GetFreeBlockId();
 }
 
-}
+} // namespace duckdb
