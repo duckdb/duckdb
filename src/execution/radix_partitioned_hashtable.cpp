@@ -221,6 +221,7 @@ RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
 	Destroy();
 }
 
+// LCOV_EXCL_START
 void RadixHTGlobalSinkState::Destroy() {
 	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE || count_before_combining == 0 ||
 	    partitions.empty()) {
@@ -248,6 +249,7 @@ void RadixHTGlobalSinkState::Destroy() {
 		data_collection.Reset();
 	}
 }
+// LCOV_EXCL_STOP
 
 class RadixHTLocalSinkState : public LocalSinkState {
 public:
@@ -369,7 +371,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		// This only works because we never resize the HT
 		ht.ClearPointerTable();
 		ht.ResetCount();
-		// We don't do this when running single-threaded, because we don't have to combine anyway
+		// We don't do this when running with 1 or 2 threads, it only makes sense when there's many threads
 	}
 
 	// Check if we need to repartition
@@ -386,12 +388,15 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
-	// Loop until all threads have called Combine, make sure we sync partitioning
+	// Check if we want to repartition, then mark this thread as Combined
 	MaybeRepartition(context.client, gstate, lstate);
 	gstate.combined_threads++;
+
+	// Loop until all threads have called Combine, make sure we sync partitioning
 	while (gstate.combined_threads < gstate.active_threads) {
 		MaybeRepartition(context.client, gstate, lstate);
 	}
+	MaybeRepartition(context.client, gstate, lstate);
 
 	auto &ht = *lstate.ht;
 	ht.UnpinData();

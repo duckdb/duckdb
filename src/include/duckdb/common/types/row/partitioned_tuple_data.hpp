@@ -77,9 +77,6 @@ public:
 	void Combine(PartitionedTupleData &other);
 	//! Resets this PartitionedTupleData
 	void Reset();
-	//! Partition a TupleDataCollection
-	void Partition(TupleDataCollection &source,
-	               TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(PartitionedTupleData &new_partitioned_data);
 	//! Unpins the data

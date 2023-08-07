@@ -141,6 +141,7 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 	Verify();
 }
 
+// LCOV_EXCL_START
 template <class MAP_TYPE>
 struct UnorderedMapGetter {
 	static inline const typename MAP_TYPE::key_type &GetKey(typename MAP_TYPE::iterator &iterator) {
@@ -178,6 +179,7 @@ struct FixedSizeMapGetter {
 		return iterator.GetValue();
 	}
 };
+// LCOV_EXCL_STOP
 
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
                                              const idx_t append_count) {
@@ -313,36 +315,6 @@ void PartitionedTupleData::Reset() {
 	}
 	this->count = 0;
 	this->data_size = 0;
-	Verify();
-}
-
-void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinProperties properties) {
-	if (source.Count() == 0) {
-		return;
-	}
-#ifdef DEBUG
-	const auto count_before = source.Count();
-#endif
-
-	PartitionedTupleDataAppendState append_state;
-	InitializeAppendState(append_state, properties);
-
-	TupleDataChunkIterator iterator(source, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
-	auto &chunk_state = iterator.GetChunkState();
-	do {
-		Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
-	} while (iterator.Next());
-
-	FlushAppendState(append_state);
-	source.Reset();
-
-#ifdef DEBUG
-	idx_t count_after = 0;
-	for (const auto &partition : partitions) {
-		count_after += partition->Count();
-	}
-	D_ASSERT(count_before == count_after);
-#endif
 	Verify();
 }
 
