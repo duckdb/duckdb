@@ -49,7 +49,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format black
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black
 
       - name: Format Check
         shell: bash

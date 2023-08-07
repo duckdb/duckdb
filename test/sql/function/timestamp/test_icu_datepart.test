@@ -214,17 +214,41 @@ NULL	NULL
 query II
 SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
 ----
-4	3
-3	2
-5	4
-2	1
-6	5
-2	1
-2	1
-6	5
+3	3
+2	2
+4	4
+1	1
+5	5
+1	1
+1	1
+5	5
 NULL	NULL
 NULL	NULL
 NULL	NULL
+
+query II
+SELECT date_part('isodow', ts), date_part('isodow', ts::timestamp)
+FROM range('1992-01-06'::timestamptz, '1992-01-13'::timestamptz, interval 1 day) as t(ts);
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
+7	7
+
+query II
+SELECT date_part('dow', ts), date_part('dow', ts::timestamp)
+FROM range('1992-01-05'::timestamptz, '1992-01-12'::timestamptz, interval 1 day) as t(ts);
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+5	5
+6	6
 
 query II
 SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
@@ -575,14 +599,14 @@ ORDER BY 2
 ----
 NULL	NULL
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	-infinity
-{'weekday': 3, 'isodow': 4, 'doy': 72}	0044-03-13 (BC) 01:40:43.987654-07:52
-{'weekday': 2, 'isodow': 3, 'doy': 212}	1962-07-31 05:20:48.123456-07
-{'weekday': 4, 'isodow': 5, 'doy': 366}	2020-12-31 16:00:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 32}	2021-02-01 16:00:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 01:30:00-08
-{'weekday': 1, 'isodow': 2, 'doy': 319}	2021-11-15 02:30:00-08
-{'weekday': 5, 'isodow': 6, 'doy': 330}	2021-11-26 02:15:13.123456-08
-{'weekday': 5, 'isodow': 6, 'doy': 358}	2021-12-24 14:00:00-08
+{'weekday': 3, 'isodow': 3, 'doy': 72}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'weekday': 2, 'isodow': 2, 'doy': 212}	1962-07-31 05:20:48.123456-07
+{'weekday': 4, 'isodow': 4, 'doy': 366}	2020-12-31 16:00:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 32}	2021-02-01 16:00:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 319}	2021-11-15 01:30:00-08
+{'weekday': 1, 'isodow': 1, 'doy': 319}	2021-11-15 02:30:00-08
+{'weekday': 5, 'isodow': 5, 'doy': 330}	2021-11-26 02:15:13.123456-08
+{'weekday': 5, 'isodow': 5, 'doy': 358}	2021-12-24 14:00:00-08
 {'weekday': NULL, 'isodow': NULL, 'doy': NULL}	infinity
 
 # ISO parts
