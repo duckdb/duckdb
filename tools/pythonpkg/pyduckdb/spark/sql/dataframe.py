@@ -28,6 +28,18 @@ class DataFrame:
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError
 
+    def withColumnRenamed(self, columnName: str, newName: str) -> "DataFrame":
+        if columnName not in self.relation:
+            raise ValueError(f"DataFrame does not contain a column named {columnName}")
+        cols = []
+        for x in self.relation.columns:
+            col = ColumnExpression(x)
+            if x.casefold() == columnName.casefold():
+                col = col.alias(newName)
+            cols.append(col)
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
         if columnName in self.relation:
             # We want to replace the existing column with this new expression

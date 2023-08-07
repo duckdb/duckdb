@@ -14,7 +14,7 @@ from pyduckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from pyduckdb.spark.sql.functions import col, struct, when
+from pyduckdb.spark.sql.functions import col, struct, when, lit
 import duckdb
 import re
 
@@ -31,10 +31,34 @@ class TestWithColumn(object):
 
         columns = ["firstname", "middlename", "lastname", "dob", "gender", "salary"]
         df = spark.createDataFrame(data=data, schema=columns)
-        assert df.schema['salary'].dataType.typeName() == 'short'
+        assert df.schema['salary'].dataType.typeName() == 'integer'
 
-        # The type of 'salary' has been cast to Integer
-        new_df = df.withColumn("salary", col("salary").cast("Integer"))
-        assert new_df.schema['salary'].dataType.typeName() == 'integer'
+        # The type of 'salary' has been cast to Bigint
+        new_df = df.withColumn("salary", col("salary").cast("BIGINT"))
+        assert new_df.schema['salary'].dataType.typeName() == 'long'
 
-        df.withColumn("salary", col("salary") * 100).show()
+        # Replace the 'salary' column with '(salary * 100)'
+        df2 = df.withColumn("salary", col("salary") * 100)
+        res = df2.collect()
+        assert res[0].salary == 300_000
+
+        # Create a column from an existing column
+        df2 = df.withColumn("CopiedColumn", col("salary") * -1)
+        res = df2.collect()
+        assert res[0].CopiedColumn == -3000
+
+        df2 = df.withColumn("Country", lit("USA"))
+        res = df2.collect()
+        assert res[0].Country == 'USA'
+
+        df2 = df.withColumn("Country", lit("USA")).withColumn("anotherColumn", lit("anotherValue"))
+        res = df2.collect()
+        assert res[0].Country == 'USA'
+        assert res[1].anotherColumn == 'anotherValue'
+
+        df2 = df.withColumnRenamed("gender", "sex")
+        assert 'gender' not in df2
+        assert 'sex' in df2
+
+        df2 = df.drop("salary")
+        assert 'salary' not in df2
