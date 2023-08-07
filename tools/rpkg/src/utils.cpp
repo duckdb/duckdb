@@ -200,6 +200,17 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		auto ts_val = VECTOR_ELT(valsexp, idx);
 		return Rf_isNull(ts_val) ? Value(LogicalType::BLOB) : Value::BLOB(RAW(ts_val), Rf_xlength(ts_val));
 	}
+	case RTypeId::LIST: {
+		auto ts_val = VECTOR_ELT(valsexp, idx);
+		auto child_rtype = rtype.GetListChildType();
+		vector<Value> child_values;
+		R_len_t child_len = GetVecSize(child_rtype, ts_val);
+		for (R_len_t child_idx = 0; child_idx < child_len; ++child_idx) {
+			auto value = SexpToValue(ts_val, child_idx);
+			child_values.push_back(value);
+		}
+		return Value::LIST(std::move(child_values));
+	}
 	case RTypeId::STRUCT: {
 		child_list_t<Value> child_values;
 		auto ncol = Rf_length(valsexp);
