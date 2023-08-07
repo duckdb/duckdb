@@ -1,0 +1,284 @@
+# name: test/sql/function/list/list_reverse.test
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+foreach f list_reverse array_reverse
+
+query I
+SELECT ${f}(NULL);
+----
+NULL
+
+query I
+SELECT ${f}([]);
+----
+[]
+
+query I
+SELECT ${f}([NULL]);
+----
+[NULL]
+
+query I
+SELECT ${f}([1, 42, 2]);
+----
+[2, 42, 1]
+
+query I
+SELECT ${f}([1, 42, NULL, 2]);
+----
+[2, NULL, 42, 1]
+
+query I
+SELECT ${f}(${f}([1, 3, 3, 42, 117, 69, NULL]));
+----
+[1, 3, 3, 42, 117, 69, NULL]
+
+query I
+SELECT ${f} ([[1, 2 ,42], [3, 4]]);
+----
+[[3, 4], [1, 2, 42]]
+
+query I
+prepare q1 as select ${f}(?);
+execute q1([5, 42, 3]);
+----
+[3, 42, 5]
+
+query I
+create table tbl_big as select range(5000) as list;
+select list_sort((list), 'desc') == ${f}(list) from tbl_big;
+----
+true
+
+statement ok
+CREATE TABLE tbl (id INTEGER, list INTEGER[]);
+
+statement ok
+INSERT INTO tbl VALUES (1, [NULL, 3, 117, 42, 1]), (2, NULL), (3, [1, 8, 9]), (4, NULL), (5, NULL), (6, [NULL]);
+
+query II
+SELECT id, ${f}(list) FROM tbl ORDER BY id;
+----
+1	[1, 42, 117, 3, NULL]
+2	NULL
+3	[9, 8, 1]
+4	NULL
+5	NULL
+6	[NULL]
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+CREATE TABLE tbl2 (id INTEGER, list INTEGER[]);
+
+statement ok
+INSERT INTO tbl2 VALUES (1, [1, 2, 3]), (1, [4, 5, 6]), (3, [7, 8, 9]);
+
+query II
+SELECT id, ${f}(list) FROM tbl2 ORDER BY id;
+----
+1	[3, 2, 1]
+1	[6, 5, 4]
+3	[9, 8, 7]
+
+statement ok
+DROP TABLE tbl2;
+
+query IIIIIIII
+select ${f}(${f}(columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']))) == columns(['int_array', 'varchar_array', 'nested_int_array', 'array_of_structs', 'timestamp_array', 'double_array', 'date_array', 'timestamptz_array']) from test_all_types();
+----
+true	true	true	true	true	true	true	true
+true	true	true	true	true	true	true	true
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
+
+statement ok
+select ${f}(test_vector) from test_vector_types(null::int[], false);
+
+statement ok
+select ${f}(test_vector) from test_vector_types(null::int[], true);
+
+query I nosort q1
+select true from test_vector_types(null::int[], false);
+----
+
+query I nosort q1
+select list_sort((list), 'desc') == list from (select ${f}(test_vector) as list from test_vector_types(null::int[], false));
+----
+
+query I nosort q1
+select list_sort((list), 'desc') == list from (select ${f}(test_vector) as list from test_vector_types(null::int[], true));
+----
+
+statement error
+SELECT ${f}()
+
+statement error
+SELECT ${f}(42)
+
+statement error
+SELECT ${f} ([1, 3, 2, 42, 117,, NULL])
+
+statement ok
+CREATE TABLE palindromes (s VARCHAR);
+
+statement ok
+INSERT INTO palindromes VALUES ('racecar'), ('civic'), ('defied'), ('repaper'), ('kayak'), ('rotator'), ('tattarrattat'), ('saippuakivikauppias'), ('malayalam');
+
+query I
+SELECT list_aggr(${f}(str_split(s, '')), 'string_agg', '') FROM palindromes ORDER BY s;
+----
+civic
+deifed
+kayak
+malayalam
+racecar
+repaper
+rotator
+saippuakivikauppias
+tattarrattat
+
+statement ok
+DROP TABLE palindromes;
+
+query I
+WITH example AS (
+  SELECT [1, 2, 3] AS arr UNION ALL
+  SELECT [4, 5] AS arr UNION ALL
+  SELECT [] AS arr
+)
+SELECT
+  ${f}(arr) AS reverse_arr
+FROM example;
+----
+[3, 2, 1]
+[5, 4]
+[]
+
+
+endloop
+
+# test incorrect syntax
+
+foreach f list_reverse array_reverse
+
+statement error
+SELECT ${f}()
+
+statement error
+SELECT ${f}(*)
+
+statement error
+SELECT ${f}([1, 2], 2)
+
+endloop
+
+# test incorrect parameter type
+
+foreach f list_reverse array_reverse
+
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+
+statement error
+SELECT ${f}(NULL::${type})
+
+endloop
+
+endloop
+
+
+# list constant tests
+
+foreach f list_reverse array_reverse
+
+query I
+SELECT ${f}([1, 42, 39, 58])
+----
+[58, 39, 42, 1]
+
+query I
+SELECT ${f}([1, NULL, 42, 39, NULL, 58])
+----
+[58, NULL, 39, 42, NULL, 1]
+
+
+query I
+SELECT ${f}([1, 42, -39, 58, -1, 18])
+----
+[18, -1, 58, -39, 42, 1]
+
+query I
+SELECT ${f}(${f}([11, -100, 678]))
+----
+[11, -100, 678]
+
+endloop
+
+
+# list column tests
+
+foreach f list_reverse array_reverse
+
+statement ok
+CREATE OR REPLACE TABLE integers AS SELECT LIST(i) AS i FROM range(1, 10, 1) t1(i)
+
+statement ok
+INSERT INTO integers VALUES ([NULL]), (NULL), ([])
+
+query I
+SELECT ${f}(i) FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
+query I
+SELECT (i).${f}() FROM integers
+----
+[9, 8, 7, 6, 5, 4, 3, 2, 1]
+[NULL]
+NULL
+[]
+
+endloop
+
+# Nested list and very Large list
+
+foreach f list_reverse array_reverse
+
+query I
+SELECT ${f}([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]])
+----
+[[1, 2, 3], [], [NULL], NULL, [1, 2], [1]]
+
+query I
+SELECT ([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]]).${f}()
+----
+[[1, 2, 3], [], [NULL], NULL, [1, 2], [1]]
+
+
+statement ok
+CREATE OR REPLACE TABLE lists AS SELECT range % 4 g, list(range) l FROM range(10000) GROUP BY range % 4;
+
+query T
+with cte0 as (
+  select g, ${f}(l) l from lists
+), cte1 as (
+  select g, unnest(l) i from cte0
+), cte2 as (
+  select g, i, lead(g, 1) over () lg, lead(i, 1) over () li from cte1
+)
+select count(*)
+from cte2
+where g = lg
+  and lg not null
+  and li > i
+----
+0
+
+endloop
+
