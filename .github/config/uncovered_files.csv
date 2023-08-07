@@ -35,6 +35,7 @@ common/file_system.cpp	19
 common/fsst.cpp	7
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
+common/http_state.cpp	36
 common/local_file_system.cpp	16
 common/multi_file_reader.cpp	15
 common/operator/cast_operators.cpp	72
@@ -114,7 +115,7 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
-core_functions/aggregate/nested/list.cpp	2
+core_functions/aggregate/nested/list.cpp	4
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
 core_functions/scalar/date/date_part.cpp	17
@@ -397,6 +398,7 @@ include/duckdb/main/capi/cast/from_decimal.hpp	2
 include/duckdb/main/capi/cast/to_decimal.hpp	38
 include/duckdb/main/client_context.hpp	2
 include/duckdb/main/client_context_file_opener.hpp	3
+include/duckdb/main/chunk_scan_state.hpp	4
 include/duckdb/main/connection.hpp	32
 include/duckdb/main/connection_manager.hpp	3
 include/duckdb/main/database.hpp	2
@@ -449,10 +451,12 @@ include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
+main/chunk_scan_state.cpp	21
 main/capi/appender-c.cpp	3
 main/capi/arrow-c.cpp	5
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
+main/chunk_scan_state/query_result.cpp	28
 main/capi/data_chunk-c.cpp	30
 main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
@@ -460,7 +464,7 @@ main/capi/helper-c.cpp	49
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	44
 main/capi/pending-c.cpp	28
-main/capi/prepared-c.cpp	4
+main/capi/prepared-c.cpp	5
 main/capi/replacement_scan-c.cpp	4
 main/capi/result-c.cpp	34
 main/capi/stream-c.cpp	5
@@ -469,13 +473,13 @@ main/capi/threading-c.cpp	52
 main/capi/value-c.cpp	3
 main/client_context.cpp	85
 main/client_context_file_opener.cpp	9
-main/client_verify.cpp	2
+main/client_verify.cpp	3
 main/config.cpp	35
 main/connection.cpp	38
 main/database.cpp	39
 main/database_manager.cpp	3
 main/database_path_and_type.cpp	5
-main/db_instance_cache.cpp	26
+main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
