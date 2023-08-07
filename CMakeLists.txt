@@ -407,6 +407,11 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_LTO)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
+  elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
+    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
+  endif()
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
@@ -1022,19 +1027,6 @@ if(BUILD_PYTHON
   endif()
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
-
-  # This searches all Out-of-tree (OOT) extensions that we have linked into duckdb for their direct dependencies and
-  # adds them to the duckdb_libs to ensure they also get linked. This allows linking OOT extensions with dependencies
-  # for the Python/R/Node builds
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} AND ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-      get_target_property(EXT_LINKED_LIBS ${EXT_NAME}_extension LINK_LIBRARIES)
-      if (NOT "${EXT_LINKED_LIBS}" STREQUAL "EXT_LINKED_LIBS-NOTFOUND")
-        set(duckdb_libs ${EXT_LINKED_LIBS} ${duckdb_libs})
-      endif()
-    endif()
-  endforeach()
 
   if(BUILD_PYTHON)
     if(USER_SPACE)

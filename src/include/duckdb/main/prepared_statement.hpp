@@ -63,7 +63,7 @@ public:
 	//! Returns the result names of the prepared statement
 	DUCKDB_API const vector<string> &GetNames();
 	//! Returns the map of parameter index to the expected type of parameter
-	DUCKDB_API vector<LogicalType> GetExpectedParameterTypes() const;
+	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
 	template <typename... Args>
@@ -72,6 +72,20 @@ public:
 		return PendingQueryRecursive(values, args...);
 	}
 
+	//! Create a pending query result of the prepared statement with the given set of arguments
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
+
+	//! Create a pending query result of the prepared statement with the given set named arguments
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(case_insensitive_map_t<Value> &named_values,
+	                                                       bool allow_stream_result = true);
+
+	//! Execute the prepared statement with the given set of values
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+
+	//! Execute the prepared statement with the given set of named+unnamed values
+	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<Value> &named_values,
+	                                           bool allow_stream_result = true);
+
 	//! Execute the prepared statement with the given set of arguments
 	template <typename... Args>
 	unique_ptr<QueryResult> Execute(Args... args) {
@@ -79,11 +93,65 @@ public:
 		return ExecuteRecursive(values, args...);
 	}
 
-	//! Create a pending query result of the prepared statement with the given set of arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
+	template <class PAYLOAD>
+	static string ExcessValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	                                    case_insensitive_map_t<PAYLOAD> &values) {
+		// Too many values
+		set<string> excess_set;
+		for (auto &pair : values) {
+			auto &name = pair.first;
+			if (!parameters.count(name)) {
+				excess_set.insert(name);
+			}
+		}
+		vector<string> excess_values;
+		for (auto &val : excess_set) {
+			excess_values.push_back(val);
+		}
+		return StringUtil::Format("Parameter argument/count mismatch, identifiers of the excess parameters: %s",
+		                          StringUtil::Join(excess_values, ", "));
+	}
 
-	//! Execute the prepared statement with the given set of values
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
+	template <class PAYLOAD>
+	static string MissingValuesException(const case_insensitive_map_t<idx_t> &parameters,
+	                                     case_insensitive_map_t<PAYLOAD> &values) {
+		// Missing values
+		set<string> missing_set;
+		for (auto &pair : parameters) {
+			auto &name = pair.first;
+			if (!values.count(name)) {
+				missing_set.insert(name);
+			}
+		}
+		vector<string> missing_values;
+		for (auto &val : missing_set) {
+			missing_values.push_back(val);
+		}
+		return StringUtil::Format("Values were not provided for the following prepared statement parameters: %s",
+		                          StringUtil::Join(missing_values, ", "));
+	}
+
+	template <class PAYLOAD>
+	static void VerifyParameters(case_insensitive_map_t<PAYLOAD> &provided,
+	                             const case_insensitive_map_t<idx_t> &expected) {
+		if (expected.size() == provided.size()) {
+			// Same amount of identifiers, if
+			for (auto &pair : expected) {
+				auto &identifier = pair.first;
+				if (!provided.count(identifier)) {
+					throw InvalidInputException(MissingValuesException(expected, provided));
+				}
+			}
+			return;
+		}
+		// Mismatch in expected and provided parameters/values
+		if (expected.size() > provided.size()) {
+			throw InvalidInputException(MissingValuesException(expected, provided));
+		} else {
+			D_ASSERT(provided.size() > expected.size());
+			throw InvalidInputException(ExcessValuesException(expected, provided));
+		}
+	}
 
 private:
 	unique_ptr<PendingQueryResult> PendingQueryRecursive(vector<Value> &values) {

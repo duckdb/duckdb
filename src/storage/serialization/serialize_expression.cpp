@@ -241,16 +241,16 @@ unique_ptr<Expression> BoundOperatorExpression::FormatDeserialize(FormatDeserial
 
 void BoundParameterExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty("parameter_nr", parameter_nr);
+	serializer.WriteProperty("identifier", identifier);
 	serializer.WriteProperty("return_type", return_type);
 	serializer.WriteProperty("parameter_data", *parameter_data);
 }
 
 unique_ptr<Expression> BoundParameterExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto parameter_nr = deserializer.ReadProperty<idx_t>("parameter_nr");
+	auto identifier = deserializer.ReadProperty<string>("identifier");
 	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
 	auto parameter_data = deserializer.ReadProperty<shared_ptr<BoundParameterData>>("parameter_data");
-	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), parameter_nr, std::move(return_type), std::move(parameter_data)));
+	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), std::move(identifier), std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 
