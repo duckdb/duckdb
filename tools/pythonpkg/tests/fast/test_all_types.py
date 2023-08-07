@@ -5,18 +5,8 @@ import datetime
 import math
 from decimal import Decimal
 from uuid import UUID
-
-
-def get_all_types():
-    conn = duckdb.connect()
-    all_types = conn.execute("describe select * from test_all_types()").fetchall()
-    types = []
-    for cur_type in all_types:
-        types.append(cur_type[0])
-    return types
-
-
-all_types = get_all_types()
+import pytz
+import pytest
 
 
 # we need to write our own equality function that considers nan==nan for testing purposes
@@ -40,9 +30,73 @@ def recursive_equality(o1, o2):
         return False
 
 
+# Regenerate the 'all_types' list using:
+
+# def get_all_types():
+#    conn = duckdb.connect()
+#    rel = conn.sql("""
+#        select * EXCLUDE
+#            time_tz
+#        from test_all_types()
+#    """)
+#    return rel.columns
+# all_types = get_all_types()
+# for type in all_types:
+# 	print(f'\t"{type}",')
+# exit()
+
+all_types = [
+    "bool",
+    "tinyint",
+    "smallint",
+    "int",
+    "bigint",
+    "hugeint",
+    "utinyint",
+    "usmallint",
+    "uint",
+    "ubigint",
+    "date",
+    "time",
+    "timestamp",
+    "timestamp_s",
+    "timestamp_ms",
+    "timestamp_ns",
+    "timestamp_tz",
+    "float",
+    "double",
+    "dec_4_1",
+    "dec_9_4",
+    "dec_18_6",
+    "dec38_10",
+    "uuid",
+    "interval",
+    "varchar",
+    "blob",
+    "bit",
+    "small_enum",
+    "medium_enum",
+    "large_enum",
+    "int_array",
+    "double_array",
+    "date_array",
+    "timestamp_array",
+    "timestamptz_array",
+    "varchar_array",
+    "nested_int_array",
+    "struct",
+    "struct_of_arrays",
+    "array_of_structs",
+    "map",
+    "union",
+]
+
+
 class TestAllTypes(object):
-    def test_fetchall(self, duckdb_cursor):
+    @pytest.mark.parametrize('cur_type', all_types)
+    def test_fetchall(self, cur_type):
         conn = duckdb.connect()
+        conn.execute("SET TimeZone =UTC")
         # We replace these values since the extreme ranges are not supported in native-python.
         replacement_values = {
             'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
@@ -55,7 +109,10 @@ class TestAllTypes(object):
             'timestamp_array': "[], ['1970-01-01'::TIMESTAMP, NULL, '0001-01-01'::TIMESTAMP, '9999-12-31 23:59:59.999999'::TIMESTAMP,], [NULL::TIMESTAMP,]",
             'timestamptz_array': "[], ['1970-01-01 00:00:00Z'::TIMESTAMPTZ, NULL, '0001-01-01 00:00:00Z'::TIMESTAMPTZ, '9999-12-31 23:59:59.999999Z'::TIMESTAMPTZ,], [NULL::TIMESTAMPTZ,]",
         }
-
+        min_datetime = datetime.datetime.min
+        min_datetime_with_utc = min_datetime.replace(tzinfo=pytz.UTC)
+        max_datetime = datetime.datetime.max
+        max_datetime_with_utc = max_datetime.replace(tzinfo=pytz.UTC)
         correct_answer_map = {
             'bool': [(False,), (True,), (None,)],
             'tinyint': [(-128,), (127,), (None,)],
@@ -116,7 +173,12 @@ class TestAllTypes(object):
             'timestamptz_array': [
                 (
                     [],
-                    [datetime.datetime(1970, 1, 1), None, datetime.datetime.min, datetime.datetime.max],
+                    [
+                        datetime.datetime(1970, 1, 1, tzinfo=pytz.UTC),
+                        None,
+                        min_datetime_with_utc,
+                        max_datetime_with_utc,
+                    ],
                     [
                         None,
                     ],
@@ -149,18 +211,16 @@ class TestAllTypes(object):
             'timestamp_s': [(datetime.datetime(1990, 1, 1, 0, 0),)],
             'timestamp_ns': [(datetime.datetime(1990, 1, 1, 0, 0),)],
             'timestamp_ms': [(datetime.datetime(1990, 1, 1, 0, 0),)],
-            'timestamp_tz': [(datetime.datetime(1990, 1, 1, 0, 0),)],
+            'timestamp_tz': [(datetime.datetime(1990, 1, 1, 0, 0, tzinfo=pytz.UTC),)],
             'union': [('Frank',), (5,), (None,)],
         }
-
-        for cur_type in all_types:
-            if cur_type in replacement_values:
-                result = conn.execute("select " + replacement_values[cur_type]).fetchall()
-                print(cur_type, result)
-            else:
-                result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
-            correct_result = correct_answer_map[cur_type]
-            assert recursive_equality(result, correct_result)
+        if cur_type in replacement_values:
+            result = conn.execute("select " + replacement_values[cur_type]).fetchall()
+            print(cur_type, result)
+        else:
+            result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
+        correct_result = correct_answer_map[cur_type]
+        assert recursive_equality(result, correct_result)
 
     def test_bytearray_with_nulls(self):
         con = duckdb.connect(database=':memory:')
@@ -173,7 +233,8 @@ class TestAllTypes(object):
         # Don't truncate the array on the nullbyte
         assert want == bytearray(got)
 
-    def test_fetchnumpy(self, duckdb_cursor):
+    @pytest.mark.parametrize('cur_type', all_types)
+    def test_fetchnumpy(self, cur_type):
         conn = duckdb.connect()
 
         correct_answer_map = {
@@ -397,22 +458,22 @@ class TestAllTypes(object):
         # - 'date_array'
 
         rel = conn.table_function("test_all_types")
-        for cur_type in all_types:
-            if cur_type not in correct_answer_map:
-                continue
-            result = rel.project(f'"{cur_type}"').fetchnumpy()
-            result = result[cur_type]
-            correct_answer = correct_answer_map[cur_type]
-            if isinstance(result, pd.Categorical) or result.dtype == object:
-                assert recursive_equality(list(result), list(correct_answer))
-            else:
-                # assert_equal compares NaN equal, but also compares masked
-                # elements equal to any unmasked element
-                if isinstance(result, np.ma.MaskedArray) or isinstance(correct_answer, np.ma.MaskedArray):
-                    assert np.all(result.mask == correct_answer.mask)
-                np.testing.assert_equal(result, correct_answer)
+        if cur_type not in correct_answer_map:
+            return
+        result = rel.project(f'"{cur_type}"').fetchnumpy()
+        result = result[cur_type]
+        correct_answer = correct_answer_map[cur_type]
+        if isinstance(result, pd.Categorical) or result.dtype == object:
+            assert recursive_equality(list(result), list(correct_answer))
+        else:
+            # assert_equal compares NaN equal, but also compares masked
+            # elements equal to any unmasked element
+            if isinstance(result, np.ma.MaskedArray) or isinstance(correct_answer, np.ma.MaskedArray):
+                assert np.all(result.mask == correct_answer.mask)
+            np.testing.assert_equal(result, correct_answer)
 
-    def test_arrow(self, duckdb_cursor):
+    @pytest.mark.parametrize('cur_type', all_types)
+    def test_arrow(self, cur_type):
         try:
             import pyarrow as pa
         except:
@@ -422,21 +483,21 @@ class TestAllTypes(object):
         # We do not round trip enum types
         enum_types = {'small_enum', 'medium_enum', 'large_enum', 'double_array'}
         conn = duckdb.connect()
-        for cur_type in all_types:
-            if cur_type in replacement_values:
-                arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()
-            else:
-                arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
-            if cur_type in enum_types:
-                round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
-                result_arrow = conn.execute("select * from arrow_table").fetchall()
-                result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
-                assert recursive_equality(result_arrow, result_roundtrip)
-            else:
-                round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
-                assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
+        if cur_type in replacement_values:
+            arrow_table = conn.execute("select " + replacement_values[cur_type]).arrow()
+        else:
+            arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
+        if cur_type in enum_types:
+            round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+            result_arrow = conn.execute("select * from arrow_table").fetchall()
+            result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
+            assert recursive_equality(result_arrow, result_roundtrip)
+        else:
+            round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+            assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 
-    def test_pandas(self):
+    @pytest.mark.parametrize('cur_type', all_types)
+    def test_pandas(self, cur_type):
         # We skip those since the extreme ranges are not supported in python.
         replacement_values = {
             'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
@@ -451,14 +512,14 @@ class TestAllTypes(object):
         }
 
         conn = duckdb.connect()
-        for cur_type in all_types:
-            if cur_type in replacement_values:
-                dataframe = conn.execute("select " + replacement_values[cur_type]).df()
-            else:
-                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
-            print(cur_type)
-            round_trip_dataframe = conn.execute("select * from dataframe").df()
-            result_dataframe = conn.execute("select * from dataframe").fetchall()
-            print(round_trip_dataframe)
-            result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
-            assert recursive_equality(result_dataframe, result_roundtrip)
+        conn.execute("SET timezone = UTC")
+        if cur_type in replacement_values:
+            dataframe = conn.execute("select " + replacement_values[cur_type]).df()
+        else:
+            dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
+        print(cur_type)
+        round_trip_dataframe = conn.execute("select * from dataframe").df()
+        result_dataframe = conn.execute("select * from dataframe").fetchall()
+        print(round_trip_dataframe)
+        result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
+        assert recursive_equality(result_dataframe, result_roundtrip)

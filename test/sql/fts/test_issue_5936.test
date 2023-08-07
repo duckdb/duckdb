@@ -6,6 +6,8 @@ require skip_reload
 
 require fts
 
+require noalternativeverify
+
 statement ok
 CREATE TABLE documents(document VARCHAR, url VARCHAR);
 
