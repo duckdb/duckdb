@@ -19,14 +19,16 @@ class Value;
 //! Abstract type that provide client-specific context to FileSystem.
 class FileOpener {
 public:
-	FileOpener() : file_path(string()) {
+	FileOpener() {
 	}
 	virtual ~FileOpener() {};
 
 	virtual bool TryGetCurrentSetting(const string &key, Value &result) = 0;
 	virtual ClientContext *TryGetClientContext() = 0;
 
-	string file_path;
+	virtual FileOpener *GetScopedOpener(const string &file_path) {
+		return this;
+	}
 
 	DUCKDB_API static ClientContext *TryGetClientContext(FileOpener *opener);
 	DUCKDB_API static bool TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result);

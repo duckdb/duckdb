@@ -887,11 +887,10 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 		throw InternalException("Cannot S3 Glob without FileOpener");
 	}
 
-	// Set file path in the opener
-	opener->file_path = glob_pattern;
+	auto scoped_opener = opener->GetScopedOpener(glob_pattern);
 
 	// Trim any query parameters from the string
-	auto s3_auth_params = S3AuthParams::ReadFrom(opener);
+	auto s3_auth_params = S3AuthParams::ReadFrom(scoped_opener);
 
 	// In url compatibility mode, we ignore globs allowing users to query files with the glob chars
 	if (s3_auth_params.s3_url_compatibility_mode) {
