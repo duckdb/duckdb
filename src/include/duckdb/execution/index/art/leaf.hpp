@@ -49,9 +49,9 @@ public:
 		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
 	}
 
-	//! Initializes a merge by incrementing the buffer IDs of the leaf
+	//! Initializes a merge by incrementing the buffer IDs of the leaf (chain)
 	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
-	//! Merge leaves and free all copied leaf nodes
+	//! Merge leaves (chains) and free all copied leaf nodes
 	static void Merge(ART &art, Node &l_node, Node &r_node);
 
 	//! Insert a row ID into a leaf
@@ -66,15 +66,15 @@ public:
 	//! Returns whether the leaf contains the row ID
 	static bool ContainsRowId(ART &art, Node &node, const row_t row_id);
 
-	//! Returns the string representation of the leaf, or only traverses and verifies the leaf
+	//! Returns the string representation of the leaf (chain), or only traverses and verifies the leaf (chain)
 	static string VerifyAndToString(ART &art, Node &node);
 
-	//! Serialize the leaf
+	//! Serialize the leaf (chain)
 	static BlockPointer Serialize(ART &art, Node &node, MetaBlockWriter &writer);
-	//! Deserialize the leaf
+	//! Deserialize the leaf (chain)
 	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
 
-	//! Vacuum the leaf
+	//! Vacuum the leaf (chain)
 	static void Vacuum(ART &art, Node &node);
 
 private:

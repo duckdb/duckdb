@@ -553,8 +553,10 @@ endfunction()
 
 function(add_extension_definitions)
   include_directories(${PROJECT_SOURCE_DIR}/extension)
-  if(NOT("${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL ""))
-    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE="${TEST_WITH_LOADABLE_EXTENSION}")
+  if(NOT "${TEST_WITH_LOADABLE_EXTENSION}" STREQUAL "")
+    string(REPLACE ";"  "," COMMA_SEPARATED_EXTENSIONS "${TEST_WITH_LOADABLE_EXTENSION}")
+    # Note: weird commas are for easy substring matching in c++
+    add_definitions(-DDUCKDB_EXTENSIONS_TEST_WITH_LOADABLE=\",${COMMA_SEPARATED_EXTENSIONS},\")
     add_definitions(-DDUCKDB_EXTENSIONS_BUILD_PATH="${CMAKE_BINARY_DIR}/extension")
   endif()
   if(NOT("${TEST_REMOTE_INSTALL}" STREQUAL "OFF"))
@@ -1020,19 +1022,6 @@ if(BUILD_PYTHON
   endif()
 
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
-
-  # This searches all Out-of-tree (OOT) extensions that we have linked into duckdb for their direct dependencies and
-  # adds them to the duckdb_libs to ensure they also get linked. This allows linking OOT extensions with dependencies
-  # for the Python/R/Node builds
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
-    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
-    if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} AND ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-      get_target_property(EXT_LINKED_LIBS ${EXT_NAME}_extension LINK_LIBRARIES)
-      if (NOT "${EXT_LINKED_LIBS}" STREQUAL "EXT_LINKED_LIBS-NOTFOUND")
-        set(duckdb_libs ${EXT_LINKED_LIBS} ${duckdb_libs})
-      endif()
-    endif()
-  endforeach()
 
   if(BUILD_PYTHON)
     if(USER_SPACE)

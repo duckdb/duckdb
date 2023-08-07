@@ -243,4 +243,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		duckdb_destroy_arrow(&arrow_result);
 		duckdb_destroy_prepare(&stmt);
 	}
+
+	// FIXME: needs test for scanning a fixed size list
+	// this likely requires nanoarrow to create the array to scan
 }

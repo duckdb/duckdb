@@ -42,19 +42,30 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 void Leaf::Free(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet() && !node.IsSerialized());
-	auto &child = Leaf::Get(art, node).ptr;
-	Node::Free(art, child);
+	Node current_node = node;
+	Node next_node;
+	while (current_node.IsSet() && !current_node.IsSerialized()) {
+		next_node = Leaf::Get(art, current_node).ptr;
+		Node::GetAllocator(art, NType::LEAF).Free(current_node);
+		current_node = next_node;
+	}
+
+	node.Reset();
 }
 
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
-	D_ASSERT(node.IsSet() && !node.IsSerialized());
-	D_ASSERT(node.GetType() == NType::LEAF);
+	auto merge_buffer_count = flags.merge_buffer_counts[(uint8_t)NType::LEAF - 1];
 
-	auto &leaf = Leaf::Get(art, node);
-	if (leaf.ptr.IsSet()) {
-		leaf.ptr.InitializeMerge(art, flags);
+	Node next_node = node;
+	node.AddToBufferID(merge_buffer_count);
+
+	while (next_node.IsSet()) {
+		auto &leaf = Leaf::Get(art, next_node);
+		next_node = leaf.ptr;
+		if (leaf.ptr.IsSet()) {
+			leaf.ptr.AddToBufferID(merge_buffer_count);
+		}
 	}
 }
 
@@ -290,7 +301,6 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 		return "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
 	}
 
-	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
 	string str = "";
 
 	reference<Node> node_ref(node);
@@ -322,46 +332,51 @@ BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 		return block_pointer;
 	}
 
-	// recurse into the child and retrieve its block pointer
-	auto &leaf = Leaf::Get(art, node);
-	auto child_block_pointer = leaf.ptr.Serialize(art, writer);
-
-	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::LEAF);
-	writer.Write<uint8_t>(leaf.count);
+	idx_t total_count = Leaf::TotalCount(art, node);
+	writer.Write<idx_t>(total_count);
 
-	// write row IDs
-	for (idx_t i = 0; i < leaf.count; i++) {
-		writer.Write(leaf.row_ids[i]);
+	// iterate all leaves and write their row IDs
+	reference<Node> ref_node(node);
+	while (ref_node.get().IsSet()) {
+		D_ASSERT(!ref_node.get().IsSerialized());
+		auto &leaf = Leaf::Get(art, ref_node);
+
+		// write row IDs
+		for (idx_t i = 0; i < leaf.count; i++) {
+			writer.Write(leaf.row_ids[i]);
+		}
+		ref_node = leaf.ptr;
 	}
-
-	// write child block pointer
-	writer.Write(child_block_pointer.block_id);
-	writer.Write(child_block_pointer.offset);
 
 	return block_pointer;
 }
 
 void Leaf::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
 
-	D_ASSERT(node.GetType() == NType::LEAF);
+	auto total_count = reader.Read<idx_t>();
+	reference<Node> ref_node(node);
 
-	auto &leaf = Leaf::Get(art, node);
-	leaf.count = reader.Read<uint8_t>();
+	while (total_count) {
+		ref_node.get() = Node::GetAllocator(art, NType::LEAF).New();
+		ref_node.get().SetType((uint8_t)NType::LEAF);
 
-	// read row IDs
-	for (idx_t i = 0; i < leaf.count; i++) {
-		leaf.row_ids[i] = reader.Read<row_t>();
+		auto &leaf = Leaf::Get(art, ref_node);
+
+		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, total_count);
+		for (idx_t i = 0; i < leaf.count; i++) {
+			leaf.row_ids[i] = reader.Read<row_t>();
+		}
+
+		total_count -= leaf.count;
+		ref_node = leaf.ptr;
+		leaf.ptr.Reset();
 	}
-
-	// read child block pointer
-	leaf.ptr = Node(reader);
 }
 
 void Leaf::Vacuum(ART &art, Node &node) {
 
-	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
 	auto &allocator = Node::GetAllocator(art, NType::LEAF);
 
 	reference<Node> node_ref(node);
@@ -373,7 +388,6 @@ void Leaf::Vacuum(ART &art, Node &node) {
 		auto &leaf = Leaf::Get(art, node_ref);
 		node_ref = leaf.ptr;
 	}
-	return;
 }
 
 void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {

@@ -4,6 +4,13 @@
 
 require icu
 
+# Normalise the testing locale
+statement ok
+SET Calendar = 'gregorian';
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
 query I
 SELECT name FROM icu_calendar_names()
 GROUP BY 1
@@ -39,14 +46,9 @@ SET Calendar = 'fnord';
 #
 # Japanese calendar testing
 #
-statement ok
-SET Calendar = 'japanese';
 
-query IIII
-SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
-----
-Calendar	japanese	The current calendar	VARCHAR
-
+# Create the table before changing calendars
+# Otherwise the parser will assume they are Japanese dates
 statement ok
 SET TimeZone = 'Asia/Tokyo';
 
@@ -65,6 +67,14 @@ CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, era FROM (VALUES
 	('2019-05-01 00:00:00+00', 'Reiwa'),
 	('2022-01-01 00:00:00+00', 'Reiwa')
 ) tbl(ts, era);
+
+statement ok
+SET Calendar = 'japanese';
+
+query IIII
+SELECT * FROM duckdb_settings() WHERE name = 'Calendar';
+----
+Calendar	japanese	The current calendar	VARCHAR
 
 # See http://www.meijigakuin.ac.jp/~watson/ref/mtsh.html for details on recent era boundaries.
 query III
