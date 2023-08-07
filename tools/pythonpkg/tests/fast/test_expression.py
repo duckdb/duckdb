@@ -435,10 +435,19 @@ class TestExpression(object):
             rel2 = rel.select(expr)
             res = rel2.fetchall()
 
-    def test_struct_expression(self):
+    def test_struct_column_expression(self):
         con = duckdb.connect()
         rel = con.sql("select {'l': 1, 'ee': 33, 't': 7} as leet")
         expr = ColumnExpression("leet.ee")
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(33,)]
+
+    def test_filter(self):
+        con = duckdb.connect()
+        rel = con.sql("select * from (VALUES(1), (2), (1), (3)) tbl(a)")
+        assert len(rel.fetchall()) == 4
+
+        expr = ColumnExpression("a") == 1
+        rel2 = rel.filter(expr)
+        assert len(rel2.fetchall()) == 2

@@ -77,7 +77,11 @@ shared_ptr<Relation> Relation::Filter(const string &expression) {
 	if (expression_list.size() != 1) {
 		throw ParserException("Expected a single expression as filter condition");
 	}
-	return make_shared<FilterRelation>(shared_from_this(), std::move(expression_list[0]));
+	return Filter(std::move(expression_list[0]));
+}
+
+shared_ptr<Relation> Relation::Filter(unique_ptr<ParsedExpression> expression) {
+	return make_shared<FilterRelation>(shared_from_this(), std::move(expression));
 }
 
 shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {

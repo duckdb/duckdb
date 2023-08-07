@@ -131,7 +131,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr
 	auto values_relation =
 	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
 	// Add a filter on an impossible condition
-	return values_relation->Filter("true = false");
+	return values_relation->FilterFromExpression("true = false");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
@@ -142,7 +142,20 @@ py::str DuckDBPyRelation::GetAlias() {
 	return py::str(string(rel->GetAlias()));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const py::object &expr) {
+	if (py::isinstance<py::str>(expr)) {
+		string expression = py::cast<py::str>(expr);
+		return FilterFromExpression(expression);
+	}
+	shared_ptr<DuckDBPyExpression> expression;
+	if (!py::try_cast(expr, expression)) {
+		throw InvalidInputException("Please provide either a string or a DuckDBPyExpression object to 'filter'");
+	}
+	auto expr_p = expression->GetExpression().Copy();
+	return make_uniq<DuckDBPyRelation>(rel->Filter(std::move(expr_p)));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FilterFromExpression(const string &expr) {
 	return make_uniq<DuckDBPyRelation>(rel->Filter(expr));
 }
 
