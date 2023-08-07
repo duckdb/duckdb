@@ -70,7 +70,8 @@ public:
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 	unique_ptr<DuckDBPyRelation> Select(const py::args &args);
 
-	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
+	unique_ptr<DuckDBPyRelation> Filter(const py::object &expr);
+	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
 

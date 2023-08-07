@@ -88,6 +88,7 @@ public:
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
+	DUCKDB_API shared_ptr<Relation> Filter(unique_ptr<ParsedExpression> expression);
 	DUCKDB_API shared_ptr<Relation> Filter(const vector<string> &expressions);
 
 	// LIMIT
