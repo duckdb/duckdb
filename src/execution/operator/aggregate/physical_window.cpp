@@ -558,7 +558,7 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 
 		//	If there is nothing to steal but there are unfinished partitions,
 		//	yield until any pending builds are done.
-		TaskScheduler::GetScheduler(context).Yield();
+		TaskScheduler::GetScheduler(context).YieldThread();
 	}
 
 	return Task();

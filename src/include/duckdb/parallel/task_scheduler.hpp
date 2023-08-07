@@ -68,7 +68,7 @@ public:
 	void Signal(idx_t n);
 
 	//! Yield to other threads
-	void Yield();
+	void YieldThread();
 
 	//! Set the allocator flush threshold
 	void SetAllocatorFlushTreshold(idx_t threshold);

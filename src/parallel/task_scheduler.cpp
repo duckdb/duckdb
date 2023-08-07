@@ -257,7 +257,7 @@ void TaskScheduler::Signal(idx_t n) {
 #endif
 }
 
-void TaskScheduler::Yield() {
+void TaskScheduler::YieldThread() {
 #ifndef DUCKDB_NO_THREADS
 	std::this_thread::yield();
 #endif
