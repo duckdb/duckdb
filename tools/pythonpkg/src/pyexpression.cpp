@@ -171,7 +171,18 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string
 	if (column_name == "*") {
 		return StarExpression();
 	}
-	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(column_name));
+
+	auto qualified_name = QualifiedName::Parse(column_name);
+	vector<string> column_names;
+	if (!qualified_name.catalog.empty()) {
+		column_names.push_back(qualified_name.catalog);
+	}
+	if (!qualified_name.schema.empty()) {
+		column_names.push_back(qualified_name.schema);
+	}
+	column_names.push_back(qualified_name.name);
+
+	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(std::move(column_names)));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const py::object &value) {

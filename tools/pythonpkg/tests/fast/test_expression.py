@@ -434,3 +434,11 @@ class TestExpression(object):
             expr = ColumnExpression("salary") * val
             rel2 = rel.select(expr)
             res = rel2.fetchall()
+
+    def test_struct_expression(self):
+        con = duckdb.connect()
+        rel = con.sql("select {'l': 1, 'ee': 33, 't': 7} as leet")
+        expr = ColumnExpression("leet.ee")
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [(33,)]
