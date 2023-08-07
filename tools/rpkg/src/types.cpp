@@ -222,7 +222,7 @@ LogicalType RApiTypes::LogicalTypeFromRType(const RType &rtype, bool experimenta
 		return LogicalType::LIST(RApiTypes::LogicalTypeFromRType(rtype.GetListChildType(), experimental));
 
 	default:
-		cpp11::stop("rapi_execute: Unsupported column type for bind");
+		cpp11::stop("rapi_execute: Can't convert R type to logical type");
 	}
 }
 
