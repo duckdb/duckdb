@@ -99,7 +99,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
 
-    {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, "CASE WHEN l is NULL THEN NULL else l[:-:-1] END"},
+    {DEFAULT_SCHEMA, "list_reverse", {"l", nullptr}, "l[:-:-1]"},
     {DEFAULT_SCHEMA, "array_reverse", {"l", nullptr}, "list_reverse(l)"},
 
     // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
