@@ -94,9 +94,9 @@ void AppendListColumnSegment(const RType &rtype, SEXP *source_data, idx_t sexp_o
 		} else {
 			auto len = RApiTypes::GetVecSize(child_rtype, val);
 			result_data[i].offset = ListVector::GetListSize(result);
-			for (R_len_t i = 0; i < len; i++) {
-				auto item = RApiTypes::SexpToValue(val, i);
-				ListVector::PushBack(result, item);
+			for (R_len_t child_idx = 0; child_idx < len; ++child_idx) {
+				auto child_item = RApiTypes::SexpToValue(val, child_idx);
+				ListVector::PushBack(result, child_item);
 			}
 			result_data[i].length = len;
 		}
