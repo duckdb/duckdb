@@ -38,7 +38,8 @@ public:
 
 struct DuckDBPyExpression : public std::enable_shared_from_this<DuckDBPyExpression> {
 public:
-	explicit DuckDBPyExpression(unique_ptr<ParsedExpression> expr);
+	explicit DuckDBPyExpression(unique_ptr<ParsedExpression> expr, OrderType order_type = OrderType::ORDER_DEFAULT,
+	                            OrderByNullType null_order = OrderByNullType::ORDER_DEFAULT);
 
 public:
 	std::shared_ptr<DuckDBPyExpression> shared_from_this() {
@@ -98,6 +99,7 @@ public:
 
 public:
 	const ParsedExpression &GetExpression() const;
+	shared_ptr<DuckDBPyExpression> Copy() const;
 
 public:
 	static shared_ptr<DuckDBPyExpression> StarExpression(const py::list &exclude = py::none());

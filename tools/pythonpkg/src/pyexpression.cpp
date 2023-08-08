@@ -8,7 +8,9 @@
 
 namespace duckdb {
 
-DuckDBPyExpression::DuckDBPyExpression(unique_ptr<ParsedExpression> expr_p) : expression(std::move(expr_p)) {
+DuckDBPyExpression::DuckDBPyExpression(unique_ptr<ParsedExpression> expr_p, OrderType order_type,
+                                       OrderByNullType null_order)
+    : expression(std::move(expr_p)), order_type(order_type), null_order(null_order) {
 	if (!expression) {
 		throw InternalException("DuckDBPyExpression created without an expression");
 	}
@@ -28,6 +30,11 @@ void DuckDBPyExpression::Print() const {
 
 const ParsedExpression &DuckDBPyExpression::GetExpression() const {
 	return *expression;
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Copy() const {
+	auto expr = GetExpression().Copy();
+	return make_shared<DuckDBPyExpression>(std::move(expr), order_type, null_order);
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SetAlias(const string &name) const {
@@ -175,15 +182,13 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
 // Order modifiers
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Ascending() {
-	auto expr = GetExpression().Copy();
-	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	auto py_expr = Copy();
 	py_expr->order_type = OrderType::ASCENDING;
 	return py_expr;
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Descending() {
-	auto expr = GetExpression().Copy();
-	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	auto py_expr = Copy();
 	py_expr->order_type = OrderType::DESCENDING;
 	return py_expr;
 }
@@ -191,15 +196,13 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Descending() {
 // Null order modifiers
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NullsFirst() {
-	auto expr = GetExpression().Copy();
-	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	auto py_expr = Copy();
 	py_expr->null_order = OrderByNullType::NULLS_FIRST;
 	return py_expr;
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NullsLast() {
-	auto expr = GetExpression().Copy();
-	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	auto py_expr = Copy();
 	py_expr->null_order = OrderByNullType::NULLS_LAST;
 	return py_expr;
 }
