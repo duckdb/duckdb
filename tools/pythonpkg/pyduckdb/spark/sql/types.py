@@ -474,6 +474,7 @@ class HugeIntegerType(IntegralType):
     def simpleString(self) -> str:
         return "hugeint"
 
+
 class UnsignedHugeIntegerType(IntegralType):
     """Unsigned huge integer data type, i.e. a unsigned 128-bit integer.
 

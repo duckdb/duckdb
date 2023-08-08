@@ -103,6 +103,7 @@ class HugeIntegerValue(Value):
     def __init__(self, object: Any):
         super().__init__(object, HUGEINT)
 
+
 class UnsignedHugeIntegerValue(Value):
     def __init__(self, object: Any):
         super().__init__(object, UHUGEINT)

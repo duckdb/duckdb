@@ -41,7 +41,7 @@ class TestTypes(object):
     def test_all_types_schema(self, spark):
         # Create DataFrame
         df = spark.sql(
-		"""
+            """
 			select * EXCLUDE (
 				small_enum,
 				medium_enum,
