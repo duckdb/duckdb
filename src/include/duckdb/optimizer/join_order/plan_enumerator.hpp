@@ -35,7 +35,7 @@ public:
 	}
 
 	//! Perform the join order solving
-	unique_ptr<JoinNode> SolveJoinOrder(bool force_no_cross_product);
+	unique_ptr<JoinNode> SolveJoinOrder();
 	void InitLeafPlans();
 
 	static unique_ptr<LogicalOperator> BuildSideProbeSideSwaps(unique_ptr<LogicalOperator> plan);

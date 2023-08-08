@@ -64,8 +64,10 @@ public:
 	//! A structure holding all the created JoinRelationSet objects
 	JoinRelationSetManager set_manager;
 
+	ClientContext &context;
+
 	//! Extract the join relations, optimizing non-reoderable relations when encountered
-	bool Build(LogicalOperator *op);
+	bool Build(LogicalOperator &op);
 
 	//! Reconstruct the logical plan using the plan found by the plan enumerator
 	unique_ptr<LogicalOperator> Reconstruct(unique_ptr<LogicalOperator> plan, JoinNode &node);
@@ -88,8 +90,6 @@ public:
 	unique_ptr<LogicalOperator> LeftRightOptimizations(unique_ptr<LogicalOperator> op);
 
 private:
-	ClientContext &context;
-
 	vector<reference<LogicalOperator>> filter_operators;
 
 	//! Filter information including the column_bindings that join filters

@@ -33,7 +33,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 
 	// extract the relations that go into the hyper graph.
 	// We optimize the children of any non-reorderable operations we come across.
-	bool reorderable = query_graph_manager.Build(op);
+	bool reorderable = query_graph_manager.Build(*op);
 
 	// get relation_stats here since the reconstruction process will move all of the relations.
 	auto relation_stats = query_graph_manager.relation_manager.GetRelationStats();
@@ -51,7 +51,7 @@ unique_ptr<LogicalOperator> JoinOrderOptimizer::Optimize(unique_ptr<LogicalOpera
 		plan_enumerator.InitLeafPlans();
 
 		// Ask the plan enumerator to enumerate a number of join orders
-		auto final_plan = plan_enumerator.SolveJoinOrder(context.config.force_no_cross_product);
+		auto final_plan = plan_enumerator.SolveJoinOrder();
 		// TODO: add in the check that if no plan exists, you have to add a cross product.
 
 		// now reconstruct a logical plan from the query graph plan

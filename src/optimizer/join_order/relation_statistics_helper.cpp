@@ -11,12 +11,12 @@
 
 namespace duckdb {
 
-static ExpressionBinding GetChildColumnBinding(Expression *expr) {
+static ExpressionBinding GetChildColumnBinding(Expression &expr) {
 	auto ret = ExpressionBinding();
-	switch (expr->expression_class) {
+	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_FUNCTION: {
 		// TODO: Other expression classes that can have 0 children?
-		auto &func = expr->Cast<BoundFunctionExpression>();
+		auto &func = expr.Cast<BoundFunctionExpression>();
 		// no children some sort of gen_random_uuid() or equivalent.
 		if (func.children.empty()) {
 			ret.found_expression = true;
@@ -27,7 +27,7 @@ static ExpressionBinding GetChildColumnBinding(Expression *expr) {
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		ret.found_expression = true;
-		auto &new_col_ref = expr->Cast<BoundColumnRefExpression>();
+		auto &new_col_ref = expr.Cast<BoundColumnRefExpression>();
 		ret.child_binding = ColumnBinding(new_col_ref.binding.table_index, new_col_ref.binding.column_index);
 		return ret;
 	}
@@ -42,8 +42,8 @@ static ExpressionBinding GetChildColumnBinding(Expression *expr) {
 	default:
 		break;
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		auto recursive_result = GetChildColumnBinding(child.get());
+	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &child) {
+		auto recursive_result = GetChildColumnBinding(*child);
 		if (recursive_result.found_expression) {
 			ret = recursive_result;
 		}
@@ -157,7 +157,7 @@ RelationStats RelationStatisticsHelper::ExtractProjectionStats(LogicalProjection
 	proj_stats.table_name = proj.GetName();
 	for (auto &expr : proj.expressions) {
 		proj_stats.column_names.push_back(expr->GetName());
-		auto res = GetChildColumnBinding(expr.get());
+		auto res = GetChildColumnBinding(*expr);
 		D_ASSERT(res.found_expression);
 		if (res.expression_is_constant) {
 			proj_stats.column_distinct_count.push_back(DistinctCount({1, true}));

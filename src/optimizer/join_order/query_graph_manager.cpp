@@ -19,18 +19,18 @@ static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
 	});
 }
 
-bool QueryGraphManager::Build(LogicalOperator *op) {
+bool QueryGraphManager::Build(LogicalOperator &op) {
 	vector<reference<LogicalOperator>> filter_operators;
 	// have the relation manager extract the join relations and create a reference list of all the
 	// filter operators.
-	auto can_reorder = relation_manager.ExtractJoinRelations(*op, filter_operators);
+	auto can_reorder = relation_manager.ExtractJoinRelations(op, filter_operators);
 	auto num_relations = relation_manager.NumRelations();
 	if (num_relations <= 1 || !can_reorder) {
 		// nothing to optimize/reorder
 		return false;
 	}
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-	filters_and_bindings = relation_manager.ExtractEdges(*op, filter_operators, set_manager);
+	filters_and_bindings = relation_manager.ExtractEdges(op, filter_operators, set_manager);
 	// Create the query_graph hyper edges
 	CreateHyperGraphEdges();
 	return true;

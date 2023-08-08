@@ -518,7 +518,8 @@ void PlanEnumerator::InitLeafPlans() {
 // the plan enumeration is a straight implementation of the paper "Dynamic Programming Strikes Back" by Guido
 // Moerkotte and Thomas Neumannn, see that paper for additional info/documentation bonus slides:
 // https://db.in.tum.de/teaching/ws1415/queryopt/chapter3.pdf?lang=de
-unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product) {
+unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder() {
+	bool force_no_cross_product = query_graph_manager.context.config.force_no_cross_product;
 	// first try to solve the join order exactly
 	if (!SolveJoinOrderExactly()) {
 		// otherwise, if that times out we resort to a greedy algorithm
@@ -543,7 +544,7 @@ unique_ptr<JoinNode> PlanEnumerator::SolveJoinOrder(bool force_no_cross_product)
 		}
 		GenerateCrossProducts();
 		//! solve the join order again, returning the final plan
-		return SolveJoinOrder(force_no_cross_product);
+		return SolveJoinOrder();
 	}
 	return std::move(final_plan->second);
 }
