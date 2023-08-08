@@ -40,7 +40,7 @@ class TestDataFrameDropDuplicates(object):
         df = spark.createDataFrame(data=data, schema=columns)
 
         distinctDF = df.distinct()
-        print("Distinct count: " + str(distinctDF.count()))
+        assert distinctDF.count() == 9
         res = distinctDF.collect()
         # James | Sales had a duplicate, has been removed
         assert res == [
@@ -54,3 +54,15 @@ class TestDataFrameDropDuplicates(object):
             Row(employee_name='Kumar', department='Marketing', salary=2000),
             Row(employee_name='Saif', department='Sales', salary=4100),
         ]
+
+        df2 = df.dropDuplicates()
+        assert df2.count() == 9
+        res2 = df2.collect()
+        assert res2 == res
+
+        with pytest.raises(NotImplementedError):
+            # DuckDBPyRelation does not have 'distinct_on' support yet
+            dropDisDF = df.dropDuplicates(["department", "salary"])
+            print("Distinct count of department & salary : " + str(dropDisDF.count()))
+            res = dropDisDF.collect()
+            print(res)

@@ -235,6 +235,65 @@ class DataFrame:
     def printSchema(self):
         raise ContributionsAcceptedError
 
+    def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
+        """Return a new :class:`DataFrame` with duplicate rows removed,
+        optionally only considering certain columns.
+
+        For a static batch :class:`DataFrame`, it just drops duplicate rows. For a streaming
+        :class:`DataFrame`, it will keep all data across triggers as intermediate state to drop
+        duplicates rows. You can use :func:`withWatermark` to limit how late the duplicate data can
+        be and the system will accordingly limit the state. In addition, data older than
+        watermark will be dropped to avoid any possibility of duplicates.
+
+        :func:`drop_duplicates` is an alias for :func:`dropDuplicates`.
+
+        .. versionadded:: 1.4.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        subset : List of column names, optional
+            List of columns to use for duplicate comparison (default All columns).
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame without duplicates.
+
+        Examples
+        --------
+        >>> from pyspark.sql import Row
+        >>> df = spark.createDataFrame([
+        ...     Row(name='Alice', age=5, height=80),
+        ...     Row(name='Alice', age=5, height=80),
+        ...     Row(name='Alice', age=10, height=80)
+        ... ])
+
+        Deduplicate the same rows.
+
+        >>> df.dropDuplicates().show()
+        +-----+---+------+
+        | name|age|height|
+        +-----+---+------+
+        |Alice|  5|    80|
+        |Alice| 10|    80|
+        +-----+---+------+
+
+        Deduplicate values on 'name' and 'height' columns.
+
+        >>> df.dropDuplicates(['name', 'height']).show()
+        +-----+---+------+
+        | name|age|height|
+        +-----+---+------+
+        |Alice|  5|    80|
+        +-----+---+------+
+        """
+        if subset:
+            raise ContributionsAcceptedError
+        return self.distinct()
+
     def distinct(self) -> "DataFrame":
         """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
 
