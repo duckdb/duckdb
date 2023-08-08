@@ -53,20 +53,20 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 	file_handle.Read(handle.Ptr(), actual_size);
 }
 
-void CSVBuffer::Pin(CSVFileHandle &file_handle) {
+unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 	if (can_seek && !handle.IsValid()) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	handle = buffer_manager.Pin(block);
+	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_size);
 }
 
 void CSVBuffer::Unpin() {
-	if (handle.IsValid()) {
-		auto &buffer_manager = BufferManager::GetBufferManager(context);
-		buffer_manager.Unpin(block);
+	if (handle.IsValid() && block->Readers() == 1) {
+		handle.Destroy();
+		D_ASSERT(block->Readers() == 0);
 	}
 }
 

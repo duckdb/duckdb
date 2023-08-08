@@ -22,9 +22,8 @@ static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
 class CSVBufferHandle {
 public:
 	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p)
-	    : handle(std::move(handle_p)), actual_size(actual_size_p) {
-
-	                                   };
+	    : handle(std::move(handle_p)), actual_size(actual_size_p) {};
+	CSVBufferHandle() : actual_size(0) {};
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
@@ -69,9 +68,12 @@ public:
 	void Reload(CSVFileHandle &file_handle);
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
 	//! Scan it from the disk file again.
-	void Pin(CSVFileHandle &file_handle);
+	unique_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle);
 	//! Wrapper for the unpin
 	void Unpin();
+	char *Ptr() {
+		return char_ptr_cast(handle.Ptr());
+	}
 
 private:
 	ClientContext &context;
@@ -94,5 +96,6 @@ private:
 	//! -------- Allocated Block ---------//
 	//! Block created in allocation
 	shared_ptr<BlockHandle> block;
+	BufferHandle handle;
 };
 } // namespace duckdb

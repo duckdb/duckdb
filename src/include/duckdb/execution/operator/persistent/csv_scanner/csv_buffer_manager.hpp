@@ -24,13 +24,15 @@ public:
 	                 bool cache_buffers = true);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
-	shared_ptr<CSVBuffer> GetBuffer(idx_t pos, bool auto_detection);
+	unique_ptr<CSVBufferHandle> GetBuffer(idx_t pos, bool auto_detection);
 	//! Returns the starting position of the first buffer
 	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing
 	unique_ptr<CSVFileHandle> file_handle;
 	//! Initializes the buffer manager, during it's construction/reset
 	void Initialize();
+
+	void UnpinBuffer(idx_t cache_idx);
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
@@ -68,7 +70,6 @@ private:
 	idx_t cur_pos = 0;
 	idx_t cur_buffer_idx = 0;
 	shared_ptr<CSVBufferManager> buffer_manager;
-	shared_ptr<CSVBuffer> cur_buffer;
-	BufferHandle cur_buffer_handle;
+	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 };
 } // namespace duckdb

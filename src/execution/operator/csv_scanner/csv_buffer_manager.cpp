@@ -17,6 +17,12 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	Initialize();
 }
 
+void CSVBufferManager::UnpinBuffer(idx_t cache_idx) {
+	if (cache_idx < cached_buffers.size()) {
+		cached_buffers[cache_idx]->Unpin();
+	}
+}
+
 void CSVBufferManager::Initialize() {
 	if (cache_buffers) {
 		if (cached_buffers.empty()) {
@@ -47,30 +53,32 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	return false;
 }
 
-shared_ptr<CSVBuffer> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection) {
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection) {
 	if (auto_detection) {
 		D_ASSERT(pos <= cached_buffers.size());
+		if (pos != 0) {
+			cached_buffers[pos - 1]->Unpin();
+		}
 		if (pos == cached_buffers.size()) {
 			if (!ReadNextAndCacheIt()) {
 				return nullptr;
 			}
-			return cached_buffers[pos];
+			return cached_buffers[pos]->Pin(*file_handle);
 		}
-		cached_buffers[pos]->Pin(*file_handle);
-		return cached_buffers[pos];
+		return cached_buffers[pos]->Pin(*file_handle);
 	} else {
 		D_ASSERT(0);
 		if (pos < cached_buffers.size()) {
 			auto buffer = cached_buffers[pos];
 			// Invalidate this buffer
 			cached_buffers[pos] = nullptr;
-			return buffer;
+			return buffer->Pin(*file_handle);
 		} else {
 			if (!last_buffer) {
 				last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0);
 			} else {
 				if (last_buffer->GetCSVGlobalStart() == 0 && pos == 0) {
-					return last_buffer;
+					return last_buffer->Pin(*file_handle);
 				}
 				if (!last_buffer->IsCSVFileLastBuffer()) {
 					last_buffer = last_buffer->Next(*file_handle, buffer_size, global_csv_pos, 0);
@@ -78,47 +86,49 @@ shared_ptr<CSVBuffer> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection
 					return nullptr;
 				}
 			}
-			return last_buffer;
+			return last_buffer->Pin(*file_handle);
 		}
 	}
 }
 
 char CSVBufferIterator::GetNextChar() {
 	// If current buffer is not set we try to get a new one
-	if (!cur_buffer) {
+	if (!cur_buffer_handle) {
 		cur_pos = 0;
 		if (cur_buffer_idx == 0) {
 			cur_pos = buffer_manager->GetStartPos();
 		}
-		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+		cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 
-		if (!cur_buffer) {
+		if (!cur_buffer_handle) {
 			return '\0';
 		}
 	}
 	// If we finished the current buffer we try to get a new one
-	if (cur_pos >= cur_buffer->GetBufferSize()) {
-		cur_buffer->Unpin();
-		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
-		if (!cur_buffer) {
+	if (cur_pos >= cur_buffer_handle->actual_size) {
+		cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+		if (!cur_buffer_handle) {
 			return '\0';
 		}
 		cur_pos = 0;
 	}
 	// We return the next char
-	return cur_buffer->Ptr()[cur_pos++];
+	return cur_buffer_handle->Ptr()[cur_pos++];
 }
 
 bool CSVBufferIterator::Finished() {
-	return !cur_buffer;
+	return !cur_buffer_handle;
 }
 
 void CSVBufferIterator::Reset() {
-	if (cur_buffer) {
-		cur_buffer->Unpin();
+	if (cur_buffer_handle) {
+		cur_buffer_handle.reset();
 	}
+	if (cur_buffer_idx > 0) {
+		buffer_manager->UnpinBuffer(cur_buffer_idx - 1);
+	}
+	D_ASSERT(!cur_buffer_handle);
 	cur_buffer_idx = 0;
-	cur_buffer = nullptr;
 	buffer_manager->Initialize();
 	cur_pos = buffer_manager->GetStartPos();
 }
