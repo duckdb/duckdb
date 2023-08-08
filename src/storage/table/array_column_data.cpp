@@ -224,7 +224,7 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	auto checkpoint_state = make_uniq<ArrayColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	checkpoint_state->child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	return checkpoint_state;
+	return std::move(checkpoint_state);
 }
 
 void ArrayColumnData::DeserializeColumn(Deserializer &source) {

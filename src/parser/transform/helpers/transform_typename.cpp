@@ -223,7 +223,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 	if (type_name.arrayBounds) {
 		// array bounds: turn the type into a list
 		for (auto cell = type_name.arrayBounds->head; cell != nullptr; cell = cell->next) {
-			auto val = (duckdb_libpgquery::PGValue *)cell->data.ptr_value;
+			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(cell->data.ptr_value);
 			if (val->type != duckdb_libpgquery::T_PGInteger) {
 				throw ParserException("Expected integer value as array bound");
 			}
