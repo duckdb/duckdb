@@ -220,7 +220,6 @@ class TestDataFrame(object):
         )
 
         df2 = spark.createDataFrame(data=structureData, schema=structureSchema)
-        df2.show(truncate=False)
         updatedDF = df2.withColumn(
             "OtherInfo",
             struct(
@@ -234,7 +233,6 @@ class TestDataFrame(object):
             ),
         ).drop("id", "gender", "salary")
 
-        updatedDF.show(truncate=False)
         assert 'OtherInfo' in updatedDF
 
     def test_array_and_map_type(self, spark):
