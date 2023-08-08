@@ -85,6 +85,8 @@ jobs:
       BUILD_ODBC: 1
       BUILD_AUTOCOMPLETE: 1
       OSX_BUILD_UNIVERSAL: 1
+      INSTALL_EXTENSIONS_TO_LOCAL_REPO: 1
+      LOCAL_EXTENSION_REPOSITORY: '/build/release/extension_repository'
       GEN: ninja
       ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 

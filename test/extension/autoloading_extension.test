@@ -9,9 +9,9 @@ statement ok
 set autoload_known_extensions=false
 
 statement error
-SET s3_endpoint='';
+SET timezone='UTC';
 ----
-Catalog Error: Setting with name "s3_endpoint" is not in the catalog, but it exists in the httpfs extension.
+Catalog Error: Setting with name "timezone" is not in the catalog, but it exists in the icu extension.
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
@@ -33,9 +33,9 @@ set autoload_extension_repository='/tmp/non-existent-repo';
 
 # Error should inform the user on whats happening
 statement error
-SET s3_endpoint='';
+SET timezone='UTC';
 ----
-IO Error: Attempted to automatically install the 'httpfs' extension, but the following error occured: (Failed to copy local extension "httpfs" at PATH
+IO Error: Attempted to automatically install the 'icu' extension, but the following error occured: (Failed to copy local extension "icu" at PATH
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
@@ -49,7 +49,7 @@ Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does 
 
 ### Autoloading with correct tmp repo
 statement ok
-set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
+set autoload_extension_repository='${LOCAL_EXTENSION_REPOSITORY}';
 
 statement ok
 SET s3_endpoint='';

@@ -40,6 +40,8 @@ jobs:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-latest
+    env:
+      LOCAL_EXTENSION_REPOSITORY: '/build/release/extension_repository'
     steps:
     - uses: actions/checkout@v3
       with:
@@ -59,7 +61,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_EXTENSIONS="parquet;icu;tpch;tpcds;fts;json;excel;visualizer;autocomplete" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_EXTENSIONS="parquet;icu;tpch;tpcds;fts;json;excel;visualizer;autocomplete" -DINSTALL_EXTENSIONS_TO_LOCAL_REPO=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test

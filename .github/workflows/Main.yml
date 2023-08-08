@@ -54,6 +54,8 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_PARQUET: 1
       BUILD_JEMALLOC: 1
+      INSTALL_EXTENSIONS_TO_LOCAL_REPO: 1
+      LOCAL_EXTENSION_REPOSITORY: '/build/debug/extension_repository'
       GEN: ninja
 
     steps:
