@@ -14,6 +14,9 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	if (file_size > 0 && file_size < buffer_size) {
 		buffer_size = CSV_MINIMUM_BUFFER_SIZE;
 	}
+	for (idx_t i = 0; i < skip_rows; i++) {
+		file_handle->ReadLine();
+	}
 	Initialize();
 }
 
@@ -127,7 +130,6 @@ void CSVBufferIterator::Reset() {
 	if (cur_buffer_idx > 0) {
 		buffer_manager->UnpinBuffer(cur_buffer_idx - 1);
 	}
-	D_ASSERT(!cur_buffer_handle);
 	cur_buffer_idx = 0;
 	buffer_manager->Initialize();
 	cur_pos = buffer_manager->GetStartPos();

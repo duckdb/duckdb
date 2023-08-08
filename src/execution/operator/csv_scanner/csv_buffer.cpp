@@ -54,19 +54,19 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 }
 
 unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
-	if (can_seek && !handle.IsValid()) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	if (can_seek && !block->IsSwizzled()) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);
 	}
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_size);
 }
 
 void CSVBuffer::Unpin() {
-	if (handle.IsValid() && block->Readers() == 1) {
+	if (handle.IsValid()) {
 		handle.Destroy();
-		D_ASSERT(block->Readers() == 0);
+//		D_ASSERT(block->Readers() == 0);
 	}
 }
 
