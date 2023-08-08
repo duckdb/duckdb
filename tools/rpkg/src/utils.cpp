@@ -97,6 +97,16 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
+R_len_t RApiTypes::GetVecSize(RType rtype, SEXP coldata) {
+	while (rtype.id() == RTypeId::STRUCT) {
+		rtype = rtype.GetStructChildTypes()[0].second;
+		D_ASSERT(TYPEOF(coldata) == VECSXP);
+		coldata = VECTOR_ELT(coldata, 0);
+	}
+	// This still isn't quite accurate, but good enough for the types we support.
+	return Rf_length(coldata);
+}
+
 Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	auto rtype = RApiTypes::DetectRType(valsexp, false); // TODO
 	switch (rtype.id()) {
