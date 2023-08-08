@@ -235,6 +235,48 @@ class DataFrame:
     def printSchema(self):
         raise ContributionsAcceptedError
 
+    def distinct(self) -> "DataFrame":
+        """Returns a new :class:`DataFrame` containing the distinct rows in this :class:`DataFrame`.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            DataFrame with distinct records.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (23, "Alice")], ["age", "name"])
+
+        Return the number of distinct rows in the :class:`DataFrame`
+
+        >>> df.distinct().count()
+        2
+        """
+        distinct_rel = self.relation.distinct()
+        return DataFrame(distinct_rel, self.session)
+
+    def count(self) -> int:
+        """Returns the number of rows in this :class:`DataFrame`.
+
+        Returns
+        -------
+        int
+            Number of rows.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+
+        Return the number of rows in the :class:`DataFrame`.
+
+        >>> df.count()
+        3
+        """
+        count_rel = self.relation.count("*")
+        return int(count_rel.fetchone()[0])
+
     def _cast_types(self, *types) -> "DataFrame":
         existing_columns = self.relation.columns
         types_count = len(types)
