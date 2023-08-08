@@ -589,6 +589,9 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 		total_cardinality += child_cardinality;
 	}
 	current_progress = 0;
+	if (total_cardinality == 0) {
+		return true;
+	}
 	for (size_t i = 0; i < progress.size(); i++) {
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 	}

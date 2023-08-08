@@ -33,21 +33,27 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const idx_t block_id, const idx_t block_offset)
+         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr, const idx_t block_id,
+         const idx_t block_offset)
 
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type) {
+    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
+      allocators(allocators_ptr), owns_data(false) {
 
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
 
 	// initialize all allocators
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node16), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node48), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+	if (!allocators) {
+		owns_data = true;
+		allocators = make_shared<vector<FixedSizeAllocator>>();
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node4), buffer_manager.GetBufferAllocator()));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node16), buffer_manager.GetBufferAllocator()));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node48), buffer_manager.GetBufferAllocator()));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+	}
 
 	// set the root node of the tree
 	tree = make_uniq<Node>();
@@ -986,26 +992,28 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 
 void ART::InitializeVacuum(ARTFlags &flags) {
 
-	flags.vacuum_flags.reserve(allocators.size());
-	for (auto &allocator : allocators) {
-		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
+	flags.vacuum_flags.reserve(allocators->size());
+	for (auto &allocator : *allocators) {
+		flags.vacuum_flags.push_back(allocator.InitializeVacuum());
 	}
 }
 
 void ART::FinalizeVacuum(const ARTFlags &flags) {
 
-	for (idx_t i = 0; i < allocators.size(); i++) {
+	for (idx_t i = 0; i < allocators->size(); i++) {
 		if (flags.vacuum_flags[i]) {
-			allocators[i]->FinalizeVacuum();
+			(*allocators)[i].FinalizeVacuum();
 		}
 	}
 }
 
 void ART::Vacuum(IndexLock &state) {
 
+	D_ASSERT(owns_data);
+
 	if (!tree->IsSet()) {
-		for (auto &allocator : allocators) {
-			allocator->Reset();
+		for (auto &allocator : *allocators) {
+			allocator.Reset();
 		}
 		return;
 	}
@@ -1032,8 +1040,8 @@ void ART::Vacuum(IndexLock &state) {
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
 
-	for (auto &allocator : allocators) {
-		allocator->Verify();
+	for (auto &allocator : *allocators) {
+		allocator.Verify();
 	}
 }
 
@@ -1043,9 +1051,11 @@ void ART::Vacuum(IndexLock &state) {
 
 void ART::InitializeMerge(ARTFlags &flags) {
 
-	flags.merge_buffer_counts.reserve(allocators.size());
-	for (auto &allocator : allocators) {
-		flags.merge_buffer_counts.emplace_back(allocator->buffers.size());
+	D_ASSERT(owns_data);
+
+	flags.merge_buffer_counts.reserve(allocators->size());
+	for (auto &allocator : *allocators) {
+		flags.merge_buffer_counts.emplace_back(allocator.buffers.size());
 	}
 }
 
@@ -1056,16 +1066,18 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 		return true;
 	}
 
-	if (tree->IsSet()) {
-		//  fully deserialize other_index, and traverse it to increment its buffer IDs
-		ARTFlags flags;
-		InitializeMerge(flags);
-		other_art.tree->InitializeMerge(other_art, flags);
-	}
+	if (other_art.owns_data) {
+		if (tree->IsSet()) {
+			//  fully deserialize other_index, and traverse it to increment its buffer IDs
+			ARTFlags flags;
+			InitializeMerge(flags);
+			other_art.tree->InitializeMerge(other_art, flags);
+		}
 
-	// merge the node storage
-	for (idx_t i = 0; i < allocators.size(); i++) {
-		allocators[i]->Merge(*other_art.allocators[i]);
+		// merge the node storage
+		for (idx_t i = 0; i < allocators->size(); i++) {
+			(*allocators)[i].Merge((*other_art.allocators)[i]);
+		}
 	}
 
 	// merge the ARTs
@@ -1073,8 +1085,8 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 		return false;
 	}
 
-	for (auto &allocator : allocators) {
-		allocator->Verify();
+	for (auto &allocator : *allocators) {
+		allocator.Verify();
 	}
 	return true;
 }
