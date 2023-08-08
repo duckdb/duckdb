@@ -1,0 +1,61 @@
+# name: test/extension/autoloading_extension.test
+# description: test the autoloading mechanism for extensions
+# group: [test]
+
+require-env LOCAL_EXTENSION_REPOSITORY
+
+### No autoloading: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement error
+SET s3_endpoint='';
+----
+Catalog Error: Setting with name "s3_endpoint" is not in the catalog, but it exists in the httpfs extension.
+
+statement error
+select * from read_json_auto('data/json/example_n.ndjson');
+----
+Catalog Error: Function with name "read_json_auto" is not in the catalog, but it exists in the json extension.
+
+statement error
+select * from thistablefunctionwillnotexistfosho();
+----
+Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does not exist!
+
+### Autoloading, but the autoloading repository is set to non-existent location
+statement ok
+set autoload_known_extensions=true
+
+# Override the default repo with a non-existent dir
+statement ok
+set autoload_extension_repository='/tmp/non-existent-repo';
+
+# Error should inform the user on whats happening
+statement error
+SET s3_endpoint='';
+----
+IO Error: Attempted to automatically install the 'httpfs' extension, but the following error occured: (Failed to copy local extension "httpfs" at PATH
+
+statement error
+select * from read_json_auto('data/json/example_n.ndjson');
+----
+IO Error: Attempted to automatically install the 'json' extension, but the following error occured: (Failed to copy local extension "json" at PATH
+
+statement error
+select * from thistablefunctionwillnotexistfosho();
+----
+Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does not exist!
+
+### Autoloading with correct tmp repo
+statement ok
+set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+statement ok
+SET s3_endpoint='';
+
+statement ok
+select * from read_json_auto('data/json/example_n.ndjson');
+
+# TODO: test reset and bind for setting
+# TODO: test other function codepath

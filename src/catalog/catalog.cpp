@@ -449,14 +449,12 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 }
 
 static void TryAutoloadExtension(ClientContext &context, const string &extension_name) {
-	if (!extension_name.empty()) {
-		try {
-			ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo);
-			ExtensionHelper::LoadExternalExtension(context, extension_name);
-		} catch (Exception &e) {
-			auto new_exception_message = "Attempted to automatically install the '" + extension_name + "' extension, but the following error occured: (" + e.RawMessage() + ") ";
-			throw Exception(e.type, new_exception_message);
-		}
+	try {
+		ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo);
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+	} catch (Exception &e) {
+		auto new_exception_message = "Attempted to automatically install the '" + extension_name + "' extension, but the following error occured: (" + e.RawMessage() + ") ";
+		throw Exception(e.type, new_exception_message);
 	}
 }
 
@@ -465,8 +463,10 @@ void Catalog::AutoloadExtensionOrThrowForConfig(ClientContext &context, const st
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
 		auto extension_name = FindExtensionForSetting(configuration_name);
-		TryAutoloadExtension(context, extension_name);
-		return;
+		if (!extension_name.empty()) {
+			TryAutoloadExtension(context, extension_name);
+			return;
+		}
 	}
 #endif
 
@@ -480,8 +480,10 @@ bool Catalog::AutoLoadExtensionForFunction(ClientContext &context, CatalogType t
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			auto extension_name = FindExtensionForFunction(function_name);
-			TryAutoloadExtension(context, extension_name);
-			return true;
+			if (!extension_name.empty()) {
+				TryAutoloadExtension(context, extension_name);
+				return true;
+			}
 		}
 	}
 #endif
@@ -597,7 +599,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		}
 	}
 
-	// Try autoloading an extension containing the entry
+	// Try autoloading an extension containing the entry TODO refactor to dedup with above code
 	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
 	if (autoloaded) {
 		// An extension was autoloaded, the function is now available
@@ -644,7 +646,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 		}
 	}
 
-	// Try autoloading an extension containing the entry
+	// Try autoloading an extension containing the entry TODO refactor to dedup with above code(?)
 	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
 	if (autoloaded) {
 		// An extension was autoloaded, the function is now available
