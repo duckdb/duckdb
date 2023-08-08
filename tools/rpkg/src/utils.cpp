@@ -195,6 +195,8 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	case RType::LIST_OF_NULLS:
+		// Performance shortcut: this corresponds to the RType::BLOB case,
+		// but we already know that all values are NULL
 		return Value(LogicalType::BLOB);
 	case RType::BLOB: {
 		auto ts_val = VECTOR_ELT(valsexp, idx);
