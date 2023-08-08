@@ -177,6 +177,22 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	expression.def("show", &DuckDBPyExpression::Print, docs);
 
 	docs = R"(
+		Return a IN expression comparing self to the input arguments.
+
+		Returns:
+			DuckDBPyExpression: The compare IN expression
+	)";
+	expression.def("isin", &DuckDBPyExpression::In, docs);
+
+	docs = R"(
+		Return a NOT IN expression comparing self to the input arguments.
+
+		Returns:
+			DuckDBPyExpression: The compare NOT IN expression
+	)";
+	expression.def("isnotin", &DuckDBPyExpression::NotIn, docs);
+
+	docs = R"(
 		Return the stringified version of the expression.
 
 		Returns:

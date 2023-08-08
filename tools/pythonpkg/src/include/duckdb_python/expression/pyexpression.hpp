@@ -80,6 +80,11 @@ public:
 	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other);
 
+	// IN / NOT IN
+
+	shared_ptr<DuckDBPyExpression> In(const py::args &args);
+	shared_ptr<DuckDBPyExpression> NotIn(const py::args &args);
+
 public:
 	const ParsedExpression &GetExpression() const;
 

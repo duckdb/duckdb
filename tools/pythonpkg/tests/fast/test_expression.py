@@ -493,3 +493,26 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(1, 'a'), (4, 'a')]
+
+        # IN expression
+        expr = ColumnExpression("a")
+        expr = expr.isin(1, 2)
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 3
+        assert res == [(1, 'a'), (1, 'b'), (2, 'b')]
+
+        # NOT IN expression
+        expr = ~expr
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 2
+        assert res == [(3, 'c'), (4, 'a')]
+
+        # NOT IN expression
+        expr = ColumnExpression("a")
+        expr = expr.isnotin(1, 2)
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 2
+        assert res == [(3, 'c'), (4, 'a')]
