@@ -44,6 +44,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: A '+' on the two input expressions.
 	)";
+
 	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
 	m.def("__radd__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
 
@@ -123,6 +124,33 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		TODO: add docs
 	)";
 	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs);
+
+	// AND, NOT and OR
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__and__", &DuckDBPyExpression::And, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__or__", &DuckDBPyExpression::Or, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__invert__", &DuckDBPyExpression::Not, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__rand__", &DuckDBPyExpression::And, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__ror__", &DuckDBPyExpression::Or, docs);
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -144,16 +172,16 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	const char *docs;
 
 	docs = R"(
-    Print the stringified version of the expression.
+	Print the stringified version of the expression.
 	)";
 	expression.def("show", &DuckDBPyExpression::Print, docs);
 
 	docs = R"(
-        Return the stringified version of the expression.
+		Return the stringified version of the expression.
 
-        Returns:
-            str: The string representation.
-    )";
+		Returns:
+			str: The string representation.
+	)";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
 
 	docs = R"(
