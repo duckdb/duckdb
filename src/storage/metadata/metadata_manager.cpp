@@ -241,14 +241,14 @@ void MetadataManager::MarkBlocksAsModified() {
 			idx_t current_free_blocks = block.FreeBlocksToInteger();
 			// merge the current set of free blocks with the modified blocks
 			idx_t new_free_blocks = current_free_blocks | modified_list;
-			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
-				// if new free_blocks is all blocks - mark entire block as modified
-				blocks.erase(entry);
-				block_manager.MarkBlockAsModified(block_id);
-			} else {
-				// set the new set of free blocks
-				block.FreeBlocksFromInteger(new_free_blocks);
-			}
+			//			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
+			//				// if new free_blocks is all blocks - mark entire block as modified
+			//				blocks.erase(entry);
+			//				block_manager.MarkBlockAsModified(block_id);
+			//			} else {
+			// set the new set of free blocks
+			block.FreeBlocksFromInteger(new_free_blocks);
+			//			}
 		}
 	}
 	modified_blocks.clear();

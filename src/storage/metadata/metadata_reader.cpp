@@ -24,6 +24,9 @@ MetadataPointer MetadataReader::FromDiskPointer(MetaBlockPointer pointer) {
 	}
 }
 
+MetadataReader::~MetadataReader() {
+}
+
 void MetadataReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	while (offset + read_size > capacity) {
 		// cannot read entire entry from block

@@ -20,6 +20,7 @@ public:
 	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
 	               BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
 	MetadataReader(MetadataManager &manager, BlockPointer pointer);
+	~MetadataReader() override;
 
 public:
 	//! Read content of size read_size into the buffer
