@@ -1,4 +1,4 @@
-from typing import Union, TYPE_CHECKING, Any, Callable
+from typing import Union, TYPE_CHECKING, Any, cast, Callable, Tuple
 
 from pyduckdb.spark.sql.types import DataType
 
@@ -11,13 +11,15 @@ from duckdb.typing import DuckDBPyType
 
 __all__ = ["Column"]
 
+
 def _func_op(name: str, doc: str = "") -> Callable[["Column"], "Column"]:
     def _(self: "Column") -> "Column":
-        njc = getattr(self.expr, name)(self.expr)
+        njc = getattr(self.expr, name)()
         return Column(njc)
 
     _.__doc__ = doc
     return _
+
 
 def _bin_op(
     name: str,
@@ -82,11 +84,11 @@ class Column:
 
     # `and`, `or`, `not` cannot be overloaded in Python,
     # so use bitwise operators as boolean operators
-    __and__ = _bin_op("and")
-    __or__ = _bin_op("or")
-    __invert__ = _func_op("not")
-    __rand__ = _bin_op("and")
-    __ror__ = _bin_op("or")
+    __and__ = _bin_op("__and__")
+    __or__ = _bin_op("__or__")
+    __invert__ = _func_op("__invert__")
+    __rand__ = _bin_op("__rand__")
+    __ror__ = _bin_op("__ror__")
 
     __add__ = _bin_op("__add__")
 
@@ -138,6 +140,16 @@ class Column:
         else:
             internal_type = dataType.duckdb_type
         return Column(self.expr.cast(internal_type))
+
+    def isin(self, *cols: Any) -> "Column":
+        if len(cols) == 1 and isinstance(cols[0], (list, set)):
+            # Only one argument supplied, it's a list
+            cols = cast(Tuple, cols[0])
+
+        cols = cast(
+            Tuple,
+            [c._jc if isinstance(c, Column) else _create_column_from_literal(c) for c in cols],
+        )
 
     # logistic operators
     def __eq__(  # type: ignore[override]
