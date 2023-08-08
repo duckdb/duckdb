@@ -125,6 +125,8 @@ DUCKDB_API bool Uhugeint::TryCast(uhugeint_t input, uint32_t &result);
 template <>
 DUCKDB_API bool Uhugeint::TryCast(uhugeint_t input, uint64_t &result);
 template <>
+DUCKDB_API bool Uhugeint::TryCast(uhugeint_t input, hugeint_t &result);
+template <>
 DUCKDB_API bool Uhugeint::TryCast(uhugeint_t input, uhugeint_t &result);
 template <>
 DUCKDB_API bool Uhugeint::TryCast(uhugeint_t input, float &result);
