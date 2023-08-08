@@ -547,9 +547,9 @@ class TestExpression(object):
         # Nulls first
         rel2 = rel.sort(b.desc().nulls_first())
         res = rel2.b.fetchall()
-        assert res == [(None,), ('a',), ('a',), ('b',), ('c',)]
+        assert res == [(None,), ('c',), ('b',), ('a',), ('a',)]
 
         # Nulls last
         rel2 = rel.sort(b.desc().nulls_last())
         res = rel2.b.fetchall()
-        assert res == [('a',), ('a',), ('b',), ('c',), (None,)]
+        assert res == [('c',), ('b',), ('a',), ('a',), (None,)]
