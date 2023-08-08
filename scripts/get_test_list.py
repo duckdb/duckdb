@@ -5,12 +5,21 @@ import re
 import os
 
 parser = argparse.ArgumentParser(description='Print a list of tests to run.')
-parser.add_argument('--file-contains', dest='file_contains',
-                     action='store', help='Filter based on a string contained in the text', default=None)
-parser.add_argument('--unittest', dest='unittest',
-                     action='store', help='The path to the unittest program', default='build/release/test/unittest')
-parser.add_argument('--list', dest='filter',
-                     action='store', help='The unittest filter to apply', default='')
+parser.add_argument(
+    '--file-contains',
+    dest='file_contains',
+    action='store',
+    help='Filter based on a string contained in the text',
+    default=None,
+)
+parser.add_argument(
+    '--unittest',
+    dest='unittest',
+    action='store',
+    help='The path to the unittest program',
+    default='build/release/test/unittest',
+)
+parser.add_argument('--list', dest='filter', action='store', help='The unittest filter to apply', default='')
 
 
 args = parser.parse_args()
@@ -23,25 +32,25 @@ proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess
 stdout = proc.stdout.read().decode('utf8')
 stderr = proc.stderr.read().decode('utf8')
 if proc.returncode is not None and proc.returncode != 0:
-	print("Failed to run program " + unittest_program)
-	print(proc.returncode)
-	print(stdout)
-	print(stderr)
-	exit(1)
+    print("Failed to run program " + unittest_program)
+    print(proc.returncode)
+    print(stdout)
+    print(stderr)
+    exit(1)
 
 test_cases = []
 for line in stdout.splitlines()[1:]:
-	if not line.strip():
-		continue
-	splits = line.rsplit('\t', 1)
-	if file_contains is not None:
-		if not os.path.isfile(splits[0]):
-			continue
-		try:
-			with open(splits[0], 'r') as f:
-				text = f.read()
-		except UnicodeDecodeError:
-			continue
-		if file_contains not in text:
-			continue
-	print(splits[0])
+    if not line.strip():
+        continue
+    splits = line.rsplit('\t', 1)
+    if file_contains is not None:
+        if not os.path.isfile(splits[0]):
+            continue
+        try:
+            with open(splits[0], 'r') as f:
+                text = f.read()
+        except UnicodeDecodeError:
+            continue
+        if file_contains not in text:
+            continue
+    print(splits[0])

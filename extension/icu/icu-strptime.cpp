@@ -249,8 +249,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr cal(info->calendar->clone());
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr cal(info.calendar->clone());
 
 		UnaryExecutor::ExecuteWithNulls<string_t, timestamp_t>(
 		    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
@@ -273,26 +273,7 @@ struct ICUStrptime : public ICUDateFunc {
 				    }
 
 				    // Now get the parts in the given time zone
-				    date_t d;
-				    dtime_t t;
-				    Timestamp::Convert(result, d, t);
-
-				    int32_t data[7];
-				    Date::Convert(d, data[0], data[1], data[2]);
-				    calendar->set(UCAL_EXTENDED_YEAR, data[0]); // strptime doesn't understand eras
-				    calendar->set(UCAL_MONTH, data[1] - 1);
-				    calendar->set(UCAL_DATE, data[2]);
-
-				    Time::Convert(t, data[3], data[4], data[5], data[6]);
-				    calendar->set(UCAL_HOUR_OF_DAY, data[3]);
-				    calendar->set(UCAL_MINUTE, data[4]);
-				    calendar->set(UCAL_SECOND, data[5]);
-
-				    int32_t millis = data[6] / Interval::MICROS_PER_MSEC;
-				    uint64_t micros = data[6] % Interval::MICROS_PER_MSEC;
-				    calendar->set(UCAL_MILLISECOND, millis);
-
-				    result = GetTime(calendar, micros);
+				    result = FromNaive(calendar, result);
 			    }
 
 			    return result;
@@ -476,8 +457,8 @@ struct ICUStrftime : public ICUDateFunc {
 
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr calendar(info->calendar->clone());
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::ExecuteWithNulls<timestamp_t, string_t>(source, result, count,
 		                                                       [&](timestamp_t input, ValidityMask &mask, idx_t idx) {

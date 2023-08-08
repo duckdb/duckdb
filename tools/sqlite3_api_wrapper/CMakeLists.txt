@@ -10,11 +10,10 @@ add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
 include_directories(../../third_party/utf8proc/include)
 
-if(NOT BUILD_AUTOCOMPLETE_EXTENSION AND NOT DISABLE_BUILTIN_EXTENSIONS)
+if(DUCKDB_EXTENSION_AUTOCOMPLETE_SHOULD_LINK)
   include_directories(../../extension/autocomplete/include)
-  set(ALL_OBJECT_FILES
-      ${ALL_OBJECT_FILES}
-      ../../extension/autocomplete/sql_auto_complete-extension.cpp)
+  set(ALL_OBJECT_FILES ${ALL_OBJECT_FILES}
+                       ../../extension/autocomplete/autocomplete_extension.cpp)
   add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
 endif()
 set(SQLITE_API_WRAPPER_FILES sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
@@ -26,7 +25,7 @@ if(NOT AMALGAMATION_BUILD)
 endif()
 link_threads(sqlite3_api_wrapper_static)
 
-if(NOT WIN32)
+if(NOT WIN32 AND NOT ZOS)
   add_library(sqlite3_api_wrapper SHARED ${SQLITE_API_WRAPPER_FILES})
   target_link_libraries(sqlite3_api_wrapper duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   link_threads(sqlite3_api_wrapper)
@@ -38,7 +37,7 @@ include_directories(test/include)
 add_subdirectory(test)
 
 add_executable(test_sqlite3_api_wrapper ${SQLITE_TEST_FILES})
-if(WIN32)
+if(WIN32 OR ZOS)
   target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper_static)
 else()
   target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper)

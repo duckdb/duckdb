@@ -5,10 +5,20 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
 JSONScanData::JSONScanData() {
+}
+
+JSONScanData::JSONScanData(ClientContext &context, vector<string> files_p, string date_format_p,
+                           string timestamp_format_p)
+    : files(std::move(files_p)), date_format(std::move(date_format_p)),
+      timestamp_format(std::move(timestamp_format_p)) {
+	InitializeReaders(context);
+	InitializeFormats();
 }
 
 void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
@@ -19,7 +29,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options)) {
+		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
@@ -51,10 +61,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	}
 
 	files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
-
-	if (options.file_options.auto_detect_hive_partitioning) {
-		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
-	}
+	options.file_options.AutoDetectHivePartitioning(files, context);
 
 	InitializeReaders(context);
 }
@@ -167,6 +174,26 @@ void JSONScanData::Deserialize(ClientContext &context, FieldReader &reader) {
 	transform_options.date_format_map = &date_format_map;
 }
 
+string JSONScanData::GetDateFormat() const {
+	if (!date_format.empty()) {
+		return date_format;
+	} else if (date_format_map.HasFormats(LogicalTypeId::DATE)) {
+		return date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier;
+	} else {
+		return string();
+	}
+}
+
+string JSONScanData::GetTimestampFormat() const {
+	if (!timestamp_format.empty()) {
+		return timestamp_format;
+	} else if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
+		return date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier;
+	} else {
+		return string();
+	}
+}
+
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data_p)
     : bind_data(bind_data_p), transform_options(bind_data.transform_options),
       allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
@@ -236,7 +263,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader::FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
 		                              reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                              input.column_ids, reader->reader_data);
+		                              input.column_ids, reader->reader_data, context);
 	}
 
 	return std::move(result);
@@ -969,6 +996,18 @@ unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, 
 	return std::move(result);
 }
 
+void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
+	auto &bind_data = bind_data_p->Cast<JSONScanData>();
+	serializer.WriteProperty("scan_data", bind_data);
+}
+
+unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	unique_ptr<JSONScanData> result;
+	deserializer.ReadProperty("scan_data", result);
+	return std::move(result);
+}
+
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	MultiFileReader::AddParameters(table_function);
 
@@ -983,6 +1022,8 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
+	table_function.format_serialize = FormatSerialize;
+	table_function.format_deserialize = FormatDeserialize;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

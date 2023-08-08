@@ -71,7 +71,8 @@ query III
 select d,bool_or(d > '2021-02-09') AS or_result,
        bool_and(d > '2021-02-09') AS and_result
 from t
-group by d;
+group by d
+order by d;
 ----
 NULL	NULL	NULL
 2021-02-08	0	0

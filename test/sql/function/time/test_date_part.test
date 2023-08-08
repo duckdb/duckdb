@@ -182,6 +182,31 @@ ORDER BY 1;
 20:08:10.33	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 20:08:10.998	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
+# Function-only parts
+query II
+SELECT d, epoch_ns(d) FROM times ORDER BY ALL;
+----
+00:01:20	80000000000
+20:08:10.001	72490001000000
+20:08:10.33	72490330000000
+20:08:10.998	72490998000000
+
+query II
+SELECT d, epoch_us(d) FROM times ORDER BY ALL;
+----
+00:01:20	80000000
+20:08:10.001	72490001000
+20:08:10.33	72490330000
+20:08:10.998	72490998000
+
+query II
+SELECT d, epoch_ms(d) FROM times ORDER BY ALL;
+----
+00:01:20	80000
+20:08:10.001	72490001
+20:08:10.33	72490330
+20:08:10.998	72490998
+
 # Invalid parts
 
 foreach datepart year month day decade century millennium quarter dow isodow doy week isoyear yearweek era

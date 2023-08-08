@@ -1,0 +1,16 @@
+# name: benchmark/micro/index/point/point_query_with_art.benchmark
+# description: Point query with an ART on randomly ordered data
+# group: [point]
+
+name Point Query (ART)
+group art
+
+load
+CREATE TABLE integers AS SELECT (i * 9876983769044::INT128 % 100000000)::INT64 AS i, i + 2 AS j FROM range(0, 100000000) t(i);
+CREATE INDEX i_index ON integers USING ART(i);
+
+run
+SELECT i FROM integers WHERE i=50000 LIMIT 1
+
+result I
+50000

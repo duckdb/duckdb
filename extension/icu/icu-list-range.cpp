@@ -128,7 +128,7 @@ struct ICUListRange : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &bind_info = (BindData &)*func_expr.bind_info;
+		auto &bind_info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(bind_info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 

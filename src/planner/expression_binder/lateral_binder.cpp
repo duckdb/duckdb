@@ -31,39 +31,8 @@ BindResult LateralBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, 
 	if (result.HasError()) {
 		return result;
 	}
-	if (depth > 1) {
-		throw BinderException("Nested lateral joins are not supported yet");
-	}
 	ExtractCorrelatedColumns(*result.expression);
 	return result;
-}
-
-vector<CorrelatedColumnInfo> LateralBinder::ExtractCorrelatedColumns(Binder &binder) {
-
-	if (correlated_columns.empty()) {
-		return binder.correlated_columns;
-	}
-
-	// clear outer
-	correlated_columns.clear();
-	auto all_correlated_columns = binder.correlated_columns;
-
-	// remove outer from inner
-	for (auto &corr_column : correlated_columns) {
-		auto entry = std::find(binder.correlated_columns.begin(), binder.correlated_columns.end(), corr_column);
-		if (entry != binder.correlated_columns.end()) {
-			binder.correlated_columns.erase(entry);
-		}
-	}
-
-	// add inner to outer
-	for (auto &corr_column : binder.correlated_columns) {
-		correlated_columns.push_back(corr_column);
-	}
-
-	// clear inner
-	binder.correlated_columns.clear();
-	return all_correlated_columns;
 }
 
 BindResult LateralBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
@@ -125,7 +94,11 @@ protected:
 			ReduceColumnRefDepth(expr.Cast<BoundColumnRefExpression>());
 		}
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+			auto &subquery_ref = expr.Cast<BoundSubqueryExpression>();
 			ReduceExpressionSubquery(expr.Cast<BoundSubqueryExpression>());
+			// Recursively update the depth in the bindings of the children nodes
+			ExpressionIterator::EnumerateQueryNodeChildren(
+			    *subquery_ref.subquery, [&](Expression &child_expr) { ReduceExpressionDepth(child_expr); });
 		}
 	}
 

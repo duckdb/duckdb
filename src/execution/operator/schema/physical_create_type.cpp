@@ -74,15 +74,11 @@ SourceResultType PhysicalCreateType::GetData(ExecutionContext &context, DataChun
 	if (IsSink()) {
 		D_ASSERT(info->type == LogicalType::INVALID);
 		auto &g_sink_state = sink_state->Cast<CreateTypeGlobalState>();
-		info->type = LogicalType::ENUM(info->name, g_sink_state.result, g_sink_state.size);
+		info->type = LogicalType::ENUM(g_sink_state.result, g_sink_state.size);
 	}
 
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-	auto catalog_entry = catalog.CreateType(context.client, *info);
-	D_ASSERT(catalog_entry->type == CatalogType::TYPE_ENTRY);
-	auto &catalog_type = catalog_entry->Cast<TypeCatalogEntry>();
-	EnumType::SetCatalog(info->type, &catalog_type);
-
+	catalog.CreateType(context.client, *info);
 	return SourceResultType::FINISHED;
 }
 

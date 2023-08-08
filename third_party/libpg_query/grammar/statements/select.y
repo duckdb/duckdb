@@ -444,15 +444,22 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctequery = $5;
+				n->ctematerialized = $4;
+				n->ctequery = $6;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
+		;
+
+opt_materialized:
+		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
+		| NOT MATERIALIZED						{ $$ = PGCTEMaterializeNever; }
+		| /*EMPTY*/								{ $$ = PGCTEMaterializeDefault; }
 		;
 
 into_clause:
@@ -2733,10 +2740,9 @@ indirection_expr:		'?'
 				{
 					$$ = $2;
 				}
-			| '{' dict_arguments_opt_comma '}'
+			| struct_expr
 				{
-					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| MAP '{' opt_map_arguments_opt_comma '}'
 				{
@@ -2760,6 +2766,17 @@ indirection_expr:		'?'
 					$$ = $1;
 				}
 		;
+
+
+
+struct_expr:		'{' dict_arguments_opt_comma '}'
+				{
+					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = (PGNode *) f;
+				}
+		;
+
+
 
 func_application:       func_name '(' ')'
 				{
@@ -3643,7 +3660,22 @@ indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
-		;
+			| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+				    	PGAIndices *ai = makeNode(PGAIndices);
+				    	ai->is_slice = true;
+				    	ai->lidx = $2;
+				    	ai->uidx = $4;
+				    	ai->step = $6;
+				    	$$ = (PGNode *) ai;
+				}
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
+					$$ = (PGNode *) ai;
+				}
+				;
 
 opt_slice_bound:
 			a_expr									{ $$ = $1; }
@@ -3686,6 +3718,22 @@ extended_indirection_el:
 					ai->is_slice = true;
 					ai->lidx = $2;
 					ai->uidx = $4;
+					$$ = (PGNode *) ai;
+				}
+		    	| '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->uidx = $4;
+					ai->step = $6;
+                 			$$ = (PGNode *) ai;
+                		}
+
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
 					$$ = (PGNode *) ai;
 				}
 		;

@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundCTERef &ref) {
 		types.push_back(type);
 	}
 
-	return make_uniq<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns);
+	return make_uniq<LogicalCTERef>(index, ref.cte_index, types, ref.bound_columns, ref.materialized_cte);
 }
 
 } // namespace duckdb

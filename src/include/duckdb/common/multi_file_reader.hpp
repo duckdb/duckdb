@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
+#include "duckdb/common/common.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/union_by_name.hpp"
@@ -32,6 +32,8 @@ struct HivePartitioningIndex {
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &source);
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static HivePartitioningIndex FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
@@ -43,6 +45,8 @@ struct MultiFileReaderBindData {
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &source);
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static MultiFileReaderBindData FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct MultiFileFilterEntry {
@@ -87,7 +91,8 @@ struct MultiFileReader {
 	DUCKDB_API static vector<string> GetFileList(ClientContext &context, const Value &input, const string &name,
 	                                             FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options);
+	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+	                                   ClientContext &context);
 	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read
 	//! If "true" the first file has been eliminated
 	DUCKDB_API static bool ComplexFilterPushdown(ClientContext &context, vector<string> &files,
@@ -102,7 +107,7 @@ struct MultiFileReader {
 	                                    const MultiFileReaderBindData &options, const string &filename,
 	                                    const vector<string> &local_names, const vector<LogicalType> &global_types,
 	                                    const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                                    MultiFileReaderData &reader_data);
+	                                    MultiFileReaderData &reader_data, ClientContext &context);
 	//! Create all required mappings from the global types/names to the file-local types/names
 	DUCKDB_API static void CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
 	                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
@@ -157,9 +162,10 @@ struct MultiFileReader {
 	static void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
 	                             const MultiFileReaderBindData &bind_data, const vector<LogicalType> &global_types,
 	                             const vector<string> &global_names, const vector<column_t> &global_column_ids,
-	                             optional_ptr<TableFilterSet> table_filters, const string &initial_file) {
+	                             optional_ptr<TableFilterSet> table_filters, const string &initial_file,
+	                             ClientContext &context) {
 		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetNames(), global_types, global_names,
-		             global_column_ids, reader.reader_data);
+		             global_column_ids, reader.reader_data, context);
 		CreateMapping(reader.GetFileName(), reader.GetTypes(), reader.GetNames(), global_types, global_names,
 		              global_column_ids, table_filters, reader.reader_data, initial_file);
 		reader.reader_data.filters = table_filters;

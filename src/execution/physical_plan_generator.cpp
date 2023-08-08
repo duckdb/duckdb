@@ -113,12 +113,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		plan = CreatePlan(op.Cast<LogicalAnyJoin>());
 		break;
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		plan = CreatePlan(op.Cast<LogicalDelimJoin>());
-		break;
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		plan = CreatePlan(op.Cast<LogicalAsOfJoin>());
-		break;
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		plan = CreatePlan(op.Cast<LogicalComparisonJoin>());
 		break;
@@ -194,6 +190,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		plan = CreatePlan(op.Cast<LogicalMaterializedCTE>());
+		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		plan = CreatePlan(op.Cast<LogicalCTERef>());
 		break;
@@ -217,6 +216,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		}
 		break;
 	case LogicalOperatorType::LOGICAL_JOIN:
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
 	case LogicalOperatorType::LOGICAL_INVALID: {
 		throw NotImplementedException("Unimplemented logical operator type!");
 	}

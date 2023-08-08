@@ -395,7 +395,7 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 
 static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	D_ASSERT(!yyjson_is_arr(val) && !yyjson_is_obj(val));
-	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId<yyjson_val>(val));
+	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node) {

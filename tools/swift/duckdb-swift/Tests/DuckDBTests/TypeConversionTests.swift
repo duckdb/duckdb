@@ -292,7 +292,7 @@ final class TypeConversionTests: XCTestCase {
     let source = [[], [Double(42), .nan, .infinity, -.infinity, nil, -42], nil]
     let expected = source.map { $0?.map(DoubleBox.init(_:)) }
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT double_array FROM test_all_types();")
+    let result = try connection.query("SELECT double_array FROM test_all_types(use_large_enum=true);")
     let column = result[0].cast(to: [Double?].self)
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)]?.map(DoubleBox.init(_:)), item)
@@ -415,7 +415,7 @@ private extension TypeConversionTests {
     cast: (Column<Void>) -> Column<T>
   ) throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types();")
+    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types(use_large_enum=true);")
     let column = cast(result[0])
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)], item)

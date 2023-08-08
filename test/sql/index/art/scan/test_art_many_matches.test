@@ -1,0 +1,98 @@
+# name: test/sql/index/art/scan/test_art_many_matches.test
+# description: Test ART index with many matches
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+# create a table with the values [0, 1, 0, 1, ..., 0, 1]
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT i FROM RANGE(0, 1024, 1) t2(j), (VALUES (0), (1)) t1(i) ORDER BY j, i;
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i<1
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i<=1
+----
+2048
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=0
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i>0
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i>=0
+----
+2048
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers SELECT i FROM RANGE(0, 2048, 1) t2(j), (VALUES (0), (1)) t1(i) ORDER BY j, i;
+
+statement ok
+CREATE INDEX i_index ON integers using art(i)
+
+query I
+SELECT COUNT(*) FROM integers WHERE i<1
+----
+2048
+
+query I
+SELECT COUNT(*) FROM integers WHERE i<=1
+----
+4096
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=0
+----
+2048
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+2048
+
+query I
+SELECT COUNT(*) FROM integers WHERE i>0
+----
+2048
+
+query I
+SELECT COUNT(*) FROM integers WHERE i>=0
+----
+4096
+
+statement ok
+ROLLBACK
+

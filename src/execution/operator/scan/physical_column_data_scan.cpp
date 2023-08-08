@@ -64,6 +64,9 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		state.SetPipelineSource(current, delim_join.distinct->Cast<PhysicalOperator>());
 		return;
 	}
+	case PhysicalOperatorType::CTE_SCAN: {
+		break;
+	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		if (!meta_pipeline.HasRecursiveCTE()) {
 			throw InternalException("Recursive CTE scan found without recursive CTE node");
@@ -74,6 +77,22 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 	}
 	D_ASSERT(children.empty());
 	state.SetPipelineSource(current, *this);
+}
+
+string PhysicalColumnDataScan::ParamsToString() const {
+	string result = "";
+	switch (type) {
+	case PhysicalOperatorType::CTE_SCAN:
+	case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
+		result += "\n[INFOSEPARATOR]\n";
+		result += StringUtil::Format("idx: %llu", cte_index);
+		break;
+	}
+	default:
+		break;
+	}
+
+	return result;
 }
 
 } // namespace duckdb

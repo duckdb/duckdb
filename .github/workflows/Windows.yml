@@ -13,14 +13,17 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
       - '.github/config/uncovered_files.csv'
@@ -34,6 +37,7 @@ env:
 
 jobs:
  win-release-64:
+    # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
@@ -55,7 +59,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_EXTENSIONS="parquet;icu;tpch;tpcds;fts;json;excel;visualizer;autocomplete" -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test
@@ -93,9 +97,46 @@ jobs:
       shell: bash
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
+    - name: Install ODBC Driver
+      shell: bash
+      run: |
+        tools/odbc/bin/Release/odbc_install.exe //CI //Install
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
+
+    - name: Enable ODBC Trace HKCU
+      shell: bash
+      run: |
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
+        echo "----------------------------------------------------------------"
+        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
+
+    - name: Install psqlodbc
+      shell: bash
+      run: |
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
+
+    - name: Test psqlodbc
+      shell: bash
+      run: |
+        cd psqlodbc
+        export PSQLODBC_TEST_DSN=DuckDB
+        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+
+    - name: Print ODBC trace on failure
+      if: ${{ failure() }}
+      shell: bash
+      run: cat ODBC_TRACE.log
+
  win-release-32:
     name: Windows (32 Bit)
-    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb'
+    runs-on: windows-2019
     needs: win-release-64
 
     steps:
@@ -116,7 +157,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_EXTENSIONS="icu;parquet;tpch;tpcds;fts;json;excel;visualizer;autocomplete"
         cmake --build . --config Release
 
     - name: Test
@@ -171,7 +212,7 @@ jobs:
        - name: Build
          shell: msys2 {0}
          run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_EXTENSIONS=parquet
            cmake --build . --config Release
 
        - name: Test
@@ -179,74 +220,14 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
-           
+
        - name: Tools Test
          shell: msys2 {0}
          run: |
            tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
- odbc-win-64:
-    name: ODBC Windows
-    runs-on: windows-latest
-    needs: win-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
-        cmake --build . --config Release
-
-    - name: Install ODBC Driver
-      shell: bash
-      run:  |
-        tools/odbc/bin/Release/odbc_install.exe //CI //Install
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
-
-    - name: Enable ODBC Trace HKCU
-      shell: bash
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
-
-    - name: Install psqlodbc
-      shell: bash
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make release)
-
-    - name: Test psqlodbc
-      shell: bash
-      run: |
-        cd psqlodbc
-        export PSQLODBC_TEST_DSN=DuckDB
-        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
-
-    - name: Print ODBC trace on failure
-      if: ${{ failure() }}
-      shell: bash
-      run: cat ODBC_TRACE.log
-
  win-extensions-64:
+   # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
    needs: win-release-64
@@ -265,17 +246,12 @@ jobs:
          key: ${{ github.job }}
          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-     - name: Install OpenSSL
-       shell: bash
-       run: |
-         choco install openssl -y --force
-
      - uses: ./.github/actions/build_extensions
        with:
+         vcpkg_target_triplet: x64-windows-static-md
          deploy_as: windows_amd64
-         post_install: choco uninstall openssl -y --force
          treat_warn_as_error: 0
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         python_name: python
+         unittest_script: ./build/release/test/Release/unittest.exe

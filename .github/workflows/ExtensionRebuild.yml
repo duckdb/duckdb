@@ -18,19 +18,30 @@ on:
         description: 'DuckDB version (short commit hash or vX.Y.Z tag)'
         required: true
         type: string
+      use_old_extension_config:
+        description: 'Use the old csv-based configuration for building extensions'
+        required: true
+        type: bool
 
 jobs:
   linux-extensions-64-rebuild:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/manylinux_2014_setup
+      with:
+        aws-cli: 1
+        ninja-build: 1
+        vcpkg: 1
+        openssl: 1
+        ccache: 1
+        ssh: 1
 
     - name: Checkout specific DuckDB version
       shell: bash
@@ -38,22 +49,21 @@ jobs:
         git clone https://github.com/duckdb/duckdb.git duckdb-old
         git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
-    - name: Override extensions.csv
+    - name: Override config (CMake)
+      if: !use_old_extension_config
+      shell: bash
+      run: |
+        echo -e 'duckdb_extension_load( ${{ inputs.extension_name }} GIT_URL ${{ inputs.extension_repo }} GIT_TAG ${{ inputs.extension_ref }} DONT_LINK)' > duckdb-old/.github/config/out_of_tree_extensions.cmake
+
+    - name: Override config (CSV)
+      if: use_old_extension_config
       shell: bash
       run: |
         echo -e 'name,url,commit,options\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/.github/config/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
-        visualizer: 0
-        icu: 0
-        tpch: 0
-        tpcds: 0
-        httpfs: 0
-        fts: 0
-        json: 0
-        excel: 0
-        sqlsmith: 0
+        build_in_tree_extensions: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
@@ -61,7 +71,8 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-
+        python_name: python3.7
+        vcpkg_target_triplet: x64-linux
 
   xcode-extensions-rebuild:
     name: OSX Extensions Release
@@ -92,15 +103,7 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
-          visualizer: 0
-          icu: 0
-          tpch: 0
-          tpcds: 0
-          httpfs: 0
-          fts: 0
-          json: 0
-          excel: 0
-          sqlsmith: 0
+          build_in_tree_extensions: 0
           treat_warn_as_error: 0
           build_dir: duckdb-old
           post_install: rm build/release/src/libduckdb*
@@ -144,16 +147,9 @@ jobs:
 
      - uses: ./.github/actions/build_extensions
        with:
-         visualizer: 0
-         icu: 0
-         tpch: 0
-         tpcds: 0
-         httpfs: 0
-         fts: 0
-         json: 0
-         excel: 0
-         sqlsmith: 0
+         build_in_tree_extensions: 0
          deploy_as: windows_amd64
+         vcpkg_target_triplet: x64-windows
          deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
          treat_warn_as_error: 0
@@ -161,7 +157,6 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         python_name: python
 
 
   manylinux-extensions-rebuild:
@@ -202,18 +197,11 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
-        visualizer: 0
-        icu: 0
-        tpch: 0
-        tpcds: 0
-        httpfs: 0
-        fts: 0
-        json: 0
-        excel: 0
-        sqlsmith: 0
+        build_in_tree_extensions: 0
         run_tests: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4
+        vcpkg_target_triplet: x64-linux
         deploy_version: ${{ inputs.duckdb_ref }}
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}

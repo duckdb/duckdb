@@ -18,8 +18,8 @@ SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, DataChunk
 }
 
 SinkFinalizeType PhysicalExplainAnalyze::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<ExplainAnalyzeStateGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<ExplainAnalyzeStateGlobalState>();
 	auto &profiler = QueryProfiler::Get(context);
 	gstate.analyzed_plan = profiler.ToString();
 	return SinkFinalizeType::READY;

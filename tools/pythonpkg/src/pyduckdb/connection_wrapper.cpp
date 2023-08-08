@@ -215,6 +215,10 @@ void PyConnectionWrapper::Close(shared_ptr<DuckDBPyConnection> conn) {
 	conn->Close();
 }
 
+void PyConnectionWrapper::Interrupt(shared_ptr<DuckDBPyConnection> conn) {
+	conn->Interrupt();
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Cursor(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Cursor();
 }
@@ -306,11 +310,6 @@ bool PyConnectionWrapper::FileSystemIsRegistered(const string &name, shared_ptr<
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Values(std::move(values));
-}
-
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromQuery(const string &query, const string &alias,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromQuery(query, alias);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,

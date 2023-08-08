@@ -374,7 +374,8 @@ struct SortedAggregateFunction {
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();
-		AggregateInputData aggr_bind_info(bind_info, Allocator::DefaultAllocator());
+		ArenaAllocator allocator(Allocator::DefaultAllocator());
+		AggregateInputData aggr_bind_info(bind_info, allocator);
 
 		// Inner aggregate APIs
 		auto initialize = order_bind.function.initialize;
@@ -515,14 +516,6 @@ struct SortedAggregateFunction {
 
 		result.Verify(count);
 	}
-
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
-		throw NotImplementedException("FIXME: serialize sorted aggregate not supported");
-	}
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            AggregateFunction &function) {
-		throw NotImplementedException("FIXME: deserialize sorted aggregate not supported");
-	}
 };
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
@@ -581,7 +574,7 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 	    AggregateFunction::StateCombine<SortedAggregateState, SortedAggregateFunction>,
 	    SortedAggregateFunction::Finalize, bound_function.null_handling, SortedAggregateFunction::SimpleUpdate, nullptr,
 	    AggregateFunction::StateDestroy<SortedAggregateState, SortedAggregateFunction>, nullptr,
-	    SortedAggregateFunction::Window, SortedAggregateFunction::Serialize, SortedAggregateFunction::Deserialize);
+	    SortedAggregateFunction::Window);
 
 	expr.function = std::move(ordered_aggregate);
 	expr.bind_info = std::move(sorted_bind);

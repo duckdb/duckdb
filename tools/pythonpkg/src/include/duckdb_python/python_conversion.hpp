@@ -36,9 +36,11 @@ enum class PythonObjectType {
 	MemoryView,
 	Bytes,
 	List,
+	Tuple,
 	Dict,
 	NdArray,
 	NdDatetime,
+	Value
 };
 
 PythonObjectType GetPythonObjectType(py::handle &ele);

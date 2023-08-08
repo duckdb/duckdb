@@ -94,8 +94,13 @@ void SingleFileStorageManager::LoadDatabase() {
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
-
-	string wal_path = path + ".wal";
+	std::size_t question_mark_pos = path.find('?');
+	auto wal_path = path;
+	if (question_mark_pos != std::string::npos) {
+		wal_path.insert(question_mark_pos, ".wal");
+	} else {
+		wal_path += ".wal";
+	}
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 	bool truncate_wal = false;

@@ -1,0 +1,16 @@
+# name: benchmark/micro/index/range/wide_range_query_with_art.benchmark
+# description: Wide (non-selective) range query with ART
+# group: [range]
+
+name Big Range Query (ART)
+group art
+
+load
+CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
+CREATE INDEX i_index ON integers USING ART(i);
+
+run
+SELECT COUNT(j) FROM integers WHERE i >= 0 AND i < 15000200;
+
+result I
+15000200

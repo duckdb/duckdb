@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-DetachInfo::DetachInfo() {
+DetachInfo::DetachInfo() : ParseInfo(TYPE) {
 }
 
 unique_ptr<DetachInfo> DetachInfo::Copy() const {

@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
+
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/common/allocator.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -67,7 +69,7 @@ public:
 	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), op.children[0]->types);
 		collection->InitializeAppend(append_state);
 	}
 };
@@ -87,11 +89,13 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                      LocalSinkState &lstate) const {
-	auto &state = lstate.Cast<BatchCopyToLocalState>();
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+SinkCombineResultType PhysicalBatchCopyToFile::Combine(ExecutionContext &context,
+                                                       OperatorSinkCombineInput &input) const {
+	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
+	auto &gstate = input.global_state.Cast<BatchCopyToGlobalState>();
 	gstate.rows_copied += state.rows_copied;
+
+	return SinkCombineResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
@@ -112,8 +116,8 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 }
 
 SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	FinalFlush(context, gstate_p);
+                                                   OperatorSinkFinalizeInput &input) const {
+	FinalFlush(context, input.global_state);
 	return SinkFinalizeType::READY;
 }
 

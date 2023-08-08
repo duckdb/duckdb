@@ -1,0 +1,61 @@
+# name: test/sql/order/order_parallel_fixed.test_slow
+# description: Test ORDER BY keyword with multiple threads (internal and external sorting)
+# group: [order]
+
+statement ok
+PRAGMA verify_parallelism
+
+# we run this with an uneven amount of threads to force the merge sort to have an odd amount of blocks to merge
+statement ok
+PRAGMA threads=3
+
+# do one asc test to hit some coverage, the rest is desc
+statement ok
+create table test as (select range i from range(100000) order by i desc);
+
+# all fixed-size
+query T
+select * from test order by i asc;
+----
+100000 values hashing to 1933b84f18ddb7545c63962be5d10bb5
+
+statement ok
+drop table test
+
+# internal/external, different memory limits
+foreach pragma true false
+
+foreach mem 50 500
+
+statement ok
+PRAGMA debug_force_external=${pragma}
+
+statement ok
+PRAGMA memory_limit='${mem}MB'
+
+statement ok
+create table test as (select range i from range(100000));
+
+# all fixed-size
+query T
+select * from test order by i desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+# fixed size sorting, variable payload
+query T
+select cast(i as varchar) from test order by i desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+query T
+select cast(i + 1000000000000 as varchar) from test order by i desc;
+----
+100000 values hashing to fd8914b27c93792cac93f3f8ee479a89
+
+statement ok
+drop table test
+
+endloop
+
+endloop

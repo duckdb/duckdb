@@ -1,0 +1,83 @@
+[
+  {
+    "class": "ResultModifier",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "ResultModifierType"
+      }
+    ]
+  },
+  {
+    "class": "LimitModifier",
+    "base": "ResultModifier",
+    "enum": "LIMIT_MODIFIER",
+    "members": [
+      {
+        "name": "limit",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "offset",
+        "type": "ParsedExpression*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "DistinctModifier",
+    "base": "ResultModifier",
+    "enum": "DISTINCT_MODIFIER",
+    "members": [
+      {
+        "name": "distinct_on_targets",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "OrderModifier",
+    "base": "ResultModifier",
+    "enum": "ORDER_MODIFIER",
+    "members": [
+      {
+        "name": "orders",
+        "type": "vector<OrderByNode>"
+      }
+    ]
+  },
+  {
+    "class": "LimitPercentModifier",
+    "base": "ResultModifier",
+    "enum": "LIMIT_PERCENT_MODIFIER",
+    "members": [
+      {
+        "name": "limit",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "offset",
+        "type": "ParsedExpression*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "BoundOrderModifier",
+    "includes": [
+      "duckdb/planner/bound_result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "orders",
+        "type": "vector<BoundOrderByNode>"
+      }
+    ]
+  }
+]

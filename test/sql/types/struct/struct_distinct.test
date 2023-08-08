@@ -5,44 +5,46 @@
 statement ok
 PRAGMA enable_verification
 
+foreach type <numeric>
+
 # Constant single integer column distinct
 query T
-SELECT {'x': 1} IS NOT DISTINCT FROM {'x': 2}
+SELECT {'x': 1::${type}} IS NOT DISTINCT FROM {'x': 2::${type}}
 ----
 false
 
 query T
-SELECT {'x': 1} IS NOT DISTINCT FROM {'x': 1}
+SELECT {'x': 1::${type}} IS NOT DISTINCT FROM {'x': 1::${type}}
 ----
 true
 
 query T
-SELECT NULL IS NOT DISTINCT FROM {'x': 1}
+SELECT NULL IS NOT DISTINCT FROM {'x': 1::${type}}
 ----
 false
 
 query T
-SELECT {'x': 1} IS DISTINCT FROM {'x': 2}
+SELECT {'x': 1::${type}} IS DISTINCT FROM {'x': 2::${type}}
 ----
 true
 
 query T
-SELECT {'x': 1} IS DISTINCT FROM {'x': 1}
+SELECT {'x': 1::${type}} IS DISTINCT FROM {'x': 1::${type}}
 ----
 false
 
 query T
-SELECT {'x': 1} IS DISTINCT FROM NULL
+SELECT {'x': 1::${type}} IS DISTINCT FROM NULL
 ----
 true
 
 statement ok
-CREATE VIEW struct_int AS SELECT * FROM (VALUES
-	({'x': 1}, {'x': 1}),
-	({'x': 1}, {'x': 2}),
-	({'x': 2}, {'x': 1}),
-	(NULL, {'x': 1}),
-	({'x': 2}, NULL),
+CREATE OR REPLACE VIEW struct_int AS SELECT * FROM (VALUES
+	({'x': 1::${type}}, {'x': 1::${type}}),
+	({'x': 1::${type}}, {'x': 2::${type}}),
+	({'x': 2::${type}}, {'x': 1::${type}}),
+	(NULL, {'x': 1::${type}}),
+	({'x': 2::${type}}, NULL),
 	(NULL, NULL)
 	) tbl(l, r);
 
@@ -65,6 +67,8 @@ true
 true
 true
 false
+
+endloop
 
 # Constant single string column distinct
 query T

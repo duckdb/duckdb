@@ -1,0 +1,217 @@
+[
+  {
+    "class": "CreateInfo",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/parsed_data/create_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "temporary",
+        "type": "bool"
+      },
+      {
+        "name": "internal",
+        "type": "bool"
+      },
+      {
+        "name": "on_conflict",
+        "type": "OnCreateConflict"
+      },
+      {
+        "name": "sql",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "CreateIndexInfo",
+    "base": "CreateInfo",
+    "enum": "INDEX_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_index_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string",
+        "property": "index_name"
+      },
+      {
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "name": "index_type",
+        "type": "IndexType"
+      },
+      {
+        "name": "constraint_type",
+        "type": "IndexConstraintType"
+      },
+      {
+        "name": "parsed_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "name": "column_ids",
+        "type": "vector<column_t>"
+      }
+    ]
+  },
+  {
+    "class": "CreateTableInfo",
+    "base": "CreateInfo",
+    "enum": "TABLE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_table_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "name": "columns",
+        "type": "ColumnList"
+      },
+      {
+        "name": "constraints",
+        "type": "vector<Constraint*>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "CreateSchemaInfo",
+    "base": "CreateInfo",
+    "enum": "SCHEMA_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_schema_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "CreateViewInfo",
+    "base": "CreateInfo",
+    "enum": "VIEW_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_view_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "CreateTypeInfo",
+    "base": "CreateInfo",
+    "enum": "TYPE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_type_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "logical_type",
+        "property": "type",
+        "type": "LogicalType"
+      }
+    ]
+  },
+  {
+    "class": "CreateMacroInfo",
+    "base": "CreateInfo",
+    "enum": ["MACRO_ENTRY", "TABLE_MACRO_ENTRY"],
+    "includes": [
+      "duckdb/parser/parsed_data/create_macro_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "function",
+        "type": "MacroFunction*"
+      }
+    ]
+  },
+  {
+    "class": "CreateSequenceInfo",
+    "base": "CreateInfo",
+    "enum": "SEQUENCE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_sequence_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "usage_count",
+        "type": "uint64_t"
+      },
+      {
+        "name": "increment",
+        "type": "int64_t"
+      },
+      {
+        "name": "min_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "max_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "start_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "cycle",
+        "type": "bool"
+      }
+    ]
+  }
+]

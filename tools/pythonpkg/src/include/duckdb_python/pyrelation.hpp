@@ -60,6 +60,9 @@ public:
 
 	py::str GetAlias();
 
+	static unique_ptr<DuckDBPyRelation> EmptyResult(const std::shared_ptr<ClientContext> &context,
+	                                                const vector<LogicalType> &types, vector<string> names);
+
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);

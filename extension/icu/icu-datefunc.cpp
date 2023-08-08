@@ -5,6 +5,8 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include "unicode/ucal.h"
+
 namespace duckdb {
 
 ICUDateFunc::BindData::BindData(const BindData &other)
@@ -34,10 +36,17 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
+
+	//	Postgres always assumes times are given in the proleptic Gregorian calendar.
+	//	ICU defaults to the Gregorian change in 1582, so we reset the change to the minimum date
+	//	so that all dates are proleptic Gregorian.
+	//	The only error here is if we have a non-Gregorian calendar,
+	//	and we just ignore that and hope for the best...
+	ucal_setGregorianChange((UCalendar *)calendar.get(), U_DATE_MIN, &success); // NOLINT
 }
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const ICUDateFunc::BindData &)other_p;
+	auto &other = other_p.Cast<const BindData>();
 	return *calendar == *other.calendar;
 }
 

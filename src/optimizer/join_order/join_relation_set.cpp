@@ -65,7 +65,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
 	return GetJoinRelation(std::move(relations), count);
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(const unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
 	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_uniq_array<idx_t>(bindings.size());
 	idx_t count = 0;
@@ -94,16 +94,12 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 				relations[count++] = left.relations[i];
 			}
 			break;
-		} else if (left.relations[i] == right.relations[j]) {
-			// equivalent, add only one of the two pairs
-			relations[count++] = left.relations[i];
-			i++;
-			j++;
 		} else if (left.relations[i] < right.relations[j]) {
 			// left is smaller, progress left and add it to the set
 			relations[count++] = left.relations[i];
 			i++;
 		} else {
+			D_ASSERT(left.relations[i] > right.relations[j]);
 			// right is smaller, progress right and add it to the set
 			relations[count++] = right.relations[j];
 			j++;

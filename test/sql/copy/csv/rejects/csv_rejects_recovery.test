@@ -1,0 +1,87 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_recovery.test
+# group: [rejects]
+
+require skip_reload
+
+# Test invalid arguments
+
+# Should not work without rejects_table
+statement error
+SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/part*.csv',
+    ignore_errors=true,
+    header=true,
+    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
+    rejects_recovery_columns=['COL2']
+);
+----
+only supported when REJECTS_TABLE is set to a table name
+
+# Should not work without rejects_recovery_columns as list
+statement error
+SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/part*.csv',
+    header=true,
+    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    rejects_recovery_columns=['NON_EXISTING_COLUMN'],
+    ignore_errors=true
+);
+----
+REJECTS_RECOVERY_COLUMNS: column "NON_EXISTING_COLUMN" not found
+
+foreach PARALLEL true false
+
+# Basic test
+query IIII rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/example.tsv', 
+    sep='\t',
+    columns = {'name': 'VARCHAR', 'age': 'INTEGER', 'id': 'INTEGER', 'count': 'INTEGER'}, 
+    rejects_table='csv_rejects_table',
+    rejects_recovery_columns=['name', 'age'],
+    ignore_errors=true,
+    parallel=${PARALLEL}
+);
+----
+alice	10	1	20
+charlie	7	3	30
+
+query IIIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+2	3	"count"	NOT_A_NUMBER	{'name': bobby, 'age': 12}	Could not convert string 'NOT_A_NUMBER' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/example.tsv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# We should not prune columns that are part of the rejects_recovery_columns
+query I
+SELECT SUM(COL1) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/part*.csv',
+    columns = {COL1: 'INTEGER', COL2: 'VARCHAR'},
+    header=true,
+    rejects_table='csv_rejects_table',
+    rejects_recovery_columns=['COL2'],
+    ignore_errors=true,
+    parallel=${PARALLEL}
+);
+----
+12282
+
+query IIIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+1001	0	"COL1"	B	{'COL2': BAD2B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
+2001	0	"COL1"	B	{'COL2': BAD1B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part1.csv
+2001	0	"COL1"	B	{'COL2': BAD1B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part3.csv
+3001	0	"COL1"	C	{'COL2': BAD2C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
+4001	0	"COL1"	C	{'COL2': BAD1C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part1.csv
+4001	0	"COL1"	C	{'COL2': BAD1C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part3.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+endloop

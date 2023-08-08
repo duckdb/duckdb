@@ -52,7 +52,7 @@ void NumpyBind::Bind(const ClientContext &context, py::handle df, vector<PandasC
 			for (idx_t i = 0; i < size; i++) {
 				enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
 			}
-			duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);
+			duckdb_col_type = LogicalType::ENUM(enum_entries_vec, size);
 			auto pandas_col = uniq.attr("__getitem__")(1);
 			bind_data.internal_categorical_type = string(py::str(pandas_col.attr("dtype")));
 			bind_data.pandas_col = make_uniq<PandasNumpyColumn>(pandas_col);

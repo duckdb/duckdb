@@ -17,7 +17,9 @@ BANNER_SIZE = 52
 
 
 def print_usage():
-    print(f"Expected usage: python3 scripts/{os.path.basename(__file__)} --old=/old/duckdb_cli --new=/new/duckdb_cli --dir=/path/to/benchmark/dir")
+    print(
+        f"Expected usage: python3 scripts/{os.path.basename(__file__)} --old=/old/duckdb_cli --new=/new/duckdb_cli --dir=/path/to/benchmark/dir"
+    )
     exit(1)
 
 
@@ -41,7 +43,9 @@ def parse_args():
 
 def init_db(cli, dbname, benchmark_dir):
     print(f"INITIALIZING {dbname} ...")
-    subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        f"{cli} {dbname} < {benchmark_dir}/init/schema.sql", shell=True, check=True, stdout=subprocess.DEVNULL
+    )
     subprocess.run(f"{cli} {dbname} < {benchmark_dir}/init/load.sql", shell=True, check=True, stdout=subprocess.DEVNULL)
     print("INITIALIZATION DONE")
 
@@ -59,7 +63,12 @@ def op_inspect(op):
 
 def query_plan_cost(cli, dbname, query):
     try:
-        subprocess.run(f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"", shell=True, check=True, capture_output=True)
+        subprocess.run(
+            f"{cli} --readonly {dbname} -c \"{ENABLE_PROFILING};{PROFILE_OUTPUT};{query}\"",
+            shell=True,
+            check=True,
+            capture_output=True,
+        )
     except subprocess.CalledProcessError as e:
         print("-------------------------")
         print("--------Failure----------")
@@ -95,10 +104,12 @@ def print_diffs(diffs):
         print("Old cost:", old_cost)
         print("New cost:", new_cost)
 
+
 def cardinality_is_higher(card_a, card_b):
     # card_a > card_b?
     # add 20% threshold before we start caring
-    return card_a > (card_b + card_b / 5 + 5000)
+    return card_a > card_b
+
 
 def main():
     old, new, benchmark_dir = parse_args()
@@ -126,7 +137,7 @@ def main():
             improvements.append((query_name, old_cost, new_cost))
         elif cardinality_is_higher(new_cost, old_cost):
             regressions.append((query_name, old_cost, new_cost))
-            
+
     exit_code = 0
     if improvements:
         print_banner("IMPROVEMENTS DETECTED")
@@ -137,7 +148,7 @@ def main():
         print_diffs(regressions)
     if not improvements and not regressions:
         print_banner("NO DIFFERENCES DETECTED")
-    
+
     os.remove(OLD_DB_NAME)
     os.remove(NEW_DB_NAME)
     os.remove(PROFILE_FILENAME)

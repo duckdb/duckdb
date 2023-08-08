@@ -5,6 +5,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/http_state.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -61,7 +62,9 @@ public:
 	uint8_t flags;
 	idx_t length;
 	time_t last_modified;
-	bool range_read = true;
+
+	// When using full file download, the full file will be written to a cached file handle
+	unique_ptr<CachedFileHandle> cached_file_handle;
 
 	// Read info
 	idx_t buffer_available;
@@ -136,7 +139,9 @@ public:
 	string GetName() const override {
 		return "HTTPFileSystem";
 	}
-
+	string PathSeparator(const string &path) override {
+		return "/";
+	}
 	static void Verify();
 
 	// Global cache

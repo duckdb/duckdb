@@ -10,6 +10,10 @@
 
 namespace duckdb {
 
+PositionalReferenceExpression::PositionalReferenceExpression()
+    : ParsedExpression(ExpressionType::POSITIONAL_REFERENCE, ExpressionClass::POSITIONAL_REFERENCE) {
+}
+
 PositionalReferenceExpression::PositionalReferenceExpression(idx_t index)
     : ParsedExpression(ExpressionType::POSITIONAL_REFERENCE, ExpressionClass::POSITIONAL_REFERENCE), index(index) {
 }
@@ -40,17 +44,6 @@ void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_uniq<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
-	return std::move(expression);
-}
-
-void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("index", index);
-}
-
-unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type,
-                                                                              FormatDeserializer &deserializer) {
-	auto expression = make_uniq<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
 	return std::move(expression);
 }
 

@@ -19,8 +19,10 @@
 */extension/tpch/*
 */extension/visualizer/*
 */extension/json/yyjson/*
-main/extension_helper.cpp
-*extension_oote*
+*/extension_helper.cpp
+*/generated_extension_loader.hpp
 */adbc/*
-common/enum_util.cpp
-common/enums/expression_type.cpp
+*/enum_util.cpp
+*/enums/expression_type.cpp
+*/serialization/*
+*/json_enums.cpp

@@ -564,10 +564,12 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	SelectionVector lcursor(count);
 	SelectionVector rcursor(count);
 
-	ListVector::GetEntry(left).Flatten(ListVector::GetListSize(left));
-	ListVector::GetEntry(right).Flatten(ListVector::GetListSize(right));
-	Vector lchild(ListVector::GetEntry(left), lcursor, count);
-	Vector rchild(ListVector::GetEntry(right), rcursor, count);
+	Vector lentry_flattened(ListVector::GetEntry(left));
+	Vector rentry_flattened(ListVector::GetEntry(right));
+	lentry_flattened.Flatten(ListVector::GetListSize(left));
+	rentry_flattened.Flatten(ListVector::GetListSize(right));
+	Vector lchild(lentry_flattened, lcursor, count);
+	Vector rchild(rentry_flattened, rcursor, count);
 
 	// To perform the positional comparison, we use a vectorisation of the following algorithm:
 	// bool CompareLists(T *left, idx_t nleft, T *right, nright) {

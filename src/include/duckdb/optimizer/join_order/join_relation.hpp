@@ -53,7 +53,7 @@ public:
 	//! Create or get a JoinRelationSet from a single node with the given index
 	JoinRelationSet &GetJoinRelation(idx_t index);
 	//! Create or get a JoinRelationSet from a set of relation bindings
-	JoinRelationSet &GetJoinRelation(unordered_set<idx_t> &bindings);
+	JoinRelationSet &GetJoinRelation(const unordered_set<idx_t> &bindings);
 	//! Create or get a JoinRelationSet from a (sorted, duplicate-free!) list of relations
 	JoinRelationSet &GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count);
 	//! Union two sets of relations together and create a new relation set

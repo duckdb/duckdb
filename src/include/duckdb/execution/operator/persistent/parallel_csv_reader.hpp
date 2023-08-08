@@ -137,7 +137,7 @@ public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
-	idx_t GetLineError(idx_t line_error, idx_t buffer_idx) override;
+	idx_t GetLineError(idx_t line_error, idx_t buffer_idx, bool stop_at_first = true) override;
 
 private:
 	//! Initialize Parser

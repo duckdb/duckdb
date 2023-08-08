@@ -1,10 +1,11 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
+
 #include "duckdb/common/field_writer.hpp"
-#include "utf8proc_wrapper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -65,6 +66,24 @@ bool StringStats::CanContainUnicode(const BaseStatistics &stats) {
 		return true;
 	}
 	return StringStats::GetDataUnsafe(stats).has_unicode;
+}
+
+string GetStringMinMaxValue(const data_t data[]) {
+	idx_t len;
+	for (len = 0; len < StringStatsData::MAX_STRING_MINMAX_SIZE; len++) {
+		if (!data[len]) {
+			break;
+		}
+	}
+	return string(const_char_ptr_cast(data), len);
+}
+
+string StringStats::Min(const BaseStatistics &stats) {
+	return GetStringMinMaxValue(StringStats::GetDataUnsafe(stats).min);
+}
+
+string StringStats::Max(const BaseStatistics &stats) {
+	return GetStringMinMaxValue(StringStats::GetDataUnsafe(stats).max);
 }
 
 void StringStats::ResetMaxStringLength(BaseStatistics &stats) {

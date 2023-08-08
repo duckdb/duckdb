@@ -43,8 +43,18 @@ public:
 	void MakeShared() {
 		shared = true;
 	}
+	bool IsShared() const {
+		return shared;
+	}
 	idx_t BlockCount() const {
 		return blocks.size();
+	}
+	idx_t SizeInBytes() const {
+		idx_t total_size = 0;
+		for (const auto &block : blocks) {
+			total_size += block.size;
+		}
+		return total_size;
 	}
 
 public:
@@ -53,7 +63,7 @@ public:
 	void Initialize(ColumnDataAllocator &other);
 	void InitializeChunkState(ChunkManagementState &state, ChunkMetaData &meta_data);
 	data_ptr_t GetDataPointer(ChunkManagementState &state, uint32_t block_id, uint32_t offset);
-	void UnswizzlePointers(ChunkManagementState &state, Vector &result, uint16_t v_offset, uint16_t count,
+	void UnswizzlePointers(ChunkManagementState &state, Vector &result, idx_t v_offset, uint16_t count,
 	                       uint32_t block_id, uint32_t offset);
 
 	//! Deletes the block with the given id

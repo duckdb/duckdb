@@ -1,0 +1,367 @@
+[
+  {
+    "class": "ParsedExpression",
+    "class_type": "expression_class",
+    "set_parameters": [
+      "type"
+    ],
+    "includes": [
+      "duckdb/parser/expression/list.hpp"
+    ],
+    "members": [
+      {
+        "name": "class",
+        "type": "ExpressionClass",
+        "property": "expression_class"
+      },
+      {
+        "name": "type",
+        "type": "ExpressionType"
+      },
+      {
+        "name": "alias",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "BetweenExpression",
+    "base": "ParsedExpression",
+    "enum": "BETWEEN",
+    "members": [
+      {
+        "name": "input",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "lower",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "upper",
+        "type": "ParsedExpression*"
+      }
+    ]
+  },
+  {
+    "class": "CaseExpression",
+    "base": "ParsedExpression",
+    "enum": "CASE",
+    "members": [
+      {
+        "name": "case_checks",
+        "type": "vector<CacheCheck>"
+      },
+      {
+        "name": "else_expr",
+        "type": "ParsedExpression*"
+      }
+    ]
+  },
+  {
+    "class": "CastExpression",
+    "base": "ParsedExpression",
+    "enum": "CAST",
+    "members": [
+      {
+        "name": "child",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "cast_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "try_cast",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "CollateExpression",
+    "base": "ParsedExpression",
+    "enum": "COLLATE",
+    "members": [
+      {
+        "name": "child",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "collation",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "ColumnRefExpression",
+    "base": "ParsedExpression",
+    "enum": "COLUMN_REF",
+    "members": [
+      {
+        "name": "column_names",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "ComparisonExpression",
+    "base": "ParsedExpression",
+    "enum": "COMPARISON",
+    "members": [
+      {
+        "name": "left",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "right",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "constructor": ["type"]
+  },
+  {
+    "class": "ConjunctionExpression",
+    "base": "ParsedExpression",
+    "enum": "CONJUNCTION",
+    "members": [
+      {
+        "name": "children",
+        "type": "vector<ParsedExpression*>"
+      }
+    ],
+    "constructor": ["type"]
+  },
+  {
+    "class": "ConstantExpression",
+    "base": "ParsedExpression",
+    "enum": "CONSTANT",
+    "members": [
+      {
+        "name": "value",
+        "type": "Value"
+      }
+    ]
+  },
+  {
+    "class": "DefaultExpression",
+    "base": "ParsedExpression",
+    "enum": "DEFAULT",
+    "members": [
+    ]
+  },
+  {
+    "class": "FunctionExpression",
+    "base": "ParsedExpression",
+    "enum": "FUNCTION",
+    "members": [
+      {
+        "name": "function_name",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "children",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "filter",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "order_bys",
+        "type": "OrderModifier*",
+        "base": "ResultModifier"
+      },
+      {
+        "name": "distinct",
+        "type": "bool"
+      },
+      {
+        "name": "is_operator",
+        "type": "bool"
+      },
+      {
+        "name": "export_state",
+        "type": "bool"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "LambdaExpression",
+    "base": "ParsedExpression",
+    "enum": "LAMBDA",
+    "members": [
+      {
+        "name": "lhs",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "expr",
+        "type": "ParsedExpression*"
+      }
+    ]
+  },
+  {
+    "class": "OperatorExpression",
+    "base": "ParsedExpression",
+    "enum": "OPERATOR",
+    "members": [
+      {
+        "name": "children",
+        "type": "vector<ParsedExpression*>"
+      }
+    ],
+    "constructor": ["type"]
+  },
+  {
+    "class": "ParameterExpression",
+    "base": "ParsedExpression",
+    "enum": "PARAMETER",
+    "members": [
+      {
+        "name": "identifier",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "PositionalReferenceExpression",
+    "base": "ParsedExpression",
+    "enum": "POSITIONAL_REFERENCE",
+    "members": [
+      {
+        "name": "index",
+        "type": "idx_t"
+      }
+    ]
+  },
+  {
+    "class": "StarExpression",
+    "base": "ParsedExpression",
+    "enum": "STAR",
+    "members": [
+      {
+        "name": "relation_name",
+        "type": "string"
+      },
+      {
+        "name": "exclude_list",
+        "type": "unordered_set<string>"
+      },
+      {
+        "name": "replace_list",
+        "type": "unordered_set<ParsedExpression*>"
+      },
+      {
+        "name": "columns",
+        "type": "bool"
+      },
+      {
+        "name": "expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      }
+    ]
+  },
+  {
+    "class": "SubqueryExpression",
+    "base": "ParsedExpression",
+    "enum": "SUBQUERY",
+    "members": [
+      {
+        "name": "subquery_type",
+        "type": "SubqueryType"
+      },
+      {
+        "name": "subquery",
+        "type": "SelectStatement"
+      },
+      {
+        "name": "child",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "comparison_type",
+        "type": "ExpressionType"
+      }
+    ]
+  },
+  {
+    "class": "WindowExpression",
+    "base": "ParsedExpression",
+    "enum": "WINDOW",
+    "members": [
+      {
+        "name": "function_name",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "name": "children",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "partitions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "orders",
+        "type": "vector<OrderByNode>"
+      },
+      {
+        "name": "start",
+        "type": "WindowBoundary"
+      },
+      {
+        "name": "end",
+        "type": "WindowBoundary"
+      },
+      {
+        "name": "start_expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "end_expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "offset_expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "default_expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "ignore_nulls",
+        "type": "bool"
+      },
+      {
+        "name": "filter_expr",
+        "optional": true,
+        "type": "ParsedExpression*"
+      }
+    ],
+    "constructor": ["type"]
+  }
+]

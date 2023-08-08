@@ -32,13 +32,13 @@ PartitionedColumnData::~PartitionedColumnData() {
 
 void PartitionedColumnData::InitializeAppendState(PartitionedColumnDataAppendState &state) const {
 	state.partition_sel.Initialize();
-	state.slice_chunk.Initialize(context, types);
+	state.slice_chunk.Initialize(BufferAllocator::Get(context), types);
 	InitializeAppendStateInternal(state);
 }
 
 unique_ptr<DataChunk> PartitionedColumnData::CreatePartitionBuffer() const {
 	auto result = make_uniq<DataChunk>();
-	result->Initialize(BufferManager::GetBufferManager(context).GetBufferAllocator(), types, BufferSize());
+	result->Initialize(BufferAllocator::Get(context), types, BufferSize());
 	return result;
 }
 

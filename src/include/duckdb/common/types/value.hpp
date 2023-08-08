@@ -177,7 +177,10 @@ public:
 	template <class T>
 	T GetValue() const;
 	template <class T>
-	static Value CreateValue(T value);
+	static Value CreateValue(T value) {
+		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		return Value(nullptr);
+	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
@@ -394,6 +397,7 @@ struct ListValue {
 struct UnionValue {
 	DUCKDB_API static const Value &GetValue(const Value &value);
 	DUCKDB_API static uint8_t GetTag(const Value &value);
+	DUCKDB_API static const LogicalType &GetType(const Value &value);
 };
 
 //! Return the internal integral value for any type that is stored as an integral value internally

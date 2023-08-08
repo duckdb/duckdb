@@ -11,6 +11,22 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
+
+// Parameters come in three different types:
+// auto-increment:
+//	token: '?'
+//	name: -
+//	number: 0
+// positional:
+//	token: '$<number>'
+//	name: -
+//	number: <number>
+// named:
+//	token: '$<name>'
+//	name: <name>
+//	number: 0
+enum class PreparedParamType : uint8_t { AUTO_INCREMENT, POSITIONAL, NAMED, INVALID };
+
 class ParameterExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::PARAMETER;
@@ -18,7 +34,7 @@ public:
 public:
 	ParameterExpression();
 
-	idx_t parameter_nr;
+	string identifier;
 
 public:
 	bool IsScalar() const override {
@@ -38,6 +54,6 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 };
 } // namespace duckdb

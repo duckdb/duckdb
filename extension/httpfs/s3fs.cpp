@@ -102,7 +102,7 @@ string S3FileSystem::UrlDecode(string input) {
 	replace(input.begin(), input.end(), '+', ' ');
 	for (idx_t i = 0; i < input.length(); i++) {
 		if (int(input[i]) == 37) {
-			int ii;
+			unsigned int ii;
 			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
 			ch = static_cast<char>(ii);
 			result += ch;
@@ -474,7 +474,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 			auto currently_in_use = buffers_in_use;
 			if (currently_in_use == 0) {
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
-				throw e;
+				throw;
 			} else {
 				// Wait for more buffers to become available before trying again
 				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
@@ -978,7 +978,7 @@ string S3FileSystem::GetName() const {
 bool S3FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
                              FileOpener *opener) {
 	string trimmed_dir = directory;
-	StringUtil::RTrim(trimmed_dir, PathSeparator());
+	StringUtil::RTrim(trimmed_dir, PathSeparator(trimmed_dir));
 	auto glob_res = Glob(JoinPath(trimmed_dir, "**"), opener);
 
 	if (glob_res.empty()) {

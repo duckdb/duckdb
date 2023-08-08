@@ -368,6 +368,29 @@ void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	ChecksumAndWrite(buffer, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
 }
 
+void SingleFileBlockManager::Truncate() {
+	BlockManager::Truncate();
+	idx_t blocks_to_truncate = 0;
+	// reverse iterate over the free-list
+	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
+		auto block_id = *entry;
+		if (block_id + 1 != max_block) {
+			break;
+		}
+		blocks_to_truncate++;
+		max_block--;
+	}
+	if (blocks_to_truncate == 0) {
+		// nothing to truncate
+		return;
+	}
+	// truncate the file
+	for (idx_t i = 0; i < blocks_to_truncate; i++) {
+		free_list.erase(max_block + i);
+	}
+	handle->Truncate(BLOCK_START + max_block * Storage::BLOCK_ALLOC_SIZE);
+}
+
 vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<block_id_t> free_list_blocks;
 

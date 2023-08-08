@@ -1,0 +1,29 @@
+# name: test/sql/index/art/insert_update_delete/test_art_update.test
+# description: Test updates on the ART
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE INDEX i_index ON integers using art(j)
+
+statement ok
+INSERT INTO integers VALUES (1, 2), (2, 2)
+
+statement ok
+UPDATE integers SET j=10 WHERE i=1
+
+statement ok
+UPDATE integers SET j=10 WHERE rowid=0
+
+statement ok
+DELETE FROM integers WHERE rowid=1
+
+query II
+SELECT * FROM integers WHERE j>5
+----
+1	10

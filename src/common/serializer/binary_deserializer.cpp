@@ -5,6 +5,9 @@ namespace duckdb {
 void BinaryDeserializer::SetTag(const char *tag) {
 	current_tag = tag;
 	stack.back().read_field_count++;
+	if (stack.back().read_field_count > stack.back().expected_field_count) {
+		throw SerializationException("Attempting to read a required field, but field is missing");
+	}
 }
 
 //===--------------------------------------------------------------------===//

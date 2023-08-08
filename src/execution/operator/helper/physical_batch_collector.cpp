@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
+
 #include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	mutex glock;
@@ -23,7 +24,7 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	BatchedDataCollection data;
@@ -36,18 +37,20 @@ SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                     LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
-	auto &state = lstate_p.Cast<BatchCollectorLocalState>();
+SinkCombineResultType PhysicalBatchCollector::Combine(ExecutionContext &context,
+                                                      OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
+	auto &state = input.local_state.Cast<BatchCollectorLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
 	gstate.data.Merge(state.data);
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                  GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
+                                                  OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchCollectorGlobalState>();
 	auto collection = gstate.data.FetchCollection();
 	D_ASSERT(collection);
 	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(collection),

@@ -35,6 +35,6 @@ do
         exit 1
     fi
     # clean odbc trace file
-    rm $TRACE_FILE
+    rm -f $TRACE_FILE
 done < ${BASE_DUCKDB_DIR}/tools/odbc/test/psql_supported_tests
 

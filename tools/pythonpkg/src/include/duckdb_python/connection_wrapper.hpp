@@ -65,9 +65,6 @@ public:
 
 	static void LoadExtension(const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation",
-	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
-
 	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation",
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -112,6 +109,8 @@ public:
 	static shared_ptr<DuckDBPyConnection> Rollback(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static void Close(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static void Interrupt(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 

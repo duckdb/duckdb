@@ -10,6 +10,11 @@ LogicalUpdate::LogicalUpdate(TableCatalogEntry &table)
     : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE), table(table), table_index(0), return_chunk(false) {
 }
 
+LogicalUpdate::LogicalUpdate(ClientContext &context, const string &catalog, const string &schema, const string &table)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_UPDATE),
+      table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
+}
+
 void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
@@ -22,10 +27,11 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto &context = state.gstate.context;
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource(), context);
+	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
 	auto &catalog = Catalog::GetCatalog(context, info->catalog);
 
-	auto &table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
+	auto &table_catalog_entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->Cast<CreateTableInfo>().table);
 	auto result = make_uniq<LogicalUpdate>(table_catalog_entry);
 	result->table_index = reader.ReadRequired<idx_t>();
 	result->return_chunk = reader.ReadRequired<bool>();
