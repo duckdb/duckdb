@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 
+
 @pytest.fixture
 def con():
     conn = duckdb.connect()
