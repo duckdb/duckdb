@@ -101,10 +101,10 @@ MetadataPointer MetadataManager::FromDiskPointer(MetaBlockPointer pointer) {
 	auto block_id = pointer.GetBlockId();
 	auto index = pointer.GetBlockIndex();
 	auto entry = blocks.find(block_id);
-	if (entry == blocks.end()) {
-		throw InternalException("Failed to load metadata pointer (block id %llu, index %llu, pointer %llu)\n", block_id,
-		                        index, pointer.block_pointer);
-	}
+	if (entry == blocks.end()) { // LCOV_EXCL_START
+		throw InternalException("Failed to load metadata pointer (id %llu, idx %llu, ptr %llu)\n", block_id, index,
+		                        pointer.block_pointer);
+	} // LCOV_EXCL_STOP
 	MetadataPointer result;
 	result.block_index = block_id;
 	result.index = index;
