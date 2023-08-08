@@ -68,7 +68,7 @@ public:
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
-	unique_ptr<DuckDBPyRelation> Select(const py::args &args);
+	unique_ptr<DuckDBPyRelation> Select(const py::args &args, const py::kwargs &kwargs);
 
 	unique_ptr<DuckDBPyRelation> Filter(const py::object &expr);
 	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);
@@ -210,7 +210,7 @@ private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
-	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
+	string GenerateExpressionList(const string &function_name, vector<string> &&aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
 	void AssertResult() const;

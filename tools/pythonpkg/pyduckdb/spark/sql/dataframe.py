@@ -11,6 +11,7 @@ import duckdb
 
 if TYPE_CHECKING:
     from .session import SparkSession
+    from .group import GroupedData, Grouping
 
 from .functions import _to_column
 
@@ -247,6 +248,8 @@ class DataFrame:
         rel = self.relation.filter(cond)
         return DataFrame(rel, self.session)
 
+    where = filter
+
     def select(self, *cols) -> "DataFrame":
         cols = list(cols)
         if len(cols) == 1:
@@ -359,6 +362,88 @@ class DataFrame:
         if name not in self.relation.columns:
             raise AttributeError("'%s' object has no attribute '%s'" % (self.__class__.__name__, name))
         return Column(duckdb.ColumnExpression(name))
+
+    @overload
+    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":
+        ...
+
+    @overload
+    def groupBy(self, __cols: Union[List[Column], List[str]]) -> "GroupedData":
+        ...
+
+    def groupBy(self, *cols: "ColumnOrName") -> "GroupedData":  # type: ignore[misc]
+        """Groups the :class:`DataFrame` using the specified columns,
+        so we can run aggregation on them. See :class:`GroupedData`
+        for all the available aggregate functions.
+
+        :func:`groupby` is an alias for :func:`groupBy`.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        cols : list, str or :class:`Column`
+            columns to group by.
+            Each element should be a column name (string) or an expression (:class:`Column`)
+            or list of them.
+
+        Returns
+        -------
+        :class:`GroupedData`
+            Grouped data by given columns.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([
+        ...     (2, "Alice"), (2, "Bob"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+
+        Empty grouping columns triggers a global aggregation.
+
+        >>> df.groupBy().avg().show()
+        +--------+
+        |avg(age)|
+        +--------+
+        |    2.75|
+        +--------+
+
+        Group-by 'name', and specify a dictionary to calculate the summation of 'age'.
+
+        >>> df.groupBy("name").agg({"age": "sum"}).sort("name").show()
+        +-----+--------+
+        | name|sum(age)|
+        +-----+--------+
+        |Alice|       2|
+        |  Bob|       9|
+        +-----+--------+
+
+        Group-by 'name', and calculate maximum values.
+
+        >>> df.groupBy(df.name).max().sort("name").show()
+        +-----+--------+
+        | name|max(age)|
+        +-----+--------+
+        |Alice|       2|
+        |  Bob|       5|
+        +-----+--------+
+
+        Group-by 'name' and 'age', and calculate the number of rows in each group.
+
+        >>> df.groupBy(["name", df.age]).count().sort("name", "age").show()
+        +-----+---+-----+
+        | name|age|count|
+        +-----+---+-----+
+        |Alice|  2|    1|
+        |  Bob|  2|    2|
+        |  Bob|  5|    1|
+        +-----+---+-----+
+        """
+        from .group import GroupedData, Grouping
+
+        groups = Grouping(*cols)
+        return GroupedData(groups, self)
 
     @property
     def write(self) -> DataFrameWriter:

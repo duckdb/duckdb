@@ -121,6 +121,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
+	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions,
+	                                          const string &group_list);
 
 	// ALIAS
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);

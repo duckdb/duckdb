@@ -196,6 +196,11 @@ shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates, const
 	return this->Aggregate(aggregate_list, group_list);
 }
 
+shared_ptr<Relation> Relation::Aggregate(vector<unique_ptr<ParsedExpression>> expressions, const string &group_list) {
+	auto groups = Parser::ParseGroupByList(group_list, context.GetContext()->GetParserOptions());
+	return make_shared<AggregateRelation>(shared_from_this(), std::move(expressions), std::move(groups));
+}
+
 string Relation::GetAlias() {
 	return "relation";
 }

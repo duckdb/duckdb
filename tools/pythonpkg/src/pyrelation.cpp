@@ -56,7 +56,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	return ProjectFromExpression(expr);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(const py::args &args) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(const py::args &args, const py::kwargs &kwargs) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto arg : args) {
 		shared_ptr<DuckDBPyExpression> py_expr;
@@ -68,7 +68,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(const py::args &args) {
 		expressions.push_back(std::move(expr));
 	}
 	vector<string> empty_aliases;
-	return make_uniq<DuckDBPyRelation>(rel->Select(std::move(expressions), empty_aliases));
+	auto groups = kwargs.contains("groups") ? std::string(py::cast<py::str>(kwargs["groups"])) : "";
+	if (groups.empty()) {
+		// No groups provided
+		return make_uniq<DuckDBPyRelation>(rel->Select(std::move(expressions), empty_aliases));
+	}
+	return make_uniq<DuckDBPyRelation>(rel->Aggregate(std::move(expressions), groups));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object &obj) {
@@ -303,24 +308,36 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
                                                 const string &groups, const string &function_parameter,
                                                 const string &projected_columns, const string &window_function) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
-	return GenerateExpressionList(function_name, input, groups, function_parameter, projected_columns, window_function);
+	return GenerateExpressionList(function_name, std::move(input), groups, function_parameter, projected_columns,
+	                              window_function);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const vector<string> &input,
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vector<string> &&input,
                                                 const string &groups, const string &function_parameter,
                                                 const string &projected_columns, const string &window_function) {
 	string expr;
-	if (!projected_columns.empty()) {
-		expr = projected_columns + ", ";
-	}
-	for (idx_t i = 0; i < input.size(); i++) {
-		if (function_parameter.empty()) {
-			expr += function_name + "(" + input[i] + ") " + window_function;
-		} else {
-			expr += function_name + "(" + input[i] + "," + function_parameter + ")" + window_function;
-		}
+	expr = projected_columns;
 
-		if (i < input.size() - 1) {
+	if (StringUtil::CIEquals("count", function_name) && input.empty()) {
+		// Insert an artificial '*'
+		input.push_back("*");
+	}
+
+	if (!projected_columns.empty() && !input.empty()) {
+		expr += ", ";
+	}
+
+	for (idx_t i = 0; i < input.size(); i++) {
+		// string_agg(<col>
+		expr += function_name + "(" + input[i];
+		if (!function_parameter.empty()) {
+			// string_agg(<col>, <sep>
+			expr += "," + function_parameter;
+		}
+		// string_agg(<col, <sep>) OVER ()
+		expr += ") " + window_function;
+
+		if (i + 1 != input.size()) {
 			expr += ",";
 		}
 	}
