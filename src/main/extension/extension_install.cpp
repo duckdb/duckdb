@@ -117,7 +117,8 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
-void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install, string repository) {
+void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
+                                       string repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -126,7 +127,8 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
 }
 
-void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install, string repository) {
+void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
+                                       string repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -156,7 +158,8 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 }
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-                                               const string &local_path, const string &extension, bool force_install, string repository) {
+                                               const string &local_path, const string &extension, bool force_install,
+                                               string repository) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -224,13 +227,13 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		string file = url;
 		if (!fs.FileExists(file)) {
 			// check for non-gzipped variant
-			file = file.substr(0, file.size()-3);
+			file = file.substr(0, file.size() - 3);
 			if (!fs.FileExists(file)) {
 				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
-		auto testData = std::unique_ptr<unsigned char[]>{ new unsigned char[read_handle->GetFileSize()] };
+		auto testData = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(testData.get(), read_handle->GetFileSize());
 		WriteExtensionFileToDisk(fs, temp_path, (void *)testData.get(), read_handle->GetFileSize());
 		fs.MoveFile(temp_path, local_extension_path);

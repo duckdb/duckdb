@@ -190,7 +190,8 @@ struct CustomExtensionRepository {
 
 struct AutoloadExtensionRepository {
 	static constexpr const char *Name = "autoload_extension_repository";
-	static constexpr const char *Description = "Overrides the custom endpoint for extension installation on autoloading";
+	static constexpr const char *Description =
+	    "Overrides the custom endpoint for extension installation on autoloading";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

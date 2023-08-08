@@ -1,6 +1,6 @@
 # name: test/extension/autoloading_extension.test
 # description: test the autoloading mechanism for extensions
-# group: [test]
+# group: [extension]
 
 require-env LOCAL_EXTENSION_REPOSITORY
 

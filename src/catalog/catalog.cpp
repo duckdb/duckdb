@@ -453,7 +453,8 @@ static void TryAutoloadExtension(ClientContext &context, const string &extension
 		ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo);
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
-		auto new_exception_message = "Attempted to automatically install the '" + extension_name + "' extension, but the following error occured: (" + e.RawMessage() + ") ";
+		auto new_exception_message = "Attempted to automatically install the '" + extension_name +
+		                             "' extension, but the following error occured: (" + e.RawMessage() + ") ";
 		throw Exception(e.type, new_exception_message);
 	}
 }
@@ -622,7 +623,8 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 			}
 		}
 		// When the autoloader autoloads an extension, the entry must be available.
-		throw InternalException(error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
+		throw InternalException(
+		    error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
@@ -658,7 +660,8 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 			}
 		}
 		// When the autoloader autoloads an extension, the entry must be available.
-		throw InternalException(error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
+		throw InternalException(
+		    error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
