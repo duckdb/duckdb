@@ -20,6 +20,7 @@
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/helper.hpp"
@@ -97,6 +98,7 @@ public:
 	// ORDER
 	DUCKDB_API shared_ptr<Relation> Order(const string &expression);
 	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
+	DUCKDB_API shared_ptr<Relation> Order(vector<OrderByNode> expressions);
 
 	// JOIN operation
 	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,

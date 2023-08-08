@@ -18,6 +18,7 @@
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
+#include "duckdb/common/enums/order_type.hpp"
 
 namespace duckdb {
 
@@ -85,6 +86,16 @@ public:
 	shared_ptr<DuckDBPyExpression> In(const py::args &args);
 	shared_ptr<DuckDBPyExpression> NotIn(const py::args &args);
 
+	// Order modifiers
+
+	shared_ptr<DuckDBPyExpression> Ascending();
+	shared_ptr<DuckDBPyExpression> Descending();
+
+	// Null order modifiers
+
+	shared_ptr<DuckDBPyExpression> NullsFirst();
+	shared_ptr<DuckDBPyExpression> NullsLast();
+
 public:
 	const ParsedExpression &GetExpression() const;
 
@@ -117,6 +128,10 @@ public:
 
 private:
 	unique_ptr<ParsedExpression> expression;
+
+public:
+	OrderByNullType null_order = OrderByNullType::ORDER_DEFAULT;
+	OrderType order_type = OrderType::ORDER_DEFAULT;
 };
 
 } // namespace duckdb

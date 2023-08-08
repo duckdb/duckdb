@@ -172,6 +172,38 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NotIn(const py::args &args) {
 	return in_expr->Not();
 }
 
+// Order modifiers
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Ascending() {
+	auto expr = GetExpression().Copy();
+	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	py_expr->order_type = OrderType::ASCENDING;
+	return py_expr;
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Descending() {
+	auto expr = GetExpression().Copy();
+	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	py_expr->order_type = OrderType::DESCENDING;
+	return py_expr;
+}
+
+// Null order modifiers
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NullsFirst() {
+	auto expr = GetExpression().Copy();
+	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	py_expr->null_order = OrderByNullType::NULLS_FIRST;
+	return py_expr;
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::NullsLast() {
+	auto expr = GetExpression().Copy();
+	auto py_expr = make_shared<DuckDBPyExpression>(std::move(expr));
+	py_expr->null_order = OrderByNullType::NULLS_LAST;
+	return py_expr;
+}
+
 // Unary operators
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {

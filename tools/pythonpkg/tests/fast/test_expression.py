@@ -289,7 +289,7 @@ class TestExpression(object):
         col = col.alias('b')
 
         rel2 = rel.select(col)
-        rel2.columns == ['b']
+        assert rel2.columns == ['b']
 
     def test_star_expression(self):
         con = duckdb.connect()
@@ -516,3 +516,40 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(3, 'c'), (4, 'a')]
+
+    def test_sort(self):
+        con = duckdb.connect()
+        rel = con.sql(
+            """
+            select * from (VALUES
+                (1, 'a'),
+                (2, 'b'),
+                (3, NULL),
+                (4, 'c'),
+                (5, 'a')
+            ) tbl(a, b)
+        """
+        )
+        # Ascending sort order
+
+        a = ColumnExpression("a")
+        b = ColumnExpression("b")
+
+        rel2 = rel.sort(a.asc())
+        res = rel2.a.fetchall()
+        assert res == [(1,), (2,), (3,), (4,), (5,)]
+
+        # Descending sort order
+        rel2 = rel.sort(a.desc())
+        res = rel2.a.fetchall()
+        assert res == [(5,), (4,), (3,), (2,), (1,)]
+
+        # Nulls first
+        rel2 = rel.sort(b.desc().nulls_first())
+        res = rel2.b.fetchall()
+        assert res == [(None,), ('a',), ('a',), ('b',), ('c',)]
+
+        # Nulls last
+        rel2 = rel.sort(b.desc().nulls_last())
+        res = rel2.b.fetchall()
+        assert res == [('a',), ('a',), ('b',), ('c',), (None,)]
