@@ -30,17 +30,17 @@ from typing_extensions import Literal, Protocol
 import datetime
 import decimal
 
-from pyduckdb.spark._typing import PrimitiveType
-import pyduckdb.spark.sql.types
-from pyduckdb.spark.sql.column import Column
+from .._typing import PrimitiveType
+from . import types
+from .column import Column
 
 ColumnOrName = Union[Column, str]
 ColumnOrName_ = TypeVar("ColumnOrName_", bound=ColumnOrName)
 DecimalLiteral = decimal.Decimal
 DateTimeLiteral = Union[datetime.datetime, datetime.date]
 LiteralType = PrimitiveType
-AtomicDataTypeOrString = Union[pyduckdb.spark.sql.types.AtomicType, str]
-DataTypeOrString = Union[pyduckdb.spark.sql.types.DataType, str]
+AtomicDataTypeOrString = Union[types.AtomicType, str]
+DataTypeOrString = Union[types.DataType, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
 
 AtomicValue = TypeVar(
@@ -54,7 +54,7 @@ AtomicValue = TypeVar(
     float,
 )
 
-RowLike = TypeVar("RowLike", List[Any], Tuple[Any, ...], pyduckdb.spark.sql.types.Row)
+RowLike = TypeVar("RowLike", List[Any], Tuple[Any, ...], types.Row)
 
 SQLBatchedUDFType = Literal[100]
 
@@ -65,7 +65,7 @@ class SupportsOpen(Protocol):
 
 
 class SupportsProcess(Protocol):
-    def process(self, row: pyduckdb.spark.sql.types.Row) -> None:
+    def process(self, row: types.Row) -> None:
         ...
 
 
@@ -80,7 +80,7 @@ class UserDefinedFunctionLike(Protocol):
     deterministic: bool
 
     @property
-    def returnType(self) -> pyduckdb.spark.sql.types.DataType:
+    def returnType(self) -> types.DataType:
         ...
 
     def __call__(self, *args: ColumnOrName) -> Column:

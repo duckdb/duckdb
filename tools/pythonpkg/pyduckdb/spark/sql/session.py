@@ -2,19 +2,19 @@ from typing import Optional, List, Tuple, Any, Union, Iterable, ForwardRef, TYPE
 import uuid
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.catalog import Catalog
+    from .catalog import Catalog
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-from pyduckdb.spark.exception import ContributionsAcceptedError
+from ..exception import ContributionsAcceptedError
 
-from pyduckdb.spark.sql.types import StructType, AtomicType, DataType
-from pyduckdb.spark.conf import SparkConf
-from pyduckdb.spark.sql.dataframe import DataFrame
-from pyduckdb.spark.sql.conf import RuntimeConfig
-from pyduckdb.spark.sql.readwriter import DataFrameReader
-from pyduckdb.spark.context import SparkContext
-from pyduckdb.spark.sql.udf import UDFRegistration
-from pyduckdb.spark.sql.streaming import DataStreamReader
+from .types import StructType, AtomicType, DataType
+from ..conf import SparkConf
+from .dataframe import DataFrame
+from .conf import RuntimeConfig
+from .readwriter import DataFrameReader
+from ..context import SparkContext
+from .udf import UDFRegistration
+from .streaming import DataStreamReader
 import duckdb
 
 # In spark:

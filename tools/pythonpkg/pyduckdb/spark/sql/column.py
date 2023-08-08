@@ -1,7 +1,7 @@
 from typing import Union, TYPE_CHECKING, Any, cast, Callable, Tuple
 from ..exception import ContributionsAcceptedError
 
-from pyduckdb.spark.sql.types import DataType
+from .types import DataType
 
 if TYPE_CHECKING:
     from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
@@ -17,6 +17,21 @@ def _func_op(name: str, doc: str = "") -> Callable[["Column"], "Column"]:
     def _(self: "Column") -> "Column":
         njc = getattr(self.expr, name)()
         return Column(njc)
+
+    _.__doc__ = doc
+    return _
+
+
+def _unary_op(
+    name: str,
+    doc: str = "unary operator",
+) -> Callable[["Column"], "Column"]:
+    """Create a method for given unary operator"""
+
+    def _(self: "Column") -> "Column":
+        # Call the function identified by 'name' on the internal Expression object
+        expr = getattr(self.expr, name)()
+        return Column(expr)
 
     _.__doc__ = doc
     return _
@@ -254,3 +269,89 @@ class Column:
     ilike = _bin_func("~~*")
     startswith = _bin_func("starts_with")
     endswith = _bin_func("suffix")
+
+    # order
+    _asc_doc = """
+    Returns a sort expression based on the ascending order of the column.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.asc()).collect()
+    [Row(name='Alice'), Row(name='Tom')]
+    """
+    _asc_nulls_first_doc = """
+    Returns a sort expression based on ascending order of the column, and null values
+    return before non-null values.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), (None, 60), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.asc_nulls_first()).collect()
+    [Row(name=None), Row(name='Alice'), Row(name='Tom')]
+
+    """
+    _asc_nulls_last_doc = """
+    Returns a sort expression based on ascending order of the column, and null values
+    appear after non-null values.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), (None, 60), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.asc_nulls_last()).collect()
+    [Row(name='Alice'), Row(name='Tom'), Row(name=None)]
+
+    """
+    _desc_doc = """
+    Returns a sort expression based on the descending order of the column.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.desc()).collect()
+    [Row(name='Tom'), Row(name='Alice')]
+    """
+    _desc_nulls_first_doc = """
+    Returns a sort expression based on the descending order of the column, and null values
+    appear before non-null values.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), (None, 60), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.desc_nulls_first()).collect()
+    [Row(name=None), Row(name='Tom'), Row(name='Alice')]
+
+    """
+    _desc_nulls_last_doc = """
+    Returns a sort expression based on the descending order of the column, and null values
+    appear after non-null values.
+
+    Examples
+    --------
+    >>> from pyspark.sql import Row
+    >>> df = spark.createDataFrame([('Tom', 80), (None, 60), ('Alice', None)], ["name", "height"])
+    >>> df.select(df.name).orderBy(df.name.desc_nulls_last()).collect()
+    [Row(name='Tom'), Row(name='Alice'), Row(name=None)]
+    """
+
+    asc = _unary_op("asc", _asc_doc)
+    desc = _unary_op("desc", _desc_doc)
+    nulls_first = _unary_op("null_first")
+    nulls_last = _unary_op("null_last")
+
+    def asc_nulls_first(self) -> "Column":
+        return self.asc().nulls_first()
+
+    def asc_nulls_last(self) -> "Column":
+        return self.asc().nulls_last()
+
+    def desc_nulls_first(self) -> "Column":
+        return self.desc().nulls_first()
+
+    def desc_nulls_last(self) -> "Column":
+        return self.desc().nulls_last()

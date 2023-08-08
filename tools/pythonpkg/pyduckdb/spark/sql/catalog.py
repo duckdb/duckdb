@@ -1,5 +1,5 @@
 from typing import List, NamedTuple, Optional
-from pyduckdb.spark.sql.session import SparkSession
+from .session import SparkSession
 
 
 class Database(NamedTuple):

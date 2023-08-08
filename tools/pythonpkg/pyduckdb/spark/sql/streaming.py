@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING, Optional, Union
-from pyduckdb.spark.sql.types import StructType
+from .types import StructType
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.dataframe import DataFrame
-    from pyduckdb.spark.sql.session import SparkSession
+    from .dataframe import DataFrame
+    from .session import SparkSession
 
 PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]

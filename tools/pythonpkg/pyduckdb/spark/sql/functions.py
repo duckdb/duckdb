@@ -1,8 +1,6 @@
 from .column import Column
 from typing import Any
 
-import duckdb
-
 from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
 from ._typing import ColumnOrName
 
@@ -35,7 +33,7 @@ def _invoke_function(function: str, *arguments):
     return Column(FunctionExpression(function, *arguments))
 
 
-def _to_column(col: ColumnOrName) -> Column:
+def _to_column(col: ColumnOrName) -> Expression:
     return col.expr if isinstance(col, Column) else ColumnExpression(col)
 
 

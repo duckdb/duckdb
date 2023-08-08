@@ -1,6 +1,6 @@
 from ..exception import ContributionsAcceptedError
 
-from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload
+from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict
 from duckdb import StarExpression, ColumnExpression
 
 from .readwriter import DataFrameWriter
@@ -11,6 +11,8 @@ import duckdb
 
 if TYPE_CHECKING:
     from .session import SparkSession
+
+from .functions import _to_column
 
 
 class DataFrame:
@@ -23,7 +25,35 @@ class DataFrame:
         self.relation.show()
 
     def createOrReplaceTempView(self, name: str) -> None:
-        raise NotImplementedError
+        """Creates or replaces a local temporary view with this :class:`DataFrame`.
+
+        The lifetime of this temporary table is tied to the :class:`SparkSession`
+        that was used to create this :class:`DataFrame`.
+
+        Parameters
+        ----------
+        name : str
+            Name of the view.
+
+        Examples
+        --------
+        Create a local temporary view named 'people'.
+
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")], schema=["age", "name"])
+        >>> df.createOrReplaceTempView("people")
+
+        Replace the local temporary view.
+
+        >>> df2 = df.filter(df.age > 3)
+        >>> df2.createOrReplaceTempView("people")
+        >>> df3 = spark.sql("SELECT * FROM people")
+        >>> sorted(df3.collect()) == sorted(df2.collect())
+        True
+        >>> spark.catalog.dropTempView("people")
+        True
+
+        """
+        self.relation.to_view(name)
 
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError
@@ -54,6 +84,108 @@ class DataFrame:
             cols.append(col.expr.alias(columnName))
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
+
+    def sort(self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
+        """Returns a new :class:`DataFrame` sorted by the specified column(s).
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        cols : str, list, or :class:`Column`, optional
+             list of :class:`Column` or column names to sort by.
+
+        Other Parameters
+        ----------------
+        ascending : bool or list, optional, default True
+            boolean or list of boolean.
+            Sort ascending vs. descending. Specify list for multiple sort orders.
+            If a list is specified, the length of the list must equal the length of the `cols`.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Sorted DataFrame.
+
+        Examples
+        --------
+        >>> from pyspark.sql.functions import desc, asc
+        >>> df = spark.createDataFrame([
+        ...     (2, "Alice"), (5, "Bob")], schema=["age", "name"])
+
+        Sort the DataFrame in ascending order.
+
+        >>> df.sort(asc("age")).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  2|Alice|
+        |  5|  Bob|
+        +---+-----+
+
+        Sort the DataFrame in descending order.
+
+        >>> df.sort(df.age.desc()).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  5|  Bob|
+        |  2|Alice|
+        +---+-----+
+        >>> df.orderBy(df.age.desc()).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  5|  Bob|
+        |  2|Alice|
+        +---+-----+
+        >>> df.sort("age", ascending=False).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  5|  Bob|
+        |  2|Alice|
+        +---+-----+
+
+        Specify multiple columns
+
+        >>> df = spark.createDataFrame([
+        ...     (2, "Alice"), (2, "Bob"), (5, "Bob")], schema=["age", "name"])
+        >>> df.orderBy(desc("age"), "name").show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  5|  Bob|
+        |  2|Alice|
+        |  2|  Bob|
+        +---+-----+
+
+        Specify multiple columns for sorting order at `ascending`.
+
+        >>> df.orderBy(["age", "name"], ascending=[False, False]).show()
+        +---+-----+
+        |age| name|
+        +---+-----+
+        |  5|  Bob|
+        |  2|  Bob|
+        |  2|Alice|
+        +---+-----+
+        """
+        if kwargs:
+            raise ContributionsAcceptedError
+        columns = []
+        for col in cols:
+            if isinstance(col, (str, Column)):
+                columns.append(_to_column(col))
+            else:
+                raise ContributionsAcceptedError
+        rel = self.relation.sort(*columns)
+        return DataFrame(rel, self.session)
+
+    orderBy = sort
 
     def filter(self, condition: "ColumnOrName") -> "DataFrame":
         """Filters rows using the given condition.
