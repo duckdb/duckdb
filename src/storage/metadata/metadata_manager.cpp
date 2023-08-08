@@ -148,15 +148,19 @@ idx_t MetadataManager::BlockCount() {
 }
 
 void MetadataManager::Flush() {
+	const idx_t total_metadata_size = MetadataManager::METADATA_BLOCK_SIZE * MetadataManager::METADATA_BLOCK_COUNT;
 	// write the blocks of the metadata manager to disk
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
-		// FIXME: zero-initialize any free blocks
-		//		for(auto &free_block : free_blocks) {
-		//			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
-		//MetadataManager::METADATA_BLOCK_SIZE);
-		//		}
+		// zero-initialize any free blocks
+		for (auto free_block : block.free_blocks) {
+			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
+			       MetadataManager::METADATA_BLOCK_SIZE);
+		}
+		// there are a few bytes left-over at the end of the block, zero-initialize them
+		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);
+		// write the block to disk
 		block_manager.Write(handle.GetFileBuffer(), block.block_id);
 	}
 }
