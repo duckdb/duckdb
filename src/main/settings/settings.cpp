@@ -527,6 +527,37 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Autoload Extension Repository
+//===--------------------------------------------------------------------===//
+void AutoloadExtensionRepository::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).autoload_extension_repo = ClientConfig().autoload_extension_repo;
+}
+
+void AutoloadExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).autoload_extension_repo = StringUtil::Lower(input.ToString());
+}
+
+Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).autoload_extension_repo);
+}
+
+//===--------------------------------------------------------------------===//
+// Autoload Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoloadKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoload_known_extensions = input.GetValue<bool>();
+}
+
+void AutoloadKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoload_known_extensions = DBConfig().options.autoload_known_extensions;
+}
+
+Value AutoloadKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoload_known_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {

@@ -301,6 +301,11 @@ public:
 
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
+	//! Autoload the extension required for `configuration_name` or throw a CatalogException
+	static void AutoloadExtensionOrThrowForConfig(ClientContext &context, const string &configuration_name);
+	//! Autoload the extension required for `function_name` or throw a CatalogException
+	static bool AutoLoadExtensionForFunction(ClientContext &context, CatalogType type, const string &function_name);
+
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;

@@ -95,6 +95,8 @@ struct DBConfigOptions {
 	bool use_direct_io = false;
 	//! Whether extensions should be loaded on start-up
 	bool load_extensions = true;
+	//! Whether known extensions are allowed to be automatically installed and loaded when a query depends on them
+	bool autoload_known_extensions = true;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
 	//! The maximum amount of CPU threads used by the database system. Default: all available.

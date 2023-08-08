@@ -2598,7 +2598,7 @@ static const yytype_uint16 yyrline[] =
      121,   122,   123,   129,   134,   142,   143,    10,    16,    22,
       28,    38,    39,    47,    58,    70,    78,    86,    93,   103,
      105,   111,   115,   119,   134,   141,   142,   143,   147,   148,
-       7,    14,    20,    26,    33,    42,    43,    45,    46,     8,
+       7,    15,    22,    29,    36,    45,    46,    48,    49,     8,
       22,    36,    48,    56,    70,    71,    72,    73,    74,    87,
       88,    93,    94,    98,    99,     7,    18,    31,    35,    42,
       53,    54,    60,    61,     9,    19,     7,    18,    25,    34,
@@ -28758,33 +28758,36 @@ yyreduce:
     {
 					PGLoadStmt *n = makeNode(PGLoadStmt);
 					n->filename = (yyvsp[(2) - (2)].str);
+					n->repository = "";
 					n->load_type = PG_LOAD_TYPE_LOAD;
 					(yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1351:
-#line 14 "third_party/libpg_query/grammar/statements/load.y"
+#line 15 "third_party/libpg_query/grammar/statements/load.y"
     {
                     PGLoadStmt *n = makeNode(PGLoadStmt);
                     n->filename = (yyvsp[(2) - (2)].str);
+                    n->repository = "";
                     n->load_type = PG_LOAD_TYPE_INSTALL;
                     (yyval.node) = (PGNode *)n;
 				;}
     break;
 
   case 1352:
-#line 20 "third_party/libpg_query/grammar/statements/load.y"
+#line 22 "third_party/libpg_query/grammar/statements/load.y"
     {
                       PGLoadStmt *n = makeNode(PGLoadStmt);
                       n->filename = (yyvsp[(3) - (3)].str);
+                      n->repository = "";
                       n->load_type = PG_LOAD_TYPE_FORCE_INSTALL;
                       (yyval.node) = (PGNode *)n;
                 ;}
     break;
 
   case 1353:
-#line 26 "third_party/libpg_query/grammar/statements/load.y"
+#line 29 "third_party/libpg_query/grammar/statements/load.y"
     {
                       PGLoadStmt *n = makeNode(PGLoadStmt);
                       n->filename = (yyvsp[(2) - (4)].str);
@@ -28795,7 +28798,7 @@ yyreduce:
     break;
 
   case 1354:
-#line 33 "third_party/libpg_query/grammar/statements/load.y"
+#line 36 "third_party/libpg_query/grammar/statements/load.y"
     {
                         PGLoadStmt *n = makeNode(PGLoadStmt);
                         n->filename = (yyvsp[(3) - (5)].str);
@@ -28806,22 +28809,22 @@ yyreduce:
     break;
 
   case 1355:
-#line 42 "third_party/libpg_query/grammar/statements/load.y"
-    { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
-    break;
-
-  case 1356:
-#line 43 "third_party/libpg_query/grammar/statements/load.y"
-    { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
-    break;
-
-  case 1357:
 #line 45 "third_party/libpg_query/grammar/statements/load.y"
     { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
     break;
 
-  case 1358:
+  case 1356:
 #line 46 "third_party/libpg_query/grammar/statements/load.y"
+    { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
+    break;
+
+  case 1357:
+#line 48 "third_party/libpg_query/grammar/statements/load.y"
+    { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
+    break;
+
+  case 1358:
+#line 49 "third_party/libpg_query/grammar/statements/load.y"
     { (yyval.str) = (yyvsp[(1) - (1)].str); ;}
     break;
 
@@ -29481,7 +29484,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 29485 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 29488 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);

@@ -219,6 +219,24 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		throw IOException("No slash in URL template");
 	}
 
+	// Special case to install extension from a local file, useful for testing
+	if (!StringUtil::Contains(endpoint, "http://")) {
+		string file = url;
+		if (!fs.FileExists(file)) {
+			// check for non-gzipped variant
+			file = file.substr(0, file.size()-3);
+			if (!fs.FileExists(file)) {
+				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			}
+		}
+		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
+		auto testData = std::unique_ptr<unsigned char[]>{ new unsigned char[read_handle->GetFileSize()] };
+		read_handle->Read(testData.get(), read_handle->GetFileSize());
+		WriteExtensionFileToDisk(fs, temp_path, (void *)testData.get(), read_handle->GetFileSize());
+		fs.MoveFile(temp_path, local_extension_path);
+		return;
+	}
+
 	// Push the substring [last, next) on to splits
 	auto hostname_without_http = no_http.substr(0, next);
 	auto url_local_part = no_http.substr(next);

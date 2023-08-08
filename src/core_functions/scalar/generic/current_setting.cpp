@@ -51,7 +51,10 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 	auto key = StringUtil::Lower(key_str);
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		throw Catalog::UnrecognizedConfigurationError(context, key);
+		Catalog::AutoloadExtensionOrThrowForConfig(context, key);
+		// If autoloader didn't throw, the config is now available
+		auto res = context.TryGetCurrentSetting(key, val);
+		D_ASSERT(res);
 	}
 
 	bound_function.return_type = val.type();

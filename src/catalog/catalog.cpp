@@ -11,6 +11,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
@@ -447,6 +448,47 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+static void TryAutoloadExtension(ClientContext &context, const string &extension_name) {
+	if (!extension_name.empty()) {
+		try {
+			ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo);
+			ExtensionHelper::LoadExternalExtension(context, extension_name);
+		} catch (Exception &e) {
+			auto new_exception_message = "Attempted to automatically install the '" + extension_name + "' extension, but the following error occured: (" + e.RawMessage() + ") ";
+			throw Exception(e.type, new_exception_message);
+		}
+	}
+}
+
+void Catalog::AutoloadExtensionOrThrowForConfig(ClientContext &context, const string &configuration_name) {
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+	auto &dbconfig = DBConfig::GetConfig(context);
+	if (dbconfig.options.autoload_known_extensions) {
+		auto extension_name = FindExtensionForSetting(configuration_name);
+		TryAutoloadExtension(context, extension_name);
+		return;
+	}
+#endif
+
+	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
+}
+
+bool Catalog::AutoLoadExtensionForFunction(ClientContext &context, CatalogType type, const string &function_name) {
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+	auto &dbconfig = DBConfig::GetConfig(context);
+	if (dbconfig.options.autoload_known_extensions) {
+		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
+		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
+			auto extension_name = FindExtensionForFunction(function_name);
+			TryAutoloadExtension(context, extension_name);
+			return true;
+		}
+	}
+#endif
+
+	return false;
+}
+
 CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
 	// check if the setting exists in any extensions
 	auto extension_name = FindExtensionForSetting(name);
@@ -554,6 +596,33 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 			schemas.insert(*result.schema);
 		}
 	}
+
+	// Try autoloading an extension containing the entry
+	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
+	if (autoloaded) {
+		// An extension was autoloaded, the function is now available
+		if (IsInvalidSchema(schema)) {
+			// try all schemas for this catalog
+			auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
+			for (auto &entry : entries) {
+				auto &candidate_schema = entry.schema;
+				auto transaction = GetCatalogTransaction(context);
+				auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
+				if (result.Found()) {
+					return result;
+				}
+			}
+		} else {
+			auto transaction = GetCatalogTransaction(context);
+			auto result = LookupEntryInternal(transaction, type, schema, name);
+			if (result.Found()) {
+				return result;
+			}
+		}
+		// When the autoloader autoloads an extension, the entry must be available.
+		throw InternalException(error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
+	}
+
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr};
 	}
@@ -574,6 +643,22 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 			schemas.insert(*result.schema);
 		}
 	}
+
+	// Try autoloading an extension containing the entry
+	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
+	if (autoloaded) {
+		// An extension was autoloaded, the function is now available
+		for (auto &lookup : lookups) {
+			auto transaction = lookup.catalog.GetCatalogTransaction(context);
+			auto result = lookup.catalog.LookupEntryInternal(transaction, type, lookup.schema, name);
+			if (result.Found()) {
+				return result;
+			}
+		}
+		// When the autoloader autoloads an extension, the entry must be available.
+		throw InternalException(error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
+	}
+
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr};
 	}
