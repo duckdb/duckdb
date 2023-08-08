@@ -491,8 +491,9 @@ int32_t Date::ExtractDayOfTheYear(date_t date) {
 }
 
 int64_t Date::ExtractJulianDay(date_t date) {
-	const auto julian_epoch = Date::FromDate(-4713, 11, 24);
-	return date.days - julian_epoch.days;
+	// Julian Day 0 is (-4713, 11, 24) in the proleptic Gregorian calendar.
+	static const auto JULIAN_EPOCH = -2440588;
+	return date.days - JULIAN_EPOCH;
 }
 
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {
