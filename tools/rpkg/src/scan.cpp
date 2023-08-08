@@ -30,17 +30,17 @@ static void AppendColumnSegment(SRC *source_data, idx_t sexp_offset, Vector &res
 	}
 }
 
-void AppendListColumnSegment(SEXP *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
+void AppendListColumnSegment(const RType &rtype, SEXP *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
 	source_data += sexp_offset;
 	auto &result_mask = FlatVector::Validity(result);
+	auto child_rtype = rtype.GetListChildType();
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RSexpType::IsNull(val)) {
 			result_mask.SetInvalid(i);
 		} else {
 			auto result_data = FlatVector::GetData<list_entry_t>(result);
-			// FIXME: Use vec_size() equivalent here
-			auto len = Rf_length(val);
+			auto len = RApiTypes::GetVecSize(child_rtype, val);
 			result_data[i].offset = ListVector::GetListSize(result);
 			for (R_len_t i = 0; i < len; i++) {
 				auto item = RApiTypes::SexpToValue(val, i);
@@ -181,7 +181,7 @@ void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t co
 	}
 	case RTypeId::LIST: {
 		auto data_ptr = (SEXP *)coldata_ptr;
-		AppendListColumnSegment(data_ptr, sexp_offset, v, this_count);
+		AppendListColumnSegment(rtype, data_ptr, sexp_offset, v, this_count);
 		break;
 	}
 	default:
