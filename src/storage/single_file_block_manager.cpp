@@ -467,6 +467,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			writer.Write<uint32_t>(entry.second);
 		}
 		GetMetadataManager().Serialize(writer);
+		writer.Flush();
 	} else {
 		// no blocks in the free list
 		header.free_list = DConstants::INVALID_INDEX;

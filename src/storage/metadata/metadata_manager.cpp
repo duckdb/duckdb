@@ -84,7 +84,6 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 }
 
 MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
-	D_ASSERT(blocks[pointer.block_index].block_id == pointer.block_index);
 	idx_t block_pointer = idx_t(pointer.block_index);
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
@@ -92,7 +91,6 @@ MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32
 
 block_id_t MetaBlockPointer::GetBlockId() {
 	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));
-	;
 }
 
 uint32_t MetaBlockPointer::GetBlockIndex() {
@@ -156,12 +154,19 @@ void MetadataManager::Flush() {
 		// zero-initialize any free blocks
 		for (auto free_block : block.free_blocks) {
 			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
-			       MetadataManager::METADATA_BLOCK_SIZE);
+				   MetadataManager::METADATA_BLOCK_SIZE);
 		}
 		// there are a few bytes left-over at the end of the block, zero-initialize them
 		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);
-		// write the block to disk
-		block_manager.Write(handle.GetFileBuffer(), block.block_id);
+		D_ASSERT(kv.first == block.block_id);
+		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
+			// temporary block - convert to persistent
+			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block));
+		} else {
+			// already a persistent block - only need to write it
+			D_ASSERT(block.block->BlockId() == block.block_id);
+			block_manager.Write(handle.GetFileBuffer(), block.block_id);
+		}
 	}
 }
 
@@ -238,8 +243,8 @@ void MetadataManager::MarkBlocksAsModified() {
 			idx_t new_free_blocks = current_free_blocks | modified_list;
 			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
 				// if new free_blocks is all blocks - mark entire block as modified
-				block_manager.MarkBlockAsModified(block_id);
 				blocks.erase(entry);
+				block_manager.MarkBlockAsModified(block_id);
 			} else {
 				// set the new set of free blocks
 				block.FreeBlocksFromInteger(new_free_blocks);

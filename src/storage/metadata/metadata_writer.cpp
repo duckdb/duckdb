@@ -6,6 +6,15 @@ namespace duckdb {
 MetadataWriter::MetadataWriter(MetadataManager &manager) : manager(manager), capacity(0), offset(0) {
 }
 
+MetadataWriter::~MetadataWriter() {
+	// If there's an exception during checkpoint, this can get destroyed without
+	// flushing the data...which is fine, because none of the unwritten data
+	// will be referenced.
+	//
+	// Otherwise, we should have explicitly flushed (and thereby nulled the block).
+	D_ASSERT(!block.handle.IsValid() || Exception::UncaughtException());
+}
+
 BlockPointer MetadataWriter::GetBlockPointer() {
 	return MetadataManager::ToBlockPointer(GetMetaBlockPointer());
 }
@@ -63,6 +72,7 @@ void MetadataWriter::Flush() {
 		// clear remaining bytes of block (if any)
 		memset(Ptr(), 0, capacity - offset);
 	}
+	block.handle.Destroy();
 }
 
 data_ptr_t MetadataWriter::BasePtr() {

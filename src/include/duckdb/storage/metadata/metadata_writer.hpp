@@ -15,6 +15,7 @@ namespace duckdb {
 class MetadataWriter : public Serializer {
 public:
 	explicit MetadataWriter(MetadataManager &manager);
+	~MetadataWriter();
 
 public:
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
