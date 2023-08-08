@@ -167,6 +167,25 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Order(const string &expr) {
 	return make_uniq<DuckDBPyRelation>(rel->Order(expr));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sort(const py::args &args) {
+	vector<OrderByNode> order_nodes;
+	order_nodes.reserve(args.size());
+
+	for (auto arg : args) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			string actual_type = py::str(arg.get_type());
+			throw InvalidInputException("Expected argument of type Expression, received '%s' instead", actual_type);
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		order_nodes.emplace_back(py_expr->order_type, py_expr->null_order, std::move(expr));
+	}
+	if (order_nodes.empty()) {
+		throw InvalidInputException("Please provide at least one expression to sort on");
+	}
+	return make_uniq<DuckDBPyRelation>(rel->Order(std::move(order_nodes)));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, const string &groups) {
 	if (!groups.empty()) {
 		return make_uniq<DuckDBPyRelation>(rel->Aggregate(expr, groups));

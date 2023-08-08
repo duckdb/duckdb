@@ -172,9 +172,29 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 	const char *docs;
 
 	docs = R"(
-	Print the stringified version of the expression.
+		Print the stringified version of the expression.
 	)";
 	expression.def("show", &DuckDBPyExpression::Print, docs);
+
+	docs = R"(
+		Set the order by modifier to ASCENDING.
+	)";
+	expression.def("asc", &DuckDBPyExpression::Ascending, docs);
+
+	docs = R"(
+		Set the order by modifier to DESCENDING.
+	)";
+	expression.def("desc", &DuckDBPyExpression::Descending, docs);
+
+	docs = R"(
+		Set the NULL order by modifier to NULLS FIRST.
+	)";
+	expression.def("nulls_first", &DuckDBPyExpression::NullsFirst, docs);
+
+	docs = R"(
+		Set the NULL order by modifier to NULLS LAST.
+	)";
+	expression.def("nulls_last", &DuckDBPyExpression::NullsLast, docs);
 
 	docs = R"(
 		Return a IN expression comparing self to the input arguments.

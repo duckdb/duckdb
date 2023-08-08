@@ -174,6 +174,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	relation_module
 	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
+	    .def("sort", &DuckDBPyRelation::Sort, "Reorder the relation object by the provided expressions")
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")

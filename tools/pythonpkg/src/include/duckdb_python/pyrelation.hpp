@@ -74,6 +74,7 @@ public:
 	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
+	unique_ptr<DuckDBPyRelation> Sort(const py::args &args);
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
