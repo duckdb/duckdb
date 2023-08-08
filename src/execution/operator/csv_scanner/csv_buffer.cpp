@@ -10,7 +10,6 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 	auto buffer = Ptr();
 	actual_size = file_handle.Read(buffer, buffer_size_p);
 	global_csv_start = global_csv_current_position;
-	global_csv_current_position += actual_size;
 	if (actual_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
 		start_position += 3;
 	}
@@ -26,10 +25,9 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 	last_buffer = file_handle.FinishedReading();
 }
 
-shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t &global_csv_current_position,
-                                      idx_t file_number_p) {
-	auto next_csv_buffer = make_shared<CSVBuffer>(file_handle, context, buffer_size,
-	                                              global_csv_current_position + actual_size, file_number_p);
+shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p) {
+	auto next_csv_buffer =
+	    make_shared<CSVBuffer>(file_handle, context, buffer_size, global_csv_start + actual_size, file_number_p);
 	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
@@ -66,7 +64,6 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 void CSVBuffer::Unpin() {
 	if (handle.IsValid()) {
 		handle.Destroy();
-//		D_ASSERT(block->Readers() == 0);
 	}
 }
 

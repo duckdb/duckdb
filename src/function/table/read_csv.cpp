@@ -330,9 +330,8 @@ public:
 		for (idx_t i = 0; i < rows_to_skip; i++) {
 			file_handle->ReadLine();
 		}
-		first_position = current_csv_position;
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
-		next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, first_position, file_number);
+		next_buffer = current_buffer->Next(*file_handle, buffer_size, file_number);
 		running_threads = MaxThreads();
 
 		// Initialize all the book-keeping variables
@@ -426,8 +425,6 @@ private:
 
 	//! Forces parallelism for small CSV Files, should only be used for testing.
 	bool force_parallelism = false;
-	//! Current (Global) position of CSV
-	idx_t current_csv_position = 0;
 	//! First Position of First Buffer
 	idx_t first_position = 0;
 	//! Current File Number
@@ -553,15 +550,14 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		if (file_index < bind_data.files.size()) {
 			current_file_path = bind_data.files[file_index++];
 			file_handle = ReadCSV::OpenCSV(current_file_path, bind_data.options.compression, context);
-			current_csv_position = 0;
+			first_position = 0;
 			file_number++;
 			local_batch_index = 0;
 
 			line_info.lines_read[file_number][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
 
-			current_buffer =
-			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
-			next_buffer = current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
+			current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, first_position, file_number);
+			next_buffer = current_buffer->Next(*file_handle, buffer_size, file_number);
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -581,7 +577,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		current_buffer = next_buffer;
 		if (next_buffer) {
 			// Next buffer gets the next-next buffer
-			next_buffer = next_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number);
+			next_buffer = next_buffer->Next(*file_handle, buffer_size, file_number);
 		}
 	}
 	if (!reader || reader->options.file_path != current_file_path) {

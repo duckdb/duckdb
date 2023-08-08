@@ -49,7 +49,7 @@ idx_t CSVBufferManager::GetStartPos() {
 bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
 	if (!last_buffer->IsCSVFileLastBuffer()) {
-		last_buffer = last_buffer->Next(*file_handle, buffer_size, global_csv_pos, 0);
+		last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
 		cached_buffers.emplace_back(last_buffer);
 		return true;
 	}
@@ -70,7 +70,6 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(idx_t pos, bool auto_det
 		}
 		return cached_buffers[pos]->Pin(*file_handle);
 	} else {
-		D_ASSERT(0);
 		if (pos < cached_buffers.size()) {
 			auto buffer = cached_buffers[pos];
 			// Invalidate this buffer
@@ -84,7 +83,7 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(idx_t pos, bool auto_det
 					return last_buffer->Pin(*file_handle);
 				}
 				if (!last_buffer->IsCSVFileLastBuffer()) {
-					last_buffer = last_buffer->Next(*file_handle, buffer_size, global_csv_pos, 0);
+					last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
 				} else {
 					return nullptr;
 				}
