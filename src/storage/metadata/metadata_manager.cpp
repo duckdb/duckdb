@@ -154,7 +154,7 @@ void MetadataManager::Flush() {
 		// zero-initialize any free blocks
 		for (auto free_block : block.free_blocks) {
 			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
-				   MetadataManager::METADATA_BLOCK_SIZE);
+			       MetadataManager::METADATA_BLOCK_SIZE);
 		}
 		// there are a few bytes left-over at the end of the block, zero-initialize them
 		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);

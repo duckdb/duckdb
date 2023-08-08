@@ -4,6 +4,13 @@ import subprocess
 from io import StringIO
 import csv
 import statistics
+import math
+
+
+# Geometric mean of an array of numbers
+def geomean(xs):
+    return math.exp(math.fsum(math.log(float(x)) for x in xs) / len(xs))
+
 
 # how many times we will run the experiment, to be sure of the regression
 number_repetitions = 5
@@ -17,6 +24,7 @@ new_runner = None
 benchmark_file = None
 verbose = False
 threads = None
+no_regression_fail = False
 for arg in sys.argv:
     if arg.startswith("--old="):
         old_runner = arg.replace("--old=", "")
@@ -28,6 +36,8 @@ for arg in sys.argv:
         verbose = True
     elif arg.startswith("--threads="):
         threads = int(arg.replace("--threads=", ""))
+    elif arg.startswith("--nofail"):
+        no_regression_fail = True
 
 if old_runner is None or new_runner is None or benchmark_file is None:
     print(
@@ -42,6 +52,8 @@ if not os.path.isfile(old_runner):
 if not os.path.isfile(new_runner):
     print(f"Failed to find new runner {new_runner}")
     exit(1)
+
+complete_timings = {old_runner: [], new_runner: []}
 
 
 def run_benchmark(runner, benchmark):
@@ -84,6 +96,7 @@ def run_benchmark(runner, benchmark):
                 header = False
             else:
                 timings.append(row[2])
+                complete_timings[runner].append(row[2])
         return float(statistics.median(timings))
     except:
         print("Failed to run benchmark " + benchmark)
@@ -126,7 +139,9 @@ for i in range(number_repetitions):
         if isinstance(old_res, str) or isinstance(new_res, str):
             # benchmark failed to run - always a regression
             error_list.append([benchmark, old_res, new_res])
-        elif (old_res + regression_threshold_seconds) * multiply_percentage < new_res:
+        elif (no_regression_fail == False) and (
+            (old_res + regression_threshold_seconds) * multiply_percentage < new_res
+        ):
             regression_list.append([benchmark, old_res, new_res])
         else:
             other_results.append([benchmark, old_res, new_res])
@@ -167,5 +182,19 @@ for res in other_results:
     print(f"Old timing: {res[1]}")
     print(f"New timing: {res[2]}")
     print("")
+
+time_a = geomean(complete_timings[old_runner])
+time_b = geomean(complete_timings[new_runner])
+
+print("")
+if time_a > time_b * 1.01:
+    print(f"Old timing geometric mean: {time_a}")
+    print(f"New timing geometric mean: {time_b}, roughly {int((time_a - time_b) * 100.0 / time_a)}% faster")
+elif time_b > time_a * 1.01:
+    print(f"Old timing geometric mean: {time_a}, roughly {int((time_b - time_a) * 100.0 / time_b)}% faster")
+    print(f"New timing geometric mean: {time_b}")
+else:
+    print(f"Old timing geometric mean: {time_a}")
+    print(f"New timing geometric mean: {time_b}")
 
 exit(exit_code)

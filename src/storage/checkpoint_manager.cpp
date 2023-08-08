@@ -400,8 +400,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 	switch (index_info.index_type) {
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
-		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          index_info.constraint_type, storage.db, BlockPointer(root_block_id, root_offset));
+		auto art =
+		    make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                   index_info.constraint_type, storage.db, nullptr, BlockPointer(root_block_id, root_offset));
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;

@@ -43,7 +43,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	// create an adaptive radix tree around the expressions
 	if (index_block.IsValid()) {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, index_block);
+		                     storage.db, nullptr, index_block);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
 		                     storage.db);

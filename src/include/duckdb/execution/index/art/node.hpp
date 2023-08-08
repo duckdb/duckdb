@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -179,6 +180,12 @@ public:
 	//! Reset the Node pointer by setting the node info to zero
 	inline void Reset() {
 		data = 0;
+	}
+
+	//! Adds an idx_t to a buffer ID, the rightmost 32 bits contain the buffer ID
+	inline void AddToBufferID(const idx_t summand) {
+		D_ASSERT(summand < NumericLimits<uint32_t>().Maximum());
+		data += summand;
 	}
 
 	//! Comparison operator

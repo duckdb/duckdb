@@ -612,12 +612,6 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	                    "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string") == 0);
 	adbc_error.release(&adbc_error);
 
-	// Test null schema name
-	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, nullptr, "duckdb_indexes", &arrow_schema,
-	                                              &adbc_error)));
-	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide db_schema") == 0);
-	adbc_error.release(&adbc_error);
-
 	// Empty schema should be fine
 	REQUIRE(SUCCESS(
 	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexes", &arrow_schema, &adbc_error)));

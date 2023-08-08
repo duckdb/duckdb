@@ -64,7 +64,7 @@ TEST_CASE("Test bools to char conversion", "[odbc]") {
 	// Fetch result
 	METADATA_CHECK(hstmt, 3, "b", sizeof('b'), SQL_CHAR, types_map[SQL_CHAR], 0, SQL_NULLABLE_UNKNOWN);
 
-	std::vector<const char *> expected_data[3] = {{"1", "yeah", "true"}, {"2", "yes", "true"}, {"3", "true", "true"}};
+	std::vector<std::string> expected_data[3] = {{"1", "yeah", "true"}, {"2", "yes", "true"}, {"3", "true", "true"}};
 
 	for (int i = 0; i < 3; i++) {
 		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);

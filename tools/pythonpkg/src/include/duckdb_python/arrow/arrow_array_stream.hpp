@@ -19,6 +19,7 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 namespace duckdb {
 
@@ -57,8 +58,8 @@ PyArrowObjectType GetArrowType(const py::handle &obj);
 
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, const ClientConfig &config)
-	    : arrow_object(arrow_table), config(config) {};
+	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table, const ClientProperties &client_properties_p)
+	    : arrow_object(arrow_table), client_properties(client_properties_p) {};
 
 	//! Produces an Arrow Scanner, should be only called once when initializing Scan States
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory, ArrowStreamParameters &parameters);
@@ -69,15 +70,15 @@ public:
 	//! Arrow Object (i.e., Scanner, Record Batch Reader, Table, Dataset)
 	PyObject *arrow_object;
 
-	const ClientConfig &config;
+	const ClientProperties client_properties;
 
 private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
 	static py::object TransformFilter(TableFilterSet &filters, std::unordered_map<idx_t, string> &columns,
-	                                  const ClientConfig &config);
+	                                  const ClientProperties &client_properties);
 
 	static py::object ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
-	                                 ArrowStreamParameters &parameters, const ClientConfig &config);
+	                                 ArrowStreamParameters &parameters, const ClientProperties &client_properties);
 };
 } // namespace duckdb
 

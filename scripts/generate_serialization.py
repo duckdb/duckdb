@@ -492,6 +492,23 @@ def generate_class_code(class_entry):
     return class_generation
 
 
+def check_children_for_duplicate_members(node, parents: list, seen: set):
+    # Check for duplicate names
+    if node.members is not None:
+        for member in node.members:
+            if member.name in seen:
+                # Print the inheritance tree
+                print(
+                    f"Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                )
+                exit()
+            seen.add(member.name)
+
+    # Recurse
+    for child in node.children.values():
+        check_children_for_duplicate_members(child, parents + [node], seen.copy())
+
+
 for entry in file_list:
     source_path = entry['source']
     target_path = entry['target']
@@ -528,6 +545,12 @@ for entry in file_list:
                 if enum_entry in base_class_object.children:
                     raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
                 base_class_object.children[enum_entry] = new_class
+
+    # Ensure that there are no duplicate names in the inheritance tree
+    for base_class in base_classes:
+        if base_class.base is None:
+            # Root base class, now traverse the children
+            check_children_for_duplicate_members(base_class, [], set())
 
     with open(target_path, 'w+') as f:
         f.write(

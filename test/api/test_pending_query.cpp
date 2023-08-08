@@ -178,7 +178,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		auto prepare = con.Prepare("SELECT SUM(i+X) FROM range(1000000) tbl(i) WHERE i>=$1");
 		REQUIRE(prepare->HasError());
 
-		REQUIRE_THROWS(prepare->PendingQuery(0));
+		REQUIRE_FAIL(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
 		duckdb::vector<Value> parameters;
