@@ -14,7 +14,7 @@
 
 namespace duckdb {
 class CSVBuffer;
-
+class CSVStateMachine;
 //! This class is used to manage the buffers
 //! Buffers are cached when used for auto detection
 //! Otherwise they are not cached and just returned
@@ -61,6 +61,37 @@ public:
 	//! Returns \0 if there are no more chars
 	char GetNextChar();
 
+	//! This functions templates an operation over the CSV File
+	template <class OP>
+	inline bool Process(CSVStateMachine& machine, vector<idx_t> &sniffed_column_counts) {
+		//! If current buffer is not set we try to get a new one
+		if (!cur_buffer_handle) {
+			cur_pos = 0;
+			if (cur_buffer_idx == 0) {
+				cur_pos = buffer_manager->GetStartPos();
+			}
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+			if (!cur_buffer_handle) {
+				//! Done Processing the File
+				OP::Finalize(machine,sniffed_column_counts);
+				return true;
+			}
+		}
+		while (cur_buffer_handle){
+			while (cur_pos < cur_buffer_handle->actual_size){
+				if (OP::Process(machine,sniffed_column_counts,cur_buffer_handle->Ptr()[cur_pos++])){
+					//! Not-Done Processing the File, but the Operator is happy!
+					OP::Finalize(machine,sniffed_column_counts);
+					return false;
+				}
+			}
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+			cur_pos = 0;
+		}
+		//! Done Processing the File
+		OP::Finalize(machine,sniffed_column_counts);
+		return true;
+	}
 	//! Returns true if the iterator is finished
 	bool Finished();
 	//! Resets the iterator

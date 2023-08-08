@@ -62,7 +62,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count,
                                          idx_t prev_column_count) {
 	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
-	state_machine->SniffDialect(sniffed_column_counts);
+	state_machine->csv_buffer_iterator.Process<SniffDialect>(*state_machine,sniffed_column_counts);
+//	state_machine->SniffDialect(sniffed_column_counts);
 
 	idx_t start_row = options.skip_rows;
 	idx_t consistent_rows = 0;
@@ -158,6 +159,8 @@ void CSVSniffer::RefineCandidates() {
 		auto cur_candidates = std::move(candidates);
 		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
 		for (auto &cur_candidate : cur_candidates) {
+			cur_candidate->cur_rows = 0;
+	 		cur_candidate->column_count = 1;
 			AnalyzeDialectCandidate(std::move(cur_candidate), rows_read, best_consistent_rows, prev_padding_count,
 			                        cur_best_num_cols);
 		}

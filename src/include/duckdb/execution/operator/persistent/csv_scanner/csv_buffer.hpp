@@ -27,7 +27,7 @@ public:
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
-	char *Ptr() {
+	inline char *Ptr() {
 		return char_ptr_cast(handle.Ptr());
 	}
 };
