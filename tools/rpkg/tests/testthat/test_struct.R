@@ -122,3 +122,35 @@ test_that("nested lists of atomic values can be written", {
   duckdb_register(con, "df_reg", df)
   expect_equal(dbReadTable(con, "df_reg"), df)
 })
+
+test_that("nested and packed columns work in full", {
+  skip_if_not_installed("vctrs")
+
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  df <- vctrs::data_frame(
+    a = vctrs::data_frame(x = 1:5, y = 6:10),
+    b = list(
+      vctrs::data_frame(u = 1:2, v = 3:4, w = 5:6)
+    ),
+    c = list(
+      vctrs::data_frame(
+        d = 13:16,
+        e = vctrs::data_frame(u = 1:4, v = 5:8, w = as.list(9:12))
+      )
+    ),
+    f = list(
+      vctrs::data_frame(
+        g = 13:16,
+        h = vctrs::data_frame(u = 1:4, v = 5:8, w = list(vctrs::data_frame(s = 9:10)))
+      )
+    ),
+    i = "plain old"
+  )
+  dbWriteTable(con, "df", df)
+  expect_equal(dbReadTable(con, "df"), df)
+
+  duckdb_register(con, "df_reg", df)
+  expect_equal(dbReadTable(con, "df_reg"), df)
+})
