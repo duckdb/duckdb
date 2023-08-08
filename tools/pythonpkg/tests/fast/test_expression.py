@@ -445,9 +445,51 @@ class TestExpression(object):
 
     def test_filter(self):
         con = duckdb.connect()
-        rel = con.sql("select * from (VALUES(1), (2), (1), (3)) tbl(a)")
-        assert len(rel.fetchall()) == 4
+        rel = con.sql(
+            """
+            select * from (VALUES
+                (1, 'a'),
+                (2, 'b'),
+                (1, 'b'),
+                (3, 'c'),
+                (4, 'a')
+            ) tbl(a, b)
+        """
+        )
+        assert len(rel.fetchall()) == 5
 
         expr = ColumnExpression("a") == 1
         rel2 = rel.filter(expr)
-        assert len(rel2.fetchall()) == 2
+        res = rel2.fetchall()
+        assert len(res) == 2
+        assert res == [(1, 'a'), (1, 'b')]
+
+        # NOT operator
+
+        expr = ~expr
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 3
+        assert res == [(2, 'b'), (3, 'c'), (4, 'a')]
+
+        # AND operator
+
+        expr = expr & (ColumnExpression("b") != 'b')
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 2
+        assert res == [(3, 'c'), (4, 'a')]
+
+        # OR operator
+        expr = (ColumnExpression("a") == 1) | (ColumnExpression("a") == 4)
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 3
+        assert res == [(1, 'a'), (1, 'b'), (4, 'a')]
+
+        # Mixed
+        expr = (ColumnExpression("b") == "a") & ((ColumnExpression("a") == 1) | (ColumnExpression("a") == 4))
+        rel2 = rel.filter(expr)
+        res = rel2.fetchall()
+        assert len(res) == 2
+        assert res == [(1, 'a'), (4, 'a')]

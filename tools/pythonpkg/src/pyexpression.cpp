@@ -3,6 +3,8 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 namespace duckdb {
 
@@ -132,6 +134,20 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LessThanOrEqual(const DuckDBP
 	return ComparisonExpression(ExpressionType::COMPARE_LESSTHANOREQUALTO, *this, other);
 }
 
+// AND, OR and NOT
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Not() {
+	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_NOT, *this);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::And(const DuckDBPyExpression &other) {
+	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_AND, *this, other);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &other) {
+	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_OR, *this, other);
+}
+
 // Unary operators
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
@@ -208,6 +224,25 @@ DuckDBPyExpression::InternalFunctionExpression(const string &function_name,
 	auto function_expression =
 	    make_uniq<duckdb::FunctionExpression>(function_name, std::move(children), nullptr, nullptr, false, is_operator);
 	return make_shared<DuckDBPyExpression>(std::move(function_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::InternalUnaryOperator(ExpressionType type,
+                                                                         const DuckDBPyExpression &arg) {
+	auto expr = arg.GetExpression().Copy();
+	auto operator_expression = make_uniq<OperatorExpression>(type, std::move(expr));
+	return make_shared<DuckDBPyExpression>(std::move(operator_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::InternalConjunction(ExpressionType type,
+                                                                       const DuckDBPyExpression &arg,
+                                                                       const DuckDBPyExpression &other) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.reserve(2);
+	children.push_back(arg.GetExpression().Copy());
+	children.push_back(other.GetExpression().Copy());
+
+	auto operator_expression = make_uniq<ConjunctionExpression>(type, std::move(children));
+	return make_shared<DuckDBPyExpression>(std::move(operator_expression));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::InternalConstantExpression(Value val) {

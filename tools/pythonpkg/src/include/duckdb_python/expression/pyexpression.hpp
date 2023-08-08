@@ -59,6 +59,9 @@ public:
 	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other);
+
+	// Equality operations
+
 	shared_ptr<DuckDBPyExpression> Equality(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Inequality(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> GreaterThan(const DuckDBPyExpression &other);
@@ -70,6 +73,12 @@ public:
 	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
 	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
 	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
+
+	// AND, OR and NOT
+
+	shared_ptr<DuckDBPyExpression> Not();
+	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other);
 
 public:
 	const ParsedExpression &GetExpression() const;
@@ -87,6 +96,10 @@ public:
 	static shared_ptr<DuckDBPyExpression> InternalFunctionExpression(const string &function_name,
 	                                                                 vector<unique_ptr<ParsedExpression>> children,
 	                                                                 bool is_operator = false);
+
+	static shared_ptr<DuckDBPyExpression> InternalUnaryOperator(ExpressionType type, const DuckDBPyExpression &arg);
+	static shared_ptr<DuckDBPyExpression> InternalConjunction(ExpressionType type, const DuckDBPyExpression &arg,
+	                                                          const DuckDBPyExpression &other);
 	static shared_ptr<DuckDBPyExpression> InternalConstantExpression(Value value);
 	static shared_ptr<DuckDBPyExpression> BinaryOperator(const string &function_name, const DuckDBPyExpression &arg_one,
 	                                                     const DuckDBPyExpression &arg_two);
