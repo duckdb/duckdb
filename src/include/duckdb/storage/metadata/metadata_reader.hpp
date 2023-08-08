@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "metadata_manager.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
 
 namespace duckdb {
 
