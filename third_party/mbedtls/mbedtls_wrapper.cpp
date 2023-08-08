@@ -3,6 +3,7 @@
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "mbedtls/aes.h"
+#include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha256.h"
 
@@ -25,30 +26,6 @@ openssl dgst -binary -sha256 dummy > hash
 # Calculate signature from hash
 openssl pkeyutl -sign -in hash -inkey private.pem -pkeyopt digest:sha256 -out dummy.sign
 */
-
-MbedTlsAesContext MbedTlsAesContext::CreateEncryptionContext(const std::string &key) {
-	MbedTlsAesContext result;
-	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
-	mbedtls_aes_init(context);
-	if (mbedtls_aes_setkey_enc(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
-		throw runtime_error("Invalid AES key length");
-	}
-	return result;
-}
-
-MbedTlsAesContext MbedTlsAesContext::CreateDecryptionContext(const std::string &key) {
-	MbedTlsAesContext result;
-	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
-	mbedtls_aes_init(context);
-	if (mbedtls_aes_setkey_dec(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
-		throw runtime_error("Invalid AES key length");
-	}
-	return result;
-}
-
-MbedTlsAesContext::~MbedTlsAesContext() {
-	mbedtls_aes_free(reinterpret_cast<mbedtls_aes_context *>(context_ptr));
-}
 
 void MbedTlsWrapper::ComputeSha256Hash(const char *in, size_t in_len, char *out) {
 
@@ -112,16 +89,59 @@ void MbedTlsWrapper::Hmac256(const char *key, size_t key_len, const char *messag
 	mbedtls_md_free(&hmac_ctx);
 }
 
-void MbedTlsWrapper::Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
-	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_ENCRYPT, in_len,
-	                          iv, in, in) != 0) {
-		throw runtime_error("Invalid AES input length");
+MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
+	context_ptr = malloc(sizeof(mbedtls_gcm_context));
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr);
+	mbedtls_gcm_init(context);
+	if (mbedtls_gcm_setkey(context, MBEDTLS_CIPHER_ID_AES, reinterpret_cast<const unsigned char *>(key.c_str()),
+	                       key.length() * 8) != 0) {
+		throw runtime_error("Invalid AES key length");
 	}
 }
 
-void MbedTlsWrapper::Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
-	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_DECRYPT, in_len,
-	                          iv, in, in) != 0) {
-		throw runtime_error("Invalid AES input length");
-	}
+MbedTlsGcmContext::~MbedTlsGcmContext() {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr);
+	mbedtls_gcm_free(context);
+	free(context_ptr);
 }
+
+// MbedTlsAesContext MbedTlsAesContext::CreateEncryptionContext(const std::string &key) {
+//	MbedTlsAesContext result;
+//	result.context_ptr = malloc(sizeof(mbedtls_aes_context));
+//	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
+//	mbedtls_aes_init(context);
+//	if (mbedtls_aes_setkey_enc(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
+//		throw runtime_error("Invalid AES key length");
+//	}
+//	return result;
+// }
+//
+// MbedTlsAesContext MbedTlsAesContext::CreateDecryptionContext(const std::string &key) {
+//	MbedTlsAesContext result;
+//	result.context_ptr = malloc(sizeof(mbedtls_aes_context));
+//	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
+//	mbedtls_aes_init(context);
+//	if (mbedtls_aes_setkey_dec(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
+//		throw runtime_error("Invalid AES key length");
+//	}
+//	return result;
+// }
+//
+// MbedTlsAesContext::~MbedTlsAesContext() {
+//	mbedtls_aes_free(reinterpret_cast<mbedtls_aes_context *>(context_ptr));
+//	free(context_ptr);
+// }
+//
+// void MbedTlsWrapper::Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
+//	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_ENCRYPT, in_len,
+//	                          iv, in, in) != 0) {
+//		throw runtime_error("Invalid AES input length");
+//	}
+// }
+//
+// void MbedTlsWrapper::Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
+//	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_DECRYPT, in_len,
+//	                          iv, in, in) != 0) {
+//		throw runtime_error("Invalid AES input length");
+//	}
+// }

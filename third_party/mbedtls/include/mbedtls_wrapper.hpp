@@ -12,12 +12,23 @@
 
 namespace duckdb_mbedtls {
 
-class MbedTlsAesContext {
-public:
-	static MbedTlsAesContext CreateEncryptionContext(const std::string &key);
-	static MbedTlsAesContext CreateDecryptionContext(const std::string &key);
+//class MbedTlsAesContext {
+//public:
+//	static MbedTlsAesContext CreateEncryptionContext(const std::string &key);
+//	static MbedTlsAesContext CreateDecryptionContext(const std::string &key);
+//
+//	~MbedTlsAesContext();
+//
+//public:
+//	void *context_ptr;
+//};
 
-	~MbedTlsAesContext();
+class MbedTlsGcmContext {
+public:
+	// trying to follow https://gist.github.com/unprovable/892a677d672990f46bca97194ae549bc
+	MbedTlsGcmContext(const std::string &key);
+
+	~MbedTlsGcmContext();
 
 public:
 	void *context_ptr;
@@ -33,9 +44,9 @@ public:
 
 	static constexpr size_t SHA256_HASH_BYTES = 32;
 
-public:
-	static void Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len);
-	static void Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len);
+//public:
+//	static void Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len);
+//	static void Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len);
 };
 
 } // namespace duckdb_mbedtls

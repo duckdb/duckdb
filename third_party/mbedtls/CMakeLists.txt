@@ -10,7 +10,7 @@ add_library(duckdb_mbedtls STATIC mbedtls_wrapper.cpp library/aes.cpp library/sh
 
 set_property(TARGET duckdb_mbedtls PROPERTY C_STANDARD 99)
 
-target_compile_definitions(duckdb_mbedtls PRIVATE MBEDTLS_AES_C MBEDTLS_CIPHER_MODE_CBC)
+target_compile_definitions(duckdb_mbedtls PRIVATE MBEDTLS_GCM_C)
 
 install(TARGETS duckdb_mbedtls
         EXPORT "${DUCKDB_EXPORT_SET}"

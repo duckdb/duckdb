@@ -147,12 +147,14 @@ void ParquetOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(binary_as_string);
 	writer.WriteField<bool>(file_row_number);
 	writer.WriteSerializable(file_options);
+	writer.WriteString(encryption_key);
 }
 
 void ParquetOptions::Deserialize(FieldReader &reader) {
 	binary_as_string = reader.ReadRequired<bool>();
 	file_row_number = reader.ReadRequired<bool>();
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
+	encryption_key = reader.ReadRequired<string>();
 }
 
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
@@ -320,6 +322,10 @@ public:
 				parquet_options.binary_as_string = BooleanValue::Get(kv.second);
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
+			} else if (loption == "encryption_key") {
+				parquet_options.encryption_key = StringValue::Get(kv.second);
+			} else {
+				throw BinderException("Unknown option for Parquet scan \"%s\"", loption);
 			}
 		}
 		parquet_options.file_options.AutoDetectHivePartitioning(files, context);

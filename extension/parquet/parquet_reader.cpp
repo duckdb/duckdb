@@ -6,6 +6,7 @@
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "mbedtls_wrapper.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
@@ -38,6 +39,7 @@ namespace duckdb {
 using duckdb_parquet::format::ColumnChunk;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileCryptoMetaData;
 using duckdb_parquet::format::FileMetaData;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::SchemaElement;
@@ -45,17 +47,22 @@ using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
 static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
+CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
+}
+
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftStringProtocol(const string &str) {
+	auto transport = make_shared<ThriftStringTransport>(str);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftStringTransport>>(std::move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
                                                          const string &encryption_key) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(allocator, file_handle, false);
-	auto &transport = reinterpret_cast<ThriftFileTransport &>(*proto->getTransport());
+	auto file_proto = CreateThriftFileProtocol(allocator, file_handle, false);
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*file_proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
@@ -68,11 +75,14 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(file_size - 8);
 	transport.read(buf.ptr, 8);
 
-	bool encrypted;
-	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
-		encrypted = false;
-	} else if (memcmp(buf.ptr + 4, "PARE", 4) != 0) {
-		encrypted = true;
+	bool footer_encrypted;
+	if (memcmp(buf.ptr + 4, "PAR1", 4) == 0) {
+		footer_encrypted = false;
+	} else if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+		footer_encrypted = true;
+		if (encryption_key.empty()) {
+			throw InvalidInputException("File '%s' is encrypted, but no encryption key was given");
+		}
 	} else {
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
@@ -83,16 +93,52 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
 
-	if (encrypted) {
-		
-	}
-
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
+	if (footer_encrypted) {
+		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+		auto crypto_metadata_size = crypto_metadata->read(file_proto.get());
+		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+			                            file_handle.path);
+		}
+		transport.SetLocation(metadata_pos + crypto_metadata_size);
+		footer_len -= crypto_metadata_size;
+
+		// TODO deal with encrypted footers when the time comes
+		//		auto context = duckdb_mbedtls::MbedTlsAesContext::CreateEncryptionContext(encryption_key);
+		//		unsigned char iv[16];
+		//		duckdb_mbedtls::MbedTlsWrapper::Decrypt(context, iv, buf.ptr + metadata_pos, footer_len);
+		//		D_ASSERT(!encryption_key.empty());
+	}
+
 	auto metadata = make_uniq<FileMetaData>();
-	metadata->read(proto.get());
+	metadata->read(file_proto.get());
+
+	for (auto &row_group : metadata->row_groups) {
+		for (auto &column_chunk : row_group.columns) {
+			if (!column_chunk.__isset.encrypted_column_metadata) {
+				// || !column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_FOOTER_KEY
+				// We can only decrypt when everything is encrypted with footer key (for now)
+				continue;
+			}
+			if (!column_chunk.__isset.encrypted_column_metadata) {
+				continue; // Nothing to decrypt
+			}
+
+			auto &ecm = column_chunk.encrypted_column_metadata;
+			auto context = duckdb_mbedtls::MbedTlsAesContext::CreateEncryptionContext(encryption_key);
+			unsigned char iv[16];
+			memcpy(iv, ecm.c_str(), 16);
+			duckdb_mbedtls::MbedTlsWrapper::Decrypt(context, iv, (unsigned char *)ecm.c_str(), ecm.length() - 1);
+
+			auto string_proto = CreateThriftStringProtocol(ecm);
+			column_chunk.meta_data.statistics.read(string_proto.get());
+		}
+	}
+
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }
 
@@ -401,7 +447,10 @@ void ParquetReader::InitializeSchema() {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
-		throw FormatException("Encrypted Parquet files are not supported");
+		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
+			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
+			                            file_name);
+		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
@@ -632,7 +681,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
 
-	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader();
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);

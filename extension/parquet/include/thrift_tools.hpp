@@ -1,12 +1,12 @@
 #pragma once
-#include <list>
+#include "duckdb.hpp"
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
 
-#include "duckdb.hpp"
+#include <list>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/file_system.hpp"
 #endif
 
 namespace duckdb {
@@ -202,6 +202,23 @@ private:
 	// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
 	// reader will manage the read buffering.
 	bool prefetch_mode;
+};
+
+class ThriftStringTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftStringTransport> {
+public:
+	ThriftStringTransport(const string &str) : ptr(str.c_str()), len(str.length()), location(0) {
+	}
+
+	uint32_t read(uint8_t *buf, uint32_t len) {
+		const auto next = len - location;
+		memcpy(buf, ptr + location, next);
+		return next;
+	}
+
+private:
+	const char *const ptr;
+	const idx_t len;
+	idx_t location;
 };
 
 } // namespace duckdb

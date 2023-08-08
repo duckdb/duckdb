@@ -23,6 +23,8 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #endif
 
+#include <iostream>
+
 namespace duckdb {
 
 using duckdb_parquet::format::CompressionCodec;
