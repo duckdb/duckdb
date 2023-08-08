@@ -289,7 +289,7 @@ class TestExpression(object):
         col = col.alias('b')
 
         rel2 = rel.select(col)
-        rel2.columns == ['b']
+        assert rel2.columns == ['b']
 
     def test_star_expression(self):
         con = duckdb.connect()
