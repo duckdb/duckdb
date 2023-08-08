@@ -222,7 +222,6 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 	}
 	if (type_name.arrayBounds) {
 		// array bounds: turn the type into a list
-		idx_t extra_stack = 0;
 		for (auto cell = type_name.arrayBounds->head; cell != nullptr; cell = cell->next) {
 			auto val = (duckdb_libpgquery::PGValue *)cell->data.ptr_value;
 			if (val->type != duckdb_libpgquery::T_PGInteger) {
@@ -236,9 +235,12 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 				// Empty arrays are not supported
 				throw ParserException("Arrays must have a size of at least 1");
 			} else {
+				if ((uint64_t)array_size > ArrayType::MAX_ARRAY_SIZE) {
+					throw ParserException("Array size %d is too large, maximum allowed array size is %d", array_size,
+					                      ArrayType::MAX_ARRAY_SIZE);
+				}
 				result_type = LogicalType::ARRAY(result_type, array_size);
 			}
-			StackCheck(extra_stack++);
 		}
 	}
 	return result_type;

@@ -201,7 +201,8 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 
 	} else if (internal_type == PhysicalType::ARRAY) {
 		auto &child_vector = ArrayVector::GetEntry(result);
-		ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
+		auto child_count = ReadVector(state, GetChildIndex(vdata.child_index), child_vector);
+		(void)child_count;
 	} else if (internal_type == PhysicalType::STRUCT) {
 		auto &child_vectors = StructVector::GetEntries(result);
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {

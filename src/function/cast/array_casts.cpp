@@ -51,30 +51,45 @@ static unique_ptr<FunctionLocalState> InitArrayLocalState(CastLocalStateParamete
 //------------------------------------------------------------------------------
 static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 
+	auto source_array_size = ArrayType::GetSize(source.GetType());
+	auto target_array_size = ArrayType::GetSize(result.GetType());
+	if (source_array_size != target_array_size) {
+		// Cant cast between arrays of different sizes
+		throw CastException(source.GetType(), result.GetType());
+	}
+
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
-
-	if (count == 1) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+		if (ConstantVector::IsNull(source)) {
+			ConstantVector::SetNull(result, true);
+			return true;
+		}
+
+		auto &source_cc = ArrayVector::GetEntry(source);
+		auto &result_cc = ArrayVector::GetEntry(result);
+
+		// If the array vector is constant, the child vector must be flat (or constant if array size is 1)
+		D_ASSERT(source_cc.GetVectorType() == VectorType::FLAT_VECTOR || source_array_size == 1);
+
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, source_array_size, child_parameters);
+		return all_ok;
+	} else {
+		// Flatten if not constant
+		source.Flatten(count);
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+
+		FlatVector::SetValidity(result, FlatVector::Validity(source));
+		auto &source_cc = ArrayVector::GetEntry(source);
+		auto &result_cc = ArrayVector::GetEntry(result);
+
+		CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
+		bool all_ok =
+		    cast_data.child_cast_info.function(source_cc, result_cc, count * source_array_size, child_parameters);
+		return all_ok;
 	}
-
-	// TODO: Handle mismatched sizes
-	// We should be able to cast between arrays of different sizes if the child fits in the target
-	// OR maybe we shouldnt? I dont know
-	if (ArrayType::GetSize(source.GetType()) != ArrayType::GetSize(result.GetType())) {
-		throw NotImplementedException("Array to array cast with mismatched sizes");
-	}
-
-	// TODO: dont flatten
-	source.Flatten(count);
-
-	auto array_size = ArrayType::GetSize(source.GetType());
-	auto &source_cc = ArrayVector::GetEntry(source);
-	auto &result_cc = ArrayVector::GetEntry(result);
-	auto child_count = count * array_size;
-
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	bool all_ok = cast_data.child_cast_info.function(source_cc, result_cc, child_count, child_parameters);
-	return all_ok;
 }
 
 //------------------------------------------------------------------------------

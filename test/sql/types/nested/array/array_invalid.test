@@ -9,7 +9,14 @@ PRAGMA verify_external
 
 # Should not be able to create an array with 0 elements
 statement error
-CREATE TABLE t1(a, b[0]);
+CREATE TABLE t1(a INT, b INT[0]);
+
+# Should not be able to create an array above limit
+statement error
+CREATE TABLE t1(a INT, b INT[4294967295]);
+
+statement error
+CREATE TABLE t1(a INT, b INT[2147483647]);
 
 # Should not be able to create an array with 0 elements
 statement error
@@ -17,15 +24,15 @@ SELECT array_value();
 
 # Should not be able to create an array with a negative number of elements
 statement error
-CREATE TABLE t1(a, b[-1]);
+CREATE TABLE t1(a INT, b INT[-1]);
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
-CREATE TABLE t1(a, b[1.5]);
+CREATE TABLE t1(a INT, b INT[1.5]);
 
 # Should not be able to create an array with a non-integer number of elements
 statement error
-CREATE TABLE t1(a, b['foobar']);
+CREATE TABLE t1(a INT, b INT['foobar']);
 
 # Should not be able to cast array to 0 elements
 statement error
