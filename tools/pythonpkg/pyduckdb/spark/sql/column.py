@@ -1,4 +1,5 @@
 from typing import Union, TYPE_CHECKING, Any, cast, Callable, Tuple
+from ..exception import ContributionsAcceptedError
 
 from pyduckdb.spark.sql.types import DataType
 
@@ -118,6 +119,76 @@ class Column:
 
     __rpow__ = _bin_op("__rpow__")
 
+    def __getitem__(self, k: Any) -> "Column":
+        """
+        An expression that gets an item at position ``ordinal`` out of a list,
+        or gets an item by key out of a dict.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        k
+            a literal value, or a slice object without step.
+
+        Returns
+        -------
+        :class:`Column`
+            Column representing the item got by key out of a dict, or substrings sliced by
+            the given slice object.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
+        >>> df.select(df.l[slice(1, 3)], df.d['key']).show()
+        +------------------+------+
+        |substring(l, 1, 3)|d[key]|
+        +------------------+------+
+        |               abc| value|
+        +------------------+------+
+        """
+        if isinstance(k, slice):
+            raise ContributionsAcceptedError
+            # if k.step is not None:
+            #    raise ValueError("Using a slice with a step value is not supported")
+            # return self.substr(k.start, k.stop)
+        else:
+            # FIXME: this is super hacky
+            expr_str = str(self.expr) + "." + str(k)
+            return Column(ColumnExpression(expr_str))
+
+    def __getattr__(self, item: Any) -> "Column":
+        """
+        An expression that gets an item at position ``ordinal`` out of a list,
+        or gets an item by key out of a dict.
+
+        Parameters
+        ----------
+        item
+            a literal value.
+
+        Returns
+        -------
+        :class:`Column`
+            Column representing the item got by key out of a dict.
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame([('abcedfg', {"key": "value"})], ["l", "d"])
+        >>> df.select(df.d.key).show()
+        +------+
+        |d[key]|
+        +------+
+        | value|
+        +------+
+        """
+        if item.startswith("__"):
+            raise AttributeError("Can not access __ (dunder) method")
+        return self[item]
+
     def alias(self, alias: str):
         return Column(self.expr.alias(alias))
 
@@ -148,8 +219,9 @@ class Column:
 
         cols = cast(
             Tuple,
-            [c._jc if isinstance(c, Column) else _create_column_from_literal(c) for c in cols],
+            [c.expr if isinstance(c, Column) else c for c in cols],
         )
+        return self.expr.isin(*cols)
 
     # logistic operators
     def __eq__(  # type: ignore[override]

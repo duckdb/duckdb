@@ -51,3 +51,32 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     [Row(d='-----')]
     """
     return _invoke_function("regexp_replace", _to_column(str), pattern, replacement)
+
+
+def array_contains(col: "ColumnOrName", value: Any) -> Column:
+    """
+    Collection function: returns null if the array is null, true if the array contains the
+    given value, and false otherwise.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column containing array
+    value :
+        value or column to check for in array
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a column of Boolean type.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(["a", "b", "c"],), ([],)], ['data'])
+    >>> df.select(array_contains(df.data, "a")).collect()
+    [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
+    >>> df.select(array_contains(df.data, lit("a"))).collect()
+    [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
+    """
+    value = value.expr if isinstance(value, Column) else value
+    return _invoke_function("array_contains", _to_column(col), value)
