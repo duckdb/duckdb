@@ -44,7 +44,7 @@ struct S3AuthParams {
 	bool use_ssl;
 	bool s3_url_compatibility_mode;
 
-	static S3AuthParams ReadFrom(FileOpener *opener);
+	static S3AuthParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 struct ParsedS3Url {
@@ -67,7 +67,7 @@ struct S3ConfigParams {
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
 
-	static S3ConfigParams ReadFrom(FileOpener *opener);
+	static S3ConfigParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 class S3FileSystem;

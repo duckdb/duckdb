@@ -229,11 +229,11 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
+string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
 		Value result;
-		if (opener->TryGetCurrentSetting("home_directory", result)) {
+		if (opener->TryGetCurrentSetting("home_directory", result, info.operator*())) {
 			if (!result.IsNull() && !result.ToString().empty()) {
 				return result.ToString();
 			}
@@ -248,7 +248,7 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 }
 
 string FileSystem::GetHomeDirectory() {
-	return GetHomeDirectory(nullptr);
+	return GetHomeDirectory(nullptr, nullptr);
 }
 
 string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
@@ -256,7 +256,9 @@ string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opene
 		return path;
 	}
 	if (path[0] == '~') {
-		return GetHomeDirectory(opener) + path.substr(1);
+		auto info = duckdb::make_uniq<FileOpenerInfo>();
+		info->file_path = path;
+		return GetHomeDirectory(opener, info.get()) + path.substr(1);
 	}
 	return path;
 }

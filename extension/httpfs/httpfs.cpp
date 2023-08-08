@@ -28,26 +28,26 @@ static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> initialize_http_heade
 	return headers;
 }
 
-HTTPParams HTTPParams::ReadFrom(FileOpener *opener) {
+HTTPParams HTTPParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	uint64_t timeout = DEFAULT_TIMEOUT;
 	uint64_t retries = DEFAULT_RETRIES;
 	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
 	float retry_backoff = DEFAULT_RETRY_BACKOFF;
 	bool force_download = DEFAULT_FORCE_DOWNLOAD;
 	Value value;
-	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value, info)) {
 		timeout = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "force_download", value, info)) {
 		force_download = value.GetValue<bool>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retries", value, info)) {
 		retries = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_wait_ms", value, info)) {
 		retry_wait_ms = value.GetValue<uint64_t>();
 	}
-	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "http_retry_backoff", value, info)) {
 		retry_backoff = value.GetValue<float>();
 	}
 
@@ -360,7 +360,8 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, string path, uint8_t flags, const
 unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
                                                         FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener));
+	FileOpenerInfo info = {path};
+	return duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener, info));
 }
 
 unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,

@@ -4,6 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
@@ -41,7 +42,7 @@ struct HTTPParams {
 	float retry_backoff;
 	bool force_download;
 
-	static HTTPParams ReadFrom(FileOpener *opener);
+	static HTTPParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
 };
 
 class HTTPFileHandle : public FileHandle {

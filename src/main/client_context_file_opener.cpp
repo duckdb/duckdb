@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result) {
+bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) {
 	return context.TryGetCurrentSetting(key, result);
 }
 
@@ -15,11 +15,11 @@ ClientContext *FileOpener::TryGetClientContext(FileOpener *opener) {
 	return opener->TryGetClientContext();
 }
 
-bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result) {
+bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Value &result, FileOpenerInfo &info) {
 	if (!opener) {
 		return false;
 	}
-	return opener->TryGetCurrentSetting(key, result);
+	return opener->TryGetCurrentSetting(key, result, info);
 }
 
 } // namespace duckdb

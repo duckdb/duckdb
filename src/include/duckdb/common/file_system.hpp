@@ -16,6 +16,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/file_opener.hpp"
 #include <functional>
 
 #undef CreateDirectory
@@ -176,7 +177,7 @@ public:
 	//! Gets the working directory
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
+	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
 	//! Gets the users home directory
 	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user

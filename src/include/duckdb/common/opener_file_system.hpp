@@ -85,7 +85,7 @@ public:
 	}
 
 	string GetHomeDirectory() override {
-		return FileSystem::GetHomeDirectory(GetOpener());
+		return FileSystem::GetHomeDirectory(GetOpener(), nullptr);
 	}
 
 	string ExpandPath(const string &path) override {
