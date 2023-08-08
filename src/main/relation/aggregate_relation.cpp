@@ -21,6 +21,22 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
+AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
+                                     vector<unique_ptr<ParsedExpression>> parsed_expressions,
+                                     vector<unique_ptr<ParsedExpression>> groups_p)
+    : Relation(child_p->context, RelationType::AGGREGATE_RELATION), expressions(std::move(parsed_expressions)),
+      child(std::move(child_p)) {
+	if (!groups_p.empty()) {
+		// explicit groups provided: use standard handling
+		GroupingSet grouping_set;
+		for (idx_t i = 0; i < groups_p.size(); i++) {
+			groups.group_expressions.push_back(groups_p[i]->Copy());
+			grouping_set.insert(i);
+		}
+		groups.grouping_sets.push_back(std::move(grouping_set));
+	}
+}
+
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	auto child_ptr = child.get();
 	while (child_ptr->InheritsColumnBindings()) {
@@ -39,6 +55,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 	D_ASSERT(result->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = result->Cast<SelectNode>();
 	if (!groups.group_expressions.empty()) {
+		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups = groups.Copy();
 	} else {
 		// no groups provided: automatically figure out groups (if any)

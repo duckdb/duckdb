@@ -19,6 +19,8 @@ public:
 	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions);
 	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
 	                             GroupByNode groups);
+	DUCKDB_API AggregateRelation(shared_ptr<Relation> child, vector<unique_ptr<ParsedExpression>> expressions,
+	                             vector<unique_ptr<ParsedExpression>> groups);
 
 	vector<unique_ptr<ParsedExpression>> expressions;
 	GroupByNode groups;
