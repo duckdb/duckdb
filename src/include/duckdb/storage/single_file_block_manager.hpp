@@ -20,6 +20,7 @@
 namespace duckdb {
 
 class DatabaseInstance;
+struct MetadataHandle;
 
 struct StorageManagerOptions {
 	bool read_only = false;

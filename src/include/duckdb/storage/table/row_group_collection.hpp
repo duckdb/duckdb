@@ -27,6 +27,7 @@ class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
 struct ColumnSegmentInfo;
+class MetadataManager;
 
 class RowGroupCollection {
 public:
