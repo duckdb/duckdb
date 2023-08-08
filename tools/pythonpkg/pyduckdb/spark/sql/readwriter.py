@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Iterable, Union, List, Optional, cast
-from pyduckdb.spark.sql.types import StructType
+from .types import StructType
 from ..exception import ContributionsAcceptedError
 
 PrimitiveType = Union[bool, float, int, str]
