@@ -9,9 +9,6 @@
 #define GPOPT_CCTEConfig_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CDouble.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-#include "duckdb/optimizer/cascade/memory/CMemoryPool.h"
 
 namespace gpopt
 {
@@ -25,14 +22,11 @@ using namespace gpos;
 //		CTE configurations
 //
 //---------------------------------------------------------------------------
-class CCTEConfig : public CRefCount
+class CCTEConfig
 {
-private:
+public:
 	// CTE inlining cut-off
 	ULONG m_ulCTEInliningCutoff;
-
-	// private copy ctor
-	CCTEConfig(const CCTEConfig &);
 
 public:
 	// ctor
@@ -41,21 +35,20 @@ public:
 	{
 	}
 
+	// private copy ctor
+	CCTEConfig(const CCTEConfig &) = delete;
+
 	// CTE inlining cut-off
-	ULONG
-	UlCTEInliningCutoff() const
+	ULONG UlCTEInliningCutoff() const
 	{
 		return m_ulCTEInliningCutoff;
 	}
 
 	// generate default optimizer configurations
-	static CCTEConfig *
-	PcteconfDefault(CMemoryPool *mp)
+	static CCTEConfig* PcteconfDefault()
 	{
-		return GPOS_NEW(mp) CCTEConfig(0 /* cte_inlining_cut_off */);
+		return new CCTEConfig(0);
 	}
-
 };	// class CCTEConfig
 }  // namespace gpopt
-
 #endif

@@ -15,17 +15,15 @@
 #define GPOPT_CPartialPlan_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/CReqdProp.h"
 #include "duckdb/optimizer/cascade/cost/ICostModel.h"
+#include <memory>
 
 namespace gpopt
 {
 using namespace gpos;
 
 class CGroupExpression;
-class CCost;
 class CCostContext;
 
 //---------------------------------------------------------------------------
@@ -36,78 +34,49 @@ class CCostContext;
 //		Description of partial plans created during optimization
 //
 //---------------------------------------------------------------------------
-class CPartialPlan : public CRefCount
+class CPartialPlan
 {
-private:
+public:
+	// equality function
+	bool operator==(const CPartialPlan &pppSnd) const;
+	
+public:
 	// root group expression
-	CGroupExpression *m_pgexpr;
+	CGroupExpression* m_pgexpr;
 
 	// required plan properties of root operator
-	CReqdPropPlan *m_prpp;
+	CReqdPropPlan* m_prpp;
 
 	// cost context of known child plan -- can be null if no child plans are known
-	CCostContext *m_pccChild;
+	CCostContext* m_pccChild;
 
 	// index of known child plan
 	ULONG m_ulChildIndex;
 
-	// private copy ctor
-	CPartialPlan(const CPartialPlan &);
-
-	// extract costing info from children
-	void ExtractChildrenCostingInfo(CMemoryPool *mp, ICostModel *pcm,
-									CExpressionHandle &exprhdl,
-									ICostModel::SCostingInfo *pci);
-
-	// raise exception if the stats object is NULL
-	void RaiseExceptionIfStatsNull(IStatistics *stats);
-
 public:
 	// ctor
-	CPartialPlan(CGroupExpression *pgexpr, CReqdPropPlan *prpp,
-				 CCostContext *pccChild, ULONG child_index);
-
+	CPartialPlan(CGroupExpression* pgexpr, CReqdPropPlan* prpp, CCostContext* pccChild, ULONG child_index);
+	
+	// no copy ctor
+	CPartialPlan(const CPartialPlan &) = delete;
+	
 	// dtor
 	virtual ~CPartialPlan();
 
-	// group expression accessor
-	CGroupExpression *
-	Pgexpr() const
-	{
-		return m_pgexpr;
-	}
-
-	// plan properties accessor
-	CReqdPropPlan *
-	Prpp() const
-	{
-		return m_prpp;
-	}
-
-	// child cost context accessor
-	CCostContext *
-	PccChild() const
-	{
-		return m_pccChild;
-	}
-
-	// child index accessor
-	ULONG
-	UlChildIndex() const
-	{
-		return m_ulChildIndex;
-	}
+public:
+	// extract costing info from children
+	void ExtractChildrenCostingInfo(ICostModel* pcm, CExpressionHandle &exprhdl, ICostModel::SCostingInfo* pci);
 
 	// compute partial plan cost
-	CCost CostCompute(CMemoryPool *mp);
+	double CostCompute();
+
+	ULONG HashValue() const;
 
 	// hash function used for cost bounding
-	static ULONG HashValue(const CPartialPlan *ppp);
+	static ULONG HashValue(const CPartialPlan* ppp);
 
 	// equality function used for for cost bounding
-	static BOOL Equals(const CPartialPlan *pppFst, const CPartialPlan *pppSnd);
-
+	static bool Equals(const CPartialPlan* pppFst, const CPartialPlan* pppSnd);
 };	// class CPartialPlan
 }  // namespace gpopt
-
 #endif

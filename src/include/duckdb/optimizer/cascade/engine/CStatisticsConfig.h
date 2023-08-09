@@ -1,7 +1,4 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
-//	Copyright (C) 2013 EMC Corp.
-//
 //	@filename:
 //		CStatisticsConfig.h
 //
@@ -12,17 +9,10 @@
 #define GPOPT_CStatisticsConfig_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CDouble.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-#include "duckdb/optimizer/cascade/memory/CMemoryPool.h"
-
-#include "duckdb/optimizer/cascade/md/CMDIdColStats.h"
-#include "duckdb/optimizer/cascade/md/IMDId.h"
 
 namespace gpopt
 {
 using namespace gpos;
-using namespace gpmd;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -32,72 +22,48 @@ using namespace gpmd;
 //		Statistics configurations
 //
 //---------------------------------------------------------------------------
-class CStatisticsConfig : public CRefCount
+class CStatisticsConfig
 {
-private:
-	// shared memory pool
-	CMemoryPool *m_mp;
-
+public:
 	// damping factor for filter
-	CDouble m_damping_factor_filter;
+	double m_damping_factor_filter;
 
 	// damping factor for join
-	CDouble m_damping_factor_join;
+	double m_damping_factor_join;
 
 	// damping factor for group by
-	CDouble m_damping_factor_groupby;
-
-	// hash set of md ids for columns with missing statistics
-	MdidHashSet *m_phsmdidcolinfo;
+	double m_damping_factor_groupby;
 
 public:
 	// ctor
-	CStatisticsConfig(CMemoryPool *mp, CDouble damping_factor_filter,
-					  CDouble damping_factor_join,
-					  CDouble damping_factor_groupby);
+	CStatisticsConfig(double damping_factor_filter, double damping_factor_join, double damping_factor_groupby);
 
 	// dtor
 	~CStatisticsConfig();
 
 	// damping factor for filter
-	CDouble
-	DDampingFactorFilter() const
+	double DDampingFactorFilter() const
 	{
 		return m_damping_factor_filter;
 	}
 
 	// damping factor for join
-	CDouble
-	DDampingFactorJoin() const
+	double DDampingFactorJoin() const
 	{
 		return m_damping_factor_join;
 	}
 
 	// damping factor for group by
-	CDouble
-	DDampingFactorGroupBy() const
+	double DDampingFactorGroupBy() const
 	{
 		return m_damping_factor_groupby;
 	}
 
-	// add the information about the column with the missing statistics
-	void AddMissingStatsColumn(CMDIdColStats *pmdidCol);
-
-	// collect the missing statistics columns
-	void CollectMissingStatsColumns(IMdIdArray *pdrgmdid);
-
 	// generate default optimizer configurations
-	static CStatisticsConfig *
-	PstatsconfDefault(CMemoryPool *mp)
+	static CStatisticsConfig* PstatsconfDefault()
 	{
-		return GPOS_NEW(mp) CStatisticsConfig(
-			mp, 0.75 /* damping_factor_filter */,
-			0.01 /* damping_factor_join */, 0.75 /* damping_factor_groupby */
-		);
+		return new CStatisticsConfig(0.75, 0.01, 0.75);
 	}
-
-
 };	// class CStatisticsConfig
 }  // namespace gpopt
-
 #endif

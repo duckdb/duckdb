@@ -9,11 +9,7 @@
 #define GPOPT_CEnumeratorConfig_H
 
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
-#include "duckdb/optimizer/cascade/common/CRefCount.h"
-
-#include "duckdb/optimizer/cascade/cost/CCost.h"
-#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
+#include "duckdb/planner/expression.hpp"
 
 #define GPOPT_UNBOUNDED_COST_THRESHOLD 0.0
 
@@ -25,12 +21,10 @@ class CWStringDynamic;
 namespace gpopt
 {
 using namespace gpos;
-
-// fwd declarations
-
+using namespace duckdb;
 
 // type definition of plan checker
-typedef BOOL(FnPlanChecker)(CExpression *);
+typedef bool(FnPlanChecker)(shared_ptr<Expression>);
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -40,9 +34,9 @@ typedef BOOL(FnPlanChecker)(CExpression *);
 //		Configurations of plan enumerator
 //
 //---------------------------------------------------------------------------
-class CEnumeratorConfig : public CRefCount
+class CEnumeratorConfig
 {
-private:
+public:
 	//---------------------------------------------------------------------------
 	//	@class:
 	//		SSamplePlan
@@ -53,44 +47,23 @@ private:
 	//---------------------------------------------------------------------------
 	struct SSamplePlan
 	{
-	private:
+	public:
 		// plan id
 		ULLONG m_plan_id;
 
 		// plan cost
-		CCost m_cost;
+		double m_cost;
 
 	public:
 		// ctor
-		SSamplePlan(ULLONG plan_id, CCost cost)
+		SSamplePlan(ULLONG plan_id, double cost)
 			: m_plan_id(plan_id), m_cost(cost)
 		{
 		}
 
 		// dtor
 		virtual ~SSamplePlan(){};
-
-		// return plan id
-		ULLONG
-		GetPlanId() const
-		{
-			return m_plan_id;
-		}
-
-		// return plan cost
-		CCost
-		Cost() const
-		{
-			return m_cost;
-		}
-
 	};	// struct SSamplePlan
-
-	// array og unsigned long long int
-	typedef CDynamicPtrArray<SSamplePlan, CleanupDelete> SSamplePlanArray;
-
-	// memory pool
-	CMemoryPool *m_mp;
 
 	// identifier of chosen plan
 	ULLONG m_plan_id;
@@ -102,34 +75,34 @@ private:
 	ULLONG m_ullInputSamples;
 
 	// cost of best plan found
-	CCost m_costBest;
+	double m_costBest;
 
 	// max cost of a created plan sample
-	CCost m_costMax;
+	double m_costMax;
 
 	// max cost of accepted samples as a ratio to best plan cost
-	CDouble m_dCostThreshold;
+	double m_dCostThreshold;
 
 	// sampled plans
-	SSamplePlanArray *m_pdrgpsp;
+	duckdb::vector<shared_ptr<SSamplePlan>> m_pdrgpsp;
 
 	// step value used in fitting cost distribution
-	CDouble m_dStep;
+	double m_dStep;
 
 	// x-values of fitted cost distribution
-	DOUBLE *m_pdX;
+	duckdb::vector<double> m_pdX;
 
 	// y-values of fitted cost distribution
-	DOUBLE *m_pdY;
+	duckdb::vector<double> m_pdY;
 
 	// size of fitted cost distribution
 	ULONG m_ulDistrSize;
 
 	// restrict plan sampling to plans satisfying required properties
-	BOOL m_fSampleValidPlans;
+	bool m_fSampleValidPlans;
 
 	// plan checker function
-	FnPlanChecker *m_pfpc;
+	shared_ptr<FnPlanChecker> m_pfpc;
 
 	// initialize size of cost distribution
 	void InitCostDistrSize();
@@ -138,209 +111,163 @@ private:
 	CEnumeratorConfig(const CEnumeratorConfig &);
 
 	// compute Gaussian probability value
-	static DOUBLE DGaussian(DOUBLE d, DOUBLE dMean, DOUBLE dStd);
+	static double DGaussian(double d, double dMean, double dStd);
 
 public:
 	// ctor
-	CEnumeratorConfig(CMemoryPool *mp, ULLONG plan_id, ULLONG ullSamples,
-					  CDouble cost_threshold = GPOPT_UNBOUNDED_COST_THRESHOLD);
+	CEnumeratorConfig(ULLONG plan_id, ULLONG ullSamples, double cost_threshold = GPOPT_UNBOUNDED_COST_THRESHOLD);
 
 	// dtor
 	virtual ~CEnumeratorConfig();
 
 	// return plan id
-	ULLONG
-	GetPlanId() const
+	ULLONG GetPlanId() const
 	{
 		return m_plan_id;
 	}
 
 	// return enumerated space size
-	ULLONG
-	GetPlanSpaceSize() const
+	ULLONG GetPlanSpaceSize() const
 	{
 		return m_ullSpaceSize;
 	}
 
 	// set plan space size
-	void
-	SetPlanSpaceSize(ULLONG ullSpaceSize)
+	void SetPlanSpaceSize(ULLONG ullSpaceSize)
 	{
 		m_ullSpaceSize = ullSpaceSize;
 	}
 
 	// return number of required samples
-	ULLONG
-	UllInputSamples() const
+	ULLONG UllInputSamples() const
 	{
 		return m_ullInputSamples;
 	}
 
 	// return number of created samples
-	ULONG
-	UlCreatedSamples() const
+	ULONG UlCreatedSamples() const
 	{
-		return m_pdrgpsp->Size();
+		return m_pdrgpsp.size();
 	}
 
 	// set plan id
-	void
-	SetPlanId(ULLONG plan_id)
+	void SetPlanId(ULLONG plan_id)
 	{
 		m_plan_id = plan_id;
 	}
 
 	// return cost threshold
-	CDouble
-	DCostThreshold() const
+	double DCostThreshold() const
 	{
 		return m_dCostThreshold;
 	}
 
 	// return id of a plan sample
-	ULLONG
-	UllPlanSample(ULONG ulPos) const
+	ULLONG UllPlanSample(ULONG ulPos) const
 	{
-		return (*m_pdrgpsp)[ulPos]->GetPlanId();
+		return m_pdrgpsp[ulPos]->m_plan_id;
 	}
 
 	// set cost of best plan found
-	void
-	SetBestCost(CCost cost)
+	void SetBestCost(double cost)
 	{
 		m_costBest = cost;
 	}
 
 	// return cost of best plan found
-	CCost
-	CostBest() const
+	double CostBest() const
 	{
 		return m_costBest;
 	}
 
 	// return cost of a plan sample
-	CCost
-	CostPlanSample(ULONG ulPos) const
+	double CostPlanSample(ULONG ulPos) const
 	{
-		return (*m_pdrgpsp)[ulPos]->Cost();
+		return m_pdrgpsp[ulPos]->m_cost;
 	}
 
 	// add a new plan to sample
-	BOOL FAddSample(ULLONG plan_id, CCost cost);
+	bool FAddSample(ULLONG plan_id, double cost);
 
 	// clear samples
 	void ClearSamples();
 
 	// return x-value of cost distribution
-	CDouble DCostDistrX(ULONG ulPos) const;
+	double DCostDistrX(ULONG ulPos) const;
 
 	// return y-value of cost distribution
-	CDouble DCostDistrY(ULONG ulPos) const;
+	double DCostDistrY(ULONG ulPos) const;
 
 	// fit cost distribution on generated samples
 	void FitCostDistribution();
 
 	// return size of fitted cost distribution
-	ULONG
-	UlCostDistrSize() const
+	ULONG UlCostDistrSize() const
 	{
 		return m_ulDistrSize;
 	}
 
 	// is enumeration enabled?
-	BOOL
-	FEnumerate() const
+	bool FEnumerate() const
 	{
-		return GPOS_FTRACE(EopttraceEnumeratePlans);
+		return true;
 	}
 
 	// is sampling enabled?
-	BOOL
-	FSample() const
+	bool FSample() const
 	{
-		return GPOS_FTRACE(EopttraceSamplePlans);
+		return false;
 	}
 
 	// return plan checker function
-	FnPlanChecker *
-	Pfpc() const
+	shared_ptr<FnPlanChecker> Pfpc() const
 	{
 		return m_pfpc;
 	}
 
 	// set plan checker function
-	void
-	SetPlanChecker(FnPlanChecker *pfpc)
+	void SetPlanChecker(shared_ptr<FnPlanChecker> pfpc)
 	{
-		GPOS_ASSERT(NULL != pfpc);
-
 		m_pfpc = pfpc;
 	}
 
 	// restrict sampling to plans satisfying required properties
 	// we need to change settings for testing
-	void
-	SetSampleValidPlans(BOOL fSampleValidPlans)
+	void SetSampleValidPlans(bool fSampleValidPlans)
 	{
 		m_fSampleValidPlans = fSampleValidPlans;
 	}
 
 	// return true if sampling can only generate valid plans
-	BOOL
-	FSampleValidPlans() const
+	bool FSampleValidPlans() const
 	{
 		return m_fSampleValidPlans;
 	}
 
 	// check given plan using PlanChecker function
-	BOOL
-	FCheckPlan(CExpression *pexpr) const
+	bool FCheckPlan(shared_ptr<Expression> pexpr) const
 	{
-		GPOS_ASSERT(NULL != pexpr);
-
-		if (NULL != m_pfpc)
+		if (nullptr != m_pfpc)
 		{
-			return m_pfpc(pexpr);
+			return (*m_pfpc)(pexpr);
 		}
-
 		return true;
 	}
 
-	// dump samples to an output file
-	void DumpSamples(CWStringDynamic *str, ULONG ulSessionId,
-					 ULONG ulCommandId);
-
-	// dump fitted cost distribution to an output file
-	void DumpCostDistr(CWStringDynamic *str, ULONG ulSessionId,
-					   ULONG ulCommandId);
-
-	// print ids of plans in the generated sample
-	void PrintPlanSample() const;
-
 	// compute Gaussian kernel density
-	static void GussianKernelDensity(DOUBLE *pdObervationX,
-									 DOUBLE *pdObervationY,
-									 ULONG ulObservations, DOUBLE *pdX,
-									 DOUBLE *pdY, ULONG size);
+	static void GussianKernelDensity(duckdb::vector<double> pdObervationX, duckdb::vector<double> pdObervationY, ULONG ulObservations, duckdb::vector<double> pdX, duckdb::vector<double> pdY, ULONG size);
 
 	// generate default enumerator configurations
-	static CEnumeratorConfig *
-	PecDefault(CMemoryPool *mp)
+	static shared_ptr<CEnumeratorConfig> PecDefault()
 	{
-		return GPOS_NEW(mp)
-			CEnumeratorConfig(mp, 0 /*plan_id*/, 0 /*ullSamples*/);
+		return make_shared<CEnumeratorConfig>(0, 0);
 	}
 
 	// generate enumerator configuration for a given plan id
-	static CEnumeratorConfig *
-	GetEnumeratorCfg(CMemoryPool *mp, ULLONG plan_id)
+	static shared_ptr<CEnumeratorConfig> GetEnumeratorCfg(ULLONG plan_id)
 	{
-		return GPOS_NEW(mp) CEnumeratorConfig(mp, plan_id, 0 /*ullSamples*/);
+		return make_shared<CEnumeratorConfig>(plan_id, 0);
 	}
-
-
 };	// class CEnumeratorConfig
-
 }  // namespace gpopt
-
 #endif
