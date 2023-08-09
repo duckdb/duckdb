@@ -156,6 +156,80 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 }
 
+struct SniffValue {
+	inline static void Initialize(CSVStateMachine &machine) {
+		machine.state = CSVState::STANDARD;
+		machine.previous_state = CSVState::STANDARD;
+		machine.pre_previous_state = CSVState::STANDARD;
+		machine.cur_rows = 0;
+		machine.value = "";
+		machine.rows_read = 0;
+	}
+
+	inline static bool Process(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values,
+	                           char current_char) {
+
+		if ((machine.options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
+		    (machine.options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+			machine.rows_read++;
+		}
+		machine.pre_previous_state = machine.previous_state;
+		machine.previous_state = machine.state;
+		machine.state = static_cast<CSVState>(
+		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+
+		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
+		if (machine.previous_state == CSVState::FIELD_SEPARATOR ||
+		    (machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+			// Started a new value
+			// Check if it's UTF-8
+			machine.VerifyUTF8();
+			if (machine.value.empty() || machine.value == machine.options.null_str) {
+				// We set empty == null value
+				sniffed_values[machine.cur_rows].second.push_back(Value(LogicalType::VARCHAR));
+			} else {
+				sniffed_values[machine.cur_rows].second.push_back(Value(machine.value));
+			}
+			sniffed_values[machine.cur_rows].first = machine.rows_read;
+			machine.value = "";
+		}
+		if (machine.state == CSVState::STANDARD ||
+		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
+			machine.value += current_char;
+		}
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		// It means our carriage return is actually a record separator
+		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		if (machine.cur_rows >= sniffed_values.size()) {
+			// We sniffed enough rows
+			return true;
+		}
+		return false;
+	}
+
+	inline static void Finalize(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values) {
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+		if (machine.cur_rows < sniffed_values.size() && !empty_line) {
+			machine.VerifyUTF8();
+			sniffed_values[machine.cur_rows].first = machine.rows_read;
+			sniffed_values[machine.cur_rows++].second.push_back(Value(machine.value));
+		}
+		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - machine.cur_rows), sniffed_values.end());
+	}
+};
+
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<LogicalType> return_types;

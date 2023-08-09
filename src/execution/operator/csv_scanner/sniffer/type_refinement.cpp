@@ -1,6 +1,90 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 namespace duckdb {
+struct Parse {
+	inline static void Initialize(CSVStateMachine &machine) {
+		machine.state = CSVState::STANDARD;
+		machine.previous_state = CSVState::STANDARD;
+		machine.pre_previous_state = CSVState::STANDARD;
+
+		machine.cur_rows = 0;
+		machine.column_count = 0;
+		machine.value = "";
+	}
+
+	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char) {
+		machine.pre_previous_state = machine.previous_state;
+		machine.previous_state = machine.state;
+		machine.state = static_cast<CSVState>(
+		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+
+		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
+		if (machine.previous_state == CSVState::FIELD_SEPARATOR ||
+		    (machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+			// Started a new value
+			// Check if it's UTF-8 (Or not?)
+			machine.VerifyUTF8();
+			auto &v = parse_chunk.data[machine.column_count++];
+			auto parse_data = FlatVector::GetData<string_t>(v);
+			auto &validity_mask = FlatVector::Validity(v);
+			if (machine.value.empty()) {
+				validity_mask.SetInvalid(machine.cur_rows);
+			} else {
+				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			}
+			machine.value = "";
+		}
+		if (((machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		     (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) &&
+		    machine.options.null_padding && machine.column_count < parse_chunk.ColumnCount()) {
+			// It's a new row, check if we need to pad stuff
+			while (machine.column_count < parse_chunk.ColumnCount()) {
+				auto &v = parse_chunk.data[machine.column_count++];
+				auto &validity_mask = FlatVector::Validity(v);
+				validity_mask.SetInvalid(machine.cur_rows);
+			}
+		}
+		if (machine.state == CSVState::STANDARD) {
+			machine.value += current_char;
+		}
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		machine.column_count -= machine.column_count * (machine.previous_state == CSVState::RECORD_SEPARATOR);
+
+		// It means our carriage return is actually a record separator
+		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		machine.column_count -= machine.column_count * (machine.state != CSVState::RECORD_SEPARATOR && carriage_return);
+
+		if (machine.cur_rows >= machine.options.sample_chunk_size) {
+			// We sniffed enough rows
+			return false;
+		}
+		return true;
+	}
+
+	inline static void Finalize(CSVStateMachine &machine, DataChunk &parse_chunk) {
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+		if (machine.cur_rows < machine.options.sample_chunk_size && !empty_line) {
+			machine.VerifyUTF8();
+			auto &v = parse_chunk.data[machine.column_count++];
+			auto parse_data = FlatVector::GetData<string_t>(v);
+			parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+		}
+		parse_chunk.SetCardinality(machine.cur_rows);
+	}
+};
+
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
@@ -56,8 +140,7 @@ void CSVSniffer::RefineTypes() {
 				}
 				return;
 			}
-			// if jump ends up a bad line, we just skip this chunk
-			best_candidate->Parse(parse_chunk);
+			best_candidate->csv_buffer_iterator.Process<Parse>(*best_candidate, parse_chunk);
 			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {

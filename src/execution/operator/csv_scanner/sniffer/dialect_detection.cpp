@@ -2,6 +2,95 @@
 
 namespace duckdb {
 
+struct SniffDialect {
+	inline static void Initialize(CSVStateMachine &machine) {
+		machine.state = CSVState::STANDARD;
+		machine.previous_state = CSVState::STANDARD;
+		machine.pre_previous_state = CSVState::STANDARD;
+		machine.cur_rows = 0;
+		machine.column_count = 1;
+	}
+
+	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char) {
+
+		D_ASSERT(sniffed_column_counts.size() == machine.options.sample_chunk_size);
+
+		if (machine.state == CSVState::INVALID) {
+			sniffed_column_counts.clear();
+			return true;
+		}
+		machine.pre_previous_state = machine.previous_state;
+		machine.previous_state = machine.state;
+
+		machine.state = static_cast<CSVState>(
+		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+
+		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
+		machine.column_count += machine.previous_state == CSVState::FIELD_SEPARATOR;
+		sniffed_column_counts[machine.cur_rows] = machine.column_count;
+		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		machine.column_count -= (machine.column_count - 1) * (machine.previous_state == CSVState::RECORD_SEPARATOR);
+
+		// It means our carriage return is actually a record separator
+		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		machine.column_count -=
+		    (machine.column_count - 1) * (machine.state != CSVState::RECORD_SEPARATOR && carriage_return);
+
+		// Identify what is our line separator
+		machine.carry_on_separator =
+		    (machine.state == CSVState::RECORD_SEPARATOR && carriage_return) || machine.carry_on_separator;
+		machine.single_record_separator = ((machine.state != CSVState::RECORD_SEPARATOR && carriage_return) ||
+		                                   (machine.state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
+		                                  machine.single_record_separator;
+		if (machine.cur_rows >= machine.options.sample_chunk_size) {
+			// We sniffed enough rows
+			return true;
+		}
+		return false;
+	}
+	inline static void Finalize(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts) {
+		if (machine.state == CSVState::INVALID) {
+			return;
+		}
+		bool empty_line =
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
+		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
+		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
+		     machine.previous_state == CSVState::CARRIAGE_RETURN);
+		if (machine.cur_rows < machine.options.sample_chunk_size && !empty_line) {
+			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
+		}
+		NewLineIdentifier suggested_newline;
+		if (machine.carry_on_separator) {
+			if (machine.single_record_separator) {
+				suggested_newline = NewLineIdentifier::MIX;
+			} else {
+				suggested_newline = NewLineIdentifier::CARRY_ON;
+			}
+		} else {
+			suggested_newline = NewLineIdentifier::SINGLE;
+		}
+		if (machine.options.new_line == NewLineIdentifier::NOT_SET) {
+			machine.options.new_line = suggested_newline;
+		} else {
+			if (machine.options.new_line != suggested_newline) {
+				// Invalidate this whole detection
+				machine.cur_rows = 0;
+			}
+		}
+		sniffed_column_counts.erase(sniffed_column_counts.end() -
+		                                (machine.options.sample_chunk_size - machine.cur_rows),
+		                            sniffed_column_counts.end());
+	}
+};
+
 void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates,
                                                        vector<QuoteRule> &quoterule_candidates,
                                                        vector<vector<char>> &quote_candidates_map,
@@ -197,7 +286,7 @@ void CSVSniffer::DetectDialect() {
 	                                escape_candidates_map);
 	// Step 3: Analyze all candidates on the first chunk
 	for (auto &state_machine : csv_state_machines) {
-		state_machine->Reset(false);
+		state_machine->Reset();
 		AnalyzeDialectCandidate(std::move(state_machine), rows_read, best_consistent_rows, prev_padding_count);
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
