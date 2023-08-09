@@ -38,7 +38,7 @@ public:
 	void Parse(DataChunk &parse_chunk);
 
 	//! Resets the state machine, so it can be used again
-	void Reset();
+	void Reset(bool get_next_char = true);
 	CSVReaderOptions options;
 	CSVBufferIterator csv_buffer_iterator;
 	//! Which one was the identified start row for this file
@@ -47,21 +47,31 @@ public:
 	//! It holds the transitions of all states, on all 256 possible different characters
 	uint8_t transition_array[7][256];
 
-	// Both these variables are used for new line identifier detection
+	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
-	CSVState state {CSVState::STANDARD};
-	CSVState previous_state {CSVState::STANDARD};
-	CSVState pre_previous_state {CSVState::STANDARD};
-	idx_t cur_rows = 0;
-	idx_t column_count = 1;
-private:
 
+	CSVState state;
+	CSVState previous_state;
+	CSVState pre_previous_state;
+	idx_t cur_rows;
+	idx_t column_count;
+private:
 	//! Current char being looked at by the machine
 	char current_char;
 };
 
-struct SniffDialect{
+//! -------------- SNIFF DIALECT Process -----------//
+
+struct SniffDialect {
+	inline static void Initialize(CSVStateMachine& machine){
+		machine.state = CSVState::STANDARD;
+		machine.previous_state = CSVState::STANDARD;
+		machine.pre_previous_state = CSVState::STANDARD;
+		machine.cur_rows = 0;
+		machine.column_count = 1;
+	}
+
 	inline static bool Process(CSVStateMachine& machine,vector<idx_t> &sniffed_column_counts, char current_char){
 
 	D_ASSERT(sniffed_column_counts.size() == machine.options.sample_chunk_size);
@@ -133,7 +143,6 @@ struct SniffDialect{
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (machine.options.sample_chunk_size - machine.cur_rows),
 	                            sniffed_column_counts.end());
-
 }
 
 };

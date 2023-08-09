@@ -64,6 +64,7 @@ public:
 	//! This functions templates an operation over the CSV File
 	template <class OP>
 	inline bool Process(CSVStateMachine& machine, vector<idx_t> &sniffed_column_counts) {
+		OP::Initialize(machine);
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
 			cur_pos = 0;
@@ -78,8 +79,9 @@ public:
 			}
 		}
 		while (cur_buffer_handle){
+			char* buffer_handle_ptr = cur_buffer_handle->Ptr();
 			while (cur_pos < cur_buffer_handle->actual_size){
-				if (OP::Process(machine,sniffed_column_counts,cur_buffer_handle->Ptr()[cur_pos++])){
+				if (OP::Process(machine,sniffed_column_counts,buffer_handle_ptr[cur_pos++])){
 					//! Not-Done Processing the File, but the Operator is happy!
 					OP::Finalize(machine,sniffed_column_counts);
 					return false;

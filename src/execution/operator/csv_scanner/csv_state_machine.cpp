@@ -69,9 +69,11 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBuffe
 	transition_array[escape_state][static_cast<uint8_t>(options.escape)] = quoted_state;
 }
 
-void CSVStateMachine::Reset() {
+void CSVStateMachine::Reset(bool get_next_char) {
 	csv_buffer_iterator.Reset();
-	current_char = csv_buffer_iterator.GetNextChar();
+	if (get_next_char){
+		current_char = csv_buffer_iterator.GetNextChar();
+	}
 }
 
 void VerifyUTF8(CSVReaderOptions &options, idx_t linenr, string &value) {
