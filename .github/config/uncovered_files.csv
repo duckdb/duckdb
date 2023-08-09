@@ -157,9 +157,11 @@ execution/expression_executor_state.cpp	2
 execution/index/art/art.cpp	3
 execution/index/art/art_key.cpp	6
 execution/index/art/iterator.cpp	2
-execution/index/art/node.cpp	6
+execution/index/art/leaf.cpp	3
+execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	1
-execution/index/art/prefix.cpp	1
+execution/index/art/node48.cpp	5
+execution/index/art/prefix.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
@@ -262,7 +264,8 @@ function/scalar/struct/struct_extract.cpp	3
 function/scalar/system/aggregate_export.cpp	10
 function/scalar_function.cpp	7
 function/table/arrow.cpp	61
-function/table/arrow_conversion.cpp	229
+function/table/arrow_conversion.cpp	231
+function/table/arrow/arrow_duck_schema.cpp	3
 function/table/checkpoint.cpp	7
 function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
@@ -392,6 +395,7 @@ include/duckdb/function/function_serialization.hpp	2
 include/duckdb/function/function_set.hpp	3
 include/duckdb/function/scalar/list/contains_or_position.hpp	16
 include/duckdb/function/table_function.hpp	6
+include/duckdb/function/table/arrow/arrow_duck_schema.hpp	3
 include/duckdb/function/udf_function.hpp	108
 include/duckdb/main/appender.hpp	4
 include/duckdb/main/capi/cast/from_decimal.hpp	2
@@ -764,7 +768,8 @@ storage/statistics/numeric_stats.cpp	15
 storage/statistics/numeric_stats_union.cpp	3
 storage/statistics/string_stats.cpp	8
 storage/statistics/struct_stats.cpp	7
-storage/storage_manager.cpp	3
+storage/storage_manager.cpp	6
+storage/metadata/metadata_manager.cpp	4
 storage/table/chunk_info.cpp	16
 storage/table/column_checkpoint_state.cpp	20
 storage/table/column_data.cpp	16

@@ -71,7 +71,7 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/config.hpp"
