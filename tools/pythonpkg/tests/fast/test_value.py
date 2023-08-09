@@ -49,6 +49,7 @@ from duckdb.typing import (
     BIGINT,
     UBIGINT,
     HUGEINT,
+    UHUGEINT,
     UUID,
     FLOAT,
     DOUBLE,
