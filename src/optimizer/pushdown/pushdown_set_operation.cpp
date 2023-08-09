@@ -55,8 +55,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 		left_pushdown.filters.push_back(std::move(filters[i]));
 		right_pushdown.filters.push_back(std::move(right_filter));
 	}
-	op->children[0] = left_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
-	op->children[1] = right_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	op->children[0] = left_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
+	op->children[1] = right_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])));
 	bool left_empty = op->children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	bool right_empty = op->children[1]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT;
 	if (left_empty && right_empty)
@@ -75,7 +75,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				// union with empty left side: return right child
 				auto &projection = op->children[1]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
-				return unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get());
+				return unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1]));
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_EXCEPT:
@@ -98,7 +98,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSetOperation(unique_ptr<Logi
 				// union or except with empty right child: return left child
 				auto &projection = op->children[0]->Cast<LogicalProjection>();
 				projection.table_index = setop.table_index;
-				return unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get());
+				return unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
 			}
 			break;
 		case LogicalOperatorType::LOGICAL_INTERSECT:

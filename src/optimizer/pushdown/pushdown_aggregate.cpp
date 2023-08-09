@@ -93,7 +93,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 		i--;
 	}
 	child_pushdown.GenerateFilters();
-	op->children[0] = child_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+	op->children[0] = child_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 	return FinishPushdown(std::move(op));
 }
 

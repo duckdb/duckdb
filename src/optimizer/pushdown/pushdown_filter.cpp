@@ -24,6 +24,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownFilter(unique_ptr<LogicalOpe
 		}
 	}
 	GenerateFilters();
-	return Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)filter.children[0].get()));
+	return Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(filter.children[0])));
 }
 } // namespace duckdb

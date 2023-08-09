@@ -44,7 +44,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownProjection(unique_ptr<Logica
 	}
 	child_pushdown.GenerateFilters();
 	// now push into children
-	op->children[0] = child_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+	op->children[0] = child_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 	if (op->children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT)
 	{
 		// child returns an empty result: generate an empty result here too

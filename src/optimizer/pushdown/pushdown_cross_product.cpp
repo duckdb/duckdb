@@ -40,8 +40,8 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 			}
 		}
 	}
-	op->children[0] = left_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
-	op->children[1] = right_pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	op->children[0] = left_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
+	op->children[1] = right_pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])));
 	if (!join_expressions.empty())
 	{
 		// join conditions found: turn into inner join
@@ -49,11 +49,11 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		vector<JoinCondition> conditions;
 		vector<unique_ptr<Expression>> arbitrary_expressions;
 		auto join_type = JoinType::INNER;
-		unique_ptr<LogicalOperator> left_child = unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get());
-		unique_ptr<LogicalOperator> right_child = unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get());
+		unique_ptr<LogicalOperator> left_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
+		unique_ptr<LogicalOperator> right_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
 		LogicalComparisonJoin::ExtractJoinConditions(join_type, left_child, right_child, left_bindings, right_bindings, join_expressions, conditions, arbitrary_expressions);
 		// create the join from the join conditions
-		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, JoinRefType::REGULAR, unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()), unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()), std::move(conditions), std::move(arbitrary_expressions));
+		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, JoinRefType::REGULAR, unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])), unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])), std::move(conditions), std::move(arbitrary_expressions));
 	}
 	else
 	{
