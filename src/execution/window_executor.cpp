@@ -714,7 +714,7 @@ class WindowValueState : public WindowExecutorBoundsState {
 public:
 	WindowValueState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count,
 	                 const ValidityMask &partition_mask_p, const ValidityMask &order_mask_p,
-	                 WindowExclusion exclude_mode_p, const ValidityMask &ignore_nulls)
+	                 const ValidityMask &ignore_nulls)
 	    : WindowExecutorBoundsState(wexpr, context, count, partition_mask_p, order_mask_p)
 
 	{
@@ -723,7 +723,7 @@ public:
 			ignore_nulls_exclude = &ignore_nulls;
 		} else {
 			// create the exclusion filter based on ignore_nulls
-			exclusion_filter = make_uniq<ExclusionFilter>(exclude_mode_p, count, ignore_nulls);
+			exclusion_filter = make_uniq<ExclusionFilter>(wexpr.exclude_clause, count, ignore_nulls);
 			ignore_nulls_exclude = &exclusion_filter->mask;
 		}
 	}
@@ -1214,7 +1214,7 @@ unique_ptr<WindowExecutorState> WindowValueExecutor::GetExecutorState() const {
 	if (wexpr.type == ExpressionType::WINDOW_FIRST_VALUE || wexpr.type == ExpressionType::WINDOW_LAST_VALUE ||
 	    wexpr.type == ExpressionType::WINDOW_NTH_VALUE) {
 		return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask,
-		                                   wexpr.exclude_clause, ignore_nulls);
+		                                   ignore_nulls);
 	} else {
 		return make_uniq<WindowExecutorBoundsState>(wexpr, context, payload_count, partition_mask, order_mask);
 	}
