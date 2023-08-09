@@ -316,14 +316,14 @@ public:
 	{
 		if (!op.children.empty())
 		{
-			root = unique_ptr<LogicalOperator>((LogicalOperator*)op.children[0].get());
+			root = unique_ptr_cast<Operator, LogicalOperator>(std::move(op.children[0]));
 			D_ASSERT(root);
 			VisitOperatorExpressions(op);
 			op.children[0] = std::move(root);
 			for (idx_t i = 0; i < op.children.size(); i++)
 			{
 				D_ASSERT(op.children[i]);
-				unique_ptr<LogicalOperator> child = unique_ptr<LogicalOperator>((LogicalOperator*)op.children[i].get());
+				unique_ptr<LogicalOperator> child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op.children[i]));
 				VisitOperator(*child);
 			}
 		}
