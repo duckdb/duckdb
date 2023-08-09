@@ -887,8 +887,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 		result.push_back(path);
 	} else if (!absolute_path) {
 		Value value;
-		FileOpenerInfo info = {path};
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value, info)) {
+		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
@@ -935,9 +934,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		absolute_path = true;
 	} else if (splits[0] == "~") {
 		// starts with home directory
-		auto info = duckdb::make_uniq<FileOpenerInfo>();
-		info->file_path = path;
-		auto home_directory = GetHomeDirectory(opener, info.get());
+		auto home_directory = GetHomeDirectory(opener);
 		if (!home_directory.empty()) {
 			absolute_path = true;
 			splits[0] = home_directory;
@@ -959,8 +956,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 	} else {
 		// If file_search_path is set, use those paths as the first glob elements
 		Value value;
-		FileOpenerInfo info = {path};
-		if (opener && opener->TryGetCurrentSetting("file_search_path", value, info)) {
+		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {

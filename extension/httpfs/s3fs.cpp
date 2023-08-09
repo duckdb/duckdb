@@ -223,25 +223,25 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
 	        endpoint, url_style,     use_ssl,           s3_url_compatibility_mode};
 }
 
-S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener, FileOpenerInfo &info) {
+S3ConfigParams S3ConfigParams::ReadFrom(FileOpener *opener) {
 	uint64_t uploader_max_filesize;
 	uint64_t max_parts_per_file;
 	uint64_t max_upload_threads;
 	Value value;
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value, info)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_filesize", value)) {
 		uploader_max_filesize = DBConfig::ParseMemoryLimit(value.GetValue<string>());
 	} else {
 		uploader_max_filesize = S3ConfigParams::DEFAULT_MAX_FILESIZE;
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value, info)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_max_parts_per_file", value)) {
 		max_parts_per_file = value.GetValue<uint64_t>();
 	} else {
 		max_parts_per_file = S3ConfigParams::DEFAULT_MAX_PARTS_PER_FILE; // AWS Default
 	}
 
-	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", value, info)) {
+	if (FileOpener::TryGetCurrentSetting(opener, "s3_uploader_thread_limit", value)) {
 		max_upload_threads = value.GetValue<uint64_t>();
 	} else {
 		max_upload_threads = S3ConfigParams::DEFAULT_MAX_UPLOAD_THREADS;
@@ -698,8 +698,8 @@ unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_
 	auto parsed_s3_url = S3UrlParse(path, auth_params);
 	ReadQueryParams(parsed_s3_url.query_param, auth_params);
 
-	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener, info), auth_params,
-	                                       S3ConfigParams::ReadFrom(opener, info));
+	return duckdb::make_uniq<S3FileHandle>(*this, path, flags, HTTPParams::ReadFrom(opener), auth_params,
+	                                       S3ConfigParams::ReadFrom(opener));
 }
 
 // this computes the signature from https://czak.pl/2015/09/15/s3-rest-api-with-curl.html
@@ -908,7 +908,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	}
 
 	string shared_path = parsed_glob_url.substr(0, first_wildcard_pos);
-	auto http_params = HTTPParams::ReadFrom(opener, info);
+	auto http_params = HTTPParams::ReadFrom(opener);
 
 	ReadQueryParams(parsed_s3_url.query_param, s3_auth_params);
 

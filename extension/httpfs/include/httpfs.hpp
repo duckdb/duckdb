@@ -43,7 +43,7 @@ struct HTTPParams {
 	float retry_backoff;
 	bool force_download;
 
-	static HTTPParams ReadFrom(FileOpener *opener, FileOpenerInfo &info);
+	static HTTPParams ReadFrom(FileOpener *opener);
 };
 
 class HTTPFileHandle : public FileHandle {

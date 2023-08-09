@@ -177,7 +177,7 @@ public:
 	//! Gets the working directory
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
+	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
 	//! Gets the users home directory
 	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
