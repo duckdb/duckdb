@@ -15,7 +15,7 @@ unique_ptr<LogicalOperator> RegexRangeFilter::Rewrite(unique_ptr<LogicalOperator
 {
 	for (idx_t child_idx = 0; child_idx < op->children.size(); child_idx++)
 	{
-		op->children[child_idx] = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[child_idx].get()));
+		op->children[child_idx] = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[child_idx])));
 	}
 	if (op->logical_type != LogicalOperatorType::LOGICAL_FILTER)
 	{

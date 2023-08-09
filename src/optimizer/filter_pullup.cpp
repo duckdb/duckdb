@@ -24,7 +24,7 @@ unique_ptr<LogicalOperator> FilterPullup::Rewrite(unique_ptr<LogicalOperator> op
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 	{
 		// we can just pull directly through these operations without any rewriting
-		op->children[0] = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+		op->children[0] = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 		return op;
 	}
 	default:
@@ -86,7 +86,7 @@ unique_ptr<LogicalOperator> FilterPullup::FinishPullup(unique_ptr<LogicalOperato
 	for (idx_t i = 0; i < op->children.size(); i++)
 	{
 		FilterPullup pullup;
-		op->children[i] = pullup.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[i].get()));
+		op->children[i] = pullup.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[i])));
 	}
 	// now pull up any existing filters
 	if (filters_expr_pullup.empty())

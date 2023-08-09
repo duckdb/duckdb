@@ -100,7 +100,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			// sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
 			// the DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
 			JoinOrderOptimizer optimizer(context);
-			unique_ptr<LogicalOperator> tmp = unique_ptr<LogicalOperator>((LogicalOperator*)delim_join.children[1].get());
+			unique_ptr<LogicalOperator> tmp = unique_ptr_cast<Operator, LogicalOperator>(std::move(delim_join.children[1]));
 			delim_join.children[1] = optimizer.Optimize(std::move(tmp));
 		}
 	}
@@ -137,8 +137,9 @@ void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr, vector<uni
 	// search children before adding, so the deepest candidates get added first
 	for (auto &child : op->children)
 	{
-		unique_ptr<LogicalOperator> tmp = unique_ptr<LogicalOperator>((LogicalOperator*)child.get());
+		unique_ptr<LogicalOperator> tmp = unique_ptr_cast<Operator, LogicalOperator>(std::move(child));
 		FindCandidates(&tmp, candidates);
+		child = std::move(tmp);
 	}
 	// search for projection/aggregate
 	if (op->logical_type != LogicalOperatorType::LOGICAL_PROJECTION && op->logical_type != LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
@@ -305,7 +306,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 		join.children[1 - delim_idx] = std::move(filter_op);
 	}
 	// temporarily save deleted operator so its expressions are still available
-	updater.temp_ptr = unique_ptr<LogicalOperator>((LogicalOperator*)proj_or_agg.children[0].release());
+	updater.temp_ptr = unique_ptr_cast<Operator, LogicalOperator>(std::move(proj_or_agg.children[0]));
 	// replace the redundant join
 	proj_or_agg.children[0] = std::move(join.children[1 - delim_idx]);
 	return true;

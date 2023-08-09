@@ -38,7 +38,7 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 		case LogicalOperatorType::LOGICAL_ORDER_BY:
 		{
 			// we can just push directly through these operations without any rewriting
-			op->children[0] = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+			op->children[0] = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 			return op;
 		}
 		case LogicalOperatorType::LOGICAL_GET:
@@ -139,7 +139,7 @@ unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOpe
 	for (auto &child : op->children)
 	{
 		FilterPushdown pushdown(optimizer);
-		child = pushdown.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)child.get()));
+		child = pushdown.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 	}
 	// now push any existing filters
 	return PushFinalFilters(std::move(op));

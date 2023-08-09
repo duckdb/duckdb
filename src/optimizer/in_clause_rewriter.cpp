@@ -20,7 +20,7 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 	}
 	for (auto &child : op->children)
 	{
-		child = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)child.get()));
+		child = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 	}
 	return op;
 }
