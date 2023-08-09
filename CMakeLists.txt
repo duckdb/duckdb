@@ -399,6 +399,7 @@ endif()
 
 if(MOLD_LINKER)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=mold")
 endif()
 
 if(NOT MSVC)
