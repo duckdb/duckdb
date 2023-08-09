@@ -665,7 +665,12 @@ static LogicalType CombineNumericTypes(const LogicalType &left, const LogicalTyp
 	if (left.id() == LogicalTypeId::TINYINT || right.id() == LogicalTypeId::UTINYINT) {
 		return LogicalType::SMALLINT;
 	}
-	throw InternalException("Cannot combine these numeric types!?");
+
+	// No type is larger than (u)hugeint, so casting to double is required
+	if (left.id() == LogicalTypeId::HUGEINT || right.id() == LogicalTypeId::UHUGEINT) {
+		return LogicalType::DOUBLE;
+	}
+	throw InternalException("Cannot combine these numeric types (%s & %s)", left.ToString(), right.ToString());
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {

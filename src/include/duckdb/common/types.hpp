@@ -216,8 +216,8 @@ enum class LogicalTypeId : uint8_t {
 	TIME_TZ = 34,
 	BIT = 36,
 
-	UHUGEINT = 49,
-	HUGEINT = 50,
+	HUGEINT = 49,
+	UHUGEINT = 50,
 	POINTER = 51,
 	VALIDITY = 53,
 	UUID = 54,
