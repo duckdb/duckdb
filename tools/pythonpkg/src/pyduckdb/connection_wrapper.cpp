@@ -329,7 +329,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AliasDF(const PandasDataFrame 
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FilterDf(const PandasDataFrame &df, const string &expr,
                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromDF(df)->Filter(expr);
+	return conn->FromDF(df)->FilterFromExpression(expr);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::LimitDF(const PandasDataFrame &df, int64_t n,
