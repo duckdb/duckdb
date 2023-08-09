@@ -718,17 +718,56 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Intersect(DuckDBPyRelation *other
 	return make_uniq<DuckDBPyRelation>(rel->Intersect(other->rel));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
+namespace {
+struct SupportedPythonJoinType {
+	string name;
+	JoinType type;
+};
+} // namespace
+
+static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
+	static const SupportedPythonJoinType supported_types[] = {
+	    {.name = "left", .type = JoinType::LEFT},   {.name = "right", .type = JoinType::RIGHT},
+	    {.name = "outer", .type = JoinType::OUTER}, {.name = "semi", .type = JoinType::SEMI},
+	    {.name = "inner", .type = JoinType::INNER}, {.name = "anti", .type = JoinType::ANTI}};
+	static const auto supported_types_count = sizeof(supported_types) / sizeof(SupportedPythonJoinType);
+	length = supported_types_count;
+	return reinterpret_cast<const SupportedPythonJoinType *>(supported_types);
+}
+
+static JoinType ParseJoinType(const string &type) {
+	idx_t supported_types_count;
+	auto supported_types = GetSupportedJoinTypes(supported_types_count);
+	for (idx_t i = 0; i < supported_types_count; i++) {
+		auto &supported_type = supported_types[i];
+		if (supported_type.name == type) {
+			return supported_type.type;
+		}
+	}
+	return JoinType::INVALID;
+}
+
+[[noreturn]] void ThrowUnsupportedJoinTypeError(const string &provided) {
+	vector<string> supported_options;
+	idx_t length;
+	auto supported_types = GetSupportedJoinTypes(length);
+	for (idx_t i = 0; i < length; i++) {
+		supported_options.push_back(StringUtil::Format("'%s'", supported_types[i].name));
+	}
+	auto options = StringUtil::Join(supported_options, ", ");
+	throw InvalidInputException("Unsupported join type %s, try one of: %s", provided, options);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const py::object &condition,
                                                     const string &type) {
+
 	JoinType dtype;
 	string type_string = StringUtil::Lower(type);
 	StringUtil::Trim(type_string);
-	if (type_string == "inner") {
-		dtype = JoinType::INNER;
-	} else if (type_string == "left") {
-		dtype = JoinType::LEFT;
-	} else {
-		throw InvalidInputException("Unsupported join type %s	 try 'inner' or 'left'", type_string);
+
+	dtype = ParseJoinType(type_string);
+	if (dtype == JoinType::INVALID) {
+		ThrowUnsupportedJoinTypeError(type);
 	}
 	auto alias = GetAlias();
 	auto other_alias = other->GetAlias();
@@ -736,7 +775,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
-	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
+	if (py::isinstance<py::str>(condition)) {
+		auto condition_string = std::string(py::cast<py::str>(condition));
+		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
+	}
+	shared_ptr<DuckDBPyExpression> condition_expr;
+	if (!py::try_cast(condition, condition_expr)) {
+		throw InvalidInputException(
+		    "Please provide condition as an expression either in string form or as an Expression object");
+	}
+	vector<unique_ptr<ParsedExpression>> conditions;
+	conditions.push_back(condition_expr->GetExpression().Copy());
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {

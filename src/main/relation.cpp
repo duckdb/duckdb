@@ -129,7 +129,12 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
                                     JoinRefType ref_type) {
 	auto expression_list = Parser::ParseExpressionList(condition, context.GetContext()->GetParserOptions());
 	D_ASSERT(!expression_list.empty());
+	return Join(other, std::move(expression_list), type, ref_type);
+}
 
+shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
+                                    vector<unique_ptr<ParsedExpression>> expression_list, JoinType type,
+                                    JoinRefType ref_type) {
 	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
 		vector<string> using_columns;

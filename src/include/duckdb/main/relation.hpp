@@ -103,6 +103,8 @@ public:
 	// JOIN operation
 	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,
 	                                     JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
+	shared_ptr<Relation> Join(const shared_ptr<Relation> &other, vector<unique_ptr<ParsedExpression>> condition,
+	                          JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
 
 	// CROSS PRODUCT operation
 	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other,
