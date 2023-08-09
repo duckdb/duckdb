@@ -60,10 +60,8 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 		D_ASSERT(!partitioned_data || partitioned_data->Count() == 0);
 		partitioned_data =
 		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
-		ResetCount();
 	} else {
 		partitioned_data->Reset();
-		ResetCount();
 	}
 
 	D_ASSERT(GetLayout().GetAggrWidth() == layout.GetAggrWidth());

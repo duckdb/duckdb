@@ -296,7 +296,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
+bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, RadixHTLocalSinkState &lstate) {
 	auto &config = gstate.config;
 	auto &ht = *lstate.ht;
 	auto &partitioned_data = ht.GetPartitionedData();
@@ -320,7 +320,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 		partitioned_data->Repartition(*lstate.abandoned_data);
 		ht.SetRadixBits(gstate.config.GetRadixBits());
 		ht.InitializePartitionedData();
-		return;
+		return true;
 	}
 
 	const auto partition_count = partitioned_data->PartitionCount();
@@ -336,7 +336,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 
 	const auto global_radix_bits = config.GetRadixBits();
 	if (current_radix_bits == global_radix_bits) {
-		return; // We're already on the right number of radix bits
+		return false; // We're already on the right number of radix bits
 	}
 
 	// We're out-of-sync with the global radix bits, repartition
@@ -345,6 +345,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	ht.SetRadixBits(global_radix_bits);
 	ht.InitializePartitionedData();
 	old_partitioned_data->Repartition(*ht.GetPartitionedData());
+	return true;
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
@@ -375,7 +376,13 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	}
 
 	// Check if we need to repartition
-	MaybeRepartition(context.client, gstate, lstate);
+	auto repartitioned = MaybeRepartition(context.client, gstate, lstate);
+
+	if (repartitioned && ht.Count() != 0) {
+		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1/2 threads
+		ht.ClearPointerTable();
+		ht.ResetCount();
+	}
 
 	// TODO: combine early and often
 }

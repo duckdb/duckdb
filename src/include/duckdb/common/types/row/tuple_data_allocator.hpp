@@ -85,7 +85,7 @@ public:
 private:
 	//! Builds out a single part (grabs the lock)
 	TupleDataChunkPart BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-	                                  const idx_t append_offset, const idx_t append_count);
+	                                  const idx_t append_offset, const idx_t append_count, TupleDataChunk &chunk);
 	//! Internal function for InitializeChunkState
 	void InitializeChunkStateInternal(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, idx_t offset,
 	                                  bool recompute, bool init_heap_pointers, bool init_heap_sizes,

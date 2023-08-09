@@ -73,23 +73,29 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 		return;
 	}
 
-	Vector sources_copy(LogicalType::POINTER);
-	Vector targets_copy(LogicalType::POINTER);
-	VectorOperations::Copy(sources, sources_copy, count, 0, 0);
-	VectorOperations::Copy(targets, targets_copy, count, 0, 0);
-
 	//	Move to the first aggregate states
-	VectorOperations::AddInPlace(sources_copy, layout.GetAggrOffset(), count);
-	VectorOperations::AddInPlace(targets_copy, layout.GetAggrOffset(), count);
+	VectorOperations::AddInPlace(sources, layout.GetAggrOffset(), count);
+	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
+
+	// Keep track of the offset
+	idx_t offset = layout.GetAggrOffset();
+
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.combine(sources_copy, targets_copy, aggr_input_data, count);
+		aggr.function.combine(sources, targets, aggr_input_data, count);
 
 		// Move to the next aggregate states
-		VectorOperations::AddInPlace(sources_copy, aggr.payload_size, count);
-		VectorOperations::AddInPlace(targets_copy, aggr.payload_size, count);
+		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
+		VectorOperations::AddInPlace(targets, aggr.payload_size, count);
+
+		// Increment the offset
+		offset += aggr.payload_size;
 	}
+
+	// Now subtract the offset to get back to the original position
+	VectorOperations::AddInPlace(sources, -offset, count);
+	VectorOperations::AddInPlace(targets, -offset, count);
 }
 
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,

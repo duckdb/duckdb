@@ -72,7 +72,7 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 
 		// Build the next part
 		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next), layout);
+		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk), layout);
 		auto &chunk_part = chunk.parts.back();
 		next = chunk_part.count;
 
@@ -101,9 +101,10 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 }
 
 TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
-                                                      const idx_t append_offset, const idx_t append_count) {
+                                                      const idx_t append_offset, const idx_t append_count,
+                                                      TupleDataChunk &chunk) {
 	D_ASSERT(append_count != 0);
-	TupleDataChunkPart result;
+	TupleDataChunkPart result(*chunk.lock);
 
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
@@ -247,7 +248,7 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 		if (recompute && pin_state.properties != TupleDataPinProperties::ALREADY_PINNED) {
 			const auto new_base_heap_ptr = GetBaseHeapPointer(pin_state, part);
 			if (part.base_heap_ptr != new_base_heap_ptr) {
-				lock_guard<mutex> guard(*part.lock);
+				lock_guard<mutex> guard(part.lock);
 				const auto old_base_heap_ptr = part.base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
 					Vector old_heap_ptrs(

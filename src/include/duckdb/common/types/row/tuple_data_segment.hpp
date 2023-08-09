@@ -22,7 +22,7 @@ class TupleDataLayout;
 
 struct TupleDataChunkPart {
 public:
-	TupleDataChunkPart();
+	TupleDataChunkPart(mutex &lock);
 
 	//! Disable copy constructors
 	TupleDataChunkPart(const TupleDataChunkPart &other) = delete;
@@ -47,7 +47,7 @@ public:
 	//! Tuple count for this chunk part
 	uint32_t count;
 	//! Lock for recomputing heap pointers (owned by TupleDataChunk)
-	mutex *lock;
+	reference<mutex> lock;
 };
 
 struct TupleDataChunk {

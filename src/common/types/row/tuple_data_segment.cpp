@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-TupleDataChunkPart::TupleDataChunkPart() {
+TupleDataChunkPart::TupleDataChunkPart(mutex &lock_p) : lock(lock_p) {
 }
 
 void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
@@ -18,7 +18,7 @@ void SwapTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
 	std::swap(a.lock, b.lock);
 }
 
-TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept {
+TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept : lock((other.lock)) {
 	SwapTupleDataChunkPart(*this, other);
 }
 
@@ -54,7 +54,7 @@ void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &l
 	if (!layout.AllConstant() && part.total_heap_size > 0) {
 		heap_block_ids.insert(part.heap_block_index);
 	}
-	part.lock = lock.get();
+	part.lock = *lock;
 	parts.emplace_back(std::move(part));
 }
 
