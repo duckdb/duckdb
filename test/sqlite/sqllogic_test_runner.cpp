@@ -168,6 +168,7 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 		result.push_back("usmallint");
 		result.push_back("uinteger");
 		result.push_back("ubigint");
+		result.push_back("uhugeint");
 		collection = true;
 	}
 	if (is_numeric) {
