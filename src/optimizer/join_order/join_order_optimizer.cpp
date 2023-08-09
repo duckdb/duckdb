@@ -118,7 +118,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		{
 			// don't push filters through projection or aggregate and group by
 			JoinOrderOptimizer optimizer(context);
-			op->children[0] = optimizer.Optimize(std::move(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get())));
+			op->children[0] = optimizer.Optimize(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 			return false;
 		}
 		op = (LogicalOperator*)op->children[0].get();
@@ -178,7 +178,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		{
 			child_binding_maps.emplace_back();
 			JoinOrderOptimizer optimizer(context);
-			child = optimizer.Optimize(std::move(unique_ptr<LogicalOperator>((LogicalOperator*)child.get())));
+			child = optimizer.Optimize(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 			// save the relation bindings from the optimized child. These later all get added to the
 			// parent cardinality_estimator relation column binding map.
 			optimizer.cardinality_estimator.CopyRelationMap(child_binding_maps.at(child_bindings_it));
@@ -251,7 +251,7 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op, vector<
 		}
 		// we run the join order optimizer within the subquery as well
 		JoinOrderOptimizer optimizer(context);
-		op->children[0] = optimizer.Optimize(std::move(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get())));
+		op->children[0] = optimizer.Optimize(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 		// push one child column binding map back.
 		vector<column_binding_map_t<ColumnBinding>> child_binding_maps;
 		child_binding_maps.emplace_back();
