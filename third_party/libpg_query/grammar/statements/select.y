@@ -3104,7 +3104,7 @@ opt_partition_clause: PARTITION BY expr_list		{ $$ = $3; }
 opt_frame_clause:
 			RANGE frame_extent opt_window_exclusion_clause
 				{
-					PGWindowDef  *n = $2;
+					PGWindowDef *n = $2;
 
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_RANGE;
 					n->frameOptions |= $3;
@@ -3112,7 +3112,7 @@ opt_frame_clause:
 				}
 			| ROWS frame_extent opt_window_exclusion_clause
 				{
-					PGWindowDef  *n = $2;
+					PGWindowDef *n = $2;
 
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_ROWS;
 					n->frameOptions |= $3;
@@ -3120,7 +3120,7 @@ opt_frame_clause:
 				}
 			| GROUPS frame_extent opt_window_exclusion_clause
 				{
-					PGWindowDef  *n = $2;
+					PGWindowDef *n = $2;
 
 					n->frameOptions |= FRAMEOPTION_NONDEFAULT | FRAMEOPTION_GROUPS;
 					n->frameOptions |= $3;
@@ -3128,7 +3128,7 @@ opt_frame_clause:
 				}
 			| /*EMPTY*/
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_DEFAULTS;
 					n->startOffset = NULL;
@@ -3139,7 +3139,7 @@ opt_frame_clause:
 
 frame_extent: frame_bound
 				{
-					PGWindowDef  *n = $1;
+					PGWindowDef *n = $1;
 
 					/* reject invalid cases */
 					if (n->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)
@@ -3157,8 +3157,8 @@ frame_extent: frame_bound
 				}
 			| BETWEEN frame_bound AND frame_bound
 				{
-					PGWindowDef  *n1 = $2;
-					PGWindowDef  *n2 = $4;
+					PGWindowDef *n1 = $2;
+					PGWindowDef *n2 = $4;
 
 					/* form merged options */
 					int		frameOptions = n1->frameOptions;
@@ -3203,7 +3203,7 @@ frame_extent: frame_bound
 frame_bound:
 			UNBOUNDED PRECEDING
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_PRECEDING;
 					n->startOffset = NULL;
@@ -3212,7 +3212,7 @@ frame_bound:
 				}
 			| UNBOUNDED FOLLOWING
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_START_UNBOUNDED_FOLLOWING;
 					n->startOffset = NULL;
@@ -3221,7 +3221,7 @@ frame_bound:
 				}
 			| CURRENT_P ROW
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_START_CURRENT_ROW;
 					n->startOffset = NULL;
@@ -3230,7 +3230,7 @@ frame_bound:
 				}
 			| a_expr PRECEDING
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_START_OFFSET_PRECEDING;
 					n->startOffset = $1;
@@ -3239,7 +3239,7 @@ frame_bound:
 				}
 			| a_expr FOLLOWING
 				{
-					PGWindowDef  *n = makeNode(PGWindowDef);
+					PGWindowDef *n = makeNode(PGWindowDef);
 
 					n->frameOptions = FRAMEOPTION_START_OFFSET_FOLLOWING;
 					n->startOffset = $1;
