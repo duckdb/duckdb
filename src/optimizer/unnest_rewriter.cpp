@@ -67,8 +67,9 @@ void UnnestRewriter::FindCandidates(unique_ptr<LogicalOperator>* op_ptr, vector<
 	// search children before adding, so that we add candidates bottom-up
 	for (auto &child : op->children)
 	{
-		unique_ptr<LogicalOperator> tmp = unique_ptr<LogicalOperator>((LogicalOperator*)child.get());
+		unique_ptr<LogicalOperator> tmp = unique_ptr_cast<Operator, LogicalOperator>(std::move(child));
 		FindCandidates(&tmp, candidates);
+		child = std::move(tmp);
 	}
 	// search for operator that has a LOGICAL_DELIM_JOIN as its child
 	if (op->children.size() != 1)
@@ -136,7 +137,7 @@ bool UnnestRewriter::RewriteCandidate(unique_ptr<LogicalOperator> *candidate)
 	auto curr_op = &(delim_join.children[1]);
 	while ((*curr_op)->logical_type == LogicalOperatorType::LOGICAL_PROJECTION)
 	{
-		unique_ptr<LogicalOperator> tmp = unique_ptr<LogicalOperator>((LogicalOperator*)curr_op->get());
+		unique_ptr<LogicalOperator> tmp = unique_ptr_cast<Operator, LogicalOperator>(std::move(*curr_op));
 		path_to_unnest.push_back(&tmp);
 		curr_op = &curr_op->get()->children[0];
 	}
@@ -160,7 +161,7 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 	auto curr_op = &(topmost_op.children[0]);
 	while ((*curr_op)->logical_type == LogicalOperatorType::LOGICAL_PROJECTION)
 	{
-		unique_ptr<LogicalOperator> tmp = unique_ptr<LogicalOperator>((LogicalOperator*)curr_op->get());
+		unique_ptr<LogicalOperator> tmp = unique_ptr_cast<Operator, LogicalOperator>(std::move(*curr_op));
 		path_to_unnest.push_back(&tmp);
 		D_ASSERT((*curr_op)->logical_type == LogicalOperatorType::LOGICAL_PROJECTION);
 		auto &proj = ((LogicalOperator*)curr_op->get())->Cast<LogicalProjection>();
