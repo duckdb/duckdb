@@ -651,6 +651,68 @@ class DataFrame:
 
     unionAll = union
 
+    def unionByName(self, other: "DataFrame", allowMissingColumns: bool = False) -> "DataFrame":
+        """Returns a new :class:`DataFrame` containing union of rows in this and another
+        :class:`DataFrame`.
+
+        This is different from both `UNION ALL` and `UNION DISTINCT` in SQL. To do a SQL-style set
+        union (that does deduplication of elements), use this function followed by :func:`distinct`.
+
+        .. versionadded:: 2.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be combined.
+        allowMissingColumns : bool, optional, default False
+           Specify whether to allow missing columns.
+
+           .. versionadded:: 3.1.0
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Combined DataFrame.
+
+        Examples
+        --------
+        The difference between this function and :func:`union` is that this function
+        resolves columns by name (not by position):
+
+        >>> df1 = spark.createDataFrame([[1, 2, 3]], ["col0", "col1", "col2"])
+        >>> df2 = spark.createDataFrame([[4, 5, 6]], ["col1", "col2", "col0"])
+        >>> df1.unionByName(df2).show()
+        +----+----+----+
+        |col0|col1|col2|
+        +----+----+----+
+        |   1|   2|   3|
+        |   6|   4|   5|
+        +----+----+----+
+
+        When the parameter `allowMissingColumns` is ``True``, the set of column names
+        in this and other :class:`DataFrame` can differ; missing columns will be filled with null.
+        Further, the missing columns of this :class:`DataFrame` will be added at the end
+        in the schema of the union result:
+
+        >>> df1 = spark.createDataFrame([[1, 2, 3]], ["col0", "col1", "col2"])
+        >>> df2 = spark.createDataFrame([[4, 5, 6]], ["col1", "col2", "col3"])
+        >>> df1.unionByName(df2, allowMissingColumns=True).show()
+        +----+----+----+----+
+        |col0|col1|col2|col3|
+        +----+----+----+----+
+        |   1|   2|   3|NULL|
+        |NULL|   4|   5|   6|
+        +----+----+----+----+
+        """
+        if not allowMissingColumns:
+            raise ContributionsAcceptedError
+        raise NotImplementedError
+        # The relational API does not have support for 'union_by_name' yet
+        # return DataFrame(self.relation.union_by_name(other.relation, allowMissingColumns), self.session)
+
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
