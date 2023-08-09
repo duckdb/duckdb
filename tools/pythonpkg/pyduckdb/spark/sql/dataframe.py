@@ -1,13 +1,14 @@
 from ..exception import ContributionsAcceptedError
 
-from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict
-from duckdb import StarExpression, ColumnExpression
+from typing import TYPE_CHECKING, List, Optional, Union, Tuple, overload, Sequence, Any, Dict, cast
+from duckdb import StarExpression, ColumnExpression, Expression
 
 from .readwriter import DataFrameWriter
 from .types import Row, StructType
 from .type_utils import duckdb_to_spark_schema
 from .column import Column
 import duckdb
+from functools import reduce
 
 if TYPE_CHECKING:
     from .session import SparkSession
@@ -273,6 +274,130 @@ class DataFrame:
         ['age', 'name']
         """
         return [f.name for f in self.schema.fields]
+
+    def join(
+        self,
+        other: "DataFrame",
+        on: Optional[Union[str, List[str], Column, List[Column]]] = None,
+        how: Optional[str] = None,
+    ) -> "DataFrame":
+        """Joins with another :class:`DataFrame`, using the given join expression.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Right side of the join
+        on : str, list or :class:`Column`, optional
+            a string for the join column name, a list of column names,
+            a join expression (Column), or a list of Columns.
+            If `on` is a string or a list of strings indicating the name of the join column(s),
+            the column(s) must exist on both sides, and this performs an equi-join.
+        how : str, optional
+            default ``inner``. Must be one of: ``inner``, ``cross``, ``outer``,
+            ``full``, ``fullouter``, ``full_outer``, ``left``, ``leftouter``, ``left_outer``,
+            ``right``, ``rightouter``, ``right_outer``, ``semi``, ``leftsemi``, ``left_semi``,
+            ``anti``, ``leftanti`` and ``left_anti``.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Joined DataFrame.
+
+        Examples
+        --------
+        The following performs a full outer join between ``df1`` and ``df2``.
+
+        >>> from pyspark.sql import Row
+        >>> from pyspark.sql.functions import desc
+        >>> df = spark.createDataFrame([(2, "Alice"), (5, "Bob")]).toDF("age", "name")
+        >>> df2 = spark.createDataFrame([Row(height=80, name="Tom"), Row(height=85, name="Bob")])
+        >>> df3 = spark.createDataFrame([Row(age=2, name="Alice"), Row(age=5, name="Bob")])
+        >>> df4 = spark.createDataFrame([
+        ...     Row(age=10, height=80, name="Alice"),
+        ...     Row(age=5, height=None, name="Bob"),
+        ...     Row(age=None, height=None, name="Tom"),
+        ...     Row(age=None, height=None, name=None),
+        ... ])
+
+        Inner join on columns (default)
+
+        >>> df.join(df2, 'name').select(df.name, df2.height).show()
+        +----+------+
+        |name|height|
+        +----+------+
+        | Bob|    85|
+        +----+------+
+        >>> df.join(df4, ['name', 'age']).select(df.name, df.age).show()
+        +----+---+
+        |name|age|
+        +----+---+
+        | Bob|  5|
+        +----+---+
+
+        Outer join for both DataFrames on the 'name' column.
+
+        >>> df.join(df2, df.name == df2.name, 'outer').select(
+        ...     df.name, df2.height).sort(desc("name")).show()
+        +-----+------+
+        | name|height|
+        +-----+------+
+        |  Bob|    85|
+        |Alice|  NULL|
+        | NULL|    80|
+        +-----+------+
+        >>> df.join(df2, 'name', 'outer').select('name', 'height').sort(desc("name")).show()
+        +-----+------+
+        | name|height|
+        +-----+------+
+        |  Tom|    80|
+        |  Bob|    85|
+        |Alice|  NULL|
+        +-----+------+
+
+        Outer join for both DataFrams with multiple columns.
+
+        >>> df.join(
+        ...     df3,
+        ...     [df.name == df3.name, df.age == df3.age],
+        ...     'outer'
+        ... ).select(df.name, df3.age).show()
+        +-----+---+
+        | name|age|
+        +-----+---+
+        |Alice|  2|
+        |  Bob|  5|
+        +-----+---+
+        """
+
+        if on is not None and not isinstance(on, list):
+            on = [on]  # type: ignore[assignment]
+
+        if on is not None:
+            assert isinstance(on, list)
+            # Get (or create) the Expressions from the list of Columns
+            on = [_to_column(x) for x in on]
+
+            # & all the Expressions together to form one Expression
+            assert isinstance(on[0], Expression), "on should be Column or list of Column"
+            on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
+
+        if on is None and how is None:
+            jdf = self.relation.join(other.relation)
+        else:
+            if how is None:
+                how = "inner"
+            if on is None:
+                on = "true"
+            else:
+                on = str(on)
+            assert isinstance(how, str), "how should be a string"
+            jdf = self.relation.join(other.relation.set_alias("__other_alias__"), on, how)
+        return DataFrame(jdf, self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
         if len(cols) == 1:
