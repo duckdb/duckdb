@@ -890,6 +890,27 @@ If the conversion fails because the double value is too big, or the width/scale 
 DUCKDB_API duckdb_decimal duckdb_double_to_decimal(double val, uint8_t width, uint8_t scale);
 
 //===--------------------------------------------------------------------===//
+// Unsigned Hugeint Helpers
+//===--------------------------------------------------------------------===//
+/*!
+Converts a duckdb_uhugeint object (as obtained from a `DUCKDB_TYPE_UHUGEINT` column) into a double.
+
+* val: The uhugeint value.
+* returns: The converted `double` element.
+*/
+DUCKDB_API double duckdb_uhugeint_to_double(duckdb_uhugeint val);
+
+/*!
+Converts a double value to a duckdb_uhugeint object.
+
+If the conversion fails because the double value is too big the result will be 0.
+
+* val: The double value.
+* returns: The converted `duckdb_uhugeint` element.
+*/
+DUCKDB_API duckdb_uhugeint duckdb_double_to_uhugeint(double val);
+
+//===--------------------------------------------------------------------===//
 // Decimal Helpers
 //===--------------------------------------------------------------------===//
 /*!
