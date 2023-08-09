@@ -387,7 +387,7 @@ class DataFrame:
             on = reduce(lambda x, y: x.__and__(y), cast(List[Expression], on))
 
         if on is None and how is None:
-            jdf = self.relation.join(other.relation)
+            result = self.relation.join(other.relation)
         else:
             if how is None:
                 how = "inner"
@@ -396,8 +396,29 @@ class DataFrame:
             else:
                 on = str(on)
             assert isinstance(how, str), "how should be a string"
-            jdf = self.relation.join(other.relation.set_alias("__other_alias__"), on, how)
-        return DataFrame(jdf, self.session)
+
+            def map_to_recognized_jointype(how):
+                known_aliases = {
+                    'inner': [],
+                    'outer': ['full', 'fullouter', 'full_outer'],
+                    'left': ['leftouter', 'left_outer'],
+                    'right': ['rightouter', 'right_outer'],
+                    'anti': ['leftanti', 'left_anti'],
+                    'semi': ['leftsemi', 'left_semi'],
+                }
+                mapped_type = None
+                for type, aliases in known_aliases.items():
+                    if how == type or how in aliases:
+                        mapped_type = type
+                        break
+
+                if not mapped_type:
+                    mapped_type = how
+                return mapped_type
+
+            how = map_to_recognized_jointype(how)
+            result = self.relation.join(other.relation.set_alias("__other_alias__"), on, how)
+        return DataFrame(result, self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
         if len(cols) == 1:

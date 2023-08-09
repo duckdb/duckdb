@@ -95,3 +95,93 @@ class TestDataFrameJoin(object):
                 dept_id=40,
             ),
         ]
+
+        df2 = empDF.join(deptDF, empDF.emp_dept_id == deptDF.dept_id, "outer")
+        res1 = df2.collect()
+        assert res1 == [
+            Row(
+                emp_id=1,
+                name='Smith',
+                superior_emp_id=-1,
+                year_joined='2018',
+                emp_dept_id='10',
+                gender='M',
+                salary=3000,
+                dept_name='Finance',
+                dept_id=10,
+            ),
+            Row(
+                emp_id=2,
+                name='Rose',
+                superior_emp_id=1,
+                year_joined='2010',
+                emp_dept_id='20',
+                gender='M',
+                salary=4000,
+                dept_name='Marketing',
+                dept_id=20,
+            ),
+            Row(
+                emp_id=3,
+                name='Williams',
+                superior_emp_id=1,
+                year_joined='2010',
+                emp_dept_id='10',
+                gender='M',
+                salary=1000,
+                dept_name='Finance',
+                dept_id=10,
+            ),
+            Row(
+                emp_id=4,
+                name='Jones',
+                superior_emp_id=2,
+                year_joined='2005',
+                emp_dept_id='10',
+                gender='F',
+                salary=2000,
+                dept_name='Finance',
+                dept_id=10,
+            ),
+            Row(
+                emp_id=5,
+                name='Brown',
+                superior_emp_id=2,
+                year_joined='2010',
+                emp_dept_id='40',
+                gender='',
+                salary=-1,
+                dept_name='IT',
+                dept_id=40,
+            ),
+            Row(
+                emp_id=6,
+                name='Brown',
+                superior_emp_id=2,
+                year_joined='2010',
+                emp_dept_id='50',
+                gender='',
+                salary=-1,
+                dept_name=None,
+                dept_id=None,
+            ),
+            Row(
+                emp_id=None,
+                name=None,
+                superior_emp_id=None,
+                year_joined=None,
+                emp_dept_id=None,
+                gender=None,
+                salary=None,
+                dept_name='Sales',
+                dept_id=30,
+            ),
+        ]
+
+        df2 = empDF.join(deptDF, empDF.emp_dept_id == deptDF.dept_id, "full")
+        res2 = df2.collect()
+        assert res2 == res1
+
+        df2 = empDF.join(deptDF, empDF.emp_dept_id == deptDF.dept_id, "fullouter")
+        res3 = df2.collect()
+        assert res3 == res1
