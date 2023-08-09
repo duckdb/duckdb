@@ -341,11 +341,6 @@ bool Uhugeint::TryCast(uhugeint_t input, double &result) {
 	return CastUhugeintToFloating<double>(input, result);
 }
 
-template <>
-bool Uhugeint::TryCast(uhugeint_t input, long double &result) {
-	return CastUhugeintToFloating<long double>(input, result);
-}
-
 template <class DST>
 uhugeint_t UhugeintConvertInteger(DST input) {
 	uhugeint_t result;
