@@ -8,6 +8,7 @@
 #include "duckdb/optimizer/cascade/base/CQueryContext.h"
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 using namespace gpopt;
 using namespace duckdb;
@@ -84,8 +85,21 @@ CQueryContext* CQueryContext::PqcGenerate(duckdb::unique_ptr<Operator> pexpr, du
 	// Collect required properties (prpp) at the top level:
 	COrderSpec* pos = new COrderSpec();
 	// Ensure order, distribution and rewindability meet 'satisfy' matching at the top level
+	if (LogicalOperatorType::LOGICAL_ORDER_BY == pexpr->logical_type)
+	{
+		// top level operator is a order by, copy order spec to query context
+		for(auto &child : ((LogicalOrder*)pexpr.get())->orders)
+		{
+			pos->m_pdrgpoe.emplace_back(std::move(child));
+		}
+	}
 	CEnfdOrder* peo = new CEnfdOrder(pos, CEnfdOrder::EomSatisfy);
 	CReqdPropPlan* prpp = new CReqdPropPlan(pcrs, peo);
 	// Finally, create the CQueryContext
+	if (LogicalOperatorType::LOGICAL_ORDER_BY == pexpr->logical_type)
+	{
+		// remove top order by
+		return new CQueryContext(std::move(pexpr->children[0]), prpp, colref_array, pdrgpmdname, fDeriveStats);
+	}
 	return new CQueryContext(std::move(pexpr), prpp, colref_array, pdrgpmdname, fDeriveStats);
 }
