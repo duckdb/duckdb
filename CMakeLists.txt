@@ -398,11 +398,7 @@ if(FORCE_ASSERT)
 endif()
 
 if(MOLD_LINKER)
-  if(OS_NAME STREQUAL "linux")
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
-  else()
-    message(FATAL_ERROR "MOLD Linker is only support on Linux")
-  endif()
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=mold")
 endif()
 
 if(NOT MSVC)
