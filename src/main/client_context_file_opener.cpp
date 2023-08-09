@@ -1,7 +1,7 @@
 #include "duckdb/main/client_context_file_opener.hpp"
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -35,7 +35,7 @@ bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Val
 }
 
 bool FileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) {
-	return false;
+	return this->TryGetCurrentSetting(key, result);
 }
 
 } // namespace duckdb
