@@ -202,6 +202,9 @@ endif
 ifeq (${OSX_BUILD_UNIVERSAL}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DOSX_BUILD_UNIVERSAL=1
 endif
+ifeq (${MOLD_LINKER}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DMOLD_LINKER=1
+endif
 
 # Enable VCPKG for this build
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
