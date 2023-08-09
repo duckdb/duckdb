@@ -308,7 +308,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	vector<unique_ptr<LogicalOperator>>* insert_child_operators = new vector<unique_ptr<LogicalOperator>>();
 	for(auto &child : insert.children)
 	{
-		insert_child_operators->emplace_back(unique_ptr<LogicalOperator>((LogicalOperator*)child.get()));
+		insert_child_operators->emplace_back(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 	}
 	while (projection_index == DConstants::INVALID_INDEX)
 	{
@@ -325,7 +325,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 			// This operator does not have a table index to refer to, we have to visit its children
 			for(auto &child : current_child->children)
 			{
-				insert_child_operators->emplace_back(unique_ptr<LogicalOperator>((LogicalOperator*)child.get()));
+				insert_child_operators->emplace_back(unique_ptr_cast<Operator, LogicalOperator>(std::move(child)));
 			}
 			continue;
 		}
