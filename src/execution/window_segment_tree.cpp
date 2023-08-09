@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/window_executor.hpp"
 
 #include <utility>
 
@@ -14,9 +15,10 @@ namespace duckdb {
 WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
 }
 
-WindowAggregator::WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count_p)
+WindowAggregator::WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p,
+                                   WindowExclusion exclude_mode_p, idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
-      state_size(aggr.function.state_size()), filter_pos(0) {
+      state_size(aggr.function.state_size()), filter_pos(0), exclude_mode(exclude_mode_p) {
 }
 
 WindowAggregator::~WindowAggregator() {
@@ -50,8 +52,9 @@ void WindowAggregator::Finalize() {
 // WindowConstantAggregate
 //===--------------------------------------------------------------------===//
 WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const LogicalType &result_type,
-                                                   const ValidityMask &partition_mask, const idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, count), partition(0), row(0), state(state_size),
+                                                   const ValidityMask &partition_mask, WindowExclusion exclude_mode_p,
+                                                   const idx_t count)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), partition(0), row(0), state(state_size),
       statep(Value::POINTER(CastPointerToValue(state.data()))),
       statef(Value::POINTER(CastPointerToValue(state.data()))) {
 
@@ -203,8 +206,9 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState() cons
 	return make_uniq<WindowConstantAggregatorState>();
 }
 
-void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
-                                        Vector &target, idx_t count, idx_t row_idx) const {
+void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &target,
+                                        idx_t count, idx_t row_idx) const {
+	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	//	Chunk up the constants and copy them one at a time
 	auto &lcstate = lstate.Cast<WindowConstantAggregatorState>();
 	idx_t matched = 0;
@@ -234,8 +238,9 @@ void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const idx
 //===--------------------------------------------------------------------===//
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
-WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type, idx_t count)
-    : WindowAggregator(std::move(aggr), result_type, count) {
+WindowCustomAggregator::WindowCustomAggregator(AggregateObject aggr, const LogicalType &result_type,
+                                               WindowExclusion exclude_mode_p, idx_t count)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count) {
 }
 
 WindowCustomAggregator::~WindowCustomAggregator() {
@@ -277,8 +282,10 @@ unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const 
 	return make_uniq<WindowCustomAggregatorState>(aggr, const_cast<DataChunk &>(inputs));
 }
 
-void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
-                                      Vector &result, idx_t count, idx_t row_idx) const {
+void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
+                                      idx_t count, idx_t row_idx) const {
+	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
+	auto ends = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
 	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
 	auto &frame = lcstate.frame;
@@ -306,11 +313,9 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
-WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count,
-                                     WindowAggregationMode mode_p, FramePart frame_part_p,
-                                     WindowExclusion exclude_mode_p)
-    : WindowAggregator(std::move(aggr), result_type, count), internal_nodes(0), mode(mode_p), frame_part(frame_part_p),
-      exclude_mode(exclude_mode_p) {
+WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
+                                     WindowExclusion exclude_mode_p, idx_t count)
+    : WindowAggregator(std::move(aggr), result_type, exclude_mode_p, count), internal_nodes(0), mode(mode_p) {
 }
 
 void WindowSegmentTree::Finalize() {
@@ -343,6 +348,45 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggr.function.destructor(addresses, aggr_input_data, count);
 	}
 }
+
+class WindowSegmentTreeState : public WindowAggregatorState {
+public:
+	WindowSegmentTreeState(const AggregateObject &aggr, DataChunk &inputs, const ValidityMask &filter_mask);
+	~WindowSegmentTreeState() override;
+
+	void FlushStates(bool combining);
+	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
+	void WindowSegmentValue(const WindowSegmentTree &tree, idx_t l_idx, idx_t begin, idx_t end,
+	                        data_ptr_t current_state);
+	//! optionally writes result and calls destructors
+	void Finalize(Vector &result, idx_t count);
+
+	void Combine(WindowSegmentTreeState &other, Vector &result, idx_t count);
+
+public:
+	//! The aggregate function
+	const AggregateObject &aggr;
+	//! The aggregate function
+	DataChunk &inputs;
+	//! The filtered rows in inputs
+	const ValidityMask &filter_mask;
+	//! The size of a single aggregate state
+	const idx_t state_size;
+	//! Data pointer that contains a single state, used for intermediate window segment aggregation
+	vector<data_t> state;
+	//! Input data chunk, used for leaf segment aggregation
+	DataChunk leaves;
+	//! The filtered rows in inputs.
+	SelectionVector filter_sel;
+	//! A vector of pointers to "state", used for intermediate window segment aggregation
+	Vector statep;
+	//! Reused state pointers for combining segment tree levels
+	Vector statel;
+	//! Reused result state container for the window functions
+	Vector statef;
+	//! Count of buffered values
+	idx_t flush_count;
+};
 
 WindowSegmentTreeState::WindowSegmentTreeState(const AggregateObject &aggr, DataChunk &inputs,
                                                const ValidityMask &filter_mask)
@@ -450,12 +494,10 @@ void WindowSegmentTreeState::WindowSegmentValue(const WindowSegmentTree &tree, i
 		}
 	}
 }
-void WindowSegmentTreeState::Finalize(Vector &result, idx_t count, bool write_result) {
+void WindowSegmentTreeState::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates and write to result if write_result is set
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
-	if (write_result) {
-		aggr.function.finalize(statef, aggr_input_data, result, count, 0);
-	}
+	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
 	if (aggr.function.destructor) {
@@ -506,8 +548,60 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-                                 idx_t count, idx_t row_idx) const {
+void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
+                                 idx_t row_idx) const {
+
+	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
+	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
+
+	if (exclude_mode != WindowExclusion::NO_OTHER) {
+		// 1. evaluate the tree left of the excluded part
+		EvaluateInternal(ltstate, window_begin, peer_begin, result, count, row_idx, FramePart::LEFT);
+
+		// 2. set up buffer state containing a copy of the left tree evaluation result
+		vector<data_t> buffer_state(ltstate.state);
+		// and a Vector of pointers to its entries
+		data_ptr_t state_ptr = buffer_state.data();
+		Vector buffer_state_ptrs(LogicalType::POINTER);
+		buffer_state_ptrs.SetVectorType(VectorType::CONSTANT_VECTOR);
+		buffer_state_ptrs.Flatten(STANDARD_VECTOR_SIZE);
+		auto fdata = FlatVector::GetData<data_ptr_t>(buffer_state_ptrs);
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
+			fdata[i] = state_ptr;
+			state_ptr += state_size;
+		}
+
+		// 3. evaluate the tree right of the excluded part
+		EvaluateInternal(ltstate, peer_end, window_end, result, count, row_idx, FramePart::RIGHT);
+
+		// 4. combine the buffer state into the Segment Tree State
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), ltstate.allocator);
+		aggr.function.combine(buffer_state_ptrs, ltstate.statef, aggr_input_data, count);
+
+	} else {
+		EvaluateInternal(ltstate, window_begin, window_end, result, count, row_idx, FramePart::FULL);
+	}
+
+	ltstate.Finalize(result, count);
+
+	//	Set the validity mask on the invalid rows
+
+	auto &rmask = FlatVector::Validity(result);
+	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
+		auto begin = window_begin[rid];
+		auto end = window_end[rid];
+		if (begin >= end) {
+			rmask.SetInvalid(rid);
+		}
+	}
+}
+
+void WindowSegmentTree::EvaluateInternal(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
+                                         Vector &result, idx_t count, idx_t row_idx, FramePart frame_part) const {
+
 	auto &ltstate = lstate.Cast<WindowSegmentTreeState>();
 	const auto cant_combine = (!aggr.function.combine || !UseCombineAPI());
 	auto fdata = FlatVector::GetData<data_ptr_t>(ltstate.statef);
@@ -620,38 +714,6 @@ void WindowSegmentTree::Evaluate(WindowAggregatorState &lstate, const idx_t *beg
 		}
 	}
 	ltstate.FlushStates(false);
-
-	// without EXCLUDE, finalize and write result right here
-	if (frame_part == FramePart::FULL) {
-		ltstate.Finalize(result, count, true);
-	}
-
-	//	Set the validity mask on  the invalid rows
-
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
-		const auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
-		const auto end = end_on_curr_row ? cur_row : ends[rid];
-
-		switch (frame_part) {
-		case FramePart::FULL:
-		case FramePart::LEFT:
-			// first, set all the invalid bits with respect to the left half
-			if (begin >= end) {
-				rmask.SetInvalid(rid);
-			}
-			break;
-		case FramePart::RIGHT:
-			// then, set all the valid bits from the right half
-			// (result corrseponds to left || right)
-			if (begin < end || add_curr_row) {
-				rmask.SetValid(rid);
-			}
-			break;
-		default:
-			break;
-		}
-	}
 }
 
 } // namespace duckdb

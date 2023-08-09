@@ -601,22 +601,6 @@ void WindowExecutorBoundsState::UpdateBounds(idx_t row_idx, DataChunk &input_chu
 // ExclusionFilter
 //===--------------------------------------------------------------------===//
 
-//! Given a window expression, determine if it has an EXCLUDE clause that must be taken into account
-static bool ExclusionIgnored(BoundWindowExpression &wexpr) {
-	// any given exclusion clause is only took into account if the window function is
-	// an aggregate, first_value, last_value or nth_value
-	if (wexpr.exclude_clause == WindowExclusion::NO_OTHER) {
-		return true;
-	} else if (wexpr.type == ExpressionType::WINDOW_FIRST_VALUE || wexpr.type == ExpressionType::WINDOW_LAST_VALUE ||
-	           wexpr.type == ExpressionType::WINDOW_NTH_VALUE) {
-		return false;
-	} else if (wexpr.aggregate) {
-		return false;
-	} else {
-		return true;
-	}
-}
-
 //! Handles window exclusion by piggybacking on the filtering logic.
 //! (needed for first_value, last_value, nth_value)
 class ExclusionFilter {
@@ -734,7 +718,7 @@ public:
 	    : WindowExecutorBoundsState(wexpr, context, count, partition_mask_p, order_mask_p)
 
 	{
-		if (ExclusionIgnored(wexpr)) {
+		if (wexpr.exclude_clause == WindowExclusion::NO_OTHER) {
 			exclusion_filter = nullptr;
 			ignore_nulls_exclude = &ignore_nulls;
 		} else {
@@ -879,28 +863,21 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  const idx_t count, const ValidityMask &partition_mask,
                                                  const ValidityMask &order_mask, WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context),
-      post_exclude_tree(nullptr) {
+    : WindowExecutor(wexpr, context, count, partition_mask, order_mask), mode(mode), filter_executor(context) {
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
 	if (IsConstantAggregate()) {
-		aggregator =
-		    make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
+		aggregator = make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask,
+		                                                 wexpr.exclude_clause, count);
 	} else if (IsCustomAggregate()) {
-		aggregator = make_uniq<WindowCustomAggregator>(AggregateObject(wexpr), wexpr.return_type, count);
+		aggregator =
+		    make_uniq<WindowCustomAggregator>(AggregateObject(wexpr), wexpr.return_type, wexpr.exclude_clause, count);
 	} else if (wexpr.aggregate) {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		if (ExclusionIgnored(wexpr)) {
-			aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
-			                                          FramePart::FULL, wexpr.exclude_clause);
-		} else {
-			aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
-			                                          FramePart::LEFT, wexpr.exclude_clause);
-			post_exclude_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode,
-			                                                 FramePart::RIGHT, wexpr.exclude_clause);
-		}
+		aggregator =
+		    make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, mode, wexpr.exclude_clause, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -929,9 +906,6 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 
 	D_ASSERT(aggregator);
 	aggregator->Sink(payload_chunk, filtering, filtered);
-	if (post_exclude_tree) {
-		post_exclude_tree->Sink(payload_chunk, filtering, filtered);
-	}
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count);
 }
@@ -939,9 +913,6 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 void WindowAggregateExecutor::Finalize() {
 	D_ASSERT(aggregator);
 	aggregator->Finalize();
-	if (post_exclude_tree) {
-		post_exclude_tree->Finalize();
-	}
 }
 
 class WindowAggregateState : public WindowExecutorBoundsState {
@@ -950,23 +921,18 @@ public:
 	                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
 	                     const WindowAggregator &aggregator)
 	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask),
-	      aggregator_state(aggregator.GetLocalState()), post_exclude_tree_state(nullptr) {
+	      aggregator_state(aggregator.GetLocalState()) {
 	}
 
 public:
-	// state of aggregator (with exclusion: left frame part)
+	// state of aggregator
 	unique_ptr<WindowAggregatorState> aggregator_state;
-	// optional state of segment tree right of the exclusion
-	unique_ptr<WindowAggregatorState> post_exclude_tree_state;
 
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
 };
 
 unique_ptr<WindowExecutorState> WindowAggregateExecutor::GetExecutorState() const {
 	auto res = make_uniq<WindowAggregateState>(wexpr, context, payload_count, partition_mask, order_mask, *aggregator);
-	if (post_exclude_tree) {
-		res->post_exclude_tree_state = post_exclude_tree->GetLocalState();
-	}
 	return std::move(res);
 }
 
@@ -974,30 +940,10 @@ void WindowAggregateExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
                                                idx_t row_idx) const {
 	auto &lastate = lstate.Cast<WindowAggregateState>();
 	D_ASSERT(aggregator);
-	auto window_begin = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_END]);
 
 	auto &agg_state = *lastate.aggregator_state;
 
-	if (post_exclude_tree) {
-		// if we have an EXCLUDE:
-		auto peer_begin = FlatVector::GetData<const idx_t>(lastate.bounds.data[PEER_BEGIN]);
-		auto peer_end = FlatVector::GetData<const idx_t>(lastate.bounds.data[PEER_END]);
-		auto &pre_ex_tree_state = agg_state.Cast<WindowSegmentTreeState>();
-		auto &post_ex_tree_state = (*lastate.post_exclude_tree_state).Cast<WindowSegmentTreeState>();
-
-		// 1. evaluate the tree left of the excluded part
-		aggregator->Evaluate(pre_ex_tree_state, window_begin, peer_begin, result, count, row_idx);
-		// 2. evaluate the tree right of the excluded part
-		post_exclude_tree->Evaluate(post_ex_tree_state, peer_end, window_end, result, count, row_idx);
-		// 3. combine the right into the left part
-		pre_ex_tree_state.Combine(post_ex_tree_state, result, count);
-		// 4. write the left tree's result to the result vector
-		post_ex_tree_state.Finalize(result, count, false);
-		pre_ex_tree_state.Finalize(result, count, true);
-	} else {
-		aggregator->Evaluate(agg_state, window_begin, window_end, result, count, row_idx);
-	}
+	aggregator->Evaluate(agg_state, lastate.bounds, result, count, row_idx);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1265,8 +1211,13 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 }
 
 unique_ptr<WindowExecutorState> WindowValueExecutor::GetExecutorState() const {
-	return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask, wexpr.exclude_clause,
-	                                   ignore_nulls);
+	if (wexpr.type == ExpressionType::WINDOW_FIRST_VALUE || wexpr.type == ExpressionType::WINDOW_LAST_VALUE ||
+	    wexpr.type == ExpressionType::WINDOW_NTH_VALUE) {
+		return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask,
+		                                   wexpr.exclude_clause, ignore_nulls);
+	} else {
+		return make_uniq<WindowExecutorBoundsState>(wexpr, context, payload_count, partition_mask, order_mask);
+	}
 }
 
 void WindowNtileExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
