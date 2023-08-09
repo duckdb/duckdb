@@ -1,6 +1,7 @@
 # name: test/sql/update/test_update_issue_3170.test
 # description: Update indexed table rows with large row_id ( > 122879) which cross the first segment/row_group.
 # group: [update]
+
 statement ok
 PRAGMA enable_verification
 
