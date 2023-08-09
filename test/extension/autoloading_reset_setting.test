@@ -1,0 +1,45 @@
+# name: test/extension/autoloading_reset_setting.test
+# description: Testing reset setting that lives in an extension that can be autoloaded
+# group: [extension]
+
+require-env LOCAL_EXTENSION_REPO
+
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_reset_setting'
+
+# Default should be false when running unit tests
+query I
+select value from duckdb_settings() where name='autoload_known_extensions';
+----
+false
+
+### No autoloading: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+# Testing reset setting
+statement error
+RESET timezone;
+----
+Catalog Error: Setting with name "timezone" is not in the catalog, but it exists in the icu extension.
+
+### Autoloading, but the autoloading repository is set to non-existent location
+statement ok
+set autoload_known_extensions=true
+
+# Override the default repo with a non-existent dir
+statement ok
+set autoload_extension_repository='/tmp/non-existent-repo';
+
+# Error should inform the user on whats happening
+statement error
+RESET timezone;
+----
+IO Error: Attempted to automatically install the 'icu' extension, but the following error occured: (Failed to copy local extension "icu" at PATH
+
+### Autoloading with correct tmp repo
+statement ok
+set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+statement ok
+RESET timezone;

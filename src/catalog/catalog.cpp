@@ -450,7 +450,7 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 
 static void TryAutoloadExtension(ClientContext &context, const string &extension_name) {
 	try {
-		ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo);
+		ExtensionHelper::InstallExtension(context, extension_name, false, context.config.autoload_extension_repo);
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		auto new_exception_message = "Attempted to automatically install the '" + extension_name +
@@ -600,33 +600,6 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		}
 	}
 
-	// Try autoloading an extension containing the entry TODO refactor to dedup with above code
-	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
-	if (autoloaded) {
-		// An extension was autoloaded, the function is now available
-		if (IsInvalidSchema(schema)) {
-			// try all schemas for this catalog
-			auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
-			for (auto &entry : entries) {
-				auto &candidate_schema = entry.schema;
-				auto transaction = GetCatalogTransaction(context);
-				auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
-				if (result.Found()) {
-					return result;
-				}
-			}
-		} else {
-			auto transaction = GetCatalogTransaction(context);
-			auto result = LookupEntryInternal(transaction, type, schema, name);
-			if (result.Found()) {
-				return result;
-			}
-		}
-		// When the autoloader autoloads an extension, the entry must be available.
-		throw InternalException(
-		    error_context.FormatError("Failed to resolve entry after autoloading extension:'%s'", name));
-	}
-
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr};
 	}
@@ -648,7 +621,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 		}
 	}
 
-	// Try autoloading an extension containing the entry TODO refactor to dedup with above code(?)
+	// Try autoloading an extension containing the entry
 	auto autoloaded = AutoLoadExtensionForFunction(context, type, name);
 	if (autoloaded) {
 		// An extension was autoloaded, the function is now available

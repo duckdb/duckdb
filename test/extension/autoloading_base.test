@@ -1,8 +1,17 @@
-# name: test/extension/autoloading_extension.test
-# description: test the autoloading mechanism for extensions
+# name: test/extension/autoloading_base.test
+# description: Base tests for the autoloading mechanism for extensions
 # group: [extension]
 
 require-env LOCAL_EXTENSION_REPO
+
+query I
+select value from duckdb_settings() where name='autoload_known_extensions';
+----
+false
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_base'
 
 ### No autoloading: throw error with installation hint
 statement ok
@@ -52,10 +61,7 @@ statement ok
 set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
-SET s3_endpoint='';
+SET timezone='UTC';
 
 statement ok
 select * from read_json_auto('data/json/example_n.ndjson');
-
-# TODO: test reset and bind for setting
-# TODO: test other function codepath
