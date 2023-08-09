@@ -33,6 +33,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateChildren(LogicalOperat
 	{
 		unique_ptr<LogicalOperator> n_ptr = unique_ptr_cast<Operator, LogicalOperator>(std::move(node.children[child_idx]));
 		PropagateStatistics(n_ptr);
+		node.children[child_idx] = std::move(n_ptr);
 	}
 	return nullptr;
 }
