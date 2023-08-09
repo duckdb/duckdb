@@ -1111,6 +1111,7 @@ if(NOT CLANG_TIDY)
   endif()
 endif()
 
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
 if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
   add_custom_target(
           duckdb_local_extension_repo ALL
