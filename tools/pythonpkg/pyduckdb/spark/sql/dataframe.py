@@ -90,11 +90,6 @@ class DataFrame:
     def sort(self, *cols: Union[str, Column, List[Union[str, Column]]], **kwargs: Any) -> "DataFrame":
         """Returns a new :class:`DataFrame` sorted by the specified column(s).
 
-        .. versionadded:: 1.3.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
-
         Parameters
         ----------
         cols : str, list, or :class:`Column`, optional
@@ -194,11 +189,6 @@ class DataFrame:
 
         :func:`where` is an alias for :func:`filter`.
 
-        .. versionadded:: 1.3.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
-
         Parameters
         ----------
         condition : :class:`Column` or str
@@ -266,8 +256,6 @@ class DataFrame:
     def columns(self) -> List[str]:
         """Returns all column names as a list.
 
-        .. versionadded:: 1.3.0
-
         Examples
         --------
         >>> df.columns
@@ -282,11 +270,6 @@ class DataFrame:
         how: Optional[str] = None,
     ) -> "DataFrame":
         """Joins with another :class:`DataFrame`, using the given join expression.
-
-        .. versionadded:: 1.3.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
 
         Parameters
         ----------
@@ -423,11 +406,6 @@ class DataFrame:
     def alias(self, alias: str) -> "DataFrame":
         """Returns a new :class:`DataFrame` with an alias set.
 
-        .. versionadded:: 1.3.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
-
         Parameters
         ----------
         alias : str
@@ -488,8 +466,6 @@ class DataFrame:
     def schema(self) -> StructType:
         """Returns the schema of this :class:`DataFrame` as a :class:`pyduckdb.spark.sql.types.StructType`.
 
-        .. versionadded:: 1.3.0
-
         Examples
         --------
         >>> df.schema
@@ -508,8 +484,6 @@ class DataFrame:
 
     def __getitem__(self, item: Union[int, str, Column, List, Tuple]) -> Union[Column, "DataFrame"]:
         """Returns the column as a :class:`Column`.
-
-        .. versionadded:: 1.3.0
 
         Examples
         --------
@@ -537,8 +511,6 @@ class DataFrame:
     def __getattr__(self, name: str) -> Column:
         """Returns the :class:`Column` denoted by ``name``.
 
-        .. versionadded:: 1.3.0
-
         Examples
         --------
         >>> df.select(df.age).collect()
@@ -562,11 +534,6 @@ class DataFrame:
         for all the available aggregate functions.
 
         :func:`groupby` is an alias for :func:`groupBy`.
-
-        .. versionadded:: 1.3.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
 
         Parameters
         ----------
@@ -637,6 +604,53 @@ class DataFrame:
     def printSchema(self):
         raise ContributionsAcceptedError
 
+    def union(self, other: "DataFrame") -> "DataFrame":
+        """Return a new :class:`DataFrame` containing union of rows in this and another
+        :class:`DataFrame`.
+
+        Parameters
+        ----------
+        other : :class:`DataFrame`
+            Another :class:`DataFrame` that needs to be unioned
+
+        Returns
+        -------
+        :class:`DataFrame`
+
+        See Also
+        --------
+        DataFrame.unionAll
+
+        Notes
+        -----
+        This is equivalent to `UNION ALL` in SQL. To do a SQL-style set union
+        (that does deduplication of elements), use this function followed by :func:`distinct`.
+
+        Also as standard in SQL, this function resolves columns by position (not by name).
+
+        Examples
+        --------
+        >>> df1 = spark.createDataFrame([[1, 2, 3]], ["col0", "col1", "col2"])
+        >>> df2 = spark.createDataFrame([[4, 5, 6]], ["col1", "col2", "col0"])
+        >>> df1.union(df2).show()
+        +----+----+----+
+        |col0|col1|col2|
+        +----+----+----+
+        |   1|   2|   3|
+        |   4|   5|   6|
+        +----+----+----+
+        >>> df1.union(df1).show()
+        +----+----+----+
+        |col0|col1|col2|
+        +----+----+----+
+        |   1|   2|   3|
+        |   1|   2|   3|
+        +----+----+----+
+        """
+        return DataFrame(self.relation.union(other.relation), self.session)
+
+    unionAll = union
+
     def dropDuplicates(self, subset: Optional[List[str]] = None) -> "DataFrame":
         """Return a new :class:`DataFrame` with duplicate rows removed,
         optionally only considering certain columns.
@@ -648,11 +662,6 @@ class DataFrame:
         watermark will be dropped to avoid any possibility of duplicates.
 
         :func:`drop_duplicates` is an alias for :func:`dropDuplicates`.
-
-        .. versionadded:: 1.4.0
-
-        .. versionchanged:: 3.4.0
-            Supports Spark Connect.
 
         Parameters
         ----------
