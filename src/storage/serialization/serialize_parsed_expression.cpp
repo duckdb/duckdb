@@ -310,13 +310,13 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("orders", orders);
 	serializer.WriteProperty("start", start);
 	serializer.WriteProperty("end", end);
-	serializer.WriteProperty("exclude_clause", exclude_clause);
 	serializer.WriteOptionalProperty("start_expr", start_expr);
 	serializer.WriteOptionalProperty("end_expr", end_expr);
 	serializer.WriteOptionalProperty("offset_expr", offset_expr);
 	serializer.WriteOptionalProperty("default_expr", default_expr);
 	serializer.WriteProperty("ignore_nulls", ignore_nulls);
 	serializer.WriteOptionalProperty("filter_expr", filter_expr);
+	serializer.WriteProperty("exclude_clause", exclude_clause);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
@@ -329,13 +329,13 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
 	deserializer.ReadProperty("orders", result->orders);
 	deserializer.ReadProperty("start", result->start);
 	deserializer.ReadProperty("end", result->end);
-	deserializer.ReadProperty("exclude_clause", result->exclude_clause);
 	deserializer.ReadOptionalProperty("start_expr", result->start_expr);
 	deserializer.ReadOptionalProperty("end_expr", result->end_expr);
 	deserializer.ReadOptionalProperty("offset_expr", result->offset_expr);
 	deserializer.ReadOptionalProperty("default_expr", result->default_expr);
 	deserializer.ReadProperty("ignore_nulls", result->ignore_nulls);
 	deserializer.ReadOptionalProperty("filter_expr", result->filter_expr);
+	deserializer.ReadProperty("exclude_clause", result->exclude_clause);
 	return std::move(result);
 }
 

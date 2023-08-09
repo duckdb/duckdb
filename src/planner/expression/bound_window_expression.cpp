@@ -132,11 +132,11 @@ void BoundWindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
-	writer.WriteField<WindowExclusion>(exclude_clause);
 	writer.WriteOptional(start_expr);
 	writer.WriteOptional(end_expr);
 	writer.WriteOptional(offset_expr);
 	writer.WriteOptional(default_expr);
+	writer.WriteField<WindowExclusion>(exclude_clause);
 }
 
 unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializationState &state, FieldReader &reader) {
@@ -162,12 +162,12 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->ignore_nulls = reader.ReadRequired<bool>();
 	result->start = reader.ReadRequired<WindowBoundary>();
 	result->end = reader.ReadRequired<WindowBoundary>();
-	result->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	result->start_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->children = std::move(children);
+	result->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	return std::move(result);
 }
 

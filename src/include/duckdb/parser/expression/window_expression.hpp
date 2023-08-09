@@ -59,7 +59,7 @@ public:
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
 	//! The EXCLUDE clause
-	WindowExclusion exclude_clause;
+	WindowExclusion exclude_clause = WindowExclusion::NO_OTHER;
 
 	unique_ptr<ParsedExpression> start_expr;
 	unique_ptr<ParsedExpression> end_expr;

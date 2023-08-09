@@ -343,10 +343,6 @@
         "type": "WindowBoundary"
       },
       {
-        "name": "exclude_clause",
-        "type": "WindowExclusion"
-      },
-      {
         "name": "start_expr",
         "optional": true,
         "type": "ParsedExpression*"
@@ -374,6 +370,10 @@
         "name": "filter_expr",
         "optional": true,
         "type": "ParsedExpression*"
+      },
+      {
+        "name": "exclude_clause",
+        "type": "WindowExclusion"
       }
     ]
   }

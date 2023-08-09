@@ -156,9 +156,6 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	}
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
-
-	writer.WriteField<WindowExclusion>(exclude_clause);
-
 	writer.WriteOptional(start_expr);
 	writer.WriteOptional(end_expr);
 	writer.WriteOptional(offset_expr);
@@ -166,6 +163,7 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
 	writer.WriteString(catalog);
+	writer.WriteField<WindowExclusion>(exclude_clause);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
@@ -182,9 +180,6 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	}
 	expr->start = reader.ReadRequired<WindowBoundary>();
 	expr->end = reader.ReadRequired<WindowBoundary>();
-
-	expr->exclude_clause = reader.ReadRequired<WindowExclusion>();
-
 	expr->start_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->end_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->offset_expr = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -192,6 +187,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->ignore_nulls = reader.ReadRequired<bool>();
 	expr->filter_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	expr->catalog = reader.ReadField<string>(INVALID_CATALOG);
+	expr->exclude_clause = reader.ReadRequired<WindowExclusion>();
 	return std::move(expr);
 }
 
