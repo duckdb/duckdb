@@ -12,7 +12,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFilter(unique_ptr<LogicalOperato
 	auto &filter = op->Cast<LogicalFilter>();
 	if (can_pullup && filter.projection_map.empty())
 	{
-		unique_ptr<LogicalOperator> child = unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get());
+		unique_ptr<LogicalOperator> child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
 		child = Rewrite(std::move(child));
 		// moving filter's expressions
 		for (idx_t i = 0; i < op->expressions.size(); ++i)
@@ -21,7 +21,7 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFilter(unique_ptr<LogicalOperato
 		}
 		return child;
 	}
-	op->children[0] = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+	op->children[0] = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 	return op;
 }
 } // namespace duckdb

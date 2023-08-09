@@ -86,7 +86,7 @@ void FilterPullup::ProjectSetOperation(LogicalProjection &proj)
 unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOperator> op)
 {
 	D_ASSERT(op->logical_type == LogicalOperatorType::LOGICAL_PROJECTION);
-	op->children[0] = Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
+	op->children[0] = Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
 	if (!filters_expr_pullup.empty())
 	{
 		auto &proj = op->Cast<LogicalProjection>();

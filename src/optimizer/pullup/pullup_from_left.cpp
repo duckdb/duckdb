@@ -9,8 +9,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupFromLeft(unique_ptr<LogicalOpera
 	D_ASSERT(op->logical_type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_EXCEPT || op->logical_type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	FilterPullup left_pullup(true, can_add_column);
 	FilterPullup right_pullup(false, can_add_column);
-	op->children[0] = left_pullup.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
-	op->children[1] = right_pullup.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	op->children[0] = left_pullup.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
+	op->children[1] = right_pullup.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])));
 	// check only for filters from the LHS
 	if (!left_pullup.filters_expr_pullup.empty() && right_pullup.filters_expr_pullup.empty())
 	{

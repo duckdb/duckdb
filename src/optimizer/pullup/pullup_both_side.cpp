@@ -4,8 +4,8 @@ namespace duckdb {
 unique_ptr<LogicalOperator> FilterPullup::PullupBothSide(unique_ptr<LogicalOperator> op) {
 	FilterPullup left_pullup(true, can_add_column);
 	FilterPullup right_pullup(true, can_add_column);
-	op->children[0] = left_pullup.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()));
-	op->children[1] = right_pullup.Rewrite(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	op->children[0] = left_pullup.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])));
+	op->children[1] = right_pullup.Rewrite(unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])));
 	D_ASSERT(left_pullup.can_add_column == can_add_column);
 	D_ASSERT(right_pullup.can_add_column == can_add_column);
 	// merging filter expressions
