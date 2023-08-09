@@ -71,15 +71,15 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBuffe
 
 void CSVStateMachine::Reset(bool get_next_char) {
 	csv_buffer_iterator.Reset();
-	if (get_next_char){
+	if (get_next_char) {
 		current_char = csv_buffer_iterator.GetNextChar();
 	}
 }
 
-void VerifyUTF8(CSVReaderOptions &options, idx_t linenr, string &value) {
+void CSVStateMachine::VerifyUTF8() {
 	auto utf_type = Utf8Proc::Analyze(value.c_str(), value.size());
 	if (utf_type == UnicodeType::INVALID) {
-		int64_t error_line = linenr;
+		int64_t error_line = cur_rows;
 		throw InvalidInputException("Error in file \"%s\" at line %llu: "
 		                            "%s. Parser options:\n%s",
 		                            options.file_path, error_line, ErrorManager::InvalidUnicodeError(value, "CSV file"),
@@ -87,68 +87,6 @@ void VerifyUTF8(CSVReaderOptions &options, idx_t linenr, string &value) {
 	}
 }
 
-void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_value) {
-	CSVState state {CSVState::STANDARD};
-	CSVState previous_state {CSVState::STANDARD};
-	CSVState pre_previous_state {CSVState::STANDARD};
-	idx_t cur_row = 0;
-	string value;
-	idx_t rows_read = 0;
-
-	while (!csv_buffer_iterator.Finished()) {
-		if ((options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
-		    (options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
-			rows_read++;
-		}
-		pre_previous_state = previous_state;
-		previous_state = state;
-		state =
-		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
-		bool empty_line =
-		    (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-		    (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (pre_previous_state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
-
-		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
-		if (previous_state == CSVState::FIELD_SEPARATOR ||
-		    (previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
-		    (state != CSVState::RECORD_SEPARATOR && carriage_return)) {
-			// Started a new value
-			// Check if it's UTF-8
-			VerifyUTF8(options, cur_row, value);
-			if (value.empty() || value == options.null_str) {
-				// We set empty == null value
-				sniffed_value[cur_row].second.push_back(Value(LogicalType::VARCHAR));
-			} else {
-				sniffed_value[cur_row].second.push_back(Value(value));
-			}
-			sniffed_value[cur_row].first = rows_read;
-			value = "";
-		}
-		if (state == CSVState::STANDARD || (state == CSVState::QUOTED && previous_state == CSVState::QUOTED)) {
-			value += current_char;
-		}
-		cur_row += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
-		// It means our carriage return is actually a record separator
-		cur_row += state != CSVState::RECORD_SEPARATOR && carriage_return;
-		if (cur_row >= sniffed_value.size()) {
-			// We sniffed enough rows
-			break;
-		}
-		current_char = csv_buffer_iterator.GetNextChar();
-	}
-	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
-	                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
-	                  (pre_previous_state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
-	if (cur_row < sniffed_value.size() && !empty_line) {
-		VerifyUTF8(options, cur_row, value);
-		sniffed_value[cur_row].first = rows_read;
-		sniffed_value[cur_row++].second.push_back(Value(value));
-	}
-	sniffed_value.erase(sniffed_value.end() - (sniffed_value.size() - cur_row), sniffed_value.end());
-}
 void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state {CSVState::STANDARD};
@@ -174,7 +112,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		    (state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8 (Or not?)
-			VerifyUTF8(options, cur_row, value);
+			VerifyUTF8();
 			auto &v = parse_chunk.data[cur_col++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
 			auto &validity_mask = FlatVector::Validity(v);
@@ -216,7 +154,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 	                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
 	                  (pre_previous_state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	if (cur_row < options.sample_chunk_size && !empty_line) {
-		VerifyUTF8(options, cur_row, value);
+		VerifyUTF8();
 		auto &v = parse_chunk.data[cur_col++];
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));

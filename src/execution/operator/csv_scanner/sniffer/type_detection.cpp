@@ -187,7 +187,7 @@ void CSVSniffer::DetectTypes() {
 			sample_size++;
 		}
 		vector<pair<idx_t, vector<Value>>> values(sample_size);
-		candidate->SniffValue(values);
+		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, values);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
 		idx_t values_start = 0;

@@ -62,8 +62,8 @@ public:
 	char GetNextChar();
 
 	//! This functions templates an operation over the CSV File
-	template <class OP>
-	inline bool Process(CSVStateMachine& machine, vector<idx_t> &sniffed_column_counts) {
+	template <class OP, class T>
+	inline bool Process(CSVStateMachine &machine, T &result) {
 		OP::Initialize(machine);
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
@@ -74,16 +74,16 @@ public:
 			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 			if (!cur_buffer_handle) {
 				//! Done Processing the File
-				OP::Finalize(machine,sniffed_column_counts);
+				OP::Finalize(machine, result);
 				return true;
 			}
 		}
-		while (cur_buffer_handle){
-			char* buffer_handle_ptr = cur_buffer_handle->Ptr();
-			while (cur_pos < cur_buffer_handle->actual_size){
-				if (OP::Process(machine,sniffed_column_counts,buffer_handle_ptr[cur_pos++])){
+		while (cur_buffer_handle) {
+			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
+			while (cur_pos < cur_buffer_handle->actual_size) {
+				if (OP::Process(machine, result, buffer_handle_ptr[cur_pos++])) {
 					//! Not-Done Processing the File, but the Operator is happy!
-					OP::Finalize(machine,sniffed_column_counts);
+					OP::Finalize(machine, result);
 					return false;
 				}
 			}
@@ -91,7 +91,7 @@ public:
 			cur_pos = 0;
 		}
 		//! Done Processing the File
-		OP::Finalize(machine,sniffed_column_counts);
+		OP::Finalize(machine, result);
 		return true;
 	}
 	//! Returns true if the iterator is finished
