@@ -8,7 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
@@ -23,7 +23,7 @@ class Prefix {
 public:
 	//! Up to PREFIX_SIZE bytes of prefix data and the count
 	uint8_t data[Node::PREFIX_SIZE + 1];
-	//! A pointer to the next ART node
+	//! A pointer to the next Node
 	Node ptr;
 
 public:
@@ -36,9 +36,9 @@ public:
 	static void New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
+
 	//! Get a reference to the prefix
 	static inline Prefix &Get(const ART &art, const Node ptr) {
-		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
 	}
 
@@ -73,11 +73,6 @@ public:
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
-	//! Serialize this node and all subsequent nodes
-	static BlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
-	//! Deserialize this node and all subsequent prefix nodes
-	static void Deserialize(ART &art, Node &node, MetadataReader &reader);
-
 	//! Vacuum the child of the node
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
@@ -88,8 +83,6 @@ private:
 	//! Appends the other_prefix and all its subsequent prefix nodes to this prefix node.
 	//! Also frees all copied/appended nodes
 	void Append(ART &art, Node other_prefix);
-	//! Get the total count of bytes in the chain of prefixes, with the node reference pointing to first non-prefix node
-	static idx_t TotalCount(ART &art, reference<Node> &node);
 };
 
 } // namespace duckdb

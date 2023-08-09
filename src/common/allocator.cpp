@@ -198,7 +198,7 @@ AllocatorDebugInfo::AllocatorDebugInfo() {
 }
 AllocatorDebugInfo::~AllocatorDebugInfo() {
 #ifdef DUCKDB_DEBUG_ALLOCATION
-	if (allocation_count != 0) {
+	if (segment_count != 0) {
 		printf("Outstanding allocations found for Allocator\n");
 		for (auto &entry : pointers) {
 			printf("Allocation of size %llu at address %p\n", entry.second.first, (void *)entry.first);

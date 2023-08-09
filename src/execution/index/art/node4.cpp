@@ -2,15 +2,13 @@
 
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
 Node4 &Node4::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_4).New();
-	node.SetType((uint8_t)NType::NODE_4);
+	node.SetMetadata((uint8_t)NType::NODE_4);
 	auto &n4 = Node4::Get(art, node);
 
 	n4.count = 0;
@@ -19,9 +17,7 @@ Node4 &Node4::New(ART &art, Node &node) {
 
 void Node4::Free(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
-
+	D_ASSERT(node.HasMetadata());
 	auto &n4 = Node4::Get(art, node);
 
 	// free all children
@@ -56,8 +52,7 @@ void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
+	D_ASSERT(node.HasMetadata());
 	auto &n4 = Node4::Get(art, node);
 
 	// ensure that there is no other child at the same byte
@@ -92,8 +87,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 
 void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
-	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSerialized());
+	D_ASSERT(node.HasMetadata());
 	auto &n4 = Node4::Get(art, node);
 
 	idx_t child_pos = 0;
@@ -147,7 +141,7 @@ optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
-			D_ASSERT(children[i].IsSet());
+			D_ASSERT(children[i].HasMetadata());
 			return &children[i];
 		}
 	}
@@ -159,55 +153,11 @@ optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
 			byte = key[i];
-			D_ASSERT(children[i].IsSet());
+			D_ASSERT(children[i].HasMetadata());
 			return &children[i];
 		}
 	}
 	return nullptr;
-}
-
-BlockPointer Node4::Serialize(ART &art, MetadataWriter &writer) {
-
-	// recurse into children and retrieve child block pointers
-	vector<BlockPointer> child_block_pointers;
-	for (idx_t i = 0; i < count; i++) {
-		child_block_pointers.push_back(children[i].Serialize(art, writer));
-	}
-	for (idx_t i = count; i < Node::NODE_4_CAPACITY; i++) {
-		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
-	}
-
-	// get pointer and write fields
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(NType::NODE_4);
-	writer.Write<uint8_t>(count);
-
-	// write key values
-	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-		writer.Write(key[i]);
-	}
-
-	// write child block pointers
-	for (auto &child_block_pointer : child_block_pointers) {
-		writer.Write(child_block_pointer.block_id);
-		writer.Write(child_block_pointer.offset);
-	}
-
-	return block_pointer;
-}
-
-void Node4::Deserialize(MetadataReader &reader) {
-	count = reader.Read<uint8_t>();
-
-	// read key values
-	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-		key[i] = reader.Read<uint8_t>();
-	}
-
-	// read child block pointers
-	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-		children[i] = Node(reader);
-	}
 }
 
 void Node4::Vacuum(ART &art, const ARTFlags &flags) {

@@ -125,6 +125,7 @@ public:
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
 
+	// TODO: this should also serialize the index metadata, no?
 	//! Serializes the index and returns the pair of block_id offset positions
 	virtual BlockPointer Serialize(MetadataWriter &writer);
 	//! Returns the serialized data pointer to the block and offset of the serialized index

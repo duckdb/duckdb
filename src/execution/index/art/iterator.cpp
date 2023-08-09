@@ -73,10 +73,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 
 void Iterator::FindMinimum(Node &node) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSerialized()) {
-		node.Deserialize(*art);
-	}
+	D_ASSERT(node.HasMetadata());
 
 	// found the minimum
 	if (node.GetType() == NType::LEAF || node.GetType() == NType::LEAF_INLINED) {
@@ -105,12 +102,8 @@ void Iterator::FindMinimum(Node &node) {
 
 bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
-	if (!node.IsSet()) {
+	if (!node.HasMetadata()) {
 		return false;
-	}
-
-	if (node.IsSerialized()) {
-		node.Deserialize(*art);
 	}
 
 	// we found the lower bound

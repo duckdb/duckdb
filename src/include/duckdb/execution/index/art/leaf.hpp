@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
@@ -43,15 +43,15 @@ public:
 	static void New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count);
 	//! Free the leaf (chain)
 	static void Free(ART &art, Node &node);
+
 	//! Get a reference to the leaf
 	static inline Leaf &Get(const ART &art, const Node ptr) {
-		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
 	}
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf (chain)
 	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
-	//! Merge leaves (chains) and free all copied leaf nodes
+	//! Merge leaf (chains) and free all copied leaf nodes
 	static void Merge(ART &art, Node &l_node, Node &r_node);
 
 	//! Insert a row ID into a leaf
@@ -68,11 +68,6 @@ public:
 
 	//! Returns the string representation of the leaf (chain), or only traverses and verifies the leaf (chain)
 	static string VerifyAndToString(ART &art, Node &node);
-
-	//! Serialize the leaf (chain)
-	static BlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
-	//! Deserialize the leaf (chain)
-	static void Deserialize(ART &art, Node &node, MetadataReader &reader);
 
 	//! Vacuum the leaf (chain)
 	static void Vacuum(ART &art, Node &node);

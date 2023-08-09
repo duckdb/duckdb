@@ -3,8 +3,6 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/common/swap.hpp"
 
 namespace duckdb {
@@ -12,7 +10,7 @@ namespace duckdb {
 Prefix &Prefix::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.SetType((uint8_t)NType::PREFIX);
+	node.SetMetadata((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
 	prefix.data[Node::PREFIX_SIZE] = 0;
@@ -22,7 +20,7 @@ Prefix &Prefix::New(ART &art, Node &node) {
 Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, Node next) {
 
 	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.SetType((uint8_t)NType::PREFIX);
+	node.SetMetadata((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
 	prefix.data[Node::PREFIX_SIZE] = 1;
@@ -40,7 +38,7 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-		node.get().SetType((uint8_t)NType::PREFIX);
+		node.get().SetMetadata((uint8_t)NType::PREFIX);
 		auto &prefix = Prefix::Get(art, node);
 
 		auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
@@ -57,14 +55,14 @@ void Prefix::Free(ART &art, Node &node) {
 
 	Node current_node = node;
 	Node next_node;
-	while (current_node.IsSet() && !current_node.IsSerialized() && current_node.GetType() == NType::PREFIX) {
+	while (current_node.HasMetadata() && current_node.GetType() == NType::PREFIX) {
 		next_node = Prefix::Get(art, current_node).ptr;
 		Node::GetAllocator(art, NType::PREFIX).Free(current_node);
 		current_node = next_node;
 	}
 
 	Node::Free(art, current_node);
-	node.Reset();
+	node.Clear();
 }
 
 void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
@@ -88,23 +86,18 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node) {
 
-	D_ASSERT(prefix_node.IsSet() && !prefix_node.IsSerialized());
-	D_ASSERT(child_prefix_node.IsSet());
-
-	if (child_prefix_node.IsSerialized()) {
-		child_prefix_node.Deserialize(art);
-	}
+	D_ASSERT(prefix_node.HasMetadata() && child_prefix_node.HasMetadata());
 
 	// append a byte and a child_prefix to prefix
 	if (prefix_node.GetType() == NType::PREFIX) {
 
 		// get the tail
 		reference<Prefix> prefix = Prefix::Get(art, prefix_node);
-		D_ASSERT(prefix.get().ptr.IsSet() && !prefix.get().ptr.IsSerialized());
+		D_ASSERT(prefix.get().ptr.HasMetadata());
 
 		while (prefix.get().ptr.GetType() == NType::PREFIX) {
 			prefix = Prefix::Get(art, prefix.get().ptr);
-			D_ASSERT(prefix.get().ptr.IsSet() && !prefix.get().ptr.IsSerialized());
+			D_ASSERT(prefix.get().ptr.HasMetadata());
 		}
 
 		// append the byte
@@ -136,7 +129,7 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 
 idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth) {
 
-	D_ASSERT(prefix_node.get().IsSet() && !prefix_node.get().IsSerialized());
+	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
 
 	// compare prefix nodes to key bytes
@@ -149,10 +142,7 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key
 			depth++;
 		}
 		prefix_node = prefix.ptr;
-		D_ASSERT(prefix_node.get().IsSet());
-		if (prefix_node.get().IsSerialized()) {
-			prefix_node.get().Deserialize(art);
-		}
+		D_ASSERT(prefix_node.get().HasMetadata());
 	}
 
 	return DConstants::INVALID_INDEX;
@@ -197,7 +187,7 @@ bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node
 
 void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 
-	D_ASSERT(prefix_node.IsSet() && !prefix_node.IsSerialized());
+	D_ASSERT(prefix_node.HasMetadata());
 	D_ASSERT(n < Node::PREFIX_SIZE);
 
 	reference<Prefix> prefix = Prefix::Get(art, prefix_node);
@@ -205,8 +195,8 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 	// free this prefix node
 	if (n == (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1)) {
 		auto next_ptr = prefix.get().ptr;
-		D_ASSERT(next_ptr.IsSet());
-		prefix.get().ptr.Reset();
+		D_ASSERT(next_ptr.HasMetadata());
+		prefix.get().ptr.Clear();
 		Node::Free(art, prefix_node);
 		prefix_node = next_ptr;
 		return;
@@ -225,7 +215,7 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 
 void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position) {
 
-	D_ASSERT(prefix_node.get().IsSet() && !prefix_node.get().IsSerialized());
+	D_ASSERT(prefix_node.get().HasMetadata());
 
 	auto &prefix = Prefix::Get(art, prefix_node);
 
@@ -246,10 +236,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 			child_prefix = child_prefix.get().Append(art, prefix.data[i]);
 		}
 
-		D_ASSERT(prefix.ptr.IsSet());
-		if (prefix.ptr.IsSerialized()) {
-			prefix.ptr.Deserialize(art);
-		}
+		D_ASSERT(prefix.ptr.HasMetadata());
 
 		if (prefix.ptr.GetType() == NType::PREFIX) {
 			child_prefix.get().Append(art, prefix.ptr);
@@ -269,7 +256,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 
 	// no bytes left before the split, free this node
 	if (position == 0) {
-		prefix.ptr.Reset();
+		prefix.ptr.Clear();
 		Node::Free(art, prefix_node.get());
 		return;
 	}
@@ -297,68 +284,10 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 		}
 		str += "] ";
 
-		if (prefix.ptr.IsSerialized()) {
-			return str + " serialized";
-		}
 		node_ref = prefix.ptr;
 	}
 
 	return str + node_ref.get().VerifyAndToString(art, only_verify);
-}
-
-BlockPointer Prefix::Serialize(ART &art, Node &node, MetadataWriter &writer) {
-	reference<Node> first_non_prefix(node);
-	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
-	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
-
-	// get pointer and write fields
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(NType::PREFIX);
-	writer.Write<idx_t>(total_count);
-
-	reference<Node> current_node(node);
-	while (current_node.get().GetType() == NType::PREFIX) {
-
-		// write prefix bytes
-		D_ASSERT(!current_node.get().IsSerialized());
-		auto &prefix = Prefix::Get(art, current_node);
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-			writer.Write(prefix.data[i]);
-		}
-
-		current_node = prefix.ptr;
-	}
-
-	// write child block pointer
-	writer.Write(child_block_pointer.block_id);
-	writer.Write(child_block_pointer.offset);
-
-	return block_pointer;
-}
-
-void Prefix::Deserialize(ART &art, Node &node, MetadataReader &reader) {
-	auto total_count = reader.Read<idx_t>();
-	reference<Node> current_node(node);
-
-	while (total_count) {
-		current_node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-		current_node.get().SetType((uint8_t)NType::PREFIX);
-
-		auto &prefix = Prefix::Get(art, current_node);
-		prefix.data[Node::PREFIX_SIZE] = MinValue((idx_t)Node::PREFIX_SIZE, total_count);
-
-		// read bytes
-		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-			prefix.data[i] = reader.Read<uint8_t>();
-		}
-
-		total_count -= prefix.data[Node::PREFIX_SIZE];
-		current_node = prefix.ptr;
-		prefix.ptr.Reset();
-	}
-
-	// read child block pointer
-	current_node.get() = Node(reader);
 }
 
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
@@ -367,10 +296,10 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	auto &allocator = Node::GetAllocator(art, NType::PREFIX);
 
 	reference<Node> node_ref(node);
-	while (!node_ref.get().IsSerialized() && node_ref.get().GetType() == NType::PREFIX) {
+	while (node_ref.get().GetType() == NType::PREFIX) {
 		if (flag_set && allocator.NeedsVacuum(node_ref)) {
 			node_ref.get() = allocator.VacuumPointer(node_ref);
-			node_ref.get().SetType((uint8_t)NType::PREFIX);
+			node_ref.get().SetMetadata((uint8_t)NType::PREFIX);
 		}
 		auto &prefix = Prefix::Get(art, node_ref);
 		node_ref = prefix.ptr;
@@ -395,8 +324,7 @@ Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 
 void Prefix::Append(ART &art, Node other_prefix) {
 
-	// NOTE: all usages of this function already deserialize the other prefix
-	D_ASSERT(other_prefix.IsSet() && !other_prefix.IsSerialized());
+	D_ASSERT(other_prefix.HasMetadata());
 
 	reference<Prefix> prefix(*this);
 	while (other_prefix.GetType() == NType::PREFIX) {
@@ -407,10 +335,7 @@ void Prefix::Append(ART &art, Node other_prefix) {
 			prefix = prefix.get().Append(art, other.data[i]);
 		}
 
-		D_ASSERT(other.ptr.IsSet());
-		if (other.ptr.IsSerialized()) {
-			other.ptr.Deserialize(art);
-		}
+		D_ASSERT(other.ptr.HasMetadata());
 
 		prefix.get().ptr = other.ptr;
 		Node::GetAllocator(art, NType::PREFIX).Free(other_prefix);
@@ -418,24 +343,6 @@ void Prefix::Append(ART &art, Node other_prefix) {
 	}
 
 	D_ASSERT(prefix.get().ptr.GetType() != NType::PREFIX);
-}
-
-idx_t Prefix::TotalCount(ART &art, reference<Node> &node) {
-
-	// NOTE: first prefix in the prefix chain is already deserialized
-	D_ASSERT(node.get().IsSet() && !node.get().IsSerialized());
-
-	idx_t count = 0;
-	while (node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Prefix::Get(art, node);
-		count += prefix.data[Node::PREFIX_SIZE];
-
-		if (prefix.ptr.IsSerialized()) {
-			prefix.ptr.Deserialize(art);
-		}
-		node = prefix.ptr;
-	}
-	return count;
 }
 
 } // namespace duckdb

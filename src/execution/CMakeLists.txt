@@ -2,7 +2,7 @@ add_subdirectory(expression_executor)
 add_subdirectory(nested_loop_join)
 add_subdirectory(operator)
 add_subdirectory(physical_plan)
-add_subdirectory(index/art)
+add_subdirectory(index)
 
 add_library_unity(
   duckdb_execution
