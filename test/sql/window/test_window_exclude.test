@@ -407,6 +407,55 @@ SELECT unique1, COUNT(*) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW E
 physical_plan	<!REGEX>:.*STREAMING_WINDOW.*
 
 
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE CURRENT ROW) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	12
+4 	0 	8
+8 	0 	4
+1 	1 	14
+5 	1 	10
+9 	1 	6
+2 	2 	6
+6 	2 	2
+3 	3 	7
+7 	3 	3
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE GROUP) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	NULL
+4 	0 	NULL
+8 	0 	NULL
+1 	1 	NULL
+5 	1 	NULL
+9 	1 	NULL
+2 	2 	NULL
+6 	2 	NULL
+3 	3 	NULL
+7 	3 	NULL
+
+
+# PARTITION BY without ORDER BY
+query III
+SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING EXCLUDE TIES) FROM tenk1d ORDER BY four, unique1;
+----
+0 	0 	0
+4 	0 	4
+8 	0 	8
+1 	1 	1
+5 	1 	5
+9 	1 	9
+2 	2 	2
+6 	2 	6
+3 	3 	3
+7 	3 	7
+
+
+
 # Lag ignores EXCLUDE
 query III
 SELECT i, lag(i, 1) OVER w, array_agg(i) OVER w
