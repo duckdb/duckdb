@@ -43,7 +43,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, index_block->block_id, index_block->offset);
+		                     storage.db, nullptr, index_block->block_id, index_block->offset);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
 		                     storage.db);
@@ -527,10 +527,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::DropNotNull(ClientContext &context, Dro
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
-	if (info.target_type.id() == LogicalTypeId::USER) {
-		info.target_type =
-		    Catalog::GetType(context, catalog.GetName(), schema.name, UserType::GetTypeName(info.target_type));
-	}
+	Binder::BindLogicalType(context, info.target_type, &catalog, schema.name);
 	auto change_idx = GetColumnIndex(info.column_name);
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->temporary = temporary;

@@ -1,0 +1,27 @@
+# name: test/sql/index/art/vacuum/test_art_vacuum.test
+# description: Test vacuuming leaves
+# group: [vacuum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE delete_vacuum (id INT);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 10 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 11 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 12 FROM range(10000);
+
+statement ok
+INSERT INTO delete_vacuum SELECT 13 FROM range(10000);
+
+statement ok
+CREATE INDEX idx ON delete_vacuum(id);
+
+statement ok
+DELETE FROM delete_vacuum WHERE id = 11 OR id = 10;

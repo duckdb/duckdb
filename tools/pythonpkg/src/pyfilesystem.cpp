@@ -115,6 +115,9 @@ vector<string> PythonFilesystem::Glob(const string &path, FileOpener *opener) {
 	}
 	return results;
 }
+string PythonFilesystem::PathSeparator(const string &path) {
+	return "/";
+}
 int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;

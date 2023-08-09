@@ -50,6 +50,10 @@
         "property": "index_name"
       },
       {
+        "name": "table",
+        "type": "string"
+      },
+      {
         "name": "index_type",
         "type": "IndexType"
       },
@@ -148,7 +152,8 @@
         "type": "string"
       },
       {
-        "name": "type",
+        "name": "logical_type",
+        "property": "type",
         "type": "LogicalType"
       }
     ]

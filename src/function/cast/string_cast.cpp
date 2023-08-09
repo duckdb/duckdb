@@ -36,7 +36,6 @@ bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, 
 template <class T>
 bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	auto enum_name = EnumType::GetTypeName(result.GetType());
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

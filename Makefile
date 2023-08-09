@@ -51,6 +51,7 @@ ifeq (${STATIC_LIBCPP}, 1)
 endif
 
 CMAKE_VARS ?=
+CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
 ifneq (${DUCKDB_EXTENSIONS}, )
@@ -213,6 +214,12 @@ ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
 
+ifneq ("${LTO}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
+endif
+ifneq ("${CMAKE_LLVM_PATH}", "")
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
+endif
 
 clean:
 	rm -rf build

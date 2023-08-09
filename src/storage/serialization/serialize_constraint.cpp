@@ -50,7 +50,7 @@ void ForeignKeyConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
 	serializer.WriteProperty("pk_columns", pk_columns);
 	serializer.WriteProperty("fk_columns", fk_columns);
-	serializer.WriteProperty("type", info.type);
+	serializer.WriteProperty("fk_type", info.type);
 	serializer.WriteProperty("schema", info.schema);
 	serializer.WriteProperty("table", info.table);
 	serializer.WriteProperty("pk_keys", info.pk_keys);
@@ -61,7 +61,7 @@ unique_ptr<Constraint> ForeignKeyConstraint::FormatDeserialize(FormatDeserialize
 	auto result = duckdb::unique_ptr<ForeignKeyConstraint>(new ForeignKeyConstraint());
 	deserializer.ReadProperty("pk_columns", result->pk_columns);
 	deserializer.ReadProperty("fk_columns", result->fk_columns);
-	deserializer.ReadProperty("type", result->info.type);
+	deserializer.ReadProperty("fk_type", result->info.type);
 	deserializer.ReadProperty("schema", result->info.schema);
 	deserializer.ReadProperty("table", result->info.table);
 	deserializer.ReadProperty("pk_keys", result->info.pk_keys);

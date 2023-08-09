@@ -49,10 +49,25 @@ SQLRETURN duckdb::FreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	}
 }
 
+/**
+ * @brief Frees a handle
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfreehandle-function?view=sql-server-ver15
+ * @param handle_type
+ * @param handle
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	return duckdb::FreeHandle(handle_type, handle);
 }
 
+/**
+ * @brief Allocates a handle
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function?view=sql-server-ver15
+ * @param handle_type Can be SQL_HANDLE_ENV, SQL_HANDLE_DBC, SQL_HANDLE_STMT, SQL_HANDLE_DESC
+ * @param input_handle Handle to associate with the new handle, if applicable
+ * @param output_handle_ptr The new handle
+ * @return
+ */
 SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr) {
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
@@ -84,6 +99,18 @@ SQLRETURN SQL_API SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle
 	}
 }
 
+static SQLUINTEGER ExtractMajorVersion(SQLPOINTER value_ptr) {
+	// Values like 380 represent version 3.8, here we extract the major version (3 in this case)
+	auto full_version = (SQLUINTEGER)(uintptr_t)value_ptr;
+	if (full_version > 100) {
+		return full_version / 100;
+	}
+	if (full_version > 10) {
+		return full_version / 10;
+	}
+	return full_version;
+}
+
 SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                 SQLINTEGER string_length) {
 	duckdb::OdbcHandleEnv *env = nullptr;
@@ -93,7 +120,8 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION: {
-		switch ((SQLUINTEGER)(intptr_t)value_ptr) {
+		auto major_version = ExtractMajorVersion(value_ptr);
+		switch (major_version) {
 		case SQL_OV_ODBC3:
 		case SQL_OV_ODBC2:
 			// TODO actually do something with this?

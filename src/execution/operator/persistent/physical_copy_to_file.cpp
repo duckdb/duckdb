@@ -108,7 +108,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 		auto partition_key_map = l.part_buffer->GetReverseMap();
 
 		string trimmed_path = file_path;
-		StringUtil::RTrim(trimmed_path, fs.PathSeparator());
+		StringUtil::RTrim(trimmed_path, fs.PathSeparator(trimmed_path));
 
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path =

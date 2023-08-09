@@ -7,7 +7,6 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
-#include "duckdb/planner/operator/logical_asof_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
@@ -193,12 +192,11 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	} else {
 		// we successfully converted expressions into JoinConditions
 		// create a LogicalComparisonJoin
-		unique_ptr<LogicalComparisonJoin> comp_join;
+		auto logical_type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 		if (reftype == JoinRefType::ASOF) {
-			comp_join = make_uniq<LogicalAsOfJoin>(type);
-		} else {
-			comp_join = make_uniq<LogicalComparisonJoin>(type);
+			logical_type = LogicalOperatorType::LOGICAL_ASOF_JOIN;
 		}
+		auto comp_join = make_uniq<LogicalComparisonJoin>(type, logical_type);
 		comp_join->conditions = std::move(conditions);
 		comp_join->children.push_back(std::move(left_child));
 		comp_join->children.push_back(std::move(right_child));

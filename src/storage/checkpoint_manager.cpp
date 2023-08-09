@@ -131,7 +131,6 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 	con.BeginTransaction();
 	// create the MetaBlockReader to read from the storage
 	MetaBlockReader reader(block_manager, meta_block);
-	reader.SetCatalog(catalog.GetAttached().GetCatalog());
 	reader.SetContext(*con.context);
 	LoadCheckpoint(*con.context, reader);
 	con.Commit();
@@ -395,7 +394,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
 		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          index_info.constraint_type, storage.db, root_block_id, root_offset);
+		                          index_info.constraint_type, storage.db, nullptr, root_block_id, root_offset);
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
@@ -414,10 +413,7 @@ void CheckpointWriter::WriteType(TypeCatalogEntry &type) {
 
 void CheckpointReader::ReadType(ClientContext &context, MetaBlockReader &reader) {
 	auto info = TypeCatalogEntry::Deserialize(reader);
-	auto &catalog_entry = catalog.CreateType(context, *info)->Cast<TypeCatalogEntry>();
-	if (info->type.id() == LogicalTypeId::ENUM) {
-		EnumType::SetCatalog(info->type, &catalog_entry);
-	}
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 //===--------------------------------------------------------------------===//

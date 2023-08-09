@@ -232,8 +232,8 @@
     "enum": "BOUND_PARAMETER",
     "members": [
       {
-        "name": "parameter_nr",
-        "type": "idx_t"
+        "name": "identifier",
+        "type": "string"
       },
       {
         "name": "return_type",
@@ -244,7 +244,7 @@
         "type": "shared_ptr<BoundParameterData>"
       }
     ],
-    "constructor": ["$bound_parameter_map_t", "parameter_nr", "return_type", "parameter_data"]
+    "constructor": ["$bound_parameter_map_t", "identifier", "return_type", "parameter_data"]
   },
   {
     "class": "BoundReferenceExpression",
@@ -277,5 +277,23 @@
       }
     ],
     "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundFunctionExpression",
+    "base": "Expression",
+    "enum": "BOUND_FUNCTION",
+    "custom_implementation": true
+  },
+  {
+    "class": "BoundAggregateExpression",
+    "base": "Expression",
+    "enum": "BOUND_AGGREGATE",
+    "custom_implementation": true
+  },
+  {
+    "class": "BoundWindowExpression",
+    "base": "Expression",
+    "enum": "BOUND_WINDOW",
+    "custom_implementation": true
   }
 ]

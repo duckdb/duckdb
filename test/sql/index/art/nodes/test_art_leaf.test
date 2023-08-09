@@ -233,3 +233,32 @@ query I
 SELECT sum(id_int) FROM tbl_grow_shrink;
 ----
 NULL
+
+# merging leaves
+
+statement ok
+CREATE TABLE merge_leaf_tbl (id int);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range FROM range(2048);
+
+statement ok
+INSERT INTO merge_leaf_tbl VALUES (2047);
+
+statement ok
+CREATE INDEX idx_merge_leaf_tbl ON merge_leaf_tbl(id);
+
+statement ok
+DROP INDEX idx_merge_leaf_tbl;
+
+statement ok
+INSERT INTO merge_leaf_tbl VALUES (2047);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range + 10000 FROM range(2048);
+
+statement ok
+INSERT INTO merge_leaf_tbl SELECT range + 10000 FROM range(2048);
+
+statement ok
+CREATE INDEX idx_merge_leaf_tbl ON merge_leaf_tbl(id);
