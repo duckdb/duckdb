@@ -5,9 +5,10 @@ namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalAggregate &aggr, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto child = unique_ptr<LogicalOperator>((LogicalOperator*)aggr.children[0].get());
+	auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(aggr.children[0]));
 	// first propagate statistics in the child node
 	node_stats = PropagateStatistics(child);
+	aggr.children[0] = std::move(child);
 	// handle the groups: simply propagate statistics and assign the stats to the group binding
 	aggr.group_stats.resize(aggr.groups.size());
 	for (idx_t group_idx = 0; group_idx < aggr.groups.size(); group_idx++)

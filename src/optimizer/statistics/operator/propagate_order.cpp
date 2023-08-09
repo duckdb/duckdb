@@ -6,9 +6,10 @@ namespace duckdb
 {
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrder &order, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto child = unique_ptr<LogicalOperator>((LogicalOperator*)order.children[0].get());
+	auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(order.children[0]));
 	// first propagate to the child
 	node_stats = PropagateStatistics(child);
+	order.children[0] = std::move(child);
 	// then propagate to each of the order expressions
 	for (auto &bound_order : order.orders)
 	{

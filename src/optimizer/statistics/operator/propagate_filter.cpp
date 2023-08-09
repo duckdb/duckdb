@@ -258,9 +258,10 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition)
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilter &filter, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto left_child = unique_ptr<LogicalOperator>((LogicalOperator*)filter.children[0].get());
+	auto left_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(filter.children[0]));
 	// first propagate to the child
 	node_stats = PropagateStatistics(left_child);
+	filter.children[0] = std::move(left_child);
 	if (filter.children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT)
 	{
 		ReplaceWithEmptyResult(*node_ptr);
@@ -280,7 +281,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 			if (filter.expressions.empty())
 			{
 				// all conditions have been erased: remove the entire filter
-				*node_ptr = unique_ptr<LogicalOperator>((LogicalOperator*)filter.children[0].get());
+				*node_ptr = unique_ptr_cast<Operator, LogicalOperator>(std::move(filter.children[0]));
 				break;
 			}
 		}

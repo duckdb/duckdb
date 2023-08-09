@@ -47,19 +47,19 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// when the right child has no data, return an empty set
 					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 					limit->AddChild(std::move(join.children[1]));
-					auto cross_product = LogicalCrossProduct::Create(unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get()), std::move(limit));
+					auto cross_product = LogicalCrossProduct::Create(unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0])), std::move(limit));
 					*node_ptr = std::move(cross_product);
 					return;
 				}
 				case JoinType::LEFT:
 				{
 					// anti/left outer join: replace right side with empty node
-					auto child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[1].get());
+					auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[1]));
 					ReplaceWithEmptyResult(child);
 					return;
 				}
 				case JoinType::RIGHT:
-				{	auto child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get());
+				{	auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0]));
 					// right outer join: replace left side with empty node
 					ReplaceWithEmptyResult(child);
 					return;
@@ -93,7 +93,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// when the right child has no data, return an empty set
 						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 						limit->AddChild(std::move(join.children[1]));
-						auto cross_product = LogicalCrossProduct::Create(unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get()), std::move(limit));
+						auto cross_product = LogicalCrossProduct::Create(unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0])), std::move(limit));
 						*node_ptr = std::move(cross_product);
 						return;
 					}
@@ -101,7 +101,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					{
 						// inner, replace with cross product
 						auto cross_product =
-						    LogicalCrossProduct::Create(unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get()), unique_ptr<LogicalOperator>((LogicalOperator*)join.children[1].get()));
+						    LogicalCrossProduct::Create(unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0])), unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[1])));
 						*node_ptr = std::move(cross_product);
 						return;
 					}
@@ -190,12 +190,12 @@ void StatisticsPropagator::MultiplyCardinalities(unique_ptr<NodeStatistics> &sta
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin &join, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto first_child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get());
+	auto first_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0]));
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(first_child);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++)
 	{
-		auto child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[child_idx].get());
+		auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[child_idx]));
 		auto child_stats = PropagateStatistics(child);
 		if (!child_stats)
 		{
@@ -276,12 +276,13 @@ static void MaxCardinalities(unique_ptr<NodeStatistics> &stats, NodeStatistics &
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPositionalJoin &join, unique_ptr<LogicalOperator> *node_ptr)
 {
 	D_ASSERT(join.logical_type == LogicalOperatorType::LOGICAL_POSITIONAL_JOIN);
-	auto first_child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[0].get());
+	auto first_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0]));
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(first_child);
+	join.children[0] = std::move(first_child);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++)
 	{
-		auto child = unique_ptr<LogicalOperator>((LogicalOperator*)join.children[child_idx].get());
+		auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[child_idx]));
 		auto child_stats = PropagateStatistics(child);
 		if (!child_stats)
 		{

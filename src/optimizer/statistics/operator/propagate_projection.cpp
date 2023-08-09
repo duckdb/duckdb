@@ -5,9 +5,10 @@ namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalProjection &proj, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto child = unique_ptr<LogicalOperator>((LogicalOperator*)proj.children[0].get());
+	auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(proj.children[0]));
 	// first propagate to the child
 	node_stats = PropagateStatistics(child);
+	proj.children[0] = std::move(child);
 	if (proj.children[0]->logical_type == LogicalOperatorType::LOGICAL_EMPTY_RESULT)
 	{
 		ReplaceWithEmptyResult(*node_ptr);

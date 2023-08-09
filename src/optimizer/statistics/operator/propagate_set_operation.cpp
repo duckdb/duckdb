@@ -31,11 +31,13 @@ void StatisticsPropagator::AddCardinalities(unique_ptr<NodeStatistics> &stats, N
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalSetOperation &setop, unique_ptr<LogicalOperator> *node_ptr)
 {
-	auto left_child = unique_ptr<LogicalOperator>((LogicalOperator*)setop.children[0].get());
-	auto right_child = unique_ptr<LogicalOperator>((LogicalOperator*)setop.children[1].get());
+	auto left_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(setop.children[0]));
+	auto right_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(setop.children[1]));
 	// first propagate statistics in the child nodes
 	auto left_stats = PropagateStatistics(left_child);
 	auto right_stats = PropagateStatistics(right_child);
+	setop.children[0] = std::move(left_child);
+	setop.children[1] = std::move(right_child);
 	// now fetch the column bindings on both sides
 	auto left_bindings = setop.children[0]->GetColumnBindings();
 	auto right_bindings = setop.children[1]->GetColumnBindings();
