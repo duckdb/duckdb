@@ -16,7 +16,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
 #include "duckdb/common/optional_ptr.hpp"
-#include "duckdb/common/file_opener.hpp"
 #include <functional>
 
 #undef CreateDirectory
