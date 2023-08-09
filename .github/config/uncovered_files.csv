@@ -768,7 +768,8 @@ storage/statistics/numeric_stats.cpp	15
 storage/statistics/numeric_stats_union.cpp	3
 storage/statistics/string_stats.cpp	8
 storage/statistics/struct_stats.cpp	7
-storage/storage_manager.cpp	3
+storage/storage_manager.cpp	6
+storage/metadata/metadata_manager.cpp	4
 storage/table/chunk_info.cpp	16
 storage/table/column_checkpoint_state.cpp	20
 storage/table/column_data.cpp	16

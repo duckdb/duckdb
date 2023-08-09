@@ -12,6 +12,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -28,12 +29,13 @@ enum class NType : uint8_t {
 class FixedSizeAllocator;
 class ART;
 class Prefix;
-class MetaBlockReader;
-class MetaBlockWriter;
+class MetadataReader;
+class MetadataWriter;
 
 // structs
 struct BlockPointer;
 struct ARTFlags;
+struct MetaBlockPointer;
 
 //! The Node is the pointer class of the ART index.
 //! If the node is serialized, then the pointer points to a storage address (and has no type),
@@ -70,7 +72,7 @@ public:
 	//! Constructs an empty Node
 	Node() : data(0) {};
 	//! Constructs a serialized Node pointer from a block ID and an offset
-	explicit Node(MetaBlockReader &reader);
+	explicit Node(MetadataReader &reader);
 	//! Constructs an in-memory Node from a buffer ID and an offset
 	Node(const uint32_t buffer_id, const uint32_t offset) : data(0) {
 		SetPtr(buffer_id, offset);
@@ -95,7 +97,7 @@ public:
 	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte, const bool deserialize = true) const;
 
 	//! Serialize the node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize the node
 	void Deserialize(ART &art);
 

@@ -60,7 +60,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		return false;
 	} // LCOV_EXCL_STOP
 	initial_reader.reset();
-	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
+	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
 		auto &manager = database.GetStorageManager();
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
@@ -523,7 +523,8 @@ void ReplayState::ReplayUpdate() {
 }
 
 void ReplayState::ReplayCheckpoint() {
-	checkpoint_id = source.Read<block_id_t>();
+	checkpoint_id.block_pointer = source.Read<idx_t>();
+	checkpoint_id.offset = source.Read<uint32_t>();
 }
 
 } // namespace duckdb
