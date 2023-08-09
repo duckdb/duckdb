@@ -125,7 +125,6 @@ endif()
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
-option(LOCAL_EXTENSION_REPO "Copies all built extensions to a local folder structured as extension repo" TRUE) # TODO: should be false
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
@@ -168,7 +167,6 @@ elseif(${ENABLE_SANITIZER})
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
   endif()
 endif()
-
 
 if (${DISABLE_VPTR_SANITIZER})
 else()
@@ -1113,16 +1111,16 @@ if(NOT CLANG_TIDY)
   endif()
 endif()
 
-if (LOCAL_EXTENSION_REPO)
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          python3 scripts/create_local_extension_repo.py ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_BINARY_DIR}/extension_repository
+          python3 scripts/create_local_extension_repo.py ${CMAKE_CURRENT_BINARY_DIR} ${LOCAL_EXTENSION_REPO}
           DEPENDS shell
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
   add_extension_dependencies(duckdb_local_extension_repo)
-  message(STATUS "Extensions will be deployed to: ${CMAKE_CURRENT_BINARY_DIR}/extension_repository")
+  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
 if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT EXTENSION_CONFIG_BUILD ) # this does not work with 2.8

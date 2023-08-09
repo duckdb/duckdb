@@ -2,7 +2,7 @@
 # description: test the autoloading mechanism for extensions
 # group: [extension]
 
-require-env LOCAL_EXTENSION_REPOSITORY
+require-env LOCAL_EXTENSION_REPO
 
 ### No autoloading: throw error with installation hint
 statement ok
@@ -49,7 +49,7 @@ Catalog Error: Table Function with name thistablefunctionwillnotexistfosho does 
 
 ### Autoloading with correct tmp repo
 statement ok
-set autoload_extension_repository='${LOCAL_EXTENSION_REPOSITORY}';
+set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
 SET s3_endpoint='';
