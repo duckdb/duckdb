@@ -15,8 +15,8 @@
 namespace duckdb {
 
 // classes
-class MetaBlockWriter;
-class MetaBlockReader;
+class MetadataWriter;
+class MetadataReader;
 
 // structs
 struct BlockPointer;
@@ -70,9 +70,9 @@ public:
 	static string VerifyAndToString(ART &art, Node &node);
 
 	//! Serialize the leaf (chain)
-	static BlockPointer Serialize(ART &art, Node &node, MetaBlockWriter &writer);
+	static BlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
 	//! Deserialize the leaf (chain)
-	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
+	static void Deserialize(ART &art, Node &node, MetadataReader &reader);
 
 	//! Vacuum the leaf (chain)
 	static void Vacuum(ART &art, Node &node);

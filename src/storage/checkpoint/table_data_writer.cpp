@@ -31,8 +31,8 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
-                                                     TableCatalogEntry &table, MetaBlockWriter &table_data_writer,
-                                                     MetaBlockWriter &meta_data_writer)
+                                                     TableCatalogEntry &table, MetadataWriter &table_data_writer,
+                                                     MetadataWriter &meta_data_writer)
     : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer),
       meta_data_writer(meta_data_writer) {
 }
@@ -44,7 +44,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
-	auto pointer = table_data_writer.GetBlockPointer();
+	auto pointer = table_data_writer.GetMetaBlockPointer();
 
 	global_stats.Serialize(table_data_writer);
 
@@ -60,18 +60,18 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	}
 
 	// Pointer to the table itself goes to the metadata stream.
-	meta_data_writer.Write<block_id_t>(pointer.block_id);
+	meta_data_writer.Write<idx_t>(pointer.block_pointer);
 	meta_data_writer.Write<uint64_t>(pointer.offset);
 	meta_data_writer.Write<idx_t>(total_rows);
 
 	// Now we serialize indexes in the table_metadata_writer
-	vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());
 	for (auto &block_info : index_pointers) {
-		meta_data_writer.Write<idx_t>(block_info.block_id);
-		meta_data_writer.Write<idx_t>(block_info.offset);
+		meta_data_writer.Write<block_id_t>(block_info.block_id);
+		meta_data_writer.Write<uint32_t>(block_info.offset);
 	}
 }
 
