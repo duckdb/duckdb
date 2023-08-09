@@ -1,0 +1,63 @@
+# name: test/sql/update/test_update_issue_3170.test
+# description: Update indexed table rows with large row_id ( > 122879) which cross the first segment/row_group.
+# group: [update]
+statement ok
+PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE student(id INTEGER,name VARCHAR,PRIMARY KEY(id));
+
+statement ok
+INSERT INTO student SELECT i, 'creator' FROM RANGE(260001) tbl(i)
+
+# read
+# rowgroup 0
+query I
+SELECT name FROM student WHERE id = 122879
+----
+creator
+
+# rowgroup 1
+query I
+SELECT name FROM student WHERE id = 122881
+----
+creator
+
+# rowgroup 2
+query I
+SELECT name FROM student WHERE id = 245780
+----
+creator
+
+# Update
+# rowgroup 0
+statement ok
+UPDATE student SET name = 'updator0' WHERE id = 122879
+
+# rowgroup 1
+statement ok
+UPDATE student SET name = 'updator1' WHERE id = 122881
+
+# rowgroup 2 
+statement ok
+UPDATE student SET name = 'updator2' WHERE id = 245780
+
+# read again
+# rowgroup 0
+query I
+SELECT name FROM student WHERE id = 122879
+----
+updator0
+
+# rowgroup 1
+query I
+SELECT name FROM student WHERE id = 122881
+----
+updator1
+
+# rowgroup 2
+query I
+SELECT name FROM student WHERE id = 245780
+----
+updator2
