@@ -417,8 +417,47 @@ class DataFrame:
                 return mapped_type
 
             how = map_to_recognized_jointype(how)
-            result = self.relation.join(other.relation.set_alias("__other_alias__"), on, how)
+            result = self.relation.join(other.relation, on, how)
         return DataFrame(result, self.session)
+
+    def alias(self, alias: str) -> "DataFrame":
+        """Returns a new :class:`DataFrame` with an alias set.
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Parameters
+        ----------
+        alias : str
+            an alias name to be set for the :class:`DataFrame`.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Aliased DataFrame.
+
+        Examples
+        --------
+        >>> from pyspark.sql.functions import col, desc
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df_as1 = df.alias("df_as1")
+        >>> df_as2 = df.alias("df_as2")
+        >>> joined_df = df_as1.join(df_as2, col("df_as1.name") == col("df_as2.name"), 'inner')
+        >>> joined_df.select(
+        ...     "df_as1.name", "df_as2.name", "df_as2.age").sort(desc("df_as1.name")).show()
+        +-----+-----+---+
+        | name| name|age|
+        +-----+-----+---+
+        |  Tom|  Tom| 14|
+        |  Bob|  Bob| 16|
+        |Alice|Alice| 23|
+        +-----+-----+---+
+        """
+        assert isinstance(alias, str), "alias should be a string"
+        return DataFrame(self.relation.set_alias(alias), self.session)
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
         if len(cols) == 1:
