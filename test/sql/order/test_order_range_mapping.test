@@ -28,7 +28,7 @@ drop table test
 endloop
 
 # cast to usmallint
-foreach type smallint usmallint integer uinteger bigint ubigint hugeint
+foreach type smallint usmallint integer uinteger bigint ubigint hugeint uhugeint
 
 statement ok
 create table test (i ${type})
@@ -50,7 +50,7 @@ drop table test
 endloop
 
 # cast to uint
-foreach type integer uinteger bigint ubigint hugeint
+foreach type integer uinteger bigint ubigint hugeint uhugeint
 
 statement ok
 create table test (i ${type})
@@ -72,7 +72,7 @@ drop table test
 endloop
 
 # cast to ubigint
-foreach type bigint ubigint hugeint
+foreach type bigint ubigint hugeint uhugeint
 
 statement ok
 create table test (i ${type})

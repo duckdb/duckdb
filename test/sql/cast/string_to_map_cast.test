@@ -263,7 +263,7 @@ SELECT CAST('{True=[true, FALSE, true], False=[false, false, false]}' AS MAP(BOO
 ----
 {true=[true, false, true], false=[false, false, false]}
 
-foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT
+foreach type TINYINT SMALLINT INTEGER BIGINT HUGEINT UTINYINT USMALLINT UINTEGER UBIGINT UHUGEINT
 
 query I
 SELECT CAST('{0={a:1, b: 8.3}, 5.7={a:2, b: 3}}' AS MAP(${type}, STRUCT(a ${type}, b ${type})));

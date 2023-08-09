@@ -139,3 +139,44 @@ NULL
 1
 340282366920938463463374607431768211455
 NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UHUGEINT FROM uhugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::UHUGEINT FROM uhugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,0)::UHUGEINT FROM uhugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,0)::UHUGEINT FROM uhugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,0))::UHUGEINT FROM uhugeints ORDER BY i
+----
+0
+1
+NULL
