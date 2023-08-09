@@ -293,7 +293,7 @@ class TestDataFrameJoin(object):
         ]
 
     @pytest.mark.parametrize('how', ['anti', 'leftanti', 'left_anti'])
-    def test_semi_join(self, dataframe_a, dataframe_b, how):
+    def test_anti_join(self, dataframe_a, dataframe_b, how):
         df = dataframe_a.join(dataframe_b, dataframe_a.emp_dept_id == dataframe_b.dept_id, how)
         res = df.collect()
         assert res == [
