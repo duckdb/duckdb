@@ -136,7 +136,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("SET default_null_order='nulls_first'"));
 
 	// integer columns
-	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
+	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT",  "HUGEINT",
 	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT", "UHUGEINT"};
 	for (auto &type : types) {
 		// create the table and insert values
