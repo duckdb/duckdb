@@ -307,8 +307,8 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const idx_t thread_limit = 0.6 * limit / n_threads;
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
 		// We're approaching the memory limit, unpin the data
-		gstate.external = true;
 		gstate.config.SetRadixBitsToExternal();
+		gstate.external = true;
 
 		if (!lstate.abandoned_data) {
 			lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
@@ -401,6 +401,9 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 
 	// Loop until all threads have called Combine, make sure we sync partitioning
 	while (gstate.combined_threads < gstate.active_threads) {
+		if (gstate.external) {
+			break; // Already at maximum radix bits
+		}
 		MaybeRepartition(context.client, gstate, lstate);
 	}
 	MaybeRepartition(context.client, gstate, lstate);

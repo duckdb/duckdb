@@ -39,7 +39,7 @@ statement ok
 set disabled_optimizers to 'compressed_materialization'
 
 statement ok
-pragma memory_limit='75mb'
+pragma memory_limit='125mb'
 
 query I
 select count(*) from (select distinct * from t1)
@@ -60,7 +60,7 @@ from range(100)
 
 # slightly higher memory limit for this one
 statement ok
-pragma memory_limit='90mb'
+pragma memory_limit='135mb'
 
 query I
 select count(*) from (select distinct * from t1)

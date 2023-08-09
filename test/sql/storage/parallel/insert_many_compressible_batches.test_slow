@@ -46,7 +46,7 @@ SELECT i, COUNT(*) FROM integers_parquet GROUP BY ALL ORDER BY ALL
 1	1000
 
 query I
-SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('__TEST_DIR__/integers_parquet');
+SELECT COUNT(DISTINCT block_id)<=3 FROM pragma_storage_info('integers_parquet');
 ----
 true
 
