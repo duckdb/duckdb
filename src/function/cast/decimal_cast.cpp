@@ -247,6 +247,8 @@ BoundCastInfo DefaultCasts::DecimalCastSwitch(BindCastInput &input, const Logica
 		return FromDecimalCast<uint64_t>;
 	case LogicalTypeId::HUGEINT:
 		return FromDecimalCast<hugeint_t>;
+	case LogicalTypeId::UHUGEINT:
+		return FromDecimalCast<uhugeint_t>;
 	case LogicalTypeId::DECIMAL: {
 		// decimal to decimal cast
 		// first we need to figure out the source and target internal types
