@@ -7,6 +7,7 @@ add_library_unity(
     CXformGet2TableScan.cpp
     CXformImplementation.cpp
     CXformLogicalProj2PhysicalProj.cpp
+    CXformOrderImplementation.cpp
     CXformResult.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:xforms>
