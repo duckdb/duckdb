@@ -55,6 +55,7 @@ public:
 		/* I comment here */
 		ExfGet2TableScan = 0,
 		ExfLogicalProj2PhysicalProj = 1,
+		ExfOrderImplementation = 2,
 		ExfProject2ComputeScalarExfn,
 		ExfInnerJoin2HashJoin,
 		ExfSelect2Filter,
