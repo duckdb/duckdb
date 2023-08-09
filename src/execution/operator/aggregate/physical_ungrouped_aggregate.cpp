@@ -169,21 +169,24 @@ public:
 bool PhysicalUngroupedAggregate::SinkOrderDependent() const {
 	for (auto &expr : aggregates) {
 		auto &aggr = expr->Cast<BoundAggregateExpression>();
-		if (aggr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT) {
+		if (aggr.function.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT)
+		{
 			return true;
 		}
 	}
 	return false;
 }
 
-unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const {
+unique_ptr<GlobalSinkState> PhysicalUngroupedAggregate::GetGlobalSinkState(ClientContext &context) const
+{
 	return make_uniq<UngroupedAggregateGlobalState>(*this, context);
 }
 
-unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const {
+unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(ExecutionContext &context) const
+{
 	D_ASSERT(sink_state);
 	auto &gstate = *sink_state;
-	return make_uniq<UngroupedAggregateLocalState>(*this, children[0]->GetTypes(), gstate, context);
+	return make_uniq<UngroupedAggregateLocalState>(*this, ((PhysicalOperator*)children[0].get())->GetTypes(), gstate, context);
 }
 
 void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -490,8 +493,8 @@ public:
 	}
 };
 
-SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                              GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const
+{
 	auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalState>();
 	D_ASSERT(distinct_data);
 	auto &distinct_state = *gstate.distinct_state;

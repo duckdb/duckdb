@@ -1,15 +1,17 @@
 #include "catch.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/planner.hpp"
 #include "test_helpers.hpp"
-#include "duckdb/parser/parser.hpp"
 
 #include <map>
+#include <memory>
 #include <set>
 
 using namespace duckdb;
@@ -39,7 +41,8 @@ static void test_helper(string sql, duckdb::vector<string> fixtures = duckdb::ve
 		plan = optimizer.Optimize(std::move(plan));
 
 		// LogicalOperator's copy utilizes its serialize and deserialize methods
-		auto new_plan = plan->Copy(*con.context);
+		// auto new_plan = plan->Copy(*con.context);
+		auto new_plan = static_cast<LogicalOperator *>(plan.get())->Copy(*con.context);
 
 		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
 		con.context->transaction.Commit();

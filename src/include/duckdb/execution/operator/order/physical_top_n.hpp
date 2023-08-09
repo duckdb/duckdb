@@ -21,8 +21,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TOP_N;
 
 public:
-	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-	             idx_t estimated_cardinality);
+	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset, idx_t estimated_cardinality);
 
 	vector<BoundOrderByNode> orders;
 	idx_t limit;

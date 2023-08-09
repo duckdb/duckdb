@@ -1,3 +1,4 @@
+#include "duckdb/catalog/catalog.hpp"
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
 #include "duckdb/common/field_writer.hpp"
@@ -10,17 +11,17 @@
 using namespace duckdb;
 
 // whatever
-#include <signal.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <stdio.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <arpa/inet.h>
+#include <unistd.h>
 
 class WaggleExtension : public OptimizerExtension {
 public:
@@ -28,8 +29,8 @@ public:
 		optimize_function = WaggleOptimizeFunction;
 	}
 
-	static bool HasParquetScan(LogicalOperator &op) {
-		if (op.type == LogicalOperatorType::LOGICAL_GET) {
+	static bool HasParquetScan(Operator &op) {
+		if (op.logical_type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = op.Cast<LogicalGet>();
 			return get.function.name == "parquet_scan";
 		}

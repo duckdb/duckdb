@@ -344,13 +344,13 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	if (config.enable_optimizer && plan->RequireOptimizer())
 	{
 		profiler.StartPhase("optimizer");
-		if(statement_type == StatementType::SELECT_STATEMENT)
-		{
-			Cascade cascade = Cascade(*this);
-			unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
-			physical_plan = cascade.Optimize(std::move(logical_plan));
-		}
-		else
+		// if(statement_type == StatementType::SELECT_STATEMENT)
+		// {
+		// 	Cascade cascade = Cascade(*this);
+		// 	unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
+		// 	physical_plan = cascade.Optimize(std::move(logical_plan));
+		// }
+		// else
 		{
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));

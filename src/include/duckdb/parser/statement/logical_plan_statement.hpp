@@ -24,7 +24,8 @@ public:
 	unique_ptr<LogicalOperator> plan;
 
 public:
-	unique_ptr<SQLStatement> Copy() const override {
+	unique_ptr<SQLStatement> Copy() const override
+	{
 		throw NotImplementedException("PLAN_STATEMENT");
 	}
 };

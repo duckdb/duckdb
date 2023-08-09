@@ -5,7 +5,6 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
@@ -13,10 +12,18 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-namespace duckdb {
+namespace gpopt
+{
+	class CEnfdOrder;
+}
+
+namespace duckdb
+{
+using namespace gpopt;
 
 //! Represents a scan of a base table
-class PhysicalTableScan : public PhysicalOperator {
+class PhysicalTableScan : public PhysicalOperator
+{
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::TABLE_SCAN;
 
@@ -72,6 +79,28 @@ public:
 	}
 
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
+
+public:
+	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const override;
+
+	BOOL FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG ulOptReq) const override;
+
+	vector<ColumnBinding> GetColumnBindings() override;
+
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override;
+
+	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
+
+	// Rehydrate expression from a given cost context and child expressions
+	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
+
+	duckdb::unique_ptr<Operator> Copy() override;
+
+	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override;
+	
+	duckdb::unique_ptr<Operator> CopywithNewChilds(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
 };
 
 } // namespace duckdb

@@ -25,11 +25,14 @@ public:
 	ResultModifierType type;
 };
 
-struct BoundOrderByNode {
+struct BoundOrderByNode
+{
 public:
+	BoundOrderByNode(const BoundOrderByNode &other);
+
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression);
-	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
-	                 unique_ptr<BaseStatistics> stats);
+	
+	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression, unique_ptr<BaseStatistics> stats);
 
 	OrderType type;
 	OrderByNullType null_order;

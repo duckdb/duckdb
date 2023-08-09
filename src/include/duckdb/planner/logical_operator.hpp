@@ -5,10 +5,11 @@
 //
 //
 //===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/optimizer/cascade/base/CPropConstraint.h"
+#include "duckdb/optimizer/cascade/operators/Operator.h"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/optimizer/join_order/estimated_properties.hpp"
@@ -16,11 +17,13 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
 #include "duckdb/planner/plan_serialization.hpp"
-
+#include "duckdb/optimizer/cascade/xforms/CXform.h"
 #include <algorithm>
 #include <functional>
 
-namespace duckdb {
+namespace duckdb
+{
+using namespace gpopt;
 
 class FieldWriter;
 class FieldReader;
@@ -31,80 +34,115 @@ extern const uint64_t PLAN_SERIALIZATION_VERSION;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree
-class LogicalOperator {
+class LogicalOperator : public Operator
+{
 public:
 	explicit LogicalOperator(LogicalOperatorType type);
+	
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
+
+	// copy ctor
+	LogicalOperator(const LogicalOperator & other) = delete;
+	
 	virtual ~LogicalOperator();
 
-	//! The type of the logical operator
-	LogicalOperatorType type;
-	//! The set of children of the operator
-	vector<unique_ptr<LogicalOperator>> children;
-	//! The set of expressions contained within the operator, if any
-	vector<unique_ptr<Expression>> expressions;
-	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
-	vector<LogicalType> types;
-	//! Estimated Cardinality
-	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
 
-	unique_ptr<EstimatedProperties> estimated_props;
-
 public:
-	virtual vector<ColumnBinding> GetColumnBindings();
+	virtual vector<const_reference<LogicalOperator>> GetChildren() const
+	{
+		vector<const_reference<LogicalOperator>> result;
+		for (auto &child : children)
+		{
+			result.push_back(*(LogicalOperator*)child.get());
+		}
+		return result;
+	}
+
+	CDrvdProp* PdpCreate() override;
+
+	CReqdProp* PrpCreate() const override;
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
+
+	vector<ColumnBinding> GetColumnBindings() override;
+	
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
+	
 	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
+	
 	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
 
-	//! Resolve the types of the logical operator and its children
-	void ResolveOperatorTypes();
-
 	virtual string GetName() const;
+	
 	virtual string ParamsToString() const;
-	virtual string ToString() const;
+	
+	string ToString() const override;
+	
 	DUCKDB_API void Print();
+	
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);
 
-	void AddChild(unique_ptr<LogicalOperator> child);
-	virtual idx_t EstimateCardinality(ClientContext &context);
+	virtual idx_t EstimateCardinality(ClientContext &context) override;
+
+	virtual BOOL FInputOrderSensitive() override
+	{
+		return false;
+	};
+
+	virtual ULONG HashValue() const;
 
 	//! Serializes a LogicalOperator to a stand-alone binary blob
 	void Serialize(Serializer &serializer) const;
+
 	//! Serializes an LogicalOperator to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
+	virtual void Serialize(FieldWriter &writer) const override
+	{
+	}
 
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
 	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
 
-	virtual bool RequireOptimizer() const {
-		return true;
-	}
-
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
 
-protected:
-	//! Resolve types for this specific operator
-	virtual void ResolveTypes() = 0;
+	static CKeyCollection* PkcDeriveKeysPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
+
+	CPropConstraint* PpcDeriveConstraintFromPredicates(CExpressionHandle &exprhdl);
+
+	static CPropConstraint* PpcDeriveConstraintPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
+
+	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override;
 
 public:
-	template <class TARGET>
-	TARGET &Cast() {
-		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+	template <class TARGET> TARGET &Cast()
+	{
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && this->logical_type != TARGET::TYPE)
+		{
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
 		return (TARGET &)*this;
 	}
 
-	template <class TARGET>
-	const TARGET &Cast() const {
-		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+	template <class TARGET> const TARGET &Cast() const
+	{
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && this->logical_type != TARGET::TYPE)
+		{
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
 		return (const TARGET &)*this;
+	}
+
+public:
+	//-------------------------------------------------------------------------------------
+	// Transformations
+	//-------------------------------------------------------------------------------------
+	// candidate set of xforms
+	virtual CXformSet* PxfsCandidates() const
+	{
+		return nullptr;
 	}
 };
 } // namespace duckdb

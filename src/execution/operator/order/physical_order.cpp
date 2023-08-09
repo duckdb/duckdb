@@ -1,41 +1,40 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
+
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
+
+#include <cstddef>
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality), orders(std::move(orders)), projections(std::move(projections))
-{
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, vector<idx_t> projections,
+                             idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, std::move(types), estimated_cardinality),
+      orders(std::move(orders)), projections(std::move(projections)) {
 }
 
-CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const
-{
+CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprhdl,
+                                                        vector<BoundOrderByNode> peo) const {
 	bool compactible = true;
-	for(int ul = 0; ul < peo.size(); ul++)
-	{
+	for (size_t ul = 0; ul < peo.size(); ul++) {
 		bool flag = false;
-		for(int sul = 0; sul < orders.size(); sul++)
-		{
-			if(orders[sul].Equals(peo[ul]))
-			{
+		for (size_t sul = 0; sul < orders.size(); sul++) {
+			if (orders[sul].Equals(peo[ul])) {
 				flag = true;
 				break;
 			}
 		}
-		if(!flag)
-		{
+		if (!flag) {
 			compactible = false;
 			break;
 		}
 	}
-	if (compactible)
-	{
+	if (compactible) {
 		// required order is already established by sort operator
 		return CEnfdOrder::EpetUnnecessary;
 	}
@@ -44,14 +43,14 @@ CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprh
 	return CEnfdOrder::EpetProhibited;
 }
 
-COrderSpec* PhysicalOrder::PosRequired(CExpressionHandle &exprhdl, COrderSpec* posRequired, ULONG child_index, vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq) const
-{
+COrderSpec *PhysicalOrder::PosRequired(CExpressionHandle &exprhdl, COrderSpec *pos_required, ULONG child_index,
+                                       vector<CDrvdProp *> pdrgpdp_ctxt, ULONG ul_opt_req) const {
 	return new COrderSpec();
 }
 
-bool PhysicalOrder::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG ulOptReq) const
-{
-	return FUnaryProvidesReqdCols(exprhdl, pcrsRequired);
+bool PhysicalOrder::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrs_required,
+                                      ULONG ul_opt_req) const {
+	return FUnaryProvidesReqdCols(exprhdl, pcrs_required);
 }
 
 //---------------------------------------------------------------------------
@@ -62,53 +61,47 @@ bool PhysicalOrder::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnB
 //		Compute required columns of the n-th child;
 //
 //---------------------------------------------------------------------------
-vector<ColumnBinding> PhysicalOrder::PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG child_index, vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq)
-{
-	vector<ColumnBinding> pcrsSort;
-	for(auto &child : orders)
-	{
+vector<ColumnBinding> PhysicalOrder::PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrs_required,
+                                                  ULONG child_index, vector<CDrvdProp *> pdrgpdp_ctxt, ULONG ul_opt_req) {
+	vector<ColumnBinding> pcrs_sort;
+	for (auto &child : orders) {
 		vector<ColumnBinding> cell = child.expression->getColumnBinding();
-		pcrsSort.insert(pcrsSort.end(), cell.begin(), cell.begin());
+		pcrs_sort.insert(pcrs_sort.end(), cell.begin(), cell.begin());
 	}
 	vector<ColumnBinding> pcrs;
-	std::set_union(pcrsSort.begin(), pcrsSort.end(), pcrsRequired.begin(), pcrsRequired.end(), pcrs.begin());
-	vector<ColumnBinding> pcrsChildReqd = PcrsChildReqd(exprhdl, pcrs, child_index);
-	return pcrsChildReqd;
+	std::set_union(pcrs_sort.begin(), pcrs_sort.end(), pcrs_required.begin(), pcrs_required.end(), pcrs.begin());
+	vector<ColumnBinding> pcrs_child_reqd = PcrsChildReqd(exprhdl, pcrs, child_index);
+	return pcrs_child_reqd;
 }
 
-CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl)
-{
-	return NULL;
+CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) {
+	return nullptr;
 }
 
-Operator* PhysicalOrder::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
-{
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+Operator *PhysicalOrder::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
+                                       CDrvdPropCtxtPlan *pdpctxtplan) {
+	CGroupExpression *pgexpr = pcc->m_pgexpr;
 	double cost = pcc->m_cost;
 	ULONG arity = pgexpr->Arity();
 	vector<double> pdrgpcost;
-	for (ULONG ul = 0; ul < arity; ul++)
-	{
-		double costChild = pdrgpexpr[ul]->m_cost;
-		pdrgpcost.push_back(costChild);
+	for (ULONG ul = 0; ul < arity; ul++) {
+		double cost_child = pdrgpexpr[ul]->m_cost;
+		pdrgpcost.push_back(cost_child);
 	}
 	cost = pcc->CostCompute(pdrgpcost);
-	PhysicalOrder* pexpr = new PhysicalOrder(types, orders, projections, 0);
+	PhysicalOrder *pexpr = new PhysicalOrder(types, orders, projections, 0);
 	pexpr->m_cost = cost;
 	pexpr->m_pgexpr = pgexpr;
 	return pexpr;
 }
 
-vector<ColumnBinding> PhysicalOrder::GetColumnBindings()
-{
-	auto child_bindings = ((LogicalOperator*)children[0].get())->GetColumnBindings();
-	if (projections.empty())
-	{
+vector<ColumnBinding> PhysicalOrder::GetColumnBindings() {
+	auto child_bindings = ((LogicalOperator *)children[0].get())->GetColumnBindings();
+	if (projections.empty()) {
 		return child_bindings;
 	}
 	vector<ColumnBinding> result;
-	for (auto &col_idx : projections)
-	{
+	for (auto &col_idx : projections) {
 		result.push_back(child_bindings[col_idx]);
 	}
 	return result;
@@ -117,12 +110,10 @@ vector<ColumnBinding> PhysicalOrder::GetColumnBindings()
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class OrderGlobalSinkState : public GlobalSinkState
-{
+class OrderGlobalSinkState : public GlobalSinkState {
 public:
 	OrderGlobalSinkState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
-	    : global_sort_state(buffer_manager, order.orders, payload_layout)
-	{
+	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
 	//! Global sort state
@@ -131,14 +122,12 @@ public:
 	idx_t memory_per_thread;
 };
 
-class OrderLocalSinkState : public LocalSinkState
-{
+class OrderLocalSinkState : public LocalSinkState {
 public:
 	OrderLocalSinkState(ClientContext &context, const PhysicalOrder &op) : key_executor(context) {
 		// Initialize order clause expression executor and DataChunk
 		vector<LogicalType> key_types;
-		for (auto &order : op.orders)
-		{
+		for (auto &order : op.orders) {
 			key_types.push_back(order.expression->return_type);
 			key_executor.AddExpression(*order.expression);
 		}
@@ -157,8 +146,7 @@ public:
 	DataChunk payload;
 };
 
-unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const
-{
+unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const {
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
@@ -169,13 +157,12 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	return std::move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const
-{
+unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
 	return make_uniq<OrderLocalSinkState>(context.client, *this);
 }
 
-SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p, DataChunk &input) const
-{
+SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+                                   DataChunk &input) const {
 	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
 

@@ -19,20 +19,19 @@
 
 namespace duckdb {
 
-void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
+void AddDataTableIndex(DataTable *storage, const ColumnList &columns, const vector<PhysicalIndex> &keys, IndexConstraintType constraint_type, BlockPointer *index_block = nullptr)
+{
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<Expression>> bound_expressions;
 	idx_t key_nr = 0;
 	column_ids.reserve(keys.size());
-	for (auto &physical_key : keys) {
+	for (auto &physical_key : keys)
+	{
 		auto &column = columns.GetColumn(physical_key);
 		D_ASSERT(!column.Generated());
-		unbound_expressions.push_back(
-		    make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), ColumnBinding(0, column_ids.size())));
-
+		unbound_expressions.push_back(make_uniq<BoundColumnRefExpression>(column.Name(), column.Type(), ColumnBinding(0, column_ids.size())));
 		bound_expressions.push_back(make_uniq<BoundReferenceExpression>(column.Type(), key_nr++));
 		column_ids.push_back(column.StorageOid());
 	}

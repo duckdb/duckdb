@@ -361,23 +361,24 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 	return result;
 }
 
-class TreeChildrenIterator {
+class TreeChildrenIterator
+{
 public:
-	template <class T>
-	static bool HasChildren(const T &op) {
+	template <class T> static bool HasChildren(const T &op)
+	{
 		return !op.children.empty();
 	}
-	template <class T>
-	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
-		for (auto &child : op.children) {
-			callback(*child);
+	template <class T> static void Iterate(const T &op, const std::function<void(const T &child)> &callback)
+	{
+		for (auto &child : op.GetChildren())
+		{
+			callback(child);
 		}
 	}
 };
 
-template <>
-bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	switch (op.type) {
+template <> bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
+	switch (op.physical_type) {
 	case PhysicalOperatorType::DELIM_JOIN:
 	case PhysicalOperatorType::POSITIONAL_SCAN:
 		return true;
@@ -385,16 +386,15 @@ bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
 		return !op.children.empty();
 	}
 }
-template <>
-void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
-                                   const std::function<void(const PhysicalOperator &child)> &callback) {
+
+template <> void TreeChildrenIterator::Iterate(const PhysicalOperator &op, const std::function<void(const PhysicalOperator &child)> &callback) {
 	for (auto &child : op.children) {
-		callback(*child);
+		callback(*(PhysicalOperator*)child.get());
 	}
-	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+	if (op.physical_type == PhysicalOperatorType::DELIM_JOIN) {
 		auto &delim = op.Cast<PhysicalDelimJoin>();
 		callback(*delim.join);
-	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
+	} else if ((op.physical_type == PhysicalOperatorType::POSITIONAL_SCAN)) {
 		auto &pscan = op.Cast<PhysicalPositionalScan>();
 		for (auto &table : pscan.child_tables) {
 			callback(*table);
@@ -442,8 +442,7 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 	height++;
 }
 
-template <class T>
-idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
+template <class T> idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, std::move(node));
 
@@ -452,18 +451,15 @@ idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, i
 	}
 	idx_t width = 0;
 	// render the children of this node
-	TreeChildrenIterator::Iterate<T>(
-	    op, [&](const T &child) { width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1); });
+	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) { width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1); });
 	return width;
 }
 
-template <class T>
-unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
+template <class T> unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op)
+{
 	idx_t width, height;
 	GetTreeWidthHeight<T>(op, width, height);
-
 	auto result = make_uniq<RenderTree>(width, height);
-
 	// now fill in the tree
 	CreateRenderTreeRecursive<T>(*result, op, 0, 0);
 	return result;

@@ -1,11 +1,12 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+
 using namespace duckdb;
 
 //===--------------------------------------------------------------------===//
@@ -125,7 +126,8 @@ public:
 	};
 
 	static duckdb::unique_ptr<FunctionData> QuackBind(ClientContext &context, TableFunctionBindInput &input,
-	                                                  vector<LogicalType> &return_types, vector<string> &names) {
+	                                                  duckdb::vector<LogicalType> &return_types,
+	                                                  duckdb::vector<string> &names) {
 		names.emplace_back("quack");
 		return_types.emplace_back(LogicalType::VARCHAR);
 		return make_uniq<QuackBindData>(BigIntValue::Get(input.inputs[0]));

@@ -25,7 +25,7 @@ class Planner {
 public:
 	explicit Planner(ClientContext &context);
 
-	unique_ptr<LogicalOperator> plan;
+	unique_ptr<Operator> plan;
 	vector<string> names;
 	vector<LogicalType> types;
 	bound_parameter_map_t value_map;
@@ -38,8 +38,7 @@ public:
 
 public:
 	void CreatePlan(unique_ptr<SQLStatement> statement);
-	static void VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
-	                       bound_parameter_map_t *map = nullptr);
+	static void VerifyPlan(ClientContext &context, unique_ptr<Operator> &op,  bound_parameter_map_t *map = nullptr);
 
 private:
 	void CreatePlan(SQLStatement &statement);

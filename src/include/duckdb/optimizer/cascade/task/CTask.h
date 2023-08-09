@@ -13,11 +13,9 @@
 #include "duckdb/optimizer/cascade/task/CTaskId.h"
 #include "duckdb/optimizer/cascade/task/CTaskLocalStorage.h"
 
-namespace gpos
-{
+namespace gpos {
 // task status
-enum ETaskStatus
-{ EtsInit, EtsQueued, EtsDequeued, EtsRunning, EtsCompleted, EtsError };
+enum ETaskStatus { EtsInit, EtsQueued, EtsDequeued, EtsRunning, EtsCompleted, EtsError };
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -28,8 +26,7 @@ enum ETaskStatus
 //		provides asynchronous task execution and error handling;
 //
 //---------------------------------------------------------------------------
-class CTask
-{
+class CTask {
 public:
 	// TLS
 	CTaskLocalStorage m_tls;
@@ -38,7 +35,7 @@ public:
 	ETaskStatus m_status;
 
 	// cancellation flag
-	bool* m_cancel;
+	bool *m_cancel;
 
 	// local cancellation flag; used when no flag is externally passed
 	bool m_cancel_local;
@@ -50,19 +47,19 @@ public:
 	CTaskId m_tid;
 
 	// function to execute
-	void* (*m_func)(void *);
+	void *(*m_func)(void *);
 
 	// function argument
-	void* m_arg;
+	void *m_arg;
 
 	// function result
-	void* m_res;
+	void *m_res;
 
 public:
 	CTask();
 
 	// ctor
-	CTask(bool* cancel);
+	CTask(bool *cancel);
 
 	// no copy ctor
 	CTask(const CTask &) = delete;
@@ -72,7 +69,7 @@ public:
 
 public:
 	// binding a task structure to a function and its arguments
-	void Bind(void* (*func)(void *), void* arg);
+	void Bind(void *(*func)(void *), void *arg);
 
 	// execution, called by the owning worker
 	void Execute();
@@ -84,56 +81,47 @@ public:
 	bool IsFinished() const;
 
 	// check if task is currently executing
-	bool IsRunning() const
-	{
+	bool IsRunning() const {
 		return EtsRunning == m_status;
 	}
 
 	// reported flag accessor
-	bool IsReported() const
-	{
+	bool IsReported() const {
 		return m_reported;
 	}
 
 	// set reported flag
-	void SetReported()
-	{
+	void SetReported() {
 		m_reported = true;
 	}
 
 	// TLS accessor
-	CTaskLocalStorage & GetTls()
-	{
+	CTaskLocalStorage &GetTls() {
 		return m_tls;
 	}
 
 	// task id accessor
-	CTaskId & GetTid()
-	{
+	CTaskId &GetTid() {
 		return m_tid;
 	}
 
 	// check if task is canceled
-	bool IsCanceled() const
-	{
+	bool IsCanceled() const {
 		return *m_cancel;
 	}
 
 	// reset cancel flag
-	void ResetCancel()
-	{
+	void ResetCancel() {
 		*m_cancel = false;
 	}
 
 	// set cancel flag
-	void Cancel()
-	{
+	void Cancel() {
 		*m_cancel = true;
 	}
 
 	// task status accessor
-	ETaskStatus GetStatus() const
-	{
+	ETaskStatus GetStatus() const {
 		return m_status;
 	}
 
@@ -141,8 +129,7 @@ public:
 	void SetStatus(ETaskStatus status);
 
 	// task result accessor
-	void* GetRes() const
-	{
+	void *GetRes() const {
 		return m_res;
 	}
 
@@ -155,7 +142,7 @@ public:
 	// slink for worker pool manager
 	SLink m_worker_pool_manager_link;
 
-	static CTask* Self();
-};	// class CTask
-}  // namespace gpos
+	static CTask *Self();
+}; // class CTask
+} // namespace gpos
 #endif
