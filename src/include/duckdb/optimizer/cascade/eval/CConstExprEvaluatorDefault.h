@@ -15,7 +15,6 @@
 #define GPOPT_CConstExprEvaluatorDefault_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/eval/IConstExprEvaluator.h"
 
 namespace gpopt
@@ -45,11 +44,10 @@ public:
 	virtual ~CConstExprEvaluatorDefault();
 
 	// Evaluate the given expression and return the result as a new expression
-	virtual CExpression *PexprEval(CExpression *pexpr);
+	virtual Expression* PexprEval(Expression* pexpr);
 
 	// Returns true iff the evaluator can evaluate constant expressions
-	virtual BOOL FCanEvalExpressions();
+	virtual bool FCanEvalExpressions();
 };
 }  // namespace gpopt
-
 #endif
