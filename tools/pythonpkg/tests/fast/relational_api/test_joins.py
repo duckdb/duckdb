@@ -36,4 +36,4 @@ class TestRAPIJoins(object):
         expr = ColumnExpression('tbl_a.b') == ColumnExpression('tbl_b.a')
         rel = a.join(b, expr, 'outer')
         res = rel.fetchall()
-        print(res)
+        assert res == [(1, 1, 1, 4), (2, 1, 1, 4), (3, 2, None, None), (None, None, 3, 5)]

@@ -167,7 +167,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
-	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
+	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const py::object &condition, const string &type);
 
 	void ToParquet(const string &filename, const py::object &compression = py::none());
 

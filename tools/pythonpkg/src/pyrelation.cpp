@@ -740,7 +740,7 @@ static JoinType ParseJoinType(const string &type) {
 	throw InvalidInputException("Unsupported join type %s, try one of: %s", provided, options);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const string &condition,
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, const py::object &condition,
                                                     const string &type) {
 
 	JoinType dtype;
@@ -757,7 +757,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Join(DuckDBPyRelation *other, con
 		throw InvalidInputException("Both relations have the same alias, please change the alias of one or both "
 		                            "relations using 'rel = rel.set_alias(<new alias>)'");
 	}
-	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition, dtype));
+	if (py::isinstance<py::str>(condition)) {
+		auto condition_string = std::string(py::cast<py::str>(condition));
+		return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, condition_string, dtype));
+	}
+	shared_ptr<DuckDBPyExpression> condition_expr;
+	if (!py::try_cast(condition, condition_expr)) {
+		throw InvalidInputException(
+		    "Please provide condition as an expression either in string form or as an Expression object");
+	}
+	vector<unique_ptr<ParsedExpression>> conditions;
+	conditions.push_back(condition_expr->GetExpression().Copy());
+	return make_uniq<DuckDBPyRelation>(rel->Join(other->rel, std::move(conditions), dtype));
 }
 
 void DuckDBPyRelation::ToParquet(const string &filename, const py::object &compression) {
