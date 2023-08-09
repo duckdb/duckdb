@@ -23,7 +23,9 @@ for i in range(len(sys.argv)):
         i -= 1
 
 if len(sys.argv) < 2:
-    print("Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit] [--profile] [--no-assertions]")
+    print(
+        "Expected usage: python3 scripts/run_tests_one_by_one.py build/debug/test/unittest [--no-exit] [--profile] [--no-assertions]"
+    )
     exit(1)
 unittest_program = sys.argv[1]
 extra_args = []
@@ -55,6 +57,7 @@ for line in stdout.splitlines():
 test_count = len(test_cases)
 return_code = 0
 
+
 def parse_assertions(stdout):
     for line in stdout.splitlines():
         if line == 'assertions: - none -':
@@ -63,10 +66,11 @@ def parse_assertions(stdout):
         # Parse assertions in format
         pos = line.find("assertion")
         if pos != -1:
-            space_before_num = line.rfind(' ', 0, pos-2)
-            return line[space_before_num+2: pos + 10]
+            space_before_num = line.rfind(' ', 0, pos - 2)
+            return line[space_before_num + 2 : pos + 10]
 
     raise Exception(f"Failed to parse assertions from: {stdout}")
+
 
 for test_number in range(test_count):
     if not profile:
