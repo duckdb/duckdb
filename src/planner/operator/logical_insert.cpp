@@ -2,12 +2,17 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/optimizer/cascade/base/CDrvdPropRelational.h"
 
 namespace duckdb {
 
 LogicalInsert::LogicalInsert(TableCatalogEntry &table, idx_t table_index)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false),
-      action_type(OnConflictAction::THROW) {
+    : LogicalOperator(LogicalOperatorType::LOGICAL_INSERT), table(table), table_index(table_index), return_chunk(false), action_type(OnConflictAction::THROW)
+{
+	m_pdprel = new CDrvdPropRelational();
+	m_pgexpr = nullptr;
+	m_pdpplan = nullptr;
+	m_prpp = nullptr;
 }
 
 void LogicalInsert::Serialize(FieldWriter &writer) const {
