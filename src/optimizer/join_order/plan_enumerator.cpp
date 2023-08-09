@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order/join_node.hpp"
 #include "duckdb/optimizer/join_order/plan_enumerator.hpp"
 #include "duckdb/optimizer/join_order/query_graph_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <iostream>
 
 namespace duckdb {
