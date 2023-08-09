@@ -7,6 +7,7 @@
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "mbedtls_wrapper.hpp"
 #endif
 
 namespace duckdb {
@@ -124,7 +125,7 @@ public:
 
 	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, bool prefetch_mode_p)
 	    : handle(handle_p), location(0), allocator(allocator), ra_buffer(ReadAheadBuffer(allocator, handle_p)),
-	      prefetch_mode(prefetch_mode_p) {
+	      prefetch_mode(prefetch_mode_p), is_decrypting(false) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -137,15 +138,36 @@ public:
 				handle.Read(prefetch_buffer->data.get(), prefetch_buffer->size, prefetch_buffer->location);
 				prefetch_buffer->data_isset = true;
 			}
-			memcpy(buf, prefetch_buffer->data.get() + location - prefetch_buffer->location, len);
+
+			const auto src = prefetch_buffer->data.get() + location - prefetch_buffer->location;
+			if (is_decrypting) {
+				// TODO: make sure that len + 15 is always possible
+				aes->Process(src, len, buf, len + 15);
+			} else {
+				memcpy(buf, src, len);
+			}
 		} else {
 			if (prefetch_mode && len < PREFETCH_FALLBACK_BUFFERSIZE && len > 0) {
 				Prefetch(location, MinValue<uint64_t>(PREFETCH_FALLBACK_BUFFERSIZE, handle.GetFileSize() - location));
 				auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 				D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
-				memcpy(buf, prefetch_buffer_fallback->data.get() + location - prefetch_buffer_fallback->location, len);
+
+				const auto src = prefetch_buffer_fallback->data.get() + location - prefetch_buffer_fallback->location;
+				if (is_decrypting) {
+					// TODO: make sure that len + 15 is always possible
+					aes->Process(src, len, buf, len + 15);
+				} else {
+					memcpy(buf, src, len);
+				}
 			} else {
-				handle.Read(buf, len, location);
+				if (is_decrypting) {
+					// We read offset by 8, then decrypt / overwrite
+					handle.Read(buf + 8, len, location);
+					// TODO: make sure that len + 15 is always possible
+					aes->Process(buf + 8, len, buf, len + 15);
+				} else {
+					handle.Read(buf, len, location);
+				}
 			}
 		}
 		location += len;
@@ -190,6 +212,15 @@ public:
 		return handle.file_system.GetFileSize(handle);
 	}
 
+	void InitializeDecryption(const string &key) {
+		aes = make_uniq<duckdb_mbedtls::MbedTlsGcmContext>(key);
+		aes_iv_buffer = allocator.Allocate(16);
+		read(aes_iv_buffer.get(), 16);
+//		auto cipher_len = Load<uint32_t>(aes_iv_buffer.get());
+		aes->InitializeDecryption(aes_iv_buffer.get(), 16);
+		is_decrypting = true;
+	}
+
 private:
 	FileHandle &handle;
 	idx_t location;
@@ -202,22 +233,30 @@ private:
 	// Whether the prefetch mode is enabled. In this mode the DirectIO flag of the handle will be set and the parquet
 	// reader will manage the read buffering.
 	bool prefetch_mode;
+
+	// Whether we are currently decrypting
+	bool is_decrypting;
+	// AES decryption context
+	unique_ptr<duckdb_mbedtls::MbedTlsGcmContext> aes;
+	// AES buffer that stores the IV
+	AllocatedData aes_iv_buffer;
 };
 
-class ThriftStringTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftStringTransport> {
+class ThriftGenericTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftGenericTransport> {
 public:
-	ThriftStringTransport(const string &str) : ptr(str.c_str()), len(str.length()), location(0) {
+	ThriftGenericTransport(const char *const in_p, const idx_t in_len_p) : in(in_p), in_len(in_len_p), location(0) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
-		const auto next = len - location;
-		memcpy(buf, ptr + location, next);
+		const auto next = MinValue<idx_t>(in_len - location, len);
+		memcpy(buf, in + location, next);
+		location += next;
 		return next;
 	}
 
 private:
-	const char *const ptr;
-	const idx_t len;
+	const char *const in;
+	const idx_t in_len;
 	idx_t location;
 };
 

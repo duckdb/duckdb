@@ -52,9 +52,10 @@ CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool pre
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftStringProtocol(const string &str) {
-	auto transport = make_shared<ThriftStringTransport>(str);
-	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftStringTransport>>(std::move(transport));
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftGenericProtocol(const char *const ptr,
+                                                                                          const idx_t len) {
+	auto transport = make_shared<ThriftGenericTransport>(ptr, len);
+	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftGenericTransport>>(std::move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
@@ -99,19 +100,12 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
-		auto crypto_metadata_size = crypto_metadata->read(file_proto.get());
+		crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		transport.SetLocation(metadata_pos + crypto_metadata_size);
-		footer_len -= crypto_metadata_size;
-
-		// TODO deal with encrypted footers when the time comes
-		//		auto context = duckdb_mbedtls::MbedTlsAesContext::CreateEncryptionContext(encryption_key);
-		//		unsigned char iv[16];
-		//		duckdb_mbedtls::MbedTlsWrapper::Decrypt(context, iv, buf.ptr + metadata_pos, footer_len);
-		//		D_ASSERT(!encryption_key.empty());
+		transport.InitializeDecryption(encryption_key);
 	}
 
 	auto metadata = make_uniq<FileMetaData>();
@@ -129,12 +123,10 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 			}
 
 			auto &ecm = column_chunk.encrypted_column_metadata;
-			auto context = duckdb_mbedtls::MbedTlsAesContext::CreateEncryptionContext(encryption_key);
-			unsigned char iv[16];
-			memcpy(iv, ecm.c_str(), 16);
-			duckdb_mbedtls::MbedTlsWrapper::Decrypt(context, iv, (unsigned char *)ecm.c_str(), ecm.length() - 1);
 
-			auto string_proto = CreateThriftStringProtocol(ecm);
+			// TODO decrypt
+
+			auto string_proto = CreateThriftGenericProtocol(ecm.c_str(), ecm.length());
 			column_chunk.meta_data.statistics.read(string_proto.get());
 		}
 	}

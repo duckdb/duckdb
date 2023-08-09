@@ -2,6 +2,7 @@
 // otherwise we have different definitions for mbedtls_pk_context / mbedtls_sha256_context
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
+#include "duckdb/common/helper.hpp"
 #include "mbedtls/aes.h"
 #include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
@@ -89,9 +90,16 @@ void MbedTlsWrapper::Hmac256(const char *key, size_t key_len, const char *messag
 	mbedtls_md_free(&hmac_ctx);
 }
 
+MbedTlsGcmContext::MbedTlsGcmContext() {
+}
+
 MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
-	context_ptr = malloc(sizeof(mbedtls_gcm_context));
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr);
+	Initialize(key);
+}
+
+void MbedTlsGcmContext::Initialize(const std::string &key) {
+	context_ptr = reinterpret_cast<char *>(malloc(sizeof(mbedtls_gcm_context)));
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
 	mbedtls_gcm_init(context);
 	if (mbedtls_gcm_setkey(context, MBEDTLS_CIPHER_ID_AES, reinterpret_cast<const unsigned char *>(key.c_str()),
 	                       key.length() * 8) != 0) {
@@ -100,9 +108,29 @@ MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
 }
 
 MbedTlsGcmContext::~MbedTlsGcmContext() {
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr);
+	if (!context_ptr) {
+		return;
+	}
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
 	mbedtls_gcm_free(context);
-	free(context_ptr);
+	free(context_ptr.get());
+}
+
+void MbedTlsGcmContext::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_DECRYPT, iv, iv_len) != 0) {
+		throw runtime_error("Unable to initialize AES decryption");
+	}
+}
+
+size_t MbedTlsGcmContext::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
+                                  duckdb::idx_t out_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+	size_t result;
+	if (mbedtls_gcm_update(context, in, in_len, out, out_len, &result) != 0) {
+		throw runtime_error("Unable to process using AES");
+	}
+	return result;
 }
 
 // MbedTlsAesContext MbedTlsAesContext::CreateEncryptionContext(const std::string &key) {
