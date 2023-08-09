@@ -1,3 +1,8 @@
+###
+# This script copies all extensions in a build folder from their cmake-produced structure into the extension repository
+# structure of ./<duckdb_version>/<build_archictecture>/<extension_name>.duckdb_extension. Note that it requires
+# the shell to be built in the build folder since it uses that to determine the version and arch
+
 import os
 import sys
 import subprocess
