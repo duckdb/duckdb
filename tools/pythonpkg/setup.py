@@ -200,7 +200,7 @@ if len(existing_duckdb_dir) == 0:
         import package_build
 
         (source_list, include_list, original_sources) = package_build.build_package(
-            os.path.join(script_path, lib_name), extensions, False, unity_build
+            os.path.join(script_path, "build"), extensions, False, unity_build, "build"
         )
 
         duckdb_sources = [
@@ -208,10 +208,10 @@ if len(existing_duckdb_dir) == 0:
         ]
         duckdb_sources.sort()
 
-        original_sources = [os.path.join(lib_name, x) for x in original_sources]
+        original_sources = [os.path.join("build", x) for x in original_sources]
 
-        duckdb_includes = [os.path.join(lib_name, x) for x in include_list]
-        duckdb_includes += [lib_name]
+        duckdb_includes = [os.path.join("build", x) for x in include_list]
+        duckdb_includes += ["build"]
 
         # gather the include files
         import amalgamation
