@@ -468,7 +468,7 @@ main/capi/helper-c.cpp	49
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	44
 main/capi/pending-c.cpp	28
-main/capi/prepared-c.cpp	5
+main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
 main/capi/result-c.cpp	34
 main/capi/stream-c.cpp	5

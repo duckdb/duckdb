@@ -189,6 +189,6 @@ class TestADBCStatementBind(object):
             statement.bind(array, schema)
             with pytest.raises(
                 adbc_driver_manager.ProgrammingError,
-                match="Parameter/argument count mismatch for prepared statement. Expected 2, got 1",
+                match="Values were not provided for the following prepared statement parameters: 2",
             ):
                 res, _ = statement.execute_query()
