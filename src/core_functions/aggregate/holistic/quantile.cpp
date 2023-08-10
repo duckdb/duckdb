@@ -468,9 +468,9 @@ struct QuantileBindData : public FunctionData {
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<QuantileBindData>();
-		deserializer.ReadProperty("quantiles", result->quantiles);
-		deserializer.ReadProperty("order", result->order);
-		deserializer.ReadProperty("desc", result->desc);
+		deserializer.ReadProperty(100, "quantiles", result->quantiles);
+		deserializer.ReadProperty(101, "order", result->order);
+		deserializer.ReadProperty(102, "desc", result->desc);
 		return std::move(result);
 	}
 

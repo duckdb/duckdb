@@ -226,12 +226,12 @@ void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
-	deserializer.ReadProperty("table_index", result->table_index);
-	deserializer.ReadProperty("returned_types", result->returned_types);
-	deserializer.ReadProperty("names", result->names);
-	deserializer.ReadProperty("column_ids", result->column_ids);
-	deserializer.ReadProperty("projection_ids", result->projection_ids);
-	deserializer.ReadProperty("table_filters", result->table_filters);
+	deserializer.ReadProperty(200, "table_index", result->table_index);
+	deserializer.ReadProperty(201, "returned_types", result->returned_types);
+	deserializer.ReadProperty(202, "names", result->names);
+	deserializer.ReadProperty(203, "column_ids", result->column_ids);
+	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
+	deserializer.ReadProperty(205, "table_filters", result->table_filters);
 	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
 	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
 	auto &function = entry.first;
@@ -239,10 +239,10 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 
 	unique_ptr<FunctionData> bind_data;
 	if (!has_serialize) {
-		deserializer.ReadProperty("parameters", result->parameters);
-		deserializer.ReadProperty("named_parameters", result->named_parameters);
-		deserializer.ReadProperty("input_table_types", result->input_table_types);
-		deserializer.ReadProperty("input_table_names", result->input_table_names);
+		deserializer.ReadProperty(206, "parameters", result->parameters);
+		deserializer.ReadProperty(207, "named_parameters", result->named_parameters);
+		deserializer.ReadProperty(208, "input_table_types", result->input_table_types);
+		deserializer.ReadProperty(209, "input_table_names", result->input_table_names);
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get());
 
@@ -264,7 +264,7 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
-	deserializer.ReadProperty("projected_input", result->projected_input);
+	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	return std::move(result);
 }
 

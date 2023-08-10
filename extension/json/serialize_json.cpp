@@ -20,10 +20,10 @@ void BufferedJSONReaderOptions::FormatSerialize(FormatSerializer &serializer) co
 
 BufferedJSONReaderOptions BufferedJSONReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
 	BufferedJSONReaderOptions result;
-	deserializer.ReadProperty(/*100*/ "format", result.format);
-	deserializer.ReadProperty(/*101*/ "record_type", result.record_type);
-	deserializer.ReadProperty(/*102*/ "compression", result.compression);
-	deserializer.ReadProperty(/*103*/ "file_options", result.file_options);
+	deserializer.ReadProperty(100, "format", result.format);
+	deserializer.ReadProperty(101, "record_type", result.record_type);
+	deserializer.ReadProperty(102, "compression", result.compression);
+	deserializer.ReadProperty(103, "file_options", result.file_options);
 	return result;
 }
 
@@ -44,19 +44,19 @@ void JSONScanData::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<JSONScanData> JSONScanData::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<JSONScanType>(/*100*/ "json_type");
-	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(/*101*/ "options");
-	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(/*102*/ "reader_bind");
-	auto files = deserializer.ReadProperty<vector<string>>(/*103*/ "files");
-	auto ignore_errors = deserializer.ReadProperty<bool>(/*104*/ "ignore_errors");
-	auto maximum_object_size = deserializer.ReadProperty<idx_t>(/*105*/ "maximum_object_size");
-	auto auto_detect = deserializer.ReadProperty<bool>(/*106*/ "auto_detect");
-	auto sample_size = deserializer.ReadProperty<idx_t>(/*107*/ "sample_size");
-	auto max_depth = deserializer.ReadProperty<idx_t>(/*108*/ "max_depth");
-	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(/*109*/ "transform_options");
-	auto names = deserializer.ReadProperty<vector<string>>(/*110*/ "names");
-	auto date_format = deserializer.ReadProperty<string>(/*111*/ "date_format");
-	auto timestamp_format = deserializer.ReadProperty<string>(/*112*/ "timestamp_format");
+	auto type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
+	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(101, "options");
+	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(102, "reader_bind");
+	auto files = deserializer.ReadProperty<vector<string>>(103, "files");
+	auto ignore_errors = deserializer.ReadProperty<bool>(104, "ignore_errors");
+	auto maximum_object_size = deserializer.ReadProperty<idx_t>(105, "maximum_object_size");
+	auto auto_detect = deserializer.ReadProperty<bool>(106, "auto_detect");
+	auto sample_size = deserializer.ReadProperty<idx_t>(107, "sample_size");
+	auto max_depth = deserializer.ReadProperty<idx_t>(108, "max_depth");
+	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(109, "transform_options");
+	auto names = deserializer.ReadProperty<vector<string>>(110, "names");
+	auto date_format = deserializer.ReadProperty<string>(111, "date_format");
+	auto timestamp_format = deserializer.ReadProperty<string>(112, "timestamp_format");
 	auto result = duckdb::unique_ptr<JSONScanData>(new JSONScanData(deserializer.Get<ClientContext &>(), std::move(files), std::move(date_format), std::move(timestamp_format)));
 	result->type = type;
 	result->options = options;
@@ -81,11 +81,11 @@ void JSONTransformOptions::FormatSerialize(FormatSerializer &serializer) const {
 
 JSONTransformOptions JSONTransformOptions::FormatDeserialize(FormatDeserializer &deserializer) {
 	JSONTransformOptions result;
-	deserializer.ReadProperty(/*100*/ "strict_cast", result.strict_cast);
-	deserializer.ReadProperty(/*101*/ "error_duplicate_key", result.error_duplicate_key);
-	deserializer.ReadProperty(/*102*/ "error_missing_key", result.error_missing_key);
-	deserializer.ReadProperty(/*103*/ "error_unknown_key", result.error_unknown_key);
-	deserializer.ReadProperty(/*104*/ "delay_error", result.delay_error);
+	deserializer.ReadProperty(100, "strict_cast", result.strict_cast);
+	deserializer.ReadProperty(101, "error_duplicate_key", result.error_duplicate_key);
+	deserializer.ReadProperty(102, "error_missing_key", result.error_missing_key);
+	deserializer.ReadProperty(103, "error_unknown_key", result.error_unknown_key);
+	deserializer.ReadProperty(104, "delay_error", result.delay_error);
 	return result;
 }
 

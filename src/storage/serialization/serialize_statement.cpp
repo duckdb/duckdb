@@ -15,7 +15,7 @@ void SelectStatement::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
-	deserializer.ReadProperty(/*100*/ "node", result->node);
+	deserializer.ReadProperty(100, "node", result->node);
 	return result;
 }
 

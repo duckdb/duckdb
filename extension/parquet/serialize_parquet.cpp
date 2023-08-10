@@ -17,9 +17,9 @@ void ParquetOptions::FormatSerialize(FormatSerializer &serializer) const {
 
 ParquetOptions ParquetOptions::FormatDeserialize(FormatDeserializer &deserializer) {
 	ParquetOptions result;
-	deserializer.ReadProperty(/*100*/ "binary_as_string", result.binary_as_string);
-	deserializer.ReadProperty(/*101*/ "file_row_number", result.file_row_number);
-	deserializer.ReadProperty(/*102*/ "file_options", result.file_options);
+	deserializer.ReadProperty(100, "binary_as_string", result.binary_as_string);
+	deserializer.ReadProperty(101, "file_row_number", result.file_row_number);
+	deserializer.ReadProperty(102, "file_options", result.file_options);
 	return result;
 }
 

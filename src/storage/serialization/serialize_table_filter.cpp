@@ -17,7 +17,7 @@ void TableFilter::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableFilter> TableFilter::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto filter_type = deserializer.ReadProperty<TableFilterType>(/*100*/ "filter_type");
+	auto filter_type = deserializer.ReadProperty<TableFilterType>(100, "filter_type");
 	unique_ptr<TableFilter> result;
 	switch (filter_type) {
 	case TableFilterType::CONJUNCTION_AND:
@@ -48,7 +48,7 @@ void ConjunctionAndFilter::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<TableFilter> ConjunctionAndFilter::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionAndFilter>(new ConjunctionAndFilter());
-	deserializer.ReadProperty(/*200*/ "child_filters", result->child_filters);
+	deserializer.ReadProperty(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
@@ -59,7 +59,7 @@ void ConjunctionOrFilter::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<TableFilter> ConjunctionOrFilter::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionOrFilter>(new ConjunctionOrFilter());
-	deserializer.ReadProperty(/*200*/ "child_filters", result->child_filters);
+	deserializer.ReadProperty(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
@@ -70,8 +70,8 @@ void ConstantFilter::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableFilter> ConstantFilter::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto comparison_type = deserializer.ReadProperty<ExpressionType>(/*200*/ "comparison_type");
-	auto constant = deserializer.ReadProperty<Value>(/*201*/ "constant");
+	auto comparison_type = deserializer.ReadProperty<ExpressionType>(200, "comparison_type");
+	auto constant = deserializer.ReadProperty<Value>(201, "constant");
 	auto result = duckdb::unique_ptr<ConstantFilter>(new ConstantFilter(comparison_type, constant));
 	return std::move(result);
 }

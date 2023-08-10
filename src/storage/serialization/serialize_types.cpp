@@ -15,8 +15,8 @@ void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(/*100*/ "type");
-	auto alias = deserializer.ReadProperty<string>(/*101*/ "alias");
+	auto type = deserializer.ReadProperty<ExtraTypeInfoType>(100, "type");
+	auto alias = deserializer.ReadProperty<string>(101, "alias");
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
@@ -61,9 +61,9 @@ void AggregateStateTypeInfo::FormatSerialize(FormatSerializer &serializer) const
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<AggregateStateTypeInfo>(new AggregateStateTypeInfo());
-	deserializer.ReadProperty(/*200*/ "function_name", result->state_type.function_name);
-	deserializer.ReadProperty(/*201*/ "return_type", result->state_type.return_type);
-	deserializer.ReadProperty(/*202*/ "bound_argument_types", result->state_type.bound_argument_types);
+	deserializer.ReadProperty(200, "function_name", result->state_type.function_name);
+	deserializer.ReadProperty(201, "return_type", result->state_type.return_type);
+	deserializer.ReadProperty(202, "bound_argument_types", result->state_type.bound_argument_types);
 	return std::move(result);
 }
 
@@ -75,8 +75,8 @@ void DecimalTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 shared_ptr<ExtraTypeInfo> DecimalTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<DecimalTypeInfo>(new DecimalTypeInfo());
-	deserializer.ReadProperty(/*200*/ "width", result->width);
-	deserializer.ReadProperty(/*201*/ "scale", result->scale);
+	deserializer.ReadProperty(200, "width", result->width);
+	deserializer.ReadProperty(201, "scale", result->scale);
 	return std::move(result);
 }
 
@@ -87,7 +87,7 @@ void ListTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 shared_ptr<ExtraTypeInfo> ListTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<ListTypeInfo>(new ListTypeInfo());
-	deserializer.ReadProperty(/*200*/ "child_type", result->child_type);
+	deserializer.ReadProperty(200, "child_type", result->child_type);
 	return std::move(result);
 }
 
@@ -98,7 +98,7 @@ void StringTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 shared_ptr<ExtraTypeInfo> StringTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<StringTypeInfo>(new StringTypeInfo());
-	deserializer.ReadProperty(/*200*/ "collation", result->collation);
+	deserializer.ReadProperty(200, "collation", result->collation);
 	return std::move(result);
 }
 
@@ -109,7 +109,7 @@ void StructTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 shared_ptr<ExtraTypeInfo> StructTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<StructTypeInfo>(new StructTypeInfo());
-	deserializer.ReadProperty(/*200*/ "child_types", result->child_types);
+	deserializer.ReadProperty(200, "child_types", result->child_types);
 	return std::move(result);
 }
 
@@ -120,7 +120,7 @@ void UserTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 shared_ptr<ExtraTypeInfo> UserTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<UserTypeInfo>(new UserTypeInfo());
-	deserializer.ReadProperty(/*200*/ "user_type_name", result->user_type_name);
+	deserializer.ReadProperty(200, "user_type_name", result->user_type_name);
 	return std::move(result);
 }
 

@@ -462,19 +462,19 @@ static void TableScanFormatSerialize(FormatSerializer &serializer, const optiona
 }
 
 static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
-	auto catalog = deserializer.ReadProperty<string>("catalog");
-	auto schema = deserializer.ReadProperty<string>("schema");
-	auto table = deserializer.ReadProperty<string>("table");
+	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
+	auto schema = deserializer.ReadProperty<string>(101, "schema");
+	auto table = deserializer.ReadProperty<string>(102, "table");
 	auto &catalog_entry =
 	    Catalog::GetEntry<TableCatalogEntry>(deserializer.Get<ClientContext &>(), catalog, schema, table);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema, table);
 	}
 	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	deserializer.ReadProperty("is_index_scan", result->is_index_scan);
-	deserializer.ReadProperty("is_create_index", result->is_create_index);
-	deserializer.ReadProperty("result_ids", result->result_ids);
-	deserializer.ReadProperty("result_ids", result->result_ids);
+	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
+	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
+	deserializer.ReadProperty(105, "result_ids", result->result_ids);
+	deserializer.ReadProperty(106, "result_ids", result->result_ids);
 	return std::move(result);
 }
 

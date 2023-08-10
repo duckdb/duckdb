@@ -1086,24 +1086,24 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 
 	auto &validity = FlatVector::Validity(*this);
 	validity.Reset();
-	const auto has_validity = deserializer.ReadProperty<bool>("all_valid");
+	const auto has_validity = deserializer.ReadProperty<bool>(100, "all_valid");
 	if (has_validity) {
 		validity.Initialize(count);
-		deserializer.ReadProperty("validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
+		deserializer.ReadProperty(101, "validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: read fixed amount of data
 		auto column_size = GetTypeIdSize(logical_type.InternalType()) * count;
 		auto ptr = make_unsafe_uniq_array<data_t>(column_size);
-		deserializer.ReadProperty("data", ptr.get(), column_size);
+		deserializer.ReadProperty(102, "data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			deserializer.SetTag("data");
+			deserializer.SetTag(102, "data");
 			auto read_count = deserializer.OnListBegin();
 			D_ASSERT(read_count == count);
 			(void)read_count; // otherwise unused variable error in release mode
@@ -1122,7 +1122,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 		case PhysicalType::STRUCT: {
 			auto &entries = StructVector::GetEntries(*this);
 			// Deserialize entries as a list
-			deserializer.SetTag("children");
+			deserializer.SetTag(103, "children");
 			auto read_size = deserializer.OnListBegin();
 			D_ASSERT(read_size == entries.size());
 			(void)read_size;
@@ -1136,26 +1136,26 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 		}
 		case PhysicalType::LIST: {
 			// Read the list size
-			auto list_size = deserializer.ReadProperty<uint64_t>("list_size");
+			auto list_size = deserializer.ReadProperty<uint64_t>(104, "list_size");
 			ListVector::Reserve(*this, list_size);
 			ListVector::SetListSize(*this, list_size);
 
 			// Read the entries
 			auto list_entries = FlatVector::GetData<list_entry_t>(*this);
-			deserializer.SetTag("entries");
+			deserializer.SetTag(105, "entries");
 			auto entries_count = deserializer.OnListBegin();
 			D_ASSERT(entries_count == count);
 			(void)entries_count;
 			for (idx_t i = 0; i < count; i++) {
 				deserializer.OnObjectBegin();
-				deserializer.ReadProperty("offset", list_entries[i].offset);
-				deserializer.ReadProperty("length", list_entries[i].length);
+				deserializer.ReadProperty(100, "offset", list_entries[i].offset);
+				deserializer.ReadProperty(101, "length", list_entries[i].length);
 				deserializer.OnObjectEnd();
 			}
 			deserializer.OnListEnd();
 
 			// Read the child vector
-			deserializer.SetTag("child");
+			deserializer.SetTag(106, "child");
 			auto &child = ListVector::GetEntry(*this);
 			deserializer.OnObjectBegin();
 			child.FormatDeserialize(deserializer, list_size);

@@ -60,7 +60,7 @@ struct ApproximateQuantileBindData : public FunctionData {
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<ApproximateQuantileBindData>();
-		deserializer.ReadProperty("quantiles", result->quantiles);
+		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		return std::move(result);
 	}
 

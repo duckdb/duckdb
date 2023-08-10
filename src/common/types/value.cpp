@@ -1824,8 +1824,8 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<LogicalType>("type");
-	auto is_null = deserializer.ReadProperty<bool>("is_null");
+	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
+	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
 	if (is_null) {
 		return new_value;
@@ -1833,46 +1833,46 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	new_value.is_null = false;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		new_value.value_.boolean = deserializer.ReadProperty<bool>("value");
+		new_value.value_.boolean = deserializer.ReadProperty<bool>(100, "value");
 		break;
 	case PhysicalType::UINT8:
-		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>("value");
+		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>(100, "value");
 		break;
 	case PhysicalType::INT8:
-		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>("value");
+		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>(100, "value");
 		break;
 	case PhysicalType::UINT16:
-		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>("value");
+		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>(100, "value");
 		break;
 	case PhysicalType::INT16:
-		new_value.value_.smallint = deserializer.ReadProperty<int16_t>("value");
+		new_value.value_.smallint = deserializer.ReadProperty<int16_t>(100, "value");
 		break;
 	case PhysicalType::UINT32:
-		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>("value");
+		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>(100, "value");
 		break;
 	case PhysicalType::INT32:
-		new_value.value_.integer = deserializer.ReadProperty<int32_t>("value");
+		new_value.value_.integer = deserializer.ReadProperty<int32_t>(100, "value");
 		break;
 	case PhysicalType::UINT64:
-		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>("value");
+		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>(100, "value");
 		break;
 	case PhysicalType::INT64:
-		new_value.value_.bigint = deserializer.ReadProperty<int64_t>("value");
+		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(100, "value");
 		break;
 	case PhysicalType::INT128:
-		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>("value");
+		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(100, "value");
 		break;
 	case PhysicalType::FLOAT:
-		new_value.value_.float_ = deserializer.ReadProperty<float>("value");
+		new_value.value_.float_ = deserializer.ReadProperty<float>(100, "value");
 		break;
 	case PhysicalType::DOUBLE:
-		new_value.value_.double_ = deserializer.ReadProperty<double>("value");
+		new_value.value_.double_ = deserializer.ReadProperty<double>(100, "value");
 		break;
 	case PhysicalType::INTERVAL:
-		new_value.value_.interval = deserializer.ReadProperty<interval_t>("value");
+		new_value.value_.interval = deserializer.ReadProperty<interval_t>(100, "value");
 		break;
 	case PhysicalType::VARCHAR: {
-		auto str = deserializer.ReadProperty<string>("value");
+		auto str = deserializer.ReadProperty<string>(100, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(str));
 		} else {

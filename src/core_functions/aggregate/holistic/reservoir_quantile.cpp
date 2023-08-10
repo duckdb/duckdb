@@ -93,8 +93,8 @@ struct ReservoirQuantileBindData : public FunctionData {
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
-		deserializer.ReadProperty("quantiles", result->quantiles);
-		deserializer.ReadProperty("sample_size", result->sample_size);
+		deserializer.ReadProperty(100, "quantiles", result->quantiles);
+		deserializer.ReadProperty(101, "sample_size", result->sample_size);
 		return std::move(result);
 	}
 

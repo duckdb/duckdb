@@ -72,7 +72,7 @@ private:
 	}
 
 	// Set the 'tag' of the property to read
-	void SetTag(const char *tag) final;
+	void SetTag(uint16_t field_id, const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks

@@ -14,7 +14,7 @@ void Constraint::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Constraint> Constraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ConstraintType>(/*100*/ "type");
+	auto type = deserializer.ReadProperty<ConstraintType>(100, "type");
 	unique_ptr<Constraint> result;
 	switch (type) {
 	case ConstraintType::CHECK:
@@ -41,7 +41,7 @@ void CheckConstraint::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Constraint> CheckConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>(/*200*/ "expression");
+	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>(200, "expression");
 	auto result = duckdb::unique_ptr<CheckConstraint>(new CheckConstraint(std::move(expression)));
 	return std::move(result);
 }
@@ -59,13 +59,13 @@ void ForeignKeyConstraint::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<Constraint> ForeignKeyConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ForeignKeyConstraint>(new ForeignKeyConstraint());
-	deserializer.ReadProperty(/*200*/ "pk_columns", result->pk_columns);
-	deserializer.ReadProperty(/*201*/ "fk_columns", result->fk_columns);
-	deserializer.ReadProperty(/*202*/ "fk_type", result->info.type);
-	deserializer.ReadProperty(/*203*/ "schema", result->info.schema);
-	deserializer.ReadProperty(/*204*/ "table", result->info.table);
-	deserializer.ReadProperty(/*205*/ "pk_keys", result->info.pk_keys);
-	deserializer.ReadProperty(/*206*/ "fk_keys", result->info.fk_keys);
+	deserializer.ReadProperty(200, "pk_columns", result->pk_columns);
+	deserializer.ReadProperty(201, "fk_columns", result->fk_columns);
+	deserializer.ReadProperty(202, "fk_type", result->info.type);
+	deserializer.ReadProperty(203, "schema", result->info.schema);
+	deserializer.ReadProperty(204, "table", result->info.table);
+	deserializer.ReadProperty(205, "pk_keys", result->info.pk_keys);
+	deserializer.ReadProperty(206, "fk_keys", result->info.fk_keys);
 	return std::move(result);
 }
 
@@ -75,7 +75,7 @@ void NotNullConstraint::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Constraint> NotNullConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto index = deserializer.ReadProperty<LogicalIndex>(/*200*/ "index");
+	auto index = deserializer.ReadProperty<LogicalIndex>(200, "index");
 	auto result = duckdb::unique_ptr<NotNullConstraint>(new NotNullConstraint(index));
 	return std::move(result);
 }
@@ -89,9 +89,9 @@ void UniqueConstraint::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<Constraint> UniqueConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<UniqueConstraint>(new UniqueConstraint());
-	deserializer.ReadProperty(/*200*/ "is_primary_key", result->is_primary_key);
-	deserializer.ReadProperty(/*201*/ "index", result->index);
-	deserializer.ReadProperty(/*202*/ "columns", result->columns);
+	deserializer.ReadProperty(200, "is_primary_key", result->is_primary_key);
+	deserializer.ReadProperty(201, "index", result->index);
+	deserializer.ReadProperty(202, "columns", result->columns);
 	return std::move(result);
 }
 

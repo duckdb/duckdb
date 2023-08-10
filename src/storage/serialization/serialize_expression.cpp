@@ -16,9 +16,9 @@ void Expression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto expression_class = deserializer.ReadProperty<ExpressionClass>(/*100*/ "expression_class");
-	auto type = deserializer.ReadProperty<ExpressionType>(/*101*/ "type");
-	auto alias = deserializer.ReadProperty<string>(/*102*/ "alias");
+	auto expression_class = deserializer.ReadProperty<ExpressionClass>(100, "expression_class");
+	auto type = deserializer.ReadProperty<ExpressionType>(101, "type");
+	auto alias = deserializer.ReadProperty<string>(102, "alias");
 	deserializer.Set<ExpressionType>(type);
 	unique_ptr<Expression> result;
 	switch (expression_class) {
@@ -92,11 +92,11 @@ void BoundBetweenExpression::FormatSerialize(FormatSerializer &serializer) const
 
 unique_ptr<Expression> BoundBetweenExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BoundBetweenExpression>(new BoundBetweenExpression());
-	deserializer.ReadProperty(/*200*/ "input", result->input);
-	deserializer.ReadProperty(/*201*/ "lower", result->lower);
-	deserializer.ReadProperty(/*202*/ "upper", result->upper);
-	deserializer.ReadProperty(/*203*/ "lower_inclusive", result->lower_inclusive);
-	deserializer.ReadProperty(/*204*/ "upper_inclusive", result->upper_inclusive);
+	deserializer.ReadProperty(200, "input", result->input);
+	deserializer.ReadProperty(201, "lower", result->lower);
+	deserializer.ReadProperty(202, "upper", result->upper);
+	deserializer.ReadProperty(203, "lower_inclusive", result->lower_inclusive);
+	deserializer.ReadProperty(204, "upper_inclusive", result->upper_inclusive);
 	return std::move(result);
 }
 
@@ -108,10 +108,10 @@ void BoundCaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Expression> BoundCaseExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto result = duckdb::unique_ptr<BoundCaseExpression>(new BoundCaseExpression(std::move(return_type)));
-	deserializer.ReadProperty(/*201*/ "case_checks", result->case_checks);
-	deserializer.ReadProperty(/*202*/ "else_expr", result->else_expr);
+	deserializer.ReadProperty(201, "case_checks", result->case_checks);
+	deserializer.ReadProperty(202, "else_expr", result->else_expr);
 	return std::move(result);
 }
 
@@ -123,10 +123,10 @@ void BoundCastExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<Expression> BoundCastExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto child = deserializer.ReadProperty<unique_ptr<Expression>>(/*200*/ "child");
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*201*/ "return_type");
+	auto child = deserializer.ReadProperty<unique_ptr<Expression>>(200, "child");
+	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
 	auto result = duckdb::unique_ptr<BoundCastExpression>(new BoundCastExpression(deserializer.Get<ClientContext &>(), std::move(child), std::move(return_type)));
-	deserializer.ReadProperty(/*202*/ "try_cast", result->try_cast);
+	deserializer.ReadProperty(202, "try_cast", result->try_cast);
 	return std::move(result);
 }
 
@@ -138,9 +138,9 @@ void BoundColumnRefExpression::FormatSerialize(FormatSerializer &serializer) con
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
-	auto binding = deserializer.ReadProperty<ColumnBinding>(/*201*/ "binding");
-	auto depth = deserializer.ReadProperty<idx_t>(/*202*/ "depth");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto binding = deserializer.ReadProperty<ColumnBinding>(201, "binding");
+	auto depth = deserializer.ReadProperty<idx_t>(202, "depth");
 	auto result = duckdb::unique_ptr<BoundColumnRefExpression>(new BoundColumnRefExpression(std::move(return_type), binding, depth));
 	return std::move(result);
 }
@@ -152,8 +152,8 @@ void BoundComparisonExpression::FormatSerialize(FormatSerializer &serializer) co
 }
 
 unique_ptr<Expression> BoundComparisonExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto left = deserializer.ReadProperty<unique_ptr<Expression>>(/*200*/ "left");
-	auto right = deserializer.ReadProperty<unique_ptr<Expression>>(/*201*/ "right");
+	auto left = deserializer.ReadProperty<unique_ptr<Expression>>(200, "left");
+	auto right = deserializer.ReadProperty<unique_ptr<Expression>>(201, "right");
 	auto result = duckdb::unique_ptr<BoundComparisonExpression>(new BoundComparisonExpression(deserializer.Get<ExpressionType>(), std::move(left), std::move(right)));
 	return std::move(result);
 }
@@ -165,7 +165,7 @@ void BoundConjunctionExpression::FormatSerialize(FormatSerializer &serializer) c
 
 unique_ptr<Expression> BoundConjunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BoundConjunctionExpression>(new BoundConjunctionExpression(deserializer.Get<ExpressionType>()));
-	deserializer.ReadProperty(/*200*/ "children", result->children);
+	deserializer.ReadProperty(200, "children", result->children);
 	return std::move(result);
 }
 
@@ -175,7 +175,7 @@ void BoundConstantExpression::FormatSerialize(FormatSerializer &serializer) cons
 }
 
 unique_ptr<Expression> BoundConstantExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto value = deserializer.ReadProperty<Value>(/*200*/ "value");
+	auto value = deserializer.ReadProperty<Value>(200, "value");
 	auto result = duckdb::unique_ptr<BoundConstantExpression>(new BoundConstantExpression(value));
 	return std::move(result);
 }
@@ -186,7 +186,7 @@ void BoundDefaultExpression::FormatSerialize(FormatSerializer &serializer) const
 }
 
 unique_ptr<Expression> BoundDefaultExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto result = duckdb::unique_ptr<BoundDefaultExpression>(new BoundDefaultExpression(std::move(return_type)));
 	return std::move(result);
 }
@@ -200,10 +200,10 @@ void BoundLambdaExpression::FormatSerialize(FormatSerializer &serializer) const 
 }
 
 unique_ptr<Expression> BoundLambdaExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
-	auto lambda_expr = deserializer.ReadProperty<unique_ptr<Expression>>(/*201*/ "lambda_expr");
-	auto captures = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(/*202*/ "captures");
-	auto parameter_count = deserializer.ReadProperty<idx_t>(/*203*/ "parameter_count");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto lambda_expr = deserializer.ReadProperty<unique_ptr<Expression>>(201, "lambda_expr");
+	auto captures = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(202, "captures");
+	auto parameter_count = deserializer.ReadProperty<idx_t>(203, "parameter_count");
 	auto result = duckdb::unique_ptr<BoundLambdaExpression>(new BoundLambdaExpression(deserializer.Get<ExpressionType>(), std::move(return_type), std::move(lambda_expr), parameter_count));
 	result->captures = std::move(captures);
 	return std::move(result);
@@ -218,10 +218,10 @@ void BoundLambdaRefExpression::FormatSerialize(FormatSerializer &serializer) con
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
-	auto binding = deserializer.ReadProperty<ColumnBinding>(/*201*/ "binding");
-	auto lambda_index = deserializer.ReadProperty<idx_t>(/*202*/ "lambda_index");
-	auto depth = deserializer.ReadProperty<idx_t>(/*203*/ "depth");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto binding = deserializer.ReadProperty<ColumnBinding>(201, "binding");
+	auto lambda_index = deserializer.ReadProperty<idx_t>(202, "lambda_index");
+	auto depth = deserializer.ReadProperty<idx_t>(203, "depth");
 	auto result = duckdb::unique_ptr<BoundLambdaRefExpression>(new BoundLambdaRefExpression(std::move(return_type), binding, lambda_index, depth));
 	return std::move(result);
 }
@@ -233,9 +233,9 @@ void BoundOperatorExpression::FormatSerialize(FormatSerializer &serializer) cons
 }
 
 unique_ptr<Expression> BoundOperatorExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto result = duckdb::unique_ptr<BoundOperatorExpression>(new BoundOperatorExpression(deserializer.Get<ExpressionType>(), std::move(return_type)));
-	deserializer.ReadProperty(/*201*/ "children", result->children);
+	deserializer.ReadProperty(201, "children", result->children);
 	return std::move(result);
 }
 
@@ -247,9 +247,9 @@ void BoundParameterExpression::FormatSerialize(FormatSerializer &serializer) con
 }
 
 unique_ptr<Expression> BoundParameterExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto identifier = deserializer.ReadProperty<string>(/*200*/ "identifier");
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*201*/ "return_type");
-	auto parameter_data = deserializer.ReadProperty<shared_ptr<BoundParameterData>>(/*202*/ "parameter_data");
+	auto identifier = deserializer.ReadProperty<string>(200, "identifier");
+	auto return_type = deserializer.ReadProperty<LogicalType>(201, "return_type");
+	auto parameter_data = deserializer.ReadProperty<shared_ptr<BoundParameterData>>(202, "parameter_data");
 	auto result = duckdb::unique_ptr<BoundParameterExpression>(new BoundParameterExpression(deserializer.Get<bound_parameter_map_t &>(), std::move(identifier), std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
@@ -261,8 +261,8 @@ void BoundReferenceExpression::FormatSerialize(FormatSerializer &serializer) con
 }
 
 unique_ptr<Expression> BoundReferenceExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
-	auto index = deserializer.ReadProperty<idx_t>(/*201*/ "index");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto index = deserializer.ReadProperty<idx_t>(201, "index");
 	auto result = duckdb::unique_ptr<BoundReferenceExpression>(new BoundReferenceExpression(std::move(return_type), index));
 	return std::move(result);
 }
@@ -274,9 +274,9 @@ void BoundUnnestExpression::FormatSerialize(FormatSerializer &serializer) const 
 }
 
 unique_ptr<Expression> BoundUnnestExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>(/*200*/ "return_type");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto result = duckdb::unique_ptr<BoundUnnestExpression>(new BoundUnnestExpression(std::move(return_type)));
-	deserializer.ReadProperty(/*201*/ "child", result->child);
+	deserializer.ReadProperty(201, "child", result->child);
 	return std::move(result);
 }
 

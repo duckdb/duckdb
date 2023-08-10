@@ -178,9 +178,9 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 
 PivotColumnEntry PivotColumnEntry::FormatDeserialize(FormatDeserializer &source) {
 	PivotColumnEntry result;
-	source.ReadProperty("values", result.values);
-	source.ReadOptionalProperty("star_expr", result.star_expr);
-	source.ReadProperty("alias", result.alias);
+	source.ReadProperty(100, "values", result.values);
+	source.ReadOptionalProperty(101, "star_expr", result.star_expr);
+	source.ReadProperty(102, "alias", result.alias);
 	return result;
 }
 

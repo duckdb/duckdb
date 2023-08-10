@@ -426,7 +426,7 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(FieldReader &reader) {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto enum_size = deserializer.ReadProperty<idx_t>("enum_size");
+	auto enum_size = deserializer.ReadProperty<idx_t>(200, "enum_size");
 	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:

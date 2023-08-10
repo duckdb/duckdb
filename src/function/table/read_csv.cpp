@@ -1246,8 +1246,8 @@ static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optiona
 
 static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 	unique_ptr<ReadCSVData> result;
-	deserializer.ReadProperty("extra_info", function.extra_info);
-	deserializer.ReadProperty("csv_data", result);
+	deserializer.ReadProperty(100, "extra_info", function.extra_info);
+	deserializer.ReadProperty(101, "csv_data", result);
 	return std::move(result);
 }
 

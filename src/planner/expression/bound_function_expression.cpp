@@ -104,13 +104,13 @@ void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) cons
 }
 
 unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
-	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children);
 	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
-	deserializer.ReadProperty("is_operator", result->is_operator);
+	deserializer.ReadProperty(202, "is_operator", result->is_operator);
 	return std::move(result);
 }
 
