@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-void BinarySerializer::SetTag(uint16_t field_id, const char *tag) {
+void BinarySerializer::SetTag(field_id_t field_id, const char *tag) {
 	(void)field_id;
 	current_tag = tag;
 	// Increment the number of fields

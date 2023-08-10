@@ -76,8 +76,12 @@ switch_statement = (
 '''
 )
 
-deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n'
-deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
+deserialize_element = (
+    '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n'
+)
+deserialize_element_class = (
+    '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
+)
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
@@ -115,7 +119,9 @@ def get_serialize_element(property_name, property_id, property_key, property_typ
     )
 
 
-def get_deserialize_element_template(template, property_name, property_key, property_id, property_type, is_optional, pointer_type):
+def get_deserialize_element_template(
+    template, property_name, property_key, property_id, property_type, is_optional, pointer_type
+):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     if is_optional:
@@ -504,10 +510,14 @@ def check_children_for_duplicate_members(node, parents: list, seen_names: set, s
         for member in node.members:
             if member.name in seen_names:
                 # Print the inheritance tree
-                exit(f"Error: Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})")
+                exit(
+                    f"Error: Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                )
             seen_names.add(member.name)
             if member.id in seen_ids:
-                exit(f"Error: Duplicate member id \"{member.id}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})")
+                exit(
+                    f"Error: Duplicate member id \"{member.id}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                )
             seen_ids.add(member.id)
 
     # Recurse
