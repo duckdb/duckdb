@@ -86,7 +86,7 @@ public:
 	idx_t GetRadixBits() const;
 
 private:
-	void SetRadixBitsInternal(const idx_t radix_bits_p);
+	bool SetRadixBitsInternal(const idx_t radix_bits_p);
 	static idx_t InitialSinkRadixBits(ClientContext &context);
 	static idx_t MaximumSinkRadixBits(ClientContext &context);
 	static idx_t ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p);
@@ -219,25 +219,27 @@ void RadixHTConfig::SetRadixBits(idx_t radix_bits_p) {
 }
 
 void RadixHTConfig::SetRadixBitsToExternal() {
-	SetRadixBitsInternal(external_radix_bits);
+	if (SetRadixBitsInternal(external_radix_bits)) {
+		sink.external = true;
+	}
 }
 
 idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
 }
 
-void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p) {
+bool RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p) {
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
-		return;
+		return false;
 	}
 
 	lock_guard<mutex> guard(sink.lock);
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
-		return;
+		return false;
 	}
 
 	sink_radix_bits = radix_bits_p;
-	sink.external = true;
+	return true;
 }
 
 idx_t RadixHTConfig::InitialSinkRadixBits(ClientContext &context) {
@@ -413,8 +415,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
-	// Check to repartition, set any_combined, then check once more (something may have changed)
-	MaybeRepartition(context.client, gstate, lstate);
+	// Set any_combined, then check one last time whether we need to repartition
 	gstate.any_combined = true;
 	MaybeRepartition(context.client, gstate, lstate);
 
