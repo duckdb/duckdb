@@ -165,7 +165,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!returnsResultSet) {
             throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
         }
-        return getResultSet();
+        return select_result;
     }
 
     @Override
