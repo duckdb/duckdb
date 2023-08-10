@@ -250,25 +250,31 @@ string DuckDBPyRelation::ToSQL() {
 	}
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
-                                                const string &groups, const string &function_parameter,
-                                                const string &projected_columns, const string &window_function) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, 
+												const string &aggregated_columns,
+												const string &groups, 
+												const string &function_parameter, 
+												const string &projected_columns, 
+												const string &window_spec) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
-	return GenerateExpressionList(function_name, input, groups, function_parameter, projected_columns, window_function);
+	return GenerateExpressionList(function_name, input, groups, function_parameter, projected_columns, window_spec);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const vector<string> &input,
-                                                const string &groups, const string &function_parameter,
-                                                const string &projected_columns, const string &window_function) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, 
+												const vector<string> &input,
+												const string &groups, 
+												const string &function_parameter, 
+												const string &projected_columns, 
+												const string &window_spec) {
 	string expr;
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
 	for (idx_t i = 0; i < input.size(); i++) {
 		if (function_parameter.empty()) {
-			expr += function_name + "(" + input[i] + ") " + window_function;
+			expr += function_name + "(" + input[i] + ") " + window_spec;
 		} else {
-			expr += function_name + "(" + input[i] + "," + function_parameter + ")" + window_function;
+			expr += function_name + "(" + input[i] + "," + function_parameter + ") " + window_spec;
 		}
 
 		if (i < input.size() - 1) {
@@ -279,13 +285,14 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
-                                                                 const string &aggregated_columns, const string &groups,
+                                                                 const string &aggregated_columns, 
+																 const string &groups,
                                                                  const string &function_parameter,
                                                                  const string &projected_columns) {
 
 	//! Construct Aggregation Expression
 	auto expr =
-	    GenerateExpressionList(function_name, aggregated_columns, groups, function_parameter, projected_columns);
+	    GenerateExpressionList(function_name, aggregated_columns, groups, function_parameter, projected_columns, "");
 	return Aggregate(expr, groups);
 }
 
@@ -399,6 +406,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMax(const string &aggr_columns
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns) {
 	return GenericWindowFunction("min", aggr_columns);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RowNumber(const string &window_spec, const string &projected_columns) {
+	auto expr = GenerateExpressionList("row_number", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Rank(const string &window_spec, const string &projected_columns) {
+	auto expr = GenerateExpressionList("rank", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DenseRank(const string &window_spec, const string &projected_columns) {
+	auto expr = GenerateExpressionList("dense_rank", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RankDense(const string &window_spec, const string &projected_columns) {
+	// alias for dense_rank
+	return DenseRank(window_spec, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {

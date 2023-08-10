@@ -131,6 +131,14 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("aggregation_columns"));
 }
 
+
+static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
+	m.def("row_number", &DuckDBPyRelation::RowNumber, "Computes the row number within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
+		.def("rank", &DuckDBPyRelation::Rank, "Computes the rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
+		.def("dense_rank", &DuckDBPyRelation::DenseRank, "Computes the dense rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
+		.def("rank_dense", &DuckDBPyRelation::RankDense, "Computes the dense rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "");
+}
+
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 	m.def("union", &DuckDBPyRelation::Union, py::arg("union_rel"),
 	      "Create the set union of this relation object with another relation object in other_rel")
@@ -152,6 +160,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	auto relation_module = py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local());
 	InitializeReadOnlyProperties(relation_module);
 	InitializeAggregates(relation_module);
+	InitializeWindowOperators(relation_module);
 	InitializeSetOperators(relation_module);
 	InitializeMetaQueries(relation_module);
 	InitializeConsumers(relation_module);

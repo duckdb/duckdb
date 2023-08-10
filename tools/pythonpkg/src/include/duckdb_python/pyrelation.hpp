@@ -129,6 +129,10 @@ public:
 	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> RowNumber(const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> Rank(const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> DenseRank(const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> RankDense(const string &window_spec, const string &projected_columns);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 
@@ -204,10 +208,10 @@ public:
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
-	                              const string &projected_columns = "", const string &window_function = "");
+	                              const string &projected_columns = "", const string &window_spec = "");
 	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
-	                              const string &projected_columns = "", const string &window_function = "");
+	                              const string &projected_columns = "", const string &window_spec = "");
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
