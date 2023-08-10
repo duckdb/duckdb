@@ -25,6 +25,24 @@ enum class CSVState : uint8_t {
 	INVALID = 7           //! Got to an Invalid State, this should error.
 };
 
+typedef uint8_t state_machine_t[7][256];
+
+class CSVStateMachineCache {
+public:
+	CSVStateMachineCache();
+	~CSVStateMachineCache() {};
+	//! Gets a state machine from the cache, if it's not from one the default options
+	//! It first caches it, then returns it.
+	state_machine_t &Get(char delimiter, char quote, char escape);
+
+private:
+	void Insert(char delimiter, char quote, char escape);
+	//! Cache on delimiter|quote|escape
+	unordered_map<char, unordered_map<char, unordered_map<char, state_machine_t>>> state_machine_cache;
+};
+
+static CSVStateMachineCache csv_state_machine_cache;
+
 class CSVStateMachine {
 public:
 	explicit CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p);
@@ -34,13 +52,16 @@ public:
 	//! Aux Function for string UTF8 Verification
 	void VerifyUTF8();
 
-	CSVReaderOptions options;
+	//! Prints the transition array
+	void Print();
+
+	//	CSVReaderOptions options;
 	CSVBufferIterator csv_buffer_iterator;
 	//! Which one was the identified start row for this file
 	idx_t start_row = 0;
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
-	uint8_t transition_array[7][256];
+	state_machine_t &transition_array;
 
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
