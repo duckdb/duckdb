@@ -4,6 +4,8 @@
 
 require-env LOCAL_EXTENSION_REPO
 
+require no_extension_autoloading
+
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_reset_setting'
 

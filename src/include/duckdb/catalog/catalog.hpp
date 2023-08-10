@@ -271,7 +271,7 @@ public:
 	virtual string GetDBPath() = 0;
 
 public:
-	template <class T>
+	template <class T> // FIXME: 2
 	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
 	                                const string &name, OnEntryNotFound if_not_found,
 	                                QueryErrorContext error_context = QueryErrorContext()) {
@@ -284,7 +284,7 @@ public:
 		}
 		return &entry->template Cast<T>();
 	}
-	template <class T>
+	template <class T> // FIXME: 1
 	static T &GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
 	                   const string &name, QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry =
@@ -305,7 +305,7 @@ public:
 	static void AutoloadExtensionOrThrowForConfig(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionForFunction(ClientContext &context, CatalogType type, const string &function_name);
-
+	static void TryAutoloadExtension(ClientContext &context, const string &extension_name);
 protected:
 	//! Reference to the database
 	AttachedDatabase &db;

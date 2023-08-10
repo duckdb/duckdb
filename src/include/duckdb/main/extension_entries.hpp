@@ -32,6 +32,8 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"from_substrait_json", "substrait"},
                                                          {"get_substrait", "substrait"},
                                                          {"get_substrait_json", "substrait"},
+                                                         {"get_substrait_json", "substrait"},
+                                                         {"host", "inet"},
                                                          {"iceberg_scan", "iceberg"},
                                                          {"iceberg_metadata", "iceberg"},
                                                          {"iceberg_snapshots", "iceberg"},
@@ -79,6 +81,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"read_ndjson_objects", "json"},
                                                          {"read_parquet", "parquet"},
                                                          {"row_to_json", "json"},
+                                                         {"reduce_sql_statement", "sqlsmith"},
                                                          {"scan_arrow_ipc", "arrow"},
                                                          {"sqlite_attach", "sqlite_scanner"},
                                                          {"sqlite_scan", "sqlite_scanner"},
@@ -165,7 +168,8 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"st_reduceprecision", "spatial"},
                                                          {"st_geomfromhexwkb", "spatial"},
                                                          {"st_geomfromhexewkb", "spatial"},
-                                                         {"st_numpoints", "spatial"}};
+                                                         {"st_numpoints", "spatial"},
+                                                         {"sql_auto_complete", "autocomplete"}};
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"azure_storage_connection_string", "azure"},
@@ -190,4 +194,10 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"sqlite_all_varchar", "sqlite_scanner"},
     {"timezone", "icu"},
 };
+
+static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"},
+                                                              {"json", "json"}};
+
+static constexpr ExtensionEntry EXTENSION_TYPES[] = {{"json", "json"},
+                                                     {"inet", "inet"}};
 } // namespace duckdb

@@ -4,6 +4,8 @@
 
 require-env LOCAL_EXTENSION_REPO
 
+require no_extension_autoloading
+
 query I
 select value from duckdb_settings() where name='autoload_known_extensions';
 ----

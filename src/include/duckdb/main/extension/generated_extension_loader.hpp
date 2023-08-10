@@ -17,6 +17,7 @@ namespace duckdb {
 bool TryLoadLinkedExtension(DuckDB &db, const std::string &extension);
 extern vector<string> linked_extensions;
 extern vector<string> loaded_extension_test_paths;
+extern vector<string> extensions_excluded_from_autoload;
 
 } // namespace duckdb
 #endif

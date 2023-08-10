@@ -4,6 +4,7 @@
 #include "sqllogic_test_runner.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 #include "sqllogic_parser.hpp"
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -14,7 +15,7 @@ namespace duckdb {
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.load_extensions = false;
-	config->options.autoload_known_extensions = false;
+	config->options.autoload_known_extensions = true;
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -100,6 +101,11 @@ void SQLLogicTestRunner::Reconnect() {
 #endif
 	if (enable_verification) {
 		con->EnableQueryVerification();
+	}
+	// Set the local extension repo for autoinstalling extensions TODO might want to do prepared statement here
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (env_var) {
+		auto res1 = con->Query("SET autoload_extension_repository='" + string(env_var) + "'");
 	}
 }
 
@@ -525,17 +531,32 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 				return;
 #endif
-			} else {
-				auto result = ExtensionHelper::LoadExtension(*db, param);
-				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
-					// add the extension to the list of loaded extensions
-					extensions.insert(param);
-				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
-					parser.Fail("unknown extension type: %s", token.parameters[0]);
-				} else if (result == ExtensionLoadResult::NOT_LOADED) {
-					// extension known but not build: skip this test
+			} else if (param == "no_extension_autoloading") {
+				if (config->options.autoload_known_extensions) {
 					return;
 				}
+			} else {
+				bool excluded_from_autoloading = false;
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+				for (auto& ext : extensions_excluded_from_autoload) {
+					if (ext == param) {
+						excluded_from_autoloading = true;
+					}
+				}
+#endif
+				if ( !config->options.autoload_known_extensions || excluded_from_autoloading) {
+					auto result = ExtensionHelper::LoadExtension(*db, param);
+					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
+						// add the extension to the list of loaded extensions
+						extensions.insert(param);
+					} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
+						parser.Fail("unknown extension type: %s", token.parameters[0]);
+					} else if (result == ExtensionLoadResult::NOT_LOADED) {
+						// extension known but not build: skip this test
+						return;
+					}
+				}
+				// TODO when autoloading, we probably want to skip the test if the extension is not present in the repo
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {

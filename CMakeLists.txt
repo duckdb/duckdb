@@ -793,7 +793,7 @@ endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK DONT_BUILD LOAD_TESTS APPLY_PATCHES)
+  set(options DONT_LINK DONT_BUILD DONT_AUTOLOAD LOAD_TESTS APPLY_PATCHES)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR TEST_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -842,6 +842,8 @@ function(duckdb_extension_load NAME)
     message(STATUS "Load extension '${NAME}' from '${CMAKE_CURRENT_SOURCE_DIR}/extensions'")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_CURRENT_SOURCE_DIR}/extension/${NAME}/test/sql")
   endif()
+
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_DONT_AUTOLOAD ${duckdb_extension_load_DONT_AUTOLOAD} PARENT_SCOPE)
 
   # Propagate variables set by register_extension
   set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} PARENT_SCOPE)
@@ -953,6 +955,7 @@ set(LINKED_EXTENSIONS "")
 set(NONLINKED_EXTENSIONS "")
 set(SKIPPED_EXTENSIONS "")
 set(TEST_LOADED_EXTENSIONS "")
+set(EXCLUDED_FROM_AUTOLOAD_EXTENSIONS "")
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD})
@@ -965,6 +968,9 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
 
   if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
     list(APPEND TEST_LOADED_EXTENSIONS ${EXT_NAME})
+  endif()
+  if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_DONT_AUTOLOAD})
+    list(APPEND EXCLUDED_FROM_AUTOLOAD_EXTENSIONS ${EXT_NAME})
   endif()
 endforeach()
 
@@ -983,6 +989,10 @@ endif()
 if(NOT "${TEST_LOADED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${TEST_LOADED_EXTENSIONS}")
   message(STATUS "Tests loaded for extensions: [${EXT_LIST_DEBUG_MESSAGE}]")
+endif()
+if(NOT "${EXCLUDED_FROM_AUTOLOAD_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${EXCLUDED_FROM_AUTOLOAD_EXTENSIONS}")
+  message(STATUS "Extensions excluded from autoloading: [${EXT_LIST_DEBUG_MESSAGE}]")
 endif()
 
 # Special build where instead of building duckdb, we produce several artifact that require parsing the
