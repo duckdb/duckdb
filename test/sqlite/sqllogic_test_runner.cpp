@@ -15,7 +15,7 @@ namespace duckdb {
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.load_extensions = false;
-	config->options.autoload_known_extensions = true;
+	config->options.autoload_known_extensions = false;
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
@@ -103,8 +103,10 @@ void SQLLogicTestRunner::Reconnect() {
 		con->EnableQueryVerification();
 	}
 	// Set the local extension repo for autoinstalling extensions TODO might want to do prepared statement here
+	// TODO: also maybe not use env var here
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
+		config->options.autoload_known_extensions = true;
 		auto res1 = con->Query("SET autoload_extension_repository='" + string(env_var) + "'");
 	}
 }
