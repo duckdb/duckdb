@@ -8,7 +8,7 @@ from pyduckdb.spark.conf import SparkConf
 
 class SparkContext:
     def __init__(self, master: str):
-        self._connection = duckdb.connect(master)
+        self._connection = duckdb.connect(':memory:')
 
     @property
     def connection(self) -> DuckDBPyConnection:

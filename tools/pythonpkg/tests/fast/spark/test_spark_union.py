@@ -66,14 +66,15 @@ class TestDataFrameUnion(object):
         assert res == res2
 
     def test_merge_without_duplicates(self, df, df2):
-        disDF = df.union(df2).distinct()
+        # 'sort' has been added to make the result deterministic
+        disDF = df.union(df2).distinct().sort(col("employee_name"))
         res = disDF.collect()
         assert res == [
             Row(employee_name='James', department='Sales', state='NY', salary=90000, age=34, bonus=10000),
+            Row(employee_name='Jeff', department='Marketing', state='CA', salary=80000, age=25, bonus=18000),
+            Row(employee_name='Jen', department='Finance', state='NY', salary=79000, age=53, bonus=15000),
+            Row(employee_name='Kumar', department='Marketing', state='NY', salary=91000, age=50, bonus=21000),
+            Row(employee_name='Maria', department='Finance', state='CA', salary=90000, age=24, bonus=23000),
             Row(employee_name='Michael', department='Sales', state='NY', salary=86000, age=56, bonus=20000),
             Row(employee_name='Robert', department='Sales', state='CA', salary=81000, age=30, bonus=23000),
-            Row(employee_name='Maria', department='Finance', state='CA', salary=90000, age=24, bonus=23000),
-            Row(employee_name='Jen', department='Finance', state='NY', salary=79000, age=53, bonus=15000),
-            Row(employee_name='Jeff', department='Marketing', state='CA', salary=80000, age=25, bonus=18000),
-            Row(employee_name='Kumar', department='Marketing', state='NY', salary=91000, age=50, bonus=21000),
         ]

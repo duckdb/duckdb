@@ -209,12 +209,10 @@ class SparkSession:
 
     class Builder:
         def __init__(self):
-            self.name = "builder"
-            self._master = ':memory:'
-            self._config = {}
+            pass
 
         def master(self, name: str) -> "SparkSession.Builder":
-            self._master = name
+            # no-op
             return self
 
         def appName(self, name: str) -> "SparkSession.Builder":
@@ -226,17 +224,12 @@ class SparkSession:
             return self
 
         def getOrCreate(self) -> "SparkSession":
-            # TODO: use the config to pass in methods to 'connect'
-            context = SparkContext(self._master)
+            context = SparkContext("__ignored__")
             return SparkSession(context)
 
         def config(
             self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None
         ) -> "SparkSession.Builder":
-            if conf:
-                raise NotImplementedError
-            if key and value:
-                self._config[key] = value
             return self
 
         def enableHiveSupport(self) -> "SparkSession.Builder":
