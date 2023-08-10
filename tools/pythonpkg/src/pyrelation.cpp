@@ -250,22 +250,16 @@ string DuckDBPyRelation::ToSQL() {
 	}
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, 
-												const string &aggregated_columns,
-												const string &groups, 
-												const string &function_parameter, 
-												const string &projected_columns, 
-												const string &window_spec) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const string &aggregated_columns,
+                                                const string &groups, const string &function_parameter,
+                                                const string &projected_columns, const string &window_spec) {
 	auto input = StringUtil::Split(aggregated_columns, ',');
 	return GenerateExpressionList(function_name, input, groups, function_parameter, projected_columns, window_spec);
 }
 
-string DuckDBPyRelation::GenerateExpressionList(const string &function_name, 
-												const vector<string> &input,
-												const string &groups, 
-												const string &function_parameter, 
-												const string &projected_columns, 
-												const string &window_spec) {
+string DuckDBPyRelation::GenerateExpressionList(const string &function_name, const vector<string> &input,
+                                                const string &groups, const string &function_parameter,
+                                                const string &projected_columns, const string &window_spec) {
 	string expr;
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
@@ -285,8 +279,7 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name,
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
-                                                                 const string &aggregated_columns, 
-																 const string &groups,
+                                                                 const string &aggregated_columns, const string &groups,
                                                                  const string &function_parameter,
                                                                  const string &projected_columns) {
 

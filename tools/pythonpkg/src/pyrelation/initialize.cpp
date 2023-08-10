@@ -131,12 +131,15 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("aggregation_columns"));
 }
 
-
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
-	m.def("row_number", &DuckDBPyRelation::RowNumber, "Computes the row number within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
-		.def("rank", &DuckDBPyRelation::Rank, "Computes the rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
-		.def("dense_rank", &DuckDBPyRelation::DenseRank, "Computes the dense rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "")
-		.def("rank_dense", &DuckDBPyRelation::RankDense, "Computes the dense rank within the partition", py::arg("window_spec"), py::arg("projected_columns") = "");
+	m.def("row_number", &DuckDBPyRelation::RowNumber, "Computes the row number within the partition",
+	      py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("rank", &DuckDBPyRelation::Rank, "Computes the rank within the partition", py::arg("window_spec"),
+	         py::arg("projected_columns") = "")
+	    .def("dense_rank", &DuckDBPyRelation::DenseRank, "Computes the dense rank within the partition",
+	         py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("rank_dense", &DuckDBPyRelation::RankDense, "Computes the dense rank within the partition",
+	         py::arg("window_spec"), py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
