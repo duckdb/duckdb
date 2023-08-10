@@ -20,8 +20,6 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 
-#define AUTO_MEM_POOL(amp) CAutoMemoryPool amp(CAutoMemoryPool::ElcExc)
-
 namespace duckdb {
 	using namespace gpos;
 	using namespace gpopt;
