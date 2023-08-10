@@ -19,14 +19,14 @@ class Binder;
 
 class Optimizer {
 public:
-	Optimizer(Binder &binder, ClientContext &context);
+	Optimizer(Binder &binder, ClientContext &context, bool forcascade = false);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<Operator> plan);
 	unique_ptr<PhysicalOperator> OptimizebyCascade(unique_ptr<Operator> plan);
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
-
+	bool forCascade;
 private:
 	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 	void Verify(LogicalOperator &op);
