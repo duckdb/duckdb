@@ -426,6 +426,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PercentRank(const string &window_
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spec, const string &projected_columns) {
+	auto expr = GenerateExpressionList("cume_dist", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_uniq<DuckDBPyRelation>(rel->Distinct());
 }
