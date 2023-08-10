@@ -36,7 +36,7 @@ public:
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
 	    AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr = nullptr,
-	    BlockPointer block = BlockPointer());
+	    const BlockPointer &block = BlockPointer());
 	~ART() override;
 
 	//! Root of the tree
@@ -136,6 +136,9 @@ private:
 	//! Internal function to return the string representation of the ART,
 	//! or only traverses and verifies the index
 	string VerifyAndToStringInternal(const bool only_verify);
+
+	//! Deserialize the allocators of the ART
+	void Deserialize(const BlockPointer &pointer);
 };
 
 } // namespace duckdb

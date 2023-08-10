@@ -14,6 +14,7 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 
 #include <algorithm>
 
@@ -33,7 +34,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr, BlockPointer pointer)
+         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr,
+         const BlockPointer &pointer)
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
       allocators(allocators_ptr), owns_data(false) {
 	if (!Radix::IsLittleEndian()) {
@@ -56,10 +58,11 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), allocator, metadata_manager));
 	}
 
-	// set the root node of the tree
-	// TODO: we should set 'tree' accordingly when deserializing the index metadata, and then we do not
-	// TODO: need to touch it here
-	tree = make_uniq<Node>();
+	if (pointer.IsValid()) {
+		Deserialize(pointer);
+	} else {
+		tree = make_uniq<Node>();
+	}
 
 	// validate the types of the key columns
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -973,15 +976,32 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 BlockPointer ART::Serialize(MetadataWriter &writer) {
 
+	D_ASSERT(owns_data);
+
 	lock_guard<mutex> l(lock);
-	if (tree->HasMetadata()) {
-		// TODO: here, we want to serialize all the allocators, and then (maybe?) the ART metadata?
-		//		serialized_data_pointer = tree->Serialize(*this, writer);
-	} else {
-		serialized_data_pointer = BlockPointer();
+
+	vector<BlockPointer> allocator_pointers;
+	for (auto &allocator : *allocators) {
+		allocator_pointers.push_back(allocator.Serialize(writer));
+	}
+
+	serialized_data_pointer = writer.GetBlockPointer();
+	writer.Write(*tree);
+	for (auto &allocator_pointer : allocator_pointers) {
+		writer.Write(allocator_pointer);
 	}
 
 	return serialized_data_pointer;
+}
+
+void ART::Deserialize(const BlockPointer &pointer) {
+
+	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
+	tree = make_uniq<Node>(reader.Read<Node>());
+
+	for (idx_t i = 0; i < (uint8_t)NType::NODE_256 - 1; i++) {
+		(*allocators)[i].Deserialize(reader.Read<BlockPointer>());
+	}
 }
 
 //===--------------------------------------------------------------------===//

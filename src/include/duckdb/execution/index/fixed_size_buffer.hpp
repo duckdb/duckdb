@@ -27,22 +27,38 @@ public:
 	FixedSizeBuffer(const idx_t segment_count, BlockPointer &block_ptr)
 	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), block_ptr(block_ptr) {
 	}
+
+	//! The number of allocated segments
 	idx_t segment_count;
 
 	//! Flags to manage the memory of this buffer
+
+	//! True: the in-memory buffer is no longer consistent with a (possibly existing)
+	//! copy on disk
 	bool dirty;
+	//! True: the buffer is in memory
 	bool in_memory;
+	//! True: the buffer is serialized to disk
 	bool on_disk;
 
-	// TODO: is it worth combining these two into an IndexPointer to save space...?
 	//! The buffer is in-memory, and memory_ptr points to its location
 	data_ptr_t memory_ptr;
 	//! Holds the block ID and offset of the buffer
 	BlockPointer block_ptr;
 
 public:
-	data_ptr_t GetPtr(FixedSizeAllocator &fixed_size_allocator);
+	//! Returns a pointer to the buffer in memory, and calls Deserialize, if
+	//! the buffer is not in memory
+	inline data_ptr_t GetPtr(FixedSizeAllocator &fixed_size_allocator) {
+		if (in_memory) {
+			return memory_ptr;
+		}
+		return Deserialize(fixed_size_allocator);
+	}
+	//! Serializes a buffer (if dirty or not on disk)
 	void Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer);
+	//! Deserializes a buffer, if not in memory
+	data_ptr_t Deserialize(FixedSizeAllocator &fixed_size_allocator);
 };
 
 } // namespace duckdb

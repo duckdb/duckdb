@@ -6,23 +6,6 @@
 
 namespace duckdb {
 
-data_ptr_t FixedSizeBuffer::GetPtr(FixedSizeAllocator &fixed_size_allocator) {
-
-	if (in_memory) {
-		return memory_ptr;
-	}
-	D_ASSERT(on_disk);
-
-	dirty = false;
-	in_memory = true;
-
-	memory_ptr = fixed_size_allocator.allocator.AllocateData(fixed_size_allocator.BUFFER_SIZE);
-	MetadataReader reader(fixed_size_allocator.metadata_manager, block_ptr);
-	reader.ReadData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
-
-	return memory_ptr;
-}
-
 void FixedSizeBuffer::Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer) {
 
 	if (!in_memory) {
@@ -38,6 +21,20 @@ void FixedSizeBuffer::Serialize(FixedSizeAllocator &fixed_size_allocator, Metada
 	writer.WriteData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
 	dirty = false;
 	on_disk = true;
+}
+
+data_ptr_t FixedSizeBuffer::Deserialize(FixedSizeAllocator &fixed_size_allocator) {
+
+	D_ASSERT(on_disk);
+
+	dirty = false;
+	in_memory = true;
+
+	memory_ptr = fixed_size_allocator.allocator.AllocateData(fixed_size_allocator.BUFFER_SIZE);
+	MetadataReader reader(fixed_size_allocator.metadata_manager, block_ptr);
+	reader.ReadData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
+
+	return memory_ptr;
 }
 
 } // namespace duckdb

@@ -82,7 +82,7 @@ public:
 	//! Serializes all in-memory buffers and the metadata
 	BlockPointer Serialize(MetadataWriter &writer);
 	//! Deserializes all metadata
-	void Deserialize(BlockPointer &block_ptr);
+	void Deserialize(const BlockPointer &block_ptr);
 
 private:
 	//! Returns the data_ptr_t of an IndexPointer

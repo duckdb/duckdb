@@ -255,17 +255,20 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 	return block_pointer;
 }
 
-void FixedSizeAllocator::Deserialize(BlockPointer &block_ptr) {
+void FixedSizeAllocator::Deserialize(const BlockPointer &block_ptr) {
 
 	MetadataReader reader(metadata_manager, block_ptr);
 	segment_size = reader.Read<idx_t>();
 	auto buffer_count = reader.Read<idx_t>();
 	auto buffers_with_free_space_count = reader.Read<idx_t>();
 
+	total_segment_count = 0;
+
 	for (idx_t i = 0; i < buffer_count; i++) {
 		auto buffer_block_ptr = reader.Read<BlockPointer>();
 		auto buffer_segment_count = reader.Read<idx_t>();
 		buffers.emplace_back(buffer_segment_count, buffer_block_ptr);
+		total_segment_count += buffer_segment_count;
 	}
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
 		buffers_with_free_space.insert(reader.Read<idx_t>());
