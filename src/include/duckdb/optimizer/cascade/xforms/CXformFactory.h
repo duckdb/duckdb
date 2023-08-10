@@ -11,8 +11,7 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXform.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -23,23 +22,22 @@ using namespace gpos;
 //		Factory class to manage xforms
 //
 //---------------------------------------------------------------------------
-class CXformFactory
-{
+class CXformFactory {
 public:
 	// range of all xforms
-	CXform* m_rgpxf[CXform::ExfSentinel];
+	CXform *m_rgpxf[CXform::ExfSentinel];
 
 	// name -> xform map
-	unordered_map<CHAR*, CXform*> m_phmszxform;
+	unordered_map<CHAR *, CXform *> m_phmszxform;
 
 	// bitset of exploration xforms
-	CXformSet* m_pxfsExploration;
+	CXformSet *m_pxfsExploration;
 
 	// bitset of implementation xforms
-	CXformSet* m_pxfsImplementation;
+	CXformSet *m_pxfsImplementation;
 
 	// global instance
-	static CXformFactory* m_pxff;
+	static CXformFactory *m_pxff;
 
 public:
 	// ctor
@@ -53,32 +51,29 @@ public:
 
 public:
 	// actual adding of xform
-	void Add(CXform* pxform);
+	void Add(CXform *pxform);
 
 	// create all xforms
 	void Instantiate();
 
 	// accessor by xform id
-	CXform* Pxf(CXform::EXformId exfid) const;
+	CXform *Pxf(CXform::EXformId exfid) const;
 
 	// accessor by xform name
-	CXform* Pxf(const CHAR* szXformName) const;
+	CXform *Pxf(const CHAR *szXformName) const;
 
 	// accessor of exploration xforms
-	CXformSet* PxfsExploration() const
-	{
+	CXformSet *PxfsExploration() const {
 		return m_pxfsExploration;
 	}
 
 	// accessor of implementation xforms
-	CXformSet* PxfsImplementation() const
-	{
+	CXformSet *PxfsImplementation() const {
 		return m_pxfsImplementation;
 	}
 
 	// global accessor
-	static CXformFactory* Pxff()
-	{
+	static CXformFactory *Pxff() {
 		return m_pxff;
 	}
 
@@ -87,6 +82,6 @@ public:
 
 	// destroy global factory instance
 	void Shutdown();
-};	// class CXformFactory
-}  // namespace gpopt
+}; // class CXformFactory
+} // namespace gpopt
 #endif

@@ -7,8 +7,8 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/optimizer/cascade/base/CDrvdPropRelational.h"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -19,8 +19,7 @@ public:
 
 public:
 	explicit LogicalDummyScan(idx_t table_index)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index)
-	{
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), table_index(table_index) {
 		logical_type = LogicalOperatorType::LOGICAL_DUMMY_SCAN;
 		m_pdprel = new CDrvdPropRelational();
 		m_pgexpr = nullptr;
@@ -44,7 +43,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		if (types.size() == 0) {
+		if (types.empty()) {
 			types.emplace_back(LogicalType::INTEGER);
 		}
 	}

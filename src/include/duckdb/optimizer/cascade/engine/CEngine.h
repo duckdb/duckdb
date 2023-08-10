@@ -80,7 +80,7 @@ public:
 
 	// insert children of the given expression to memo, and
 	// copy the resulting groups to the given group array
-	void InsertExpressionChildren(Operator* pexpr, duckdb::vector<CGroup*> &pdrgpgroupChildren, CXform::EXformId exfidOrigin, CGroupExpression* pgexprOrigin);
+	void InsertExpressionChildren(Operator* pexpr, duckdb::vector<CGroup*> &pdrgpgroup_children, CXform::EXformId exfid_origin, CGroupExpression* pgexpr_origin);
 
 	// create and schedule the main optimization job
 	void ScheduleMainJob(CSchedulerContext* psc, COptimizationContext* poc);
@@ -89,7 +89,7 @@ public:
 	bool FSearchTerminated() const
 	{
 		// at least one stage has completed and achieved required cost
-		return (NULL != PssPrevious() && PssPrevious()->FAchievedReqdCost());
+		return (nullptr != PssPrevious() && PssPrevious()->FAchievedReqdCost());
 	}
 
 	// generate random plan id
@@ -102,14 +102,14 @@ public:
 	bool FChildrenOptimized(duckdb::vector<COptimizationContext*> pdrgpoc);
 
 	// check if ayn of the given property enforcing types prohibits enforcement
-	static bool FProhibited(duckdb::CEnfdOrder::EPropEnforcingType epetOrder);
+	static bool FProhibited(duckdb::CEnfdOrder::EPropEnforcingType epet_order);
 
 	// check whether the given memo groups can be marked as duplicates. This is
 	// true only if they have the same logical properties
-	static bool FPossibleDuplicateGroups(CGroup* pgroupFst, CGroup* pgroupSnd);
+	static bool FPossibleDuplicateGroups(CGroup* pgroup_fst, CGroup* pgroup_snd);
 
 	// check if optimization is possible under the given property enforcing types
-	static bool FOptimize(duckdb::CEnfdOrder::EPropEnforcingType epetOrder);
+	static bool FOptimize(duckdb::CEnfdOrder::EPropEnforcingType epet_order);
 
 	// unrank the plan with the given 'plan_id' from the memo
 	Operator* PexprUnrank(ULLONG plan_id);
@@ -140,24 +140,24 @@ public:
 	}
 
 	// insert expression tree to memo
-	CGroup* PgroupInsert(CGroup* pgroupTarget, duckdb::unique_ptr<Operator> pexpr, CXform::EXformId exfidOrigin, CGroupExpression* pgexprOrigin, bool fIntermediate);
+	CGroup* PgroupInsert(CGroup* pgroup_target, duckdb::unique_ptr<Operator> pexpr, CXform::EXformId exfid_origin, CGroupExpression* pgexpr_origin, bool f_intermediate);
 
 	// insert a set of xform results into the memo
-	void InsertXformResult(CGroup* pgroupOrigin, CXformResult* pxfres, CXform::EXformId exfidOrigin, CGroupExpression* pgexprOrigin, ULONG ulXformTime, ULONG ulNumberOfBindings);
+	void InsertXformResult(CGroup* pgroup_origin, CXformResult* pxfres, CXform::EXformId exfid_origin, CGroupExpression* pgexpr_origin, ULONG ul_xform_time, ULONG ul_number_of_bindings);
 
 	// add enforcers to the memo
-	void AddEnforcers(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexprEnforcers);
+	void AddEnforcers(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr_enforcers);
 
 	// extract a physical plan from the memo
 	Operator* PexprExtractPlan();
 
 	// check required properties;
 	// return false if it's impossible for the operator to satisfy one or more
-	bool FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan* prpp, ULONG ulOptReq);
+	bool FCheckReqdProps(CExpressionHandle &exprhdl, CReqdPropPlan* prpp, ULONG ul_opt_req);
 
 	// check enforceable properties;
 	// return false if it's impossible for the operator to satisfy one or more
-	bool FCheckEnfdProps(CGroupExpression* pgexpr, COptimizationContext* poc, ULONG ulOptReq, duckdb::vector<COptimizationContext*> pdrgpoc);
+	bool FCheckEnfdProps(CGroupExpression* pgexpr, COptimizationContext* poc, ULONG ul_opt_req, duckdb::vector<COptimizationContext*> pdrgpoc);
 
 	// check if the given expression has valid cte and partition properties
 	// with respect to the given requirements
@@ -201,7 +201,7 @@ public:
 	{
 		if (0 == m_ulCurrSearchStage)
 		{
-			return NULL;
+			return nullptr;
 		}
 		return m_search_stage_array[m_ulCurrSearchStage - 1];
 	}
@@ -231,10 +231,10 @@ public:
 	}
 
 	// check if parent group expression can optimize child group expression
-	bool FOptimizeChild(CGroupExpression* pgexprParent, CGroupExpression* pgexprChild, COptimizationContext* pocChild, EOptimizationLevel eol);
+	bool FOptimizeChild(CGroupExpression* pgexpr_parent, CGroupExpression* pgexpr_child, COptimizationContext* poc_child, EOptimizationLevel eol);
 
 	// determine if a plan, rooted by given group expression, can be safely pruned based on cost bounds
-	bool FSafeToPrune(CGroupExpression* pgexpr, CReqdPropPlan* prpp, CCostContext* pccChild, ULONG child_index, double* pcostLowerBound);
+	bool FSafeToPrune(CGroupExpression* pgexpr, CReqdPropPlan* prpp, CCostContext* pcc_child, ULONG child_index, double* pcost_lower_bound);
 
 	// damp optimization level to process group expressions
 	// in the next lower optimization level
