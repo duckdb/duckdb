@@ -129,7 +129,7 @@ void CSVSniffer::DetectHeader() {
 
 			// generate name if field is empty
 			if (col_name.empty() || val.IsNull()) {
-				col_name = GenerateColumnName(best_candidate->options.num_cols, col);
+				col_name = GenerateColumnName(best_candidate->num_cols, col);
 			}
 
 			// normalize names or at least trim whitespace
@@ -152,8 +152,8 @@ void CSVSniffer::DetectHeader() {
 
 	} else {
 		best_candidate->header = false;
-		for (idx_t col = 0; col < best_candidate->options.num_cols; col++) {
-			string column_name = GenerateColumnName(best_candidate->options.num_cols, col);
+		for (idx_t col = 0; col < best_candidate->num_cols; col++) {
+			string column_name = GenerateColumnName(best_candidate->num_cols, col);
 			names.push_back(column_name);
 		}
 	}

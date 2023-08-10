@@ -83,10 +83,10 @@ public:
 
 	static unique_ptr<CSVFileHandle> OpenCSV(ClientContext &context, const CSVReaderOptions &options);
 
-	static bool TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+	static bool TryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat>  &options, Vector &input_vector, Vector &result_vector, idx_t count,
 	                              string &error_message, idx_t &line_error);
 
-	static bool TryCastTimestampVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+	static bool TryCastTimestampVector(std::map<LogicalTypeId, StrpTimeFormat>  &options, Vector &input_vector, Vector &result_vector,
 	                                   idx_t count, string &error_message);
 
 protected:

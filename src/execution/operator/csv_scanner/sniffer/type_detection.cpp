@@ -125,16 +125,16 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 	if (value.IsNull()) {
 		return true;
 	}
-	if (candidate.options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
+	if (candidate.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return candidate.options.date_format.find(LogicalTypeId::DATE)
+		return candidate.date_format.find(LogicalTypeId::DATE)
 		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
-	} else if (candidate.options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
+	} else if (candidate.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
 	           sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return candidate.options.date_format.find(LogicalTypeId::TIMESTAMP)
+		return candidate.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	} else if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
 		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
@@ -169,8 +169,8 @@ struct SniffValue {
 	inline static bool Process(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values,
 	                           char current_char) {
 
-		if ((machine.options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
-		    (machine.options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+		if ((machine.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
+		    (machine.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
 		}
 		machine.pre_previous_state = machine.previous_state;
