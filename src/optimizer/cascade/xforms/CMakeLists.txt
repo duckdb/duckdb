@@ -4,6 +4,7 @@ add_library_unity(
     CXform.cpp
     CXformExploration.cpp
     CXformFactory.cpp
+    CXformFilterImplementation.cpp
     CXformGet2TableScan.cpp
     CXformImplementation.cpp
     CXformLogicalProj2PhysicalProj.cpp
