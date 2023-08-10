@@ -361,6 +361,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         throw new SQLFeatureNotSupportedException("setCursorName");
     }
 
+    /**
+     * The returned `ResultSet` must be closed by the user to avoid a memory leak
+     */
     @Override
     public ResultSet getResultSet() throws SQLException {
         if (isClosed()) {

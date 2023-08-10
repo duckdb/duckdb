@@ -102,8 +102,12 @@ public class TestDuckDBJDBC {
         assertTrue(Objects.equals(actual, expected), message);
     }
 
+    private static void assertNotNull(Object a) throws Exception {
+        assertFalse(a == null);
+    }
+
     private static void assertNull(Object a) throws Exception {
-        assertTrue(a == null);
+        assertEquals(a, null);
     }
 
     private static void assertEquals(double a, double b, double epsilon) throws Exception {
@@ -3351,12 +3355,17 @@ public class TestDuckDBJDBC {
         try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
             try (PreparedStatement p = conn.prepareStatement("select 1")) {
                 p.executeQuery();
+                try (ResultSet resultSet = p.getResultSet()) {
+                    assertNotNull(resultSet);
+                }
                 assertNull(p.getResultSet()); // returns null after initial call
             }
 
             try (Statement s = conn.createStatement()) {
                 s.execute("select 1");
-                assertFalse(s.getResultSet() == null);
+                try (ResultSet resultSet = s.getResultSet()) {
+                    assertNotNull(resultSet);
+                }
                 assertFalse(s.getMoreResults());
                 assertNull(s.getResultSet()); // returns null after initial call
             }
