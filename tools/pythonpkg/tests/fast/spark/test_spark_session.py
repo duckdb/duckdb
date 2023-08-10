@@ -13,7 +13,6 @@ class TestSparkSession(object):
 
     def test_new_session(self, spark: SparkSession):
         session = spark.newSession()
-        print(session)
 
     @pytest.mark.skip(reason='not tested yet')
     def test_retrieve_same_session(self):
