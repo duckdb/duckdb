@@ -45,9 +45,12 @@ private:
 	struct State {
 		uint32_t expected_field_count;
 		idx_t expected_size;
+		field_id_t expected_field_id;
 		uint32_t read_field_count;
-		State(uint32_t expected_field_count, idx_t expected_size)
-		    : expected_field_count(expected_field_count), expected_size(expected_size), read_field_count(0) {
+
+		State(uint32_t expected_field_count, idx_t expected_size, field_id_t expected_field_id)
+		    : expected_field_count(expected_field_count), expected_size(expected_size),
+		      expected_field_id(expected_field_id), read_field_count(0) {
 		}
 	};
 

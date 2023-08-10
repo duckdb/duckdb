@@ -21,7 +21,7 @@ void BinaryDeserializer::OnObjectBegin() {
 	D_ASSERT(expected_field_count > 0);
 	D_ASSERT(expected_size > 0);
 	D_ASSERT(expected_field_id == current_field_id);
-	stack.emplace_back(expected_field_count, expected_size);
+	stack.emplace_back(expected_field_count, expected_size, expected_field_id);
 }
 
 void BinaryDeserializer::OnObjectEnd() {
