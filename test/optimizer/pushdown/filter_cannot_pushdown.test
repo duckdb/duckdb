@@ -14,11 +14,21 @@ explain select rnd from (select random()) as t(rnd) where rnd < 0.5;
 ----
 logical_opt	<REGEX>:.*rnd < 0.5.*
 
+query II
+explain select * from (select rnd from (select random()) as t(rnd) where rnd < 0.5);
+----
+logical_opt	<REGEX>:.*rnd < 0.5.*
+
 statement ok
 CREATE TABLE t(a integer, b integer, c integer);
 
 query II
 explain select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1;
+----
+logical_opt	<REGEX>:.*rnd < 0.3.*
+
+query II
+explain select * from (select rnd, a from (select random() as rnd, a from t) where rnd < 0.3 and a > 1)
 ----
 logical_opt	<REGEX>:.*rnd < 0.3.*
 
