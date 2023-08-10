@@ -72,8 +72,8 @@ void BaseCSVReader::InitializeProjection() {
 }
 
 template <class OP, class T>
-static bool TemplatedTryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat>  &options, Vector &input_vector, Vector &result_vector,
-                                       idx_t count, string &error_message, idx_t &line_error) {
+static bool TemplatedTryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+                                       Vector &result_vector, idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	idx_t cur_line = 0;
@@ -90,25 +90,27 @@ static bool TemplatedTryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat>  
 }
 
 struct TryCastDateOperator {
-	static bool Operation(std::map<LogicalTypeId, StrpTimeFormat>  &options, string_t input, date_t &result, string &error_message) {
+	static bool Operation(std::map<LogicalTypeId, StrpTimeFormat> &options, string_t input, date_t &result,
+	                      string &error_message) {
 		return options[LogicalTypeId::DATE].TryParseDate(input, result, error_message);
 	}
 };
 
 struct TryCastTimestampOperator {
-	static bool Operation(std::map<LogicalTypeId, StrpTimeFormat>  &options, string_t input, timestamp_t &result, string &error_message) {
+	static bool Operation(std::map<LogicalTypeId, StrpTimeFormat> &options, string_t input, timestamp_t &result,
+	                      string &error_message) {
 		return options[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
 	}
 };
 
-bool BaseCSVReader::TryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat>  &options, Vector &input_vector, Vector &result_vector,
-                                      idx_t count, string &error_message, idx_t &line_error) {
+bool BaseCSVReader::TryCastDateVector(std::map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+                                      Vector &result_vector, idx_t count, string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
 	                                                               error_message, line_error);
 }
 
-bool BaseCSVReader::TryCastTimestampVector(std::map<LogicalTypeId, StrpTimeFormat>  &options, Vector &input_vector, Vector &result_vector,
-                                           idx_t count, string &error_message) {
+bool BaseCSVReader::TryCastTimestampVector(std::map<LogicalTypeId, StrpTimeFormat> &options, Vector &input_vector,
+                                           Vector &result_vector, idx_t count, string &error_message) {
 	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
 	                                                                         count, error_message, line_error);
@@ -387,12 +389,12 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options.date_format, parse_vector, result_vector, parse_chunk.size(), error_message,
-				                            line_error);
+				success = TryCastDateVector(options.date_format, parse_vector, result_vector, parse_chunk.size(),
+				                            error_message, line_error);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success =
-				    TryCastTimestampVector(options.date_format, parse_vector, result_vector, parse_chunk.size(), error_message);
+				success = TryCastTimestampVector(options.date_format, parse_vector, result_vector, parse_chunk.size(),
+				                                 error_message);
 			} else if (options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 				success = TryCastFloatingVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),

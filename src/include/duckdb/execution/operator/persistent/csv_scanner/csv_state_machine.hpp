@@ -84,8 +84,8 @@ public:
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
 	idx_t num_cols = 0;
 	bool header = false;
-	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
-	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	std::map<LogicalTypeId, bool> has_format;
+	std::map<LogicalTypeId, StrpTimeFormat> date_format;
 	idx_t skip_rows = 0;
 };
 

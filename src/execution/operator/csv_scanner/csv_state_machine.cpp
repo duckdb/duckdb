@@ -110,7 +110,7 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char
                                  shared_ptr<CSVBufferManager> buffer_manager_p)
     : options(options_p), csv_buffer_iterator(std::move(buffer_manager_p)),
       transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)), quote(quote_p), escape(escape_p),
-      delim(delim_p) {
+      delim(delim_p), has_format(options.has_format), date_format(options.date_format) {
 }
 
 void CSVStateMachine::Reset() {

@@ -42,7 +42,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	options.header = best_candidate->header;
 	options.has_format = best_candidate->has_format;
 	options.date_format = best_candidate->date_format;
-	options.skip_rows = best_candidate->skip_rows;
+	options.skip_rows += best_candidate->skip_rows;
 	if (options.skip_rows > 0) {
 		options.skip_rows_set = true;
 	}

@@ -63,9 +63,9 @@ struct Parse {
 
 		if (machine.cur_rows >= machine.options.sample_chunk_size) {
 			// We sniffed enough rows
-			return false;
+			return true;
 		}
-		return true;
+		return false;
 	}
 
 	inline static void Finalize(CSVStateMachine &machine, DataChunk &parse_chunk) {
