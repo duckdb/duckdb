@@ -2,6 +2,7 @@ import duckdb
 from pandas import DataFrame
 import pytest
 
+
 class TestInsertInto(object):
     def test_insert_into_schema(self, duckdb_cursor):
         # open connection
@@ -10,7 +11,7 @@ class TestInsertInto(object):
         con.execute('CREATE TABLE s.t (id INTEGER PRIMARY KEY)')
 
         # make relation
-        df = DataFrame([1],columns=['id'])
+        df = DataFrame([1], columns=['id'])
         rel = con.from_df(df)
 
         rel.insert_into('s.t')
@@ -21,7 +22,7 @@ class TestInsertInto(object):
         with pytest.raises(duckdb.CatalogException):
             rel.insert_into('t')
 
-        #If we add t in the default schema it should work.
+        # If we add t in the default schema it should work.
         con.execute('CREATE TABLE t (id INTEGER PRIMARY KEY)')
         rel.insert_into('t')
         assert con.execute("select * from t").fetchall() == [(1,)]

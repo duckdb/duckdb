@@ -11,19 +11,32 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
 struct BoundParameterData {
+public:
 	BoundParameterData() {
 	}
-	BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
+	explicit BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
 
+private:
 	Value value;
+
+public:
 	LogicalType return_type;
 
 public:
+	void SetValue(Value val) {
+		value = std::move(val);
+	}
+
+	const Value &GetValue() const {
+		return value;
+	}
+
 	void Serialize(Serializer &serializer) const {
 		FieldWriter writer(serializer);
 		value.Serialize(writer.GetSerializer());
@@ -39,20 +52,25 @@ public:
 		reader.Finalize();
 		return result;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static shared_ptr<BoundParameterData> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct BoundParameterMap {
-	BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {
+	explicit BoundParameterMap(case_insensitive_map_t<BoundParameterData> &parameter_data)
+	    : parameter_data(parameter_data) {
 	}
 
 	bound_parameter_map_t parameters;
-	vector<BoundParameterData> &parameter_data;
+	case_insensitive_map_t<BoundParameterData> &parameter_data;
 
-	LogicalType GetReturnType(idx_t index) {
-		if (index >= parameter_data.size()) {
+	LogicalType GetReturnType(const string &identifier) {
+		auto it = parameter_data.find(identifier);
+		if (it == parameter_data.end()) {
 			return LogicalTypeId::UNKNOWN;
 		}
-		return parameter_data[index].return_type;
+		return it->second.return_type;
 	}
 };
 

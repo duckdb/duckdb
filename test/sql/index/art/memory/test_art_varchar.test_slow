@@ -1,0 +1,74 @@
+# name: test/sql/index/art/memory/test_art_varchar.test_slow
+# description: Test the memory usage of the ART for a big table with a VARCHAR column
+# group: [memory]
+
+# test issue #7760
+
+require vector_size 2048
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE FUNCTION mem_to_bytes(x) AS CASE
+    WHEN CONTAINS(x, 'KB') THEN REPLACE(x, 'KB', '')::BIGINT * 1000
+    WHEN CONTAINS(x, 'MB') THEN REPLACE(x, 'MB', '')::BIGINT * 1000 * 1000
+    WHEN CONTAINS(x, 'GB') THEN REPLACE(x, 'GB', '')::BIGINT * 1000 * 1000 * 1000
+    WHEN CONTAINS(x, 'TB') THEN REPLACE(x, 'TB', '')::BIGINT * 1000 * 1000 * 1000 * 1000
+    WHEN x = '0 bytes' THEN 0::BIGINT
+    ELSE x::BIGINT END;
+
+# 7200000 unique strings
+
+statement ok
+CREATE TABLE art AS
+    SELECT rpad(((i * 95823983533) % 86000000)::VARCHAR, 10, '-') AS id
+        FROM range(7200000) tbl(i);
+
+# 2 * 7200k entries
+statement ok
+INSERT INTO art (SELECT * FROM art);
+
+# 4 * 7200k entries
+statement ok
+INSERT INTO art (SELECT * FROM art);
+
+# 8 * 7200k entries
+statement ok
+INSERT INTO art (SELECT * FROM art);
+
+# 86M entries
+statement ok
+INSERT INTO art (SELECT * FROM art LIMIT 28400000);
+
+query I
+SELECT count(*) FROM art;
+----
+86000000
+
+query I
+SELECT COUNT(DISTINCT id) FROM art;
+----
+7200000
+
+query II
+SELECT MIN(length(id)), MAX(length(id)) FROM art;
+----
+10	10
+
+statement ok
+CREATE TABLE base AS
+SELECT mem_to_bytes(memory_usage)::BIGINT AS usage FROM pragma_database_size();
+
+statement ok
+SET memory_limit='12GB';
+
+statement ok
+CREATE INDEX idx ON art USING ART(id);
+
+query I
+SELECT mem_to_bytes(current.memory_usage) > base.usage AND
+       	mem_to_bytes(current.memory_usage) < 4 * base.usage
+FROM base, pragma_database_size() current;
+----
+1

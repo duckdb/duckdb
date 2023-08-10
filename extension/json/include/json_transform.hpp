@@ -44,6 +44,9 @@ public:
 public:
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static JSONTransformOptions FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct TryParseDate {

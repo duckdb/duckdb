@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/serializer/deserialization_data.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -24,6 +25,7 @@ class FormatDeserializer {
 
 protected:
 	bool deserialize_enum_from_string = false;
+	DeserializationData data;
 
 public:
 	// Read into an existing value
@@ -107,6 +109,34 @@ public:
 		ReadDataPtr(ret, count);
 	}
 
+	//! Set a serialization property
+	template <class T>
+	void Set(T entry) {
+		return data.Set<T>(entry);
+	}
+
+	//! Retrieve the last set serialization property of this type
+	template <class T>
+	T Get() {
+		return data.Get<T>();
+	}
+
+	//! Unset a serialization property
+	template <class T>
+	void Unset() {
+		return data.Unset<T>();
+	}
+
+	// Manually begin an object - should be followed by EndObject
+	void BeginObject(const char *tag) {
+		SetTag(tag);
+		OnObjectBegin();
+	}
+
+	void EndObject() {
+		OnObjectEnd();
+	}
+
 private:
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>
@@ -152,11 +182,46 @@ private:
 		return vec;
 	}
 
+	template <typename T = void>
+	inline typename std::enable_if<is_unsafe_vector<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_unsafe_vector<T>::ELEMENT_TYPE;
+		T vec;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			vec.push_back(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+
+		return vec;
+	}
+
 	// Deserialize a map
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_map<T>::value, T>::type Read() {
 		using KEY_TYPE = typename is_unordered_map<T>::KEY_TYPE;
 		using VALUE_TYPE = typename is_unordered_map<T>::VALUE_TYPE;
+
+		T map;
+		auto size = OnMapBegin();
+		for (idx_t i = 0; i < size; i++) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			auto key = Read<KEY_TYPE>();
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			auto value = Read<VALUE_TYPE>();
+			OnMapValueEnd();
+			OnMapEntryEnd();
+			map[std::move(key)] = std::move(value);
+		}
+		OnMapEnd();
+		return map;
+	}
+
+	template <typename T = void>
+	inline typename std::enable_if<is_map<T>::value, T>::type Read() {
+		using KEY_TYPE = typename is_map<T>::KEY_TYPE;
+		using VALUE_TYPE = typename is_map<T>::VALUE_TYPE;
 
 		T map;
 		auto size = OnMapBegin();
@@ -308,10 +373,22 @@ private:
 		return ReadInterval();
 	}
 
-	// Deserialize a interval_t
+	// Deserialize a hugeint_t
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
 		return ReadHugeInt();
+	}
+
+	// Deserialize a LogicalIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, LogicalIndex>::value, T>::type Read() {
+		return LogicalIndex(ReadUnsignedInt64());
+	}
+
+	// Deserialize a PhysicalIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PhysicalIndex>::value, T>::type Read() {
+		return PhysicalIndex(ReadUnsignedInt64());
 	}
 
 protected:

@@ -1,0 +1,299 @@
+[
+  {
+    "class": "Expression",
+    "class_type": "expression_class",
+    "set_parameters": [
+      "type"
+    ],
+    "includes": [
+      "duckdb/planner/expression/list.hpp"
+    ],
+    "members": [
+      {
+        "name": "expression_class",
+        "type": "ExpressionClass"
+      },
+      {
+        "name": "type",
+        "type": "ExpressionType"
+      },
+      {
+        "name": "alias",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "BoundBetweenExpression",
+    "base": "Expression",
+    "enum": "BOUND_BETWEEN",
+    "members": [
+      {
+        "name": "input",
+        "type": "Expression*"
+      },
+      {
+        "name": "lower",
+        "type": "Expression*"
+      },
+      {
+        "name": "upper",
+        "type": "Expression*"
+      },
+      {
+        "name": "lower_inclusive",
+        "type": "bool"
+      },
+      {
+        "name": "upper_inclusive",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "BoundCaseExpression",
+    "base": "Expression",
+    "enum": "BOUND_CASE",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "case_checks",
+        "type": "vector<BoundCaseCheck>"
+      },
+      {
+        "name": "else_expr",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundCastExpression",
+    "base": "Expression",
+    "enum": "BOUND_CAST",
+    "members": [
+      {
+        "name": "child",
+        "type": "Expression*"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "try_cast",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["$ClientContext", "child", "return_type"]
+  },
+  {
+    "class": "BoundColumnRefExpression",
+    "base": "Expression",
+    "enum": "BOUND_COLUMN_REF",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "binding",
+        "type": "ColumnBinding"
+      },
+      {
+        "name": "depth",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["return_type", "binding", "depth"]
+  },
+  {
+    "class": "BoundComparisonExpression",
+    "base": "Expression",
+    "enum": "BOUND_COMPARISON",
+    "members": [
+      {
+        "name": "left",
+        "type": "Expression*"
+      },
+      {
+        "name": "right",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["type", "left", "right"]
+  },
+  {
+    "class": "BoundConjunctionExpression",
+    "base": "Expression",
+    "enum": "BOUND_CONJUNCTION",
+    "members": [
+      {
+        "name": "children",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["type"]
+  },
+  {
+    "class": "BoundConstantExpression",
+    "base": "Expression",
+    "enum": "BOUND_CONSTANT",
+    "members": [
+      {
+        "name": "value",
+        "type": "Value"
+      }
+    ],
+    "constructor": ["value"]
+  },
+  {
+    "class": "BoundDefaultExpression",
+    "base": "Expression",
+    "enum": "BOUND_DEFAULT",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundLambdaExpression",
+    "base": "Expression",
+    "enum": "BOUND_LAMBDA",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "lambda_expr",
+        "type": "Expression*"
+      },
+      {
+        "name": "captures",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "parameter_count",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["type", "return_type", "lambda_expr", "parameter_count"]
+  },
+  {
+    "class": "BoundLambdaRefExpression",
+    "base": "Expression",
+    "enum": "BOUND_LAMBDA_REF",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "binding",
+        "type": "ColumnBinding"
+      },
+      {
+        "name": "lambda_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "depth",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["return_type", "binding", "lambda_index", "depth"]
+  },
+  {
+    "class": "BoundOperatorExpression",
+    "base": "Expression",
+    "enum": "BOUND_OPERATOR",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "children",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["type", "return_type"]
+  },
+  {
+    "class": "BoundParameterExpression",
+    "base": "Expression",
+    "enum": "BOUND_PARAMETER",
+    "members": [
+      {
+        "name": "identifier",
+        "type": "string"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "parameter_data",
+        "type": "shared_ptr<BoundParameterData>"
+      }
+    ],
+    "constructor": ["$bound_parameter_map_t", "identifier", "return_type", "parameter_data"]
+  },
+  {
+    "class": "BoundReferenceExpression",
+    "base": "Expression",
+    "enum": "BOUND_REF",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "index",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["return_type", "index"]
+  },
+  {
+    "class": "BoundUnnestExpression",
+    "base": "Expression",
+    "enum": "BOUND_UNNEST",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "child",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundFunctionExpression",
+    "base": "Expression",
+    "enum": "BOUND_FUNCTION",
+    "custom_implementation": true
+  },
+  {
+    "class": "BoundAggregateExpression",
+    "base": "Expression",
+    "enum": "BOUND_AGGREGATE",
+    "custom_implementation": true
+  },
+  {
+    "class": "BoundWindowExpression",
+    "base": "Expression",
+    "enum": "BOUND_WINDOW",
+    "custom_implementation": true
+  }
+]

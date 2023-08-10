@@ -67,55 +67,6 @@ unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deseria
 	return std::move(result);
 }
 
-void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-	serializer.WriteOptionalProperty("condition", condition);
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("ref_type", ref_type);
-	serializer.WriteProperty("using_columns", using_columns);
-}
-
-unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = duckdb::unique_ptr<JoinRef>(new JoinRef());
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
-	deserializer.ReadOptionalProperty("condition", result->condition);
-	deserializer.ReadProperty("type", result->type);
-	deserializer.ReadProperty("ref_type", result->ref_type);
-	deserializer.ReadProperty("using_columns", result->using_columns);
-	return std::move(result);
-}
-
-void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery", *subquery);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-}
-
-unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = duckdb::unique_ptr<SubqueryRef>(new SubqueryRef());
-	deserializer.ReadProperty("subquery", result->subquery);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	return std::move(result);
-}
-
-void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("function", *function);
-	serializer.WriteProperty("alias", alias);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-}
-
-unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
-	deserializer.ReadProperty("function", result->function);
-	deserializer.ReadProperty("alias", result->alias);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	return std::move(result);
-}
-
 void EmptyTableRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
 }
@@ -140,6 +91,27 @@ unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &de
 	return std::move(result);
 }
 
+void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+	serializer.WriteOptionalProperty("condition", condition);
+	serializer.WriteProperty("join_type", type);
+	serializer.WriteProperty("ref_type", ref_type);
+	serializer.WriteProperty("using_columns", using_columns);
+}
+
+unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<JoinRef>(new JoinRef());
+	deserializer.ReadProperty("left", result->left);
+	deserializer.ReadProperty("right", result->right);
+	deserializer.ReadOptionalProperty("condition", result->condition);
+	deserializer.ReadProperty("join_type", result->type);
+	deserializer.ReadProperty("ref_type", result->ref_type);
+	deserializer.ReadProperty("using_columns", result->using_columns);
+	return std::move(result);
+}
+
 void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
 	serializer.WriteProperty("source", *source);
@@ -160,6 +132,32 @@ unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &deserialize
 	deserializer.ReadProperty("groups", result->groups);
 	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
 	deserializer.ReadProperty("include_nulls", result->include_nulls);
+	return std::move(result);
+}
+
+void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("subquery", *subquery);
+	serializer.WriteProperty("column_name_alias", column_name_alias);
+}
+
+unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SubqueryRef>(new SubqueryRef());
+	deserializer.ReadProperty("subquery", result->subquery);
+	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
+	return std::move(result);
+}
+
+void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("function", *function);
+	serializer.WriteProperty("column_name_alias", column_name_alias);
+}
+
+unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
+	deserializer.ReadProperty("function", result->function);
+	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
 	return std::move(result);
 }
 

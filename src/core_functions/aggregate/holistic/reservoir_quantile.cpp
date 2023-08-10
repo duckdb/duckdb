@@ -4,6 +4,8 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/queue.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -49,6 +51,8 @@ struct ReservoirQuantileState {
 };
 
 struct ReservoirQuantileBindData : public FunctionData {
+	ReservoirQuantileBindData() {
+	}
 	ReservoirQuantileBindData(double quantile_p, int32_t sample_size_p)
 	    : quantiles(1, quantile_p), sample_size(sample_size_p) {
 	}
@@ -78,6 +82,20 @@ struct ReservoirQuantileBindData : public FunctionData {
 		auto quantiles = reader.ReadRequiredList<double>();
 		auto sample_size = reader.ReadRequired<int32_t>();
 		return make_uniq<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
+	}
+
+	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                            const AggregateFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
+		serializer.WriteProperty("quantiles", bind_data.quantiles);
+		serializer.WriteProperty("sample_size", bind_data.sample_size);
+	}
+
+	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+		auto result = make_uniq<ReservoirQuantileBindData>();
+		deserializer.ReadProperty("quantiles", result->quantiles);
+		deserializer.ReadProperty("sample_size", result->sample_size);
+		return std::move(result);
 	}
 
 	vector<double> quantiles;
@@ -355,6 +373,8 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, Ag
 	function.name = "reservoir_quantile";
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
+	function.format_serialize = ReservoirQuantileBindData::FormatSerialize;
+	function.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	return bind_data;
 }
 
@@ -363,6 +383,8 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.bind = BindReservoirQuantile;
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
@@ -374,6 +396,8 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimalList(ClientContext &context
 	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
+	function.format_serialize = ReservoirQuantileBindData::FormatSerialize;
+	function.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	function.name = "reservoir_quantile";
 	return bind_data;
 }
@@ -383,6 +407,8 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.bind = BindReservoirQuantile;
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -411,6 +437,8 @@ static void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const
 	                      BindReservoirQuantileDecimal);
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
+	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
+	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	set.AddFunction(fun);
 
 	fun.arguments.emplace_back(LogicalType::INTEGER);

@@ -124,7 +124,6 @@ public:
 class WindowSegmentTree : public WindowAggregator {
 
 public:
-	using FrameBounds = std::pair<idx_t, idx_t>;
 	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
 
 	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,

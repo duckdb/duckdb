@@ -54,13 +54,13 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static int64_t ExtractDayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
+		// [Sun(0), Sat(6)]
 		return ExtractField(calendar, UCAL_DAY_OF_WEEK) - UCAL_SUNDAY;
 	}
 
 	static int64_t ExtractISODayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
-		calendar->setFirstDayOfWeek(UCAL_MONDAY);
-		return ExtractField(calendar, UCAL_DAY_OF_WEEK);
+		// [Mon(1), Sun(7)]
+		return 1 + (ExtractField(calendar, UCAL_DAY_OF_WEEK) + 7 - UCAL_MONDAY) % 7;
 	}
 
 	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
@@ -109,11 +109,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static int64_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
 		UErrorCode status = U_ZERO_ERROR;
-		auto millis = calendar->getTime(status);
-		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
-		millis += ExtractField(calendar, UCAL_DST_OFFSET);
 		//	Truncate
-		return millis / Interval::MSECS_PER_SEC;
+		return calendar->getTime(status) / Interval::MSECS_PER_SEC;
 	}
 
 	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
@@ -200,7 +197,12 @@ struct ICUDatePart : public ICUDateFunc {
 
 		calendar->set(UCAL_DATE, dd);
 
-		return Date::EpochToDate(ExtractEpoch(calendar, 0));
+		//	Offset to UTC
+		auto millis = calendar->getTime(status);
+		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, UCAL_DST_OFFSET);
+
+		return Date::EpochToDate(millis / Interval::MSECS_PER_SEC);
 	}
 
 	static string_t MonthName(icu::Calendar *calendar, const uint64_t micros) {

@@ -162,19 +162,20 @@ struct StringConvert {
 		// based on the max codepoint, we construct the result string
 		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
 		// based on the resulting unicode kind, we fill in the code points
-		auto kind = PyUtil::PyUnicodeKind(result);
+		auto result_handle = py::handle(result);
+		auto kind = PyUtil::PyUnicodeKind(result_handle);
 		switch (kind) {
 		case PyUnicode_1BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		case PyUnicode_2BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		case PyUnicode_4BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result), codepoints, codepoint_count, data,
-			                                      start_pos);
+			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result_handle), codepoints,
+			                                      codepoint_count, data, start_pos);
 			break;
 		default:
 			throw NotImplementedException("Unsupported typekind constant '%d' for Python Unicode Compact decode", kind);
@@ -198,7 +199,8 @@ struct StringConvert {
 		// no unicode: fast path
 		// directly construct the string and memcpy it
 		auto result = PyUnicode_New(len, 127);
-		auto target_data = PyUtil::PyUnicodeDataMutable(result);
+		auto result_handle = py::handle(result);
+		auto target_data = PyUtil::PyUnicodeDataMutable(result_handle);
 		memcpy(target_data, data, len);
 		return result;
 	}
@@ -247,19 +249,19 @@ struct UUIDConvert {
 };
 
 struct ListConvert {
-	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::list ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
 		auto val = input.GetValue(chunk_offset);
 		auto &list_children = ListValue::GetChildren(val);
 		py::list list;
 		for (auto &list_elem : list_children) {
-			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType())));
+			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType()), client_properties));
 		}
 		return list;
 	}
 };
 
 struct StructConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
 		py::dict py_struct;
 		auto val = input.GetValue(chunk_offset);
 		auto &child_types = StructType::GetChildTypes(input.GetType());
@@ -269,23 +271,23 @@ struct StructConvert {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type);
+			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type, client_properties);
 		}
 		return py_struct;
 	}
 };
 
 struct UnionConvert {
-	static py::object ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::object ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
 		auto val = input.GetValue(chunk_offset);
 		auto value = UnionValue::GetValue(val);
 
-		return PythonObject::FromValue(value, UnionValue::GetType(val));
+		return PythonObject::FromValue(value, UnionValue::GetType(val), client_properties);
 	}
 };
 
 struct MapConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const ClientProperties &client_properties) {
 		auto val = input.GetValue(chunk_offset);
 		auto &list_children = ListValue::GetChildren(val);
 
@@ -296,8 +298,8 @@ struct MapConvert {
 		py::list values;
 		for (auto &list_elem : list_children) {
 			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type));
-			values.append(PythonObject::FromValue(struct_children[1], val_type));
+			keys.append(PythonObject::FromValue(struct_children[0], key_type, client_properties));
+			values.append(PythonObject::FromValue(struct_children[1], val_type, client_properties));
 		}
 
 		py::dict py_struct;
@@ -387,7 +389,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
-                          UnifiedVectorFormat &idata, idx_t count) {
+                          UnifiedVectorFormat &idata, idx_t count, const ClientProperties &client_properties) {
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -396,7 +398,7 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = CONVERT::ConvertValue(input, i);
+				out_ptr[offset] = CONVERT::ConvertValue(input, i, client_properties);
 				target_mask[offset] = false;
 			}
 		}
@@ -404,7 +406,7 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::ConvertValue(input, i);
+			out_ptr[offset] = CONVERT::ConvertValue(input, i, client_properties);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -621,7 +623,8 @@ void RawArrayWrapper::Resize(idx_t new_capacity) {
 	data = data_ptr_cast(array.mutable_data());
 }
 
-ArrayWrapper::ArrayWrapper(const LogicalType &type) : requires_mask(false) {
+ArrayWrapper::ArrayWrapper(const LogicalType &type, const ClientProperties &client_properties_p)
+    : requires_mask(false), client_properties(client_properties_p) {
 	data = make_uniq<RawArrayWrapper>(type);
 	mask = make_uniq<RawArrayWrapper>(LogicalType::BOOLEAN);
 }
@@ -722,7 +725,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                               idata, count);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
 		break;
@@ -744,19 +746,19 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::LIST:
 		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
-		                                                                        idata, count);
+		                                                                        idata, count, client_properties);
 		break;
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
-		                                                                       idata, count);
+		                                                                       idata, count, client_properties);
 		break;
 	case LogicalTypeId::UNION:
-		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(current_offset, dataptr, maskptr,
-		                                                                           input, idata, count);
+		may_have_null = ConvertNested<py::object, duckdb_py_convert::UnionConvert>(
+		    current_offset, dataptr, maskptr, input, idata, count, client_properties);
 		break;
 	case LogicalTypeId::STRUCT:
-		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
-		                                                                          input, idata, count);
+		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(
+		    current_offset, dataptr, maskptr, input, idata, count, client_properties);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
@@ -789,11 +791,12 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
-NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity)
+NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity,
+                                             const ClientProperties &client_properties)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
-		owned_data.emplace_back(type);
+		owned_data.emplace_back(type, client_properties);
 	}
 	Resize(initial_capacity);
 }

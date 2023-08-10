@@ -107,7 +107,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 			                                  group_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
 
 			// dependencies: base_finish -> pipeline_event -> group_finish
-			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_event);
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_finish_event);
 			group_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
 
 			// add pipeline stack to event map
@@ -589,6 +589,9 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 		total_cardinality += child_cardinality;
 	}
 	current_progress = 0;
+	if (total_cardinality == 0) {
+		return true;
+	}
 	for (size_t i = 0; i < progress.size(); i++) {
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 	}

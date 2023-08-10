@@ -130,7 +130,13 @@ jobs:
 
     - name: Deploy
       shell: bash
-      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
+      run: python scripts/asset-upload-gha.py tools/rpkg/duckdb_*.tar.gz
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: r-package-source
+        path: |
+          tools/rpkg/duckdb_*.tar.gz
 
   rstats-linux-debug:
     name: R Package Linux debug mode
@@ -262,7 +268,6 @@ jobs:
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
           run_tests: 0
           build_out_of_tree_extensions: 0
-          build_vcpkg_extensions: 0
           vcpkg_build: 0
           no_static_linking: 1
 

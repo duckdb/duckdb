@@ -2,7 +2,7 @@
   {
     "class": "ParsedExpression",
     "class_type": "expression_class",
-    "extra_parameters": [
+    "set_parameters": [
       "type"
     ],
     "includes": [
@@ -41,8 +41,7 @@
         "name": "upper",
         "type": "ParsedExpression*"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "CaseExpression",
@@ -57,8 +56,7 @@
         "name": "else_expr",
         "type": "ParsedExpression*"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "CastExpression",
@@ -77,8 +75,7 @@
         "name": "try_cast",
         "type": "bool"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "CollateExpression",
@@ -93,8 +90,7 @@
         "name": "collation",
         "type": "string"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "ColumnRefExpression",
@@ -105,8 +101,7 @@
         "name": "column_names",
         "type": "vector<string>"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "ComparisonExpression",
@@ -121,7 +116,8 @@
         "name": "right",
         "type": "ParsedExpression*"
       }
-    ]
+    ],
+    "constructor": ["type"]
   },
   {
     "class": "ConjunctionExpression",
@@ -132,7 +128,8 @@
         "name": "children",
         "type": "vector<ParsedExpression*>"
       }
-    ]
+    ],
+    "constructor": ["type"]
   },
   {
     "class": "ConstantExpression",
@@ -143,16 +140,14 @@
         "name": "value",
         "type": "Value"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "DefaultExpression",
     "base": "ParsedExpression",
     "enum": "DEFAULT",
     "members": [
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "FunctionExpression",
@@ -197,8 +192,7 @@
         "name": "catalog",
         "type": "string"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "LambdaExpression",
@@ -213,8 +207,7 @@
         "name": "expr",
         "type": "ParsedExpression*"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "OperatorExpression",
@@ -225,7 +218,8 @@
         "name": "children",
         "type": "vector<ParsedExpression*>"
       }
-    ]
+    ],
+    "constructor": ["type"]
   },
   {
     "class": "ParameterExpression",
@@ -233,11 +227,10 @@
     "enum": "PARAMETER",
     "members": [
       {
-        "name": "parameter_nr",
-        "type": "idx_t"
+        "name": "identifier",
+        "type": "string"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "PositionalReferenceExpression",
@@ -248,8 +241,7 @@
         "name": "index",
         "type": "idx_t"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "StarExpression",
@@ -277,8 +269,7 @@
         "optional": true,
         "type": "ParsedExpression*"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "SubqueryExpression",
@@ -302,8 +293,7 @@
         "name": "comparison_type",
         "type": "ExpressionType"
       }
-    ],
-    "constructor": []
+    ]
   },
   {
     "class": "WindowExpression",
@@ -375,6 +365,7 @@
         "name": "exclude_clause",
         "type": "WindowExclusion"
       }
-    ]
+    ],
+    "constructor": ["type"]
   }
 ]

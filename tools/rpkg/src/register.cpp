@@ -48,7 +48,7 @@ using namespace duckdb;
 
 class RArrowTabularStreamFactory {
 public:
-	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p, ClientConfig &config)
+	RArrowTabularStreamFactory(SEXP export_fun_p, SEXP arrow_scannable_p, ClientProperties config)
 	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
@@ -68,7 +68,7 @@ public:
 			cpp11::sexp projection_sexp = StringsToSexp(column_list);
 			cpp11::sexp filters_sexp = Rf_ScalarLogical(true);
 			if (filters && !filters->filters.empty()) {
-				auto timezone_config = factory->config.ExtractTimezone();
+				auto timezone_config = factory->config.time_zone;
 				filters_sexp = TransformFilter(*filters, projection_map, factory->export_fun, timezone_config);
 			}
 			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
@@ -90,7 +90,7 @@ public:
 
 	SEXP arrow_scannable;
 	SEXP export_fun;
-	ClientConfig &config;
+	ClientProperties config;
 
 private:
 	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions,
@@ -230,7 +230,8 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 		cpp11::stop("rapi_register_arrow: Name cannot be empty");
 	}
 
-	auto stream_factory = new RArrowTabularStreamFactory(export_funs, valuesexp, conn->conn->context->config);
+	auto stream_factory =
+	    new RArrowTabularStreamFactory(export_funs, valuesexp, conn->conn->context->GetClientProperties());
 	// make r external ptr object to keep factory around until arrow table is unregistered
 	cpp11::external_pointer<RArrowTabularStreamFactory> factorysexp(stream_factory);
 

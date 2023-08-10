@@ -7,11 +7,10 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/planner/operator/logical_asof_join.hpp"
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &op) {
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
 	// now visit the children
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);

@@ -24,7 +24,7 @@ public class DuckDBArray implements Array {
     @Override
     public Object getArray() throws SQLException {
         Object[] out = new Object[length];
-        for (int i=0; i<length; i++) {
+        for (int i = 0; i < length; i++) {
             out[i] = vector.getObject(offset + i);
         }
         return out;
