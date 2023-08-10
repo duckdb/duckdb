@@ -35,13 +35,16 @@ public:
 	//! It first caches it, then returns it.
 	state_machine_t &Get(char delimiter, char quote, char escape);
 
+	static CSVStateMachineCache &GetStateMachineCache() {
+		static CSVStateMachineCache state_machine_cache;
+		return state_machine_cache;
+	}
+
 private:
 	void Insert(char delimiter, char quote, char escape);
 	//! Cache on delimiter|quote|escape
 	unordered_map<char, unordered_map<char, unordered_map<char, state_machine_t>>> state_machine_cache;
 };
-
-static CSVStateMachineCache csv_state_machine_cache;
 
 class CSVStateMachine {
 public:
@@ -55,6 +58,8 @@ public:
 
 	//! Prints the transition array
 	void Print();
+
+	CSVStateMachineCache &csv_state_machine_cache;
 
 	const CSVReaderOptions &options;
 	CSVBufferIterator csv_buffer_iterator;
