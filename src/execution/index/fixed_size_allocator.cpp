@@ -1,12 +1,15 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+
 namespace duckdb {
 
 constexpr idx_t FixedSizeAllocator::BASE[];
 constexpr uint8_t FixedSizeAllocator::SHIFT[];
 
-FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, Allocator &allocator)
-    : segment_size(segment_size), total_segment_count(0), allocator(allocator) {
+FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, Allocator &allocator,
+                                       MetadataManager &metadata_manager)
+    : allocator(allocator), metadata_manager(metadata_manager), segment_size(segment_size), total_segment_count(0) {
 
 	auto max_segment_size = BUFFER_SIZE + sizeof(validity_t);
 	if (segment_size > max_segment_size) {
@@ -46,7 +49,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, Allocator &allo
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
-			allocator.FreeData(buffer.GetPtr(), BUFFER_SIZE);
+			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
 		}
 	}
 }
@@ -72,11 +75,12 @@ IndexPointer FixedSizeAllocator::New() {
 	D_ASSERT(!buffers_with_free_space.empty());
 	auto buffer_id = (uint32_t)*buffers_with_free_space.begin();
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].GetPtr());
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].GetPtr(*this));
 	ValidityMask mask(bitmask_ptr);
 	auto offset = GetOffset(mask, buffers[buffer_id].segment_count);
 
 	buffers[buffer_id].segment_count++;
+	buffers[buffer_id].dirty = true;
 	total_segment_count++;
 	if (buffers[buffer_id].segment_count == available_segments_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
@@ -86,15 +90,21 @@ IndexPointer FixedSizeAllocator::New() {
 }
 
 void FixedSizeAllocator::Free(const IndexPointer ptr) {
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.GetBufferId()].GetPtr());
+
+	auto buffer_id = ptr.GetBufferId();
+	auto offset = ptr.GetOffset();
+
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].GetPtr(*this));
 	ValidityMask mask(bitmask_ptr);
-	D_ASSERT(!mask.RowIsValid(ptr.GetOffset()));
-	mask.SetValid(ptr.GetOffset());
-	buffers_with_free_space.insert(ptr.GetBufferId());
+	D_ASSERT(!mask.RowIsValid(offset));
+	mask.SetValid(offset);
+	buffers_with_free_space.insert(buffer_id);
 
 	D_ASSERT(total_segment_count > 0);
-	D_ASSERT(buffers[ptr.GetBufferId()].segment_count > 0);
-	buffers[ptr.GetBufferId()].segment_count--;
+	D_ASSERT(buffers[buffer_id].segment_count > 0);
+
+	buffers[buffer_id].segment_count--;
+	buffers[buffer_id].dirty = true;
 	total_segment_count--;
 }
 
@@ -102,7 +112,7 @@ void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
-			allocator.FreeData(buffer.GetPtr(), BUFFER_SIZE);
+			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
 		}
 	}
 	buffers.clear();
@@ -196,7 +206,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 		auto vacuum_it = vacuum_buffers.begin();
 		while (vacuum_it != vacuum_buffers.end()) {
 			if (buffer_id == *vacuum_it) {
-				allocator.FreeData(buffer_it->GetPtr(), BUFFER_SIZE);
+				allocator.FreeData(buffer_it->GetPtr(*this), BUFFER_SIZE);
 				buffer_it = buffers.erase(buffer_it);
 				vacuum_buffers.erase(vacuum_it);
 				break;
@@ -221,6 +231,45 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 
 	memcpy(Get(new_ptr), Get(ptr), segment_size);
 	return new_ptr;
+}
+
+BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
+
+	for (auto &buffer : buffers) {
+		buffer.Serialize(*this, writer);
+	}
+
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(segment_size);
+	writer.Write((idx_t)buffers.size());
+	writer.Write((idx_t)buffers_with_free_space.size());
+
+	for (auto &buffer : buffers) {
+		writer.Write(buffer.block_ptr);
+		writer.Write(buffer.segment_count);
+	}
+	for (auto &buffer_id : buffers_with_free_space) {
+		writer.Write(buffer_id);
+	}
+
+	return block_pointer;
+}
+
+void FixedSizeAllocator::Deserialize(BlockPointer &block_ptr) {
+
+	MetadataReader reader(metadata_manager, block_ptr);
+	segment_size = reader.Read<idx_t>();
+	auto buffer_count = reader.Read<idx_t>();
+	auto buffers_with_free_space_count = reader.Read<idx_t>();
+
+	for (idx_t i = 0; i < buffer_count; i++) {
+		auto buffer_block_ptr = reader.Read<BlockPointer>();
+		auto buffer_segment_count = reader.Read<idx_t>();
+		buffers.emplace_back(buffer_segment_count, buffer_block_ptr);
+	}
+	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
+		buffers_with_free_space.insert(reader.Read<idx_t>());
+	}
 }
 
 uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t segment_count) {

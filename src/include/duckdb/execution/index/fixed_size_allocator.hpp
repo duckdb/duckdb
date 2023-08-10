@@ -11,6 +11,8 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 
@@ -31,8 +33,13 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
-	explicit FixedSizeAllocator(const idx_t segment_size, Allocator &allocator);
+	explicit FixedSizeAllocator(const idx_t segment_size, Allocator &allocator, MetadataManager &metadata_manager);
 	~FixedSizeAllocator();
+
+	//! Buffer manager of the database instance
+	Allocator &allocator;
+	//! Metadata manager for (de)serialization
+	MetadataManager &metadata_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
@@ -72,12 +79,17 @@ public:
 	//! Vacuums an IndexPointer
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
+	//! Serializes all in-memory buffers and the metadata
+	BlockPointer Serialize(MetadataWriter &writer);
+	//! Deserializes all metadata
+	void Deserialize(BlockPointer &block_ptr);
+
 private:
 	//! Returns the data_ptr_t of an IndexPointer
 	inline data_ptr_t Get(const IndexPointer ptr) {
 		D_ASSERT(ptr.GetBufferId() < buffers.size());
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		auto buffer_ptr = buffers[ptr.GetBufferId()].GetPtr();
+		auto buffer_ptr = buffers[ptr.GetBufferId()].GetPtr(*this);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 	}
 	//! Returns the first free offset in a bitmask
@@ -85,9 +97,10 @@ private:
 
 private:
 	//! Allocation size of one segment in a buffer
+	//! We only need this value to calculate bitmask_count, bitmask_offset, and
+	//! available_segments_per_buffer
 	idx_t segment_size;
-	//! Total number of allocated segments in all buffers
-	idx_t total_segment_count;
+
 	//! Number of validity_t values in the bitmask
 	idx_t bitmask_count;
 	//! First starting byte of the payload (segments)
@@ -95,15 +108,16 @@ private:
 	//! Number of possible segment allocations per buffer
 	idx_t available_segments_per_buffer;
 
+	//! Total number of allocated segments in all buffers
+	//! We can recalculate this by iterating over all buffers
+	idx_t total_segment_count;
+
 	//! Buffers containing the segments
 	vector<FixedSizeBuffer> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum
 	unordered_set<idx_t> vacuum_buffers;
-
-	//! Buffer manager of the database instance
-	Allocator &allocator;
 };
 
 } // namespace duckdb

@@ -13,6 +13,9 @@
 
 namespace duckdb {
 
+class FixedSizeAllocator;
+class MetadataWriter;
+
 //! A fixed-size buffer holds fixed-size segments of data. It lazily deserializes a buffer, if on-disk and not
 //! yet in memory, and it only serializes dirty and non-written buffers to disk during
 //! serialization.
@@ -20,6 +23,9 @@ class FixedSizeBuffer {
 public:
 	FixedSizeBuffer(const idx_t segment_count, const data_ptr_t memory_ptr)
 	    : segment_count(segment_count), dirty(false), in_memory(true), on_disk(false), memory_ptr(memory_ptr) {
+	}
+	FixedSizeBuffer(const idx_t segment_count, BlockPointer &block_ptr)
+	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), block_ptr(block_ptr) {
 	}
 	idx_t segment_count;
 
@@ -35,8 +41,8 @@ public:
 	BlockPointer block_ptr;
 
 public:
-	//	void Serialize();
-	data_ptr_t GetPtr();
+	data_ptr_t GetPtr(FixedSizeAllocator &fixed_size_allocator);
+	void Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer);
 };
 
 } // namespace duckdb

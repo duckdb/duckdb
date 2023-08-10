@@ -44,12 +44,16 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	if (!allocators) {
 		owns_data = true;
 		allocators = make_shared<vector<FixedSizeAllocator>>();
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node4), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node16), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node48), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+
+		auto &allocator = buffer_manager.GetBufferAllocator();
+		auto &metadata_manager = table_io_manager.GetMetadataManager();
+
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Prefix), allocator, metadata_manager));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Leaf), allocator, metadata_manager));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node4), allocator, metadata_manager));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node16), allocator, metadata_manager));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node48), allocator, metadata_manager));
+		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), allocator, metadata_manager));
 	}
 
 	// set the root node of the tree
