@@ -195,9 +195,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"timezone", "icu"},
 };
 
-static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"},
-                                                              {"json", "json"}};
+static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parquet"}, {"json", "json"}};
 
-static constexpr ExtensionEntry EXTENSION_TYPES[] = {{"json", "json"},
-                                                     {"inet", "inet"}};
+static constexpr ExtensionEntry EXTENSION_TYPES[] = {{"json", "json"}, {"inet", "inet"}};
 } // namespace duckdb

@@ -374,9 +374,8 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], idx_t size) {
 	auto lcase = StringUtil::Lower(name);
 
-	auto it = std::find_if(entries, entries + size, [&](const ExtensionEntry &element) {
-		return element.name == lcase;
-	});
+	auto it =
+	    std::find_if(entries, entries + size, [&](const ExtensionEntry &element) { return element.name == lcase; });
 
 	if (it != entries + size && it->name == lcase) {
 		return it->extension;
@@ -483,7 +482,8 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 
 void Catalog::TryAutoloadExtension(ClientContext &context, const string &extension_name) {
 	try {
-		ExtensionHelper::InstallExtension(context, extension_name, true, context.config.autoload_extension_repo); // TODO REVERT to false!s
+		ExtensionHelper::InstallExtension(context, extension_name, true,
+		                                  context.config.autoload_extension_repo); // TODO REVERT to false!s
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		auto new_exception_message = "Attempted to automatically install the '" + extension_name +
@@ -717,7 +717,7 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
                                              const string &schema, const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
-//	Printer::Print("GetEntry3s: " + CatalogTypeToString(type) + " -> " + name);
+	//	Printer::Print("GetEntry3s: " + CatalogTypeToString(type) + " -> " + name);
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
@@ -768,7 +768,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
                                 const string &name, QueryErrorContext error_context) {
-//	Printer::Print("GetEntry: " + CatalogTypeToString(type) + " -> " + name);
+	//	Printer::Print("GetEntry: " + CatalogTypeToString(type) + " -> " + name);
 	return *Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 

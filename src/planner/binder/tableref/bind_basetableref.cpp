@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string& table_name) {
+static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string &table_name) {
 	auto lower_name = StringUtil::Lower(table_name);
 
 	// Parquet
@@ -175,7 +175,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 							auto &subquery = replacement_function->Cast<SubqueryRef>();
 							subquery.column_name_alias = ref.column_name_alias;
 						} else {
-							throw InternalException("Replacement scan should return either a table function or a subquery");
+							throw InternalException(
+							    "Replacement scan should return either a table function or a subquery");
 						}
 						return Bind(*replacement_function);
 					}

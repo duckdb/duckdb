@@ -538,13 +538,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else {
 				bool excluded_from_autoloading = false;
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-				for (auto& ext : extensions_excluded_from_autoload) {
+				for (auto &ext : extensions_excluded_from_autoload) {
 					if (ext == param) {
 						excluded_from_autoloading = true;
 					}
 				}
 #endif
-				if ( !config->options.autoload_known_extensions || excluded_from_autoloading) {
+				if (!config->options.autoload_known_extensions || excluded_from_autoloading) {
 					auto result = ExtensionHelper::LoadExtension(*db, param);
 					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 						// add the extension to the list of loaded extensions

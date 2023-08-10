@@ -113,12 +113,16 @@ static void PragmaVisualizeDiffProfilingOutput(ClientContext &context, const Fun
 }
 
 void VisualizerExtension::Load(DuckDB &db) {
-	ExtensionUtil::RegisterFunction(*db.instance, PragmaFunction::PragmaCall(
-													  "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR}));
-	ExtensionUtil::RegisterFunction(*db.instance, PragmaFunction::PragmaCall("visualize_json_profiling_output", PragmaVisualizeJsonProfilingOutput,{LogicalType::VARCHAR, LogicalType::VARCHAR}));
+	ExtensionUtil::RegisterFunction(*db.instance, PragmaFunction::PragmaCall("visualize_last_profiling_output",
+	                                                                         PragmaVisualizeLastProfilingOutput,
+	                                                                         {LogicalType::VARCHAR}));
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, PragmaFunction::PragmaCall("visualize_json_profiling_output", PragmaVisualizeJsonProfilingOutput,
+	                                             {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 
-	ExtensionUtil::RegisterFunction(*db.instance, PragmaFunction::PragmaCall("visualize_diff_profiling_output", PragmaVisualizeDiffProfilingOutput,
-	                                                                         {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}));
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, PragmaFunction::PragmaCall("visualize_diff_profiling_output", PragmaVisualizeDiffProfilingOutput,
+	                                             {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}));
 }
 
 std::string VisualizerExtension::Name() {

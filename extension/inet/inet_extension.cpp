@@ -28,11 +28,14 @@ void InetExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterType(*db.instance, INET_TYPE_NAME, inet_type);
 
 	// add the casts to and from INET type
-	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET, 100);
-	ExtensionUtil::RegisterCastFunction(*db.instance, inet_type, LogicalType::VARCHAR, INetFunctions::CastINETToVarchar);
+	ExtensionUtil::RegisterCastFunction(*db.instance, LogicalType::VARCHAR, inet_type, INetFunctions::CastVarcharToINET,
+	                                    100);
+	ExtensionUtil::RegisterCastFunction(*db.instance, inet_type, LogicalType::VARCHAR,
+	                                    INetFunctions::CastINETToVarchar);
 
 	// add inet functions
-	ExtensionUtil::RegisterFunction(*db.instance, ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
+	ExtensionUtil::RegisterFunction(*db.instance,
+	                                ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host));
 
 	// Add - function with ALTER_ON_CONFLICT
 	Connection con(db);
