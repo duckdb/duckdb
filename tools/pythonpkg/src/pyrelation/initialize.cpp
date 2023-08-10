@@ -139,6 +139,8 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	    .def("dense_rank", &DuckDBPyRelation::DenseRank, "Computes the dense rank within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("rank_dense", &DuckDBPyRelation::RankDense, "Computes the dense rank within the partition",
+	         py::arg("window_spec"), py::arg("projected_columns") = "")
+		.def("percent_rank", &DuckDBPyRelation::PercentRank, "Computes the relative rank within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "");
 }
 

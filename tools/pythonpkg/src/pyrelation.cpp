@@ -421,6 +421,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RankDense(const string &window_sp
 	return DenseRank(window_spec, projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PercentRank(const string &window_spec, const string &projected_columns) {
+	auto expr = GenerateExpressionList("percent_rank", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_uniq<DuckDBPyRelation>(rel->Distinct());
 }

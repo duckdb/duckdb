@@ -133,6 +133,7 @@ public:
 	unique_ptr<DuckDBPyRelation> Rank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> DenseRank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> RankDense(const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> PercentRank(const string &window_spec, const string &projected_columns);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 

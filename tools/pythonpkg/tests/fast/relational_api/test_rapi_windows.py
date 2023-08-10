@@ -67,3 +67,13 @@ class TestRAPIWindows:
         expected = [(1, 1, 1), (1, 1, 1), (1, 2, 2), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, 45, 3)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_percent_rank(self, table):
+        result = table.percent_rank("over ()").execute().fetchall()
+        expected = [0.0] * 8
+        assert len(result) == len(expected)
+        assert all([r[0] == e for r, e in zip(result, expected)])
+        result = table.percent_rank("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
+        expected = [(1, 1, 0.0), (1, 1, 0.0), (1, 2, 1.0), (2, 10, 0.0), (2, 11, 1.0), (3, -1, 0.0), (3, 5, 0.5), (3, 45, 1.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
