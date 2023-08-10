@@ -4,17 +4,24 @@
 #include "duckdb/optimizer/cascade/base/CDrvdPropCtxtPlan.h"
 
 namespace duckdb {
+LogicalFilter::LogicalFilter()
+	: LogicalOperator(LogicalOperatorType::LOGICAL_FILTER)
+{
+	m_pdprel = new CDrvdPropRelational();
+	m_pgexpr = nullptr;
+	m_pdpplan = nullptr;
+	m_prpp = nullptr;
+}
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
 	: LogicalOperator(LogicalOperatorType::LOGICAL_FILTER)
 {
+	m_pdprel = new CDrvdPropRelational();
+	m_pgexpr = nullptr;
+	m_pdpplan = nullptr;
+	m_prpp = nullptr;
 	expressions.push_back(std::move(expression));
 	SplitPredicates(expressions);
-}
-
-LogicalFilter::LogicalFilter()
-	: LogicalOperator(LogicalOperatorType::LOGICAL_FILTER)
-{
 }
 
 void LogicalFilter::ResolveTypes()
