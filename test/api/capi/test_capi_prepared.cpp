@@ -17,9 +17,11 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
 
-	status = duckdb_bind_boolean(stmt, 1, 1);
+	status = duckdb_bind_boolean(stmt, 1, true);
 	REQUIRE(status == DuckDBSuccess);
-	status = duckdb_bind_boolean(stmt, 2, 1);
+
+	// Parameter index 2 is out of bounds
+	status = duckdb_bind_boolean(stmt, 2, true);
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_execute_prepared(stmt, &res);
@@ -275,6 +277,72 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_nparams(stmt) == 1);
 	REQUIRE(duckdb_param_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
 	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+
+	duckdb_destroy_prepare(&stmt);
+}
+
+TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	duckdb_result res;
+	duckdb_prepared_statement stmt = nullptr;
+	duckdb_state status;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	status = duckdb_prepare(tester.connection, "SELECT CAST($my_val AS BIGINT)", &stmt);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(stmt != nullptr);
+
+	idx_t parameter_index;
+	// test invalid name
+	status = duckdb_bind_parameter_index(stmt, &parameter_index, "invalid");
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_bind_parameter_index(stmt, &parameter_index, "my_val");
+	REQUIRE(status == DuckDBSuccess);
+
+	idx_t param_count = duckdb_nparams(stmt);
+	duckdb::vector<string> names;
+	for (idx_t i = 0; i < param_count; i++) {
+		auto name = duckdb_parameter_name(stmt, i + 1);
+		names.push_back(std::string(name));
+		duckdb_free((void *)name);
+	}
+
+	REQUIRE(duckdb_parameter_name(stmt, 0) == (const char *)NULL);
+	REQUIRE(duckdb_parameter_name(stmt, 2) == (const char *)NULL);
+
+	duckdb::vector<string> expected_names = {"my_val"};
+	REQUIRE(names.size() == expected_names.size());
+	for (idx_t i = 0; i < expected_names.size(); i++) {
+		auto &name = names[i];
+		auto &expected_name = expected_names[i];
+		REQUIRE(name == expected_name);
+	}
+
+	status = duckdb_bind_boolean(stmt, parameter_index, 1);
+	REQUIRE(status == DuckDBSuccess);
+	status = duckdb_bind_boolean(stmt, parameter_index + 1, 1);
+	REQUIRE(status == DuckDBError);
+
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
+	duckdb_destroy_result(&res);
+
+	// Clear the bindings, don't rebind the parameter index
+	status = duckdb_clear_bindings(stmt);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_bind_boolean(stmt, parameter_index, 1);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_int64(&res, 0, 0) == 1);
+	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);
 }

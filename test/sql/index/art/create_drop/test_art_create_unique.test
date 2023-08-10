@@ -21,3 +21,18 @@ query I
 SELECT * FROM t0 WHERE t0.c0 = 1;
 ----
 1
+
+statement ok
+CREATE TABLE merge_violation (id INT);
+
+statement ok
+INSERT INTO merge_violation SELECT range FROM range(2048);
+
+statement ok
+INSERT INTO merge_violation SELECT range + 10000 FROM range(2048);
+
+statement ok
+INSERT INTO merge_violation VALUES (2047);
+
+statement error
+CREATE UNIQUE INDEX idx ON merge_violation(id);

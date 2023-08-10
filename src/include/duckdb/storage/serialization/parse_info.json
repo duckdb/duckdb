@@ -184,7 +184,8 @@
         "type": "vector<PhysicalIndex>"
       },
       {
-        "name": "type",
+        "name": "alter_fk_type",
+        "property": "type",
         "type": "AlterForeignKeyType"
       }
     ]

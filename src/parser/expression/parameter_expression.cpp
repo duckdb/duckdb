@@ -11,36 +11,36 @@
 namespace duckdb {
 
 ParameterExpression::ParameterExpression()
-    : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER), parameter_nr(0) {
+    : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER) {
 }
 
 string ParameterExpression::ToString() const {
-	return "$" + to_string(parameter_nr);
+	return "$" + identifier;
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	auto copy = make_uniq<ParameterExpression>();
-	copy->parameter_nr = parameter_nr;
+	copy->identifier = identifier;
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
 
 bool ParameterExpression::Equal(const ParameterExpression &a, const ParameterExpression &b) {
-	return a.parameter_nr == b.parameter_nr;
+	return StringUtil::CIEquals(a.identifier, b.identifier);
 }
 
 hash_t ParameterExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
-	return CombineHash(duckdb::Hash(parameter_nr), result);
+	return CombineHash(duckdb::Hash(identifier.c_str(), identifier.size()), result);
 }
 
 void ParameterExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(parameter_nr);
+	writer.WriteString(identifier);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_uniq<ParameterExpression>();
-	expression->parameter_nr = reader.ReadRequired<idx_t>();
+	expression->identifier = reader.ReadRequired<string>();
 	return std::move(expression);
 }
 

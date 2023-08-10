@@ -176,7 +176,7 @@ void AlterForeignKeyInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("fk_columns", fk_columns);
 	serializer.WriteProperty("pk_keys", pk_keys);
 	serializer.WriteProperty("fk_keys", fk_keys);
-	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("alter_fk_type", type);
 }
 
 unique_ptr<AlterTableInfo> AlterForeignKeyInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -186,7 +186,7 @@ unique_ptr<AlterTableInfo> AlterForeignKeyInfo::FormatDeserialize(FormatDeserial
 	deserializer.ReadProperty("fk_columns", result->fk_columns);
 	deserializer.ReadProperty("pk_keys", result->pk_keys);
 	deserializer.ReadProperty("fk_keys", result->fk_keys);
-	deserializer.ReadProperty("type", result->type);
+	deserializer.ReadProperty("alter_fk_type", result->type);
 	return std::move(result);
 }
 

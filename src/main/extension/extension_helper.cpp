@@ -180,7 +180,8 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #endif
 
 #ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
-	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, extension)) {
+	// Note: weird comma's are on purpose to do easy string contains on a list of extension names
+	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, "," + extension + ",")) {
 		Connection con(db);
 		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
 		                        ".duckdb_extension'");

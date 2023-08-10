@@ -104,11 +104,11 @@ struct ListPackFun {
 
 struct ListSliceFun {
 	static constexpr const char *Name = "list_slice";
-	static constexpr const char *Parameters = "list,begin,end";
-	static constexpr const char *Description = "Extract a sublist using slice conventions. NULLs are interpreted as the bounds of the LIST. Negative values are accepted.";
-	static constexpr const char *Example = "list_slice(l, 2, NULL)";
+	static constexpr const char *Parameters = "list,begin,end[,step]";
+	static constexpr const char *Description = "Extract a sublist using slice conventions. Negative values are accepted.";
+	static constexpr const char *Example = "list_slice(l, 2, 4)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ArraySliceFun {
