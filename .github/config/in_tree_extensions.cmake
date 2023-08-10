@@ -8,7 +8,7 @@
 duckdb_extension_load(autocomplete)
 duckdb_extension_load(excel)
 duckdb_extension_load(fts)
-duckdb_extension_load(httpfs DONT_LINK)
+duckdb_extension_load(httpfs)
 duckdb_extension_load(inet DONT_AUTOLOAD)
 duckdb_extension_load(icu DONT_AUTOLOAD)
 duckdb_extension_load(json)

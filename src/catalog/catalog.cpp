@@ -607,13 +607,13 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
                                                 const string &name) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
-		return {nullptr, nullptr};
+		return {nullptr, nullptr, PreservedError()};
 	}
 	auto entry = schema_entry->GetEntry(transaction, type, name);
 	if (!entry) {
-		return {schema_entry, nullptr};
+		return {schema_entry, nullptr, PreservedError()};
 	}
-	return {schema_entry, entry};
+	return {schema_entry, entry, PreservedError()};
 }
 
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
@@ -646,7 +646,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr};
+		return {nullptr, nullptr, PreservedError()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
 		return {nullptr, nullptr, PreservedError(except)};
@@ -669,7 +669,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-		return {nullptr, nullptr};
+		return {nullptr, nullptr, PreservedError()};
 	} else {
 		auto except = CreateMissingEntryException(context, name, type, schemas, error_context);
 		return {nullptr, nullptr, PreservedError(except)};
