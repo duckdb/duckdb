@@ -150,8 +150,8 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
-	candidate.options.has_format[sql_type] = true;
-	auto &date_format = candidate.options.date_format[sql_type];
+	candidate.has_format[sql_type] = true;
+	auto &date_format = candidate.date_format[sql_type];
 	date_format.format_specifier = format_specifier;
 	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 }
@@ -235,7 +235,7 @@ void CSVSniffer::DetectTypes() {
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
-		vector<vector<LogicalType>> info_sql_types_candidates(candidate->options.num_cols,
+		vector<vector<LogicalType>> info_sql_types_candidates(candidate->num_cols,
 		                                                      candidate->options.auto_type_candidates);
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
@@ -244,13 +244,13 @@ void CSVSniffer::DetectTypes() {
 			format_candidates[t.first].clear();
 		}
 
-		if (candidate->options.num_cols == 0) {
+		if (candidate->num_cols == 0) {
 			continue;
 		}
 
 		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(candidate->options.num_cols, LogicalType::VARCHAR);
+		return_types.assign(candidate->num_cols, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
 		candidate->Reset();
@@ -328,7 +328,7 @@ void CSVSniffer::DetectTypes() {
 								}
 							}
 							//	initialise the first candidate
-							candidate->options.has_format[sql_type.id()] = true;
+							candidate->has_format[sql_type.id()] = true;
 							//	all formats are constructed to be valid
 							SetDateFormat(*candidate, type_format_candidates.back(), sql_type.id());
 						}
@@ -337,13 +337,13 @@ void CSVSniffer::DetectTypes() {
 						auto save_format_candidates = type_format_candidates;
 						while (!type_format_candidates.empty()) {
 							//	avoid using exceptions for flow control...
-							auto &current_format = candidate->options.date_format[sql_type.id()];
+							auto &current_format = candidate->date_format[sql_type.id()];
 							if (current_format.Parse(StringValue::Get(dummy_val), result)) {
 								break;
 							}
 							//	doesn't work - move to the next one
 							type_format_candidates.pop_back();
-							candidate->options.has_format[sql_type.id()] = (!type_format_candidates.empty());
+							candidate->has_format[sql_type.id()] = (!type_format_candidates.empty());
 							if (!type_format_candidates.empty()) {
 								SetDateFormat(*candidate, type_format_candidates.back(), sql_type.id());
 							}
@@ -388,8 +388,7 @@ void CSVSniffer::DetectTypes() {
 			// we have a new best_options candidate
 			if (true_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->options.skip_rows += true_start;
-				candidate->options.skip_rows_set = true;
+				candidate->skip_rows += true_start;
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;

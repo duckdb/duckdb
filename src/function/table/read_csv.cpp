@@ -241,8 +241,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		CSVSniffer sniffer(options, result->buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
 
-		auto initial_reader =
-		    make_uniq<BufferedCSVReader>(context, sniffer_result.options, sniffer_result.return_types);
+		auto initial_reader = make_uniq<BufferedCSVReader>(context, options, sniffer_result.return_types);
 		return_types.assign(sniffer_result.return_types.begin(), sniffer_result.return_types.end());
 		if (names.empty()) {
 			names.assign(sniffer_result.names.begin(), sniffer_result.names.end());
@@ -259,7 +258,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			}
 			initial_reader->names = names;
 		}
-		options = sniffer_result.options;
 
 	} else {
 		D_ASSERT(return_types.size() == names.size());

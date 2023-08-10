@@ -157,7 +157,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
 		CSVSniffer sniffer(options, buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
-		options = sniffer_result.options;
 		bind_data->csv_types = sniffer_result.return_types;
 		bind_data->csv_names = sniffer_result.names;
 		bind_data->return_types = sniffer_result.return_types;

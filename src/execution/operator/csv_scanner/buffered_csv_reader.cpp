@@ -51,7 +51,6 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		auto sniffer_result = sniffer.SniffCSV();
 		return_types = sniffer_result.return_types;
 		names = sniffer_result.names;
-		options = sniffer_result.options;
 		if (return_types.empty()) {
 			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}

@@ -18,21 +18,19 @@ enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2
 
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
-	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p, CSVReaderOptions options_p)
-	    : return_types(std::move(return_types_p)), names(std::move(names_p)), options(std::move(options_p)) {
+	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)
+	    : return_types(std::move(return_types_p)), names(std::move(names_p)) {
 	}
 	//! Return Types that were detected
 	vector<LogicalType> return_types;
 	//! Column Names that were detected
 	vector<string> names;
-	//! The CSV Options that were detected (e.g., delimiter, quotes,...)
-	CSVReaderOptions options;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
+	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>());
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
@@ -52,7 +50,7 @@ private:
 	//! Current Candidates being considered
 	vector<unique_ptr<CSVStateMachine>> candidates;
 	//! Original Options set
-	const CSVReaderOptions options;
+	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
 

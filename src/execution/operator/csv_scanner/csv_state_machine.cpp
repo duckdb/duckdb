@@ -106,9 +106,11 @@ state_machine_t &CSVStateMachineCache::Get(char delimiter, char quote, char esca
 	return transition_array;
 }
 
-CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p)
-    : options(std::move(options_p)), csv_buffer_iterator(std::move(buffer_manager_p)),
-      transition_array(csv_state_machine_cache.Get(options.delimiter, options.quote, options.escape)) {
+CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char escape_p, char delim_p,
+                                 shared_ptr<CSVBufferManager> buffer_manager_p)
+    : options(options_p), csv_buffer_iterator(std::move(buffer_manager_p)),
+      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)), quote(quote_p), escape(escape_p),
+      delim(delim_p) {
 }
 
 void CSVStateMachine::Reset() {

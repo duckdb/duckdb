@@ -45,7 +45,8 @@ static CSVStateMachineCache csv_state_machine_cache;
 
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p);
+	explicit CSVStateMachine(CSVReaderOptions &options_p, char quote, char escape, char delim,
+	                         shared_ptr<CSVBufferManager> buffer_manager_p);
 	//! Resets the state machine, so it can be used again
 	void Reset();
 
@@ -55,7 +56,7 @@ public:
 	//! Prints the transition array
 	void Print();
 
-	//	CSVReaderOptions options;
+	const CSVReaderOptions &options;
 	CSVBufferIterator csv_buffer_iterator;
 	//! Which one was the identified start row for this file
 	idx_t start_row = 0;
@@ -75,6 +76,17 @@ public:
 	idx_t column_count;
 	string value;
 	idx_t rows_read;
+
+	//! Options resulting from sniffing
+	char quote;
+	char escape;
+	char delim;
+	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
+	idx_t num_cols = 0;
+	bool header = false;
+	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	idx_t skip_rows = 0;
 };
 
 } // namespace duckdb

@@ -119,8 +119,7 @@ void CSVSniffer::DetectHeader() {
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !best_candidate->options.has_header) ||
 	    (best_candidate->options.has_header && best_candidate->options.header)) {
-		best_candidate->options.has_header = true;
-		best_candidate->options.header = true;
+		best_candidate->header = true;
 		case_insensitive_map_t<idx_t> name_collision_count;
 
 		// get header names from CSV
@@ -152,7 +151,7 @@ void CSVSniffer::DetectHeader() {
 		}
 
 	} else {
-		best_candidate->options.header = false;
+		best_candidate->header = false;
 		for (idx_t col = 0; col < best_candidate->options.num_cols; col++) {
 			string column_name = GenerateColumnName(best_candidate->options.num_cols, col);
 			names.push_back(column_name);

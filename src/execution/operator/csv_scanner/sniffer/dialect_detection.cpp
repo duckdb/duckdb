@@ -78,7 +78,7 @@ struct SniffDialect {
 			suggested_newline = NewLineIdentifier::SINGLE;
 		}
 		if (machine.options.new_line == NewLineIdentifier::NOT_SET) {
-			machine.options.new_line = suggested_newline;
+			machine.new_line = suggested_newline;
 		} else {
 			if (machine.options.new_line != suggested_newline) {
 				// Invalidate this whole detection
@@ -135,12 +135,9 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					auto state_options = options;
-					state_options.quote = quote;
-					state_options.escape = escape;
-					state_options.delimiter = delim;
 					D_ASSERT(buffer_manager);
-					csv_state_machines.emplace_back(make_uniq<CSVStateMachine>(state_options, buffer_manager));
+					csv_state_machines.emplace_back(
+					    make_uniq<CSVStateMachine>(options, quote, escape, delim, buffer_manager));
 				}
 			}
 		}
@@ -205,7 +202,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 		prev_padding_count = padding_count;
 		state_machine->start_row = start_row;
 		candidates.clear();
-		state_machine->options.num_cols = num_cols;
+		state_machine->num_cols = num_cols;
 		candidates.emplace_back(std::move(state_machine));
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	           !invalid_padding) {
@@ -217,7 +214,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 		}
 		if (!same_quote_is_candidate) {
 			state_machine->start_row = start_row;
-			state_machine->options.num_cols = num_cols;
+			state_machine->num_cols = num_cols;
 			candidates.emplace_back(std::move(state_machine));
 		}
 	}
