@@ -116,7 +116,8 @@ void FilterPushdown::GenerateFilters() {
 	});
 }
 
-unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalOperator> op, vector<unique_ptr<Expression>> expressions) {
+unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalOperator> op,
+                                                             vector<unique_ptr<Expression>> expressions) {
 	if (expressions.empty()) {
 		// No left expressions, so needn't to add an extra filter operator.
 		return op;
