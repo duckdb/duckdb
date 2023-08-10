@@ -1004,7 +1004,7 @@ void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<
 
 unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 	unique_ptr<JSONScanData> result;
-	deserializer.ReadProperty("scan_data", result);
+	deserializer.ReadProperty(100, "scan_data", result);
 	return std::move(result);
 }
 
