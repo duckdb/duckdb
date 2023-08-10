@@ -31,6 +31,9 @@ import duckdb
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     from pyduckdb import Value
 
+    # FIXME: this is not true
+    assert not isinstance(data, PandasDataFrame)
+
     new_data = []
     for row in data:
         new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row, [y.dataType for y in schema])]
@@ -129,6 +132,7 @@ class SparkSession:
             data = [tuple(None for _ in names)]
 
         if schema and isinstance(schema, StructType):
+	        # TODO: this can also transform pandas dataframes currently
             # Transform the data into Values to combine the data+schema
             data = _combine_data_and_schema(data, schema)
 
