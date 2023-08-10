@@ -27,6 +27,7 @@ class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
 struct ColumnSegmentInfo;
+class MetadataManager;
 
 class RowGroupCollection {
 public:
@@ -106,6 +107,7 @@ public:
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager();
 	DataTableInfo &GetTableInfo() {
 		return *info;
 	}

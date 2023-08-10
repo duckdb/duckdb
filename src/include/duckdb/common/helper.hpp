@@ -37,6 +37,14 @@ namespace duckdb {
 #define DUCKDB_EXPLICIT_FALLTHROUGH
 #endif
 
+template <class... T>
+struct AlwaysFalse {
+	static constexpr bool value = false;
+};
+
+template<typename T>
+using reference = std::reference_wrapper<T>;
+
 template<class _Tp, bool SAFE = true>
 struct __unique_if
 {
@@ -192,9 +200,6 @@ void AssignSharedPointer(shared_ptr<T> &target, const shared_ptr<T> &source) {
 		target = source;
 	}
 }
-
-template<typename T>
-using reference = std::reference_wrapper<T>;
 
 template<typename T>
 using const_reference = std::reference_wrapper<const T>;

@@ -23,6 +23,7 @@
 #include "nodes/parsenodes.hpp"
 #include "nodes/primnodes.hpp"
 #include "pg_definitions.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 
 namespace duckdb {
 
@@ -67,6 +68,8 @@ private:
 	idx_t prepared_statement_parameter_index = 0;
 	//! Map from named parameter to parameter index;
 	case_insensitive_map_t<idx_t> named_param_map;
+	//! Last parameter type
+	PreparedParamType last_param_type = PreparedParamType::INVALID;
 	//! Holds window expressions defined by name. We need those when transforming the expressions referring to them.
 	unordered_map<string, duckdb_libpgquery::PGWindowDef *> window_clauses;
 	//! The set of pivot entries to create
@@ -82,9 +85,8 @@ private:
 	Transformer &RootTransformer();
 	const Transformer &RootTransformer() const;
 	void SetParamCount(idx_t new_count);
-	void SetNamedParam(const string &name, int32_t index);
-	bool GetNamedParam(const string &name, int32_t &index);
-	bool HasNamedParameters() const;
+	void SetParam(const string &name, idx_t index, PreparedParamType type);
+	bool GetParam(const string &name, idx_t &index, PreparedParamType type);
 
 	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column,
 	                   unique_ptr<QueryNode> subquery);
