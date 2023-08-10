@@ -82,11 +82,11 @@ public:
 	explicit RadixHTConfig(ClientContext &context, RadixHTGlobalSinkState &sink);
 
 	void SetRadixBits(idx_t radix_bits_p);
-	void SetRadixBitsToExternal();
+	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
 
 private:
-	bool SetRadixBitsInternal(const idx_t radix_bits_p);
+	void SetRadixBitsInternal(const idx_t radix_bits_p, bool external);
 	static idx_t InitialSinkRadixBits(ClientContext &context);
 	static idx_t MaximumSinkRadixBits(ClientContext &context);
 	static idx_t ExternalRadixBits(const idx_t &maximum_sink_radix_bits_p);
@@ -215,31 +215,33 @@ RadixHTConfig::RadixHTConfig(ClientContext &context, RadixHTGlobalSinkState &sin
 }
 
 void RadixHTConfig::SetRadixBits(idx_t radix_bits_p) {
-	SetRadixBitsInternal(MinValue(radix_bits_p, maximum_sink_radix_bits));
+	SetRadixBitsInternal(MinValue(radix_bits_p, maximum_sink_radix_bits), false);
 }
 
-void RadixHTConfig::SetRadixBitsToExternal() {
-	if (SetRadixBitsInternal(external_radix_bits)) {
-		sink.external = true;
-	}
+bool RadixHTConfig::SetRadixBitsToExternal() {
+	SetRadixBitsInternal(external_radix_bits, true);
+	return sink.external;
 }
 
 idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
 }
 
-bool RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p) {
+void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
-		return false;
+		return;
 	}
 
 	lock_guard<mutex> guard(sink.lock);
 	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
-		return false;
+		return;
 	}
 
+	if (external) {
+		sink.external = true;
+	}
 	sink_radix_bits = radix_bits_p;
-	return true;
+	return;
 }
 
 idx_t RadixHTConfig::InitialSinkRadixBits(ClientContext &context) {
@@ -328,19 +330,20 @@ bool MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 	const idx_t limit = BufferManager::GetBufferManager(context).GetMaxMemory();
 	const idx_t thread_limit = 0.6 * limit / n_threads;
 	if (ht.GetPartitionedData()->SizeInBytes() > thread_limit || context.config.force_external) {
-		// We're approaching the memory limit, unpin the data
-		gstate.config.SetRadixBitsToExternal();
-		if (!lstate.abandoned_data) {
-			lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
-			    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayout(), config.GetRadixBits(),
-			    gstate.radix_ht.GetLayout().ColumnCount() - 1);
-		}
+		if (gstate.config.SetRadixBitsToExternal()) {
+			// We're approaching the memory limit, unpin the data
+			if (!lstate.abandoned_data) {
+				lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
+				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayout(), config.GetRadixBits(),
+				    gstate.radix_ht.GetLayout().ColumnCount() - 1);
+			}
 
-		ht.UnpinData();
-		partitioned_data->Repartition(*lstate.abandoned_data);
-		ht.SetRadixBits(gstate.config.GetRadixBits());
-		ht.InitializePartitionedData();
-		return true;
+			ht.UnpinData();
+			partitioned_data->Repartition(*lstate.abandoned_data);
+			ht.SetRadixBits(gstate.config.GetRadixBits());
+			ht.InitializePartitionedData();
+			return true;
+		}
 	}
 
 	const auto partition_count = partitioned_data->PartitionCount();
@@ -399,7 +402,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	auto repartitioned = MaybeRepartition(context.client, gstate, lstate);
 
 	if (repartitioned && ht.Count() != 0) {
-		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1/2 threads
+		// We repartitioned, but we didn't clear the pointer table / reset the count because we're on 1 or 2 threads
 		ht.ClearPointerTable();
 		ht.ResetCount();
 	}
