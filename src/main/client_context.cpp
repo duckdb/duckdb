@@ -344,13 +344,16 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	if (config.enable_optimizer && plan->RequireOptimizer())
 	{
 		profiler.StartPhase("optimizer");
-		// if(statement_type == StatementType::SELECT_STATEMENT)
-		// {
-		// 	Cascade cascade = Cascade(*this);
-		// 	unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
-		// 	physical_plan = cascade.Optimize(std::move(logical_plan));
-		// }
-		// else
+		if(statement_type == StatementType::SELECT_STATEMENT)
+		{
+			Optimizer optimizer(*planner.binder, *this, true);
+			plan = optimizer.Optimize(std::move(plan));
+			D_ASSERT(plan);
+			Cascade cascade = Cascade(*this);
+			unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
+			physical_plan = cascade.Optimize(std::move(logical_plan));
+		}
+		else
 		{
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));
@@ -361,16 +364,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		}
 		profiler.EndPhase();
 	}
-
 	//profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	//PhysicalPlanGenerator physical_planner(*this);
 	//physical_plan = physical_planner.CreatePlan(std::move(plan));
 	//profiler.EndPhase();
-
-#ifdef DEBUG
-	D_ASSERT(!physical_plan->ToString().empty());
-#endif
 	result->plan = std::move(physical_plan);
 	return result;
 }
