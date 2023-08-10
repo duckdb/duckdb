@@ -52,6 +52,7 @@ private:
 	};
 
 	const char *current_tag = nullptr;
+	field_id_t current_field_id = 0;
 	data_ptr_t ptr;
 	data_ptr_t end_ptr;
 	vector<State> stack;

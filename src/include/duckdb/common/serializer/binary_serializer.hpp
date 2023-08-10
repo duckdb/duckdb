@@ -24,6 +24,7 @@ private:
 	};
 
 	const char *current_tag;
+	field_id_t current_field_id = 0;
 
 	vector<data_t> data;
 	vector<State> stack;
