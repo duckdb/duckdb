@@ -18,9 +18,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_FILTER;
 
 public:
-	explicit LogicalFilter(unique_ptr<Expression> expression);
 	LogicalFilter();
 
+	explicit LogicalFilter(unique_ptr<Expression> expression);
+	
 	vector<idx_t> projection_map;
 
 public:
