@@ -3341,6 +3341,25 @@ public class TestDuckDBJDBC {
             assertEquals(s.executeUpdate("insert into t values (1)"), 1);
             assertFalse(s.execute("insert into t values (1)"));
             assertEquals(s.getUpdateCount(), 1);
+
+            // result is invalidated after a call
+            assertEquals(s.getUpdateCount(), -1);
+        }
+    }
+
+    public static void test_get_result_set() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (PreparedStatement p = conn.prepareStatement("select 1")) {
+                p.executeQuery();
+                assertNull(p.getResultSet()); // returns null after initial call
+            }
+
+            try (Statement s = conn.createStatement()) {
+                s.execute("select 1");
+                assertFalse(s.getResultSet() == null);
+                assertFalse(s.getMoreResults());
+                assertNull(s.getResultSet()); // returns null after initial call
+            }
         }
     }
 

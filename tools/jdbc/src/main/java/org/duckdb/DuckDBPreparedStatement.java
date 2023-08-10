@@ -373,7 +373,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!returnsResultSet) {
             return null;
         }
-        return select_result;
+
+        // getResultSet can only be called once per result
+        ResultSet to_return = select_result;
+        this.select_result = null;
+        return to_return;
     }
 
     @Override
@@ -388,7 +392,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (returnsResultSet || returnsNothing || select_result.isFinished()) {
             return -1;
         }
-        return update_result;
+
+        // getUpdateCount can only be called once per result
+        int to_return = update_result;
+        update_result = -1;
+        return to_return;
     }
 
     @Override
