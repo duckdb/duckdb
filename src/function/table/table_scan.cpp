@@ -452,13 +452,13 @@ static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &s
 static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-	serializer.WriteProperty("catalog", bind_data.table.schema.catalog.GetName());
-	serializer.WriteProperty("schema", bind_data.table.schema.name);
-	serializer.WriteProperty("table", bind_data.table.name);
-	serializer.WriteProperty("is_index_scan", bind_data.is_index_scan);
-	serializer.WriteProperty("is_create_index", bind_data.is_create_index);
-	serializer.WriteProperty("result_ids", bind_data.result_ids);
-	serializer.WriteProperty("result_ids", bind_data.result_ids);
+	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
+	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
+	serializer.WriteProperty(102, "table", bind_data.table.name);
+	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
+	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
+	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
+	serializer.WriteProperty(106, "result_ids", bind_data.result_ids);
 }
 
 static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {

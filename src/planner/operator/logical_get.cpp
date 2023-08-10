@@ -206,22 +206,22 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 
 void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty("table_index", table_index);
-	serializer.WriteProperty("returned_types", returned_types);
-	serializer.WriteProperty("names", names);
-	serializer.WriteProperty("column_ids", column_ids);
-	serializer.WriteProperty("projection_ids", projection_ids);
-	serializer.WriteProperty("table_filters", table_filters);
+	serializer.WriteProperty(200, "table_index", table_index);
+	serializer.WriteProperty(201, "returned_types", returned_types);
+	serializer.WriteProperty(202, "names", names);
+	serializer.WriteProperty(203, "column_ids", column_ids);
+	serializer.WriteProperty(204, "projection_ids", projection_ids);
+	serializer.WriteProperty(205, "table_filters", table_filters);
 	FunctionSerializer::FormatSerialize(serializer, function, bind_data.get());
 	if (!function.format_serialize) {
 		D_ASSERT(!function.format_deserialize);
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
-		serializer.WriteProperty("parameters", parameters);
-		serializer.WriteProperty("named_parameters", named_parameters);
-		serializer.WriteProperty("input_table_types", input_table_types);
-		serializer.WriteProperty("input_table_names", input_table_names);
+		serializer.WriteProperty(206, "parameters", parameters);
+		serializer.WriteProperty(207, "named_parameters", named_parameters);
+		serializer.WriteProperty(208, "input_table_types", input_table_types);
+		serializer.WriteProperty(209, "input_table_names", input_table_names);
 	}
-	serializer.WriteProperty("projected_input", projected_input);
+	serializer.WriteProperty(210, "projected_input", projected_input);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &deserializer) {

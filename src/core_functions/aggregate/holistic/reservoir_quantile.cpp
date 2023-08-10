@@ -87,8 +87,8 @@ struct ReservoirQuantileBindData : public FunctionData {
 	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const AggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
-		serializer.WriteProperty("quantiles", bind_data.quantiles);
-		serializer.WriteProperty("sample_size", bind_data.sample_size);
+		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
+		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {

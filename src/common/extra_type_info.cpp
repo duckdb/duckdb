@@ -476,7 +476,7 @@ void EnumTypeInfo::Serialize(FieldWriter &writer) const {
 
 void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("dict_size", dict_size);
+	serializer.WriteProperty(200, "dict_size", dict_size);
 	((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
 }
 

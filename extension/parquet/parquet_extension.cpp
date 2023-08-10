@@ -437,10 +437,10 @@ public:
 	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                       const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty("files", bind_data.files);
-		serializer.WriteProperty("types", bind_data.types);
-		serializer.WriteProperty("names", bind_data.names);
-		serializer.WriteProperty("parquet_options", bind_data.parquet_options);
+		serializer.WriteProperty(100, "files", bind_data.files);
+		serializer.WriteProperty(101, "types", bind_data.types);
+		serializer.WriteProperty(102, "names", bind_data.names);
+		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,

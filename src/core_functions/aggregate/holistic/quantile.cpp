@@ -461,9 +461,9 @@ struct QuantileBindData : public FunctionData {
 	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const AggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
-		serializer.WriteProperty("quantiles", bind_data.quantiles);
-		serializer.WriteProperty("order", bind_data.order);
-		serializer.WriteProperty("desc", bind_data.desc);
+		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
+		serializer.WriteProperty(101, "order", bind_data.order);
+		serializer.WriteProperty(102, "desc", bind_data.desc);
 	}
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {

@@ -1069,8 +1069,8 @@ void ColumnDataCollection::FormatSerialize(FormatSerializer &serializer) const {
 			}
 		}
 	}
-	serializer.WriteProperty("types", types);
-	serializer.WriteProperty("values", values);
+	serializer.WriteProperty(100, "types", types);
+	serializer.WriteProperty(101, "values", values);
 }
 
 unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(FormatDeserializer &deserializer) {

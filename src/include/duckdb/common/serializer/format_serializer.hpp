@@ -28,15 +28,15 @@ protected:
 public:
 	// Serialize a value
 	template <class T>
-	void WriteProperty(const char *tag, const T &value) {
-		SetTag(tag);
+	void WriteProperty(uint16_t field_id, const char *tag, const T &value) {
+		SetTag(field_id, tag);
 		WriteValue(value);
 	}
 
 	// Optional pointer
 	template <class POINTER>
-	void WriteOptionalProperty(const char *tag, POINTER &&ptr) {
-		SetTag(tag);
+	void WriteOptionalProperty(uint16_t field_id, const char *tag, POINTER &&ptr) {
+		SetTag(field_id, tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);
 			OnOptionalEnd(false);
@@ -48,14 +48,14 @@ public:
 	}
 
 	// Special case: data_ptr_T
-	void WriteProperty(const char *tag, const_data_ptr_t ptr, idx_t count) {
-		SetTag(tag);
+	void WriteProperty(uint16_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
+		SetTag(field_id, tag);
 		WriteDataPtr(ptr, count);
 	}
 
 	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const char *tag) {
-		SetTag(tag);
+	void BeginObject(uint16_t field_id, const char *tag) {
+		SetTag(field_id, tag);
 		OnObjectBegin();
 	}
 
@@ -196,7 +196,8 @@ protected:
 	}
 
 	// Handle setting a "tag" (optional)
-	virtual void SetTag(const char *tag) {
+	virtual void SetTag(uint16_t field_id, const char *tag) {
+		(void)field_id;
 		(void)tag;
 	}
 

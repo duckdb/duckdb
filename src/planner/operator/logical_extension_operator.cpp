@@ -20,7 +20,7 @@ unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(Logic
 
 void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty("extension_name", GetExtensionName());
+	serializer.WriteProperty(200, "extension_name", GetExtensionName());
 }
 
 unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {

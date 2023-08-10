@@ -97,10 +97,10 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 
 void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty("return_type", return_type);
-	serializer.WriteProperty("children", children);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
 	FunctionSerializer::FormatSerialize(serializer, function, bind_info.get());
-	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
 unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {

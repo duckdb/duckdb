@@ -161,9 +161,9 @@ void PivotColumnEntry::Serialize(Serializer &serializer) const {
 }
 
 void PivotColumnEntry::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("values", values);
-	serializer.WriteOptionalProperty("star_expr", star_expr);
-	serializer.WriteProperty("alias", alias);
+	serializer.WriteProperty(100, "values", values);
+	serializer.WriteOptionalProperty(101, "star_expr", star_expr);
+	serializer.WriteProperty(102, "alias", alias);
 }
 
 PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {

@@ -1763,55 +1763,55 @@ Value Value::Deserialize(Deserializer &main_source) {
 }
 
 void Value::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type_);
-	serializer.WriteProperty("is_null", is_null);
+	serializer.WriteProperty(100, "type", type_);
+	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
 		switch (type_.InternalType()) {
 		case PhysicalType::BOOL:
-			serializer.WriteProperty("value", value_.boolean);
+			serializer.WriteProperty(100, "value", value_.boolean);
 			break;
 		case PhysicalType::INT8:
-			serializer.WriteProperty("value", value_.tinyint);
+			serializer.WriteProperty(100, "value", value_.tinyint);
 			break;
 		case PhysicalType::INT16:
-			serializer.WriteProperty("value", value_.smallint);
+			serializer.WriteProperty(100, "value", value_.smallint);
 			break;
 		case PhysicalType::INT32:
-			serializer.WriteProperty("value", value_.integer);
+			serializer.WriteProperty(100, "value", value_.integer);
 			break;
 		case PhysicalType::INT64:
-			serializer.WriteProperty("value", value_.bigint);
+			serializer.WriteProperty(100, "value", value_.bigint);
 			break;
 		case PhysicalType::UINT8:
-			serializer.WriteProperty("value", value_.utinyint);
+			serializer.WriteProperty(100, "value", value_.utinyint);
 			break;
 		case PhysicalType::UINT16:
-			serializer.WriteProperty("value", value_.usmallint);
+			serializer.WriteProperty(100, "value", value_.usmallint);
 			break;
 		case PhysicalType::UINT32:
-			serializer.WriteProperty("value", value_.uinteger);
+			serializer.WriteProperty(100, "value", value_.uinteger);
 			break;
 		case PhysicalType::UINT64:
-			serializer.WriteProperty("value", value_.ubigint);
+			serializer.WriteProperty(100, "value", value_.ubigint);
 			break;
 		case PhysicalType::INT128:
-			serializer.WriteProperty("value", value_.hugeint);
+			serializer.WriteProperty(100, "value", value_.hugeint);
 			break;
 		case PhysicalType::FLOAT:
-			serializer.WriteProperty("value", value_.float_);
+			serializer.WriteProperty(100, "value", value_.float_);
 			break;
 		case PhysicalType::DOUBLE:
-			serializer.WriteProperty("value", value_.double_);
+			serializer.WriteProperty(100, "value", value_.double_);
 			break;
 		case PhysicalType::INTERVAL:
-			serializer.WriteProperty("value", value_.interval);
+			serializer.WriteProperty(100, "value", value_.interval);
 			break;
 		case PhysicalType::VARCHAR:
 			if (type_.id() == LogicalTypeId::BLOB) {
 				auto blob_str = Blob::ToString(StringValue::Get(*this));
-				serializer.WriteProperty("value", blob_str);
+				serializer.WriteProperty(100, "value", blob_str);
 			} else {
-				serializer.WriteProperty("value", StringValue::Get(*this));
+				serializer.WriteProperty(100, "value", StringValue::Get(*this));
 			}
 			break;
 		default: {

@@ -104,13 +104,13 @@ public:
 	static void FormatSerialize(FormatSerializer &serializer, const FUNC &function,
 	                            optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty("name", function.name);
-		serializer.WriteProperty("arguments", function.arguments);
-		serializer.WriteProperty("original_arguments", function.original_arguments);
+		serializer.WriteProperty(500, "name", function.name);
+		serializer.WriteProperty(501, "arguments", function.arguments);
+		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
 		bool has_serialize = function.format_serialize;
-		serializer.WriteProperty("has_serialize", has_serialize);
+		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
-			serializer.BeginObject("function_data");
+			serializer.BeginObject(504, "function_data");
 			function.format_serialize(serializer, bind_info, function);
 			serializer.EndObject();
 			D_ASSERT(function.format_deserialize);

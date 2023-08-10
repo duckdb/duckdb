@@ -62,7 +62,7 @@ public:
 	}
 
 	void FormatSerialize(FormatSerializer &serializer) const {
-		serializer.WriteProperty("internal_vector", internal_vector);
+		serializer.WriteProperty(100, "internal_vector", internal_vector);
 	}
 
 	static IndexVector<T, INDEX_TYPE> FormatDeserialize(FormatDeserializer &deserializer) {

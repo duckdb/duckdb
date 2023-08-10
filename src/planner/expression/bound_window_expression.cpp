@@ -164,22 +164,22 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 
 void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty("return_type", return_type);
-	serializer.WriteProperty("children", children);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
 	if (type == ExpressionType::WINDOW_AGGREGATE) {
 		D_ASSERT(aggregate);
 		FunctionSerializer::FormatSerialize(serializer, *aggregate, bind_info.get());
 	}
-	serializer.WriteProperty("partitions", partitions);
-	serializer.WriteProperty("orders", orders);
-	serializer.WriteOptionalProperty("filters", filter_expr);
-	serializer.WriteProperty("ignore_nulls", ignore_nulls);
-	serializer.WriteProperty("start", start);
-	serializer.WriteProperty("end", end);
-	serializer.WriteOptionalProperty("start_expr", start_expr);
-	serializer.WriteOptionalProperty("end_expr", end_expr);
-	serializer.WriteOptionalProperty("offset_expr", offset_expr);
-	serializer.WriteOptionalProperty("default_expr", default_expr);
+	serializer.WriteProperty(202, "partitions", partitions);
+	serializer.WriteProperty(203, "orders", orders);
+	serializer.WriteOptionalProperty(204, "filters", filter_expr);
+	serializer.WriteProperty(205, "ignore_nulls", ignore_nulls);
+	serializer.WriteProperty(206, "start", start);
+	serializer.WriteProperty(207, "end", end);
+	serializer.WriteOptionalProperty(208, "start_expr", start_expr);
+	serializer.WriteOptionalProperty(209, "end_expr", end_expr);
+	serializer.WriteOptionalProperty(210, "offset_expr", offset_expr);
+	serializer.WriteOptionalProperty(211, "default_expr", default_expr);
 }
 
 unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
