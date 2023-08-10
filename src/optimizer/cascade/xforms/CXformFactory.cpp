@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/cascade/xforms/CXformLogicalProj2PhysicalProj.h"
 #include "duckdb/optimizer/cascade/common/clibwrapper.h"
 #include "duckdb/optimizer/cascade/xforms/CXformOrderImplementation.h"
+#include "duckdb/optimizer/cascade/xforms/CXformFilterImplementation.h"
 
 using namespace gpopt;
 
@@ -111,6 +112,7 @@ void CXformFactory::Instantiate()
 	Add(new CXformGet2TableScan());
 	Add(new CXformLogicalProj2PhysicalProj());
 	Add(new CXformOrderImplementation());
+	Add(new CXformFilterImplementation());
 	/*
 	Add(make_shared<CXformInnerJoin2HashJoin();
 	Add(make_shared<CXformIndexGet2IndexScan();

@@ -1,30 +1,30 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CXformOrderImplementation.cpp
+//		CXformFilterImplementation.cpp
 //
 //	@doc:
 //		Implementation of transform
 //---------------------------------------------------------------------------
-#include "duckdb/optimizer/cascade/xforms/CXformOrderImplementation.h"
+#include "duckdb/optimizer/cascade/xforms/CXformFilterImplementation.h"
 #include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/execution/operator/order/physical_order.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/execution/operator/filter/physical_filter.hpp"
 #include "duckdb/optimizer/cascade/operators/CPatternLeaf.h"
 
 using namespace gpopt;
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformOrderImplementation::CXformOrderImplementation
+//		CXformFilterImplementation::CXformFilterImplementation
 //
 //	@doc:
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformOrderImplementation::CXformOrderImplementation()
-    :CXformImplementation(make_uniq<LogicalOrder>(duckdb::vector<BoundOrderByNode>()))
+CXformFilterImplementation::CXformFilterImplementation()
+    :CXformImplementation(make_uniq<LogicalFilter>())
 {
-     this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+    this->m_pop->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ CXformOrderImplementation::CXformOrderImplementation()
 //		Compute promise of xform
 //
 //---------------------------------------------------------------------------
-CXform::EXformPromise CXformOrderImplementation::Exfp(CExpressionHandle &exprhdl) const
+CXform::EXformPromise CXformFilterImplementation::Exfp(CExpressionHandle &exprhdl) const
 {
 	return CXform::ExfpMedium;
 }
@@ -48,16 +48,16 @@ CXform::EXformPromise CXformOrderImplementation::Exfp(CExpressionHandle &exprhdl
 //		Actual transformation
 //
 //---------------------------------------------------------------------------
-void CXformOrderImplementation::Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const
+void CXformFilterImplementation::Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const
 {
-	LogicalOrder* popOrder = (LogicalOrder*)pexpr;
-    duckdb::vector<BoundOrderByNode> vorders;
-    for(auto &child : popOrder->orders)
+	LogicalFilter* popFilter = (LogicalFilter*)pexpr;
+    duckdb::vector<duckdb::unique_ptr<Expression>> v;
+     for(auto &child : popFilter->expressions)
     {
-        vorders.push_back(child.Copy());
+        v.push_back(child->Copy());
     }
 	// create alternative expression
-	duckdb::unique_ptr<Operator> pexprAlt = make_uniq<PhysicalOrder>(popOrder->types, popOrder->orders, popOrder->projections, popOrder->estimated_cardinality);
+	duckdb::unique_ptr<Operator> pexprAlt = make_uniq<PhysicalFilter>(popFilter->types, std::move(v), popFilter->estimated_cardinality);
     for(auto &child : pexpr->children)
     {
         pexprAlt->AddChild(child->Copy());
