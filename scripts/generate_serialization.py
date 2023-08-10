@@ -498,21 +498,21 @@ def generate_class_code(class_entry):
     return class_generation
 
 
-def check_children_for_duplicate_members(node, parents: list, seen: set):
+def check_children_for_duplicate_members(node, parents: list, seen_names: set, seen_ids: set):
     # Check for duplicate names
     if node.members is not None:
         for member in node.members:
-            if member.name in seen:
+            if member.name in seen_names:
                 # Print the inheritance tree
-                print(
-                    f"Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
-                )
-                exit()
-            seen.add(member.name)
+                exit(f"Error: Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})")
+            seen_names.add(member.name)
+            if member.id in seen_ids:
+                exit(f"Error: Duplicate member id \"{member.id}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})")
+            seen_ids.add(member.id)
 
     # Recurse
     for child in node.children.values():
-        check_children_for_duplicate_members(child, parents + [node], seen.copy())
+        check_children_for_duplicate_members(child, parents + [node], seen_names.copy(), seen_ids.copy())
 
 
 for entry in file_list:
@@ -556,7 +556,7 @@ for entry in file_list:
     for base_class in base_classes:
         if base_class.base is None:
             # Root base class, now traverse the children
-            check_children_for_duplicate_members(base_class, [], set())
+            check_children_for_duplicate_members(base_class, [], set(), set())
 
     with open(target_path, 'w+') as f:
         f.write(
