@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include <iomanip>
 
 namespace duckdb {
 
