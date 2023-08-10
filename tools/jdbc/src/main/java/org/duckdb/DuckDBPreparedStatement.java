@@ -175,7 +175,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException(
                 "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
         }
-        return getUpdateCount();
+        return getUpdateCountInternal();
     }
 
     @Override
@@ -380,8 +380,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         return to_return;
     }
 
-    @Override
-    public int getUpdateCount() throws SQLException {
+    private Integer getUpdateCountInternal() throws SQLException {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
@@ -392,9 +391,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (returnsResultSet || returnsNothing || select_result.isFinished()) {
             return -1;
         }
+        return update_result;
+    }
 
+    @Override
+    public int getUpdateCount() throws SQLException {
         // getUpdateCount can only be called once per result
-        int to_return = update_result;
+        int to_return = getUpdateCountInternal();
         update_result = -1;
         return to_return;
     }
