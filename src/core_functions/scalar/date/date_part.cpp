@@ -582,19 +582,22 @@ struct DatePart {
 		}
 
 		template <typename P>
-		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
+		static inline P HasPartValue(vector<P> part_values, DatePartSpecifier part) {
 			static const auto BEGIN_DOUBLE = size_t(DatePartSpecifier::JULIAN_DAY);
 			auto idx = size_t(part);
-			if (idx < BEGIN_DOUBLE) {
+			if (IsBigintDatepart(part)) {
 				return part_values[idx];
 			} else {
 				return part_values[idx - BEGIN_DOUBLE];
 			}
 		}
 
+		using bigint_vec = vector<int64_t *>;
+		using double_vec = vector<double *>;
+
 		template <class TA>
-		static inline void Operation(int64_t **bigint_values, double **double_values, const TA &input, const idx_t idx,
-		                             const part_mask_t mask) {
+		static inline void Operation(bigint_vec &bigint_values, double_vec &double_values, const TA &input,
+		                             const idx_t idx, const part_mask_t mask) {
 			int64_t *bigint_data;
 			// YMD calculations
 			int32_t yyyy = 1970;
@@ -1092,7 +1095,7 @@ double DatePart::JulianDayOperator::Operation(dtime_t input) {
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const dtime_t &input,
+void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const dtime_t &input,
                                          const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
 	if (mask & TIME) {
@@ -1144,7 +1147,7 @@ void DatePart::StructOperator::Operation(int64_t **bigint_values, double **doubl
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const timestamp_t &input,
+void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const timestamp_t &input,
                                          const idx_t idx, const part_mask_t mask) {
 	date_t d;
 	dtime_t t;
@@ -1171,7 +1174,7 @@ void DatePart::StructOperator::Operation(int64_t **bigint_values, double **doubl
 }
 
 template <>
-void DatePart::StructOperator::Operation(int64_t **bigint_values, double **double_values, const interval_t &input,
+void DatePart::StructOperator::Operation(bigint_vec &bigint_values, double_vec &double_values, const interval_t &input,
                                          const idx_t idx, const part_mask_t mask) {
 	int64_t *part_data;
 	if (mask & YMD) {
@@ -1471,7 +1474,7 @@ struct StructDatePart {
 				}
 				name_collision_set.insert(part_name);
 				part_codes.emplace_back(part_code);
-				const auto part_type = (size_t(part_code) >= BEGIN_DOUBLE) ? LogicalType::DOUBLE : LogicalType::BIGINT;
+				const auto part_type = IsBigintDatepart(part_code) ? LogicalType::BIGINT : LogicalType::DOUBLE;
 				struct_children.emplace_back(make_pair(part_name, part_type));
 			}
 		} else {
@@ -1491,10 +1494,8 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		vector<int64_t *> vec_bigints(size_t(BEGIN_DOUBLE), nullptr);
-		auto part_bigints = vec_bigints.data();
-		vector<double *> vec_doubles(BEGIN_INVALID - size_t(BEGIN_DOUBLE), nullptr);
-		auto part_doubles = vec_doubles.data();
+		DatePart::StructOperator::bigint_vec bigint_values(size_t(BEGIN_DOUBLE), nullptr);
+		DatePart::StructOperator::double_vec double_values(BEGIN_INVALID - size_t(BEGIN_DOUBLE), nullptr);
 		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
 
 		auto &child_entries = StructVector::GetEntries(result);
@@ -1521,16 +1522,16 @@ struct StructDatePart {
 					ConstantVector::SetNull(*child_entry, false);
 					const auto part_index = size_t(info.part_codes[col]);
 					if (owners[part_index] == col) {
-						if (part_index < size_t(BEGIN_DOUBLE)) {
-							part_bigints[part_index - BEGIN_BIGINT] = ConstantVector::GetData<int64_t>(*child_entry);
+						if (IsBigintDatepart(info.part_codes[col])) {
+							bigint_values[part_index - BEGIN_BIGINT] = ConstantVector::GetData<int64_t>(*child_entry);
 						} else {
-							part_doubles[part_index - BEGIN_DOUBLE] = ConstantVector::GetData<double>(*child_entry);
+							double_values[part_index - BEGIN_DOUBLE] = ConstantVector::GetData<double>(*child_entry);
 						}
 					}
 				}
 				auto tdata = ConstantVector::GetData<INPUT_TYPE>(input);
 				if (Value::IsFinite(tdata[0])) {
-					DatePart::StructOperator::Operation(part_bigints, part_doubles, tdata[0], 0, part_mask);
+					DatePart::StructOperator::Operation(bigint_values, double_values, tdata[0], 0, part_mask);
 				} else {
 					for (auto &child_entry : child_entries) {
 						ConstantVector::SetNull(*child_entry, true);
@@ -1563,10 +1564,10 @@ struct StructDatePart {
 				// Pre-multiplex
 				const auto part_index = size_t(info.part_codes[col]);
 				if (owners[part_index] == col) {
-					if (part_index < size_t(BEGIN_DOUBLE)) {
-						part_bigints[part_index - BEGIN_BIGINT] = FlatVector::GetData<int64_t>(*child_entry);
+					if (IsBigintDatepart(info.part_codes[col])) {
+						bigint_values[part_index - BEGIN_BIGINT] = FlatVector::GetData<int64_t>(*child_entry);
 					} else {
-						part_doubles[part_index - BEGIN_DOUBLE] = FlatVector::GetData<double>(*child_entry);
+						double_values[part_index - BEGIN_DOUBLE] = FlatVector::GetData<double>(*child_entry);
 					}
 				}
 			}
@@ -1575,7 +1576,7 @@ struct StructDatePart {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
 					if (Value::IsFinite(tdata[idx])) {
-						DatePart::StructOperator::Operation(part_bigints, part_doubles, tdata[idx], i, part_mask);
+						DatePart::StructOperator::Operation(bigint_values, double_values, tdata[idx], i, part_mask);
 					} else {
 						for (auto &child_entry : child_entries) {
 							FlatVector::Validity(*child_entry).SetInvalid(i);

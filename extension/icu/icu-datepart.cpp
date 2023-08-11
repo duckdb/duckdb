@@ -347,10 +347,6 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 	};
 
-	static const auto BEGIN_BIGINT = size_t(DatePartSpecifier::YEAR);
-	static const auto BEGIN_DOUBLE = size_t(DatePartSpecifier::JULIAN_DAY);
-	static const auto BEGIN_INVALID = size_t(DatePartSpecifier::JULIAN_DAY) + 1;
-
 	template <typename INPUT_TYPE>
 	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -377,8 +373,7 @@ struct ICUDatePart : public ICUDateFunc {
 					auto &child_entry = child_entries[col];
 					if (is_finite) {
 						ConstantVector::SetNull(*child_entry, false);
-						const auto part_index = size_t(info.part_codes[col]);
-						if (part_index < BEGIN_DOUBLE) {
+						if (IsBigintDatepart(info.part_codes[col])) {
 							auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
 							auto adapter = info.bigints[col];
 							pdata[0] = adapter(calendar, micros);
@@ -416,8 +411,7 @@ struct ICUDatePart : public ICUDateFunc {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
 							FlatVector::Validity(*child_entry).SetValid(i);
-							const auto part_index = size_t(info.part_codes[col]);
-							if (part_index < BEGIN_DOUBLE) {
+							if (IsBigintDatepart(info.part_codes[col])) {
 								auto pdata = ConstantVector::GetData<int64_t>(*child_entry);
 								auto adapter = info.bigints[col];
 								pdata[i] = adapter(calendar, micros);
@@ -452,7 +446,7 @@ struct ICUDatePart : public ICUDateFunc {
 	static duckdb::unique_ptr<FunctionData> BindUnaryDatePart(ClientContext &context, ScalarFunction &bound_function,
 	                                                          vector<duckdb::unique_ptr<Expression>> &arguments) {
 		const auto part_code = GetDatePartSpecifier(bound_function.name);
-		if (size_t(part_code) < BEGIN_DOUBLE) {
+		if (IsBigintDatepart(part_code)) {
 			using data_t = BindAdapterData<int64_t>;
 			auto adapter = PartCodeBigintFactory(part_code);
 			return BindAdapter<data_t>(context, bound_function, arguments, adapter);
@@ -478,7 +472,7 @@ struct ICUDatePart : public ICUDateFunc {
 
 			const auto part_name = part_value.ToString();
 			const auto part_code = GetDatePartSpecifier(part_name);
-			if (size_t(part_code) < BEGIN_DOUBLE) {
+			if (IsBigintDatepart(part_code)) {
 				break;
 			}
 
@@ -532,7 +526,7 @@ struct ICUDatePart : public ICUDateFunc {
 				}
 				name_collision_set.insert(part_name);
 				part_codes.emplace_back(part_code);
-				if (size_t(part_code) < BEGIN_DOUBLE) {
+				if (IsBigintDatepart(part_code)) {
 					bigints[col] = PartCodeBigintFactory(part_code);
 					struct_children.emplace_back(make_pair(part_name, LogicalType::BIGINT));
 				} else {
