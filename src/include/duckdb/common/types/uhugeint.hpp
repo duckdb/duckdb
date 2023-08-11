@@ -47,7 +47,9 @@ public:
 	// "The negative of an unsigned quantity is computed by subtracting its value from 2^n, where n is the number of
 	// bits in the promoted operand."
 	static void NegateInPlace(uhugeint_t &input) {
-		input = NumericLimits<uhugeint_t>::Maximum() - input;
+		uhugeint_t result = 0;
+		SubtractInPlaceNoOverflowCheck(result, input);
+		input = result;
 	}
 	static uhugeint_t Negate(uhugeint_t input) {
 		NegateInPlace(input);
@@ -67,6 +69,8 @@ public:
 
 	static bool AddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 	static bool SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
+
+	static void SubtractInPlaceNoOverflowCheck(uhugeint_t &lhs, uhugeint_t rhs);
 
 	// comparison operators
 	// note that everywhere here we intentionally use bitwise ops

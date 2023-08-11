@@ -239,6 +239,12 @@ bool Uhugeint::SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs) {
 	return no_overflow;
 }
 
+void Uhugeint::SubtractInPlaceNoOverflowCheck(uhugeint_t &lhs, uhugeint_t rhs) {
+	uint64_t new_upper = lhs.upper - rhs.upper - ((lhs.lower - rhs.lower) > lhs.lower);
+	lhs.lower -= rhs.lower;
+	lhs.upper = new_upper;
+}
+
 uhugeint_t Uhugeint::Add(uhugeint_t lhs, uhugeint_t rhs) {
 	if (!AddInPlace(lhs, rhs)) {
 		throw OutOfRangeException("Overflow in UHUGEINT addition");
