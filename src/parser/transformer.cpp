@@ -91,23 +91,41 @@ void Transformer::SetParamCount(idx_t new_count) {
 	auto &root = RootTransformer();
 	root.prepared_statement_parameter_index = new_count;
 }
-void Transformer::SetNamedParam(const string &name, int32_t index) {
-	auto &root = RootTransformer();
-	D_ASSERT(!root.named_param_map.count(name));
-	root.named_param_map[name] = index;
+
+static void ParamTypeCheck(PreparedParamType last_type, PreparedParamType new_type) {
+	// Mixing positional/auto-increment and named parameters is not supported
+	if (last_type == PreparedParamType::INVALID) {
+		return;
+	}
+	if (last_type == PreparedParamType::NAMED) {
+		if (new_type != PreparedParamType::NAMED) {
+			throw NotImplementedException("Mixing named and positional parameters is not supported yet");
+		}
+	}
+	if (last_type != PreparedParamType::NAMED) {
+		if (new_type == PreparedParamType::NAMED) {
+			throw NotImplementedException("Mixing named and positional parameters is not supported yet");
+		}
+	}
 }
-bool Transformer::GetNamedParam(const string &name, int32_t &index) {
+
+void Transformer::SetParam(const string &identifier, idx_t index, PreparedParamType type) {
 	auto &root = RootTransformer();
-	auto entry = root.named_param_map.find(name);
+	ParamTypeCheck(root.last_param_type, type);
+	root.last_param_type = type;
+	D_ASSERT(!root.named_param_map.count(identifier));
+	root.named_param_map[identifier] = index;
+}
+
+bool Transformer::GetParam(const string &identifier, idx_t &index, PreparedParamType type) {
+	auto &root = RootTransformer();
+	ParamTypeCheck(root.last_param_type, type);
+	auto entry = root.named_param_map.find(identifier);
 	if (entry == root.named_param_map.end()) {
 		return false;
 	}
 	index = entry->second;
 	return true;
-}
-bool Transformer::HasNamedParameters() const {
-	auto &root = RootTransformer();
-	return !root.named_param_map.empty();
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgquery::PGNode &stmt) {

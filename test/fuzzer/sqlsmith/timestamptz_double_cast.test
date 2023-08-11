@@ -22,4 +22,4 @@ SELECT
 		OVER (PARTITION BY ref_0."smallint" ORDER BY ref_0.int_array) AS c2 
 FROM main.all_types AS ref_0
 ----
-Invalid Input Error: Type DOUBLE with value
+Invalid Input Error: Type INT64 with value

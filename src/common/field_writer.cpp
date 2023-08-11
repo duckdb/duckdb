@@ -72,6 +72,7 @@ FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count
 	max_field_count = source_p.Read<uint32_t>();
 	total_size = source_p.Read<uint64_t>();
 	D_ASSERT(max_field_count > 0);
+	D_ASSERT(total_size > 0);
 	source.SetRemainingData(total_size);
 }
 

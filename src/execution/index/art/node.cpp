@@ -9,8 +9,8 @@
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 
 namespace duckdb {
@@ -19,13 +19,12 @@ namespace duckdb {
 // Constructors / Destructors
 //===--------------------------------------------------------------------===//
 
-Node::Node(MetaBlockReader &reader) {
-
-	idx_t block_id = reader.Read<block_id_t>();
+Node::Node(MetadataReader &reader) {
+	block_id_t block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint32_t>();
 	Reset();
 
-	if (block_id == DConstants::INVALID_INDEX) {
+	if (block_id == INVALID_BLOCK) {
 		return;
 	}
 
@@ -61,7 +60,6 @@ void Node::New(ART &art, Node &node, const NType type) {
 
 void Node::Free(ART &art, Node &node) {
 
-	// recursively free all nodes that are in-memory, and skip serialized and empty nodes
 	if (!node.IsSet()) {
 		return;
 	}
@@ -72,11 +70,11 @@ void Node::Free(ART &art, Node &node) {
 		auto type = node.GetType();
 		switch (type) {
 		case NType::PREFIX:
-			Prefix::Free(art, node);
-			break;
+			// iterative
+			return Prefix::Free(art, node);
 		case NType::LEAF:
-			Leaf::Free(art, node);
-			break;
+			// iterative
+			return Leaf::Free(art, node);
 		case NType::NODE_4:
 			Node4::Free(art, node);
 			break;
@@ -90,8 +88,7 @@ void Node::Free(ART &art, Node &node) {
 			Node256::Free(art, node);
 			break;
 		case NType::LEAF_INLINED:
-			node.Reset();
-			return;
+			return node.Reset();
 		}
 
 		Node::GetAllocator(art, type).Free(node);
@@ -225,10 +222,9 @@ optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deseri
 // (De)serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
-
+BlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
 	if (!IsSet()) {
-		return {(block_id_t)DConstants::INVALID_INDEX, 0};
+		return BlockPointer();
 	}
 	if (IsSerialized()) {
 		Deserialize(art);
@@ -236,8 +232,10 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 
 	switch (GetType()) {
 	case NType::PREFIX:
-		return Prefix::Get(art, *this).Serialize(art, writer);
+		// iterative
+		return Prefix::Serialize(art, *this, writer);
 	case NType::LEAF:
+		// iterative
 		return Leaf::Serialize(art, *this, writer);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Serialize(art, writer);
@@ -254,28 +252,31 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 }
 
 void Node::Deserialize(ART &art) {
-
 	D_ASSERT(IsSet() && IsSerialized());
 
-	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), GetBufferId());
-	reader.offset = GetOffset();
+	BlockPointer pointer(GetBufferId(), GetOffset());
+	MetadataReader reader(art.table_io_manager.GetMetadataManager(), pointer);
 	Reset();
 	SetType(reader.Read<uint8_t>());
 
 	auto decoded_type = GetType();
+
+	// iterative functions
+	if (decoded_type == NType::PREFIX) {
+		return Prefix::Deserialize(art, *this, reader);
+	}
 	if (decoded_type == NType::LEAF_INLINED) {
-		SetRowId(reader.Read<row_t>());
-		return;
+		return SetRowId(reader.Read<row_t>());
+	}
+	if (decoded_type == NType::LEAF) {
+		return Leaf::Deserialize(art, *this, reader);
 	}
 
 	*this = Node::GetAllocator(art, decoded_type).New();
 	SetType((uint8_t)decoded_type);
 
+	// recursive functions
 	switch (decoded_type) {
-	case NType::PREFIX:
-		return Prefix::Get(art, *this).Deserialize(reader);
-	case NType::LEAF:
-		return Leaf::Deserialize(art, *this, reader);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Deserialize(reader);
 	case NType::NODE_16:
@@ -363,7 +364,7 @@ NType Node::GetARTNodeTypeByCount(const idx_t count) {
 }
 
 FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
-	return *art.allocators[(uint8_t)type - 1];
+	return (*art.allocators)[(uint8_t)type - 1];
 }
 
 //===--------------------------------------------------------------------===//
@@ -377,11 +378,11 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	switch (GetType()) {
 	case NType::PREFIX:
-		Prefix::Get(art, *this).InitializeMerge(art, flags);
-		break;
+		// iterative
+		return Prefix::InitializeMerge(art, *this, flags);
 	case NType::LEAF:
-		Leaf::InitializeMerge(art, *this, flags);
-		break;
+		// iterative
+		return Leaf::InitializeMerge(art, *this, flags);
 	case NType::NODE_4:
 		Node4::Get(art, *this).InitializeMerge(art, flags);
 		break;
@@ -398,8 +399,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	// NOTE: this works because the rightmost 32 bits contain the buffer ID
-	data += flags.merge_buffer_counts[(uint8_t)GetType() - 1];
+	AddToBufferID(flags.merge_buffer_counts[(uint8_t)GetType() - 1]);
 }
 
 bool Node::Merge(ART &art, Node &other) {
@@ -572,11 +572,16 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 
 	auto node_type = GetType();
+
+	// iterative functions
+	if (node_type == NType::PREFIX) {
+		return Prefix::Vacuum(art, *this, flags);
+	}
 	if (node_type == NType::LEAF_INLINED) {
 		return;
 	}
 	if (node_type == NType::LEAF) {
-		if (flags.vacuum_flags[(uint8_t)GetType() - 1]) {
+		if (flags.vacuum_flags[(uint8_t)node_type - 1]) {
 			Leaf::Vacuum(art, *this);
 		}
 		return;
@@ -589,9 +594,8 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		SetType((uint8_t)node_type);
 	}
 
+	// recursive functions
 	switch (node_type) {
-	case NType::PREFIX:
-		return Prefix::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_16:

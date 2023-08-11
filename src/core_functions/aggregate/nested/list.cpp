@@ -77,7 +77,12 @@ static void ListCombineFunction(Vector &states_vector, Vector &combined, Aggrega
 	for (idx_t i = 0; i < count; i++) {
 
 		auto &state = *states_ptr[states_data.sel->get_index(i)];
-		D_ASSERT(state.linked_list.total_capacity != 0);
+		if (state.linked_list.total_capacity == 0) {
+			// NULL, no need to append
+			// this can happen when adding a FILTER to the grouping, e.g.,
+			// LIST(i) FILTER (WHERE i <> 3)
+			continue;
+		}
 
 		if (combined_ptr[i]->linked_list.total_capacity == 0) {
 			combined_ptr[i]->linked_list = state.linked_list;

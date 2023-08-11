@@ -165,7 +165,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!returnsResultSet) {
             throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
         }
-        return getResultSet();
+        return select_result;
     }
 
     @Override
@@ -175,7 +175,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException(
                 "executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
         }
-        return getUpdateCount();
+        return getUpdateCountInternal();
     }
 
     @Override
@@ -361,6 +361,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         throw new SQLFeatureNotSupportedException("setCursorName");
     }
 
+    /**
+     * The returned `ResultSet` must be closed by the user to avoid a memory leak
+     */
     @Override
     public ResultSet getResultSet() throws SQLException {
         if (isClosed()) {
@@ -373,11 +376,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         if (!returnsResultSet) {
             return null;
         }
-        return select_result;
+
+        // getResultSet can only be called once per result
+        ResultSet to_return = select_result;
+        this.select_result = null;
+        return to_return;
     }
 
-    @Override
-    public int getUpdateCount() throws SQLException {
+    private Integer getUpdateCountInternal() throws SQLException {
         if (isClosed()) {
             throw new SQLException("Statement was closed");
         }
@@ -385,10 +391,18 @@ public class DuckDBPreparedStatement implements PreparedStatement {
             throw new SQLException("Prepare something first");
         }
 
-        if (returnsResultSet || select_result.isFinished()) {
+        if (returnsResultSet || returnsNothing || select_result.isFinished()) {
             return -1;
         }
         return update_result;
+    }
+
+    @Override
+    public int getUpdateCount() throws SQLException {
+        // getUpdateCount can only be called once per result
+        int to_return = getUpdateCountInternal();
+        update_result = -1;
+        return to_return;
     }
 
     @Override
