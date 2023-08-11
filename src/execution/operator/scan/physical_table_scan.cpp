@@ -18,10 +18,10 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality), function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)), names(std::move(names_p)), table_filters(std::move(table_filters_p))
 {
 	physical_type = PhysicalOperatorType::TABLE_SCAN;
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 	m_ulTotalOptRequests = 1;
 }
 
@@ -29,7 +29,7 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality), function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)), column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)), table_filters(std::move(table_filters_p))
 {
 	physical_type = PhysicalOperatorType::TABLE_SCAN;
-	m_pdprel = new CDrvdPropRelational();
+	m_derived_property_relation = new CDrvdPropRelational();
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState
@@ -273,7 +273,7 @@ ULONG PhysicalTableScan::DeriveJoinDepth(CExpressionHandle &exprhdl)
 // Rehydrate expression from a given cost context and child expressions
 Operator* PhysicalTableScan::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
 {
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	CGroupExpression* pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	// if (!table_filters->filters.empty())
 	// {
@@ -286,7 +286,7 @@ Operator* PhysicalTableScan::SelfRehydrate(CCostContext* pcc, duckdb::vector<Ope
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	PhysicalTableScan* pexpr = new PhysicalTableScan(returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 
@@ -298,9 +298,9 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy()
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -314,12 +314,12 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy()
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = m_pgexpr;
+	result->m_group_expression = m_group_expression;
 	result->m_cost = m_cost;
 	return result;
 }
 
-duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewGroupExpression(CGroupExpression* pgexpr)
+duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGroupExpression* pgexpr)
 {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind, function.init_global, function.init_local);
 	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
@@ -327,9 +327,9 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewGroupExpression(CGrou
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -343,12 +343,12 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewGroupExpression(CGrou
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = m_cost;
 	return result;
 }
 	
-duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewChilds(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost)
+duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost)
 {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind, function.init_global, function.init_local);
 	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
@@ -356,9 +356,9 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewChilds(CGroupExpressi
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -372,7 +372,7 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopywithNewChilds(CGroupExpressi
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	return result;
 }

@@ -23,6 +23,7 @@
 #include <functional>
 
 namespace duckdb {
+
 using namespace gpopt;
 
 class FieldWriter;
@@ -43,7 +44,7 @@ public:
 	// copy ctor
 	LogicalOperator(const LogicalOperator &other) = delete;
 
-	virtual ~LogicalOperator();
+	~LogicalOperator() override;
 
 	bool has_estimated_cardinality;
 
@@ -55,8 +56,6 @@ public:
 		}
 		return result;
 	}
-
-	CDrvdProp *PdpCreate() override;
 
 	CReqdProp *PrpCreate() const override;
 
@@ -102,6 +101,8 @@ public:
 
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
+
+	CDrvdProp *PdpCreate() override;
 
 	static CKeyCollection *PkcDeriveKeysPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
 

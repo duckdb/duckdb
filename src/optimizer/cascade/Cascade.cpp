@@ -78,7 +78,7 @@ duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<Logica
 	// CExpression* pexprPlan = eng.PexprExtractPlan();
 	// CheckCTEConsistency(pexprPlan);
 	// PrintQueryOrPlan(pexprPlan);
-	// (void) pexprPlan->PrppCompute(pqc->m_prpp);
+	// (void) pexprPlan->PrppCompute(pqc->m_required_plan_property);
 	atp.DestroyAll();
 	wrkr.release();
 	return pexprPlan;

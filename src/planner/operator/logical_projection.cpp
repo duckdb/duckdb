@@ -7,10 +7,10 @@ namespace duckdb {
 
 LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION, std::move(select_list)), table_index(table_index) {
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 }
 
 vector<ColumnBinding> LogicalProjection::GetColumnBindings() {
@@ -58,7 +58,7 @@ CPropConstraint *LogicalProjection::DerivePropertyConstraint(CExpressionHandle &
 // Rehydrate expression from a given cost context and child expressions
 Operator *LogicalProjection::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
                                            CDrvdPropCtxtPlan *pdpctxtplan) {
-	CGroupExpression *pgexpr = pcc->m_pgexpr;
+	CGroupExpression *pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for (auto &child : pgexpr->m_pop.get()->expressions) {
@@ -70,7 +70,7 @@ Operator *LogicalProjection::SelfRehydrate(CCostContext *pcc, duckdb::vector<Ope
 		pexpr->AddChild(child->Copy());
 	}
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 
@@ -97,9 +97,9 @@ duckdb::unique_ptr<Operator> LogicalProjection::Copy() {
 		v.push_back(child->Copy());
 	}
 	unique_ptr<LogicalProjection> result = make_uniq<LogicalProjection>(table_index, std::move(v));
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -111,20 +111,20 @@ duckdb::unique_ptr<Operator> LogicalProjection::Copy() {
 	for (auto &child : children) {
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = m_pgexpr;
+	result->m_group_expression = m_group_expression;
 	result->m_cost = m_cost;
 	return result;
 }
 
-duckdb::unique_ptr<Operator> LogicalProjection::CopywithNewGroupExpression(CGroupExpression *pgexpr) {
+duckdb::unique_ptr<Operator> LogicalProjection::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for (auto &child : expressions) {
 		v.push_back(child->Copy());
 	}
 	unique_ptr<LogicalProjection> result = make_uniq<LogicalProjection>(table_index, std::move(v));
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -136,22 +136,22 @@ duckdb::unique_ptr<Operator> LogicalProjection::CopywithNewGroupExpression(CGrou
 	for (auto &child : children) {
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = m_cost;
 	return result;
 }
 
 duckdb::unique_ptr<Operator>
-LogicalProjection::CopywithNewChilds(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+LogicalProjection::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                      double cost) {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for (auto &child : expressions) {
 		v.push_back(child->Copy());
 	}
 	unique_ptr<LogicalProjection> result = make_uniq<LogicalProjection>(table_index, std::move(v));
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -163,7 +163,7 @@ LogicalProjection::CopywithNewChilds(CGroupExpression *pgexpr, duckdb::vector<du
 	for (auto &child : pdrgpexpr) {
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	return result;
 }

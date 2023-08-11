@@ -80,7 +80,7 @@ CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) {
 
 Operator *PhysicalOrder::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
                                        CDrvdPropCtxtPlan *pdpctxtplan) {
-	CGroupExpression *pgexpr = pcc->m_pgexpr;
+	CGroupExpression *pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	ULONG arity = pgexpr->Arity();
 	vector<double> pdrgpcost;
@@ -91,7 +91,7 @@ Operator *PhysicalOrder::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operato
 	cost = pcc->CostCompute(pdrgpcost);
 	PhysicalOrder *pexpr = new PhysicalOrder(types, orders, projections, 0);
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 

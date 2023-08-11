@@ -106,7 +106,7 @@ void CExpressionHandle::Attach(CGroupExpression* pgexpr)
 void CExpressionHandle::Attach(CCostContext* pcc)
 {
 	m_pcc = pcc;
-	Attach(pcc->m_pgexpr);
+	Attach(pcc->m_group_expression);
 }
 
 //---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ void CExpressionHandle::DeriveProps(CDrvdPropCtxt* pdpctxt)
 //---------------------------------------------------------------------------
 BOOL CExpressionHandle::FAttachedToLeafPattern() const
 {
-	return 0 == Arity() && nullptr != m_pop && nullptr != m_pop->m_pgexpr;
+	return 0 == Arity() && nullptr != m_pop && nullptr != m_pop->m_group_expression;
 }
 
 // Derive the properties of the plan carried by attached cost context.
@@ -405,7 +405,7 @@ CDrvdPropRelational* CExpressionHandle::GetRelationalProperties(ULONG child_inde
 		if (Pop()->FPhysical())
 		{
 			// relational props were copied from memo, return props directly
-			return Pop()->children[child_index]->m_pdprel;
+			return Pop()->children[child_index]->m_derived_property_relation;
 		}
 		// return props after calling derivation function
 		return CDrvdPropRelational::GetRelationalProperties(Pop()->children[child_index]->PdpDerive());
@@ -430,7 +430,7 @@ CDrvdPropRelational* CExpressionHandle::GetRelationalProperties() const
 		if (Pop()->FPhysical())
 		{
 			// relational props were copied from memo, return props directly
-			CDrvdPropRelational* drvdProps = Pop()->m_pdprel;
+			CDrvdPropRelational* drvdProps = Pop()->m_derived_property_relation;
 			return drvdProps;
 		}
 		// return props after calling derivation function
@@ -529,7 +529,7 @@ Operator* CExpressionHandle::Pop(ULONG child_index) const
 	{
 		COptimizationContext* pocChild = m_pcc->m_pdrgpoc[child_index];
 		CCostContext* pccChild = pocChild->m_pccBest;
-		return pccChild->m_pgexpr->m_pop.get();
+		return pccChild->m_group_expression->m_pop.get();
 	}
 	return nullptr;
 }
@@ -560,7 +560,7 @@ Operator* CExpressionHandle::PopGrandchild(ULONG child_index, ULONG grandchild_i
 			{
 				*grandchildContext = pccgrandchild;
 			}
-			return pccgrandchild->m_pgexpr->m_pop.get();
+			return pccgrandchild->m_group_expression->m_pop.get();
 		}
 	}
 	return nullptr;
@@ -583,7 +583,7 @@ Expression* CExpressionHandle::PexprScalarRepChild(ULONG child_index) const
 		Expression* pexprScalar = (*m_pgexpr)[child_index]->m_pexprScalarRep;
 		return pexprScalar;
 	}
-	if (nullptr != m_pop && nullptr != m_pop->children[child_index]->m_pgexpr)
+	if (nullptr != m_pop && nullptr != m_pop->children[child_index]->m_group_expression)
 	{
 		// access scalar expression cached on the child scalar group
 		Expression* pexprScalar = m_pop->expressions[child_index].get();
@@ -593,7 +593,7 @@ Expression* CExpressionHandle::PexprScalarRepChild(ULONG child_index) const
 	{
 		// if the expression does not come from a group, but its child does then
 		// get the scalar child from that group
-		CGroupExpression* pgexpr = m_pop->children[child_index]->m_pgexpr;
+		CGroupExpression* pgexpr = m_pop->children[child_index]->m_group_expression;
 		Expression* pexprScalar = pgexpr->m_pgroup->m_pexprScalarRep;
 		return pexprScalar;
 	}
@@ -634,7 +634,7 @@ Expression* CExpressionHandle::PexprScalarExactChild(ULONG child_index, BOOL err
 	{
 		result_expr = nullptr;
 	}
-	else if (nullptr != m_pop && nullptr != m_pop->children[child_index]->m_pgexpr && !(m_pop->children[child_index]->m_pgexpr->m_pgroup->m_pexprScalarRepIsExact))
+	else if (nullptr != m_pop && nullptr != m_pop->children[child_index]->m_group_expression && !(m_pop->children[child_index]->m_group_expression->m_pgroup->m_pexprScalarRepIsExact))
 	{
 		// the expression does not come from a group, but its child does and
 		// the child group does not have an exact expression

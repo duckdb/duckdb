@@ -40,7 +40,7 @@ CPropConstraint* LogicalTopN::DerivePropertyConstraint(CExpressionHandle &exprhd
 
 Operator* LogicalTopN::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
 {
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	CGroupExpression* pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	LogicalTopN* tmp = (LogicalTopN*)pgexpr->m_pop.get();
 	LogicalTopN* pexpr = new LogicalTopN(tmp->orders, tmp->limit, tmp->offset);
@@ -49,7 +49,7 @@ Operator* LogicalTopN::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*
 		pexpr->AddChild(child->Copy());
 	}
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 

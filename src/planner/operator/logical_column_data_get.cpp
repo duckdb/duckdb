@@ -75,7 +75,7 @@ Operator* LogicalColumnDataGet::SelfRehydrate(CCostContext* pcc, duckdb::vector<
 {
 	LogicalColumnDataGet* pexpr = new LogicalColumnDataGet(table_index, chunk_types, make_uniq<ColumnDataCollection>(*collection));
 	pexpr->m_cost = pcc->m_cost;
-	pexpr->m_pgexpr = pcc->m_pgexpr;
+	pexpr->m_group_expression = pcc->m_group_expression;
 	return pexpr;
 }
 

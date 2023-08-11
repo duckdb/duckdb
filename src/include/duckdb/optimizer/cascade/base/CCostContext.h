@@ -9,25 +9,24 @@
 #ifndef GPOPT_CCostContext_H
 #define GPOPT_CCostContext_H
 
+#include "duckdb/common/vector.hpp"
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/base/COptimizationContext.h"
 #include "duckdb/optimizer/cascade/cost/ICostModel.h"
-#include "duckdb/common/vector.hpp"
 
 using namespace std;
 using namespace duckdb;
 
-namespace gpopt
-{
+namespace gpopt {
 // fwd declarations
 class CDrvdPropPlan;
 class CCostContext;
 
 // cost context pointer definition
-typedef CCostContext* COSTCTXT_PTR;
+typedef CCostContext *COSTCTXT_PTR;
 
 // cost context pointer definition
-typedef const CCostContext* CONST_COSTCTXT_PTR;
+typedef const CCostContext *CONST_COSTCTXT_PTR;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -37,28 +36,20 @@ typedef const CCostContext* CONST_COSTCTXT_PTR;
 //		Cost context
 //
 //---------------------------------------------------------------------------
-class CCostContext
-{
+class CCostContext {
 public:
 	// states of cost context
-	enum EState
-	{
-		estUncosted, estCosting, estCosted, estSentinel
-	};
+	enum EState { estUncosted, estCosting, estCosted, estSentinel };
 
 public:
-	struct CCostContextHash
-	{
-		size_t operator()(const CCostContext &cc) const
-		{
+	struct CCostContextHash {
+		size_t operator()(const CCostContext &cc) const {
 			return COptimizationContext::HashValue(*(cc.m_poc));
 		}
 	};
 
-	struct CCostContextPTRHash
-	{
-		size_t operator()(const CCostContext* cc) const
-		{
+	struct CCostContextPTRHash {
+		size_t operator()(const CCostContext *cc) const {
 			return COptimizationContext::HashValue(*(cc->m_poc));
 		}
 	};
@@ -71,16 +62,16 @@ public:
 	EState m_estate;
 
 	// back pointer to owner group expression
-	CGroupExpression* m_pgexpr;
+	CGroupExpression *m_group_expression;
 
 	// group expression to be used stats derivation during costing
-	CGroupExpression* m_pgexprForStats;
+	CGroupExpression *m_pgexprForStats;
 
 	// array of optimization contexts of child groups
-	duckdb::vector<COptimizationContext*> m_pdrgpoc;
+	duckdb::vector<COptimizationContext *> m_pdrgpoc;
 
 	// derived properties of the carried plan
-	CDrvdPropPlan* m_pdpplan;
+	CDrvdPropPlan *m_pdpplan;
 
 	// optimization request number
 	ULONG m_ulOptReq;
@@ -91,17 +82,17 @@ public:
 	bool m_fPruned;
 
 	// main optimization context
-	COptimizationContext* m_poc;
+	COptimizationContext *m_poc;
 
 	// link for cost context hash table in CGroupExpression
 	SLink m_link;
 
 public:
 	// ctor
-	CCostContext(COptimizationContext* poc, ULONG ulOptReq, CGroupExpression* pgexpr);
+	CCostContext(COptimizationContext *poc, ULONG ulOptReq, CGroupExpression *pgexpr);
 
 	// private copy ctor
-	CCostContext(const CCostContext &) =  delete;
+	CCostContext(const CCostContext &) = delete;
 
 	// dtor
 	virtual ~CCostContext();
@@ -109,11 +100,11 @@ public:
 public:
 	// for two cost contexts with join plans of the same cost, break the tie based on join depth,
 	// if tie-resolution succeeded, store a pointer to preferred cost context in output argument
-	static void BreakCostTiesForJoinPlans(CCostContext* pccFst, CCostContext* pccSnd, CCostContext** ppccPrefered, bool* pfTiesResolved);
+	static void BreakCostTiesForJoinPlans(CCostContext *pccFst, CCostContext *pccSnd, CCostContext **ppccPrefered,
+	                                      bool *pfTiesResolved);
 
 	// set pruned flag
-	void SetPruned()
-	{
+	void SetPruned() {
 		m_fPruned = true;
 	}
 
@@ -121,8 +112,7 @@ public:
 	bool FNeedsNewStats() const;
 
 	// set cost value
-	void SetCost(double cost)
-	{
+	void SetCost(double cost) {
 		m_cost = cost;
 	}
 
@@ -130,16 +120,13 @@ public:
 	void DerivePlanProps();
 
 	// set cost context state
-	void SetState(EState estNewState)
-	{
+	void SetState(EState estNewState) {
 		m_estate = estNewState;
 	}
 
 	// set child contexts
-	void SetChildContexts(duckdb::vector<COptimizationContext*> pdrgpoc)
-	{
-		for(auto &child : pdrgpoc)
-		{
+	void SetChildContexts(duckdb::vector<COptimizationContext *> pdrgpoc) {
+		for (auto &child : pdrgpoc) {
 			m_pdrgpoc.push_back(child);
 		}
 	}
@@ -154,42 +141,37 @@ public:
 	double CostCompute(duckdb::vector<double> pdrgpcostChildren);
 
 	// is current context better than the given equivalent context based on cost?
-	bool FBetterThan(CCostContext* pcc) const;
+	bool FBetterThan(CCostContext *pcc) const;
 
 	// equality function
-	static bool Equals(const CCostContext &ccLeft, const CCostContext &ccRight)
-	{
+	static bool Equals(const CCostContext &ccLeft, const CCostContext &ccRight) {
 		// check if we are comparing against invalid context
-		if (NULL == ccLeft.m_poc || NULL == ccRight.m_poc)
-		{
+		if (NULL == ccLeft.m_poc || NULL == ccRight.m_poc) {
 			return NULL == ccLeft.m_poc && NULL == ccRight.m_poc;
 		}
-		return ccLeft.m_ulOptReq == ccRight.m_ulOptReq && ccLeft.m_pgexpr == ccRight.m_pgexpr && ccLeft.m_poc->Matches(ccRight.m_poc);
+		return ccLeft.m_ulOptReq == ccRight.m_ulOptReq && ccLeft.m_group_expression == ccRight.m_group_expression &&
+		       ccLeft.m_poc->Matches(ccRight.m_poc);
 	}
 
 	// equality function
-	static bool Equals(const CCostContext* pccLeft, const CCostContext* pccRight)
-	{
+	static bool Equals(const CCostContext *pccLeft, const CCostContext *pccRight) {
 		return Equals(*pccLeft, *pccRight);
 	}
 
 	// hash function
-	ULONG HashValue()
-	{
+	ULONG HashValue() {
 		return m_poc->HashValue();
 	}
 
 	// hash function
-	static ULONG HashValue(const CCostContext &cc)
-	{
+	static ULONG HashValue(const CCostContext &cc) {
 		return COptimizationContext::HashValue(*(cc.m_poc));
 	}
 
 	// hash function
-	static ULONG HashValue(const CCostContext* pcc)
-	{
+	static ULONG HashValue(const CCostContext *pcc) {
 		return HashValue(*pcc);
 	}
-};	// class CCostContext
-}  // namespace gpopt
+}; // class CCostContext
+} // namespace gpopt
 #endif

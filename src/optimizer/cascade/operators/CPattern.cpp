@@ -6,10 +6,10 @@
 //		Implementation of base class of pattern operators
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/operators/CPattern.h"
+
 #include "duckdb/optimizer/cascade/base.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace duckdb;
 
 //---------------------------------------------------------------------------
@@ -21,8 +21,7 @@ using namespace duckdb;
 //		expression has to take care of this on a higher level
 //
 //---------------------------------------------------------------------------
-CDrvdProp* CPattern::PdpCreate()
-{
+CDrvdProp *CPattern::PdpCreate() {
 	return nullptr;
 }
 
@@ -35,8 +34,7 @@ CDrvdProp* CPattern::PdpCreate()
 //		expression has to take care of this on a higher level
 //
 //---------------------------------------------------------------------------
-CReqdProp* CPattern::PrpCreate() const
-{
+CReqdProp *CPattern::PrpCreate() const {
 	return nullptr;
 }
 
@@ -48,8 +46,7 @@ CReqdProp* CPattern::PrpCreate() const
 //		match against an operator
 //
 //---------------------------------------------------------------------------
-bool CPattern::Matches(Operator *pop)
-{
+bool CPattern::Matches(Operator *pop) {
 	return logical_type == pop->logical_type && physical_type == pop->physical_type;
 }
 
@@ -61,8 +58,7 @@ bool CPattern::Matches(Operator *pop)
 //		By default patterns are leaves; no need to call this function ever
 //
 //---------------------------------------------------------------------------
-bool CPattern::FInputOrderSensitive()
-{
+bool CPattern::FInputOrderSensitive() {
 	return true;
 }
 
@@ -74,8 +70,7 @@ bool CPattern::FInputOrderSensitive()
 //		Return a copy of the operator with remapped columns
 //
 //---------------------------------------------------------------------------
-Operator* CPattern::PopCopyWithRemappedColumns(std::map<ULONG, ColumnBinding> colref_mapping, bool must_exist)
-{
+Operator *CPattern::PopCopyWithRemappedColumns(std::map<ULONG, ColumnBinding> colref_mapping, bool must_exist) {
 	return NULL;
 }
-}
+} // namespace gpopt

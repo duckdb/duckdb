@@ -53,7 +53,7 @@ public:
 		return "CPatternLeaf";
 	}
 
-	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override
+	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override
 	{
 		return make_uniq<CPatternLeaf>();
 	}

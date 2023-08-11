@@ -50,7 +50,7 @@ CGroupExpression* COptimizationContext::PgexprBest() const
 	{
 		return nullptr;
 	}
-	return m_pccBest->m_pgexpr;
+	return m_pccBest->m_group_expression;
 }
 
 //---------------------------------------------------------------------------
