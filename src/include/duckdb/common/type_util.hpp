@@ -63,7 +63,8 @@ PhysicalType GetTypeId() {
 
 template <class T>
 bool TypeIsNumber() {
-	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>();
+	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>() ||
+	       std::is_same<T, uhugeint_t>();
 }
 
 template <class T>
