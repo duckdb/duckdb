@@ -406,7 +406,7 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 		}
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
 			// an extension is required to read this file but it is not loaded - try to load it
-			ExtensionHelper::LoadExternalExtension(context, required_extension);
+			Catalog::TryAutoloadExtension(context, required_extension);
 			// success! glob again
 			// check the extension is loaded just in case to prevent an infinite loop here
 			if (!context.db->ExtensionIsLoaded(required_extension)) {

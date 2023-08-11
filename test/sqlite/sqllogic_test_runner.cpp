@@ -15,7 +15,10 @@ namespace duckdb {
 SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)), finished_processing_file(false) {
 	config = GetTestConfig();
 	config->options.load_extensions = false;
-	config->options.autoload_known_extensions = false;
+	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
+	if (!env_var) {
+		config->options.autoload_known_extensions = false;
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {

@@ -9,14 +9,13 @@ import subprocess
 import glob
 import shutil
 
-if len(sys.argv) != 3:
-    print("Usage: scripts/create_local_extension_repo.py <path/to/duckdb/build> ")
+if len(sys.argv) != 4:
+    print("Usage: scripts/create_local_extension_repo.py <path/to/duckdb/binary> <path/to/duckdb/build> <path/to/local_repo>")
     exit(1)
 
-src_path = sys.argv[1]
+duckdb_path  = sys.argv[1]
+extension_path = sys.argv[2]
 
-# Generate queries for platform and version
-duckdb_path = os.path.join(src_path, 'duckdb')
 duckdb_invocation = [duckdb_path, '-noheader', '-list', '-c']
 platform_query = duckdb_invocation.copy()
 platform_query.append('SELECT platform FROM pragma_platform();')
@@ -36,12 +35,12 @@ source_id = res.stdout.decode('ascii').strip()
 version_path = source_id if "-dev" in duckdb_version else duckdb_version
 
 # Create destination path
-dest_path = os.path.join(sys.argv[2], version_path, duckdb_platform)
+dest_path = os.path.join(sys.argv[3], version_path, duckdb_platform)
 if not os.path.exists(dest_path):
     os.makedirs(dest_path)
 
 # Now copy over the extensions to the correct path
-glob_string = os.path.join(src_path, 'extension', '*', '*.duckdb_extension')
+glob_string = os.path.join(extension_path, 'extension', '*', '*.duckdb_extension')
 for file in glob.glob(glob_string):
     dest_file = os.path.join(dest_path, os.path.basename(file))
     shutil.copy(file, dest_file)

@@ -713,7 +713,6 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 	return *Catalog::GetEntry(context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 
-// FIXME: 3
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
                                              const string &schema, const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {

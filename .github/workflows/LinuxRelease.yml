@@ -42,18 +42,12 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     env:
+      EXTENSION_CONFIGS: './.github/config/bundled_extensions.cmake'
+      LOCAL_EXTENSION_REPO: '/tmp'
       GEN: ninja
       BUILD_BENCHMARK: 1
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_FTS: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
       BUILD_ODBC: 1
-      BUILD_JEMALLOC: 1
       DEBUG_STACKTRACE: 1
-      BUILD_AUTOCOMPLETE: 1
       FORCE_WARN_UNUSED: 1
 
     steps:
@@ -119,13 +113,6 @@ jobs:
    env:
      GEN: ninja
      BUILD_BENCHMARK: 1
-     BUILD_ICU: 1
-     BUILD_INET: 1
-     BUILD_TPCH: 1
-     BUILD_FTS: 1
-     BUILD_JSON: 1
-     BUILD_EXCEL: 1
-     BUILD_JEMALLOC: 1
      TREAT_WARNINGS_AS_ERRORS: 1
      FORCE_WARN_UNUSED: 1
      BUILD_ODBC: 1
