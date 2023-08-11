@@ -4,6 +4,8 @@
 #include "duckdb/common/types/row/row_data_collection.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <numeric>
+
 namespace duckdb {
 
 void RowDataCollectionScanner::AlignHeapBlocks(RowDataCollection &swizzled_block_collection,
@@ -155,6 +157,31 @@ RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, Ro
 	ValidateUnscannedBlock();
 }
 
+RowDataCollectionScanner::RowDataCollectionScanner(RowDataCollection &rows_p, RowDataCollection &heap_p,
+                                                   const RowLayout &layout_p, bool external_p, idx_t block_idx,
+                                                   bool flush_p)
+    : rows(rows_p), heap(heap_p), layout(layout_p), read_state(*this), total_count(rows.count), total_scanned(0),
+      external(external_p), flush(flush_p), unswizzling(!layout.AllConstant() && external && !heap.keep_pinned) {
+
+	if (unswizzling) {
+		D_ASSERT(rows.blocks.size() == heap.blocks.size());
+	}
+
+	D_ASSERT(block_idx < rows.blocks.size());
+	read_state.block_idx = block_idx;
+	read_state.entry_idx = 0;
+
+	//	Pretend that we have scanned up to the start block
+	//	and will stop at the end
+	auto begin = rows.blocks.begin();
+	auto end = begin + block_idx;
+	total_scanned =
+	    std::accumulate(begin, end, idx_t(0), [&](idx_t c, const unique_ptr<RowDataBlock> &b) { return c + b->count; });
+	total_count = total_scanned + (*end)->count;
+
+	ValidateUnscannedBlock();
+}
+
 void RowDataCollectionScanner::SwizzleBlock(RowDataBlock &data_block, RowDataBlock &heap_block) {
 	// Pin the data block and swizzle the pointers within the rows
 	D_ASSERT(!data_block.block->IsSwizzled());
@@ -190,7 +217,7 @@ void RowDataCollectionScanner::ReSwizzle() {
 }
 
 void RowDataCollectionScanner::ValidateUnscannedBlock() const {
-	if (unswizzling && read_state.block_idx < rows.blocks.size()) {
+	if (unswizzling && read_state.block_idx < rows.blocks.size() && Remaining()) {
 		D_ASSERT(rows.blocks[read_state.block_idx]->block->IsSwizzled());
 	}
 }
@@ -201,6 +228,9 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		chunk.SetCardinality(count);
 		return;
 	}
+
+	//	Only flush blocks we processed.
+	const auto flush_block_idx = read_state.block_idx;
 
 	const idx_t &row_width = layout.GetRowWidth();
 	// Set up a batch of pointers to scan data from
@@ -227,6 +257,8 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		}
 		// Update state indices
 		read_state.entry_idx += next;
+		scanned += next;
+		total_scanned += next;
 		if (read_state.entry_idx == data_block->count) {
 			// Pin completed blocks so we don't lose them
 			pinned_blocks.emplace_back(rows.buffer_manager.Pin(data_block->block));
@@ -238,7 +270,6 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 			read_state.entry_idx = 0;
 			ValidateUnscannedBlock();
 		}
-		scanned += next;
 	}
 	D_ASSERT(scanned == count);
 	// Deserialize the payload data
@@ -248,14 +279,13 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 	}
 	chunk.SetCardinality(count);
 	chunk.Verify();
-	total_scanned += scanned;
 
 	//	Switch to a new set of pinned blocks
 	read_state.pinned_blocks.swap(pinned_blocks);
 
 	if (flush) {
 		// Release blocks we have passed.
-		for (idx_t i = 0; i < read_state.block_idx; ++i) {
+		for (idx_t i = flush_block_idx; i < read_state.block_idx; ++i) {
 			rows.blocks[i]->block = nullptr;
 			if (unswizzling) {
 				heap.blocks[i]->block = nullptr;
@@ -263,7 +293,7 @@ void RowDataCollectionScanner::Scan(DataChunk &chunk) {
 		}
 	} else if (unswizzling) {
 		// Reswizzle blocks we have passed so they can be flushed safely.
-		for (idx_t i = 0; i < read_state.block_idx; ++i) {
+		for (idx_t i = flush_block_idx; i < read_state.block_idx; ++i) {
 			auto &data_block = rows.blocks[i];
 			if (data_block->block && !data_block->block->IsSwizzled()) {
 				SwizzleBlock(*data_block, *heap.blocks[i]);

@@ -89,6 +89,9 @@ string DuckDB::Platform() {
 		postfix = "_gcc4";
 	}
 #endif
+#if defined(__ANDROID__)
+	postfix += "_android"; // using + because it may also be gcc4
+#endif
 #ifdef __MINGW32__
 	postfix = "_mingw";
 #endif
