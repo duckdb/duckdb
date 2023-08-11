@@ -105,3 +105,9 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_ntile(self, table):
+        result = table.n_tile("over (order by v)", 3, "v").execute().fetchall()
+        expected = [(-1, 1), (1, 1), (1, 1), (2, 2), (5, 2), (10, 2), (11, 3), (45, 3)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

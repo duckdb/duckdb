@@ -264,15 +264,19 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
-	for (idx_t i = 0; i < input.size(); i++) {
-		if (function_parameter.empty()) {
-			expr += function_name + "(" + input[i] + ") " + window_spec;
-		} else {
-			expr += function_name + "(" + input[i] + "," + function_parameter + ") " + window_spec;
-		}
+	if (input.size() == 0 && !function_parameter.empty()) {
+		expr += function_name + "(" + function_parameter  + ") " + window_spec;
+	} else {
+		for (idx_t i = 0; i < input.size(); i++) {
+			if (function_parameter.empty()) {
+				expr += function_name + "(" + input[i] + ") " + window_spec;
+			} else {
+				expr += function_name + "(" + input[i] + "," + function_parameter + ") " + window_spec;
+			}
 
-		if (i < input.size() - 1) {
-			expr += ",";
+			if (i < input.size() - 1) {
+				expr += ",";
+			}
 		}
 	}
 	return expr;
@@ -428,6 +432,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PercentRank(const string &window_
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spec, const string &projected_columns) {
 	auto expr = GenerateExpressionList("cume_dist", "*", "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets, const string &projected_columns) {
+	auto expr = GenerateExpressionList("ntile", "", "", std::to_string(num_buckets), projected_columns, window_spec);
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
