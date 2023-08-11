@@ -6,16 +6,16 @@ statement ok
 PRAGMA enable_verification
 
 # negation
-query I
-SELECT ~(-50::UHUGEINT);
+query II
+SELECT ~(-50::UHUGEINT), -(-(50::UHUGEINT));
 ----
-50
+49	50
 
 # negate 0
 query I
 SELECT -(0::UHUGEINT)
 ----
-340282366920938463463374607431768211455
+0
 
 # addition
 # simple addition: small values
