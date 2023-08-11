@@ -24,7 +24,7 @@ using namespace gpopt;
 CXformFilterImplementation::CXformFilterImplementation()
     :CXformImplementation(make_uniq<LogicalFilter>())
 {
-    this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+    this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------

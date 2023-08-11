@@ -56,7 +56,7 @@ namespace gpopt {
 CEngine::CEngine() : m_pqc(nullptr), m_ulCurrSearchStage(0), m_pmemo(nullptr), m_xforms(nullptr) {
 	m_pmemo = new CMemo();
 	m_pexprEnforcerPattern = make_uniq<CPatternLeaf>();
-	m_xforms = new CXformSet();
+	m_xforms = new CXform_set();
 }
 
 //---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ void CEngine::FinalizeImplementation() {
 //---------------------------------------------------------------------------
 void CEngine::FinalizeSearchStage() {
 	m_xforms = nullptr;
-	m_xforms = new CXformSet();
+	m_xforms = new CXform_set();
 	m_ulCurrSearchStage++;
 	m_pmemo->ResetGroupStates();
 }

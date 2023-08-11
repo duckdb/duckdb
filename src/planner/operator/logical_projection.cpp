@@ -82,8 +82,8 @@ Operator *LogicalProjection::SelfRehydrate(CCostContext *pcc, duckdb::vector<Ope
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet *LogicalProjection::PxfsCandidates() const {
-	CXformSet *xform_set = new CXformSet();
+CXform_set *LogicalProjection::PxfsCandidates() const {
+	CXform_set *xform_set = new CXform_set();
 	(void)xform_set->set(CXform::ExfLogicalProj2PhysicalProj);
 	// (void) xform_set->set(CXform::ExfProject2Apply);
 	// (void) xform_set->set(CXform::ExfProject2ComputeScalar);

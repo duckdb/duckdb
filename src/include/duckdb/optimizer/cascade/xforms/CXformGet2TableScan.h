@@ -39,13 +39,13 @@ public:
 	}
 
 	// ident accessors
-	virtual EXformId Exfid() const
+	virtual EXformId ID() const
 	{
 		return ExfGet2TableScan;
 	}
 
 	// return a string for xform name
-	virtual const CHAR* SzId() const
+	virtual const CHAR*Name() const
 	{
 		return "CXformGet2TableScan";
 	}

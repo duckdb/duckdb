@@ -24,7 +24,7 @@ using namespace gpopt;
 CXformOrderImplementation::CXformOrderImplementation()
     :CXformImplementation(make_uniq<LogicalOrder>(duckdb::vector<BoundOrderByNode>()))
 {
-     this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+     this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------

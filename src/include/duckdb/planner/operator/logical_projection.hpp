@@ -48,7 +48,7 @@ public:
 	// Transformations
 	//-------------------------------------------------------------------------------------
 	// candidate set of xforms
-	CXformSet* PxfsCandidates() const override;
+	CXform_set * PxfsCandidates() const override;
 
 	duckdb::unique_ptr<Operator> Copy() override;
 

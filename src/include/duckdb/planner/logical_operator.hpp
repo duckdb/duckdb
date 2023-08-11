@@ -62,7 +62,7 @@ public:
 	CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) override;
 
 	// Transformations: it outputs the candidate set of xforms
-	virtual CXformSet *PxfsCandidates() const {
+	virtual CXform_set *PxfsCandidates() const {
 		return nullptr;
 	}
 

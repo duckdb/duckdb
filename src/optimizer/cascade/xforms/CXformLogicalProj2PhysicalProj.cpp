@@ -24,7 +24,7 @@ using namespace gpopt;
 CXformLogicalProj2PhysicalProj::CXformLogicalProj2PhysicalProj()
 	: CXformImplementation(make_uniq<LogicalProjection>(0, std::move(duckdb::vector<duckdb::unique_ptr<Expression>>())))
 {
-	this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+	this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------

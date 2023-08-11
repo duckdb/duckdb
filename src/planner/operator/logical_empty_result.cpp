@@ -61,9 +61,9 @@ CKeyCollection* LogicalEmptyResult::DeriveKeyCollection(CExpressionHandle &exprh
 // Transformations
 //-------------------------------------------------------------------------------------
 // candidate set of xforms
-CXformSet* LogicalEmptyResult::PxfsCandidates() const
+CXform_set * LogicalEmptyResult::PxfsCandidates() const
 {
-	CXformSet* xform_set = new CXformSet();
+	CXform_set * xform_set = new CXform_set();
 	return xform_set;
 }
 } // namespace duckdb

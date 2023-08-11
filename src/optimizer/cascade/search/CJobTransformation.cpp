@@ -97,7 +97,7 @@ CJobTransformation::EEvent CJobTransformation::EevtTransform(CSchedulerContext* 
 	ULONG ulElapsedTime = 0;
 	ULONG ulNumberOfBindings = 0;
 	pgexpr->Transform(pxform, pxfres, &ulElapsedTime, &ulNumberOfBindings);
-	psc->m_peng->InsertXformResult(pgexpr->m_pgroup, pxfres, pxform->Exfid(), pgexpr, ulElapsedTime, ulNumberOfBindings);
+	psc->m_peng->InsertXformResult(pgexpr->m_pgroup, pxfres, pxform->ID(), pgexpr, ulElapsedTime, ulNumberOfBindings);
 	return eevCompleted;
 }
 

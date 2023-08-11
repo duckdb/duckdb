@@ -5,8 +5,7 @@
 //	@doc:
 //		Management of global xform set
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CXformFactory_H
-#define GPOPT_CXformFactory_H
+#pragma once
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXform.h"
@@ -25,63 +24,48 @@ using namespace gpos;
 class CXformFactory {
 public:
 	// range of all xforms
-	CXform *m_rgpxf[CXform::ExfSentinel];
-
+	CXform *m_xform_range[CXform::ExfSentinel];
 	// name -> xform map
-	unordered_map<CHAR *, CXform *> m_phmszxform;
-
+	unordered_map<CHAR *, CXform *> m_xform_dict;
 	// bitset of exploration xforms
-	CXformSet *m_pxfsExploration;
-
+	CXform_set *m_exploration_xforms;
 	// bitset of implementation xforms
-	CXformSet *m_pxfsImplementation;
-
+	CXform_set *m_implementation_xforms;
 	// global instance
-	static CXformFactory *m_pxff;
+	static CXformFactory *m_xform_factory;
 
 public:
 	// ctor
 	explicit CXformFactory();
-
 	// np copy ctor
 	CXformFactory(const CXformFactory &) = delete;
-
 	// dtor
 	~CXformFactory();
 
 public:
 	// actual adding of xform
-	void Add(CXform *pxform);
-
+	void Add(CXform *xform);
 	// create all xforms
 	void Instantiate();
-
 	// accessor by xform id
-	CXform *Pxf(CXform::EXformId exfid) const;
-
+	CXform *Xform(CXform::EXformId xform_id) const;
 	// accessor by xform name
-	CXform *Pxf(const CHAR *szXformName) const;
-
+	CXform *Xform(const CHAR *xform_name) const;
 	// accessor of exploration xforms
-	CXformSet *PxfsExploration() const {
-		return m_pxfsExploration;
+	CXform_set *XformExploration() const {
+		return m_exploration_xforms;
 	}
-
 	// accessor of implementation xforms
-	CXformSet *PxfsImplementation() const {
-		return m_pxfsImplementation;
+	CXform_set *XformImplementation() const {
+		return m_implementation_xforms;
 	}
-
 	// global accessor
-	static CXformFactory *Pxff() {
-		return m_pxff;
+	static CXformFactory *XformFactory() {
+		return m_xform_factory;
 	}
-
 	// initialize global factory instance
 	static GPOS_RESULT Init();
-
 	// destroy global factory instance
 	void Shutdown();
 }; // class CXformFactory
 } // namespace gpopt
-#endif

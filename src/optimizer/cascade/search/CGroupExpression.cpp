@@ -535,7 +535,7 @@ void CGroupExpression::Transform(CXform* pxform, CXformResult* pxfres, ULONG* pu
 	CXformContext* pxfctxt = new CXformContext();
 	COptimizerConfig* optconfig = COptCtxt::PoctxtFromTLS()->m_optimizer_config;
 	ULONG bindThreshold = optconfig->m_hint->UlXformBindThreshold();
-	Operator* pexprPattern = pxform->m_pop.get();
+	Operator* pexprPattern = pxform->m_operator.get();
 	Operator* pexpr = binding.PexprExtract(this, pexprPattern, nullptr);
 	while (nullptr != pexpr)
 	{

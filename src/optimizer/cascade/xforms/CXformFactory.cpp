@@ -5,19 +5,20 @@
 //	@doc:
 //		Management of the global xform set
 //---------------------------------------------------------------------------
-#include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
+
+#include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/common/clibwrapper.h"
 #include "duckdb/optimizer/cascade/xforms/CXform.h"
+#include "duckdb/optimizer/cascade/xforms/CXformFilterImplementation.h"
 #include "duckdb/optimizer/cascade/xforms/CXformGet2TableScan.h"
 #include "duckdb/optimizer/cascade/xforms/CXformLogicalProj2PhysicalProj.h"
-#include "duckdb/optimizer/cascade/common/clibwrapper.h"
 #include "duckdb/optimizer/cascade/xforms/CXformOrderImplementation.h"
-#include "duckdb/optimizer/cascade/xforms/CXformFilterImplementation.h"
 
-using namespace gpopt;
+namespace gpopt {
 
 // global instance of xform factory
-CXformFactory* CXformFactory::m_pxff = nullptr;
+CXformFactory *CXformFactory::m_xform_factory = nullptr;
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -27,16 +28,14 @@ CXformFactory* CXformFactory::m_pxff = nullptr;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformFactory::CXformFactory()
-	: m_phmszxform(NULL), m_pxfsExploration(NULL), m_pxfsImplementation(NULL)
-{
+CXformFactory::CXformFactory() : m_xform_dict(0), m_exploration_xforms(nullptr), m_implementation_xforms(nullptr) {
 	// null out array so dtor can be called prematurely
-	for (ULONG i = 0; i < CXform::ExfSentinel; i++)
-	{
-		m_rgpxf[i] = NULL;
+	for (ULONG i = 0; i < CXform::ExfSentinel; i++) {
+		m_xform_range[i] = nullptr;
 	}
-	m_pxfsExploration = new CXformSet();
-	m_pxfsImplementation = new CXformSet();
+
+	m_exploration_xforms = new CXform_set();
+	m_implementation_xforms = new CXform_set();
 }
 
 //---------------------------------------------------------------------------
@@ -47,22 +46,19 @@ CXformFactory::CXformFactory()
 //		Dtor
 //
 //---------------------------------------------------------------------------
-CXformFactory::~CXformFactory()
-{
+CXformFactory::~CXformFactory() {
 	// delete all xforms in the array
-	for (ULONG i = 0; i < CXform::ExfSentinel; i++)
-	{
-		if (NULL == m_rgpxf[i])
-		{
+	for (ULONG i = 0; i < CXform::ExfSentinel; i++) {
+		if (nullptr == m_xform_range[i]) {
 			// dtor called after failing to populate array
 			break;
 		}
-		delete m_rgpxf[i];
-		m_rgpxf[i] = nullptr;
+		delete m_xform_range[i];
+		m_xform_range[i] = nullptr;
 	}
-	m_phmszxform.clear();
-	delete m_pxfsExploration;
-	delete m_pxfsImplementation;
+	m_xform_dict.clear();
+	delete m_exploration_xforms;
+	delete m_implementation_xforms;
 }
 
 //---------------------------------------------------------------------------
@@ -74,21 +70,19 @@ CXformFactory::~CXformFactory()
 //		are added for readability/debugging
 //
 //---------------------------------------------------------------------------
-void CXformFactory::Add(CXform* pxform)
-{
-	CXform::EXformId exfid = pxform->Exfid();
-	m_rgpxf[exfid] = pxform;
+void CXformFactory::Add(CXform *xform) {
+	CXform::EXformId xform_id = xform->ID();
+	m_xform_range[xform_id] = xform;
 	// create name -> xform mapping
-	ULONG length = clib::Strlen(pxform->SzId());
-	CHAR* szXformName = new CHAR[length + 1];
-	clib::Strncpy(szXformName, pxform->SzId(), length + 1);
-	m_phmszxform.insert(make_pair(szXformName, pxform));
-	CXformSet* xform_set = m_pxfsExploration;
-	if (pxform->FImplementation())
-	{
-		xform_set = m_pxfsImplementation;
+	ULONG length = clib::Strlen(xform->Name());
+	CHAR *sz_xform_name = new CHAR[length + 1];
+	clib::Strncpy(sz_xform_name, xform->Name(), length + 1);
+	m_xform_dict.insert(make_pair(sz_xform_name, xform));
+	CXform_set *xform_set = m_exploration_xforms;
+	if (xform->FImplementation()) {
+		xform_set = m_implementation_xforms;
 	}
-	xform_set->set(exfid);
+	xform_set->set(xform_id);
 }
 
 //---------------------------------------------------------------------------
@@ -99,8 +93,7 @@ void CXformFactory::Add(CXform* pxform)
 //		Construct all xforms
 //
 //---------------------------------------------------------------------------
-void CXformFactory::Instantiate()
-{
+void CXformFactory::Instantiate() {
 	/* I comment here */
 	/*
 	Add(make_shared<CXformProject2ComputeScalar>();
@@ -265,36 +258,31 @@ void CXformFactory::Instantiate()
 	*/
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformFactory::Pxf
+//		CXformFactory::Xform
 //
 //	@doc:
 //		Accessor of xform array
 //
 //---------------------------------------------------------------------------
-CXform* CXformFactory::Pxf(CXform::EXformId exfid) const
-{
-	CXform* pxf = m_rgpxf[exfid];
+CXform *CXformFactory::Xform(CXform::EXformId xform_id) const {
+	CXform *pxf = m_xform_range[xform_id];
 	return pxf;
 }
 
-
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformFactory::Pxf
+//		CXformFactory::Xform
 //
 //	@doc:
 //		Accessor by xform name
 //
 //---------------------------------------------------------------------------
-CXform* CXformFactory::Pxf(const CHAR* szXformName) const
-{
-	auto itr = m_phmszxform.find(const_cast<CHAR*>(szXformName));
+CXform *CXformFactory::Xform(const CHAR *xform_name) const {
+	auto itr = m_xform_dict.find(const_cast<CHAR *>(xform_name));
 	return itr->second;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -304,16 +292,14 @@ CXform* CXformFactory::Pxf(const CHAR* szXformName) const
 //		Initializes global instance
 //
 //---------------------------------------------------------------------------
-GPOS_RESULT CXformFactory::Init()
-{
-	GPOS_RESULT eres = GPOS_OK;
+GPOS_RESULT CXformFactory::Init() {
+	GPOS_RESULT result = GPOS_OK;
 	// create xform factory instance
-	m_pxff = new CXformFactory();
+	m_xform_factory = new CXformFactory();
 	// instantiating the factory
-	m_pxff->Instantiate();
-	return eres;
+	m_xform_factory->Instantiate();
+	return result;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -323,10 +309,10 @@ GPOS_RESULT CXformFactory::Init()
 //		Cleans up allocated memory pool
 //
 //---------------------------------------------------------------------------
-void CXformFactory::Shutdown()
-{
-	CXformFactory* pxff = CXformFactory::Pxff();
+void CXformFactory::Shutdown() {
+	CXformFactory *xform_factory = CXformFactory::XformFactory();
 	// destroy xform factory
-	CXformFactory::m_pxff = nullptr;
-	delete pxff;
+	CXformFactory::m_xform_factory = nullptr;
+	delete xform_factory;
 }
+} // namespace gpopt
