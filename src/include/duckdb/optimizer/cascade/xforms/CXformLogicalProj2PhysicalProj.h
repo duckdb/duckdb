@@ -11,8 +11,7 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformImplementation.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -23,36 +22,27 @@ using namespace gpos;
 //		Transform Get to TableScan
 //
 //---------------------------------------------------------------------------
-class CXformLogicalProj2PhysicalProj : public CXformImplementation
-{
+class CXformLogicalProj2PhysicalProj : public CXformImplementation {
 public:
 	// ctor
 	explicit CXformLogicalProj2PhysicalProj();
-    
-    CXformLogicalProj2PhysicalProj(const CXformLogicalProj2PhysicalProj &) = delete;
-	
-    // dtor
-	virtual ~CXformLogicalProj2PhysicalProj()
-	{
-	}
 
+	CXformLogicalProj2PhysicalProj(const CXformLogicalProj2PhysicalProj &) = delete;
+
+	// dtor
+	~CXformLogicalProj2PhysicalProj() override = default;
 	// ident accessors
-	virtual EXformId Exfid() const
-	{
+	EXformId ID() const override {
 		return ExfLogicalProj2PhysicalProj;
 	}
-
 	// return a string for xform name
-	virtual const CHAR* SzId() const
-	{
+	const CHAR *Name() const override {
 		return "CXformLogicalProj2PhysicalProj";
 	}
-
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const;
-
+	EXformPromise XformPromise(CExpressionHandle &expression_handle) const override;
 	// actual transform
-	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;
+	void Transform(CXformContext *pxfctxt, CXformResult *pxfres, Operator *pexpr) const override;
 };
-}  // namespace gpopt
+} // namespace gpopt
 #endif

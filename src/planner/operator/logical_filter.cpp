@@ -111,9 +111,9 @@ Operator* LogicalFilter::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operato
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet* LogicalFilter::PxfsCandidates() const
+CXform_set * LogicalFilter::PxfsCandidates() const
 {
-	CXformSet* xform_set = new CXformSet();
+	CXform_set * xform_set = new CXform_set();
 	(void) xform_set->set(CXform::ExfSelect2Apply);
 	(void) xform_set->set(CXform::ExfRemoveSubqDistinct);
 	(void) xform_set->set(CXform::ExfInlineCTEConsumerUnderSelect);

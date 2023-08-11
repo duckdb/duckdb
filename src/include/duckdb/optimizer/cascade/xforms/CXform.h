@@ -6,16 +6,16 @@
 //		Base class for all transformations: substitution, exploration,
 //		and implementation
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CXform_H
-#define GPOPT_CXform_H
+#pragma once
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformContext.h"
 #include "duckdb/optimizer/cascade/xforms/CXformResult.h"
+
 #include <bitset>
 
-namespace gpopt
-{
+namespace gpopt {
+
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -26,32 +26,26 @@ using namespace gpos;
 //		base class for all transformations
 //
 //---------------------------------------------------------------------------
-class CXform
-{
+class CXform {
 public:
 	// pattern
-	duckdb::unique_ptr<Operator> m_pop;
+	duckdb::unique_ptr<Operator> m_operator;
 
 public:
 	// private copy ctor
 	CXform(CXform &);
-
 	// ctor
-	explicit CXform(duckdb::unique_ptr<Operator> pexpr);
-
+	explicit CXform(duckdb::unique_ptr<Operator> expression) : m_operator(std::move(expression)) {};
 	// dtor
-	virtual ~CXform();
+	virtual ~CXform() = default;
 
 public:
 	// identification
 	//
-	// IMPORTANT: when adding new Xform Ids, please add them near
-	// the end of the enum (before ExfInvalid). Xform Ids are sometimes
-	// referenced using their location in the array (e.g. when disabling
-	// xforms using traceflags), so shifting these ids may result in
-	// accidentally disabling the wrong xform
-	enum EXformId
-	{
+	// IMPORTANT: when adding new Xform Ids, please add them near the end of the enum (before ExfInvalid). Xform Ids are
+	// sometimes referenced using their location in the array (e.g. when disabling xforms using traceflags), so shifting
+	// these ids may result in accidentally disabling the wrong xform
+	enum EXformId {
 		/* I comment here */
 		ExfGet2TableScan = 0,
 		ExfLogicalProj2PhysicalProj = 1,
@@ -207,94 +201,72 @@ public:
 		ExfInvalid,
 		ExfSentinel = ExfInvalid
 	};
-
-	// promise levels;
-	// used for prioritizing xforms as well as bypassing inapplicable xforms
-	enum EXformPromise
-	{
-		ExfpNone, ExfpLow, ExfpMedium, ExfpHigh	 // xform has high priority
+	// promise levels; used for prioritizing xforms as well as bypassing inapplicable xforms
+	enum EXformPromise {
+		ExfpNone,
+		ExfpLow,
+		ExfpMedium,
+		ExfpHigh // xform has high priority
 	};
-	
+
 public:
 	// ident accessors
-	virtual EXformId Exfid() const = 0;
-
+	virtual EXformId ID() const = 0;
 	// return a string for xform name
-	virtual const CHAR *SzId() const = 0;
-
-	// return true if xform should be applied only once.
-	// for expression of type CPatternTree, in deep trees, the number
-	// of expressions generated for group expression can be significantly
-	// large causing the Xform to be applied many times. This can lead to
-	// significantly long planning time, so such Xform should only be applied once
+	virtual const CHAR *Name() const = 0;
+	// return true if xform should be applied only once. For expression of type CPatternTree, in deep trees, the number
+	// of expressions generated for group expression can be significantly large causing the Xform to be applied many
+	// times. This can lead to significantly long planning time, so such Xform should only be applied once
 	virtual bool IsApplyOnce();
 
 public:
 	// the following functions check xform type
 	// is xform substitution?
-	virtual bool FSubstitution() const
-	{
+	virtual bool FSubstitution() const {
 		return false;
 	}
-
 	// is xform exploration?
-	virtual bool FExploration() const
-	{
+	virtual bool FExploration() const {
 		return false;
 	}
-
 	// is xform implementation?
-	virtual bool FImplementation() const
-	{
+	virtual bool FImplementation() const {
 		return false;
 	}
-
 	// actual transformation
-	virtual void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const = 0;
-
+	virtual void Transform(CXformContext *pxfctxt, CXformResult *pxfres, Operator *pexpr) const = 0;
 	// check compatibility with another xform
-	virtual bool FCompatible(CXform::EXformId)
-	{
+	virtual bool FCompatible(CXform::EXformId) {
 		return true;
 	}
-
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const = 0;
+	virtual EXformPromise XformPromise(CExpressionHandle &exprhdl) const = 0;
 
 public:
 	// equality function over xform ids
-	static bool FEqualIds(const CHAR* szIdOne, const CHAR* szIdTwo);
-
+	static bool FEqualIds(const CHAR *sz_id_one, const CHAR *sz_id_two);
 	// returns a set containing all xforms related to index join
 	// caller takes ownership of the returned set
 	static bitset<ExfSentinel> PbsIndexJoinXforms();
-
 	// returns a set containing all xforms related to bitmap indexes
 	// caller takes ownership of the returned set
 	static bitset<ExfSentinel> PbsBitmapIndexXforms();
-
 	// returns a set containing all xforms related to heterogeneous indexes
 	// caller takes ownership of the returned set
 	static bitset<ExfSentinel> PbsHeterogeneousIndexXforms();
-
 	// returns a set containing all xforms that generate a plan with a hash join
 	// caller takes ownership of the returned set
 	static bitset<ExfSentinel> PbsHashJoinXforms();
-
 	// returns a set containing xforms to use only the join order as available
 	// in the query
 	static bitset<ExfSentinel> PbsJoinOrderInQueryXforms();
-
 	// returns a set containing xforms to use combination of greedy xforms
 	// for join order
 	static bitset<ExfSentinel> PbsJoinOrderOnGreedyXforms();
-
 	// returns a set containing xforms to use for exhaustive join order
 	static bitset<ExfSentinel> PbsJoinOrderOnExhaustiveXforms();
-
 	// returns a set containing xforms to use for exhaustive2 join order
 	static bitset<ExfSentinel> PbsJoinOrderOnExhaustive2Xforms();
-};	// class CXform
-typedef bitset<CXform::ExfSentinel> CXformSet;
-}  // namespace gpopt
-#endif
+}; // class CXform
+typedef bitset<CXform::ExfSentinel> CXform_set;
+} // namespace gpopt

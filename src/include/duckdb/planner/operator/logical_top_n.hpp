@@ -61,6 +61,6 @@ public:
 	// Transformations
 	//-------------------------------------------------------------------------------------
 	// candidate set of xforms
-	virtual CXformSet* PxfsCandidates() const override;
+	virtual CXform_set * PxfsCandidates() const override;
 };
 } // namespace duckdb

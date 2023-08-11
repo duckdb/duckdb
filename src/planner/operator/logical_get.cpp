@@ -208,8 +208,8 @@ vector<idx_t> LogicalGet::GetTableIndex() const {
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet *LogicalGet::PxfsCandidates() const {
-	CXformSet *xform_set = new CXformSet();
+CXform_set *LogicalGet::PxfsCandidates() const {
+	CXform_set *xform_set = new CXform_set();
 	(void)xform_set->set(CXform::ExfGet2TableScan);
 	return xform_set;
 }

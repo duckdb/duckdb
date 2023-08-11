@@ -24,18 +24,18 @@ using namespace gpopt;
 CXformOrderImplementation::CXformOrderImplementation()
     :CXformImplementation(make_uniq<LogicalOrder>(duckdb::vector<BoundOrderByNode>()))
 {
-     this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+     this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformGet2TableScan::Exfp
+//		CXformGet2TableScan::XformPromise
 //
 //	@doc:
 //		Compute promise of xform
 //
 //---------------------------------------------------------------------------
-CXform::EXformPromise CXformOrderImplementation::Exfp(CExpressionHandle &exprhdl) const
+CXform::EXformPromise CXformOrderImplementation::XformPromise(CExpressionHandle &exprhdl) const
 {
 	return CXform::ExfpMedium;
 }

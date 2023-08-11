@@ -75,7 +75,7 @@ public:
 		return 1;
 	}
 
-	CXformSet* PxfsCandidates() const override;
+	CXform_set * PxfsCandidates() const override;
 
 	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
 

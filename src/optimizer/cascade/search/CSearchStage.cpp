@@ -19,11 +19,11 @@ using namespace gpos;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CSearchStage::CSearchStage(CXformSet* xform_set, ULONG ulTimeThreshold, double costThreshold)
+CSearchStage::CSearchStage(CXform_set * xform_set, ULONG ulTimeThreshold, double costThreshold)
 	: m_xforms(xform_set), m_time_threshold(ulTimeThreshold), m_cost_threshold(costThreshold), m_costBest(-0.5)
 {
 	// include all implementation rules in any search strategy
-	*m_xforms |= *(CXformFactory::Pxff()->PxfsImplementation());
+	*m_xforms |= *(CXformFactory::XformFactory()->XformImplementation());
 	m_pexprBest = nullptr;
 }
 
@@ -70,8 +70,8 @@ void CSearchStage::SetBestExpr(Operator* pexpr)
 //---------------------------------------------------------------------------
 duckdb::vector<CSearchStage*> CSearchStage::PdrgpssDefault()
 {
-	CXformSet* xform_set = new CXformSet();
-	*xform_set |= *(CXformFactory::Pxff()->PxfsExploration());
+	CXform_set * xform_set = new CXform_set();
+	*xform_set |= *(CXformFactory::XformFactory()->XformExploration());
 	duckdb::vector<CSearchStage*> search_stage_array;
 	search_stage_array.push_back(new CSearchStage(xform_set));
 	return search_stage_array;

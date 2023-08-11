@@ -94,9 +94,9 @@ void LogicalJoin::Deserialize(LogicalJoin &join, LogicalDeserializationState &st
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet* LogicalJoin::PxfsCandidates() const
+CXform_set * LogicalJoin::PxfsCandidates() const
 {
-	CXformSet* xform_set = new CXformSet();
+	CXform_set * xform_set = new CXform_set();
 	if(join_type == JoinType::INNER)
 	{
 		(void) xform_set->set(CXform::ExfInnerJoin2NLJoin);

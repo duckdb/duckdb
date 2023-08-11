@@ -31,7 +31,7 @@ class CSearchStage
 {
 public:
 	// set of xforms to be applied during stage
-	CXformSet* m_xforms;
+	CXform_set * m_xforms;
 
 	// time threshold in milliseconds
 	ULONG m_time_threshold;
@@ -50,7 +50,7 @@ public:
 
 public:
 	// ctor
-	CSearchStage(CXformSet* xform_set, ULONG ulTimeThreshold = gpos::ulong_max, double costThreshold = 0.0);
+	CSearchStage(CXform_set * xform_set, ULONG ulTimeThreshold = gpos::ulong_max, double costThreshold = 0.0);
 
 	// dtor
 	virtual ~CSearchStage();

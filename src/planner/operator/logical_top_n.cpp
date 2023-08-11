@@ -61,9 +61,9 @@ Operator* LogicalTopN::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet* LogicalTopN::PxfsCandidates() const
+CXform_set * LogicalTopN::PxfsCandidates() const
 {
-	CXformSet* xform_set = new CXformSet();
+	CXform_set * xform_set = new CXform_set();
 	(void) xform_set->set(CXform::ExfImplementLimit);
 	(void) xform_set->set(CXform::ExfSplitLimit);
 	return xform_set;

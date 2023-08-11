@@ -87,9 +87,9 @@ Operator* LogicalColumnDataGet::SelfRehydrate(CCostContext* pcc, duckdb::vector<
 //		Get candidate xforms
 //
 //---------------------------------------------------------------------------
-CXformSet* LogicalColumnDataGet::PxfsCandidates() const
+CXform_set * LogicalColumnDataGet::PxfsCandidates() const
 {
-	CXformSet* xform_set = new CXformSet();
+	CXform_set * xform_set = new CXform_set();
 	(void) xform_set->set(CXform::ExfImplementColumnDataGet);
 	return xform_set;
 }

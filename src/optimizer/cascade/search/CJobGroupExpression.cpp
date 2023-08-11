@@ -39,14 +39,14 @@ void gpopt::CJobGroupExpression::Init(CGroupExpression* pgexpr)
 //		Schedule transformation jobs for the given set of xforms
 //
 //---------------------------------------------------------------------------
-void gpopt::CJobGroupExpression::ScheduleTransformations(CSchedulerContext* psc, CXformSet* xform_set)
+void gpopt::CJobGroupExpression::ScheduleTransformations(CSchedulerContext* psc, CXform_set * xform_set)
 {
 	// iterate on xforms
 	for(size_t i = 0; i < CXform::EXformId::ExfSentinel; i++)
 	{
 		if (xform_set->test(i))
 		{
-			CXform* pxform = CXformFactory::Pxff()->Pxf(static_cast<CXform::EXformId>(i));
+			CXform* pxform = CXformFactory::XformFactory()->Xform(static_cast<CXform::EXformId>(i));
 			CJobTransformation::ScheduleJob(psc, m_pgexpr, pxform, this);
 		}
 	}

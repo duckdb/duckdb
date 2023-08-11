@@ -6,13 +6,13 @@
 //		Implementation of transform
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/xforms/CXformFilterImplementation.h"
-#include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/planner/operator/logical_filter.hpp"
+
 #include "duckdb/execution/operator/filter/physical_filter.hpp"
+#include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/operators/CPatternLeaf.h"
+#include "duckdb/planner/operator/logical_filter.hpp"
 
-using namespace gpopt;
-
+namespace gpopt {
 //---------------------------------------------------------------------------
 //	@function:
 //		CXformFilterImplementation::CXformFilterImplementation
@@ -21,22 +21,19 @@ using namespace gpopt;
 //		Ctor
 //
 //---------------------------------------------------------------------------
-CXformFilterImplementation::CXformFilterImplementation()
-    :CXformImplementation(make_uniq<LogicalFilter>())
-{
-    this->m_pop->AddChild(make_uniq<CPatternLeaf>());
+CXformFilterImplementation::CXformFilterImplementation() : CXformImplementation(make_uniq<LogicalFilter>()) {
+	this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformGet2TableScan::Exfp
+//		CXformGet2TableScan::XformPromise
 //
 //	@doc:
 //		Compute promise of xform
 //
 //---------------------------------------------------------------------------
-CXform::EXformPromise CXformFilterImplementation::Exfp(CExpressionHandle &exprhdl) const
-{
+CXform::EXformPromise CXformFilterImplementation::XformPromise(CExpressionHandle &expression_handle) const {
 	return CXform::ExfpMedium;
 }
 
@@ -48,20 +45,20 @@ CXform::EXformPromise CXformFilterImplementation::Exfp(CExpressionHandle &exprhd
 //		Actual transformation
 //
 //---------------------------------------------------------------------------
-void CXformFilterImplementation::Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const
-{
-	LogicalFilter* popFilter = (LogicalFilter*)pexpr;
-    duckdb::vector<duckdb::unique_ptr<Expression>> v;
-     for(auto &child : popFilter->expressions)
-    {
-        v.push_back(child->Copy());
-    }
+void CXformFilterImplementation::Transform(CXformContext *xform_context, CXformResult *xform_result,
+                                           Operator *expression) const {
+	LogicalFilter *operator_filter = static_cast<LogicalFilter *>(expression);
+	duckdb::vector<duckdb::unique_ptr<Expression>> v;
+	for (auto &child : operator_filter->expressions) {
+		v.push_back(child->Copy());
+	}
 	// create alternative expression
-	duckdb::unique_ptr<Operator> pexprAlt = make_uniq<PhysicalFilter>(popFilter->types, std::move(v), popFilter->estimated_cardinality);
-    for(auto &child : pexpr->children)
-    {
-        pexprAlt->AddChild(child->Copy());
-    }
+	duckdb::unique_ptr<Operator> alternative_expression =
+	    make_uniq<PhysicalFilter>(operator_filter->types, std::move(v), operator_filter->estimated_cardinality);
+	for (auto &child : expression->children) {
+		alternative_expression->AddChild(child->Copy());
+	}
 	// add alternative to transformation result
-	pxfres->Add(std::move(pexprAlt));
+	xform_result->Add(std::move(alternative_expression));
 }
+} // namespace gpopt

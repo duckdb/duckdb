@@ -37,19 +37,19 @@ public:
 	}
 
 	// ident accessors
-	virtual EXformId Exfid() const
+	virtual EXformId ID() const
 	{
 		return ExfOrderImplementation;
 	}
 
 	// return a string for xform name
-	virtual const CHAR* SzId() const
+	virtual const CHAR*Name() const
 	{
 		return "CXformOrderImplementation";
 	}
 
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const;
+	virtual EXformPromise XformPromise(CExpressionHandle &exprhdl) const;
 
 	// actual transform
 	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;

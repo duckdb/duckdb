@@ -60,7 +60,7 @@ public:
 	// the following variables are used for maintaining optimization statistics
 
 	// set of activated xforms
-	CXformSet* m_xforms;
+	CXform_set * m_xforms;
 
 	// number of calls to each xform
 	duckdb::vector<ULONG_PTR*> m_pdrgpulpXformCalls;
@@ -213,7 +213,7 @@ public:
 	}
 
 	// set of xforms of current stage
-	CXformSet* PxfsCurrentStage() const
+	CXform_set * PxfsCurrentStage() const
 	{
 		return m_search_stage_array[m_ulCurrSearchStage]->m_xforms;
 	}
