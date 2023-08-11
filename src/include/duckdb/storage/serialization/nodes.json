@@ -403,9 +403,9 @@
     "constructor": ["value", "index"]
   },
   {
-    "class": "BufferedCSVReaderOptions",
+    "class": "CSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+      "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
     ],
     "members": [
       {
@@ -414,7 +414,7 @@
       },
       {
         "name": "delimiter",
-        "type": "string"
+        "type": "char"
       },
       {
         "name": "has_quote",
@@ -422,7 +422,7 @@
       },
       {
         "name": "quote",
-        "type": "string"
+        "type": "char"
       },
       {
         "name": "has_escape",
@@ -430,7 +430,7 @@
       },
       {
         "name": "escape",
-        "type": "string"
+        "type": "char"
       },
       {
         "name": "has_header",
