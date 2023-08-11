@@ -94,7 +94,7 @@ struct EmptyBitpackingWriter {
 	}
 };
 
-template <class T, class T_S = typename MakeSigned<T>::type, class T_U = typename MakeUnsigned<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
@@ -220,19 +220,7 @@ public:
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
 		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= static_cast<T_U>(frame_of_reference);
-		}
-	}
-
-	template <>
-	void SubtractFrameOfReference(hugeint_t *buffer, hugeint_t frame_of_reference) {
-		hugeint_t adjusted_for = frame_of_reference;
-		if (adjusted_for < 0) {
-			Hugeint::NegateInPlace(adjusted_for);
-			adjusted_for = NumericLimits<hugeint_t>::Maximum() - adjusted_for;
-		}
-		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= adjusted_for;
+			buffer[i] -= static_cast<typename MakeUnsigned<T>::type>(frame_of_reference);
 		}
 	}
 
