@@ -29,13 +29,13 @@ CXformOrderImplementation::CXformOrderImplementation()
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformGet2TableScan::Exfp
+//		CXformGet2TableScan::XformPromise
 //
 //	@doc:
 //		Compute promise of xform
 //
 //---------------------------------------------------------------------------
-CXform::EXformPromise CXformOrderImplementation::Exfp(CExpressionHandle &exprhdl) const
+CXform::EXformPromise CXformOrderImplementation::XformPromise(CExpressionHandle &exprhdl) const
 {
 	return CXform::ExfpMedium;
 }

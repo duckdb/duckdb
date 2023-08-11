@@ -181,13 +181,13 @@ CGroup *CEngine::PgroupInsert(CGroup *pgroup_target, duckdb::unique_ptr<Operator
 //---------------------------------------------------------------------------
 void CEngine::InsertXformResult(CGroup *pgroup_origin, CXformResult *pxfres, CXform::EXformId exfid_origin,
                                 CGroupExpression *pgexpr_origin, ULONG ul_xform_time, ULONG ul_number_of_bindings) {
-	duckdb::unique_ptr<Operator> pexpr = pxfres->PexprNext();
+	duckdb::unique_ptr<Operator> pexpr = pxfres->NextExpression();
 	while (nullptr != pexpr) {
 		CGroup *pgroup_container = PgroupInsert(pgroup_origin, std::move(pexpr), exfid_origin, pgexpr_origin, false);
 		if (pgroup_container != pgroup_origin && FPossibleDuplicateGroups(pgroup_container, pgroup_origin)) {
 			m_pmemo->MarkDuplicates(pgroup_origin, pgroup_container);
 		}
-		pexpr = pxfres->PexprNext();
+		pexpr = pxfres->NextExpression();
 	}
 }
 

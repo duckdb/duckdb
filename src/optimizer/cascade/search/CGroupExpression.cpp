@@ -524,7 +524,7 @@ void CGroupExpression::Transform(CXform* pxform, CXformResult* pxfres, ULONG* pu
 	CExpressionHandle exprhdl;
 	exprhdl.Attach(this);
 	exprhdl.DeriveProps(nullptr);
-	if (CXform::ExfpNone == pxform->Exfp(exprhdl))
+	if (CXform::ExfpNone == pxform->XformPromise(exprhdl))
 	{
 		return;
 	}
@@ -540,10 +540,10 @@ void CGroupExpression::Transform(CXform* pxform, CXformResult* pxfres, ULONG* pu
 	while (nullptr != pexpr)
 	{
 		++(*pulNumberOfBindings);
-		ULONG ulNumResults = pxfres->m_pdrgpexpr.size();
+		ULONG ulNumResults = pxfres->m_alternative_expressions.size();
 		pxform->Transform(pxfctxt, pxfres, pexpr);
-		ulNumResults = pxfres->m_pdrgpexpr.size() - ulNumResults;
-		if ((bindThreshold != 0 && (*pulNumberOfBindings) > bindThreshold) || pxform->IsApplyOnce() || (0 < pxfres->m_pdrgpexpr.size()))
+		ulNumResults = pxfres->m_alternative_expressions.size() - ulNumResults;
+		if ((bindThreshold != 0 && (*pulNumberOfBindings) > bindThreshold) || pxform->IsApplyOnce() || (0 < pxfres->m_alternative_expressions.size()))
 		{
 			// do not apply xform to other possible patterns
 			break;

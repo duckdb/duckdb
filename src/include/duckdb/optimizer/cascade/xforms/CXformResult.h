@@ -11,8 +11,7 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/operators/Operator.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -23,30 +22,29 @@ using namespace gpos;
 //		result container
 //
 //---------------------------------------------------------------------------
-class CXformResult
-{
+class CXformResult {
 public:
 	// set of alternatives
-	duckdb::vector<duckdb::unique_ptr<Operator>> m_pdrgpexpr;
+	duckdb::vector<duckdb::unique_ptr<Operator>> m_alternative_expressions;
 
 	// cursor for retrieval
-	ULONG m_ulExpr;
+	ULONG m_expression;
 
 public:
 	// ctor
-	explicit CXformResult();
+	explicit CXformResult() : m_expression(0) {};
 
 	CXformResult(const CXformResult &) = delete;
-	
+
 	// dtor
-	~CXformResult();
+	~CXformResult() = default;
 
 	// add alternative
-	void Add(duckdb::unique_ptr<Operator> pexpr);
+	void Add(duckdb::unique_ptr<Operator> expression);
 
 	// retrieve next alternative
-	duckdb::unique_ptr<Operator> PexprNext();
-};	// class CXformResult
-}  // namespace gpopt
+	duckdb::unique_ptr<Operator> NextExpression();
+}; // class CXformResult
+} // namespace gpopt
 
 #endif

@@ -6,13 +6,13 @@
 //		Implementation of transform
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/xforms/CXformLogicalProj2PhysicalProj.h"
-#include "duckdb/optimizer/cascade/base.h"
-#include "duckdb/planner/operator/logical_projection.hpp"
+
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
+#include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/operators/CPatternLeaf.h"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
-using namespace gpopt;
-
+namespace gpopt {
 //---------------------------------------------------------------------------
 //	@function:
 //		CXformGet2TableScan::CXformGet2TableScan
@@ -22,21 +22,19 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CXformLogicalProj2PhysicalProj::CXformLogicalProj2PhysicalProj()
-	: CXformImplementation(make_uniq<LogicalProjection>(0, std::move(duckdb::vector<duckdb::unique_ptr<Expression>>())))
-{
+    : CXformImplementation(make_uniq<LogicalProjection>(0, duckdb::vector<duckdb::unique_ptr<Expression>>())) {
 	this->m_operator->AddChild(make_uniq<CPatternLeaf>());
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformGet2TableScan::Exfp
+//		CXformGet2TableScan::XformPromise
 //
 //	@doc:
 //		Compute promise of xform
 //
 //---------------------------------------------------------------------------
-CXform::EXformPromise CXformLogicalProj2PhysicalProj::Exfp(CExpressionHandle &exprhdl) const
-{
+CXform::EXformPromise CXformLogicalProj2PhysicalProj::XformPromise(CExpressionHandle &expression_handle) const {
 	return CXform::ExfpMedium;
 }
 
@@ -48,21 +46,20 @@ CXform::EXformPromise CXformLogicalProj2PhysicalProj::Exfp(CExpressionHandle &ex
 //		Actual transformation
 //
 //---------------------------------------------------------------------------
-void CXformLogicalProj2PhysicalProj::Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const
-{
-	LogicalProjection* popGet = (LogicalProjection*)pexpr;
+void CXformLogicalProj2PhysicalProj::Transform(CXformContext *pxfctxt, CXformResult *pxfres, Operator *pexpr) const {
+	LogicalProjection *operator_get = static_cast<LogicalProjection *>(pexpr);
 	// create/extract components for alternative
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
-    for(auto &child : popGet->expressions)
-    {
-        v.push_back(child->Copy());
-    }
+	for (auto &child : operator_get->expressions) {
+		v.push_back(child->Copy());
+	}
 	// create alternative expression
-	duckdb::unique_ptr<Operator> pexprAlt = make_uniq<PhysicalProjection>(popGet->types, std::move(v), popGet->estimated_cardinality);
-    for(auto &child : pexpr->children)
-    {
-        pexprAlt->AddChild(child->Copy());
-    }
+	duckdb::unique_ptr<Operator> alternative_expression =
+	    make_uniq<PhysicalProjection>(operator_get->types, std::move(v), operator_get->estimated_cardinality);
+	for (auto &child : pexpr->children) {
+		alternative_expression->AddChild(child->Copy());
+	}
 	// add alternative to transformation result
-	pxfres->Add(std::move(pexprAlt));
+	pxfres->Add(std::move(alternative_expression));
 }
+} // namespace gpopt

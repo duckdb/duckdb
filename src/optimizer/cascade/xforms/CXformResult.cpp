@@ -6,34 +6,10 @@
 //		Implementation of result container
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/xforms/CXformResult.h"
+
 #include "duckdb/optimizer/cascade/base.h"
 
-using namespace gpopt;
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CXformResult::CXformResult
-//
-//	@doc:
-//		ctor
-//
-//---------------------------------------------------------------------------
-CXformResult::CXformResult()
-	: m_ulExpr(0)
-{
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CXformResult::~CXformResult
-//
-//	@doc:
-//		dtor
-//
-//---------------------------------------------------------------------------
-CXformResult::~CXformResult()
-{
-}
+namespace gpopt {
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -43,26 +19,24 @@ CXformResult::~CXformResult()
 //		add alternative
 //
 //---------------------------------------------------------------------------
-void CXformResult::Add(duckdb::unique_ptr<Operator> pexpr)
-{
-	m_pdrgpexpr.push_back(std::move(pexpr));
+void CXformResult::Add(duckdb::unique_ptr<Operator> expression) {
+	m_alternative_expressions.push_back(std::move(expression));
 }
 
 //---------------------------------------------------------------------------
 //	@function:
-//		CXformResult::PexprNext
+//		CXformResult::NextExpression
 //
 //	@doc:
 //		retrieve next alternative
 //
 //---------------------------------------------------------------------------
-duckdb::unique_ptr<Operator> CXformResult::PexprNext()
-{
-	duckdb::unique_ptr<Operator> pexpr = nullptr;
-	if (m_ulExpr < m_pdrgpexpr.size())
-	{
-		pexpr = std::move(m_pdrgpexpr[m_ulExpr]);
+duckdb::unique_ptr<Operator> CXformResult::NextExpression() {
+	duckdb::unique_ptr<Operator> expression = nullptr;
+	if (m_expression < m_alternative_expressions.size()) {
+		expression = std::move(m_alternative_expressions[m_expression]);
 	}
-	m_ulExpr++;
-	return pexpr;
+	m_expression++;
+	return expression;
 }
+} // namespace gpopt

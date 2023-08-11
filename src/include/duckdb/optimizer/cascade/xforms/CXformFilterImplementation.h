@@ -11,8 +11,7 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformImplementation.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -23,36 +22,31 @@ using namespace gpos;
 //		Transform Get to TableScan
 //
 //---------------------------------------------------------------------------
-class CXformFilterImplementation : public CXformImplementation
-{
+class CXformFilterImplementation : public CXformImplementation {
 public:
 	// ctor
 	explicit CXformFilterImplementation();
-    
-    CXformFilterImplementation(const CXformFilterImplementation &) = delete;
-	
-    // dtor
-	virtual ~CXformFilterImplementation()
-	{
-	}
+
+	CXformFilterImplementation(const CXformFilterImplementation &) = delete;
+
+	// dtor
+	~CXformFilterImplementation() override = default;
 
 	// ident accessors
-	virtual EXformId ID() const
-	{
+	EXformId ID() const override {
 		return ExfFilterImplementation;
 	}
 
 	// return a string for xform name
-	virtual const CHAR*Name() const
-	{
+	const CHAR *Name() const override {
 		return "CXformFilterImplementation";
 	}
 
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const;
+	EXformPromise XformPromise(CExpressionHandle &expression_handle) const override;
 
 	// actual transform
-	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;
+	void Transform(CXformContext *xform_context, CXformResult *xform_result, Operator *pexpr) const override;
 };
-}  // namespace gpopt
+} // namespace gpopt
 #endif

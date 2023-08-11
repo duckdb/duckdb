@@ -240,7 +240,7 @@ public:
 		return true;
 	}
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const = 0;
+	virtual EXformPromise XformPromise(CExpressionHandle &exprhdl) const = 0;
 
 public:
 	// equality function over xform ids

@@ -11,8 +11,7 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformImplementation.h"
 
-namespace gpopt
-{
+namespace gpopt {
 using namespace gpos;
 
 //---------------------------------------------------------------------------
@@ -23,8 +22,7 @@ using namespace gpos;
 //		Transform Get to TableScan
 //
 //---------------------------------------------------------------------------
-class CXformGet2TableScan : public CXformImplementation
-{
+class CXformGet2TableScan : public CXformImplementation {
 private:
 	// private copy ctor
 	CXformGet2TableScan(const CXformGet2TableScan &);
@@ -34,28 +32,24 @@ public:
 	explicit CXformGet2TableScan();
 
 	// dtor
-	virtual ~CXformGet2TableScan()
-	{
-	}
+	~CXformGet2TableScan() override = default;
 
 	// ident accessors
-	virtual EXformId ID() const
-	{
+	EXformId ID() const override {
 		return ExfGet2TableScan;
 	}
 
 	// return a string for xform name
-	virtual const CHAR*Name() const
-	{
+	const CHAR *Name() const override {
 		return "CXformGet2TableScan";
 	}
 
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const;
+	EXformPromise XformPromise(CExpressionHandle &expression_handle) const override;
 
 	// actual transform
-	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;
+	void Transform(CXformContext *xform_context, CXformResult *xform_result, Operator *expression) const override;
 };
-}  // namespace gpopt
+} // namespace gpopt
 
 #endif

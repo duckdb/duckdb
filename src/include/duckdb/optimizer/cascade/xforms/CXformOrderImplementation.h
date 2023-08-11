@@ -49,7 +49,7 @@ public:
 	}
 
 	// compute xform promise for a given expression handle
-	virtual EXformPromise Exfp(CExpressionHandle &exprhdl) const;
+	virtual EXformPromise XformPromise(CExpressionHandle &exprhdl) const;
 
 	// actual transform
 	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;
