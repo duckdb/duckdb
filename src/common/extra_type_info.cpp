@@ -212,18 +212,7 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
 
 bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<StructTypeInfo>();
-	if (child_types.size() != other.child_types.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto &my_type = child_types[i].second;
-		auto &other_type = other.child_types[i].second;
-		// We only compare the types, we don't care if the names are different or not
-		if (my_type != other_type) {
-			return false;
-		}
-	}
-	return true;
+	return child_types == other.child_types;
 }
 
 //===--------------------------------------------------------------------===//

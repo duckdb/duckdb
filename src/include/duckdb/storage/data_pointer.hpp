@@ -33,7 +33,7 @@ struct RowGroupPointer {
 	uint64_t row_start;
 	uint64_t tuple_count;
 	//! The data pointers of the column segments stored in the row group
-	vector<BlockPointer> data_pointers;
+	vector<MetaBlockPointer> data_pointers;
 	//! The versions information of the row group (if any)
 	shared_ptr<VersionNode> versions;
 };

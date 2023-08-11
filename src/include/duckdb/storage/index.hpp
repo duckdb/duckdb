@@ -14,7 +14,7 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/constraint_conflict_info.hpp"
 
@@ -126,7 +126,7 @@ public:
 	}
 
 	//! Serializes the index and returns the pair of block_id offset positions
-	virtual BlockPointer Serialize(MetaBlockWriter &writer);
+	virtual BlockPointer Serialize(MetadataWriter &writer);
 	//! Returns the serialized data pointer to the block and offset of the serialized index
 	BlockPointer GetSerializedDataPointer() const {
 		return serialized_data_pointer;

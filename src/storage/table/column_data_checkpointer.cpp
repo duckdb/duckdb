@@ -242,9 +242,9 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	}
 }
 
-void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes) {
-	D_ASSERT(!nodes.empty());
-	this->nodes = std::move(nodes);
+void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes_p) {
+	D_ASSERT(!nodes_p.empty());
+	this->nodes = std::move(nodes_p);
 	// first check if any of the segments have changes
 	if (!HasChanges()) {
 		// no changes: only need to write the metadata for this column

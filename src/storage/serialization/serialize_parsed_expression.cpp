@@ -246,12 +246,12 @@ unique_ptr<ParsedExpression> OperatorExpression::FormatDeserialize(FormatDeseria
 
 void ParameterExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("parameter_nr", parameter_nr);
+	serializer.WriteProperty("identifier", identifier);
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ParameterExpression>(new ParameterExpression());
-	deserializer.ReadProperty("parameter_nr", result->parameter_nr);
+	deserializer.ReadProperty("identifier", result->identifier);
 	return std::move(result);
 }
 
