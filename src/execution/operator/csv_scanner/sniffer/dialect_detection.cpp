@@ -208,7 +208,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine->options.quote == candidate->options.quote) {
+			if (state_machine->quote == candidate->quote) {
 				same_quote_is_candidate = true;
 			}
 		}

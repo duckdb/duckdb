@@ -83,6 +83,7 @@ public:
 			while (cur_pos < cur_buffer_handle->actual_size) {
 				if (OP::Process(machine, result, buffer_handle_ptr[cur_pos++])) {
 					//! Not-Done Processing the File, but the Operator is happy!
+					cur_pos--;
 					OP::Finalize(machine, result);
 					return false;
 				}

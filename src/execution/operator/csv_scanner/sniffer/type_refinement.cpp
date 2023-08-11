@@ -13,6 +13,7 @@ struct Parse {
 	}
 
 	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char) {
+
 		machine.pre_previous_state = machine.previous_state;
 		machine.previous_state = machine.state;
 		machine.state = static_cast<CSVState>(
