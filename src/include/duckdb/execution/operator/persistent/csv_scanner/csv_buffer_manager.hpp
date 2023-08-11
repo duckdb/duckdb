@@ -57,10 +57,6 @@ public:
 		cur_pos = buffer_manager->GetStartPos();
 	};
 
-	//! Returns the next char in the CSV File
-	//! Returns \0 if there are no more chars
-	char GetNextChar();
-
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
 	inline bool Process(CSVStateMachine &machine, T &result) {

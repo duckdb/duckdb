@@ -93,31 +93,6 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(idx_t pos, bool auto_det
 	}
 }
 
-char CSVBufferIterator::GetNextChar() {
-	// If current buffer is not set we try to get a new one
-	if (!cur_buffer_handle) {
-		cur_pos = 0;
-		if (cur_buffer_idx == 0) {
-			cur_pos = buffer_manager->GetStartPos();
-		}
-		cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
-
-		if (!cur_buffer_handle) {
-			return '\0';
-		}
-	}
-	// If we finished the current buffer we try to get a new one
-	if (cur_pos >= cur_buffer_handle->actual_size) {
-		cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
-		if (!cur_buffer_handle) {
-			return '\0';
-		}
-		cur_pos = 0;
-	}
-	// We return the next char
-	return cur_buffer_handle->Ptr()[cur_pos++];
-}
-
 bool CSVBufferIterator::Finished() {
 	return !cur_buffer_handle;
 }

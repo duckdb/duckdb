@@ -35,9 +35,12 @@ public:
 	//! It first caches it, then returns it.
 	state_machine_t &Get(char delimiter, char quote, char escape);
 
-	static CSVStateMachineCache &GetStateMachineCache() {
-		static CSVStateMachineCache state_machine_cache;
-		return state_machine_cache;
+	static shared_ptr<CSVStateMachineCache> GetStateMachineCache() {
+		static shared_ptr<CSVStateMachineCache> STATE_MACHINE_CACHE;
+		if (!STATE_MACHINE_CACHE) {
+			STATE_MACHINE_CACHE = make_shared<CSVStateMachineCache>();
+		}
+		return STATE_MACHINE_CACHE;
 	}
 
 private:

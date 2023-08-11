@@ -75,6 +75,8 @@ private:
 	                             idx_t &prev_padding_count, idx_t prev_column_count = 0);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
+	//! Checks if candidate still produces good values for the next chunk
+	bool RefineCandidateNextChunk(CSVStateMachine &candidate);
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //

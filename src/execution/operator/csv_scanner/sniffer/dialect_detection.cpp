@@ -220,35 +220,46 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	}
 }
 
-void CSVSniffer::RefineCandidates() {
-	auto cur_best_num_cols = best_num_cols;
-	for (idx_t i = 1; i < options.sample_chunks; i++) {
-		if (candidates.size() <= 1) {
-			// no candidates or we only have one candidate left: stop
-			return;
-		}
-		bool finished_file = candidates[0]->csv_buffer_iterator.Finished();
-		if (finished_file) {
-			// we finished the file: stop
-			return;
-		}
-		// Number of rows read
-		idx_t rows_read = 0;
-		// Best Number of consistent rows (i.e., presenting all columns)
-		idx_t best_consistent_rows = 0;
-		// If padding was necessary (i.e., rows are missing some columns, how many)
-		idx_t prev_padding_count = 0;
-		// Have to restart best number of columns
-		best_num_cols = 0;
-		auto cur_candidates = std::move(candidates);
-		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
-		for (auto &cur_candidate : cur_candidates) {
-			cur_candidate->cur_rows = 0;
-			cur_candidate->column_count = 1;
-			AnalyzeDialectCandidate(std::move(cur_candidate), rows_read, best_consistent_rows, prev_padding_count,
-			                        cur_best_num_cols);
+bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
+	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
+	candidate.csv_buffer_iterator.Process<SniffDialect>(candidate, sniffed_column_counts);
+	bool allow_padding = options.null_padding;
+
+	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
+		if (best_num_cols != sniffed_column_counts[row] && !allow_padding) {
+			return false;
 		}
 	}
+	return true;
+}
+
+void CSVSniffer::RefineCandidates() {
+	// It's very frequent that more than one dialect can parse a csv file, hence here we run one state machine
+	// fully on the whole sample dataset, when/if it fails we go to the next one.
+	if (candidates.size() == 1 || candidates[0]->csv_buffer_iterator.Finished()) {
+		// Only one candidate nothing to refine or all candidates already checked
+		return;
+	}
+	for (auto &cur_candidate : candidates) {
+		for (idx_t i = 1; i < options.sample_chunks; i++) {
+			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
+			if (finished_file) {
+				// we finished the file successfully: stop
+				auto neo = std::move(cur_candidate);
+				candidates.clear();
+				candidates.emplace_back(std::move(neo));
+				return;
+			}
+			cur_candidate->cur_rows = 0;
+			cur_candidate->column_count = 1;
+			if (!RefineCandidateNextChunk(*cur_candidate)) {
+				// This candidate failed, move to the next one
+				break;
+			}
+		}
+	}
+	candidates.clear();
+	return;
 }
 
 // Dialect Detection consists of five steps:
