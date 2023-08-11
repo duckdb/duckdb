@@ -88,7 +88,7 @@ CSVStateMachineCache::CSVStateMachineCache() {
 			}
 		}
 	}
-};
+}
 
 state_machine_t &CSVStateMachineCache::Get(char delimiter, char quote, char escape) {
 	bool cached = false;
