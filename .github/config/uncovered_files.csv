@@ -250,7 +250,7 @@ function/pragma_function.cpp	6
 function/scalar/generic/constant_or_null.cpp	5
 function/scalar/list/list_concat.cpp	5
 function/scalar/list/list_extract.cpp	10
-function/scalar/operators/add.cpp	4
+function/scalar/operators/add.cpp	6
 function/scalar/operators/arithmetic.cpp	23
 function/scalar/operators/multiply.cpp	3
 function/scalar/operators/subtract.cpp	5
