@@ -144,8 +144,8 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("cume_dist", &DuckDBPyRelation::CumeDist, "Computes the cumulative distribution within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
-		.def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible",
-	         py::arg("window_spec"), py::arg("num_buckets"), py::arg("projected_columns") = "");
+	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets", py::arg("window_spec"),
+	         py::arg("num_buckets"), py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {

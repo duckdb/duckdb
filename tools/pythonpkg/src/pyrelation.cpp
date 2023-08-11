@@ -265,7 +265,7 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 		expr = projected_columns + ", ";
 	}
 	if (input.size() == 0 && !function_parameter.empty()) {
-		expr += function_name + "(" + function_parameter  + ") " + window_spec;
+		expr += function_name + "(" + function_parameter + ") " + window_spec;
 	} else {
 		for (idx_t i = 0; i < input.size(); i++) {
 			if (function_parameter.empty()) {
@@ -435,7 +435,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spe
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets, const string &projected_columns) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets,
+                                                     const string &projected_columns) {
 	auto expr = GenerateExpressionList("ntile", "", "", std::to_string(num_buckets), projected_columns, window_spec);
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
