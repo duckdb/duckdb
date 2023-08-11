@@ -38,62 +38,62 @@ extern const uint64_t PLAN_SERIALIZATION_VERSION;
 class LogicalOperator : public Operator {
 public:
 	explicit LogicalOperator(LogicalOperatorType type);
-
 	LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions);
-
 	// copy ctor
 	LogicalOperator(const LogicalOperator &other) = delete;
-
 	~LogicalOperator() override;
 
-	bool has_estimated_cardinality;
-
 public:
-	virtual vector<const_reference<LogicalOperator>> GetChildren() const {
-		vector<const_reference<LogicalOperator>> result;
-		for (auto &child : children) {
-			result.push_back(*(LogicalOperator *)child.get());
-		}
-		return result;
-	}
-
+	// ---------------------------- ORCA -------------------------------------
 	CReqdProp *PrpCreate() const override;
 
 	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
 
+	ULONG HashValue() const override;
+
+	CDrvdProp *PdpCreate() override;
+
+	static CKeyCollection *PkcDeriveKeysPassThru(CExpressionHandle &expression_handle, ULONG ulChild);
+
+	CPropConstraint *PpcDeriveConstraintFromPredicates(CExpressionHandle &exprhdl);
+
+	static CPropConstraint *PpcDeriveConstraintPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
+
+	CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) override;
+
+	// Transformations: it outputs the candidate set of xforms
+	virtual CXformSet *PxfsCandidates() const {
+		return nullptr;
+	}
+
+	// ---------------------------- DuckDB -------------------------------------
+
 	vector<ColumnBinding> GetColumnBindings() override;
-
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);
-
 	static vector<LogicalType> MapTypes(const vector<LogicalType> &types, const vector<idx_t> &projection_map);
-
 	static vector<ColumnBinding> MapBindings(const vector<ColumnBinding> &types, const vector<idx_t> &projection_map);
-
-	virtual string GetName() const;
-
-	virtual string ParamsToString() const;
-
-	string ToString() const override;
-
 	DUCKDB_API void Print();
-
 	//! Debug method: verify that the integrity of expressions & child nodes are maintained
 	virtual void Verify(ClientContext &context);
 
-	virtual idx_t EstimateCardinality(ClientContext &context) override;
+	virtual string GetName() const;
+	virtual string ParamsToString() const;
+	string ToString() const override;
 
-	virtual BOOL FInputOrderSensitive() override {
-		return false;
-	};
+	vector<const_reference<LogicalOperator>> GetChildren() const {
+		vector<const_reference<LogicalOperator>> result;
+		for (auto &child : children) {
+			result.push_back(*static_cast<LogicalOperator *>(child.get()));
+		}
+		return result;
+	}
 
-	virtual ULONG HashValue() const;
+	idx_t EstimateCardinality(ClientContext &context) override;
 
 	//! Serializes a LogicalOperator to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-
+	void Serialize(Serializer &serializer) const override;
 	//! Serializes an LogicalOperator to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const override {
-	}
+	void Serialize(FieldWriter &writer) const override = 0;
 
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
@@ -101,16 +101,6 @@ public:
 
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
-
-	CDrvdProp *PdpCreate() override;
-
-	static CKeyCollection *PkcDeriveKeysPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
-
-	CPropConstraint *PpcDeriveConstraintFromPredicates(CExpressionHandle &exprhdl);
-
-	static CPropConstraint *PpcDeriveConstraintPassThru(CExpressionHandle &exprhdl, ULONG ulChild);
-
-	CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) override;
 
 public:
 	template <class TARGET>
@@ -127,15 +117,6 @@ public:
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
 		return (const TARGET &)*this;
-	}
-
-public:
-	//-------------------------------------------------------------------------------------
-	// Transformations
-	//-------------------------------------------------------------------------------------
-	// candidate set of xforms
-	virtual CXformSet *PxfsCandidates() const {
-		return nullptr;
 	}
 };
 } // namespace duckdb

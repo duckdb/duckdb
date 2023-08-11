@@ -16,16 +16,17 @@
 namespace duckdb {
 const uint64_t PLAN_SERIALIZATION_VERSION = 1;
 
-LogicalOperator::LogicalOperator(LogicalOperatorType type) : has_estimated_cardinality(false) {
+LogicalOperator::LogicalOperator(LogicalOperatorType type) {
 	logical_type = type;
 	estimated_cardinality = 0;
+	has_estimated_cardinality = false;
 }
 
-LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : has_estimated_cardinality(false) {
+LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions) {
 	logical_type = type;
 	this->expressions = std::move(expressions);
 	estimated_cardinality = 0;
+	has_estimated_cardinality = false;
 }
 
 LogicalOperator::~LogicalOperator() {
@@ -105,7 +106,7 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 	}
 	idx_t max_cardinality = 0;
 	for (auto &child : children) {
-		LogicalOperator *logical_child = (LogicalOperator *)(child.get());
+		LogicalOperator *logical_child = static_cast<LogicalOperator *>(child.get());
 		max_cardinality = MaxValue(logical_child->EstimateCardinality(context), max_cardinality);
 	}
 	has_estimated_cardinality = true;
@@ -310,7 +311,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 }
 
 vector<idx_t> LogicalOperator::GetTableIndex() const {
-	return vector<idx_t> {};
+	return {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
@@ -341,13 +342,13 @@ CDrvdProp *LogicalOperator::PdpCreate() {
 //		Addref and return keys of n-th child
 //
 //---------------------------------------------------------------------------
-CKeyCollection *LogicalOperator::PkcDeriveKeysPassThru(CExpressionHandle &exprhdl, ULONG ulChild) {
-	CKeyCollection *pkcLeft = exprhdl.GetRelationalProperties(ulChild)->GetKeyCollection();
+CKeyCollection *LogicalOperator::PkcDeriveKeysPassThru(CExpressionHandle &expression_handle, ULONG ul_child) {
+	CKeyCollection *pkc_left = expression_handle.GetRelationalProperties(ul_child)->GetKeyCollection();
 	// key collection may be NULL
-	return pkcLeft;
+	return pkc_left;
 }
 
-CKeyCollection *LogicalOperator::DeriveKeyCollection(CExpressionHandle &exprhdl) {
+CKeyCollection *LogicalOperator::DeriveKeyCollection(CExpressionHandle &expression_handle) {
 	return nullptr;
 }
 
@@ -359,16 +360,16 @@ CKeyCollection *LogicalOperator::DeriveKeyCollection(CExpressionHandle &exprhdl)
 //		Derive join depth
 //
 //---------------------------------------------------------------------------
-ULONG LogicalOperator::DeriveJoinDepth(CExpressionHandle &exprhdl) {
-	const ULONG arity = exprhdl.Arity();
+ULONG LogicalOperator::DeriveJoinDepth(CExpressionHandle &expression_handle) {
+	const ULONG arity = expression_handle.Arity();
 	// sum-up join depth of all relational children
-	ULONG ulDepth = 0;
+	ULONG ul_depth = 0;
 	for (ULONG ul = 0; ul < arity; ul++) {
-		if (!exprhdl.FScalarChild(ul)) {
-			ulDepth = ulDepth + exprhdl.DeriveJoinDepth(ul);
+		if (!expression_handle.FScalarChild(ul)) {
+			ul_depth = ul_depth + expression_handle.DeriveJoinDepth(ul);
 		}
 	}
-	return ulDepth;
+	return ul_depth;
 }
 
 //---------------------------------------------------------------------------
@@ -379,9 +380,9 @@ ULONG LogicalOperator::DeriveJoinDepth(CExpressionHandle &exprhdl) {
 //		Shorthand to addref and pass through constraint from a given child
 //
 //---------------------------------------------------------------------------
-CPropConstraint *LogicalOperator::PpcDeriveConstraintPassThru(CExpressionHandle &exprhdl, ULONG ulChild) {
+CPropConstraint *LogicalOperator::PpcDeriveConstraintPassThru(CExpressionHandle &expression_handle, ULONG ul_child) {
 	// return constraint property of child
-	CPropConstraint *ppc = exprhdl.DerivePropertyConstraint(ulChild);
+	CPropConstraint *ppc = expression_handle.DerivePropertyConstraint(ul_child);
 	return ppc;
 }
 
@@ -394,39 +395,39 @@ CPropConstraint *LogicalOperator::PpcDeriveConstraintPassThru(CExpressionHandle 
 //		scalar children (predicates)
 //
 //---------------------------------------------------------------------------
-CPropConstraint *LogicalOperator::PpcDeriveConstraintFromPredicates(CExpressionHandle &exprhdl) {
+CPropConstraint *LogicalOperator::PpcDeriveConstraintFromPredicates(CExpressionHandle &expression_handle) {
 	vector<vector<ColumnBinding>> pdrgpcrs;
 	vector<Expression *> pdrgpcnstr;
 	// collect constraint properties from relational children
 	// and predicates from scalar children
-	ULONG arity = exprhdl.Arity(0);
+	ULONG arity = expression_handle.Arity(0);
 	for (ULONG ul = 0; ul < arity; ul++) {
-		CPropConstraint *ppc = exprhdl.DerivePropertyConstraint(ul);
+		CPropConstraint *ppc = expression_handle.DerivePropertyConstraint(ul);
 		// equivalence classes coming from child
-		vector<vector<ColumnBinding>> pdrgpcrsChild = ppc->PdrgpcrsEquivClasses();
+		vector<vector<ColumnBinding>> pdrgpcrs_child = ppc->PdrgpcrsEquivClasses();
 		// merge with the equivalence classes we have so far
-		vector<vector<ColumnBinding>> pdrgpcrsMerged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrsChild);
-		pdrgpcrs = pdrgpcrsMerged;
+		vector<vector<ColumnBinding>> pdrgpcrs_merged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrs_child);
+		pdrgpcrs = pdrgpcrs_merged;
 		// constraint coming from child
 		Expression *pcnstr = ppc->Pcnstr();
-		if (NULL != pcnstr) {
+		if (nullptr != pcnstr) {
 			pdrgpcnstr.push_back(pcnstr);
 		}
 	}
-	arity = exprhdl.Arity(1);
+	arity = expression_handle.Arity(1);
 	for (ULONG ul = 0; ul < arity; ul++) {
-		Expression *pexprScalar = exprhdl.PexprScalarExactChild(ul);
-		vector<ColumnBinding> v = pexprScalar->getColumnBinding();
-		vector<vector<ColumnBinding>> pdrgpcrsChild;
-		pdrgpcrsChild = CUtils::AddEquivClassToArray(v, pdrgpcrsChild);
-		if (NULL != pexprScalar) {
-			pdrgpcnstr.push_back(pexprScalar);
+		Expression *expression_scalar = expression_handle.PexprScalarExactChild(ul);
+		vector<ColumnBinding> v = expression_scalar->getColumnBinding();
+		vector<vector<ColumnBinding>> pdrgpcrs_child;
+		pdrgpcrs_child = CUtils::AddEquivClassToArray(v, pdrgpcrs_child);
+		if (nullptr != expression_scalar) {
+			pdrgpcnstr.push_back(expression_scalar);
 			// merge with the equivalence classes we have so far
-			vector<vector<ColumnBinding>> pdrgpcrsMerged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrsChild);
-			pdrgpcrs = pdrgpcrsMerged;
+			vector<vector<ColumnBinding>> pdrgpcrs_merged = CUtils::PdrgpcrsMergeEquivClasses(pdrgpcrs, pdrgpcrs_child);
+			pdrgpcrs = pdrgpcrs_merged;
 		}
 	}
-	Expression *pcnstrNew = new BoundConjunctionExpression(ExpressionType::CONJUNCTION_AND);
-	return new CPropConstraint(pdrgpcrs, pcnstrNew);
+	Expression *pcnstr_new = new BoundConjunctionExpression(ExpressionType::CONJUNCTION_AND);
+	return new CPropConstraint(pdrgpcrs, pcnstr_new);
 }
 } // namespace duckdb

@@ -117,7 +117,7 @@ public:
 	// hash function
 	static ULONG HashValue(const Operator *op);
 
-	ULONG HashValue() const;
+	virtual ULONG HashValue() const;
 
 public:
 	//! Resolve types for this specific operator
