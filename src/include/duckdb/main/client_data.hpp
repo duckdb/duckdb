@@ -13,6 +13,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -61,6 +62,8 @@ struct ClientData {
 
 	//! The file search path
 	string file_search_path;
+
+	CSVStateMachineCache state_machine_cache;
 
 	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
 	//! FIXME: this should not be done like this

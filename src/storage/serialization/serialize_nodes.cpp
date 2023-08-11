@@ -25,7 +25,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 
@@ -85,8 +85,7 @@ BoundPivotInfo BoundPivotInfo::FormatDeserialize(FormatDeserializer &deserialize
 	return result;
 }
 
-
-void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
+void BufferedCSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("has_delimiter", has_delimiter);
 	serializer.WriteProperty("delimiter", delimiter);
 	serializer.WriteProperty("has_quote", has_quote);
@@ -125,8 +124,8 @@ void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("rejects_recovery_column_ids", rejects_recovery_column_ids);
 }
 
-CSVReaderOptions CSVReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
-	CSVReaderOptions result;
+BufferedCSVReaderOptions BufferedCSVReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	BufferedCSVReaderOptions result;
 	deserializer.ReadProperty("has_delimiter", result.has_delimiter);
 	deserializer.ReadProperty("delimiter", result.delimiter);
 	deserializer.ReadProperty("has_quote", result.has_quote);

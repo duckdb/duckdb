@@ -2,6 +2,8 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine_cache.hpp"
+
 #include <iomanip>
 
 namespace duckdb {
@@ -109,8 +111,9 @@ state_machine_t &CSVStateMachineCache::Get(char delimiter, char quote, char esca
 }
 
 CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char escape_p, char delim_p,
-                                 shared_ptr<CSVBufferManager> buffer_manager_p)
-    : csv_state_machine_cache(*CSVStateMachineCache::GetStateMachineCache()), options(options_p),
+                                 shared_ptr<CSVBufferManager> buffer_manager_p,
+                                 CSVStateMachineCache &csv_state_machine_cache_p)
+    : csv_state_machine_cache(csv_state_machine_cache_p), options(options_p),
       csv_buffer_iterator(std::move(buffer_manager_p)),
       transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)), quote(quote_p), escape(escape_p),
       delim(delim_p), has_format(options.has_format), date_format(options.date_format) {

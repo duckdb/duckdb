@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/main/client_data.hpp"
 
 namespace duckdb {
 
@@ -137,7 +138,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
 					csv_state_machines.emplace_back(
-					    make_uniq<CSVStateMachine>(options, quote, escape, delim, buffer_manager));
+					    make_uniq<CSVStateMachine>(options, quote, escape, delim, buffer_manager,
+					                               buffer_manager->context.client_data->state_machine_cache));
 				}
 			}
 		}
