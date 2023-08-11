@@ -6,7 +6,7 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
@@ -27,8 +27,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_uniq<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
-	reader->offset = data.offset;
+	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
 }
 
 unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
@@ -65,6 +64,10 @@ Allocator &RowGroupCollection::GetAllocator() const {
 
 AttachedDatabase &RowGroupCollection::GetAttached() {
 	return GetTableInfo().db;
+}
+
+MetadataManager &RowGroupCollection::GetMetadataManager() {
+	return GetBlockManager().GetMetadataManager();
 }
 
 //===--------------------------------------------------------------------===//

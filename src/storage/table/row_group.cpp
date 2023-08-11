@@ -11,7 +11,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -116,11 +116,10 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (column_pointers.size() != columns.size()) {
 		throw InternalException("Lazy loading a column but the pointer was not set");
 	}
-	auto &block_manager = GetCollection().GetBlockManager();
+	auto &metadata_manager = GetCollection().GetMetadataManager();
 	auto &types = GetCollection().GetTypes();
 	auto &block_pointer = column_pointers[c];
-	MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
-	column_data_reader.offset = block_pointer.offset;
+	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
 	is_loaded[c] = true;
@@ -832,7 +831,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	for (auto &state : result.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
-		auto pointer = data_writer.GetBlockPointer();
+		auto pointer = data_writer.GetMetaBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
@@ -898,8 +897,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.WriteField<uint64_t>(pointer.tuple_count);
 	auto &serializer = writer.GetSerializer();
 	for (auto &data_pointer : pointer.data_pointers) {
-		serializer.Write<block_id_t>(data_pointer.block_id);
-		serializer.Write<uint64_t>(data_pointer.offset);
+		serializer.Write<idx_t>(data_pointer.block_pointer);
+		serializer.Write<uint32_t>(data_pointer.offset);
 	}
 	CheckpointDeletes(pointer.versions.get(), serializer);
 	writer.Finalize();
@@ -917,9 +916,9 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < physical_columns; i++) {
-		BlockPointer pointer;
-		pointer.block_id = source.Read<block_id_t>();
-		pointer.offset = source.Read<uint64_t>();
+		MetaBlockPointer pointer;
+		pointer.block_pointer = source.Read<idx_t>();
+		pointer.offset = source.Read<uint32_t>();
 		result.data_pointers.push_back(pointer);
 	}
 	result.versions = DeserializeDeletes(source);

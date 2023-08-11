@@ -82,6 +82,9 @@ public:
 	BlockManager &GetBlockManagerForRowData() override {
 		return block_manager;
 	}
+	MetadataManager &GetMetadataManager() override {
+		return block_manager.GetMetadataManager();
+	}
 };
 
 SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string path, bool read_only)
@@ -140,8 +143,6 @@ void SingleFileStorageManager::LoadDatabase() {
 		//! Load from storage
 		auto checkpointer = SingleFileCheckpointReader(*this);
 		checkpointer.LoadFromStorage();
-		// finish load checkpoint, clear the cached handles of meta blocks
-		block_manager->ClearMetaBlockHandles();
 		// check if the WAL file exists
 		if (fs.FileExists(wal_path)) {
 			// replay the WAL
@@ -223,7 +224,7 @@ unique_ptr<StorageCommitState> SingleFileStorageManager::GenStorageCommitState(T
 	return make_uniq<SingleFileStorageCommitState>(*this, checkpoint);
 }
 
-bool SingleFileStorageManager::IsCheckpointClean(block_id_t checkpoint_id) {
+bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id) {
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
