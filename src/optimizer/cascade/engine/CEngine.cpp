@@ -150,8 +150,8 @@ CGroup *CEngine::PgroupInsert(CGroup *pgroup_target, duckdb::unique_ptr<Operator
 	CGroup *pgroup_origin;
 	// check if expression was produced by extracting
 	// a binding from the memo
-	if (nullptr != pexpr->m_pgexpr) {
-		pgroup_origin = pexpr->m_pgexpr->m_pgroup;
+	if (nullptr != pexpr->m_group_expression) {
+		pgroup_origin = pexpr->m_group_expression->m_pgroup;
 		// if parent has group pointer, all children must have group pointers;
 		// terminate recursive insertion here
 		return pgroup_origin;
@@ -616,7 +616,7 @@ bool CEngine::FCheckEnfdProps(CGroupExpression *pgexpr, COptimizationContext *po
 	CExpressionHandle exprhdl;
 	exprhdl.Attach(pcc);
 	exprhdl.DerivePlanPropsForCostContext();
-	PhysicalOperator *pop_physical = (PhysicalOperator *)(pcc->m_pgexpr->m_pop.get());
+	PhysicalOperator *pop_physical = (PhysicalOperator *)(pcc->m_group_expression->m_pop.get());
 	CReqdPropPlan *prpp = poc->m_prpp;
 	// Determine if any property enforcement is disable or unnecessary
 	bool f_order_reqd = !prpp->m_peo->m_pos->IsEmpty();

@@ -27,10 +27,10 @@ PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_
     : PhysicalOperator(PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality), select_list(std::move(select_list))
 {
 	physical_type = PhysicalOperatorType::PROJECTION;
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 	m_ulTotalOptRequests = 1;
 }
 
@@ -95,7 +95,7 @@ string PhysicalProjection::ParamsToString() const
 
 Operator* PhysicalProjection::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
 {
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	CGroupExpression* pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	duckdb::vector<unique_ptr<Expression>> v;
     for(auto &child : ((PhysicalProjection*)pgexpr->m_pop.get())->select_list)
@@ -108,7 +108,7 @@ Operator* PhysicalProjection::SelfRehydrate(CCostContext* pcc, duckdb::vector<Op
 		pexpr->AddChild(child->Copy());
 	}
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 
@@ -120,9 +120,9 @@ duckdb::unique_ptr<Operator> PhysicalProjection::Copy()
 		v.push_back(child->Copy());
 	}
 	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -136,12 +136,12 @@ duckdb::unique_ptr<Operator> PhysicalProjection::Copy()
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = m_pgexpr;
+	result->m_group_expression = m_group_expression;
 	result->m_cost = m_cost;
 	return result;
 }
 
-duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewGroupExpression(CGroupExpression* pgexpr)
+duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewGroupExpression(CGroupExpression* pgexpr)
 {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for(auto &child : select_list)
@@ -149,9 +149,9 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewGroupExpression(CGro
 		v.push_back(child->Copy());
 	}
 	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -165,12 +165,12 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewGroupExpression(CGro
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = m_cost;
 	return result;
 }
 	
-duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewChilds(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost)
+duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost)
 {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for(auto &child : select_list)
@@ -178,9 +178,9 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewChilds(CGroupExpress
 		v.push_back(child->Copy());
 	}
 	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if(nullptr != estimated_props)
 	{
 		result->estimated_props = estimated_props->Copy();
@@ -194,7 +194,7 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopywithNewChilds(CGroupExpress
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	return result;
 }

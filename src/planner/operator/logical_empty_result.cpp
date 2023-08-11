@@ -48,7 +48,7 @@ Operator* LogicalEmptyResult::SelfRehydrate(CCostContext* pcc, duckdb::vector<Op
 {
 	LogicalEmptyResult* pexpr = new LogicalEmptyResult(unique_ptr_cast<Operator, LogicalOperator>(pdrgpexpr[0]->Copy()));
 	pexpr->m_cost = pcc->m_cost;
-	pexpr->m_pgexpr = pcc->m_pgexpr;
+	pexpr->m_group_expression = pcc->m_group_expression;
 	return pexpr;
 }
 

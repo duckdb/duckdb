@@ -63,7 +63,7 @@ CPropConstraint* LogicalComparisonJoin::DerivePropertyConstraint(CExpressionHand
 // Rehydrate expression from a given cost context and child expressions
 Operator* LogicalComparisonJoin::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
 {
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	CGroupExpression* pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	LogicalComparisonJoin* pexpr = new LogicalComparisonJoin(join_type);
 	for(auto &child : pdrgpexpr)
@@ -71,7 +71,7 @@ Operator* LogicalComparisonJoin::SelfRehydrate(CCostContext* pcc, duckdb::vector
 		pexpr->AddChild(child->Copy());
 	}
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 } // namespace duckdb

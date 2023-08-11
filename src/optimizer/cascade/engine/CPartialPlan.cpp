@@ -117,10 +117,10 @@ double CPartialPlan::CostCompute()
 	// extract rows from stats
 	double rows = pop->estimated_cardinality;
 	// extract width from stats
-	// double width = m_pgexpr->Pgroup()->Pstats()->Width(mp, m_prpp->m_pcrs).Get();
+	// double width = m_group_expression->Pgroup()->Pstats()->Width(mp, m_required_plan_property->m_pcrs).Get();
 	// ci.SetWidth(width);
 	// extract rebinds
-	// double num_rebinds = m_pgexpr->Pgroup()->Pstats()->NumRebinds().Get();
+	// double num_rebinds = m_group_expression->Pgroup()->Pstats()->NumRebinds().Get();
 	// ci.SetRebinds(num_rebinds);
 	// compute partial plan cost
 	double cost = rows;

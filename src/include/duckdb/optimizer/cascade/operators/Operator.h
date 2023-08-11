@@ -5,8 +5,7 @@
 //	@doc:
 //		Base class for all operators: logical, physical, patterns
 //---------------------------------------------------------------------------
-#ifndef GPOPT_Operator_H
-#define GPOPT_Operator_H
+#pragma once
 
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/optimizer/cascade/base.h"
@@ -19,7 +18,6 @@
 
 namespace gpopt {
 using namespace gpos;
-using namespace duckdb;
 
 class Operator;
 class CCostContext;
@@ -39,98 +37,154 @@ class CPropConstraint;
 //---------------------------------------------------------------------------
 class Operator {
 public:
-	// aggregate type
-	enum EGbAggType { EgbaggtypeGlobal, EgbaggtypeLocal, EgbaggtypeIntermediate, EgbaggtypeSentinel };
+	//! aggregate type
+	enum EGbAggType { EGB_AGG_TYPE_GLOBAL, EGB_AGG_TYPE_LOCAL, EGB_AGG_TYPE_INTERMEDIATE, EGB_AGG_TYPE_SENTINEL };
 
-	// coercion form
-	enum ECoercionForm { EcfExplicitCall, EcfExplicitCast, EcfImplicitCast, EcfDontCare };
+	//! coercion form
+	enum ECoercionForm { ECF_EXPLICIT_CALL, ECF_EXPLICIT_CAST, ECF_IMPLICIT_CAST, ECF_DONT_CARE };
 
 public:
-	CGroupExpression *m_pgexpr;
-
-	// derived relational properties
-	CDrvdPropRelational *m_pdprel;
-
-	// derived physical properties
-	CDrvdPropPlan *m_pdpplan;
-
-	// required plan properties
-	CReqdPropPlan *m_prpp;
-
-	duckdb::unique_ptr<EstimatedProperties> estimated_props;
-
-	//! The types returned by this operator. Set by calling Operator::ResolveTypes.
-	duckdb::vector<LogicalType> types;
-
-	//! Estimated Cardinality
-	idx_t estimated_cardinality;
-
 	//! The set of children of the operator
 	duckdb::vector<duckdb::unique_ptr<Operator>> children;
-
-	double m_cost;
-
-	//! The set of expressions contained within the operator, if any
-	duckdb::vector<duckdb::unique_ptr<Expression>> expressions;
-
-	bool has_estimated_cardinality = false;
-
 	LogicalOperatorType logical_type = LogicalOperatorType::LOGICAL_INVALID;
-
 	PhysicalOperatorType physical_type = PhysicalOperatorType::INVALID;
 
-	/* ctors and dtor */
+	// --------------------------- ORCA ------------------------
+	CGroupExpression *m_group_expression;
+	//! derived relational properties
+	CDrvdPropRelational *m_derived_property_relation;
+	//! derived properties of the carried plan
+	CDrvdPropPlan *m_derived_property_plan;
+	//! required plan properties
+	CReqdPropPlan *m_required_plan_property;
+	double m_cost;
+
+	// --------------------------- DuckDB ----------------------
+	duckdb::unique_ptr<EstimatedProperties> estimated_props;
+	//! The types returned by this operator. Set by calling Operator::ResolveTypes.
+	duckdb::vector<LogicalType> types;
+	//! Estimated Cardinality
+	idx_t estimated_cardinality;
+	//! The set of expressions contained within the operator, if any
+	duckdb::vector<duckdb::unique_ptr<Expression>> expressions;
+	bool has_estimated_cardinality = false;
+
 public:
-	// ctor
-	explicit Operator() : m_cost(GPOPT_INVALID_COST) {
+	Operator() : m_cost(GPOPT_INVALID_COST) {
 	}
 
-	// copy ctor
 	Operator(const Operator &other) = delete;
 
-	// dtor
-	virtual ~Operator() {
-	}
+	virtual ~Operator() = default;
 
 public:
-	// Rehydrate expression from a given cost context and child expressions
-	static Operator *PexprRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
-	                                CDrvdPropCtxtPlan *pdpctxtplan);
+	void ResolveOperatorTypes();
 
-	//! Resolve types for this specific operator
-	virtual void ResolveTypes() {
-	}
-
-	void ResolveOperatorTypes() {
-		types.clear();
-		// first resolve child types
-		for (duckdb::unique_ptr<Operator> &child : children) {
-			child->ResolveOperatorTypes();
-		}
-		// now resolve the types for this operator
-		ResolveTypes();
-		D_ASSERT(types.size() == GetColumnBindings().size());
-	}
-
-public:
 	void AddChild(duckdb::unique_ptr<Operator> child) {
 		D_ASSERT(child);
 		children.emplace_back(std::move(child));
 	}
 
+	virtual idx_t EstimateCardinality(ClientContext &context);
+
+	// ------------------------------------- ORCA ------------------------------------
+	// Rehydrate expression from a given cost context and child expressions
+	static Operator *PexprRehydrate(CCostContext *cost_context, duckdb::vector<Operator *> pdrgpexpr,
+	                                CDrvdPropCtxtPlan *pdpctxtplan);
 	// get the suitable derived property type based on operator
-	CDrvdProp::EPropType Ept() const {
-		if (FLogical()) {
-			return CDrvdProp::EptRelational;
+	CDrvdProp::EPropType Ept() const;
+
+	ULONG Arity(int x = 0) const {
+		if (x == 0) {
+			return children.size();
+		} else if (x == 1) {
+			return expressions.size();
 		}
-		if (FPhysical()) {
-			return CDrvdProp::EptPlan;
-		}
-		return CDrvdProp::EptInvalid;
+		return children.size();
+	}
+	// get expression's derived property given its type
+	CDrvdProp *Pdp(const CDrvdProp::EPropType ept) const;
+
+	duckdb::vector<CFunctionalDependency *> DeriveFunctionalDependencies(CExpressionHandle &expression_handle);
+
+	CReqdPropPlan *PrppCompute(CReqdPropPlan *required_properties_input);
+
+	CReqdPropPlan *PrppDecorate(CReqdPropPlan *required_properties_input);
+
+	CDrvdProp *PdpDerive(CDrvdPropCtxtPlan *pdpctxtL = nullptr);
+
+	bool FMatchPattern(CGroupExpression *group_expression);
+	// hash function
+	static ULONG HashValue(const Operator *op);
+
+	virtual ULONG HashValue() const;
+
+public:
+	//! Resolve types for this specific operator
+	virtual void ResolveTypes() {};
+
+	// ------------------------------------- ORCA ------------------------------------
+	virtual CKeyCollection *DeriveKeyCollection(CExpressionHandle &expression_handle) {
+		return nullptr;
+	}
+
+	virtual CPropConstraint *DerivePropertyConstraint(CExpressionHandle &expression_handle) {
+		return nullptr;
+	}
+
+	virtual ULONG DeriveJoinDepth(CExpressionHandle &expression_handle) {
+		return 0;
+	}
+
+	virtual Operator *SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
+	                                CDrvdPropCtxtPlan *pdpctxtplan) {
+		return nullptr;
+	}
+	//! create container for derived properties
+	virtual CDrvdProp *PdpCreate() {
+		return nullptr;
+	}
+	//! is operator logical?
+	virtual bool FLogical() const {
+		return ((logical_type != LogicalOperatorType::LOGICAL_INVALID) &&
+		        (physical_type == PhysicalOperatorType::INVALID));
+	}
+	//! is operator physical?
+	virtual bool FPhysical() const {
+		return ((logical_type == LogicalOperatorType::LOGICAL_INVALID) &&
+		        (physical_type != PhysicalOperatorType::INVALID));
+	}
+	//! is operator physical aggregate?
+	virtual bool FPhysicalAgg() const {
+		return physical_type == PhysicalOperatorType::UNGROUPED_AGGREGATE;
+	}
+	//! is operator pattern?
+	virtual bool FPattern() const {
+		return ((logical_type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) &&
+		        (physical_type != PhysicalOperatorType::EXTENSION));
+	}
+	//! sensitivity to order of inputs
+	virtual bool FInputOrderSensitive() {
+		return false;
+	};
+	//! create container for required properties
+	virtual CReqdProp *PrpCreate() const {
+		return nullptr;
+	};
+	//! match function, abstract to enforce an implementation for each new operator
+	virtual bool Matches(Operator *pop) {
+		return this == pop;
 	};
 
-	/* H-defined virtual functions */
-public:
+	virtual duckdb::unique_ptr<Operator> Copy();
+
+	virtual duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *group_expression);
+
+	virtual duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *group_expression,
+	                                                         duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+	                                                         double cost);
+
+	// ------------------------------------- DuckDB -------------------------------------
 	virtual string ToString() const {
 		return "Something wrong happens";
 	}
@@ -144,125 +198,14 @@ public:
 		return v;
 	}
 
-	virtual CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) {
-		return NULL;
-	}
-
-	virtual CPropConstraint *DerivePropertyConstraint(CExpressionHandle &exprhdl) {
-		return NULL;
-	}
-
-	virtual ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) {
-		return 0;
-	}
-
-	virtual Operator *SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
-	                                CDrvdPropCtxtPlan *pdpctxtplan) {
-		return nullptr;
-	}
-
-	// create container for derived properties
-	virtual CDrvdProp *PdpCreate() {
-		return nullptr;
-	}
-
-	bool FLogical() const {
-		return ((logical_type != LogicalOperatorType::LOGICAL_INVALID) &&
-		        (physical_type == PhysicalOperatorType::INVALID));
-	}
-
-	// is operator physical?
-	bool FPhysical() const {
-		return ((logical_type == LogicalOperatorType::LOGICAL_INVALID) &&
-		        (physical_type != PhysicalOperatorType::INVALID));
-	}
-
-	virtual bool FPhysicalAgg() const {
-		return physical_type == PhysicalOperatorType::UNGROUPED_AGGREGATE;
-	}
-
-	// is operator pattern?
-	virtual bool FPattern() const {
-		return ((logical_type == LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) &&
-		        (physical_type != PhysicalOperatorType::EXTENSION));
-	}
-
-	// sensitivity to order of inputs
-	virtual bool FInputOrderSensitive() {
-		return false;
-	};
-
-	// match function;
-	// abstract to enforce an implementation for each new operator
-	virtual bool Matches(Operator *pop) {
-		return this == pop;
-	};
-
-	// create container for required properties
-	virtual CReqdProp *PrpCreate() const {
-		return nullptr;
-	}
-
 	//! Serializes an LogicalOperator to a stand-alone binary blob
 	virtual void Serialize(FieldWriter &writer) const {
 	}
-
 	//! Serializes a LogicalOperator to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const {
+	virtual void Serialize(Serializer &serializer) const {
 	}
 
-	/* CPP-defined virtual functions */
 public:
-	virtual idx_t EstimateCardinality(ClientContext &context);
-
-	virtual duckdb::unique_ptr<Operator> Copy();
-
-	virtual duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression *pgexpr);
-
-	virtual duckdb::unique_ptr<Operator>
-	CopywithNewChilds(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost);
-
-	/* CPP-defined functions */
-public:
-	duckdb::vector<CFunctionalDependency *> DeriveFunctionalDependencies(CExpressionHandle &exprhdl);
-
-	CReqdPropPlan *PrppCompute(CReqdPropPlan *prppInput);
-
-	CReqdPropPlan *PrppDecorate(CReqdPropPlan *prppInput);
-
-	CDrvdProp *PdpDerive(CDrvdPropCtxtPlan *pdpctxtL = nullptr);
-
-	bool FMatchPattern(CGroupExpression *pgexpr);
-
-	// hash function
-	static ULONG HashValue(const Operator *op);
-
-	ULONG HashValue() const;
-
-	/* H-defined functions */
-public:
-	ULONG Arity(int x = 0) const {
-		if (x == 0) {
-			return children.size();
-		} else if (x == 1) {
-			return expressions.size();
-		}
-		return children.size();
-	}
-
-	// get expression's derived property given its type
-	CDrvdProp *Pdp(const CDrvdProp::EPropType ept) const {
-		switch (ept) {
-		case CDrvdProp::EptRelational:
-			return (CDrvdProp *)m_pdprel;
-		case CDrvdProp::EptPlan:
-			return (CDrvdProp *)m_pdpplan;
-		default:
-			break;
-		}
-		return nullptr;
-	};
-
 	template <class TARGET>
 	TARGET &Cast() {
 		return (TARGET &)*this;
@@ -274,4 +217,3 @@ public:
 	}
 }; // class Operator
 } // namespace gpopt
-#endif

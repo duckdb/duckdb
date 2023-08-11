@@ -226,7 +226,7 @@ CJobGroupExpressionOptimization::EEvent CJobGroupExpressionOptimization::EevtIni
 	exprhdl.Attach(pjgeo->m_pgexpr);
 	exprhdl.DeriveProps(NULL);
 	/* I comment here because it has to be true */
-	// if (!psc->m_peng->FCheckReqdProps(exprhdl, pjgeo->m_poc->m_prpp, pjgeo->m_ulOptReq))
+	// if (!psc->m_peng->FCheckReqdProps(exprhdl, pjgeo->m_poc->m_required_plan_property, pjgeo->m_ulOptReq))
 	// {
 	//		return eevFinalized;
 	// }

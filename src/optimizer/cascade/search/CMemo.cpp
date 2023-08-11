@@ -75,7 +75,7 @@ void CMemo::SetRoot(CGroup* pgroup)
 void CMemo::Add(CGroup* pgroup, Operator* pexprOrigin)
 {
 	// extract expression props
-	CDrvdProp* pdp = pexprOrigin->m_pdprel;
+	CDrvdProp* pdp = pexprOrigin->m_derived_property_relation;
 	ULONG id = m_aul++;
 	{
 		CGroupProxy gp(pgroup);
@@ -272,7 +272,7 @@ duckdb::unique_ptr<Operator> CMemo::PexprExtractPlan(CGroup* pgroupRoot, CReqdPr
 		duckdb::unique_ptr<Operator> pexprChild = PexprExtractPlan(pgroupChild, prpp, ulSearchStages);
 		pdrgpexpr.emplace_back(std::move(pexprChild));
 	}
-	duckdb::unique_ptr<Operator> pexpr = pgexprBest->m_pop->CopywithNewChilds(pgexprBest, std::move(pdrgpexpr), cost);
+	duckdb::unique_ptr<Operator> pexpr = pgexprBest->m_pop->CopyWithNewChildren(pgexprBest, std::move(pdrgpexpr), cost);
 	return pexpr;
 }
 

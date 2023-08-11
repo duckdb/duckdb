@@ -28,11 +28,11 @@ using namespace gpopt;
 //
 //---------------------------------------------------------------------------
 CCostContext::CCostContext(COptimizationContext* poc, ULONG ulOptReq, CGroupExpression* pgexpr)
-	:m_cost(GPOPT_INVALID_COST), m_estate(estUncosted), m_pgexpr(pgexpr), m_pgexprForStats(nullptr), m_pdpplan(nullptr), m_ulOptReq(ulOptReq), m_fPruned(false), m_poc(poc)
+	:m_cost(GPOPT_INVALID_COST), m_estate(estUncosted), m_group_expression(pgexpr), m_pgexprForStats(nullptr), m_pdpplan(nullptr), m_ulOptReq(ulOptReq), m_fPruned(false), m_poc(poc)
 {
-	if(m_pgexpr != nullptr)
+	if(m_group_expression != nullptr)
 	{
-		CGroupExpression* pgexprForStats = m_pgexpr->m_pgroup->PgexprBestPromise(m_pgexpr);
+		CGroupExpression* pgexprForStats = m_group_expression->m_pgroup->PgexprBestPromise(m_group_expression);
 		if (nullptr != pgexprForStats)
 		{
 			m_pgexprForStats = pgexprForStats;
@@ -115,7 +115,7 @@ bool CCostContext::operator==(const CCostContext &cc) const
 bool CCostContext::IsValid()
 {
 	// obtain relational properties from group
-	CDrvdPropRelational* pdprel = CDrvdPropRelational::GetRelationalProperties(m_pgexpr->m_pgroup->m_pdp);
+	CDrvdPropRelational* pdprel = CDrvdPropRelational::GetRelationalProperties(m_group_expression->m_pgroup->m_pdp);
 	// derive plan properties
 	DerivePlanProps();
 	// checking for required properties satisfaction
@@ -165,8 +165,8 @@ void CCostContext::BreakCostTiesForJoinPlans(CCostContext* pccFst, CCostContext*
 	}
 	// both plans have equal estimated rows for both children, break tie based on join depth
 	*pfTiesResolved = true;
-	ULONG ulOuterJoinDepthFst = CDrvdPropRelational::GetRelationalProperties((*pccFst->m_pgexpr)[0]->m_pdp)->GetJoinDepth();
-	ULONG ulInnerJoinDepthFst = CDrvdPropRelational::GetRelationalProperties((*pccFst->m_pgexpr)[1]->m_pdp)->GetJoinDepth();
+	ULONG ulOuterJoinDepthFst = CDrvdPropRelational::GetRelationalProperties((*pccFst->m_group_expression)[0]->m_pdp)->GetJoinDepth();
+	ULONG ulInnerJoinDepthFst = CDrvdPropRelational::GetRelationalProperties((*pccFst->m_group_expression)[1]->m_pdp)->GetJoinDepth();
 	if (ulInnerJoinDepthFst < ulOuterJoinDepthFst)
 	{
 		*ppccPrefered = pccFst;
@@ -268,7 +268,7 @@ double CCostContext::CostCompute(duckdb::vector<double> pdrgpcostChildren)
 	// extract local costing info
 	DOUBLE rows = m_pstats->Rows().Get();
 	ci.SetRows(rows);
-	DOUBLE width = m_pstats->Width(m_poc->m_prpp->m_pcrs).Get();
+	DOUBLE width = m_pstats->Width(m_poc->m_required_plan_property->m_pcrs).Get();
 	ci.SetWidth(width);
 	DOUBLE num_rebinds = m_pstats->NumRebinds().Get();
 	ci.SetRebinds(num_rebinds);
@@ -283,7 +283,7 @@ double CCostContext::CostCompute(duckdb::vector<double> pdrgpcostChildren)
 		ci.SetChildStats(ul, new ICostModel::CCostingStats(child_stats));
 		DOUBLE dRowsChild = child_stats->Rows().Get();
 		ci.SetChildRows(ul, dRowsChild);
-		DOUBLE dWidthChild = child_stats->Width(pocChild->m_prpp->m_pcrs).Get();
+		DOUBLE dWidthChild = child_stats->Width(pocChild->m_required_plan_property->m_pcrs).Get();
 		ci.SetChildWidth(ul, dWidthChild);
 		DOUBLE dRebindsChild = child_stats->NumRebinds().Get();
 		ci.SetChildRebinds(ul, dRebindsChild);

@@ -7,19 +7,19 @@ namespace duckdb {
 LogicalFilter::LogicalFilter()
 	: LogicalOperator(LogicalOperatorType::LOGICAL_FILTER)
 {
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 }
 
 LogicalFilter::LogicalFilter(unique_ptr<Expression> expression)
 	: LogicalOperator(LogicalOperatorType::LOGICAL_FILTER)
 {
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 	expressions.push_back(std::move(expression));
 	SplitPredicates(expressions);
 }
@@ -90,7 +90,7 @@ CPropConstraint* LogicalFilter::DerivePropertyConstraint(CExpressionHandle &expr
 // Rehydrate expression from a given cost context and child expressions
 Operator* LogicalFilter::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan)
 {
-	CGroupExpression* pgexpr = pcc->m_pgexpr;
+	CGroupExpression* pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	LogicalFilter* pexpr = new LogicalFilter();
 	pexpr->expressions = std::move(pgexpr->m_pop->expressions);
@@ -99,7 +99,7 @@ Operator* LogicalFilter::SelfRehydrate(CCostContext* pcc, duckdb::vector<Operato
 		pexpr->AddChild(child->Copy());
 	}
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 

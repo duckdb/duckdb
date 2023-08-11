@@ -98,9 +98,9 @@ public:
 
 	duckdb::unique_ptr<Operator> Copy() override;
 
-	duckdb::unique_ptr<Operator> CopywithNewGroupExpression(CGroupExpression* pgexpr) override;
+	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override;
 	
-	duckdb::unique_ptr<Operator> CopywithNewChilds(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
+	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
 };
 
 } // namespace duckdb

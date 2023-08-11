@@ -16,10 +16,10 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)) {
 	logical_type = LogicalOperatorType::LOGICAL_GET;
-	m_pdprel = new CDrvdPropRelational();
-	m_pgexpr = nullptr;
-	m_pdpplan = nullptr;
-	m_prpp = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_group_expression = nullptr;
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
 }
 
 string LogicalGet::GetName() const {
@@ -230,7 +230,7 @@ CPropConstraint *LogicalGet::DerivePropertyConstraint(CExpressionHandle &exprhdl
 // Rehydrate expression from a given cost context and child expressions
 Operator *LogicalGet::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
                                     CDrvdPropCtxtPlan *pdpctxtplan) {
-	CGroupExpression *pgexpr = pcc->m_pgexpr;
+	CGroupExpression *pgexpr = pcc->m_group_expression;
 	double cost = pcc->m_cost;
 	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
 	unique_ptr<TableScanBindData> tmp_bind_data =
@@ -238,7 +238,7 @@ Operator *LogicalGet::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	LogicalGet *pexpr = new LogicalGet(table_index, function, std::move(tmp_bind_data), returned_types, names);
 	pexpr->m_cost = cost;
-	pexpr->m_pgexpr = pgexpr;
+	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
 
@@ -251,9 +251,9 @@ unique_ptr<Operator> LogicalGet::Copy() {
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
 	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -268,7 +268,7 @@ unique_ptr<Operator> LogicalGet::Copy() {
 	for (auto &child : children) {
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = m_pgexpr;
+	result->m_group_expression = m_group_expression;
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
@@ -281,7 +281,7 @@ unique_ptr<Operator> LogicalGet::Copy() {
 	return result;
 }
 
-unique_ptr<Operator> LogicalGet::CopywithNewGroupExpression(CGroupExpression *pgexpr) {
+unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
 	                           function.init_global, function.init_local);
 	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
@@ -290,9 +290,9 @@ unique_ptr<Operator> LogicalGet::CopywithNewGroupExpression(CGroupExpression *pg
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
 	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -307,7 +307,7 @@ unique_ptr<Operator> LogicalGet::CopywithNewGroupExpression(CGroupExpression *pg
 	for (auto &child : children) {
 		result->AddChild(child->Copy());
 	}
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
@@ -320,7 +320,7 @@ unique_ptr<Operator> LogicalGet::CopywithNewGroupExpression(CGroupExpression *pg
 	return result;
 }
 
-unique_ptr<Operator> LogicalGet::CopywithNewChilds(CGroupExpression *pgexpr,
+unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
                                                    duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                                    double cost) {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
@@ -331,9 +331,9 @@ unique_ptr<Operator> LogicalGet::CopywithNewChilds(CGroupExpression *pgexpr,
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
 	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
-	result->m_pdprel = m_pdprel;
-	result->m_pdpplan = m_pdpplan;
-	result->m_prpp = m_prpp;
+	result->m_derived_property_relation = m_derived_property_relation;
+	result->m_derived_property_plan = m_derived_property_plan;
+	result->m_required_plan_property = m_required_plan_property;
 	if (nullptr != estimated_props) {
 		result->estimated_props = estimated_props->Copy();
 	}
@@ -346,7 +346,7 @@ unique_ptr<Operator> LogicalGet::CopywithNewChilds(CGroupExpression *pgexpr,
 	result->logical_type = logical_type;
 	result->physical_type = physical_type;
 	result->children = std::move(pdrgpexpr);
-	result->m_pgexpr = pgexpr;
+	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());

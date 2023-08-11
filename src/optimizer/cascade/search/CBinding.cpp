@@ -255,7 +255,7 @@ Operator* CBinding::PexprExtract(CGroup* pgroup, Operator* pexprPattern, Operato
 	list<CGroupExpression*>::iterator itr;
 	if (NULL != pexprLast)
 	{
-		itr = find(pgroup->m_listGExprs.begin(), pgroup->m_listGExprs.end(), pexprLast->m_pgexpr);
+		itr = find(pgroup->m_listGExprs.begin(), pgroup->m_listGExprs.end(), pexprLast->m_group_expression);
 		pgexpr = *itr;
 	}
 	else
