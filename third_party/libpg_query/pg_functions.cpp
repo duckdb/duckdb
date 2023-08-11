@@ -49,6 +49,9 @@ static void allocate_new(parser_state *state, size_t n) {
 	if (state->malloc_ptr_idx >= state->malloc_ptr_size) {
 		size_t new_size = state->malloc_ptr_size * 2;
 		auto new_malloc_ptrs = (char **) malloc(sizeof(char *) * new_size);
+		if (!new_malloc_ptrs) {
+			throw std::runtime_error("Memory allocation failure");
+		}
 		memset(new_malloc_ptrs, 0, sizeof(char*) * new_size);
 		memcpy(new_malloc_ptrs, state->malloc_ptrs, state->malloc_ptr_size * sizeof(char*));
 		free(state->malloc_ptrs);
@@ -90,7 +93,11 @@ void pg_parser_init() {
 	pg_parser_state.pg_err_msg[0] = '\0';
 
 	pg_parser_state.malloc_ptr_size = 4;
+	pg_parser_state.malloc_ptrs = nullptr;
 	pg_parser_state.malloc_ptrs = (char **) malloc(sizeof(char *) * pg_parser_state.malloc_ptr_size);
+	if (!pg_parser_state.malloc_ptrs) {
+		throw std::runtime_error("Memory allocation failure");
+	}
 	memset(pg_parser_state.malloc_ptrs, 0, sizeof(char*) * pg_parser_state.malloc_ptr_size);
 	pg_parser_state.malloc_ptr_idx = 0;
 	allocate_new(&pg_parser_state, 1);
@@ -110,6 +117,9 @@ void pg_parser_parse(const char *query, parse_result *res) {
 }
 
 void pg_parser_cleanup() {
+	if (!pg_parser_state.malloc_ptrs) {
+		return;
+	}
 	for (size_t ptr_idx = 0; ptr_idx < pg_parser_state.malloc_ptr_idx; ptr_idx++) {
 		char *ptr = pg_parser_state.malloc_ptrs[ptr_idx];
 		if (ptr) {
