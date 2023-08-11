@@ -109,6 +109,10 @@ void LogicalGet::ResolveTypes() {
 }
 
 idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
+	// join order optimizer does better cardinality estimation.
+	if (has_estimated_cardinality) {
+		return estimated_cardinality;
+	}
 	if (function.cardinality) {
 		auto node_stats = function.cardinality(context, bind_data.get());
 		if (node_stats && node_stats->has_estimated_cardinality) {
