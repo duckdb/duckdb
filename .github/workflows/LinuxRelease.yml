@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     env:
-      EXTENSION_CONFIGS: './.github/config/bundled_extensions.cmake'
+      EXTENSION_CONFIGS: '.github/config/bundled_extensions.cmake'
       LOCAL_EXTENSION_REPO: '/tmp'
       GEN: ninja
       BUILD_BENCHMARK: 1

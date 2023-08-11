@@ -10,10 +10,12 @@ import glob
 import shutil
 
 if len(sys.argv) != 4:
-    print("Usage: scripts/create_local_extension_repo.py <path/to/duckdb/binary> <path/to/duckdb/build> <path/to/local_repo>")
+    print(
+        "Usage: scripts/create_local_extension_repo.py <path/to/duckdb/binary> <path/to/duckdb/build> <path/to/local_repo>"
+    )
     exit(1)
 
-duckdb_path  = sys.argv[1]
+duckdb_path = sys.argv[1]
 extension_path = sys.argv[2]
 
 duckdb_invocation = [duckdb_path, '-noheader', '-list', '-c']
