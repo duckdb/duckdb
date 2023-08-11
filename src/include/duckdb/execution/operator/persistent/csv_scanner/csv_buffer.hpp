@@ -11,6 +11,8 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB

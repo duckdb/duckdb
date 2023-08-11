@@ -241,10 +241,10 @@ void CSVSniffer::RefineCandidates() {
 		return;
 	}
 	for (auto &cur_candidate : candidates) {
-		for (idx_t i = 1; i < options.sample_chunks; i++) {
+		for (idx_t i = 1; i <= options.sample_chunks; i++) {
 			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
-			if (finished_file) {
-				// we finished the file successfully: stop
+			if (finished_file || i == options.sample_chunks) {
+				// we finished the file or our chunk sample successfully: stop
 				auto neo = std::move(cur_candidate);
 				candidates.clear();
 				candidates.emplace_back(std::move(neo));
