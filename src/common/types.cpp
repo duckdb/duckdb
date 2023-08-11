@@ -919,7 +919,7 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
-LogicalType LogicalType::KEY_VALUE(const LogicalType &key_type, const LogicalType &value_type) {
+LogicalType LogicalType::KEYVALUE(const LogicalType &key_type, const LogicalType &value_type) {
 	return LogicalType::STRUCT({{"key", key_type}, {"value", value_type}});
 }
 

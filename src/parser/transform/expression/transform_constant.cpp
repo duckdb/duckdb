@@ -110,15 +110,15 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				}
 				values.emplace_back(child_value);
 			}
-			auto type = LogicalType::KEY_VALUE(ListType::GetChildType(values[0].type()),
-			                                   ListType::GetChildType(values[1].type()));
+			auto type = LogicalType::KEYVALUE(ListType::GetChildType(values[0].type()),
+			                                  ListType::GetChildType(values[1].type()));
 
 			// need to zip these lists together
 			duckdb::vector<Value> pairs;
 			auto &keys = ListValue::GetChildren(values[0]);
 			auto &vals = ListValue::GetChildren(values[1]);
 			for (size_t i = 0; i < keys.size(); i++) {
-				pairs.emplace_back(Value::KEY_VALUE(keys[i], vals[i]));
+				pairs.emplace_back(Value::KEYVALUE(keys[i], vals[i]));
 			}
 
 			value = Value::MAP(type, std::move(pairs));

@@ -658,7 +658,7 @@ Value Value::STRUCT(child_list_t<Value> values) {
 	return result;
 }
 
-Value Value::KEY_VALUE(const Value &key, const Value &value) {
+Value Value::KEYVALUE(const Value &key, const Value &value) {
 	return Value::STRUCT({{"key", key}, {"value", value}});
 }
 
