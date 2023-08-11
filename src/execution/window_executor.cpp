@@ -1211,8 +1211,7 @@ void WindowValueExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, co
 unique_ptr<WindowExecutorState> WindowValueExecutor::GetExecutorState() const {
 	if (wexpr.type == ExpressionType::WINDOW_FIRST_VALUE || wexpr.type == ExpressionType::WINDOW_LAST_VALUE ||
 	    wexpr.type == ExpressionType::WINDOW_NTH_VALUE) {
-		return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask,
-		                                   ignore_nulls);
+		return make_uniq<WindowValueState>(wexpr, context, payload_count, partition_mask, order_mask, ignore_nulls);
 	} else {
 		return make_uniq<WindowExecutorBoundsState>(wexpr, context, payload_count, partition_mask, order_mask);
 	}

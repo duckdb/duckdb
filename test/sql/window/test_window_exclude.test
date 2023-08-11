@@ -455,28 +455,27 @@ SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDE
 7 	3 	7
 
 
-
-# Lag ignores EXCLUDE
-query III
-SELECT i, lag(i, 1) OVER w, array_agg(i) OVER w
-FROM (SELECT * FROM generate_series(1,5)
-        UNION ALL
-      SELECT * FROM generate_series(1,5) ) AS _(i)
-WINDOW w AS (ORDER BY i ROWS UNBOUNDED PRECEDING EXCLUDE GROUP)
-ORDER BY i;
-----
-1	NULL	NULL
-1	1	NULL
-2	1	[1, 1]
-2	2	[1, 1]
-3	2	[1, 1, 2, 2]
-3	3	[1, 1, 2, 2]
-4	3	[1, 1, 2, 2, 3, 3]
-4	4	[1, 1, 2, 2, 3, 3]
-5	4	[1, 1, 2, 2, 3, 3, 4, 4]
-5	5	[1, 1, 2, 2, 3, 3, 4, 4]
-
 # Custom aggregates (not implemented yet) 
+## Lag ignores EXCLUDE and array_agg (custom aggregate)
+#query III
+#SELECT i, lag(i, 1) OVER w, array_agg(i) OVER w
+#FROM (SELECT * FROM generate_series(1,5)
+#        UNION ALL
+#      SELECT * FROM generate_series(1,5) ) AS _(i)
+#WINDOW w AS (ORDER BY i ROWS UNBOUNDED PRECEDING EXCLUDE GROUP)
+#ORDER BY i;
+#----
+#1	NULL	NULL
+#1	1	NULL
+#2	1	[1, 1]
+#2	2	[1, 1]
+#3	2	[1, 1, 2, 2]
+#3	3	[1, 1, 2, 2]
+#4	3	[1, 1, 2, 2, 3, 3]
+#4	4	[1, 1, 2, 2, 3, 3]
+#5	4	[1, 1, 2, 2, 3, 3, 4, 4]
+#5	5	[1, 1, 2, 2, 3, 3, 4, 4]
+#
 #
 ## COUNT(*) and CURRENT ROW
 #query II

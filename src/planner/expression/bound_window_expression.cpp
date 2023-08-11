@@ -186,6 +186,7 @@ void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WriteOptionalProperty("end_expr", end_expr);
 	serializer.WriteOptionalProperty("offset_expr", offset_expr);
 	serializer.WriteOptionalProperty("default_expr", default_expr);
+	serializer.WriteProperty("exclude_clause", exclude_clause);
 }
 
 unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -212,6 +213,7 @@ unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializ
 	deserializer.ReadOptionalProperty("end_expr", result->end_expr);
 	deserializer.ReadOptionalProperty("offset_expr", result->offset_expr);
 	deserializer.ReadOptionalProperty("default_expr", result->default_expr);
+	deserializer.ReadProperty("exclude_clause", result->exclude_clause);
 	return std::move(result);
 }
 
