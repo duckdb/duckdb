@@ -5,7 +5,12 @@
 #' @aliases duckdb_driver
 #' @keywords internal
 #' @export
-setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "externalptr", dbdir = "character", read_only = "logical", bigint = "character"))
+setClass("duckdb_driver", contains = "DBIDriver", slots = list(
+  database_ref = "externalptr",
+  dbdir = "character",
+  read_only = "logical",
+  bigint = "character"
+))
 
 #' DuckDB connection class
 #'
@@ -14,17 +19,14 @@ setClass("duckdb_driver", contains = "DBIDriver", slots = list(database_ref = "e
 #' @aliases duckdb_connection
 #' @keywords internal
 #' @export
-setClass("duckdb_connection",
-  contains = "DBIConnection",
-  slots = list(
-    conn_ref = "externalptr",
-    driver = "duckdb_driver",
-    debug = "logical",
-    timezone_out = "character",
-    tz_out_convert = "character",
-    reserved_words = "character"
-  )
-)
+setClass("duckdb_connection", contains = "DBIConnection", slots = list(
+  conn_ref = "externalptr",
+  driver = "duckdb_driver",
+  debug = "logical",
+  timezone_out = "character",
+  tz_out_convert = "character",
+  reserved_words = "character"
+))
 
 duckdb_connection <- function(duckdb_driver, debug) {
   out <- new(
