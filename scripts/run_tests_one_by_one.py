@@ -69,7 +69,7 @@ def parse_assertions(stdout):
             space_before_num = line.rfind(' ', 0, pos - 2)
             return line[space_before_num + 2 : pos + 10]
 
-    raise Exception(f"Failed to parse assertions from: {stdout}")
+    return ""
 
 
 for test_number in range(test_count):
