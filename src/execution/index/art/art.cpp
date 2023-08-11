@@ -33,12 +33,9 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr, const idx_t block_id,
-         const idx_t block_offset)
-
+         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr, BlockPointer pointer)
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
       allocators(allocators_ptr), owns_data(false) {
-
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
@@ -57,12 +54,12 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 
 	// set the root node of the tree
 	tree = make_uniq<Node>();
-	if (block_id != DConstants::INVALID_INDEX) {
+	serialized_data_pointer = pointer;
+	if (pointer.IsValid()) {
 		tree->SetSerialized();
-		tree->SetPtr(block_id, block_offset);
+		tree->SetPtr(pointer.block_id, pointer.offset);
 		tree->Deserialize(*this);
 	}
-	serialized_data_pointer = BlockPointer(block_id, block_offset);
 
 	// validate the types of the key columns
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -974,13 +971,13 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer ART::Serialize(MetaBlockWriter &writer) {
+BlockPointer ART::Serialize(MetadataWriter &writer) {
 
 	lock_guard<mutex> l(lock);
 	if (tree->IsSet()) {
 		serialized_data_pointer = tree->Serialize(*this, writer);
 	} else {
-		serialized_data_pointer = {(block_id_t)DConstants::INVALID_INDEX, (uint32_t)DConstants::INVALID_INDEX};
+		serialized_data_pointer = BlockPointer();
 	}
 
 	return serialized_data_pointer;

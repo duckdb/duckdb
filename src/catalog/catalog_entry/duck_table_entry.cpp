@@ -23,7 +23,7 @@
 namespace duckdb {
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
+                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -41,9 +41,9 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	}
 	unique_ptr<ART> art;
 	// create an adaptive radix tree around the expressions
-	if (index_block) {
+	if (index_block.IsValid()) {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, nullptr, index_block->block_id, index_block->offset);
+		                     storage.db, nullptr, index_block);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
 		                     storage.db);
@@ -55,7 +55,7 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
-                       IndexConstraintType constraint_type, BlockPointer *index_block = nullptr) {
+                       IndexConstraintType constraint_type, BlockPointer index_block = BlockPointer()) {
 	vector<PhysicalIndex> new_keys;
 	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {
@@ -92,7 +92,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (info.indexes.empty()) {
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type);
 				} else {
-					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, &info.indexes[indexes_idx++]);
+					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, info.indexes[indexes_idx++]);
 				}
 			} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
 				// foreign key constraint: create a foreign key index
@@ -103,7 +103,7 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN);
 					} else {
 						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
-						                  &info.indexes[indexes_idx++]);
+						                  info.indexes[indexes_idx++]);
 					}
 				}
 			}
