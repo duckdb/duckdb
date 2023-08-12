@@ -441,6 +441,52 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, 
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const string &window_spec, const int &offset,
+                                                   const string &default_value, const string &projected_columns) {
+	string lag_params = "";
+	if (offset != 0)
+		lag_params += std::to_string(offset);
+	if (!default_value.empty())
+		lag_params += "," + default_value;
+	auto expr = GenerateExpressionList("lag", column, "", lag_params, projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const string &window_spec, const int &offset,
+                                                    const string &default_value, const string &projected_columns) {
+	string lead_params = "";
+	if (offset != 0)
+		lead_params += std::to_string(offset);
+	if (!default_value.empty())
+		lead_params += "," + default_value;
+	auto expr = GenerateExpressionList("lead", column, "", lead_params, projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FirstValue(const string &column, const string &window_spec,
+                                                          const string &projected_columns) {
+	auto expr = GenerateExpressionList("first_value", column, "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::First(const string &column, const string &window_spec,
+                                                     const string &projected_columns) {
+	// alias for first_value
+	return FirstValue(column, window_spec, projected_columns);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LastValue(const string &column, const string &window_spec,
+                                                         const string &projected_columns) {
+	auto expr = GenerateExpressionList("last_value", column, "", "", projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const string &column, const string &window_spec,
+                                                    const string &projected_columns) {
+	// alias for last_value
+	return LastValue(column, window_spec, projected_columns);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_uniq<DuckDBPyRelation>(rel->Distinct());
 }

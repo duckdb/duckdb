@@ -137,6 +137,17 @@ public:
 	unique_ptr<DuckDBPyRelation> CumeDist(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> NTile(const string &window_spec, const int &num_buckets,
 	                                   const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> Lag(const string &column, const string &window_spec, const int &offset,
+	                                 const string &default_value, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> Lead(const string &column, const string &window_spec, const int &offset,
+	                                  const string &default_value, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> FirstValue(const string &column, const string &window_spec,
+	                                        const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> First(const string &column, const string &window_spec,
+	                                   const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> LastValue(const string &column, const string &window_spec,
+	                                       const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> Last(const string &column, const string &window_spec, const string &projected_columns);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 

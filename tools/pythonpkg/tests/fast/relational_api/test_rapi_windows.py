@@ -111,3 +111,151 @@ class TestRAPIWindows:
         expected = [(-1, 1), (1, 1), (1, 1), (2, 2), (5, 2), (10, 2), (11, 3), (45, 3)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_lag(self, table):
+        result = (
+            table.lag("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, None),
+            (1, 1, 2, 1),
+            (1, 2, 3, 1),
+            (2, 11, -1, None),
+            (2, 10, 4, 11),
+            (3, 5, -2, None),
+            (3, -1, 0, 5),
+            (3, 45, 10, -1),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.lag("v", "over (partition by id order by t asc)", default_value="-1", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, -1),
+            (1, 1, 2, 1),
+            (1, 2, 3, 1),
+            (2, 11, -1, -1),
+            (2, 10, 4, 11),
+            (3, 5, -2, -1),
+            (3, -1, 0, 5),
+            (3, 45, 10, -1),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.lag("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, None),
+            (1, 1, 2, None),
+            (1, 2, 3, 1),
+            (2, 11, -1, None),
+            (2, 10, 4, None),
+            (3, 5, -2, None),
+            (3, -1, 0, None),
+            (3, 45, 10, 5),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_lead(self, table):
+        result = (
+            table.lead("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, 1),
+            (1, 1, 2, 2),
+            (1, 2, 3, None),
+            (2, 11, -1, 10),
+            (2, 10, 4, None),
+            (3, 5, -2, -1),
+            (3, -1, 0, 45),
+            (3, 45, 10, None),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.lead("v", "over (partition by id order by t asc)", default_value="-1", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, 1),
+            (1, 1, 2, 2),
+            (1, 2, 3, -1),
+            (2, 11, -1, 10),
+            (2, 10, 4, -1),
+            (3, 5, -2, -1),
+            (3, -1, 0, 45),
+            (3, 45, 10, -1),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.lead("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, 2),
+            (1, 1, 2, None),
+            (1, 2, 3, None),
+            (2, 11, -1, None),
+            (2, 10, 4, None),
+            (3, 5, -2, 45),
+            (3, -1, 0, None),
+            (3, 45, 10, None),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["first_value", "first"])
+    def test_first_value(self, table, f):
+        result = (
+            getattr(table, f)("v", "over (partition by id order by t asc)", "id, v, t").order("id").execute().fetchall()
+        )
+        expected = [
+            (1, 1, 1, 1),
+            (1, 1, 2, 1),
+            (1, 2, 3, 1),
+            (2, 11, -1, 11),
+            (2, 10, 4, 11),
+            (3, 5, -2, 5),
+            (3, -1, 0, 5),
+            (3, 45, 10, 5),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["last_value", "last"])
+    def test_last_value(self, table, f):
+        result = (
+            getattr(table, f)("v", "over (partition by id order by t asc)", "id, v, t").order("id").execute().fetchall()
+        )
+        expected = [
+            (1, 1, 1, 2),
+            (1, 1, 2, 2),
+            (1, 2, 3, 2),
+            (2, 11, -1, 10),
+            (2, 10, 4, 10),
+            (3, 5, -2, 45),
+            (3, -1, 0, 45),
+            (3, 45, 10, 45),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

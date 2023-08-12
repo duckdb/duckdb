@@ -144,8 +144,22 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("cume_dist", &DuckDBPyRelation::CumeDist, "Computes the cumulative distribution within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
-	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets", py::arg("window_spec"),
-	         py::arg("num_buckets"), py::arg("projected_columns") = "");
+	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets",
+	         py::arg("window_spec"), py::arg("num_buckets"), py::arg("projected_columns") = "")
+	    .def("lag", &DuckDBPyRelation::Lag, "Computes the lag within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
+	         py::arg("projected_columns") = "")
+	    .def("lead", &DuckDBPyRelation::Lead, "Computes the lead within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
+	         py::arg("projected_columns") = "")
+	    .def("first_value", &DuckDBPyRelation::FirstValue, "Computes the first value within the partition",
+	         py::arg("column"), py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("first", &DuckDBPyRelation::First, "Computes the first value within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("last_value", &DuckDBPyRelation::LastValue, "Computes the last value within the partition",
+	         py::arg("column"), py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("last", &DuckDBPyRelation::Last, "Computes the last value within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
