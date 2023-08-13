@@ -586,16 +586,14 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 // this is a nop for us
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	auto status = SetErrorMaybe(statement, error, "Missing statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!statement) {
+		SetError(error, "Missing statement object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
-	if (status != ADBC_STATUS_OK) {
-		return status;
+	if (!error) {
+		SetError(error, "Missing error object");
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
 	return ADBC_STATUS_OK;
 }
 
@@ -687,10 +685,6 @@ AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArra
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
-	if (depth != 0) {
-		SetError(error, "Depth parameter not yet supported");
-		return ADBC_STATUS_NOT_IMPLEMENTED;
-	}
 	if (catalog != nullptr) {
 		if (strcmp(catalog, "duckdb") == 0) {
 			SetError(error, "catalog must be NULL or 'duckdb'");
@@ -702,16 +696,53 @@ AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth
 		SetError(error, "Table types parameter not yet supported");
 		return ADBC_STATUS_NOT_IMPLEMENTED;
 	}
+	std::string query;
+	switch (depth) {
+	case ADBC_OBJECT_DEPTH_CATALOGS:
+		SetError(error, "ADBC_OBJECT_DEPTH_CATALOGS not yet supported");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	case ADBC_OBJECT_DEPTH_DB_SCHEMAS:
+		// Return metadata on catalogs and schemas.
+		query = duckdb::StringUtil::Format(R"(
+				SELECT table_schema db_schema_name
+				FROM information_schema.columns
+				WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s' ;
+				)",
+		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
+		                                   column_name ? column_name : "%");
+		break;
+	case ADBC_OBJECT_DEPTH_TABLES:
+		// Return metadata on catalogs, schemas, and tables.
+		query = duckdb::StringUtil::Format(R"(
+				SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables
+				FROM (
+					SELECT table_schema, { table_name : table_name} table_schema_list
+					FROM information_schema.columns
+					WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s'  GROUP BY table_schema, table_name
+					) GROUP BY table_schema;
+				)",
+		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
+		                                   column_name ? column_name : "%");
+		break;
+	case ADBC_OBJECT_DEPTH_COLUMNS:
+		// Return metadata on catalogs, schemas, tables, and columns.
+		query = duckdb::StringUtil::Format(R"(
+				SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables
+				FROM (
+					SELECT table_schema, { table_name : table_name, table_columns : LIST({column_name : column_name, ordinal_position : ordinal_position + 1, remarks : ''})} table_schema_list
+					FROM information_schema.columns
+					WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s' GROUP BY table_schema, table_name
+					) GROUP BY table_schema;
+				)",
+		                                   db_schema ? db_schema : "%", table_name ? table_name : "%",
+		                                   column_name ? column_name : "%");
+		break;
+	default:
+		SetError(error, "Invalid value of Depth");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 
-	auto q = duckdb::StringUtil::Format(R"(
-SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables FROM (
-	SELECT table_schema, { table_name : table_name, table_columns : LIST({column_name : column_name, ordinal_position : ordinal_position + 1, remarks : ''})} table_schema_list FROM information_schema.columns WHERE table_schema LIKE '%s' AND table_name LIKE '%s' AND column_name LIKE '%s' GROUP BY table_schema, table_name
-	) GROUP BY table_schema;
-)",
-	                                    db_schema ? db_schema : "%", table_name ? table_name : "%",
-	                                    column_name ? column_name : "%");
-
-	return QueryInternal(connection, out, q.c_str(), error);
+	return QueryInternal(connection, out, query.c_str(), error);
 }
 
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,

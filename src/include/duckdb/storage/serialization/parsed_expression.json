@@ -227,8 +227,8 @@
     "enum": "PARAMETER",
     "members": [
       {
-        "name": "parameter_nr",
-        "type": "idx_t"
+        "name": "identifier",
+        "type": "string"
       }
     ]
   },
