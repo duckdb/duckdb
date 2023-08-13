@@ -304,7 +304,12 @@ AdbcStatusCode AdbcConnectionGetObjects(struct AdbcConnection *connection, int d
                                         const char *db_schema, const char *table_name, const char **table_types,
                                         const char *column_name, struct ArrowArrayStream *stream,
                                         struct AdbcError *error) {
-	if (!connection->private_driver) {
+	if (!connection) {
+		SetError(error, "connection can't be null");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+	if (!connection->private_data) {
+		SetError(error, "connection must be initialized");
 		return ADBC_STATUS_INVALID_STATE;
 	}
 	return connection->private_driver->ConnectionGetObjects(connection, depth, catalog, db_schema, table_name,
@@ -474,7 +479,12 @@ AdbcStatusCode AdbcStatementNew(struct AdbcConnection *connection, struct AdbcSt
 }
 
 AdbcStatusCode AdbcStatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	if (!statement->private_driver) {
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
 		return ADBC_STATUS_INVALID_STATE;
 	}
 	return statement->private_driver->StatementPrepare(statement, error);
