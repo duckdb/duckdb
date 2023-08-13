@@ -51,6 +51,7 @@ public:
 		ExfLogicalProj2PhysicalProj = 1,
 		ExfOrderImplementation = 2,
 		ExfFilterImplementation,
+		ExfDummyScanImplementation,
 		ExfProject2ComputeScalarExfn,
 		ExfInnerJoin2HashJoin,
 		ExfSelect2Filter,

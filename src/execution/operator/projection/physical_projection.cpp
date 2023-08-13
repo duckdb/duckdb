@@ -31,7 +31,7 @@ PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_
 	m_group_expression = nullptr;
 	m_derived_property_plan = nullptr;
 	m_required_plan_property = nullptr;
-	m_ulTotalOptRequests = 1;
+	m_total_opt_requests = 1;
 }
 
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, GlobalOperatorState &gstate, OperatorState &state_p) const

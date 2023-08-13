@@ -321,8 +321,8 @@ unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pg
 }
 
 unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
-                                                   duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
-                                                   double cost) {
+                                                     duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+                                                     double cost) {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
 	                           function.init_global, function.init_local);
 	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();

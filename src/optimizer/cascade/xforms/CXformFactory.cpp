@@ -106,6 +106,7 @@ void CXformFactory::Instantiate() {
 	Add(new CXformLogicalProj2PhysicalProj());
 	Add(new CXformOrderImplementation());
 	Add(new CXformFilterImplementation());
+	Add(new CXformDummyScanImplementation());
 	/*
 	Add(make_shared<CXformInnerJoin2HashJoin();
 	Add(make_shared<CXformIndexGet2IndexScan();
