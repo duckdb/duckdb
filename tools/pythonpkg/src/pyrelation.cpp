@@ -487,6 +487,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const string &column, const 
 	return LastValue(column, window_spec, projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NthValue(const string &column, const string &window_spec,
+                                                        const int &offset, const string &projected_columns) {
+	string nth_value_params = std::to_string(offset);
+	auto expr = GenerateExpressionList("nth_value", column, "", nth_value_params, projected_columns, window_spec);
+	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 	return make_uniq<DuckDBPyRelation>(rel->Distinct());
 }

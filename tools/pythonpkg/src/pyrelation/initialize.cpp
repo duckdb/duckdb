@@ -159,7 +159,9 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	    .def("last_value", &DuckDBPyRelation::LastValue, "Computes the last value within the partition",
 	         py::arg("column"), py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("last", &DuckDBPyRelation::Last, "Computes the last value within the partition", py::arg("column"),
-	         py::arg("window_spec"), py::arg("projected_columns") = "");
+	         py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("offset"), py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {

@@ -148,6 +148,8 @@ public:
 	unique_ptr<DuckDBPyRelation> LastValue(const string &column, const string &window_spec,
 	                                       const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> Last(const string &column, const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> NthValue(const string &column, const string &window_spec, const int &offset,
+	                                      const string &projected_columns);
 
 	unique_ptr<DuckDBPyRelation> Distinct();
 

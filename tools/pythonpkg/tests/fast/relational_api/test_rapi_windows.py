@@ -259,3 +259,41 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_nth_value(self, table):
+        result = (
+            table.nth_value("v", "over (partition by id order by t asc)", 2, "id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, None),
+            (1, 1, 2, 1),
+            (1, 2, 3, 1),
+            (2, 11, -1, None),
+            (2, 10, 4, 10),
+            (3, 5, -2, None),
+            (3, -1, 0, -1),
+            (3, 45, 10, -1),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.nth_value("v", "over (partition by id order by t asc)", 4, "id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, 1, 1, None),
+            (1, 1, 2, None),
+            (1, 2, 3, None),
+            (2, 11, -1, None),
+            (2, 10, 4, None),
+            (3, 5, -2, None),
+            (3, -1, 0, None),
+            (3, 45, 10, None),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
