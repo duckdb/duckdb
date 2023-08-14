@@ -198,6 +198,9 @@ jobs:
         with:
           python-version: '3.7'
 
+      - name: Install Ninja
+        run: brew install ninja
+
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
