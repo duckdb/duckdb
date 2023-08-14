@@ -23,9 +23,10 @@ public:
 		}
 		case PhysicalType::ARRAY: {
 			auto &child_type = ArrayType::GetChildType(type);
-			auto size = ArrayType::GetSize(type);
-			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, size * capacity));
-			auxiliary = make_shared<VectorArrayBuffer>(type, capacity);
+			auto array_size = ArrayType::GetSize(type);
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, array_size * capacity));
+			auto child_vector = make_uniq<Vector>(child_type, false, false, array_size * capacity);
+			auxiliary = make_shared<VectorArrayBuffer>(std::move(child_vector), array_size, capacity);
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -69,16 +70,12 @@ public:
 			// fixed size list does not have own data
 			result.data = nullptr;
 			// reinitialize the VectorArrayBuffer
-			auxiliary->SetAuxiliaryData(nullptr);
+			// auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
 
 			// propagate through child
 			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
-			auto &array_buffer = result.auxiliary->Cast<VectorArrayBuffer>();
-
-			array_buffer.SetAuxiliaryData(nullptr);
-
-			auto &array_child = array_buffer.GetChild();
+			auto &array_child = result.auxiliary->Cast<VectorArrayBuffer>().GetChild();
 			child_cache.ResetFromCache(array_child, child_caches[0]);
 			break;
 		}

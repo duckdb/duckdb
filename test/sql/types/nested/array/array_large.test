@@ -1,0 +1,22 @@
+# name: test/sql/types/nested/array/array_large.test
+# group: [array]
+
+# Test large arrays (> VECTOR_SIZE elements)
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
+CREATE TABLE t1 (a INT[4096]);
+
+statement ok
+INSERT INTO t1 VALUES (range(0, 4096));
+
+# Round-trip test
+query I
+SELECT list_sum(a::INT[]) == list_sum(range(0, 4096)) FROM t1;
+----
+true

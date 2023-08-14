@@ -21,6 +21,21 @@ SELECT array_value(i -1, i, i + 1) FROM range(4,1,-1) as r(i) ORDER BY 1 ASC;
 [2, 3, 4]
 [3, 4, 5]
 
+# Try with larger arrays (more than 1 byte of validity data)
+query I
+SELECT * FROM (VALUES (array_value(0,1,2,3,4,NULL,6,7,8,9)), (array_value(10,11,NULL,13,14,15,16,17,18,19))) ORDER BY 1 ASC;
+----
+[0, 1, 2, 3, 4, NULL, 6, 7, 8, 9]
+[10, 11, NULL, 13, 14, 15, 16, 17, 18, 19]
+
+
+query I
+SELECT * FROM (VALUES (array_value(0,1,2,3,4,NULL,6,7,8,9)), (array_value(10,11,NULL,13,14,15,16,17,18,19))) ORDER BY 1 DESC
+----
+[10, 11, NULL, 13, 14, 15, 16, 17, 18, 19]
+[0, 1, 2, 3, 4, NULL, 6, 7, 8, 9]
+
+
 # Nested sorting
 # Test combinations of array/list nesting (up to 3 levels)
 

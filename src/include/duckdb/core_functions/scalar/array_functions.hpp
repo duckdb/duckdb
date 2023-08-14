@@ -24,20 +24,20 @@ struct ArrayValueFun {
 	static ScalarFunction GetFunction();
 };
 
-struct ArrayFromListFun {
-	static constexpr const char *Name = "array_from_list";
-	static constexpr const char *Parameters = "any,...";
-	static constexpr const char *Description = "Create an ARRAY from a list, truncating too large lists.";
-	static constexpr const char *Example = "array_from_list([4, 5, 6], 2)";
-
-	static ScalarFunction GetFunction();
-};
-
 struct ArrayCosineSimilarityFun {
 	static constexpr const char *Name = "array_cosine_similarity";
 	static constexpr const char *Parameters = "array, array";
 	static constexpr const char *Description = "Compute the cosine similarity between two arrays.";
 	static constexpr const char *Example = "array_cosine_similarity([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayCrossProductFun {
+	static constexpr const char *Name = "array_cross_product";
+	static constexpr const char *Parameters = "array, array";
+	static constexpr const char *Description = "Compute the cross product of two 3d arrays.";
+	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
 };

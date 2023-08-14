@@ -83,6 +83,11 @@ SELECT [[1, 2, 3], [4, 5, 6]]::INT[3][2]
 ----
 [[1, 2, 3], [4, 5, 6]]
 
+# Should be able to null-cast from list
+query I
+SELECT (NULL::INT[])::INT[3]
+----
+NULL
 
 query I
 SELECT c::INT[3] FROM (VALUES ([1,2,3]), ([4,NULL,6]), (NULL), ([7,8,9])) as t(c);
@@ -94,6 +99,23 @@ NULL
 
 # Should not be able to cast from list if all elements do not have the same length
 statement error
+SELECT [1,2,3]::INT[2]
+----
+Conversion Error: Cannot cast list with length 3 to array with length 2
+
+
+statement error
 SELECT [[1, 2, 3], [4, 5, 6, 7]]::INT[3][2]
 ----
 Conversion Error: Cannot cast list with length 4 to array with length 3
+
+
+# Should be able to implict cast arrays if the elements are castable
+statemet ok
+CREATE OR REPLACE TABLE t1 AS SELECT [1, 2, 3]::INT[3];
+
+statement ok
+CREATE OR REPLACE TABLE t2 AS SELECT ['4', '5', '6']::VARCHAR[3];
+
+statement ok
+INSERT INTO t2 SELECT * FROM t1;

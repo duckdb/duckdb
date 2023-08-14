@@ -858,20 +858,38 @@ void Vector::Flatten(idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
-
 			auto &child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(GetType());
 
-			auto &vector = flattened_buffer->GetChild();
-			vector.ReferenceAndSetType(child);
-			vector.Flatten(count * array_size);
+			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
+			auto &new_child = flattened_buffer->GetChild();
 
-			// VectorOperations::Copy(*vector, flattened_buffer->GetChild(), count * array_size, 0, 0);
-			// flattened_buffer->GetChild() = vector;
+			// Now we need to "unpack" the child vector.
+			// Basically, do this:
+			//
+			// | a1 | | 1 |      | a1 | | 1 |
+			//        | 2 |      | a2 | | 2 |
+			//	             =>    ..   | 1 |
+			//                          | 2 |
+			// 							 ...
 
+			// Create a selection vector
+			SelectionVector sel(count * array_size);
+			for (idx_t array_idx = 0; array_idx < count; array_idx++) {
+				for (idx_t elem_idx = 0; elem_idx < array_size; elem_idx++) {
+					auto position = array_idx * array_size + elem_idx;
+					// Broadcast the validity
+					if (FlatVector::IsNull(child, elem_idx)) {
+						FlatVector::SetNull(new_child, position, true);
+					}
+					sel.set_index(position, elem_idx);
+				}
+			}
+
+			// Copy over the data to the new buffer
+			VectorOperations::Copy(child, new_child, sel, count * array_size, 0, 0);
 			auxiliary = shared_ptr<VectorBuffer>(flattened_buffer.release());
-			D_ASSERT(ArrayVector::GetEntry(*this).GetVectorType() == VectorType::FLAT_VECTOR);
+
 		} break;
 		case PhysicalType::STRUCT: {
 			auto normalified_buffer = make_uniq<VectorStructBuffer>();
@@ -1331,9 +1349,9 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto fixed_list_size = source.Read<idx_t>();
+			auto array_size = source.Read<idx_t>();
 			auto &child = ArrayVector::GetEntry(*this);
-			child.Deserialize(count * fixed_list_size, source);
+			child.Deserialize(count * array_size, source);
 			break;
 		}
 		default:

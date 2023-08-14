@@ -110,9 +110,6 @@ VectorListBuffer::~VectorListBuffer() {
 Vector &VectorArrayBuffer::GetChild() {
 	return *child;
 }
-idx_t VectorArrayBuffer::GetSize() {
-	return size;
-}
 
 idx_t VectorArrayBuffer::GetArraySize() {
 	return array_size;
@@ -120,13 +117,6 @@ idx_t VectorArrayBuffer::GetArraySize() {
 
 idx_t VectorArrayBuffer::GetInnerSize() {
 	return size * array_size;
-}
-
-void VectorArrayBuffer::SetSize(idx_t new_size) {
-	if (new_size > size) {
-		child->Resize(array_size * size, array_size * new_size);
-		size = new_size;
-	}
 }
 
 ManagedVectorBuffer::ManagedVectorBuffer(BufferHandle handle)

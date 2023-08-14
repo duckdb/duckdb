@@ -274,6 +274,10 @@ private:
 
 class VectorArrayBuffer : public VectorBuffer {
 public:
+	explicit VectorArrayBuffer(unique_ptr<Vector> child_vector, idx_t array_size, idx_t initial_capacity)
+	    : VectorBuffer(VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)), array_size(array_size),
+	      size(initial_capacity) {
+	}
 	explicit VectorArrayBuffer(const LogicalType &array_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE)
 	    : VectorBuffer(VectorBufferType::ARRAY_BUFFER),
 	      child(make_uniq<Vector>(ArrayType::GetChildType(array_type),
@@ -286,10 +290,8 @@ public:
 
 public:
 	Vector &GetChild();
-	idx_t GetSize();
 	idx_t GetArraySize();
 	idx_t GetInnerSize();
-	void SetSize(idx_t new_size);
 
 private:
 	unique_ptr<Vector> child;

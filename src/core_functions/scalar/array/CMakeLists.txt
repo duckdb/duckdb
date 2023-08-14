@@ -1,5 +1,5 @@
-add_library_unity(duckdb_func_array OBJECT array_value.cpp array_from_list.cpp
-                  array_cosine_similarity.cpp)
+add_library_unity(duckdb_func_array OBJECT array_value.cpp
+                  array_cosine_similarity.cpp array_cross_product.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_array>
     PARENT_SCOPE)

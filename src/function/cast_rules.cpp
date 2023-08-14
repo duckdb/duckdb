@@ -218,18 +218,16 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		return child_cost;
 	}
 	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::ARRAY) {
-		// Arrays can be cast if their child types can be cast and the source fits within the target
-		if (ArrayType::GetSize(from) <= ArrayType::GetSize(to)) {
+		// Arrays can be cast if their child types can be cast and the source and target has the same size
+		if (ArrayType::GetSize(from) == ArrayType::GetSize(to)) {
 			auto child_cost = ImplicitCast(ArrayType::GetChildType(from), ArrayType::GetChildType(to));
 			if (child_cost >= 100) {
 				// subtract one from the cost because we prefer ARRAY[X] -> ARRAY[VARCHAR] over ARRAY[X] -> VARCHAR
 				child_cost--;
 			}
 			return child_cost;
-		} else {
-			// Not possible
-			return -1;
 		}
+		return -1; // Not possible if the sizes are different
 	}
 	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::LIST) {
 		// Arrays can be cast to lists for the cost of casting the child type

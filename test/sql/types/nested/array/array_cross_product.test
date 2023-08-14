@@ -1,0 +1,45 @@
+# name: test/sql/types/nested/array/array_cross_product.test
+# group: [array]
+
+# This tests the vector cross product
+
+foreach TYPE DOUBLE FLOAT
+
+query I rowsort
+SELECT array_cross_product(l, r) FROM (VALUES
+	([-1, -2, 3]::${TYPE}[3], [4, 0, -8]::${TYPE}[3]),
+	([1,2,3]::${TYPE}[3], [1,5,7]::${TYPE}[3]),
+	([1,2,3]::${TYPE}[3], NULL::${TYPE}[3]),
+	(NULL::${TYPE}[3], [1,5,7]::${TYPE}[3]),
+	(NULL::${TYPE}[3], NULL::${TYPE}[3])
+) as t(l,r);
+----
+NULL
+NULL
+NULL
+[-1.0, -4.0, 3.0]
+[16.0, 4.0, 8.0]
+
+
+# Constant case
+query I
+SELECT array_cross_product([1,2,3]::${TYPE}[3], [1,5,7]::${TYPE}[3]);
+----
+[-1.0, -4.0, 3.0]
+
+# Constant Null case
+query I
+SELECT array_cross_product([1,2,3]::${TYPE}[3], NULL::${TYPE}[3]);
+----
+NULL
+
+statement error
+SELECT array_cross_product([1,NULL,3]::${TYPE}[3], [1,5,7]::${TYPE}[3]);
+----
+Array cross product is not defined for null values
+
+# Now we can also try implict casts
+SELECT array_cross_product(array_value(1,2,3), array_value(1.0,5.0,7.0)::${TYPE}[3]);
+
+
+endloop
