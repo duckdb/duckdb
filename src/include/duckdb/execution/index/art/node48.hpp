@@ -18,6 +18,10 @@ namespace duckdb {
 //! byte, and which contains the position of the child node in the children array
 class Node48 {
 public:
+	//! Delete copy constructors, as any Node48 can never own its memory
+	Node48(const Node48 &) = delete;
+	Node48 &operator=(const Node48 &) = delete;
+
 	//! Number of non-null children
 	uint8_t count;
 	//! Array containing all possible partial key bytes, those not set have an EMPTY_MARKER

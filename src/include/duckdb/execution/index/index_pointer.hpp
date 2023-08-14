@@ -13,37 +13,36 @@ namespace duckdb {
 class IndexPointer {
 public:
 	//! Bit-shifting
-	static constexpr uint64_t SHIFT_OFFSET = 32;
-	static constexpr uint64_t SHIFT_METADATA = 56;
+	static constexpr idx_t SHIFT_OFFSET = 32;
+	static constexpr idx_t SHIFT_METADATA = 56;
 	//! AND operations
-	static constexpr uint64_t AND_OFFSET = 0x0000000000FFFFFF;
-	static constexpr uint64_t AND_BUFFER_ID = 0x00000000FFFFFFFF;
-	static constexpr uint64_t AND_IS_SET = 0xFF00000000000000;
-	static constexpr uint64_t AND_RESET = 0x00FFFFFFFFFFFFFF;
+	static constexpr idx_t AND_OFFSET = 0x0000000000FFFFFF;
+	static constexpr idx_t AND_BUFFER_ID = 0x00000000FFFFFFFF;
+	static constexpr idx_t AND_METADATA = 0xFF00000000000000;
 
 public:
 	//! Constructs an empty IndexPointer
 	IndexPointer() : data(0) {};
 	//! Constructs an in-memory IndexPointer with a buffer ID and an offset
 	IndexPointer(const uint32_t buffer_id, const uint32_t offset) : data(0) {
-		auto shifted_offset = ((uint64_t)offset) << SHIFT_OFFSET;
+		auto shifted_offset = ((idx_t)offset) << SHIFT_OFFSET;
 		data += shifted_offset;
 		data += buffer_id;
 	};
 
 public:
 	//! Get data (all 64 bits)
-	inline idx_t GetData() const {
+	inline idx_t Get() const {
 		return data;
 	}
 	//! Set data (all 64 bits)
-	inline void SetData(const idx_t data_p) {
+	inline void Set(const idx_t data_p) {
 		data = data_p;
 	}
 
 	//! Returns false, if the metadata is empty
 	inline bool HasMetadata() const {
-		return data & AND_IS_SET;
+		return data & AND_METADATA;
 	}
 	//! Get metadata (zero to 7th bit)
 	inline uint8_t GetMetadata() const {
@@ -51,7 +50,7 @@ public:
 	}
 	//! Set metadata (zero to 7th bit)
 	inline void SetMetadata(const uint8_t metadata) {
-		data += (uint64_t)metadata << SHIFT_METADATA;
+		data += (idx_t)metadata << SHIFT_METADATA;
 	}
 
 	//! Get the offset (8th to 23rd bit)
@@ -69,8 +68,8 @@ public:
 		data = 0;
 	}
 
-	//! Adds an idx_t to a buffer ID, the rightmost 32 bits contain the buffer ID
-	inline void AddToBufferID(const idx_t summand) {
+	//! Adds an idx_t to a buffer ID, the rightmost 32 bits of data contain the buffer ID
+	inline void IncreaseBufferId(const idx_t summand) {
 		data += summand;
 	}
 
@@ -87,9 +86,9 @@ private:
 	//! the IndexPointer class into 16 bytes instead of the intended 8 bytes, doubling the
 	//! space requirements
 	//! https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
-	uint64_t data;
+	idx_t data;
 };
 
-static_assert(sizeof(IndexPointer) == sizeof(uint64_t), "Invalid size for IndexPointer.");
+static_assert(sizeof(IndexPointer) == sizeof(idx_t), "Invalid size for IndexPointer.");
 
 } // namespace duckdb

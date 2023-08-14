@@ -56,13 +56,13 @@ void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 	auto merge_buffer_count = flags.merge_buffer_counts[(uint8_t)NType::LEAF - 1];
 
 	Node next_node = node;
-	node.AddToBufferID(merge_buffer_count);
+	node.IncreaseBufferId(merge_buffer_count);
 
 	while (next_node.HasMetadata()) {
 		auto &leaf = Leaf::Get(art, next_node);
 		next_node = leaf.ptr;
 		if (leaf.ptr.HasMetadata()) {
-			leaf.ptr.AddToBufferID(merge_buffer_count);
+			leaf.ptr.IncreaseBufferId(merge_buffer_count);
 		}
 	}
 }

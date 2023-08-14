@@ -17,6 +17,10 @@ namespace duckdb {
 //! Node256 holds up to 256 Node children which can be directly indexed by the key byte
 class Node256 {
 public:
+	//! Delete copy constructors, as any Node256 can never own its memory
+	Node256(const Node256 &) = delete;
+	Node256 &operator=(const Node256 &) = delete;
+
 	//! Number of non-null children
 	uint16_t count;
 	//! Node pointers to the child nodes

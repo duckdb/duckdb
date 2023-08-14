@@ -28,6 +28,10 @@ struct BlockPointer;
 //! row ID directly in the node pointer.
 class Leaf {
 public:
+	//! Delete copy constructors, as any Leaf can never own its memory
+	Leaf(const Leaf &) = delete;
+	Leaf &operator=(const Leaf &) = delete;
+
 	//! The number of row IDs in this leaf
 	uint8_t count;
 	//! Up to LEAF_SIZE row IDs

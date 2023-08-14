@@ -268,7 +268,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	AddToBufferID(flags.merge_buffer_counts[(uint8_t)GetType() - 1]);
+	IncreaseBufferId(flags.merge_buffer_counts[(uint8_t)GetType() - 1]);
 }
 
 bool Node::Merge(ART &art, Node &other) {

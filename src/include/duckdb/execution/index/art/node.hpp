@@ -54,6 +54,7 @@ public:
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
+	static constexpr idx_t AND_ROW_ID = 0x00FFFFFFFFFFFFFF;
 
 public:
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
@@ -82,7 +83,7 @@ public:
 	//! Get references to the different allocators
 	static FixedSizeAllocator &GetAllocator(const ART &art, NType type);
 
-	//! Initializes a merge by fully deserializing the subtree of the node and incrementing its buffer IDs
+	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 	//! Merge another node into this node
 	bool Merge(ART &art, Node &other);
@@ -96,12 +97,11 @@ public:
 
 	//! Get the row ID (8th to 63rd bit)
 	inline row_t GetRowId() const {
-		return GetData() & AND_RESET;
+		return Get() & AND_ROW_ID;
 	}
 	//! Set the row ID (8th to 63rd bit)
 	inline void SetRowId(const row_t row_id) {
-		D_ASSERT(!(GetData() & AND_RESET));
-		SetData(GetData() + row_id);
+		Set((Get() & AND_METADATA) | row_id);
 	}
 
 	//! Returns the type of the node, which is held in the metadata
@@ -111,7 +111,7 @@ public:
 
 	//! Assign operator
 	inline void operator=(const IndexPointer &ptr) {
-		SetData(ptr.GetData());
+		Set(ptr.Get());
 	}
 };
 

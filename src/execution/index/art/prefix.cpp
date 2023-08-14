@@ -75,12 +75,12 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 	while (next_node.GetType() == NType::PREFIX) {
 		next_node = prefix.get().ptr;
 		if (prefix.get().ptr.GetType() == NType::PREFIX) {
-			prefix.get().ptr.AddToBufferID(merge_buffer_count);
+			prefix.get().ptr.IncreaseBufferId(merge_buffer_count);
 			prefix = Prefix::Get(art, next_node);
 		}
 	}
 
-	node.AddToBufferID(merge_buffer_count);
+	node.IncreaseBufferId(merge_buffer_count);
 	prefix.get().ptr.InitializeMerge(art, flags);
 }
 

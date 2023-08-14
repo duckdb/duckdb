@@ -25,6 +25,10 @@ public:
 	Node children[Node::NODE_16_CAPACITY];
 
 public:
+	//! Delete copy constructors, as any Node16 can never own its memory
+	Node16(const Node16 &) = delete;
+	Node16 &operator=(const Node16 &) = delete;
+
 	//! Get a new Node16, might cause a new buffer allocation, and initialize it
 	static Node16 &New(ART &art, Node &node);
 	//! Free the node (and its subtree)
