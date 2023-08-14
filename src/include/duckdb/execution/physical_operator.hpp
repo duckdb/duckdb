@@ -36,14 +36,12 @@ class PhysicalOperator : public Operator {
 public:
 	//! The global sink state of this operator
 	unique_ptr<GlobalSinkState> sink_state;
-
 	//! The global state of this operator
 	unique_ptr<GlobalOperatorState> op_state;
-
 	//! Lock for (re)setting any of the operator states
 	mutex lock;
-
-	ULONG m_ulTotalOptRequests;
+	//! total number of optimization requests
+	ULONG m_total_opt_requests;
 
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
@@ -224,7 +222,7 @@ public:
 
 	// return total number of optimization requests
 	ULONG UlOptRequests() const {
-		return m_ulTotalOptRequests;
+		return m_total_opt_requests;
 	}
 
 public:

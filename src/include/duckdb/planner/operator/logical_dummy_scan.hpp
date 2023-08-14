@@ -47,5 +47,28 @@ protected:
 			types.emplace_back(LogicalType::INTEGER);
 		}
 	}
+
+public:
+	// ----------------- ORCA -------------------------
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override {
+		return 1;
+	}
+
+	CXform_set *PxfsCandidates() const override;
+
+	CPropConstraint *DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+
+	// Rehydrate expression from a given cost context and child expressions
+	Operator *SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
+	                        CDrvdPropCtxtPlan *pdpctxtplan) override;
+
+	duckdb::unique_ptr<Operator> Copy() override;
+
+	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *pgexpr) override;
+
+	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
+	                                                 duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+	                                                 double cost) override;
 };
 } // namespace duckdb

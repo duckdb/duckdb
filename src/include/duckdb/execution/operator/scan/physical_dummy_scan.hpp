@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/optimizer/cascade/base/CDrvdPropRelational.h"
 
 namespace duckdb {
 
@@ -19,6 +20,11 @@ public:
 public:
 	explicit PhysicalDummyScan(vector<LogicalType> types, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
+		m_derived_property_relation = new gpopt::CDrvdPropRelational();
+		m_group_expression = nullptr;
+		m_derived_property_plan = nullptr;
+		m_required_plan_property = nullptr;
+		m_total_opt_requests = 1;
 	}
 
 public:
@@ -29,5 +35,22 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
+
+public:
+	// ------------------------------ ORCA ---------------------------------
+
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
+
+	// Rehydrate expression from a given cost context and child expressions
+	Operator *SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
+	                        CDrvdPropCtxtPlan *pdpctxtplan) override;
+
+	duckdb::unique_ptr<Operator> Copy() override;
+
+	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *pgexpr) override;
+
+	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
+	                                                 duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+	                                                 double cost) override;
 };
 } // namespace duckdb

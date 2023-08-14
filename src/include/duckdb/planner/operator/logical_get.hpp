@@ -7,20 +7,20 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
-class LogicalGet : public LogicalOperator
-{
+class LogicalGet : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
 
 public:
-	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data, vector<LogicalType> returned_types, vector<string> returned_names);
+	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
+	           vector<LogicalType> returned_types, vector<string> returned_names);
 
 	//! The table index in the current bind context
 	idx_t table_index;
@@ -56,36 +56,40 @@ public:
 
 public:
 	duckdb::vector<ColumnBinding> GetColumnBindings() override;
-	
+
 	idx_t EstimateCardinality(ClientContext &context) override;
 
 	void Serialize(FieldWriter &writer) const override;
-	
+
 	static duckdb::unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
-	
+
 	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override;
 
 public:
+	// ----------------- ORCA -------------------------
+	
 	// derive join depth
-	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override
-	{
+	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override {
 		return 1;
 	}
 
-	CXform_set * PxfsCandidates() const override;
+	CXform_set *PxfsCandidates() const override;
 
-	CPropConstraint* DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
+	CPropConstraint *DerivePropertyConstraint(CExpressionHandle &exprhdl) override;
 
 	// Rehydrate expression from a given cost context and child expressions
-	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
+	Operator *SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *> pdrgpexpr,
+	                        CDrvdPropCtxtPlan *pdpctxtplan) override;
 
 	duckdb::unique_ptr<Operator> Copy() override;
 
-	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override;
+	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *pgexpr) override;
 
-	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
+	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
+	                                                 duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+	                                                 double cost) override;
 };
 } // namespace duckdb

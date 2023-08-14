@@ -143,7 +143,7 @@ duckdb::unique_ptr<Operator> LogicalProjection::CopyWithNewGroupExpression(CGrou
 
 duckdb::unique_ptr<Operator>
 LogicalProjection::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
-                                     double cost) {
+                                       double cost) {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
 	for (auto &child : expressions) {
 		v.push_back(child->Copy());
