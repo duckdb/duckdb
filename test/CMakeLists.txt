@@ -2,6 +2,7 @@ include_directories(../third_party/catch)
 include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(include)
+include_directories(../extension/tpch/include)
 
 # Allows loading tests from registered extensions
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
@@ -43,3 +44,9 @@ if(NOT WIN32
 else()
   target_link_libraries(unittest duckdb_static test_helpers)
 endif()
+
+add_executable(mallocfailtest mallocfailtest.cpp)
+target_link_libraries(mallocfailtest duckdb_static)
+
+target_link_libraries(mallocfailtest
+                      /Users/hannes/source/mallochook/build/libmallochook.dylib)
