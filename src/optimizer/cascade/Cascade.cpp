@@ -20,12 +20,18 @@
 #include "duckdb/optimizer/cascade/task/CWorkerPoolManager.h"
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include <cstdlib>
 
 namespace duckdb {
 using namespace gpos;
 using namespace gpopt;
 
 duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<LogicalOperator> plan) {
+	/* Used for CCostContext::CostCompute */
+	unsigned seed;
+    seed = time(0);
+	srand(seed);
+	/* */
 	auto &profiler = QueryProfiler::Get(context);
 	// first resolve column references
 	profiler.StartPhase("column_binding");

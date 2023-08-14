@@ -52,7 +52,8 @@ public:
 		ExfOrderImplementation,
 		ExfFilterImplementation,
 		ExfDummyScanImplementation,
-		ExfInnerJoin2HashJoin, 
+		ExfInnerJoin2HashJoin,
+		ExfJoinCommutativity,
 		/* */
 		ExfProject2ComputeScalarExfn,
 		ExfSelect2Filter,
@@ -122,7 +123,6 @@ public:
 		ExfImplementDML,
 		ExfImplementRowTrigger,
 		ExfImplementSplit,
-		ExfJoinCommutativity,
 		ExfJoinAssociativity,
 		ExfSemiJoinSemiJoinSwap,
 		ExfSemiJoinAntiSemiJoinSwap,

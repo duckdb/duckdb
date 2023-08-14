@@ -16,6 +16,7 @@
 #include "duckdb/optimizer/cascade/cost/ICostModel.h"
 #include "duckdb/optimizer/cascade/optimizer/COptimizerConfig.h"
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
+#include <cstdlib>
 
 using namespace gpopt;
 
@@ -294,5 +295,5 @@ double CCostContext::CostCompute(duckdb::vector<double> pdrgpcostChildren)
 	// compute cost using the underlying cost model
 	return pcm->Cost(exprhdl, &ci);
 	*/
-	return 0.5; 
+	return (double)(rand() % 1000) / 1000.0; 
 }
