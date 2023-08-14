@@ -56,13 +56,13 @@ void CDrvdPropRelational::Derive(CExpressionHandle &exprhdl, CDrvdPropCtxt *pdpc
 	// derive correlated apply columns
 	// DeriveCorrelatedApplyColumns(exprhdl);
 	// derive constraint
-	DerivePropertyConstraint(exprhdl);
+	// DerivePropertyConstraint(exprhdl);
 	// derive keys
-	DeriveKeyCollection(exprhdl);
+	// DeriveKeyCollection(exprhdl);
 	// derive join depth
 	DeriveJoinDepth(exprhdl);
 	// derive functional dependencies
-	DeriveFunctionalDependencies(exprhdl);
+	// DeriveFunctionalDependencies(exprhdl);
 	m_is_complete = true;
 }
 
