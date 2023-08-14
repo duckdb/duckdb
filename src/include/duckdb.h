@@ -308,7 +308,8 @@ typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
 	DUCKDB_PENDING_RESULT_READY = 0,
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
-	DUCKDB_PENDING_ERROR = 2
+	DUCKDB_PENDING_ERROR = 2,
+	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 
 //===--------------------------------------------------------------------===//
@@ -1259,6 +1260,15 @@ Otherwise, all remaining tasks must be executed first.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb_result *out_result);
+
+/*!
+Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is
+DUCKDB_PENDING_RESULT_READY, this function will return true.
+
+* pending_state: The pending state on which to decide whether to finish execution.
+* returns: Boolean indicating pending execution should be considered finished.
+*/
+DUCKDB_API bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state);
 
 //===--------------------------------------------------------------------===//
 // Value Interface

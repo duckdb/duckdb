@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const char *tag) {
+void JsonDeserializer::SetTag(const field_id_t field_id, const char *tag) {
 	current_tag = tag;
 }
 
@@ -122,11 +122,11 @@ void JsonDeserializer::OnMapEntryBegin() {
 }
 
 void JsonDeserializer::OnMapKeyBegin() {
-	SetTag("key");
+	SetTag(100, "key");
 }
 
 void JsonDeserializer::OnMapValueBegin() {
-	SetTag("value");
+	SetTag(101, "value");
 }
 
 void JsonDeserializer::OnMapEntryEnd() {
@@ -146,11 +146,11 @@ void JsonDeserializer::OnPairBegin() {
 }
 
 void JsonDeserializer::OnPairKeyBegin() {
-	SetTag("key");
+	SetTag(100, "key");
 }
 
 void JsonDeserializer::OnPairValueBegin() {
-	SetTag("value");
+	SetTag(101, "value");
 }
 
 void JsonDeserializer::OnPairEnd() {
@@ -271,9 +271,9 @@ interval_t JsonDeserializer::ReadInterval() {
 	}
 	Push(val);
 	interval_t result;
-	ReadProperty("months", result.months);
-	ReadProperty("days", result.days);
-	ReadProperty("micros", result.micros);
+	ReadProperty(100, "months", result.months);
+	ReadProperty(101, "days", result.days);
+	ReadProperty(102, "micros", result.micros);
 	Pop();
 	return result;
 }
@@ -285,8 +285,8 @@ hugeint_t JsonDeserializer::ReadHugeInt() {
 	}
 	Push(val);
 	hugeint_t result;
-	ReadProperty("upper", result.upper);
-	ReadProperty("lower", result.lower);
+	ReadProperty(100, "upper", result.upper);
+	ReadProperty(101, "lower", result.lower);
 	Pop();
 	return result;
 }

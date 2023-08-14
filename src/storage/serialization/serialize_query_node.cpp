@@ -10,15 +10,15 @@
 namespace duckdb {
 
 void QueryNode::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("modifiers", modifiers);
-	serializer.WriteProperty("cte_map", cte_map);
+	serializer.WriteProperty(100, "type", type);
+	serializer.WriteProperty(101, "modifiers", modifiers);
+	serializer.WriteProperty(102, "cte_map", cte_map);
 }
 
 unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<QueryNodeType>("type");
-	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>("modifiers");
-	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
+	auto type = deserializer.ReadProperty<QueryNodeType>(100, "type");
+	auto modifiers = deserializer.ReadProperty<vector<unique_ptr<ResultModifier>>>(101, "modifiers");
+	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>(102, "cte_map");
 	unique_ptr<QueryNode> result;
 	switch (type) {
 	case QueryNodeType::CTE_NODE:
@@ -43,79 +43,79 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 
 void CTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("cte_name", ctename);
-	serializer.WriteProperty("query", *query);
-	serializer.WriteProperty("child", *child);
-	serializer.WriteProperty("aliases", aliases);
+	serializer.WriteProperty(200, "cte_name", ctename);
+	serializer.WriteProperty(201, "query", *query);
+	serializer.WriteProperty(202, "child", *child);
+	serializer.WriteProperty(203, "aliases", aliases);
 }
 
 unique_ptr<QueryNode> CTENode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CTENode>(new CTENode());
-	deserializer.ReadProperty("cte_name", result->ctename);
-	deserializer.ReadProperty("query", result->query);
-	deserializer.ReadProperty("child", result->child);
-	deserializer.ReadProperty("aliases", result->aliases);
+	deserializer.ReadProperty(200, "cte_name", result->ctename);
+	deserializer.ReadProperty(201, "query", result->query);
+	deserializer.ReadProperty(202, "child", result->child);
+	deserializer.ReadProperty(203, "aliases", result->aliases);
 	return std::move(result);
 }
 
 void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("cte_name", ctename);
-	serializer.WriteProperty("union_all", union_all);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-	serializer.WriteProperty("aliases", aliases);
+	serializer.WriteProperty(200, "cte_name", ctename);
+	serializer.WriteProperty(201, "union_all", union_all);
+	serializer.WriteProperty(202, "left", *left);
+	serializer.WriteProperty(203, "right", *right);
+	serializer.WriteProperty(204, "aliases", aliases);
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RecursiveCTENode>(new RecursiveCTENode());
-	deserializer.ReadProperty("cte_name", result->ctename);
-	deserializer.ReadProperty("union_all", result->union_all);
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
-	deserializer.ReadProperty("aliases", result->aliases);
+	deserializer.ReadProperty(200, "cte_name", result->ctename);
+	deserializer.ReadProperty(201, "union_all", result->union_all);
+	deserializer.ReadProperty(202, "left", result->left);
+	deserializer.ReadProperty(203, "right", result->right);
+	deserializer.ReadProperty(204, "aliases", result->aliases);
 	return std::move(result);
 }
 
 void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("select_list", select_list);
-	serializer.WriteOptionalProperty("from_table", from_table);
-	serializer.WriteOptionalProperty("where_clause", where_clause);
-	serializer.WriteProperty("group_expressions", groups.group_expressions);
-	serializer.WriteProperty("group_sets", groups.grouping_sets);
-	serializer.WriteProperty("aggregate_handling", aggregate_handling);
-	serializer.WriteOptionalProperty("having", having);
-	serializer.WriteOptionalProperty("sample", sample);
-	serializer.WriteOptionalProperty("qualify", qualify);
+	serializer.WriteProperty(200, "select_list", select_list);
+	serializer.WriteOptionalProperty(201, "from_table", from_table);
+	serializer.WriteOptionalProperty(202, "where_clause", where_clause);
+	serializer.WriteProperty(203, "group_expressions", groups.group_expressions);
+	serializer.WriteProperty(204, "group_sets", groups.grouping_sets);
+	serializer.WriteProperty(205, "aggregate_handling", aggregate_handling);
+	serializer.WriteOptionalProperty(206, "having", having);
+	serializer.WriteOptionalProperty(207, "sample", sample);
+	serializer.WriteOptionalProperty(208, "qualify", qualify);
 }
 
 unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectNode>(new SelectNode());
-	deserializer.ReadProperty("select_list", result->select_list);
-	deserializer.ReadOptionalProperty("from_table", result->from_table);
-	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
-	deserializer.ReadProperty("group_expressions", result->groups.group_expressions);
-	deserializer.ReadProperty("group_sets", result->groups.grouping_sets);
-	deserializer.ReadProperty("aggregate_handling", result->aggregate_handling);
-	deserializer.ReadOptionalProperty("having", result->having);
-	deserializer.ReadOptionalProperty("sample", result->sample);
-	deserializer.ReadOptionalProperty("qualify", result->qualify);
+	deserializer.ReadProperty(200, "select_list", result->select_list);
+	deserializer.ReadOptionalProperty(201, "from_table", result->from_table);
+	deserializer.ReadOptionalProperty(202, "where_clause", result->where_clause);
+	deserializer.ReadProperty(203, "group_expressions", result->groups.group_expressions);
+	deserializer.ReadProperty(204, "group_sets", result->groups.grouping_sets);
+	deserializer.ReadProperty(205, "aggregate_handling", result->aggregate_handling);
+	deserializer.ReadOptionalProperty(206, "having", result->having);
+	deserializer.ReadOptionalProperty(207, "sample", result->sample);
+	deserializer.ReadOptionalProperty(208, "qualify", result->qualify);
 	return std::move(result);
 }
 
 void SetOperationNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("setop_type", setop_type);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
+	serializer.WriteProperty(200, "setop_type", setop_type);
+	serializer.WriteProperty(201, "left", *left);
+	serializer.WriteProperty(202, "right", *right);
 }
 
 unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetOperationNode>(new SetOperationNode());
-	deserializer.ReadProperty("setop_type", result->setop_type);
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
+	deserializer.ReadProperty(200, "setop_type", result->setop_type);
+	deserializer.ReadProperty(201, "left", result->left);
+	deserializer.ReadProperty(202, "right", result->right);
 	return std::move(result);
 }
 
