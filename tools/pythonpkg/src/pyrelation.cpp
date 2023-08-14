@@ -268,21 +268,20 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 		expr = projected_columns + ", ";
 	}
 	if (input.size() == 0 && !function_parameter.empty()) {
-		expr += function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
-	} else {
-		for (idx_t i = 0; i < input.size(); i++) {
-			if (function_parameter.empty()) {
-				expr += function_name + "(" + input[i] + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
-			} else {
-				expr += function_name + "(" + input[i] + "," + function_parameter +
-				        ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
-			}
-
-			if (i < input.size() - 1) {
-				expr += ",";
-			}
-		}
+		return expr += function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 	}
+    for (idx_t i = 0; i < input.size(); i++) {
+        if (function_parameter.empty()) {
+            expr += function_name + "(" + input[i] + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
+        } else {
+            expr += function_name + "(" + input[i] + "," + function_parameter +
+                    ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
+        }
+
+        if (i < input.size() - 1) {
+            expr += ",";
+        }
+    }
 	return expr;
 }
 
