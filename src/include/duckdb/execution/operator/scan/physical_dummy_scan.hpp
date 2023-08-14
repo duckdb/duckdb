@@ -20,11 +20,6 @@ public:
 public:
 	explicit PhysicalDummyScan(vector<LogicalType> types, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
-		m_derived_property_relation = new gpopt::CDrvdPropRelational();
-		m_group_expression = nullptr;
-		m_derived_property_plan = nullptr;
-		m_required_plan_property = nullptr;
-		m_total_opt_requests = 1;
 	}
 
 public:

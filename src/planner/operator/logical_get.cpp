@@ -15,11 +15,6 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
                        vector<LogicalType> returned_types, vector<string> returned_names)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)) {
-	logical_type = LogicalOperatorType::LOGICAL_GET;
-	m_derived_property_relation = new CDrvdPropRelational();
-	m_group_expression = nullptr;
-	m_derived_property_plan = nullptr;
-	m_required_plan_property = nullptr;
 }
 
 string LogicalGet::GetName() const {
@@ -200,6 +195,18 @@ vector<idx_t> LogicalGet::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }
 
+ULONG LogicalGet::HashValue() const
+{
+	ULONG ulLogicalType = (ULONG)logical_type;
+	ULONG ulPhysicalType = (ULONG)physical_type;
+	ULONG ulHash = CombineHashes(gpos::HashValue<ULONG>(&ulLogicalType), gpos::HashValue<ULONG>(&ulPhysicalType));
+	ulHash = CombineHashes(ulHash, gpos::HashValue<idx_t>(&table_index));
+	std::string str = ParamsToString();
+	ULONG ulHash2 = std::hash<std::string>{}(str);
+	ulHash = CombineHashes(ulHash, ulHash2);
+	return ulHash;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		LogicalGet::PxfsCandidates
@@ -245,7 +252,23 @@ Operator *LogicalGet::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *
 unique_ptr<Operator> LogicalGet::Copy() {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
 	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	tmp_function.bind_replace = function.bind_replace;
+	tmp_function.in_out_function = function.in_out_function;
+	tmp_function.in_out_function_final = function.in_out_function_final;
+	tmp_function.statistics = function.statistics;
+	tmp_function.dependency = function.dependency;
+	tmp_function.cardinality = function.cardinality;
+	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
+	tmp_function.to_string = function.to_string;
+	tmp_function.table_scan_progress = function.table_scan_progress;
+	tmp_function.get_batch_index = function.get_batch_index;
+	tmp_function.get_batch_info = function.get_batch_info;
+	tmp_function.serialize = function.serialize;
+	tmp_function.deserialize = function.deserialize;
+	tmp_function.projection_pushdown = function.projection_pushdown;
+	tmp_function.filter_pushdown = function.filter_pushdown;
+	tmp_function.filter_prune = function.filter_prune;
+	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
@@ -272,7 +295,9 @@ unique_ptr<Operator> LogicalGet::Copy() {
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	// result->table_filters.filters = table_filters.filters;
+	for(auto &child : table_filters.filters) {
+		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
+	}
 	result->parameters.assign(parameters.begin(), parameters.end());
 	result->named_parameters = named_parameters;
 	result->input_table_types.assign(input_table_types.begin(), input_table_types.end());
@@ -284,7 +309,23 @@ unique_ptr<Operator> LogicalGet::Copy() {
 unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
 	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	tmp_function.bind_replace = function.bind_replace;
+	tmp_function.in_out_function = function.in_out_function;
+	tmp_function.in_out_function_final = function.in_out_function_final;
+	tmp_function.statistics = function.statistics;
+	tmp_function.dependency = function.dependency;
+	tmp_function.cardinality = function.cardinality;
+	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
+	tmp_function.to_string = function.to_string;
+	tmp_function.table_scan_progress = function.table_scan_progress;
+	tmp_function.get_batch_index = function.get_batch_index;
+	tmp_function.get_batch_info = function.get_batch_info;
+	tmp_function.serialize = function.serialize;
+	tmp_function.deserialize = function.deserialize;
+	tmp_function.projection_pushdown = function.projection_pushdown;
+	tmp_function.filter_pushdown = function.filter_pushdown;
+	tmp_function.filter_prune = function.filter_prune;
+	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
@@ -311,7 +352,9 @@ unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pg
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	// result->table_filters.filters = table_filters.filters;
+	for(auto &child : table_filters.filters) {
+		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
+	}
 	result->parameters.assign(parameters.begin(), parameters.end());
 	result->named_parameters = named_parameters;
 	result->input_table_types.assign(input_table_types.begin(), input_table_types.end());
@@ -325,7 +368,23 @@ unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
                                                      double cost) {
 	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
 	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	tmp_function.bind_replace = function.bind_replace;
+	tmp_function.in_out_function = function.in_out_function;
+	tmp_function.in_out_function_final = function.in_out_function_final;
+	tmp_function.statistics = function.statistics;
+	tmp_function.dependency = function.dependency;
+	tmp_function.cardinality = function.cardinality;
+	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
+	tmp_function.to_string = function.to_string;
+	tmp_function.table_scan_progress = function.table_scan_progress;
+	tmp_function.get_batch_index = function.get_batch_index;
+	tmp_function.get_batch_info = function.get_batch_info;
+	tmp_function.serialize = function.serialize;
+	tmp_function.deserialize = function.deserialize;
+	tmp_function.projection_pushdown = function.projection_pushdown;
+	tmp_function.filter_pushdown = function.filter_pushdown;
+	tmp_function.filter_prune = function.filter_prune;
+	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
@@ -345,34 +404,17 @@ unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
 	result->has_estimated_cardinality = has_estimated_cardinality;
 	result->logical_type = logical_type;
 	result->physical_type = physical_type;
-	result->children = std::move(pdrgpexpr);
+	for(auto &child : pdrgpexpr)
+	{
+		result->AddChild(child->Copy());
+	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	/*
-	if (!table_filters.filters.empty())
-	{
-	    for (auto &table_filter : table_filters.filters)
-	    {
-	        // find the relative column index from the absolute column index into the table
-	        idx_t column_index = DConstants::INVALID_INDEX;
-	        for (idx_t i = 0; i < column_ids.size(); i++)
-	        {
-	            if (table_filter.first == column_ids[i])
-	            {
-	                column_index = i;
-	                break;
-	            }
-	        }
-	        if (column_index == DConstants::INVALID_INDEX)
-	        {
-	            throw InternalException("Could not find column index for table filter");
-	        }
-	        result->table_filters.filters[column_index] = std::move(table_filter.second);
-	    }
+	for(auto &child : table_filters.filters) {
+		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
 	}
-	*/
 	result->parameters.assign(parameters.begin(), parameters.end());
 	result->named_parameters = named_parameters;
 	result->input_table_types.assign(input_table_types.begin(), input_table_types.end());

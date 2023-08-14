@@ -19,6 +19,7 @@
 #include "duckdb/optimizer/cascade/search/CJobTransformation.h"
 #include "duckdb/optimizer/cascade/search/CScheduler.h"
 #include "duckdb/optimizer/cascade/search/CSchedulerContext.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
 
 using namespace gpopt;
 
@@ -340,7 +341,7 @@ void CJobGroupExpressionOptimization::ScheduleChildGroupsJobs(CSchedulerContext*
 		return;
 	}
 	// compute required relational properties
-	CReqdPropRelational* prprel = m_pexprhdlRel->GetReqdRelationalProps(m_ulChildIndex);
+	CReqdPropRelational* prprel = new CReqdPropRelational(); // m_pexprhdlRel->GetReqdRelationalProps(m_ulChildIndex);
 	// schedule optimization job for current child group
 	COptimizationContext* pocChild = new COptimizationContext(pgroupChild, m_pexprhdlPlan->Prpp(m_ulChildIndex), prprel, psc->m_peng->UlCurrSearchStage());
 	if (pgroupChild == m_pgexpr->m_pgroup && pocChild->Matches(m_poc))

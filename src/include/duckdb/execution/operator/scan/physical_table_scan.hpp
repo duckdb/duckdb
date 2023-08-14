@@ -78,6 +78,8 @@ public:
 	double GetProgress(ClientContext &context, GlobalSourceState &gstate) const override;
 
 public:
+	ULONG HashValue() const override;
+	
 	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const override;
 
 	BOOL FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,

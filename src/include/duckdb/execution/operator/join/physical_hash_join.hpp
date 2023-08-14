@@ -24,11 +24,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_JOIN;
 
 public:
-	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<Operator> left, unique_ptr<Operator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                 const vector<idx_t> &right_projection_map, vector<LogicalType> delim_types,
 	                 idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats);
-	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+	PhysicalHashJoin(LogicalOperator &op, unique_ptr<Operator> left, unique_ptr<Operator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality,
 	                 PerfectHashJoinStats join_state);
 
@@ -91,6 +91,14 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
+
+	unique_ptr<Operator> Copy() override;
+
+	unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *pgexpr) override;
+
+	unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
+                                            duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+                                            double cost) override;
 };
 
 } // namespace duckdb

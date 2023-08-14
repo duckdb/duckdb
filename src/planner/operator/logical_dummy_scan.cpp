@@ -85,7 +85,10 @@ unique_ptr<Operator> LogicalDummyScan::CopyWithNewChildren(CGroupExpression *exp
                                                            duckdb::vector<duckdb::unique_ptr<Operator>> pdr_exprs,
                                                            double cost) {
 	auto result = Copy();
-	result->children = std::move(pdr_exprs);
+	for(auto &child : pdr_exprs)
+	{
+		result->AddChild(child->Copy());
+	}
 	result->m_group_expression = expr;
 	result->m_cost = cost;
 	return result;

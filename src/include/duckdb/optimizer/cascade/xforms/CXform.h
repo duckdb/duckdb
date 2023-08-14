@@ -48,12 +48,13 @@ public:
 	enum EXformId {
 		/* I comment here */
 		ExfGet2TableScan = 0,
-		ExfLogicalProj2PhysicalProj = 1,
-		ExfOrderImplementation = 2,
+		ExfLogicalProj2PhysicalProj,
+		ExfOrderImplementation,
 		ExfFilterImplementation,
 		ExfDummyScanImplementation,
+		ExfInnerJoin2HashJoin, 
+		/* */
 		ExfProject2ComputeScalarExfn,
-		ExfInnerJoin2HashJoin,
 		ExfSelect2Filter,
 		ExfIndexGet2IndexScan,
 		ExfDynamicGet2DynamicTableScan,

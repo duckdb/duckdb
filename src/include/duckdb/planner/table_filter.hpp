@@ -37,6 +37,7 @@ public:
 	TableFilterType filter_type;
 
 public:
+	virtual unique_ptr<TableFilter> Copy() = 0;
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) = 0;

@@ -50,8 +50,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownCrossProduct(unique_ptr<Logi
 		vector<unique_ptr<Expression>> arbitrary_expressions;
 		auto join_type = JoinType::INNER;
 		unique_ptr<LogicalOperator> left_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
-		unique_ptr<LogicalOperator> right_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
+		unique_ptr<LogicalOperator> right_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1]));
 		LogicalComparisonJoin::ExtractJoinConditions(join_type, left_child, right_child, left_bindings, right_bindings, join_expressions, conditions, arbitrary_expressions);
+		op->children[0] = std::move(left_child);
+		op->children[1] = std::move(right_child);
 		// create the join from the join conditions
 		return LogicalComparisonJoin::CreateJoin(JoinType::INNER, JoinRefType::REGULAR, unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])), unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])), std::move(conditions), std::move(arbitrary_expressions));
 	}

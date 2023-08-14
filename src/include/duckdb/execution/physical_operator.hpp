@@ -59,9 +59,6 @@ public:
 
 	virtual vector<const_reference<PhysicalOperator>> GetChildren() const;
 
-	//! Return a vector of the types that will be returned by this operator
-	const vector<LogicalType> &GetTypes() const;
-
 	virtual bool Equals(const PhysicalOperator &other) const;
 
 	virtual void Verify();

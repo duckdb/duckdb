@@ -16,10 +16,19 @@ namespace duckdb {
 
 PhysicalOperator::PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 {
+	/* PhysicalOperator fields */
+	m_total_opt_requests = 1;
+	/* Operator fields */
 	physical_type = type;
+	m_group_expression = nullptr;
+	m_derived_property_relation = new CDrvdPropRelational();
+	m_derived_property_plan = nullptr;
+	m_required_plan_property = nullptr;
+	m_cost = GPOPT_INVALID_COST;
 	estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
 	this->types = types;
 	this->estimated_cardinality = estimated_cardinality;
+	has_estimated_cardinality = false;
 }
 
 PhysicalOperator::~PhysicalOperator()
@@ -57,11 +66,6 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const
 		result.push_back(*(PhysicalOperator*)child.get());
 	}
 	return result;
-}
-
-const vector<LogicalType> &PhysicalOperator::GetTypes() const
-{
-	return types;
 }
 
 bool PhysicalOperator::Equals(const PhysicalOperator &other) const

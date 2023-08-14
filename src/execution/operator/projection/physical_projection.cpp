@@ -24,14 +24,7 @@ public:
 };
 
 PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality), select_list(std::move(select_list))
-{
-	physical_type = PhysicalOperatorType::PROJECTION;
-	m_derived_property_relation = new CDrvdPropRelational();
-	m_group_expression = nullptr;
-	m_derived_property_plan = nullptr;
-	m_required_plan_property = nullptr;
-	m_total_opt_requests = 1;
+    : PhysicalOperator(PhysicalOperatorType::PROJECTION, std::move(types), estimated_cardinality), select_list(std::move(select_list)) {
 }
 
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, GlobalOperatorState &gstate, OperatorState &state_p) const

@@ -9,6 +9,10 @@ ConstantFilter::ConstantFilter(ExpressionType comparison_type_p, Value constant_
       constant(std::move(constant_p)) {
 }
 
+unique_ptr<TableFilter> ConstantFilter::Copy() {
+	return make_uniq<ConstantFilter>(comparison_type, constant);
+}
+
 FilterPropagateResult ConstantFilter::CheckStatistics(BaseStatistics &stats) {
 	D_ASSERT(constant.type().id() == stats.GetType().id());
 	switch (constant.type().InternalType()) {

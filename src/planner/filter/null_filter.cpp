@@ -6,6 +6,10 @@ namespace duckdb {
 IsNullFilter::IsNullFilter() : TableFilter(TableFilterType::IS_NULL) {
 }
 
+unique_ptr<TableFilter> IsNullFilter::Copy() {
+	return make_uniq<IsNullFilter>();
+}
+
 FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
 	if (!stats.CanHaveNull()) {
 		// no null values are possible: always false
@@ -23,6 +27,10 @@ string IsNullFilter::ToString(const string &column_name) {
 }
 
 IsNotNullFilter::IsNotNullFilter() : TableFilter(TableFilterType::IS_NOT_NULL) {
+}
+
+unique_ptr<TableFilter> IsNotNullFilter::Copy() {
+	return make_uniq<IsNotNullFilter>();
 }
 
 FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {

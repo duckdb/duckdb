@@ -74,4 +74,109 @@ Operator* LogicalComparisonJoin::SelfRehydrate(CCostContext* pcc, duckdb::vector
 	pexpr->m_group_expression = pgexpr;
 	return pexpr;
 }
+
+unique_ptr<Operator> LogicalComparisonJoin::Copy() {
+	unique_ptr<LogicalComparisonJoin> copy = make_uniq<LogicalComparisonJoin>(this->join_type, this->logical_type);
+	/* LogicalComparisonJoin fields */
+	for(auto &child : this->conditions) {
+		JoinCondition jc;
+		jc.left = child.left->Copy();
+		jc.right = child.right->Copy();
+		jc.comparison = child.comparison;
+		copy->conditions.emplace_back(std::move(jc));
+	}
+	copy->delim_types = this->delim_types;
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	for (auto &child : this->expressions) {
+		copy->expressions.push_back(child->Copy());
+	}
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	copy->logical_type = this->logical_type;
+	copy->physical_type = this->physical_type;
+	for (auto &child : this->children) {
+		copy->AddChild(child->Copy());
+	}
+	copy->m_group_expression = this->m_group_expression;
+	copy->m_cost = this->m_cost;
+	return copy;
+}
+
+unique_ptr<Operator> LogicalComparisonJoin::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
+	unique_ptr<LogicalComparisonJoin> copy = make_uniq<LogicalComparisonJoin>(this->join_type, this->logical_type);
+	/* LogicalComparisonJoin fields */
+	for(auto &child : this->conditions) {
+		JoinCondition jc;
+		jc.left = child.left->Copy();
+		jc.right = child.right->Copy();
+		jc.comparison = child.comparison;
+		copy->conditions.emplace_back(std::move(jc));
+	}
+	copy->delim_types = this->delim_types;
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	for (auto &child : this->expressions) {
+		copy->expressions.push_back(child->Copy());
+	}
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	copy->logical_type = this->logical_type;
+	copy->physical_type = this->physical_type;
+	for (auto &child : this->children) {
+		copy->AddChild(child->Copy());
+	}
+	copy->m_group_expression = pgexpr;
+	copy->m_cost = this->m_cost;
+	return copy;
+}
+
+unique_ptr<Operator> LogicalComparisonJoin::CopyWithNewChildren(CGroupExpression *pgexpr,
+                                                     duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
+                                                     double cost) {
+	unique_ptr<LogicalComparisonJoin> copy = make_uniq<LogicalComparisonJoin>(this->join_type, this->logical_type);
+	/* LogicalComparisonJoin fields */
+	for(auto &child : this->conditions) {
+		JoinCondition jc;
+		jc.left = child.left->Copy();
+		jc.right = child.right->Copy();
+		jc.comparison = child.comparison;
+		copy->conditions.emplace_back(std::move(jc));
+	}
+	copy->delim_types = this->delim_types;
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	for (auto &child : this->expressions) {
+		copy->expressions.push_back(child->Copy());
+	}
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	copy->logical_type = this->logical_type;
+	copy->physical_type = this->physical_type;
+	for(auto &child : pdrgpexpr)
+	{
+		copy->AddChild(child->Copy());
+	}
+	copy->m_group_expression = pgexpr;
+	copy->m_cost = cost;
+	return copy;										
+}
 } // namespace duckdb

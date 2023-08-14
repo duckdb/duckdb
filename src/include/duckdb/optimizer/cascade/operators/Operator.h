@@ -84,6 +84,11 @@ public:
 		D_ASSERT(child);
 		children.emplace_back(std::move(child));
 	}
+	
+	//! Return a vector of the types that will be returned by this operator
+	const duckdb::vector<LogicalType> &GetTypes() const {
+		return types;
+	}
 
 	virtual idx_t EstimateCardinality(ClientContext &context);
 

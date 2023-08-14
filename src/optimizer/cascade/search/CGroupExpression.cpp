@@ -43,7 +43,7 @@ CGroupExpression::CGroupExpression(duckdb::unique_ptr<Operator> pop, duckdb::vec
 	: m_id(GPOPT_INVALID_GEXPR_ID), m_pgexprDuplicate(nullptr), m_pop(std::move(pop)), m_pdrgpgroup(pdrgpgroup), m_pgroup(nullptr), m_exfidOrigin(exfid), m_pgexprOrigin(pgexprOrigin), m_fIntermediate(fIntermediate), m_estate(estUnexplored), m_eol(EolLow), m_ecirculardependency(ecdDefault)
 {
 	// store sorted array of children for faster comparison
-	if (1 < pdrgpgroup.size() && !pop->FInputOrderSensitive())
+	if (1 < pdrgpgroup.size() && !m_pop->FInputOrderSensitive())
 	{
 		m_pdrgpgroupSorted.insert(m_pdrgpgroupSorted.end(), pdrgpgroup.begin(), pdrgpgroup.end());
 		sort(m_pdrgpgroupSorted.begin(), m_pdrgpgroupSorted.end(), CUtils::PtrCmp);
@@ -627,7 +627,7 @@ bool CGroupExpression::Matches(const CGroupExpression *pgexpr) const
 //---------------------------------------------------------------------------
 ULONG CGroupExpression::HashValue(Operator* pop, duckdb::vector<CGroup*> pdrgpgroup)
 {
-	ULONG ulHash = pop->HashValue();
+	ULONG ulHash = Operator::HashValue(pop);
 	ULONG arity = pdrgpgroup.size();
 	for (ULONG i = 0; i < arity; i++)
 	{

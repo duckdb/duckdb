@@ -8,6 +8,7 @@ add_library_unity(
         CXformFilterImplementation.cpp
         CXformGet2TableScan.cpp
         CXformImplementation.cpp
+        CXformInnerJoin2HashJoin.cpp
         CXformLogicalProj2PhysicalProj.cpp
         CXformOrderImplementation.cpp
         CXformResult.cpp)

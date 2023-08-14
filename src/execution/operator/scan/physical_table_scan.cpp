@@ -22,12 +22,6 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
       names(std::move(names_p)), table_filters(std::move(table_filters_p)) {
-	physical_type = PhysicalOperatorType::TABLE_SCAN;
-	m_derived_property_relation = new CDrvdPropRelational();
-	m_group_expression = nullptr;
-	m_derived_property_plan = nullptr;
-	m_required_plan_property = nullptr;
-	m_total_opt_requests = 1;
 }
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
@@ -39,8 +33,6 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)) {
-	physical_type = PhysicalOperatorType::TABLE_SCAN;
-	m_derived_property_relation = new CDrvdPropRelational();
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -179,6 +171,17 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	return true;
 }
 
+ULONG PhysicalTableScan::HashValue() const
+{
+	ULONG ulLogicalType = (ULONG)logical_type;
+	ULONG ulPhysicalType = (ULONG)physical_type;
+	ULONG ulHash = CombineHashes(gpos::HashValue<ULONG>(&ulLogicalType), gpos::HashValue<ULONG>(&ulPhysicalType));
+	std::string str = ParamsToString();
+	ULONG ulHash2 = std::hash<std::string>{}(str);
+	ulHash = CombineHashes(ulHash, ulHash2);
+	return ulHash;
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		PhysicalTableScan::EpetOrder
@@ -270,6 +273,12 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
+	if(this->table_filters != nullptr) {
+		table_filters = make_uniq<TableFilterSet>();
+		for(auto &child : this->table_filters->filters) {
+			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
+		}
+	}
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
 	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
 	result->m_derived_property_relation = m_derived_property_relation;
@@ -299,6 +308,12 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGrou
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
+	if(this->table_filters != nullptr) {
+		table_filters = make_uniq<TableFilterSet>();
+		for(auto &child : this->table_filters->filters) {
+			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
+		}
+	}
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
 	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
 	result->m_derived_property_relation = m_derived_property_relation;
@@ -330,6 +345,12 @@ PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
+	if(this->table_filters != nullptr) {
+		table_filters = make_uniq<TableFilterSet>();
+		for(auto &child : this->table_filters->filters) {
+			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
+		}
+	}
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
 	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
 	result->m_derived_property_relation = m_derived_property_relation;

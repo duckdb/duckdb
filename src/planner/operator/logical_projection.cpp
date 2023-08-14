@@ -7,10 +7,6 @@ namespace duckdb {
 
 LogicalProjection::LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list)
     : LogicalOperator(LogicalOperatorType::LOGICAL_PROJECTION, std::move(select_list)), table_index(table_index) {
-	m_derived_property_relation = new CDrvdPropRelational();
-	m_group_expression = nullptr;
-	m_derived_property_plan = nullptr;
-	m_required_plan_property = nullptr;
 }
 
 vector<ColumnBinding> LogicalProjection::GetColumnBindings() {

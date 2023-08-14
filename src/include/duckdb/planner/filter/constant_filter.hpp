@@ -24,6 +24,7 @@ public:
 	Value constant;
 
 public:
+	unique_ptr<TableFilter> Copy() override;
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
