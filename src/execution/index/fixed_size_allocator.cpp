@@ -50,6 +50,7 @@ FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
 			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
+			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
 }
@@ -113,6 +114,7 @@ void FixedSizeAllocator::Reset() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
 			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
+			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
 	buffers.clear();
@@ -162,6 +164,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	idx_t available_segments_in_memory = 0;
 
 	for (idx_t i = 0; i < buffers.size(); i++) {
+		buffers[i].vacuum = false;
 		if (buffers[i].in_memory) {
 			in_memory_buffers.push_back(i);
 			available_segments_in_memory += available_segments_per_buffer - buffers[i].segment_count;
@@ -179,18 +182,21 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		return false;
 	}
 
-	// set up the buffers that can be vacuumed
 	vacuum_buffers.clear();
-	for (idx_t i = in_memory_buffers.size(); i > 0; i--) {
-		vacuum_buffers.insert(i - 1);
-	}
+	for (idx_t i = excess_buffer_count; i > 0; i--) {
+		auto buffer_id = in_memory_buffers.back();
 
-	// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
-	for (auto buffer_id : vacuum_buffers) {
+		// set up the buffers that can be vacuumed
+		buffers[buffer_id].vacuum = true;
+		vacuum_buffers.insert(buffer_id);
+
+		// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
 		auto it = buffers_with_free_space.find(buffer_id);
 		if (it != buffers_with_free_space.end()) {
 			buffers_with_free_space.erase(it);
 		}
+
+		in_memory_buffers.pop_back();
 	}
 
 	return true;
@@ -198,25 +204,15 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 void FixedSizeAllocator::FinalizeVacuum() {
 
-	// free all (now empty) buffers
 	auto buffer_it = buffers.begin();
-	idx_t buffer_id = 0;
 	while (buffer_it != buffers.end()) {
-
-		auto vacuum_it = vacuum_buffers.begin();
-		while (vacuum_it != vacuum_buffers.end()) {
-			if (buffer_id == *vacuum_it) {
-				allocator.FreeData(buffer_it->GetPtr(*this), BUFFER_SIZE);
-				buffer_it = buffers.erase(buffer_it);
-				vacuum_buffers.erase(vacuum_it);
-				break;
-			} else {
-				vacuum_it++;
-			}
+		if (buffer_it->vacuum) {
+			D_ASSERT(buffer_it->in_memory);
+			allocator.FreeData(buffer_it->GetPtr(*this), BUFFER_SIZE);
+			buffer_it = buffers.erase(buffer_it);
+		} else {
+			buffer_it++;
 		}
-
-		buffer_it++;
-		buffer_id++;
 	}
 }
 

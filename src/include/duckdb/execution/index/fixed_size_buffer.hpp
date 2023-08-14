@@ -22,10 +22,12 @@ class MetadataWriter;
 class FixedSizeBuffer {
 public:
 	FixedSizeBuffer(const idx_t segment_count, const data_ptr_t memory_ptr)
-	    : segment_count(segment_count), dirty(false), in_memory(true), on_disk(false), memory_ptr(memory_ptr) {
+	    : segment_count(segment_count), dirty(false), in_memory(true), on_disk(false), vacuum(false),
+	      memory_ptr(memory_ptr) {
 	}
 	FixedSizeBuffer(const idx_t segment_count, BlockPointer &block_ptr)
-	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), block_ptr(block_ptr) {
+	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), vacuum(false),
+	      block_ptr(block_ptr) {
 	}
 
 	//! The number of allocated segments
@@ -40,6 +42,8 @@ public:
 	bool in_memory;
 	//! True: the buffer is serialized to disk
 	bool on_disk;
+	//! True: can be vacuumed after the vacuum operation
+	bool vacuum;
 
 	//! The buffer is in-memory, and memory_ptr points to its location
 	data_ptr_t memory_ptr;

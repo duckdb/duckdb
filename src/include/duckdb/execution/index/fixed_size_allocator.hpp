@@ -116,7 +116,7 @@ private:
 	vector<FixedSizeBuffer> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
-	//! Buffers qualifying for a vacuum
+	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
 	unordered_set<idx_t> vacuum_buffers;
 };
 
