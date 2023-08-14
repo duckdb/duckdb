@@ -72,6 +72,9 @@ inputs:
   unittest_script:
     description: 'Script/program to execute the unittests'
     default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
+  run_autoload_tests:
+    description: 'Runs the autoloading tests'
+    default: 1
 
 runs:
   using: "composite"
@@ -113,6 +116,12 @@ runs:
       run: |
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
+    - name: Set autoload test dir
+      if: inputs.run_autoload_tests != ''
+      shell: bash
+      run: |
+        echo "LOCAL_EXTENSION_REPO=/tmp/local_repo" >> $GITHUB_ENV
+
     - name: Create combined vcpkg manifest
       if: inputs.vcpkg_build == 1 && inputs.build_out_of_tree_extensions == 1
       shell: bash
@@ -130,8 +139,6 @@ runs:
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
-        LOCAL_EXTENSION_REPO: '/tmp/local_repository'
-        ENABLE_EXTENSION_AUTOLOADING: 1
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
       run: |
@@ -151,7 +158,8 @@ runs:
       if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
       shell: bash
       run: |
-         ${{ inputs.unittest_script }}
+        unset LOCAL_EXTENSION_REPO
+        ${{ inputs.unittest_script }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
@@ -185,7 +193,8 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
-        DISABLE_BUILTIN_EXTENSIONS: 1
+        EXTENSION_TESTS_ONLY: 1
+        ENABLE_EXTENSION_AUTOLOADING: 1
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf build/release

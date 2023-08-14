@@ -125,6 +125,7 @@ endif()
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_EXTENSION_AUTOLOADING "Enable extension autoloading by default." FALSE)
+option(EXTENSION_TESTS_ONLY "Only load the tests for extension, don't actually build any; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
@@ -730,7 +731,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
   set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
 
   # Allows explicitly disabling extensions that may be specified in other configurations
-  if (NOT ${DONT_BUILD})
+  if (NOT ${DONT_BUILD} AND NOT ${EXTENSION_TESTS_ONLY})
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
   else()
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)

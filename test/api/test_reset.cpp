@@ -60,7 +60,11 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"prefer_range_joins", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"autoload_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
-	    {"autoload_known_extensions", {false}},
+#ifdef DUCKDB_EXTENSION_AUTOLOAD_DEFAULT
+	    {"autoload_known_extensions", {!DUCKDB_EXTENSION_AUTOLOAD_DEFAULT}},
+#else
+	    {"autoload_known_extensions", {true}},
+#endif
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
 	    {"enable_profiling", {"json"}},

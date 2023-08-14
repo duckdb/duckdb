@@ -179,6 +179,7 @@ jobs:
       with:
         vcpkg: 1
         openssl: 1
+        ccache: 1
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -214,6 +215,7 @@ jobs:
           vcpkg: 1
           openssl: 1
           aarch64_cross_compile: 1
+          ccache: 1
 
       - uses: ./.github/actions/build_extensions
         with:
