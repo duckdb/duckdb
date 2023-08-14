@@ -267,7 +267,7 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
-	if (input.size() == 0 && !function_parameter.empty()) {
+	if (input.empty() && !function_parameter.empty()) {
 		return expr +=
 		       function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 	}
@@ -444,10 +444,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const s
                                                    const string &default_value, const bool &ignore_nulls,
                                                    const string &projected_columns) {
 	string lag_params = "";
-	if (offset != 0)
+	if (offset != 0) {
 		lag_params += std::to_string(offset);
-	if (!default_value.empty())
+	}
+	if (!default_value.empty()) {
 		lag_params += "," + default_value;
+	}
 	return GenericWindowFunction("lag", lag_params, column, "", window_spec, ignore_nulls, projected_columns);
 }
 
@@ -455,10 +457,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const 
                                                     const string &default_value, const bool &ignore_nulls,
                                                     const string &projected_columns) {
 	string lead_params = "";
-	if (offset != 0)
+	if (offset != 0) {
 		lead_params += std::to_string(offset);
-	if (!default_value.empty())
+	}
+	if (!default_value.empty()) {
 		lead_params += "," + default_value;
+	}
 	return GenericWindowFunction("lead", lead_params, column, "", window_spec, ignore_nulls, projected_columns);
 }
 
