@@ -522,6 +522,12 @@ bool TryCastWithOverflowCheck(uhugeint_t value, double &result) {
 	return Uhugeint::TryCast(value, result);
 }
 
+template <>
+bool TryCastWithOverflowCheck(uhugeint_t value, uhugeint_t &result) {
+	result = value;
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast Numeric -> uhugeint
 //===--------------------------------------------------------------------===//
@@ -573,12 +579,6 @@ bool TryCastWithOverflowCheck(float value, uhugeint_t &result) {
 template <>
 bool TryCastWithOverflowCheck(double value, uhugeint_t &result) {
 	return Uhugeint::TryConvert(std::nearbyint(value), result);
-}
-
-template <>
-bool TryCastWithOverflowCheck(uhugeint_t value, uhugeint_t &result) {
-	result = value;
-	return true;
 }
 
 struct NumericTryCastToBit {
