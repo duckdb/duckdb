@@ -59,9 +59,6 @@ public:
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 
-	void BuildSortState(TupleDataCollection &group_data, GlobalSortState &global_sort) const;
-	void BuildSortState(TupleDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
-
 	ClientContext &context;
 	BufferManager &buffer_manager;
 	Allocator &allocator;
@@ -150,7 +147,9 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	TupleDataScanState chunk_state;
 	GlobalSortState *global_sort;
+	const idx_t memory_per_thread;
 
 private:
 	mutable mutex lock;
@@ -162,15 +161,14 @@ private:
 
 class PartitionLocalMergeState {
 public:
-	PartitionLocalMergeState() : merge_state(nullptr), stage(PartitionSortStage::INIT) {
-		finished = true;
-	}
+	explicit PartitionLocalMergeState(PartitionGlobalSinkState &gstate);
 
 	bool TaskFinished() {
 		return finished;
 	}
 
 	void Prepare();
+	void Scan();
 	void Merge();
 
 	void ExecuteTask();
@@ -178,6 +176,11 @@ public:
 	PartitionGlobalMergeState *merge_state;
 	PartitionSortStage stage;
 	atomic<bool> finished;
+
+	//	Sorting buffers
+	ExpressionExecutor executor;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
 };
 
 class PartitionGlobalMergeStates {

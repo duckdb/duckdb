@@ -663,8 +663,6 @@ string PhysicalWindow::ParamsToString() const {
 		}
 		result += select_list[i]->GetName();
 	}
-	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
 	return result;
 }
 
