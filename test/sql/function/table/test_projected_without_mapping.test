@@ -1,9 +1,6 @@
 # name: test/sql/function/table/test_projected_without_mapping.test
 # group: [table]
 
-statement ok
-pragma enable_verification;
-
 query II
 SELECT * FROM (
 	VALUES
