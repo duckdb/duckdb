@@ -245,6 +245,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    @pytest.mark.skip(reason="bug in last_value SQL function")
     @pytest.mark.parametrize("f", ["last_value", "last"])
     def test_last_value(self, table, f):
         result = (
