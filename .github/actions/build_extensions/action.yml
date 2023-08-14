@@ -116,18 +116,18 @@ runs:
       run: |
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
-    - name: Set autoload test dir
-      if: inputs.run_autoload_tests != ''
-      shell: bash
-      run: |
-        echo "LOCAL_EXTENSION_REPO=/tmp/local_repo" >> $GITHUB_ENV
-
     - name: Create combined vcpkg manifest
       if: inputs.vcpkg_build == 1 && inputs.build_out_of_tree_extensions == 1
       shell: bash
       run: |
         make extension_configuration
         echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
+
+    - name: Set autoload test dir
+      if: inputs.run_autoload_tests != ''
+      shell: bash
+      run: |
+        echo "LOCAL_EXTENSION_REPO=/tmp/local_repo" >> $GITHUB_ENV
 
     - name: Build
       shell: bash
