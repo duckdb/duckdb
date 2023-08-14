@@ -28,6 +28,9 @@ struct BlockPointer;
 //! row ID directly in the node pointer.
 class Leaf {
 public:
+	//! Index of the Leaf FixedSizeAllocator
+	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::LEAF - 1;
+
 	//! Delete copy constructors, as any Leaf can never own its memory
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;
@@ -50,7 +53,7 @@ public:
 
 	//! Get a reference to the leaf
 	static inline Leaf &Get(const ART &art, const Node ptr) {
-		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
+		return *GetAllocator(art).Get<Leaf>(ptr);
 	}
 
 	//! Initializes a merge by incrementing the buffer IDs of the leaf (chain)
@@ -75,6 +78,11 @@ public:
 
 	//! Vacuum the leaf (chain)
 	static void Vacuum(ART &art, Node &node);
+
+	//! Get a reference to the LEAF allocator
+	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
+		return (*art.allocators)[ALLOCATOR_IDX];
+	}
 
 private:
 	//! Moves the inlined row ID onto a leaf

@@ -9,7 +9,7 @@ namespace duckdb {
 
 Prefix &Prefix::New(ART &art, Node &node) {
 
-	node = Node::GetAllocator(art, NType::PREFIX).New();
+	node = GetAllocator(art).New();
 	node.SetMetadata((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
@@ -19,7 +19,7 @@ Prefix &Prefix::New(ART &art, Node &node) {
 
 Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, Node next) {
 
-	node = Node::GetAllocator(art, NType::PREFIX).New();
+	node = GetAllocator(art).New();
 	node.SetMetadata((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
@@ -37,7 +37,7 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 	idx_t copy_count = 0;
 
 	while (count) {
-		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
+		node.get() = GetAllocator(art).New();
 		node.get().SetMetadata((uint8_t)NType::PREFIX);
 		auto &prefix = Prefix::Get(art, node);
 
@@ -57,7 +57,7 @@ void Prefix::Free(ART &art, Node &node) {
 	Node next_node;
 	while (current_node.HasMetadata() && current_node.GetType() == NType::PREFIX) {
 		next_node = Prefix::Get(art, current_node).ptr;
-		Node::GetAllocator(art, NType::PREFIX).Free(current_node);
+		GetAllocator(art).Free(current_node);
 		current_node = next_node;
 	}
 
@@ -293,7 +293,7 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 
 	bool flag_set = flags.vacuum_flags[(uint8_t)NType::PREFIX - 1];
-	auto &allocator = Node::GetAllocator(art, NType::PREFIX);
+	auto &allocator = GetAllocator(art);
 
 	reference<Node> node_ref(node);
 	while (node_ref.get().GetType() == NType::PREFIX) {
@@ -338,7 +338,7 @@ void Prefix::Append(ART &art, Node other_prefix) {
 		D_ASSERT(other.ptr.HasMetadata());
 
 		prefix.get().ptr = other.ptr;
-		Node::GetAllocator(art, NType::PREFIX).Free(other_prefix);
+		GetAllocator(art).Free(other_prefix);
 		other_prefix = prefix.get().ptr;
 	}
 

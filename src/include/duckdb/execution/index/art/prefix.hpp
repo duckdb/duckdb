@@ -7,8 +7,8 @@
 //===----------------------------------------------------------------------===//
 #pragma once
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
@@ -21,6 +21,9 @@ class ARTKey;
 //! node or the 'actual' ART node.
 class Prefix {
 public:
+	//! Index of the Prefix FixedSizeAllocator
+	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::PREFIX - 1;
+
 	//! Delete copy constructors, as any Prefix can never own its memory
 	Prefix(const Prefix &) = delete;
 	Prefix &operator=(const Prefix &) = delete;
@@ -43,7 +46,7 @@ public:
 
 	//! Get a reference to the prefix
 	static inline Prefix &Get(const ART &art, const Node ptr) {
-		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
+		return *GetAllocator(art).Get<Prefix>(ptr);
 	}
 
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
@@ -79,6 +82,11 @@ public:
 
 	//! Vacuum the child of the node
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
+
+	//! Get a reference to the Prefix allocator
+	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
+		return (*art.allocators)[ALLOCATOR_IDX];
+	}
 
 private:
 	//! Appends the byte to this prefix node, or creates a subsequent prefix node,

@@ -20,7 +20,7 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 	idx_t copy_count = 0;
 	while (count) {
-		node.get() = Node::GetAllocator(art, NType::LEAF).New();
+		node.get() = GetAllocator(art).New();
 		node.get().SetMetadata((uint8_t)NType::LEAF);
 
 		auto &leaf = Leaf::Get(art, node);
@@ -44,7 +44,7 @@ void Leaf::Free(ART &art, Node &node) {
 	Node next_node;
 	while (current_node.HasMetadata()) {
 		next_node = Leaf::Get(art, current_node).ptr;
-		Node::GetAllocator(art, NType::LEAF).Free(current_node);
+		GetAllocator(art).Free(current_node);
 		current_node = next_node;
 	}
 
@@ -121,7 +121,7 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 		for (idx_t i = 0; i < last_leaf.count; i++) {
 			l_leaf = l_leaf.get().Append(art, last_leaf.row_ids[i]);
 		}
-		Node::GetAllocator(art, NType::LEAF).Free(last_leaf_node);
+		GetAllocator(art).Free(last_leaf_node);
 	}
 }
 
@@ -296,7 +296,7 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 
 void Leaf::Vacuum(ART &art, Node &node) {
 
-	auto &allocator = Node::GetAllocator(art, NType::LEAF);
+	auto &allocator = GetAllocator(art);
 
 	reference<Node> node_ref(node);
 	while (node_ref.get().HasMetadata()) {
@@ -313,7 +313,7 @@ void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 	auto row_id = node.GetRowId();
-	node = Node::GetAllocator(art, NType::LEAF).New();
+	node = GetAllocator(art).New();
 	node.SetMetadata((uint8_t)NType::LEAF);
 
 	auto &leaf = Leaf::Get(art, node);
@@ -328,7 +328,7 @@ Leaf &Leaf::Append(ART &art, const row_t row_id) {
 
 	// we need a new leaf node
 	if (leaf.get().count == Node::LEAF_SIZE) {
-		leaf.get().ptr = Node::GetAllocator(art, NType::LEAF).New();
+		leaf.get().ptr = GetAllocator(art).New();
 		leaf.get().ptr.SetMetadata((uint8_t)NType::LEAF);
 
 		leaf = Leaf::Get(art, leaf.get().ptr);

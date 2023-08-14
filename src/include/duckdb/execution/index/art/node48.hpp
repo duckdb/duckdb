@@ -18,6 +18,9 @@ namespace duckdb {
 //! byte, and which contains the position of the child node in the children array
 class Node48 {
 public:
+	//! Index of the Node48 FixedSizeAllocator
+	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_48 - 1;
+
 	//! Delete copy constructors, as any Node48 can never own its memory
 	Node48(const Node48 &) = delete;
 	Node48 &operator=(const Node48 &) = delete;
@@ -37,7 +40,7 @@ public:
 
 	//! Get a reference to the node
 	static inline Node48 &Get(const ART &art, const Node ptr) {
-		return *Node::GetAllocator(art, NType::NODE_48).Get<Node48>(ptr);
+		return *GetAllocator(art).Get<Node48>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node16 to a Node48
 	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
@@ -71,5 +74,10 @@ public:
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	//! Get a reference to the Node48 allocator
+	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
+		return (*art.allocators)[ALLOCATOR_IDX];
+	}
 };
 } // namespace duckdb

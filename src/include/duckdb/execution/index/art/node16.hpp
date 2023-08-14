@@ -25,6 +25,9 @@ public:
 	Node children[Node::NODE_16_CAPACITY];
 
 public:
+	//! Index of the Node16 FixedSizeAllocator
+	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_16 - 1;
+
 	//! Delete copy constructors, as any Node16 can never own its memory
 	Node16(const Node16 &) = delete;
 	Node16 &operator=(const Node16 &) = delete;
@@ -36,7 +39,7 @@ public:
 
 	//! Get a reference to the node
 	static inline Node16 &Get(const ART &art, const Node ptr) {
-		return *Node::GetAllocator(art, NType::NODE_16).Get<Node16>(ptr);
+		return *GetAllocator(art).Get<Node16>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node4 to a Node16
 	static Node16 &GrowNode4(ART &art, Node &node16, Node &node4);
@@ -61,5 +64,10 @@ public:
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	//! Get a reference to the Node16 allocator
+	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
+		return (*art.allocators)[ALLOCATOR_IDX];
+	}
 };
 } // namespace duckdb

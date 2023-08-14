@@ -17,6 +17,9 @@ namespace duckdb {
 //! Node256 holds up to 256 Node children which can be directly indexed by the key byte
 class Node256 {
 public:
+	//! Index of the Node256 FixedSizeAllocator
+	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_256 - 1;
+
 	//! Delete copy constructors, as any Node256 can never own its memory
 	Node256(const Node256 &) = delete;
 	Node256 &operator=(const Node256 &) = delete;
@@ -34,7 +37,7 @@ public:
 
 	//! Get a reference to the node
 	static inline Node256 &Get(const ART &art, const Node ptr) {
-		return *Node::GetAllocator(art, NType::NODE_256).Get<Node256>(ptr);
+		return *GetAllocator(art).Get<Node256>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node48 to a Node256
 	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
@@ -64,5 +67,10 @@ public:
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	//! Get a reference to the Node256 allocator
+	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
+		return (*art.allocators)[ALLOCATOR_IDX];
+	}
 };
 } // namespace duckdb
