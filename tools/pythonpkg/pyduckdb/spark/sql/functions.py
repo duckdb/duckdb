@@ -1,8 +1,9 @@
 from .column import Column
-from typing import Any
+from typing import Any, Callable, overload, Union
 
 from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
 from ._typing import ColumnOrName
+from ..exception import ContributionsAcceptedError
 
 
 def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
@@ -16,6 +17,40 @@ def _invoke_function_over_columns(name: str, *cols: "ColumnOrName") -> Column:
 
 def col(column: str):
     return Column(ColumnExpression(column))
+
+
+def upper(col: "ColumnOrName") -> Column:
+    """
+    Converts a string expression to upper case.
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        target column to work on.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        upper case values.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame(["Spark", "PySpark", "Pandas API"], "STRING")
+    >>> df.select(upper("value")).show()
+    +------------+
+    |upper(value)|
+    +------------+
+    |       SPARK|
+    |     PYSPARK|
+    |  PANDAS API|
+    +------------+
+    """
+    return _invoke_function_over_columns("upper", col)
 
 
 def when(condition: "Column", value: Any) -> Column:
@@ -282,3 +317,70 @@ def count(col: "ColumnOrName") -> Column:
     +--------+----------------+
     """
     return _invoke_function_over_columns("count", col)
+
+
+@overload
+def transform(col: "ColumnOrName", f: Callable[[Column], Column]) -> Column:
+    ...
+
+
+@overload
+def transform(col: "ColumnOrName", f: Callable[[Column, Column], Column]) -> Column:
+    ...
+
+
+def transform(
+    col: "ColumnOrName",
+    f: Union[Callable[[Column], Column], Callable[[Column, Column], Column]],
+) -> Column:
+    """
+    Returns an array of elements after applying a transformation to each element in the input array.
+
+    .. versionadded:: 3.1.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    col : :class:`~pyspark.sql.Column` or str
+        name of column or expression
+    f : function
+        a function that is applied to each element of the input array.
+        Can take one of the following forms:
+
+        - Unary ``(x: Column) -> Column: ...``
+        - Binary ``(x: Column, i: Column) -> Column...``, where the second argument is
+            a 0-based index of the element.
+
+        and can use methods of :class:`~pyspark.sql.Column`, functions defined in
+        :py:mod:`pyspark.sql.functions` and Scala ``UserDefinedFunctions``.
+        Python ``UserDefinedFunctions`` are not supported
+        (`SPARK-27052 <https://issues.apache.org/jira/browse/SPARK-27052>`__).
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        a new array of transformed elements.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([(1, [1, 2, 3, 4])], ("key", "values"))
+    >>> df.select(transform("values", lambda x: x * 2).alias("doubled")).show()
+    +------------+
+    |     doubled|
+    +------------+
+    |[2, 4, 6, 8]|
+    +------------+
+
+    >>> def alternate(x, i):
+    ...     return when(i % 2 == 0, x).otherwise(-x)
+    ...
+    >>> df.select(transform("values", alternate).alias("alternated")).show()
+    +--------------+
+    |    alternated|
+    +--------------+
+    |[1, -2, 3, -4]|
+    +--------------+
+    """
+    raise NotImplementedError

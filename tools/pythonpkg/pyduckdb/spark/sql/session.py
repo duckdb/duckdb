@@ -132,7 +132,7 @@ class SparkSession:
             data = [tuple(None for _ in names)]
 
         if schema and isinstance(schema, StructType):
-	        # TODO: this can also transform pandas dataframes currently
+            # TODO: this can also transform pandas dataframes currently
             # Transform the data into Values to combine the data+schema
             data = _combine_data_and_schema(data, schema)
 
