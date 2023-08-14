@@ -7,6 +7,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "ConstraintType"
       }
@@ -18,6 +19,7 @@
     "enum": "NOT_NULL",
     "members": [
       {
+        "id": 200,
         "name": "index",
         "type": "LogicalIndex"
       }
@@ -30,6 +32,7 @@
     "enum": "CHECK",
     "members": [
       {
+        "id": 200,
         "name": "expression",
         "type": "ParsedExpression*"
       }
@@ -42,34 +45,41 @@
     "enum": "FOREIGN_KEY",
     "members": [
       {
+        "id": 200,
         "name": "pk_columns",
         "type": "vector<string>"
       },
       {
+        "id": 201,
         "name": "fk_columns",
         "type": "vector<string>"
       },
       {
+        "id": 202,
         "name": "fk_type",
         "type": "ForeignKeyType",
         "property": "info.type"
       },
       {
+        "id": 203,
         "name": "schema",
         "type": "string",
         "property":  "info.schema"
       },
       {
+        "id": 204,
         "name": "table",
         "type": "string",
         "property":  "info.table"
       },
       {
+        "id": 205,
         "name": "pk_keys",
         "type": "vector<PhysicalIndex>",
         "property":  "info.pk_keys"
       },
       {
+        "id": 206,
         "name": "fk_keys",
         "type": "vector<PhysicalIndex>",
         "property":  "info.fk_keys"
@@ -82,14 +92,17 @@
     "enum": "UNIQUE",
     "members": [
       {
+        "id": 200,
         "name": "is_primary_key",
         "type": "bool"
       },
       {
+        "id": 201,
         "name": "index",
         "type": "LogicalIndex"
       },
       {
+        "id": 202,
         "name": "columns",
         "type": "vector<string>"
       }

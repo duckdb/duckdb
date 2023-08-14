@@ -468,7 +468,7 @@ main/capi/duckdb_value-c.cpp	14
 main/capi/helper-c.cpp	49
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	44
-main/capi/pending-c.cpp	28
+main/capi/pending-c.cpp	32
 main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
 main/capi/result-c.cpp	34
@@ -502,6 +502,7 @@ main/relation/create_view_relation.cpp	7
 main/relation/cross_product_relation.cpp	2
 main/relation/read_json_relation.cpp	10
 main/relation/write_parquet_relation.cpp	22
+main/relation/aggregate_relation.cpp	14
 main/settings/settings.cpp	157
 main/stream_query_result.cpp	7
 optimizer/column_lifetime_analyzer.cpp	2
