@@ -300,6 +300,9 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		return true;
 	}
 	case LogicalTypeId::UHUGEINT: {
+		if (value < 0) {
+			return false;
+		}
 		res = Value::UHUGEINT(value);
 		return true;
 	}
