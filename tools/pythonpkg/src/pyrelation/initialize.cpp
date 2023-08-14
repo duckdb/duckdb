@@ -135,13 +135,13 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	m.def("row_number", &DuckDBPyRelation::RowNumber, "Computes the row number within the partition",
 	      py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("rank", &DuckDBPyRelation::Rank, "Computes the rank within the partition", py::arg("window_spec"),
-	         py::arg("projected_columns") = "")
-	    .def("dense_rank", &DuckDBPyRelation::DenseRank, "Computes the dense rank within the partition",
-	         py::arg("window_spec"), py::arg("projected_columns") = "")
-	    .def("rank_dense", &DuckDBPyRelation::RankDense, "Computes the dense rank within the partition",
-	         py::arg("window_spec"), py::arg("projected_columns") = "")
-	    .def("percent_rank", &DuckDBPyRelation::PercentRank, "Computes the relative rank within the partition",
-	         py::arg("window_spec"), py::arg("projected_columns") = "")
+	         py::arg("projected_columns") = "");
+
+	DefineMethod({"dense_rank", "rank_dense"}, m, &DuckDBPyRelation::DenseRank,
+	             "Computes the dense rank within the partition", py::arg("window_spec"),
+	             py::arg("projected_columns") = "");
+	m.def("percent_rank", &DuckDBPyRelation::PercentRank, "Computes the relative rank within the partition",
+	      py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("cume_dist", &DuckDBPyRelation::CumeDist, "Computes the cumulative distribution within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets",

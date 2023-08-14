@@ -124,7 +124,10 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Unique(const string &aggr_columns);
 
-	unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &aggr_columns);
+	unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &function_parameters,
+	                                                   const string &aggr_columns, const string &groups,
+	                                                   const string &window_spec, const bool &ignore_nulls,
+	                                                   const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
@@ -132,7 +135,6 @@ public:
 	unique_ptr<DuckDBPyRelation> RowNumber(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> Rank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> DenseRank(const string &window_spec, const string &projected_columns);
-	unique_ptr<DuckDBPyRelation> RankDense(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> PercentRank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> CumeDist(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> NTile(const string &window_spec, const int &num_buckets,

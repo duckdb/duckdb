@@ -245,11 +245,14 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    @pytest.mark.skip(reason="bug in last_value SQL function")
     @pytest.mark.parametrize("f", ["last_value", "last"])
     def test_last_value(self, table, f):
         result = (
-            getattr(table, f)("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            getattr(table, f)(
+                "v",
+                "over (partition by id order by t asc range between unbounded preceding and unbounded following) ",
+                projected_columns="id, v, t",
+            )
             .order("id")
             .execute()
             .fetchall()
@@ -260,9 +263,9 @@ class TestRAPIWindows:
             (1, 2, 3, 2),
             (2, 11, -1, 10),
             (2, 10, 4, 10),
-            (3, 5, -2, 45),
-            (3, -1, 0, 45),
-            (3, None, 10, 45),
+            (3, 5, -2, None),
+            (3, -1, 0, None),
+            (3, None, 10, None),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])

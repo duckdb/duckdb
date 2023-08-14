@@ -386,64 +386,58 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns)
 	return make_uniq<DuckDBPyRelation>(rel->Project(std_columns)->Distinct());
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericWindowFunction(const string &function_name,
-                                                                     const string &aggr_columns) {
-	auto expr = GenerateExpressionList(function_name, aggr_columns, "", "", false, "",
-	                                   "over (rows between unbounded preceding and current row) ");
+unique_ptr<DuckDBPyRelation>
+DuckDBPyRelation::GenericWindowFunction(const string &function_name, const string &function_parameters,
+                                        const string &aggr_columns, const string &groups, const string &window_spec,
+                                        const bool &ignore_nulls, const string &projected_columns) {
+	auto expr = GenerateExpressionList(function_name, aggr_columns, groups, function_parameters, ignore_nulls,
+	                                   projected_columns, window_spec);
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
-	return GenericWindowFunction("sum", aggr_columns);
+	return GenericWindowFunction("sum", "", aggr_columns, "",
+	                             "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumProd(const string &aggr_columns) {
-	return GenericWindowFunction("product", aggr_columns);
+	return GenericWindowFunction("product", "", aggr_columns, "",
+	                             "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMax(const string &aggr_columns) {
-	return GenericWindowFunction("max", aggr_columns);
+	return GenericWindowFunction("max", "", aggr_columns, "",
+	                             "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns) {
-	return GenericWindowFunction("min", aggr_columns);
+	return GenericWindowFunction("min", "", aggr_columns, "",
+	                             "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RowNumber(const string &window_spec, const string &projected_columns) {
-	auto expr = GenerateExpressionList("row_number", "*", "", "", false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("row_number", "", "*", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Rank(const string &window_spec, const string &projected_columns) {
-	auto expr = GenerateExpressionList("rank", "*", "", "", false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("rank", "", "*", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DenseRank(const string &window_spec, const string &projected_columns) {
-	auto expr = GenerateExpressionList("dense_rank", "*", "", "", false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RankDense(const string &window_spec, const string &projected_columns) {
-	// alias for dense_rank
-	return DenseRank(window_spec, projected_columns);
+	return GenericWindowFunction("dense_rank", "", "*", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PercentRank(const string &window_spec, const string &projected_columns) {
-	auto expr = GenerateExpressionList("percent_rank", "*", "", "", false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("percent_rank", "", "*", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spec, const string &projected_columns) {
-	auto expr = GenerateExpressionList("cume_dist", "*", "", "", false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("cume_dist", "", "*", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets,
                                                      const string &projected_columns) {
-	auto expr =
-	    GenerateExpressionList("ntile", "", "", std::to_string(num_buckets), false, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("ntile", std::to_string(num_buckets), "", "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const string &window_spec, const int &offset,
@@ -454,8 +448,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const s
 		lag_params += std::to_string(offset);
 	if (!default_value.empty())
 		lag_params += "," + default_value;
-	auto expr = GenerateExpressionList("lag", column, "", lag_params, ignore_nulls, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("lag", lag_params, column, "", window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const string &window_spec, const int &offset,
@@ -466,29 +459,24 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const 
 		lead_params += std::to_string(offset);
 	if (!default_value.empty())
 		lead_params += "," + default_value;
-	auto expr = GenerateExpressionList("lead", column, "", lead_params, ignore_nulls, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("lead", lead_params, column, "", window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FirstValue(const string &column, const string &window_spec,
                                                           const bool &ignore_nulls, const string &projected_columns) {
-	auto expr = GenerateExpressionList("first_value", column, "", "", ignore_nulls, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("first_value", "", column, "", window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LastValue(const string &column, const string &window_spec,
                                                          const bool &ignore_nulls, const string &projected_columns) {
-	auto expr = GenerateExpressionList("last_value", column, "", "", ignore_nulls, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("last_value", "", column, "", window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NthValue(const string &column, const string &window_spec,
                                                         const int &offset, const bool &ignore_nulls,
                                                         const string &projected_columns) {
-	string nth_value_params = std::to_string(offset);
-	auto expr =
-	    GenerateExpressionList("nth_value", column, "", nth_value_params, ignore_nulls, projected_columns, window_spec);
-	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
+	return GenericWindowFunction("nth_value", std::to_string(offset), column, "", window_spec, ignore_nulls,
+	                             projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
