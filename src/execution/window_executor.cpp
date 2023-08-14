@@ -315,6 +315,7 @@ struct WindowBoundariesState {
 	const bool has_following_range;
 	const bool needs_peer;
 
+	idx_t next_pos = 0;
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
 	idx_t peer_start = 0;
@@ -339,11 +340,18 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
 		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+		const auto is_jump = (next_pos != row_idx);
 
 		// when the partition changes, recompute the boundaries
-		if (!is_same_partition) {
+		if (!is_same_partition || is_jump) {
 			partition_start = row_idx;
 			peer_start = row_idx;
+
+			if (is_jump) {
+				//	Go back as far as the previous partition start
+				idx_t n = 1;
+				partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
+			}
 
 			// find end of partition
 			partition_end = input_size;
@@ -393,6 +401,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		partition_end = input_size;
 		peer_end = partition_end;
 	}
+	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
 	window_start = -1;
