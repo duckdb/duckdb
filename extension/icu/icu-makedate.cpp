@@ -1,4 +1,6 @@
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -66,7 +68,11 @@ struct ICUMakeDate : public ICUDateFunc {
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
 	static inline timestamp_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
-		const auto year = yyyy + (yyyy < 0);
+		const auto year = Cast::Operation<T, int32_t>(AddOperator::Operation<T, T, T>(yyyy, (yyyy < 0)));
+		const auto month = Cast::Operation<T, int32_t>(SubtractOperatorOverflowCheck::Operation<T, T, T>(mm, 1));
+		const auto day = Cast::Operation<T, int32_t>(dd);
+		const auto hour = Cast::Operation<T, int32_t>(hr);
+		const auto min = Cast::Operation<T, int32_t>(mn);
 
 		const auto secs = Cast::Operation<double, int32_t>(ss);
 		ss -= secs;
@@ -74,11 +80,11 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		const auto millis = int32_t(ss);
 		int64_t micros = std::round((ss - millis) * Interval::MICROS_PER_MSEC);
 
-		calendar->set(UCAL_YEAR, int32_t(year));
-		calendar->set(UCAL_MONTH, int32_t(mm - 1));
-		calendar->set(UCAL_DATE, int32_t(dd));
-		calendar->set(UCAL_HOUR_OF_DAY, int32_t(hr));
-		calendar->set(UCAL_MINUTE, int32_t(mn));
+		calendar->set(UCAL_YEAR, year);
+		calendar->set(UCAL_MONTH, month);
+		calendar->set(UCAL_DATE, day);
+		calendar->set(UCAL_HOUR_OF_DAY, hour);
+		calendar->set(UCAL_MINUTE, min);
 		calendar->set(UCAL_SECOND, secs);
 		calendar->set(UCAL_MILLISECOND, millis);
 
