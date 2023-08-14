@@ -227,6 +227,7 @@ jobs:
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
+          run_autoload_tests: 0
 
       - uses: actions/upload-artifact@v3
         with:

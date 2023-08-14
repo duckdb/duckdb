@@ -178,11 +178,13 @@ jobs:
             duckdb_arch: osx_amd64
             vcpkg_triplet: x64-osx
             universal_build: 0
+            run_autoload_tests: 1
           - label: arm64
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
             universal_build: 0
+            run_autoload_tests: 0
 
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
@@ -216,6 +218,7 @@ jobs:
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
           build_in_tree_extensions: 1
           build_out_of_tree_extensions: 1
+          run_autoload_tests: ${{ matrix.run_autoload_tests }}
 
       - name: Test statically linked extensions
         if: ${{ matrix.osx_arch == 'x86_64' }}
