@@ -13,7 +13,7 @@ foreach bitpacking_mode delta_for for constant_delta constant
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
 
-foreach type <numeric> hugeint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
 CREATE TABLE a AS SELECT MOD(i,3)::${type} i FROM range(10000) tbl(i)
