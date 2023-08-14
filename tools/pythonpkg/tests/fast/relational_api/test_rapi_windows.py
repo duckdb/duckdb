@@ -15,7 +15,7 @@ def setup_and_teardown_of_table(duckdb_cursor):
 		(2, 11, -1),
 		(3, -1, 0),
 		(3, 5, -2),
-		(3, 45, 10);
+		(3, null, 10);
 		"""
     )
     yield
@@ -42,7 +42,7 @@ class TestRAPIWindows:
             (2, 10, 4, 2),
             (3, 5, -2, 1),
             (3, -1, 0, 2),
-            (3, 45, 10, 3),
+            (3, None, 10, 3),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -53,7 +53,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r[0] == e for r, e in zip(result, expected)])
         result = table.rank("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
-        expected = [(1, 1, 1), (1, 1, 1), (1, 2, 3), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, 45, 3)]
+        expected = [(1, 1, 1), (1, 1, 1), (1, 2, 3), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, None, 3)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
@@ -64,7 +64,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r[0] == e for r, e in zip(result, expected)])
         result = getattr(table, f)("over (partition by id order by v asc)", "id, v").order("id").execute().fetchall()
-        expected = [(1, 1, 1), (1, 1, 1), (1, 2, 2), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, 45, 3)]
+        expected = [(1, 1, 1), (1, 1, 1), (1, 2, 2), (2, 10, 1), (2, 11, 2), (3, -1, 1), (3, 5, 2), (3, None, 3)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
@@ -82,7 +82,7 @@ class TestRAPIWindows:
             (2, 11, 1.0),
             (3, -1, 0.0),
             (3, 5, 0.5),
-            (3, 45, 1.0),
+            (3, None, 1.0),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -101,14 +101,14 @@ class TestRAPIWindows:
             (2, 11, 1.0),
             (3, -1, 1 / 3),
             (3, 5, 2 / 3),
-            (3, 45, 1.0),
+            (3, None, 1.0),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
     def test_ntile(self, table):
         result = table.n_tile("over (order by v)", 3, "v").execute().fetchall()
-        expected = [(-1, 1), (1, 1), (1, 1), (2, 2), (5, 2), (10, 2), (11, 3), (45, 3)]
+        expected = [(-1, 1), (1, 1), (1, 1), (2, 2), (5, 2), (10, 2), (11, 3), (None, 3)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
@@ -127,7 +127,7 @@ class TestRAPIWindows:
             (2, 10, 4, 11),
             (3, 5, -2, None),
             (3, -1, 0, 5),
-            (3, 45, 10, -1),
+            (3, None, 10, -1),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -145,7 +145,7 @@ class TestRAPIWindows:
             (2, 10, 4, 11),
             (3, 5, -2, -1),
             (3, -1, 0, 5),
-            (3, 45, 10, -1),
+            (3, None, 10, -1),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -163,7 +163,7 @@ class TestRAPIWindows:
             (2, 10, 4, None),
             (3, 5, -2, None),
             (3, -1, 0, None),
-            (3, 45, 10, 5),
+            (3, None, 10, 5),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -182,8 +182,8 @@ class TestRAPIWindows:
             (2, 11, -1, 10),
             (2, 10, 4, None),
             (3, 5, -2, -1),
-            (3, -1, 0, 45),
-            (3, 45, 10, None),
+            (3, -1, 0, None),
+            (3, None, 10, None),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -200,8 +200,8 @@ class TestRAPIWindows:
             (2, 11, -1, 10),
             (2, 10, 4, -1),
             (3, 5, -2, -1),
-            (3, -1, 0, 45),
-            (3, 45, 10, -1),
+            (3, -1, 0, None),
+            (3, None, 10, -1),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -217,9 +217,9 @@ class TestRAPIWindows:
             (1, 2, 3, None),
             (2, 11, -1, None),
             (2, 10, 4, None),
-            (3, 5, -2, 45),
+            (3, 5, -2, None),
             (3, -1, 0, None),
-            (3, 45, 10, None),
+            (3, None, 10, None),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -240,7 +240,7 @@ class TestRAPIWindows:
             (2, 10, 4, 11),
             (3, 5, -2, 5),
             (3, -1, 0, 5),
-            (3, 45, 10, 5),
+            (3, None, 10, 5),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -261,11 +261,8 @@ class TestRAPIWindows:
             (2, 10, 4, 10),
             (3, 5, -2, 45),
             (3, -1, 0, 45),
-            (3, 45, 10, 45),
+            (3, None, 10, 45),
         ]
-        import ipdb
-
-        ipdb.set_trace()
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
@@ -284,7 +281,7 @@ class TestRAPIWindows:
             (2, 10, 4, 10),
             (3, 5, -2, None),
             (3, -1, 0, -1),
-            (3, 45, 10, -1),
+            (3, None, 10, -1),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
@@ -302,7 +299,7 @@ class TestRAPIWindows:
             (2, 10, 4, None),
             (3, 5, -2, None),
             (3, -1, 0, None),
-            (3, 45, 10, None),
+            (3, None, 10, None),
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
