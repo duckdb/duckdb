@@ -20,12 +20,12 @@ unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(Logic
 
 void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty("extension_name", GetExtensionName());
+	serializer.WriteProperty(200, "extension_name", GetExtensionName());
 }
 
 unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
-	auto extension_name = deserializer.ReadProperty<string>("extension_name");
+	auto extension_name = deserializer.ReadProperty<string>(200, "extension_name");
 	for (auto &extension : config.operator_extensions) {
 		if (extension->GetName() == extension_name) {
 			return extension->FormatDeserialize(deserializer);

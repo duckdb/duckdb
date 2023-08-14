@@ -1,0 +1,101 @@
+#name: test/sql/join/test_joins_on_weird_indexes.test
+# description: Test joins that stress the logic of the join order optimizer
+# group: [join]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+# join multiple set operations
+query I
+SELECT SUM(i) FROM integers UNION ALL SELECT AVG(i) FROM integers UNION ALL SELECT MIN(i) FROM integers UNION ALL SELECT MAX(i) FROM integers;
+----
+6.000000
+2.000000
+1.000000
+3.000000
+
+
+# join multiple set operations
+statement ok
+SELECT *, i1.rowid as diff_row_id_name FROM integers i1, integers i2 where i1.rowid = i2.i;
+
+statement ok
+create table t1 as (select range as a from range(20));
+
+statement ok
+create table t2 as (select range as a from range(30));
+
+statement ok
+create table t3 as (select range as a from range(50));
+
+statement ok
+select t3.a from t3, (select * from t2 intersect select * from t1) t4 where t4.a=t3.a;
+
+
+# join on PIVOT results
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+statement ok
+create table cities_i_have_been_to (Name Varchar);
+
+statement ok
+insert into cities_i_have_been_to VALUES ('Amsterdam'), ('Seattle'), ('New York City');
+
+statement ok
+select * from (PIVOT Cities ON Year USING SUM(Population)) t1, cities_i_have_been_to t2 where t1.Name=t2.Name;
+
+statement ok
+insert into t1 (select * from range(100));
+
+statement ok
+insert into t2 (select * from range(100));
+
+statement ok
+insert into t3 (select * from range(100));
+
+# join on a constant value column from reorderable to non-reorderable to reorderable
+statement ok
+select outer_table_1.a from
+t1 as outer_table_1
+inner join t2 as outer_table_2
+on outer_table_1.a = outer_table_2.a
+inner join
+    t3 as inner_table_1
+    left join t1 as left_join_table_1
+        inner join (select 50 as rand_int,
+                    from t3 where t3.a >= 0)  as constant_table
+    on left_join_table_1.a = constant_table.rand_int
+on inner_table_1.a = left_join_table_1.a
+on outer_table_1.a = constant_table.rand_int;

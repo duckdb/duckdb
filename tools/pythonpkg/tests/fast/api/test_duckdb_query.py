@@ -41,18 +41,6 @@ class TestDuckDBQuery(object):
         res = con.query('show tables').fetchall()
         assert res == []
 
-    def test_duckdb_from_query(self, duckdb_cursor):
-        # duckdb.from_query cannot be used to run arbitrary queries
-        with pytest.raises(
-            duckdb.ParserException, match='duckdb.from_query cannot be used to run arbitrary SQL queries'
-        ):
-            duckdb.from_query('create view v1 as select 42 i')
-        # ... or multiple select statements
-        with pytest.raises(
-            duckdb.ParserException, match='duckdb.from_query cannot be used to run arbitrary SQL queries'
-        ):
-            duckdb.from_query('select 42; select 84;')
-
     def test_named_param(self):
         con = duckdb.connect()
 
@@ -86,7 +74,8 @@ class TestDuckDBQuery(object):
         con = duckdb.connect()
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="Named parameters found, but param is not of type 'dict'"
+            duckdb.InvalidInputException,
+            match="Values were not provided for the following prepared statement parameters: name1, name2, name3",
         ):
             con.execute("select $name1, $name2, $name3", ['name1', 'name2', 'name3'])
 
@@ -102,7 +91,8 @@ class TestDuckDBQuery(object):
         con = duckdb.connect()
 
         with pytest.raises(
-            duckdb.InvalidInputException, match="Not all named parameters have been located, missing: name3"
+            duckdb.InvalidInputException,
+            match="Invalid Input Error: Values were not provided for the following prepared statement parameters: name3",
         ):
             con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3})
 
@@ -111,7 +101,7 @@ class TestDuckDBQuery(object):
 
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="Named parameters could not be transformed, because query string is missing named parameter 'not_a_named_param'",
+            match="Values were not provided for the following prepared statement parameters: name3",
         ):
             con.execute("select $name1, $name2, $name3", {'name1': 5, 'name2': 3, 'not_a_named_param': 5})
 
@@ -120,7 +110,7 @@ class TestDuckDBQuery(object):
 
         with pytest.raises(
             duckdb.InvalidInputException,
-            match="Invalid Input Error: Param is of type 'dict', but no named parameters were found in the query",
+            match="Values were not provided for the following prepared statement parameters: 1, 2",
         ):
             con.execute("select $1, $1, $2", {'name1': 5, 'name2': 3})
 
@@ -128,7 +118,7 @@ class TestDuckDBQuery(object):
         con = duckdb.connect()
 
         with pytest.raises(
-            duckdb.NotImplementedException, match="Mixing positional and named parameters is not supported yet"
+            duckdb.NotImplementedException, match="Mixing named and positional parameters is not supported yet"
         ):
             con.execute("select $name1, $1, $2", {'name1': 5, 'name2': 3})
 
