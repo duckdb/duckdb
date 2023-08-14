@@ -151,20 +151,16 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
 	    .def("lead", &DuckDBPyRelation::Lead, "Computes the lead within the partition", py::arg("column"),
 	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
-	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
-	    .def("first_value", &DuckDBPyRelation::FirstValue, "Computes the first value within the partition",
-	         py::arg("column"), py::arg("window_spec"), py::arg("ignore_nulls") = false,
-	         py::arg("projected_columns") = "")
-	    .def("first", &DuckDBPyRelation::First, "Computes the first value within the partition", py::arg("column"),
-	         py::arg("window_spec"), py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
-	    .def("last_value", &DuckDBPyRelation::LastValue, "Computes the last value within the partition",
-	         py::arg("column"), py::arg("window_spec"), py::arg("ignore_nulls") = false,
-	         py::arg("projected_columns") = "")
-	    .def("last", &DuckDBPyRelation::Last, "Computes the last value within the partition", py::arg("column"),
-	         py::arg("window_spec"), py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
-	    .def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
-	         py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
-	         py::arg("projected_columns") = "");
+	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
+	DefineMethod({"first_value", "first"}, m, &DuckDBPyRelation::FirstValue,
+	             "Computes the first value within the partition", py::arg("column"), py::arg("window_spec"),
+	             py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
+	DefineMethod({"last_value", "last"}, m, &DuckDBPyRelation::LastValue,
+	             "Computes the last value within the partition", py::arg("column"), py::arg("window_spec"),
+	             py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
+	m.def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
+	      py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
+	      py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
