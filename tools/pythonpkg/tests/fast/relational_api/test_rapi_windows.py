@@ -227,7 +227,10 @@ class TestRAPIWindows:
     @pytest.mark.parametrize("f", ["first_value", "first"])
     def test_first_value(self, table, f):
         result = (
-            getattr(table, f)("v", "over (partition by id order by t asc)", "id, v, t").order("id").execute().fetchall()
+            getattr(table, f)("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
         )
         expected = [
             (1, 1, 1, 1),
@@ -245,7 +248,10 @@ class TestRAPIWindows:
     @pytest.mark.parametrize("f", ["last_value", "last"])
     def test_last_value(self, table, f):
         result = (
-            getattr(table, f)("v", "over (partition by id order by t asc)", "id, v, t").order("id").execute().fetchall()
+            getattr(table, f)("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            .order("id")
+            .execute()
+            .fetchall()
         )
         expected = [
             (1, 1, 1, 2),
@@ -257,12 +263,15 @@ class TestRAPIWindows:
             (3, -1, 0, 45),
             (3, 45, 10, 45),
         ]
+        import ipdb
+
+        ipdb.set_trace()
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
     def test_nth_value(self, table):
         result = (
-            table.nth_value("v", "over (partition by id order by t asc)", 2, "id, v, t")
+            table.nth_value("v", "over (partition by id order by t asc)", offset=2, projected_columns="id, v, t")
             .order("id")
             .execute()
             .fetchall()
@@ -280,7 +289,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
         result = (
-            table.nth_value("v", "over (partition by id order by t asc)", 4, "id, v, t")
+            table.nth_value("v", "over (partition by id order by t asc)", offset=4, projected_columns="id, v, t")
             .order("id")
             .execute()
             .fetchall()
