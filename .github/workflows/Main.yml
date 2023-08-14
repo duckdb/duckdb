@@ -39,14 +39,11 @@ jobs:
  linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
-
     env:
-      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/in_tree_extensions.cmake'
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
-      LOCAL_EXTENSION_REPO: '/tmp'
       GEN: ninja
 
     steps:

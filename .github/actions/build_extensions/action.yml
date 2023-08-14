@@ -130,6 +130,8 @@ runs:
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
+        LOCAL_EXTENSION_REPO: '/tmp/local_repository'
+        ENABLE_EXTENSION_AUTOLOADING: 1
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
       run: |
@@ -142,6 +144,9 @@ runs:
         git config --global --add safe.directory '*'
         make
 
+    # Tests extension using regular require mechanism:
+    # - statically linked extensions are disable on startup but a sqlogictest require will call their load function
+    # - loadable-only extensions have their loadable extension loaded with the LOAD statement on a sqlogictest require
     - name: Test statically linked extensions
       if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
       shell: bash
@@ -155,6 +160,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
+    # TODO: move this after the other steps
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
@@ -175,9 +181,29 @@ runs:
           fi
         fi
 
-    # Note: the extension-upload-test script will currently not run the out-of-tree extensions tests.
-    #       it will however test that the out-of-tree extensions can actually be loaded, and the default tests still pass
-    - name: Test loadable extensions
+    - name: Rebuild DuckDB without any extensions linked, but with same extension config
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      env:
+        DISABLE_BUILTIN_EXTENSIONS: 1
+      run: |
+        cd  ${{ inputs.build_dir}}
+        rm -rf build/release
+        make
+
+    # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
+    - name: Run tests with auto loading
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      env:
+        LOCAL_EXTENSION_REPO: '/tmp/local_repository'
+      run: |
+        cd  ${{ inputs.build_dir}}
+        ${{ inputs.unittest_script }}
+
+    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
+    # TODO: load test config for all OOTEs without statically loading them, only statically load the bundled
+    - name: Test deployed extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
@@ -185,6 +211,7 @@ runs:
         AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
         AWS_DEFAULT_REGION: us-east-1
       run: |
+        rm -rf ~/.duckdb
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh

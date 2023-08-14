@@ -78,9 +78,9 @@ jobs:
 #    needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+      ENABLE_EXTENSION_AUTOLOADING: 1
       BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
-      LOCAL_EXTENSION_REPO: '/tmp'
       GEN: ninja
       ODBC_CONFIG: ../../build/unixodbc/build/bin/odbc_config
 

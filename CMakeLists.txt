@@ -124,6 +124,7 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
+option(ENABLE_EXTENSION_AUTOLOADING "Enable extension autoloading by default." FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
@@ -207,6 +208,10 @@ endif()
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
 if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
+endif()
+
+if (ENABLE_EXTENSION_AUTOLOADING)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=${ENABLE_EXTENSION_AUTOLOADING})
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)

@@ -26,7 +26,6 @@ duckdb_extension_load(autocomplete)
 #
 ## Extensions that are not linked, but we do want to test them as part of the release build
 #
-duckdb_extension_load(json DONT_LINK)
 duckdb_extension_load(sqlsmith DONT_LINK)
 duckdb_extension_load(tpcds DONT_LINK)
 duckdb_extension_load(visualizer DONT_LINK)

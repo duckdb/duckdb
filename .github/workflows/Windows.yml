@@ -41,7 +41,6 @@ jobs:
     name: Windows (64 Bit)
     runs-on: windows-latest
     env:
-      LOCAL_EXTENSION_REPO: '/tmp'
     steps:
     - uses: actions/checkout@v3
       with:
@@ -61,7 +60,7 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DLOCAL_EXTENSION_REPO=$LOCAL_EXTENSION_REPO -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DENABLE_EXTENSION_AUTOLOADING=1 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DLOCAL_EXTENSION_REPO=$LOCAL_EXTENSION_REPO -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
         cmake --build . --config Release
 
     - name: Test

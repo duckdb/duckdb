@@ -2,14 +2,15 @@
 # description: Base tests for the autoloading mechanism for extensions
 # group: [extension]
 
+# TODO: this currently also means autoloading is enabled, should be separate those?
+# TODO: this also requires having the JSON AND ICU extensions NOT loaded
 require-env LOCAL_EXTENSION_REPO
 
-require no_extension_autoloading
-
+# Default is expected to be true when running this test
 query I
 select value from duckdb_settings() where name='autoload_known_extensions';
 ----
-false
+true
 
 # Ensure we have a clean extension directory without any preinstalled extensions
 statement ok

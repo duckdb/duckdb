@@ -4,16 +4,14 @@
 
 require-env LOCAL_EXTENSION_REPO
 
-require no_extension_autoloading
-
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_current_setting'
 
-# Default should be false when running unit tests
+# Default should be true when running this unit tests
 query I
 select value from duckdb_settings() where name='autoload_known_extensions';
 ----
-false
+true
 
 ### No autoloading: throw error with installation hint
 statement ok
