@@ -175,8 +175,9 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 
 	} else {
 		// recursively enumerate the children of the expression
-		ExpressionIterator::EnumerateChildren(
-		    *expr, [&](unique_ptr<Expression> &child) { CaptureLambdaColumns(captures, list_child_type, child, param_count); });
+		ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
+			CaptureLambdaColumns(captures, list_child_type, child, param_count);
+		});
 	}
 
 	expr->Verify();

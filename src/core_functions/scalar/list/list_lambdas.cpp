@@ -146,7 +146,7 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 }
 
 static Vector GetIndexVector(const idx_t lists_size, const idx_t count, const UnifiedVectorFormat &lists_data,
-						   const list_entry_t *list_entries, const Vector &child_vector, const idx_t chunk_count) {
+                             const list_entry_t *list_entries, const Vector &child_vector, const idx_t chunk_count) {
 	Vector index_child_vector(child_vector.GetType());
 	index_child_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
@@ -160,7 +160,8 @@ static Vector GetIndexVector(const idx_t lists_size, const idx_t count, const Un
 		const auto &list_entry = list_entries[lists_index];
 
 		idx_t i = 1 + (chunk_count * STANDARD_VECTOR_SIZE);
-		for (idx_t child_idx = END_OF_LIST ? list_entry.offset : START_CHILD_IDX; child_idx < list_entry.length + list_entry.offset; child_idx++) {
+		for (idx_t child_idx = END_OF_LIST ? list_entry.offset : START_CHILD_IDX;
+		     child_idx < list_entry.length + list_entry.offset; child_idx++) {
 			index_child_vector.SetValue(child_idx - (chunk_count * STANDARD_VECTOR_SIZE), Value::UBIGINT(i++));
 			set_count++;
 
@@ -314,7 +315,8 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 			if (elem_cnt == STANDARD_VECTOR_SIZE) {
 				if (info.index) {
 					// An index is passed to the lambda function, so we need to create a vector with the indexes
-					Vector index_vector = GetIndexVector(lists_size, count, lists_data, list_entries, child_vector, chunk_count++);
+					Vector index_vector =
+					    GetIndexVector(lists_size, count, lists_data, list_entries, child_vector, chunk_count++);
 					input_chunk.data[2].Reference(index_vector);
 				}
 

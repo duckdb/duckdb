@@ -26,6 +26,7 @@ public:
 	idx_t parameter_count;
 
 	bool index = false;
+
 public:
 	string ToString() const override;
 
