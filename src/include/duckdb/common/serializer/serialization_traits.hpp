@@ -1,5 +1,7 @@
 #pragma once
 #include <type_traits>
+#include <cstdint>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -9,6 +11,8 @@ namespace duckdb {
 
 class FormatSerializer;   // Forward declare
 class FormatDeserializer; // Forward declare
+
+typedef uint32_t field_id_t;
 
 // Backport to c++11
 template <class...>
@@ -64,6 +68,16 @@ template <typename T>
 struct is_unordered_map : std::false_type {};
 template <typename... Args>
 struct is_unordered_map<typename duckdb::unordered_map<Args...>> : std::true_type {
+	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
+	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
+	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
+	typedef typename std::tuple_element<3, std::tuple<Args...>>::type EQUAL_TYPE;
+};
+
+template <typename T>
+struct is_map : std::false_type {};
+template <typename... Args>
+struct is_map<typename duckdb::map<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;

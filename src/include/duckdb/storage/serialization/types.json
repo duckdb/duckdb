@@ -7,10 +7,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "ExtraTypeInfoType"
       },
       {
+        "id": 101,
         "name": "alias",
         "type": "string"
       }
@@ -23,10 +25,12 @@
     "enum": "DECIMAL_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "width",
         "type": "uint8_t"
       },
       {
+        "id": 201,
         "name": "scale",
         "type": "uint8_t"
       }
@@ -38,6 +42,7 @@
     "enum": "STRING_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "collation",
         "type": "string"
       }
@@ -49,6 +54,7 @@
     "enum": "LIST_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "child_type",
         "type": "LogicalType"
       }
@@ -60,6 +66,7 @@
     "enum": "STRUCT_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "child_types",
         "type": "child_list_t<LogicalType>"
       }
@@ -71,16 +78,19 @@
     "enum": "AGGREGATE_STATE_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "function_name",
         "type": "string",
         "property": "state_type.function_name"
       },
       {
+        "id": 201,
         "name": "return_type",
         "type": "LogicalType",
         "property": "state_type.return_type"
       },
       {
+        "id": 202,
         "name": "bound_argument_types",
         "type": "vector<LogicalType>",
         "property": "state_type.bound_argument_types"
@@ -93,6 +103,7 @@
     "enum": "USER_TYPE_INFO",
     "members": [
       {
+        "id": 200,
         "name": "user_type_name",
         "type": "string"
       }

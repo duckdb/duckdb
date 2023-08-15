@@ -8,7 +8,6 @@ namespace duckdb {
 FieldWriter::FieldWriter(Serializer &serializer_p)
     : serializer(serializer_p), buffer(make_uniq<BufferedSerializer>()), field_count(0), finalized(false) {
 	buffer->SetVersion(serializer.GetVersion());
-	buffer->is_query_plan = serializer.is_query_plan;
 }
 
 FieldWriter::~FieldWriter() {
@@ -73,6 +72,7 @@ FieldReader::FieldReader(Deserializer &source_p) : source(source_p), field_count
 	max_field_count = source_p.Read<uint32_t>();
 	total_size = source_p.Read<uint64_t>();
 	D_ASSERT(max_field_count > 0);
+	D_ASSERT(total_size > 0);
 	source.SetRemainingData(total_size);
 }
 

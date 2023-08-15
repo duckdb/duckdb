@@ -57,19 +57,6 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, Sta
       client_properties(std::move(client_properties_p)) {
 }
 
-bool CurrentChunk::Valid() {
-	if (data_chunk) {
-		if (position < data_chunk->size()) {
-			return true;
-		}
-	}
-	return false;
-}
-
-idx_t CurrentChunk::RemainingSize() {
-	return data_chunk->size() - position;
-}
-
 QueryResult::QueryResult(QueryResultType type, PreservedError error)
     : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }
@@ -162,14 +149,6 @@ string QueryResult::HeaderToString() {
 	}
 	result += "\n";
 	return result;
-}
-
-ArrowOptions QueryResult::GetArrowOptions(QueryResult &query_result) {
-	return {query_result.client_properties.arrow_offset_size, query_result.client_properties.time_zone};
-}
-
-string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	return query_result.client_properties.time_zone;
 }
 
 } // namespace duckdb

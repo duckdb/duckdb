@@ -35,6 +35,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -181,6 +183,8 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
+		table_function.format_serialize = ParquetScanFormatSerialize;
+		table_function.format_deserialize = ParquetScanFormatDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -197,8 +201,9 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (loption == "compression" || loption == "codec") {
-				// CODEC option has no effect on parquet read: we determine codec from the file
+			if (loption == "compression" || loption == "codec" || loption == "row_group_size") {
+				// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
+				// These options are determined from the file.
 				continue;
 			} else if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = true;
@@ -428,6 +433,25 @@ public:
 		options.Deserialize(reader);
 
 		return ParquetScanBindInternal(context, files, types, names, options);
+	}
+
+	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                                       const TableFunction &function) {
+		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		serializer.WriteProperty(100, "files", bind_data.files);
+		serializer.WriteProperty(101, "types", bind_data.types);
+		serializer.WriteProperty(102, "names", bind_data.names);
+		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
+	}
+
+	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,
+	                                                             TableFunction &function) {
+		auto &context = deserializer.Get<ClientContext &>();
+		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
+		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
+		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
+		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
+		return ParquetScanBindInternal(context, files, types, names, parquet_options);
 	}
 
 	static void ParquetScanImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -938,7 +962,8 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		table_function->alias = FileSystem::ExtractBaseName(table_name);
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 
 	return std::move(table_function);

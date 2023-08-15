@@ -28,29 +28,15 @@ protected:
 public:
 	// Serialize a value
 	template <class T>
-	typename std::enable_if<!std::is_enum<T>::value, void>::type WriteProperty(const char *tag, const T &value) {
-		SetTag(tag);
+	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
+		SetTag(field_id, tag);
 		WriteValue(value);
-	}
-
-	// Serialize an enum
-	template <class T>
-	typename std::enable_if<std::is_enum<T>::value, void>::type WriteProperty(const char *tag, T value) {
-		SetTag(tag);
-		if (serialize_enum_as_string) {
-			// Use the enum serializer to lookup tostring function
-			auto str = EnumUtil::ToChars(value);
-			WriteValue(str);
-		} else {
-			// Use the underlying type
-			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
-		}
 	}
 
 	// Optional pointer
 	template <class POINTER>
-	void WriteOptionalProperty(const char *tag, POINTER &&ptr) {
-		SetTag(tag);
+	void WriteOptionalProperty(const field_id_t field_id, const char *tag, POINTER &&ptr) {
+		SetTag(field_id, tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);
 			OnOptionalEnd(false);
@@ -62,12 +48,34 @@ public:
 	}
 
 	// Special case: data_ptr_T
-	void WriteProperty(const char *tag, const_data_ptr_t ptr, idx_t count) {
-		SetTag(tag);
+	void WriteProperty(const field_id_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
+		SetTag(field_id, tag);
 		WriteDataPtr(ptr, count);
 	}
 
+	// Manually begin an object - should be followed by EndObject
+	void BeginObject(const field_id_t field_id, const char *tag) {
+		SetTag(field_id, tag);
+		OnObjectBegin();
+	}
+
+	void EndObject() {
+		OnObjectEnd();
+	}
+
 protected:
+	template <typename T>
+	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
+		if (serialize_enum_as_string) {
+			// Use the enum serializer to lookup tostring function
+			auto str = EnumUtil::ToChars(value);
+			WriteValue(str);
+		} else {
+			// Use the underlying type
+			WriteValue(static_cast<typename std::underlying_type<T>::type>(value));
+		}
+	}
+
 	// Unique Pointer Ref
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
@@ -160,6 +168,24 @@ protected:
 		OnMapEnd(count);
 	}
 
+	// Map
+	template <class K, class V, class HASH, class CMP>
+	void WriteValue(const duckdb::map<K, V, HASH, CMP> &map) {
+		auto count = map.size();
+		OnMapBegin(count);
+		for (auto &item : map) {
+			OnMapEntryBegin();
+			OnMapKeyBegin();
+			WriteValue(item.first);
+			OnMapKeyEnd();
+			OnMapValueBegin();
+			WriteValue(item.second);
+			OnMapValueEnd();
+			OnMapEntryEnd();
+		}
+		OnMapEnd(count);
+	}
+
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
@@ -170,7 +196,8 @@ protected:
 	}
 
 	// Handle setting a "tag" (optional)
-	virtual void SetTag(const char *tag) {
+	virtual void SetTag(const field_id_t field_id, const char *tag) {
+		(void)field_id;
 		(void)tag;
 	}
 
@@ -246,5 +273,9 @@ protected:
 		WriteValue(value.index);
 	}
 };
+
+// We need to special case vector<bool> because elements of vector<bool> cannot be referenced
+template <>
+void FormatSerializer::WriteValue(const vector<bool> &vec);
 
 } // namespace duckdb

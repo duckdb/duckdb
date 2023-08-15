@@ -36,7 +36,6 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 	// first deserialize the WAL to look for a checkpoint flag
 	// if there is a checkpoint flag, we might have already flushed the contents of the WAL to disk
 	ReplayState checkpoint_state(database, *con.context, *initial_reader);
-	initial_reader->SetCatalog(checkpoint_state.catalog);
 	checkpoint_state.deserialize_only = true;
 	try {
 		while (true) {
@@ -61,7 +60,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		return false;
 	} // LCOV_EXCL_STOP
 	initial_reader.reset();
-	if (checkpoint_state.checkpoint_id != INVALID_BLOCK) {
+	if (checkpoint_state.checkpoint_id.IsValid()) {
 		// there is a checkpoint flag: check if we need to deserialize the WAL
 		auto &manager = database.GetStorageManager();
 		if (manager.IsCheckpointClean(checkpoint_state.checkpoint_id)) {
@@ -73,7 +72,6 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 
 	// we need to recover from the WAL: actually set up the replay state
 	BufferedFileReader reader(FileSystem::Get(database), path.c_str(), con.context.get());
-	reader.SetCatalog(checkpoint_state.catalog);
 	ReplayState state(database, *con.context, reader);
 
 	// replay the WAL
@@ -284,7 +282,7 @@ void ReplayState::ReplayDropSchema() {
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateType(context, *info);
+	catalog.CreateType(context, info->Cast<CreateTypeInfo>());
 }
 
 void ReplayState::ReplayDropType() {
@@ -525,7 +523,8 @@ void ReplayState::ReplayUpdate() {
 }
 
 void ReplayState::ReplayCheckpoint() {
-	checkpoint_id = source.Read<block_id_t>();
+	checkpoint_id.block_pointer = source.Read<idx_t>();
+	checkpoint_id.offset = source.Read<uint32_t>();
 }
 
 } // namespace duckdb

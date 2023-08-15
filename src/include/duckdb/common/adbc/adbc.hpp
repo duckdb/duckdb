@@ -88,4 +88,6 @@ void SetError(struct AdbcError *error, const std::string &message);
 
 void InitiliazeADBCError(AdbcError *error);
 
+AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message);
+
 } // namespace duckdb_adbc

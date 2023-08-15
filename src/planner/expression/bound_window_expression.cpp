@@ -162,4 +162,51 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	return std::move(result);
 }
 
+void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
+	if (type == ExpressionType::WINDOW_AGGREGATE) {
+		D_ASSERT(aggregate);
+		FunctionSerializer::FormatSerialize(serializer, *aggregate, bind_info.get());
+	}
+	serializer.WriteProperty(202, "partitions", partitions);
+	serializer.WriteProperty(203, "orders", orders);
+	serializer.WriteOptionalProperty(204, "filters", filter_expr);
+	serializer.WriteProperty(205, "ignore_nulls", ignore_nulls);
+	serializer.WriteProperty(206, "start", start);
+	serializer.WriteProperty(207, "end", end);
+	serializer.WriteOptionalProperty(208, "start_expr", start_expr);
+	serializer.WriteOptionalProperty(209, "end_expr", end_expr);
+	serializer.WriteOptionalProperty(210, "offset_expr", offset_expr);
+	serializer.WriteOptionalProperty(211, "default_expr", default_expr);
+}
+
+unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto expression_type = deserializer.Get<ExpressionType>();
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
+	unique_ptr<AggregateFunction> aggregate;
+	unique_ptr<FunctionData> bind_info;
+	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
+		auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
+		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
+		bind_info = std::move(entry.second);
+	}
+	auto result =
+	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
+	deserializer.ReadProperty(202, "partitions", result->partitions);
+	deserializer.ReadProperty(203, "orders", result->orders);
+	deserializer.ReadOptionalProperty(204, "filters", result->filter_expr);
+	deserializer.ReadProperty(205, "ignore_nulls", result->ignore_nulls);
+	deserializer.ReadProperty(206, "start", result->start);
+	deserializer.ReadProperty(207, "end", result->end);
+	deserializer.ReadOptionalProperty(208, "start_expr", result->start_expr);
+	deserializer.ReadOptionalProperty(209, "end_expr", result->end_expr);
+	deserializer.ReadOptionalProperty(210, "offset_expr", result->offset_expr);
+	deserializer.ReadOptionalProperty(211, "default_expr", result->default_expr);
+	return std::move(result);
+}
+
 } // namespace duckdb

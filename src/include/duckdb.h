@@ -308,7 +308,8 @@ typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
 	DUCKDB_PENDING_RESULT_READY = 0,
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
-	DUCKDB_PENDING_ERROR = 2
+	DUCKDB_PENDING_ERROR = 2,
+	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 
 //===--------------------------------------------------------------------===//
@@ -359,6 +360,21 @@ The instantiated connection should be closed using 'duckdb_disconnect'
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out_connection);
+
+/*!
+Interrupt running query
+
+* connection: The connection to interruot
+*/
+DUCKDB_API void duckdb_interrupt(duckdb_connection connection);
+
+/*!
+Get progress of the running query
+
+* connection: The working connection
+* returns: -1 if no progress or a percentage of the progress
+*/
+DUCKDB_API double duckdb_query_progress(duckdb_connection connection);
 
 /*!
 Closes the specified connection and de-allocates all memory allocated for that connection.
@@ -930,6 +946,16 @@ Returns 0 if the query was not successfully prepared.
 DUCKDB_API idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement);
 
 /*!
+Returns the name used to identify the parameter
+The returned string should be freed using `duckdb_free`.
+
+Returns NULL if the index is out of range for the provided prepared statement.
+
+* prepared_statement: The prepared statement for which to get the parameter name from.
+*/
+const char *duckdb_parameter_name(duckdb_prepared_statement prepared_statement, idx_t index);
+
+/*!
 Returns the parameter type for the parameter at the given index.
 
 Returns `DUCKDB_TYPE_INVALID` if the parameter index is out of range or the statement was not successfully prepared.
@@ -944,6 +970,12 @@ DUCKDB_API duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_stat
 Clear the params bind to the prepared statement.
 */
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
+
+/*!
+Retrieve the index of the parameter for the prepared statement, identified by name
+*/
+DUCKDB_API duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
+                                                    const char *name);
 
 /*!
 Binds a bool value to the prepared statement at the specified index.
@@ -1228,6 +1260,15 @@ Otherwise, all remaining tasks must be executed first.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb_result *out_result);
+
+/*!
+Returns whether a duckdb_pending_state is finished executing. For example if `pending_state` is
+DUCKDB_PENDING_RESULT_READY, this function will return true.
+
+* pending_state: The pending state on which to decide whether to finish execution.
+* returns: Boolean indicating pending execution should be considered finished.
+*/
+DUCKDB_API bool duckdb_pending_execution_is_finished(duckdb_pending_state pending_state);
 
 //===--------------------------------------------------------------------===//
 // Value Interface

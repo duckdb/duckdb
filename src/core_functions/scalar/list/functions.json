@@ -41,10 +41,10 @@
     },
     {
         "name": "list_slice",
-        "parameters": "list,begin,end",
-        "description": "Extract a sublist using slice conventions. NULLs are interpreted as the bounds of the LIST. Negative values are accepted.",
-        "example": "list_slice(l, 2, NULL)",
-        "type": "scalar_function",
+        "parameters": "list,begin,end[,step]",
+        "description": "Extract a sublist using slice conventions. Negative values are accepted.",
+        "example": "list_slice(l, 2, 4)",
+        "type": "scalar_function_set",
         "aliases": ["array_slice"]
     },
     {
