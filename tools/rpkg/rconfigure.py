@@ -103,6 +103,9 @@ include_list += ' -Iduckdb'
 include_list += extension_list
 include_list += ' ' + debug_move_flag
 
+# Autoloading is on by default for R builds
+include_list += " -DENABLE_EXTENSION_AUTOLOADING=1"
+
 # add -Werror if enabled
 if 'TREAT_WARNINGS_AS_ERRORS' in os.environ:
     include_list += ' -Werror'
