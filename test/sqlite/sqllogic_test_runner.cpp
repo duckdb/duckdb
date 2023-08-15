@@ -5,6 +5,7 @@
 #include "test_helpers.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
+#include "duckdb/main/extension_entries.hpp"
 #include "sqllogic_parser.hpp"
 #ifdef DUCKDB_OUT_OF_TREE
 #include DUCKDB_EXTENSION_HEADER
@@ -542,14 +543,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					return;
 				}
 			} else {
-				bool excluded_from_autoloading = false;
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-				for (auto &ext : extensions_excluded_from_autoload) {
+				bool excluded_from_autoloading = true;
+				for (const auto& ext: AUTOLOADABLE_EXTENSIONS) {
 					if (ext == param) {
-						excluded_from_autoloading = true;
+						excluded_from_autoloading = false;
 					}
 				}
-#endif
+
 				if (!config->options.autoload_known_extensions || excluded_from_autoloading) {
 					auto result = ExtensionHelper::LoadExtension(*db, param);
 					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
