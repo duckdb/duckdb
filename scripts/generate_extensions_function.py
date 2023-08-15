@@ -69,6 +69,7 @@ extension_path = {}
 for filename in glob.iglob('/tmp/' + '**/*.duckdb_extension', recursive=True):
     extension_path[os.path.splitext(os.path.basename(filename))[0]] = filename
 
+
 # Update global maps with settings/functions from `extension_name`
 def update_extensions(extension_name, function_list, settings_list):
     global function_map, settings_map
@@ -84,6 +85,7 @@ def update_extensions(extension_name, function_list, settings_list):
             for extension_setting in (set(settings_list) - base_settings)
         }
     )
+
 
 # Get all extension entries from DuckDB's catalog
 for extension_name in extension_names:
@@ -103,11 +105,13 @@ for extension_name in extension_names:
     extension_settings = get_settings(load)
     update_extensions(extension_name, extension_functions, extension_settings)
 
+
 # Get the slice of the file containing the var (assumes // END_OF_<varname> comment after var)
 def get_slice_of_file(var_name, file_str):
     begin = file_str.find(var_name)
     end = file_str.find("END_OF_" + var_name)
-    return file_str[begin: end]
+    return file_str[begin:end]
+
 
 # Parses the extension_entries.hpp file
 def parse_extension_entries(file_path):
@@ -135,8 +139,9 @@ def parse_extension_entries(file_path):
         'functions': cur_function_map,
         'settings': cur_settings_map,
         'types': cur_types_map,
-        'copy_functions': cur_copy_functions_map
+        'copy_functions': cur_copy_functions_map,
     }
+
 
 def print_map_diff(d1, d2):
     s1 = set(d1.items())
@@ -144,15 +149,16 @@ def print_map_diff(d1, d2):
     diff = str(s1 ^ s2)
     print("Diff between maps: " + diff + "\n")
 
+
 if args.validate:
     parsed_entries = parse_extension_entries(ext_hpp)
-    if (function_map != parsed_entries['functions']):
+    if function_map != parsed_entries['functions']:
         print("Function map mismatches:")
         print("Found in " + str(duckdb_path) + ": " + str(sorted(function_map)) + "\n")
         print("Parsed from extension_entries.hpp: " + str(parsed_entries['functions']) + "\n")
         print_map_diff(function_map, parsed_entries['functions'])
         exit(1)
-    if (settings_map != parsed_entries['settings']):
+    if settings_map != parsed_entries['settings']:
         print("Settings map mismatches:")
         print("Found: " + str(settings_map) + "\n")
         print("Parsed from extension_entries.hpp: " + str(parsed_entries['settings']) + "\n")
