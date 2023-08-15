@@ -10,10 +10,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "LogicalOperatorType"
       },
       {
+        "id": 101,
         "name": "children",
         "type": "vector<LogicalOperator*>"
       }
@@ -25,10 +27,12 @@
     "enum": "LOGICAL_PROJECTION",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "expressions",
         "type": "vector<Expression*>"
       }
@@ -41,10 +45,12 @@
     "enum": "LOGICAL_FILTER",
     "members": [
       {
+        "id": 200,
         "name": "expressions",
         "type": "vector<Expression*>"
       },
       {
+        "id": 201,
         "name": "projection_map",
         "type": "vector<idx_t>"
       }
@@ -56,30 +62,37 @@
     "enum": "LOGICAL_AGGREGATE_AND_GROUP_BY",
     "members": [
       {
+        "id": 200,
         "name": "expressions",
         "type": "vector<Expression*>"
       },
       {
+        "id": 201,
         "name": "group_index",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "aggregate_index",
         "type": "idx_t"
       },
       {
+        "id": 203,
         "name": "groupings_index",
         "type": "idx_t"
       },
       {
+        "id": 204,
         "name": "groups",
         "type": "vector<Expression*>"
       },
       {
+        "id": 205,
         "name": "grouping_sets",
         "type": "vector<GroupingSet>"
       },
       {
+        "id": 206,
         "name": "grouping_functions",
         "type": "vector<vector<idx_t>>"
       }
@@ -92,10 +105,12 @@
     "enum": "LOGICAL_WINDOW",
     "members": [
       {
+        "id": 200,
         "name": "window_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "expressions",
         "type": "vector<Expression*>"
       }
@@ -108,10 +123,12 @@
     "enum": "LOGICAL_UNNEST",
     "members": [
       {
+        "id": 200,
         "name": "unnest_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "expressions",
         "type": "vector<Expression*>"
       }
@@ -124,19 +141,23 @@
     "enum": "LOGICAL_LIMIT",
     "members": [
       {
+        "id": 200,
         "name": "limit_val",
         "type": "int64_t"
       },
       {
+        "id": 201,
         "name": "offset_val",
         "type": "int64_t"
       },
       {
+        "id": 202,
         "name": "limit",
         "type": "Expression*",
         "optional": true
       },
       {
+        "id": 203,
         "name": "offset",
         "type": "Expression*",
         "optional": true
@@ -150,10 +171,12 @@
     "enum": "LOGICAL_ORDER_BY",
     "members": [
       {
+        "id": 200,
         "name": "orders",
         "type": "vector<BoundOrderByNode>"
       },
       {
+        "id": 201,
         "name": "projections",
         "type": "vector<idx_t>"
       }
@@ -166,14 +189,17 @@
     "enum": "LOGICAL_TOP_N",
     "members": [
       {
+        "id": 200,
         "name": "orders",
         "type": "vector<BoundOrderByNode>"
       },
       {
+        "id": 201,
         "name": "limit",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "offset",
         "type": "idx_t"
       }
@@ -186,14 +212,17 @@
     "enum": "LOGICAL_DISTINCT",
     "members": [
       {
+        "id": 200,
         "name": "distinct_type",
         "type": "DistinctType"
       },
       {
+        "id": 201,
         "name": "distinct_targets",
         "type": "vector<Expression*>"
       },
       {
+        "id": 202,
         "name": "order_by",
         "type": "BoundOrderModifier*",
         "optional": true
@@ -207,6 +236,7 @@
     "enum": "LOGICAL_SAMPLE",
     "members": [
       {
+        "id": 200,
         "name": "sample_options",
         "type": "SampleOptions"
       }
@@ -218,19 +248,23 @@
     "enum": "LOGICAL_LIMIT_PERCENT",
     "members": [
       {
+        "id": 200,
         "name": "limit_percent",
         "type": "double"
       },
       {
+        "id": 201,
         "name": "offset_val",
         "type": "int64_t"
       },
       {
+        "id": 202,
         "name": "limit",
         "type": "Expression*",
         "optional": true
       },
       {
+        "id": 203,
         "name": "offset",
         "type": "Expression*",
         "optional": true
@@ -244,14 +278,17 @@
     "enum": "LOGICAL_CHUNK_GET",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "chunk_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 202,
         "name": "collection",
         "type": "ColumnDataCollection*"
       }
@@ -264,10 +301,12 @@
     "enum": "LOGICAL_DELIM_GET",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "chunk_types",
         "type": "vector<LogicalType>"
       }
@@ -280,14 +319,17 @@
     "enum": "LOGICAL_EXPRESSION_GET",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "expr_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 202,
         "name": "expressions",
         "type": "vector<vector<Expression*>>"
       }
@@ -300,6 +342,7 @@
     "enum": "LOGICAL_DUMMY_SCAN",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       }
@@ -312,10 +355,12 @@
     "enum": "LOGICAL_EMPTY_RESULT",
     "members": [
       {
+        "id": 200,
         "name": "return_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 201,
         "name": "bindings",
         "type": "vector<ColumnBinding>"
       }
@@ -327,22 +372,27 @@
     "enum": "LOGICAL_CTE_REF",
     "members": [
       {
+        "id": 200,  
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "cte_index",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "chunk_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 203,
         "name": "bound_columns",
         "type": "vector<string>"
       },
       {
+        "id": 204,
         "name": "materialized_cte",
         "type": "CTEMaterialize"
       }
@@ -355,30 +405,37 @@
     "enum": ["LOGICAL_ASOF_JOIN", "LOGICAL_COMPARISON_JOIN", "LOGICAL_DELIM_JOIN"],
     "members": [
       {
+        "id": 200,
         "name": "join_type",
         "type": "JoinType"
       },
       {
+        "id": 201,
         "name": "mark_index",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "left_projection_map",
         "type": "vector<idx_t>"
       },
       {
+        "id": 203,
         "name": "right_projection_map",
         "type": "vector<idx_t>"
       },
       {
+        "id": 204,
         "name": "conditions",
         "type": "vector<JoinCondition>"
       },
       {
+        "id": 205,
         "name": "mark_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 206,
         "name": "duplicate_eliminated_columns",
         "type": "vector<Expression*>"
       }
@@ -391,22 +448,27 @@
     "enum": "LOGICAL_ANY_JOIN",
     "members": [
       {
+        "id": 200,
         "name": "join_type",
         "type": "JoinType"
       },
       {
+        "id": 201,
         "name": "mark_index",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "left_projection_map",
         "type": "vector<idx_t>"
       },
       {
+        "id": 203,
         "name": "right_projection_map",
         "type": "vector<idx_t>"
       },
       {
+        "id": 204,
         "name": "condition",
         "type": "Expression*"
       }
@@ -433,10 +495,12 @@
     "enum": ["LOGICAL_UNION", "LOGICAL_EXCEPT", "LOGICAL_INTERSECT"],
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "column_count",
         "type": "idx_t"
       }
@@ -449,18 +513,22 @@
     "enum": "LOGICAL_RECURSIVE_CTE",
     "members": [
       {
+        "id": 200,
         "name": "union_all",
         "type": "bool"
       },
       {
+        "id": 201,
         "name": "ctename",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 203,
         "name": "column_count",
         "type": "idx_t"
       }
@@ -472,14 +540,17 @@
     "enum": "LOGICAL_MATERIALIZED_CTE",
     "members": [
       {
+        "id": 200,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "column_count",
         "type": "idx_t"
       },
       {
+        "id": 202,
         "name": "ctename",
         "type": "string"
       }
@@ -495,83 +566,102 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "catalog",
         "type": "string",
         "serialize_property": "table.ParentCatalog().GetName()"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string",
         "serialize_property": "table.ParentSchema().name"
       },
       {
+        "id": 202,
         "name": "table",
         "type": "string",
         "serialize_property": "table.name"
       },
       {
+        "id": 203,
         "name": "insert_values",
         "type": "vector<vector<Expression*>>"
       },
       {
+        "id": 204,
         "name": "column_index_map",
         "type": "vector<idx_t>"
       },
       {
+        "id": 205,
         "name": "expected_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 206,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 207,
         "name": "return_chunk",
         "type": "bool"
       },
       {
+        "id": 208,
         "name": "bound_defaults",
         "type": "vector<Expression*>"
       },
       {
+        "id": 209,
         "name": "action_type",
         "type": "OnConflictAction"
       },
       {
+        "id": 210,
         "name": "expected_set_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 211,
         "name": "on_conflict_filter",
         "type": "unordered_set<idx_t>"
       },
       {
+        "id": 212,
         "name": "on_conflict_condition",
         "type": "Expression*",
         "optional": true
       },
       {
+        "id": 213,
         "name": "do_update_condition",
         "type": "Expression*",
         "optional": true
       },
       {
+        "id": 214,
         "name": "set_columns",
         "type": "vector<idx_t>"
       },
       {
+        "id": 215,
         "name": "set_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 216,
         "name": "excluded_table_index",
         "type": "idx_t"
       },
       {
+        "id": 217,
         "name": "columns_to_fetch",
         "type": "vector<column_t>"
       },
       {
+        "id": 218,
         "name": "source_columns",
         "type": "vector<column_t>"
       }
@@ -584,29 +674,35 @@
     "enum": "LOGICAL_DELETE",
     "members": [
       {
+        "id": 200,
         "name": "catalog",
         "type": "string",
         "serialize_property": "table.ParentCatalog().GetName()"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string",
         "serialize_property": "table.ParentSchema().name"
       },
       {
+        "id": 202,
         "name": "table",
         "type": "string",
         "serialize_property": "table.name"
       },
       {
+        "id": 203,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 204,
         "name": "return_chunk",
         "type": "bool"
       },
       {
+        "id": 205,
         "name": "expressions",
         "type": "vector<Expression*>"
       }
@@ -619,41 +715,50 @@
     "enum": "LOGICAL_UPDATE",
     "members": [
       {
+        "id": 200,
         "name": "catalog",
         "type": "string",
         "serialize_property": "table.ParentCatalog().GetName()"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string",
         "serialize_property": "table.ParentSchema().name"
       },
       {
+        "id": 202,
         "name": "table",
         "type": "string",
         "serialize_property": "table.name"
       },
       {
+        "id": 203,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 204,
         "name": "return_chunk",
         "type": "bool"
       },
       {
+        "id": 205,
         "name": "expressions",
         "type": "vector<Expression*>"
       },
       {
+        "id": 206,
         "name": "columns",
         "type": "vector<PhysicalIndex>"
       },
       {
+        "id": 207,
         "name": "bound_defaults",
         "type": "vector<Expression*>"
       },
       {
+        "id": 208,
         "name": "update_is_del_and_insert",
         "type": "bool"
       }
@@ -666,16 +771,19 @@
     "enum": "LOGICAL_CREATE_TABLE",
     "members": [
       {
+        "id": 200,
         "name": "catalog",
         "type": "string",
         "serialize_property": "schema.ParentCatalog().GetName()"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string",
         "serialize_property": "schema.name"
       },
       {
+        "id": 202,
         "name": "info",
         "type": "CreateInfo*",
         "serialize_property": "info->base"
@@ -689,6 +797,7 @@
     "enum": ["LOGICAL_CREATE_SEQUENCE", "LOGICAL_CREATE_VIEW", "LOGICAL_CREATE_SCHEMA", "LOGICAL_CREATE_MACRO", "LOGICAL_CREATE_TYPE"],
     "members": [
       {
+        "id": 200,
         "name": "info",
         "type": "CreateInfo*"
       }
@@ -701,18 +810,22 @@
     "enum": "LOGICAL_EXPLAIN",
     "members": [
       {
+        "id": 200,
         "name": "explain_type",
         "type": "ExplainType"
       },
       {
+        "id": 201,
         "name": "physical_plan",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "logical_plan_unopt",
         "type": "string"
       },
       {
+        "id": 203,
         "name": "logical_plan_opt",
         "type": "string"
       }
@@ -725,10 +838,12 @@
     "enum": "LOGICAL_SHOW",
     "members": [
       {
+        "id": 200,
         "name": "types_select",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 201,
         "name": "aliases",
         "type": "vector<string>"
       }
@@ -740,14 +855,17 @@
     "enum": "LOGICAL_SET",
     "members": [
       {
+        "id": 200,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "value",
         "type": "Value"
       },
       {
+        "id": 202,
         "name": "scope",
         "type": "SetScope"
       }
@@ -760,10 +878,12 @@
     "enum": "LOGICAL_RESET",
     "members": [
       {
+        "id": 200,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "scope",
         "type": "SetScope"
       }
@@ -776,6 +896,7 @@
     "enum": ["LOGICAL_ALTER", "LOGICAL_VACUUM", "LOGICAL_LOAD", "LOGICAL_ATTACH", "LOGICAL_TRANSACTION", "LOGICAL_DROP", "LOGICAL_DETACH"],
     "members": [
       {
+        "id": 200,
         "name": "info",
         "type": "ParseInfo*"
       }
@@ -788,10 +909,12 @@
     "enum": "LOGICAL_PIVOT",
     "members": [
       {
+        "id": 200,
         "name": "pivot_index",
         "type": "idx_t"
       },
       {
+        "id": 201,
         "name": "bound_pivot",
         "type": "BoundPivotInfo"
       }
@@ -815,10 +938,12 @@
     "enum": "LOGICAL_CREATE_INDEX",
     "members": [
       {
+        "id": 200,
         "name": "info",
         "type": "CreateInfo*"
       },
       {
+        "id": 201,
         "name": "unbound_expressions",
         "type": "vector<Expression*>"
       }
