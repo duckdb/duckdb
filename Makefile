@@ -1,4 +1,4 @@
-.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite
+.PHONY: all opt unit clean debug release test unittest allunit benchmark docs doxygen format sqlite coverage-check coverage
 
 all: release
 opt: release
@@ -243,6 +243,12 @@ release:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
+coverage:
+	mkdir -p ./build/coverage && \
+	cd build/coverage && \
+	cmake $(GENERATOR) -DBUILD_EXTENSIONS="autocomplete;fts;icu;jemalloc;json;parquet;tpcds;tpch;visualizer" -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Coverage ../.. && \
+	cmake --build . --config Coverage
+
 cldebug:
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
@@ -367,7 +373,7 @@ bloaty: reldebug bloaty/bloaty
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
 
-coverage-check:
+coverage-check: coverage
 	./scripts/coverage_check.sh
 
 generate-files:
