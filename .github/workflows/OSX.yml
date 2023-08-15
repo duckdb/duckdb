@@ -268,3 +268,22 @@ jobs:
           else
             ./scripts/extension-upload-test.sh local
           fi
+
+      - name: Rebuild DuckDB without any extensions linked, but with same extension config
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        env:
+          EXTENSION_TESTS_ONLY: 1
+          ENABLE_EXTENSION_AUTOLOADING: 1
+        run: |
+          rm -rf build/release
+          make
+
+      # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
+      - name: Run tests with auto loading
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        env:
+          LOCAL_EXTENSION_REPO: ${{ github.workspace }}
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
