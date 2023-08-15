@@ -190,7 +190,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr);
+	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr,
+	                     bound_lambda_expr.parameter_count);
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
@@ -207,9 +208,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	bound_function_expr.children.pop_back();
 	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
 
+	bound_lambda.index = bound_lambda.parameter_count == 2;
+
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda expression
 	// (rhs)
 	if (lambda_bindings) {
+		if (bound_lambda.index) {
+			throw BinderException("Lambda index is not supported in nested lambdas");
+		}
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 
 			idx_t lambda_index = lambda_bindings->size() - i + 1;

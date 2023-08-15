@@ -129,9 +129,9 @@ protected:
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-	                                   idx_t &index_offset);
+	                                   const idx_t param_count);
 	void CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-	                          unique_ptr<Expression> &expr);
+	                          unique_ptr<Expression> &expr, const idx_t param_count);
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 

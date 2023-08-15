@@ -1,0 +1,141 @@
+# name: test/sql/function/list/lambdas/index.test
+# description: Test for list_transform with lambdas with index
+# group: [lambdas]
+
+statement ok
+PRAGMA enable_verification
+
+# Unsupported Nested Lambdas with index
+statement error
+select list_transform([1,2,3], (x) -> (list_transform([4,5,6], (y, y_i) -> x + y + y_i)));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+statement error
+select list_transform([1,2,3], (x, x_i) -> (list_transform([4,5,6], (y) -> x + y + x_i)));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+statement error
+select list_transform([1,2,3], (x, x_i) -> (list_transform([4,5,6], (y, y_i) -> x + y + x_i + y_i)));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+statement error
+select list_transform([1,2,3], (x, i) -> (list_transform([4,5,6], (y) -> (list_transform([7,8,9], (z) -> x + y + z + i)))));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+statement error
+select list_transform([1,2,3], (x) -> (list_transform([4,5,6], (y, i) -> (list_transform([7,8,9], (z) -> x + y + z + i)))));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+statement error
+select list_transform([1,2,3], (x) -> (list_transform([4,5,6], (y) -> (list_transform([7,8,9], (z, i) -> x + y + z + i)))));
+----
+Binder Error: Lambda index is not supported in nested lambdas
+
+# Correct Lambdas with index
+query I
+SELECT list_transform([10,20,30], (x, i) -> x + i);
+----
+[11, 22, 33]
+
+query I
+SELECT list_transform([1,2,3,4,5,6], (x, i) -> x * i);
+----
+[1, 4, 9, 16, 25, 36]
+
+query I
+SELECT list_transform([6,5,4,3,2,1], (x, i) -> x * i);
+----
+[6, 10, 12, 12, 10, 6]
+
+query I
+SELECT list_transform([1,NULL,3,4,5,6], (x, i) -> x + i);
+----
+[2, NULL, 6, 8, 10, 12]
+
+query I
+SELECT list_transform(NULL, (x, i) -> x + i);
+----
+NULL
+
+query I
+SELECT list_transform(['1', '2', '3', '4'], (x, i) -> (x || ' + ' || CAST(i as string)));
+----
+[1 + 1, 2 + 2, 3 + 3, 4 + 4]
+
+query I
+SELECT list_transform([1,2,3,4,5], (x, i) -> (x * 10 / i));
+----
+[10.0, 10.0, 10.0, 10.0, 10.0]
+
+# Table Tests
+statement ok
+create table tbl(a int[]);
+
+statement ok
+insert into tbl values ([5,4,3]);
+
+statement ok
+insert into tbl values ([1,2,3]);
+
+statement ok
+insert into tbl values (NULL);
+
+statement ok
+insert into tbl values ([NULL,101,12]);
+
+query I
+select list_transform(a, (x, i) -> x + i) from tbl;
+----
+[6, 6, 6]
+[2, 4, 6]
+NULL
+[NULL, 103, 15]
+
+query I
+select list_transform(a, (x, i) -> x + i + list_any_value(a)) from tbl;
+----
+[11, 11, 11]
+[3, 5, 7]
+NULL
+[NULL, 204, 116]
+
+statement ok
+drop table tbl;
+
+statement ok
+create table tbl(a int[], b int, c int);
+
+statement ok
+insert into tbl values ([5,4,3], 5, 10);
+
+statement ok
+insert into tbl values ([1,2,3], 7, 14);
+
+statement ok
+insert into tbl values (NULL, 9, 18);
+
+statement ok
+insert into tbl values ([10,NULL,12], 11, 22);
+
+query I
+select list_transform(a, (x, i) -> (c / b ) * (x + i)) from tbl;
+----
+[12.0, 12.0, 12.0]
+[4.0, 8.0, 12.0]
+NULL
+[22.0, NULL, 30.0]
+
+# very large lists
+query I transform list
+select range(1, 20000, 2);
+----
+
+query I transform list
+select list_transform(range(10000), (x, i) -> x + i);
+----
+

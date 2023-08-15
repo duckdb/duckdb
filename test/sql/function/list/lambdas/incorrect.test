@@ -90,9 +90,6 @@ statement error
 SELECT l, list_filter(l, l -> l > 1) FROM l_filter_test
 
 statement error
-SELECT list_transform([1, 2], (x, y) -> x + y)
-
-statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
 
 statement error

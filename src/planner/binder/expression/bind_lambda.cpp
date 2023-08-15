@@ -104,7 +104,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
                                                      unique_ptr<Expression> &replacement,
                                                      vector<unique_ptr<Expression>> &captures,
-                                                     LogicalType &list_child_type, idx_t &index_offset) {
+                                                     LogicalType &list_child_type, const idx_t param_count) {
 	// check if the original expression is a lambda parameter
 	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
@@ -117,6 +117,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			D_ASSERT(bound_lambda_ref.lambda_index < lambda_bindings->size());
 			auto &lambda_binding = (*lambda_bindings)[bound_lambda_ref.lambda_index];
 
+			if (lambda_binding.names.size() != 1) {
+				throw BinderException("Lambda index is not supported in nested lambdas");
+			}
 			D_ASSERT(lambda_binding.names.size() == 1);
 			D_ASSERT(lambda_binding.types.size() == 1);
 			// refers to a lambda parameter outside of the current lambda function
@@ -125,11 +128,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			                                        lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
 
 		} else {
-			if (bound_lambda_ref.binding.column_index == 1) {
-				// account for the index column
-				index_offset = 2;
+			if (param_count == 2 && bound_lambda_ref.binding.column_index == 1) {
 				// refers to the index parameter
-				replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 1);
+				replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 2);
 			} else {
 				// refers to current lambda parameter
 				replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 0);
@@ -138,6 +139,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 	} else {
 		// always at least the current lambda parameter
+		idx_t index_offset = (param_count == 2) ? 2 : 1;
 		if (lambda_bindings) {
 			index_offset += lambda_bindings->size();
 		}
@@ -150,7 +152,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 }
 
 void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type,
-                                            unique_ptr<Expression> &expr) {
+                                            unique_ptr<Expression> &expr, const idx_t param_count) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
@@ -166,8 +168,7 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 		auto original = std::move(expr);
 		unique_ptr<Expression> replacement;
 
-		idx_t index_offset = 1;
-		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type, index_offset);
+		TransformCapturedLambdaColumn(original, replacement, captures, list_child_type, param_count);
 
 		// replace the expression
 		expr = std::move(replacement);
@@ -175,7 +176,7 @@ void ExpressionBinder::CaptureLambdaColumns(vector<unique_ptr<Expression>> &capt
 	} else {
 		// recursively enumerate the children of the expression
 		ExpressionIterator::EnumerateChildren(
-		    *expr, [&](unique_ptr<Expression> &child) { CaptureLambdaColumns(captures, list_child_type, child); });
+		    *expr, [&](unique_ptr<Expression> &child) { CaptureLambdaColumns(captures, list_child_type, child, param_count); });
 	}
 
 	expr->Verify();
