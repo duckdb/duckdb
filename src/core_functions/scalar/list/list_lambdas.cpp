@@ -1,6 +1,5 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -160,9 +159,9 @@ static void ExecuteExpression(vector<LogicalType> &types, vector<LogicalType> &r
 	expr_executor.Execute(input_chunk, lambda_chunk);
 }
 
-static Vector GetIndexVector(const idx_t lists_size, const idx_t count, const UnifiedVectorFormat &lists_data,
+static Vector GetIndexVector(const idx_t elem_cnt, const idx_t count, const UnifiedVectorFormat &lists_data,
                              const list_entry_t *list_entries, const Vector &child_vector, const idx_t chunk_count) {
-	Vector index_child_vector(child_vector.GetType());
+	Vector index_child_vector(child_vector.GetType(), elem_cnt);
 	index_child_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 	static idx_t START_ROW_IDX = 0;
@@ -331,7 +330,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 				if (info.index) {
 					// An index is passed to the lambda function, so we need to create a vector with the indexes
 					Vector index_vector =
-					    GetIndexVector(lists_size, count, lists_data, list_entries, child_vector, chunk_count++);
+					    GetIndexVector(elem_cnt, count, lists_data, list_entries, child_vector, chunk_count++);
 					input_chunk.data[2].Reference(index_vector);
 				}
 
@@ -365,7 +364,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	if (info.index) {
 		// An index is passed to the lambda function, so we need to create a vector with the indexes
-		Vector index_vector = GetIndexVector(lists_size, count, lists_data, list_entries, child_vector, chunk_count++);
+		Vector index_vector = GetIndexVector(elem_cnt, count, lists_data, list_entries, child_vector, chunk_count++);
 		input_chunk.data[2].Reference(index_vector);
 	}
 
