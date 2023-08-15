@@ -157,7 +157,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_EXTENSIONS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake"
+        cmake -DCMAKE_BUILD_TYPE=Release  -DCMAKE_GENERATOR_PLATFORM=Win32 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake"
         cmake --build . --config Release
 
     - name: Test

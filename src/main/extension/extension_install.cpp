@@ -224,7 +224,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 
 	// Special case to install extension from a local file, useful for testing
 	if (!StringUtil::Contains(endpoint, "http://")) {
-		string file = url;
+		string file = fs.ConvertSeparators(url);
 		if (!fs.FileExists(file)) {
 			// check for non-gzipped variant
 			file = file.substr(0, file.size() - 3);

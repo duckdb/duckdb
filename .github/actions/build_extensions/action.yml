@@ -183,6 +183,8 @@ runs:
           fi
         fi
 
+    # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
+    # extensions linked
     - name: Rebuild DuckDB without any extensions linked, but with same extension config
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
