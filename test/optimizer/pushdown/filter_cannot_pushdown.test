@@ -2,8 +2,6 @@
 # description: Test Filter Can Not Push Down
 # group: [pushdown]
 
-require skip_reload
-
 # test some expressions which have side effects can not push down
 
 statement ok
@@ -49,3 +47,19 @@ query II
 explain select a, b from (select random(), a, b from t1) as t(rnd, a, b) where rnd < 1 and a > 0;
 ----
 logical_opt	<REGEX>:.*rnd < 1.0.*
+
+loop i 1 100
+
+query I
+WITH combined_results AS (
+    SELECT rnd > 0.5 as result FROM (SELECT random()) AS t(rnd) WHERE rnd < 0.5
+    UNION ALL
+    SELECT false
+)
+SELECT result
+FROM combined_results
+GROUP BY result;
+----
+False
+
+endloop
