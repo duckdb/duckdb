@@ -132,10 +132,17 @@ NULL
 
 # very large lists
 query I transform list
-select range(1, 20000, 2);
+SELECT range(1, 20000, 2);
 ----
 
 query I transform list
-select list_transform(range(10000), (x, i) -> x + i);
+SELECT list_transform(range(10000), (x, i) -> x + i);
 ----
 
+#statement ok
+#CREATE large_list(a int[], b int[]);
+#
+#statement ok
+#INSERT INTO large_list SELECT range(10000), range(1, 20000, 2);
+#
+#statement ok

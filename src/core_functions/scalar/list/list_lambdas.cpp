@@ -167,25 +167,29 @@ static Vector GetIndexVector(const idx_t elem_cnt, const idx_t count, const Unif
 	static idx_t START_ROW_IDX = 0;
 	static idx_t START_CHILD_IDX = 0;
 	static bool END_OF_LIST = true;
+	static idx_t LIST_IDX = 1;
 
 	idx_t set_count = 0;
-	for (idx_t row_idx = START_ROW_IDX; row_idx < count; row_idx++) {
+	for (idx_t row_idx = END_OF_LIST ? 0 : START_ROW_IDX; row_idx < count; row_idx++) {
 		auto lists_index = lists_data.sel->get_index(row_idx);
 		const auto &list_entry = list_entries[lists_index];
 
-		idx_t i = 1 + (chunk_count * STANDARD_VECTOR_SIZE);
-		for (idx_t child_idx = END_OF_LIST ? list_entry.offset : START_CHILD_IDX;
-		     child_idx < list_entry.length + list_entry.offset; child_idx++) {
+		idx_t i = END_OF_LIST ? 1 : LIST_IDX;
+		idx_t child_idx = END_OF_LIST ? START_CHILD_IDX : list_entry.offset;
+		for (; child_idx < list_entry.length + list_entry.offset; child_idx++) {
 			index_child_vector.SetValue(child_idx - (chunk_count * STANDARD_VECTOR_SIZE), Value::UBIGINT(i++));
 			set_count++;
 
-			if (set_count == STANDARD_VECTOR_SIZE) {
+			if (set_count == STANDARD_VECTOR_SIZE && child_idx + 1 < list_entry.length + list_entry.offset) {
+				START_CHILD_IDX = child_idx + 1;
 				END_OF_LIST = false;
-				START_CHILD_IDX = ++child_idx;
+				LIST_IDX = i;
 				break;
+			} else {
+				END_OF_LIST = true;
 			}
 		}
-		if (set_count == STANDARD_VECTOR_SIZE) {
+		if (!END_OF_LIST) {
 			START_ROW_IDX = row_idx;
 			break;
 		}
