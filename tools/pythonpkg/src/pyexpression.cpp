@@ -260,7 +260,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string
 	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(std::move(column_names)));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const PythonValue &value) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const py::object &value) {
 	auto val = TransformPythonValue(value);
 	return InternalConstantExpression(std::move(val));
 }

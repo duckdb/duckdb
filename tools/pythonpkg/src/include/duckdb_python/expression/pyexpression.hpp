@@ -22,20 +22,6 @@
 
 namespace duckdb {
 
-// pyduckdb.Value class
-struct PythonValue : py::object {
-public:
-	PythonValue(const py::object &o) : py::object(o, borrowed_t {}) {
-	}
-	using py::object::object;
-
-public:
-	static bool check_(const py::handle &object) { // NOLINT
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		return py::isinstance(object, import_cache.pyduckdb().value());
-	}
-};
-
 struct DuckDBPyExpression : public std::enable_shared_from_this<DuckDBPyExpression> {
 public:
 	explicit DuckDBPyExpression(unique_ptr<ParsedExpression> expr, OrderType order_type = OrderType::ORDER_DEFAULT,
@@ -104,7 +90,7 @@ public:
 public:
 	static shared_ptr<DuckDBPyExpression> StarExpression(const py::list &exclude = py::none());
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
-	static shared_ptr<DuckDBPyExpression> ConstantExpression(const PythonValue &value);
+	static shared_ptr<DuckDBPyExpression> ConstantExpression(const py::object &value);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, const py::args &args);

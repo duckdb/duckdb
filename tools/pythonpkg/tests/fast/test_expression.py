@@ -14,11 +14,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c
+		"""
         )
 
         constant = ConstantExpression(val)
@@ -32,11 +32,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c
+		"""
         )
         column = ColumnExpression('a')
         rel2 = rel.select(column)
@@ -54,11 +54,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c
+		"""
         )
 
         constant = ConstantExpression(val)
@@ -74,10 +74,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                5 as b
-        """
+			select
+				1 as a,
+				5 as b
+		"""
         )
         function = FunctionExpression("-", ColumnExpression('b'), ColumnExpression('a'))
         rel2 = rel.select(function)
@@ -89,8 +89,8 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select 5 as a
-        """
+			select 5 as a
+		"""
         )
         col = ColumnExpression('a')
         col = -col
@@ -103,10 +103,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                3 as a,
-                1 as b
-        """
+			select
+				3 as a,
+				1 as b
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -120,10 +120,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                3 as a,
-                2 as b
-        """
+			select
+				3 as a,
+				2 as b
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -137,10 +137,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                5 as a,
-                2 as b
-        """
+			select
+				5 as a,
+				2 as b
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -159,10 +159,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                5 as a,
-                2 as b
-        """
+			select
+				5 as a,
+				2 as b
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -176,10 +176,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                5 as a,
-                2 as b
-        """
+			select
+				5 as a,
+				2 as b
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -193,11 +193,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                5 as a,
-                2 as b,
-                5 as c
-        """
+			select
+				5 as a,
+				2 as b,
+				5 as c
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -213,11 +213,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                5 as a,
-                2 as b,
-                5 as c
-        """
+			select
+				5 as a,
+				2 as b,
+				5 as c
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -233,12 +233,12 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c,
-                3 as d
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c,
+				3 as d
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -282,8 +282,8 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select 1 as a
-        """
+			select 1 as a
+		"""
         )
         col = ColumnExpression('a')
         col = col.alias('b')
@@ -296,10 +296,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b
-        """
+			select
+				1 as a,
+				2 as b
+		"""
         )
         star = StarExpression()
         rel2 = rel.select(star)
@@ -317,10 +317,10 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b
-        """
+			select
+				1 as a,
+				2 as b
+		"""
         )
 
         col1 = ColumnExpression('a')
@@ -341,11 +341,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c
+		"""
         )
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
@@ -360,11 +360,11 @@ class TestExpression(object):
 
         rel = con.sql(
             """
-            select
-                1 as a,
-                2 as b,
-                3 as c,
-        """
+			select
+				1 as a,
+				2 as b,
+				3 as c,
+		"""
         )
 
         col1 = ColumnExpression('a')
@@ -447,14 +447,14 @@ class TestExpression(object):
         con = duckdb.connect()
         rel = con.sql(
             """
-            select * from (VALUES
-                (1, 'a'),
-                (2, 'b'),
-                (1, 'b'),
-                (3, 'c'),
-                (4, 'a')
-            ) tbl(a, b)
-        """
+			select * from (VALUES
+				(1, 'a'),
+				(2, 'b'),
+				(1, 'b'),
+				(3, 'c'),
+				(4, 'a')
+			) tbl(a, b)
+		"""
         )
         assert len(rel.fetchall()) == 5
 
@@ -474,7 +474,7 @@ class TestExpression(object):
 
         # AND operator
 
-        expr = expr & (ColumnExpression("b") != 'b')
+        expr = expr & ('b' != ConstantExpression('b'))
         rel2 = rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
@@ -488,7 +488,9 @@ class TestExpression(object):
         assert res == [(1, 'a'), (1, 'b'), (4, 'a')]
 
         # Mixed
-        expr = (ColumnExpression("b") == "a") & ((ColumnExpression("a") == 1) | (ColumnExpression("a") == 4))
+        expr = (ColumnExpression("b") == ConstantExpression("a")) & (
+            (ColumnExpression("a") == 1) | (ColumnExpression("a") == 4)
+        )
         rel2 = rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
@@ -521,14 +523,14 @@ class TestExpression(object):
         con = duckdb.connect()
         rel = con.sql(
             """
-            select * from (VALUES
-                (1, 'a'),
-                (2, 'b'),
-                (3, NULL),
-                (4, 'c'),
-                (5, 'a')
-            ) tbl(a, b)
-        """
+			select * from (VALUES
+				(1, 'a'),
+				(2, 'b'),
+				(3, NULL),
+				(4, 'c'),
+				(5, 'a')
+			) tbl(a, b)
+		"""
         )
         # Ascending sort order
 
