@@ -103,7 +103,7 @@ shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
 
 shared_ptr<Relation> Relation::Order(const string &expression) {
 	auto order_list = Parser::ParseOrderList(expression, context.GetContext()->GetParserOptions());
-	return this->Order(std::move(order_list));
+	return Order(std::move(order_list));
 }
 
 shared_ptr<Relation> Relation::Order(vector<OrderByNode> order_list) {
@@ -122,7 +122,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 		}
 		order_list.push_back(std::move(inner_list[0]));
 	}
-	return this->Order(std::move(order_list));
+	return Order(std::move(order_list));
 }
 
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type,
