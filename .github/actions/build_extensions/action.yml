@@ -137,6 +137,7 @@ runs:
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
       run: |
+        ls
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
@@ -145,6 +146,7 @@ runs:
         echo "$USER"
         git config --global --add safe.directory '*'
         make
+        ls
 
     # Tests extension using regular require mechanism:
     # - statically linked extensions are disable on startup but a sqlogictest require will call their load function
@@ -159,6 +161,7 @@ runs:
       if: ${{ inputs.post_install != '' }}
       shell: bash
       run: |
+        ls
         cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
@@ -192,9 +195,12 @@ runs:
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
       run: |
+        ls
         cd  ${{ inputs.build_dir}}
+        ls
         rm -rf build/release
         make
+        ls
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
     - name: Run tests with auto loading
@@ -203,7 +209,9 @@ runs:
       env:
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
       run: |
+        ls
         cd  ${{ inputs.build_dir}}
+        ls
         ${{ inputs.unittest_script }}
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
