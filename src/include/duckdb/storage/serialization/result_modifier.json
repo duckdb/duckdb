@@ -7,6 +7,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "ResultModifierType"
       }
@@ -18,11 +19,13 @@
     "enum": "LIMIT_MODIFIER",
     "members": [
       {
+        "id": 200,
         "name": "limit",
         "type": "ParsedExpression*",
         "optional": true
       },
       {
+        "id": 201,
         "name": "offset",
         "type": "ParsedExpression*",
         "optional": true
@@ -35,6 +38,7 @@
     "enum": "DISTINCT_MODIFIER",
     "members": [
       {
+        "id": 200,
         "name": "distinct_on_targets",
         "type": "vector<ParsedExpression*>"
       }
@@ -46,6 +50,7 @@
     "enum": "ORDER_MODIFIER",
     "members": [
       {
+        "id": 200,
         "name": "orders",
         "type": "vector<OrderByNode>"
       }
@@ -57,11 +62,13 @@
     "enum": "LIMIT_PERCENT_MODIFIER",
     "members": [
       {
+        "id": 200,
         "name": "limit",
         "type": "ParsedExpression*",
         "optional": true
       },
       {
+        "id": 201,
         "name": "offset",
         "type": "ParsedExpression*",
         "optional": true
@@ -75,6 +82,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "orders",
         "type": "vector<BoundOrderByNode>"
       }

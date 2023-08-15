@@ -427,7 +427,7 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 	if (!root->info[vector_index]) {
 		return;
 	}
-	idx_t row_in_vector = row_id - vector_index * STANDARD_VECTOR_SIZE;
+	idx_t row_in_vector = (row_id - column_data.start) - vector_index * STANDARD_VECTOR_SIZE;
 	fetch_row_function(transaction.start_time, transaction.transaction_id, root->info[vector_index]->info.get(),
 	                   row_in_vector, result, result_idx);
 }
