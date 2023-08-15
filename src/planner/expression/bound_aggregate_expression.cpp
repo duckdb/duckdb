@@ -104,4 +104,27 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
 	return std::move(x);
 }
 
+void BoundAggregateExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
+	FunctionSerializer::FormatSerialize(serializer, function, bind_info.get());
+	serializer.WriteProperty(203, "aggregate_type", aggr_type);
+	serializer.WriteOptionalProperty(204, "filter", filter);
+	serializer.WriteOptionalProperty(205, "order_bys", order_bys);
+}
+
+unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
+	auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
+	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
+	auto filter = deserializer.ReadOptionalProperty<unique_ptr<Expression>>(204, "filter");
+	auto result = make_uniq<BoundAggregateExpression>(std::move(entry.first), std::move(children), std::move(filter),
+	                                                  std::move(entry.second), aggregate_type);
+	deserializer.ReadOptionalProperty(205, "order_bys", result->order_bys);
+	return std::move(result);
+}
+
 } // namespace duckdb

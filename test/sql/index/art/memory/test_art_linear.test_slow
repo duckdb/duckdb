@@ -2,8 +2,6 @@
 # description: Test the memory usage of the ART for linear integer insertions
 # group: [memory]
 
-# FIXME: once we inline leaves, these numbers should all go down
-
 statement ok
 PRAGMA enable_verification
 
@@ -66,7 +64,8 @@ statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > base.usage AND
+	mem_to_bytes(current.memory_usage) < 3 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -99,7 +98,8 @@ statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > base.usage AND
+       	mem_to_bytes(current.memory_usage) < 3 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1
@@ -123,7 +123,8 @@ statement ok
 INSERT INTO t SELECT * FROM range(1000000);
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 2 * base.usage
+SELECT mem_to_bytes(current.memory_usage) > base.usage AND
+       	mem_to_bytes(current.memory_usage) < 3 * base.usage
 FROM base, pragma_database_size() current;
 ----
 1

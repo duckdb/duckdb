@@ -3,6 +3,7 @@ import pytest
 import os
 import shutil
 
+
 class TestWindowsAbsPath(object):
     def test_windows_path_accent(self):
         if os.name != 'nt':
@@ -23,7 +24,7 @@ class TestWindowsAbsPath(object):
         del con
 
         os.chdir('tést')
-        dbpath = os.path.join('..',  dbpath)
+        dbpath = os.path.join('..', dbpath)
         con = duckdb.connect(dbpath)
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
         assert res[0][0] == 10

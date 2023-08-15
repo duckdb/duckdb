@@ -2,15 +2,15 @@
 
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_16).New());
-	node.type = (uint8_t)NType::NODE_16;
+	node = Node::GetAllocator(art, NType::NODE_16).New();
+	node.SetType((uint8_t)NType::NODE_16);
 	auto &n16 = Node16::Get(art, node);
 
 	n16.count = 0;
@@ -20,7 +20,7 @@ Node16 &Node16::New(ART &art, Node &node) {
 void Node16::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 
 	auto &n16 = Node16::Get(art, node);
 
@@ -76,7 +76,7 @@ void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n16 = Node16::Get(art, node);
 
 	// ensure that there is no other child at the same byte
@@ -112,7 +112,7 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
-	D_ASSERT(!node.IsSwizzled());
+	D_ASSERT(!node.IsSerialized());
 	auto &n16 = Node16::Get(art, node);
 
 	idx_t child_pos = 0;
@@ -173,7 +173,7 @@ optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
 	return nullptr;
 }
 
-BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
+BlockPointer Node16::Serialize(ART &art, MetadataWriter &writer) {
 
 	// recurse into children and retrieve child block pointers
 	vector<BlockPointer> child_block_pointers;
@@ -203,7 +203,7 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node16::Deserialize(MetaBlockReader &reader) {
+void Node16::Deserialize(MetadataReader &reader) {
 
 	count = reader.Read<uint8_t>();
 
@@ -221,7 +221,7 @@ void Node16::Deserialize(MetaBlockReader &reader) {
 void Node16::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		Node::Vacuum(art, children[i], flags);
+		children[i].Vacuum(art, flags);
 	}
 }
 

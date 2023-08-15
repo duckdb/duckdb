@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   logical_aggregate.cpp
   logical_any_join.cpp
-  logical_asof_join.cpp
   logical_column_data_get.cpp
   logical_comparison_join.cpp
   logical_copy_to_file.cpp
@@ -14,7 +13,6 @@ add_library_unity(
   logical_cteref.cpp
   logical_delete.cpp
   logical_delim_get.cpp
-  logical_delim_join.cpp
   logical_dependent_join.cpp
   logical_distinct.cpp
   logical_dummy_scan.cpp

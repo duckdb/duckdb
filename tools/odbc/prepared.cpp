@@ -6,14 +6,27 @@
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
-#include <string.h>
-
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
 using duckdb::LogicalType;
 using duckdb::Value;
 
+/**
+ * @brief Binds a buffer to a parameter marker.  See the ODBC documentation for more details, as the arguments are very
+ * complex. https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindparameter-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param parameter_number Parameter number, starting at 1 and increasing for each parameter in the statement.
+ * @param input_output_type Input/output type of the bound parameter.
+ * @param value_type C data type of the parameter.
+ * @param parameter_type SQL data type of the parameter.
+ * @param column_size The size of the column or expression in characters.
+ * @param decimal_digits The decimal digits of the column or expression.
+ * @param parameter_value_ptr A pointer to a buffer for the parameter value.
+ * @param buffer_length The length of the parameter value buffer in bytes.
+ * @param str_len_or_ind_ptr A pointer to a buffer for the parameter length or indicator value.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number,
                                    SQLSMALLINT input_output_type, SQLSMALLINT value_type, SQLSMALLINT parameter_type,
                                    SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
@@ -23,6 +36,12 @@ SQLRETURN SQL_API SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT param
 	                                 str_len_or_ind_ptr);
 }
 
+/**
+ * @brief
+ * Executes a prepared statement.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlexecute-function?view=sql-server-ver16
+ * @param statement_handle The statement handle
+ */
 SQLRETURN SQL_API SQLExecute(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -68,6 +87,21 @@ SQLRETURN SQL_API SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Binds a buffer to a column in the result set.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function?view=sql-server-ver16#row-wise-binding
+ * @param statement_handle
+ * @param column_number
+ * @param target_type The C data type of the application data buffer (SQL_C_CHAR, SQL_C_LONG, etc.) (see Data Types
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types?view=sql-server-ver16)
+ * @param target_value_ptr A pointer to the data buffer to bind the column to, that is filled with the data from the
+ * column when SQLFetch or SQLFetchScroll is called. The data type of the buffer must be the same as the data type of
+ * the column
+ * @param buffer_length Length of the buffer in bytes
+ * @param str_len_or_ind_ptr A pointer to the length/indicator buffer to bind to the column.  Can be filled with the
+ * length of the data in the column, or potentially other values depending on which function is called.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
@@ -100,13 +134,14 @@ SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT param
 		return SQL_ERROR;
 	}
 
-	if (parameter_number < 0 || parameter_number > hstmt->stmt->n_param) {
+	if (parameter_number <= 0 || parameter_number > hstmt->stmt->n_param) {
 		return SQL_ERROR;
 	}
 	// TODO make global maps with type mappings for duckdb <> odbc
 	auto odbc_type = SQL_UNKNOWN_TYPE;
 	auto odbc_size = 0;
-	auto param_type_id = hstmt->stmt->data->GetType(parameter_number).id();
+	auto identifier = std::to_string(parameter_number);
+	auto param_type_id = hstmt->stmt->data->GetType(identifier).id();
 	switch (param_type_id) {
 	case duckdb::LogicalTypeId::VARCHAR:
 		odbc_type = SQL_VARCHAR;
@@ -184,6 +219,13 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Used together with SQLPutData and SQLGetData to support binding to a column or parameter data.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlparamdata-function?view=sql-server-ver15
+ * @param statement_handle
+ * @param value_ptr_ptr Pointer to a buffer in which to return the address of the bound data buffer.
+ * @return
+ */
 SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -198,6 +240,15 @@ SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_
 	return SQL_SUCCESS;
 }
 
+/**
+ * @brief Allows the application to set data for a parameter or column at execution time.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlputdata-function?view=sql-server-ver15
+ * @param statement_handle
+ * @param data_ptr Pointer to a buffer containing the data to be sent to the data source.  Must be in the C data type
+ * specified in SQLBindParameter or SQLBindCol.
+ * @param str_len_or_ind_ptr Length of data_ptr.
+ * @return
+ */
 SQLRETURN SQL_API SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {

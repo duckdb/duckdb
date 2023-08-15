@@ -31,6 +31,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the node
 	static inline Node16 &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::NODE_16).Get<Node16>(ptr);
 	}
 	//! Initializes all the fields of the node while growing a Node4 to a Node16
@@ -55,9 +56,9 @@ public:
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
 	//! Serialize this node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize this node
-	void Deserialize(MetaBlockReader &reader);
+	void Deserialize(MetadataReader &reader);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

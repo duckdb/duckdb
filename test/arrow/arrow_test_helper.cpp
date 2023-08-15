@@ -156,11 +156,11 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		return false;
 	}
 	// create the roundtrip factory
-	auto client_config = ClientConfig::GetConfig(*con.context);
-	ArrowOptions arrow_option(con.context->db->config.options.arrow_offset_size, client_config.ExtractTimezone());
+	auto client_properties = con.context->GetClientProperties();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result, arrow_option);
+	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
+	                         client_properties);
 
 	// construct the arrow scan
 	auto params = ConstructArrowScan((uintptr_t)&factory, true);

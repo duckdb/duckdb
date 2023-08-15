@@ -52,13 +52,13 @@ PyArrowObjectType GetArrowType(const py::handle &obj) {
 
 py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_scanner, py::handle &arrow_obj_handle,
                                                               ArrowStreamParameters &parameters,
-                                                              const ClientConfig &config) {
+                                                              const ClientProperties &client_properties) {
 	auto filters = parameters.filters;
 	auto &column_list = parameters.projected_columns.columns;
 	bool has_filter = filters && !filters->filters.empty();
 	py::list projection_list = py::cast(column_list);
 	if (has_filter) {
-		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, config);
+		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, client_properties);
 		if (column_list.empty()) {
 			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
 		} else {
@@ -87,23 +87,23 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
 		auto dataset = arrow_dataset(arrow_obj_handle);
 		py::object arrow_scanner = dataset.attr("__class__").attr("scanner");
-		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->config);
+		scanner = ProduceScanner(arrow_scanner, dataset, parameters, factory->client_properties);
 		break;
 	}
 	case PyArrowObjectType::RecordBatchReader: {
-		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, parameters, factory->config);
+		scanner = ProduceScanner(arrow_batch_scanner, arrow_obj_handle, parameters, factory->client_properties);
 		break;
 	}
 	case PyArrowObjectType::Scanner: {
 		// If it's a scanner we have to turn it to a record batch reader, and then a scanner again since we can't stack
 		// scanners on arrow Otherwise pushed-down projections and filters will disappear like tears in the rain
 		auto record_batches = arrow_obj_handle.attr("to_reader")();
-		scanner = ProduceScanner(arrow_batch_scanner, record_batches, parameters, factory->config);
+		scanner = ProduceScanner(arrow_batch_scanner, record_batches, parameters, factory->client_properties);
 		break;
 	}
 	case PyArrowObjectType::Dataset: {
 		py::object arrow_scanner = arrow_obj_handle.attr("__class__").attr("scanner");
-		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->config);
+		scanner = ProduceScanner(arrow_scanner, arrow_obj_handle, parameters, factory->client_properties);
 		break;
 	}
 	default: {
@@ -302,14 +302,13 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 
 py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterSet &filter_collection,
                                                                std::unordered_map<idx_t, string> &columns,
-                                                               const ClientConfig &config) {
+                                                               const ClientProperties &config) {
 	auto filters_map = &filter_collection.filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	string timezone_config = config.ExtractTimezone();
-	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
+	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone);
 	while (it != filters_map->end()) {
-		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], timezone_config);
+		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first], config.time_zone);
 		expression = expression.attr("__and__")(child_expression);
 		it++;
 	}

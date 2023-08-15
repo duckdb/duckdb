@@ -37,11 +37,12 @@ public:
 };
 
 struct ArrayWrapper {
-	explicit ArrayWrapper(const LogicalType &type);
+	explicit ArrayWrapper(const LogicalType &type, const ClientProperties &client_properties);
 
 	unique_ptr<RawArrayWrapper> data;
 	unique_ptr<RawArrayWrapper> mask;
 	bool requires_mask;
+	const ClientProperties client_properties;
 
 public:
 	void Initialize(idx_t capacity);
@@ -52,7 +53,8 @@ public:
 
 class NumpyResultConversion {
 public:
-	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
+	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity,
+	                      const ClientProperties &client_properties);
 
 	void Append(DataChunk &chunk);
 

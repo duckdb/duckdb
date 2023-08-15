@@ -31,6 +31,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the node
 	static inline Node4 &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::NODE_4).Get<Node4>(ptr);
 	}
 	//! Initializes all fields of the node while shrinking a Node16 to a Node4
@@ -53,9 +54,9 @@ public:
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
 	//! Serialize this node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
+	BlockPointer Serialize(ART &art, MetadataWriter &writer);
 	//! Deserialize this node
-	void Deserialize(MetaBlockReader &reader);
+	void Deserialize(MetadataReader &reader);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

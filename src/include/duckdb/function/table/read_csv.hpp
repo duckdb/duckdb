@@ -76,6 +76,10 @@ struct ColumnInfo {
 		info.types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		return info;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static ColumnInfo FormatDeserialize(FormatDeserializer &deserializer);
+
 	vector<std::string> names;
 	vector<LogicalType> types;
 };
@@ -105,6 +109,9 @@ struct ReadCSVData : public BaseCSVData {
 		this->initial_reader = std::move(reader);
 	}
 	void FinalizeRead(ClientContext &context);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<ReadCSVData> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct CSVCopyFunction {

@@ -45,6 +45,8 @@ public:
 	bool Equals(const TableFilter &other) const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class ConjunctionAndFilter : public ConjunctionFilter {
@@ -60,6 +62,8 @@ public:
 	bool Equals(const TableFilter &other) const override;
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<TableFilter> Deserialize(FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 } // namespace duckdb

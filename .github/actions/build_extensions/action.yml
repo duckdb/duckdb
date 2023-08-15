@@ -51,9 +51,6 @@ inputs:
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
     default: 1
-  build_vcpkg_extensions:
-    description: 'Build extensions that require vcpkg for dependency management'
-    default: 1
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
@@ -84,7 +81,6 @@ runs:
       run: |
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_extensions.cmake' || '' }}"
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
     - name: Setup vcpkg
@@ -99,14 +95,17 @@ runs:
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
         echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
-
-    # Todo: remove this after spatial no longer depends on it
-    - name: Globally install OpenSSL (Spatial still depends on it to be available)
-      if: inputs.vcpkg_build == 1 && inputs.openssl_path == ''
+        
+    - name: workaround for https://github.com/duckdb/duckdb/issues/8360
+      if: inputs.vcpkg_target_triplet == 'x64-windows-static-md'
       shell: bash
       run: |
-        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
-        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+        cd $VCPKG_ROOT
+        mkdir -p downloads
+        cd downloads
+        curl -O -L https://github.com/duckdb/duckdb-data/releases/download/v1.0/nasm-2.16.01-win64.zip
+        ls -al
+        pwd
 
     - name: Set Openssl dir
       if: inputs.openssl_path != ''
@@ -115,7 +114,7 @@ runs:
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
-      if: inputs.vcpkg_build == 1 && inputs.build_vcpkg_extensions == 1
+      if: inputs.vcpkg_build == 1 && inputs.build_out_of_tree_extensions == 1
       shell: bash
       run: |
         make extension_configuration

@@ -18,6 +18,21 @@ using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using std::string;
 
+/**
+ * @brief SQLSetStmtAttr sets attributes that govern aspects of a statement.
+ * @param statement_handle
+ * @param attribute The attribute to set. See
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function
+ * @param value_ptr The value to set the attribute to.  Depending of the value of attribute, it can be:
+ * 					\n- ODBC descriptor handle
+ * 					\n- SQLUINTEGER value
+ * 					\n- SQLULEN value
+ * 					\n- a pointer to: null-terminated character string, a bin, a value or array of type SQLLEN, SQLULEN,
+ * or SQLUSMALLINT, a driver-defined value
+ * @param string_length The length of the value_ptr parameter.  See
+ * https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlsetstmtattr-function for details.
+ * @return SQL return code
+ */
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
@@ -287,6 +302,14 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	}
 }
 
+/**
+ * @brief Prepares an SQL string for execution
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlprepare-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param statement_text SQL string to be prepared
+ * @param text_length The length of the statement text in characters
+ * @return
+ */
 SQLRETURN SQL_API SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	return duckdb::PrepareStmt(statement_handle, statement_text, text_length);
 }
@@ -308,7 +331,7 @@ SQLRETURN SQL_API SQLCancel(SQLHSTMT statement_handle) {
 
 /**
  *@brief  Executes a prepared statement
- *
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlexecdirect-function?view=sql-server-ver15
  * @param statement_handle A handle to a statement object. Stores information about the statement and the results of a
  *query.
  * @param statement_text The text of the query to execute.
@@ -624,6 +647,14 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 	                       string_length_ptr, numeric_attribute_ptr);
 }
 
+/**
+ * @brief Stops processing associated with a specific statement, closes any open cursors associated with the statement,
+ * discards pending results, or, optionally, frees all resources associated with the statement handle.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlfreestmt-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param option SQL_CLOSE, SQL_DROP, SQL_UNBIND, SQL_RESET_PARAMS
+ * @return
+ */
 SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -648,6 +679,12 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	return SQL_ERROR;
 }
 
+/**
+ * @brief Determines whether more results are available on a statement, and, if so, prepares the next result set.
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlmoreresults-function?view=sql-server-ver15
+ * @param statement_handle
+ * @return
+ */
 SQLRETURN SQL_API SQLMoreResults(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {

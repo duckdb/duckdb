@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
@@ -37,13 +38,12 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the prefix
 	static inline Prefix &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
 	}
 
-	//! Initializes a merge by incrementing the buffer ID of the child node(s)
-	inline void InitializeMerge(ART &art, const ARTFlags &flags) {
-		ptr.InitializeMerge(art, flags);
-	}
+	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
+	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
 
 	//! Appends a byte and a child_prefix to prefix. If there is no prefix, than it pushes the
 	//! byte on top of child_prefix. If there is no child_prefix, then it creates a new
@@ -71,17 +71,15 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(ART &art, const bool only_verify);
+	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
-	//! Serialize this node
-	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
-	//! Deserialize this node
-	void Deserialize(MetaBlockReader &reader);
+	//! Serialize this node and all subsequent nodes
+	static BlockPointer Serialize(ART &art, Node &node, MetadataWriter &writer);
+	//! Deserialize this node and all subsequent prefix nodes
+	static void Deserialize(ART &art, Node &node, MetadataReader &reader);
 
 	//! Vacuum the child of the node
-	inline void Vacuum(ART &art, const ARTFlags &flags) {
-		Node::Vacuum(art, ptr, flags);
-	}
+	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
 
 private:
 	//! Appends the byte to this prefix node, or creates a subsequent prefix node,
@@ -90,6 +88,8 @@ private:
 	//! Appends the other_prefix and all its subsequent prefix nodes to this prefix node.
 	//! Also frees all copied/appended nodes
 	void Append(ART &art, Node other_prefix);
+	//! Get the total count of bytes in the chain of prefixes, with the node reference pointing to first non-prefix node
+	static idx_t TotalCount(ART &art, reference<Node> &node);
 };
 
 } // namespace duckdb

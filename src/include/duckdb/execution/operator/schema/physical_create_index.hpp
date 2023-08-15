@@ -27,7 +27,7 @@ public:
 public:
 	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
 	                    unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-	                    idx_t estimated_cardinality);
+	                    idx_t estimated_cardinality, const bool sorted);
 
 	//! The table to create the index for
 	DuckTableEntry &table;
@@ -37,6 +37,8 @@ public:
 	unique_ptr<CreateIndexInfo> info;
 	//! Unbound expressions to be used in the optimizer
 	vector<unique_ptr<Expression>> unbound_expressions;
+	//! Whether the pipeline sorts the data prior to index creation
+	const bool sorted;
 
 public:
 	//! Source interface, NOP for this operator
@@ -52,10 +54,15 @@ public:
 	//! Sink interface, global sink state
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
+	//! Sink for unsorted data: insert iteratively
+	SinkResultType SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const;
+	//! Sink for sorted data: build + merge
+	SinkResultType SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const;
+
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
+	SinkCombineResultType Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-	                          GlobalSinkState &gstate) const override;
+	                          OperatorSinkFinalizeInput &input) const override;
 
 	bool IsSink() const override {
 		return true;

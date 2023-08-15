@@ -48,11 +48,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		auto &entry = expected_data[i].first;
 		METADATA_CHECK(hstmt, i + 1, entry.col_name.c_str(), entry.col_name.length(), entry.col_type,
 		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
-		if (expected_data[i].second.empty()) {
-			DATA_CHECK(hstmt, i + 1, nullptr);
-			continue;
-		}
-		DATA_CHECK(hstmt, i + 1, expected_data[i].second.c_str());
+		DATA_CHECK(hstmt, i + 1, expected_data[i].second);
 	}
 
 	// Test SQLGetTypeInfo with SQL_ALL_TYPES and data_type
@@ -108,8 +104,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
 		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 		REQUIRE(state == "07006");
-		REQUIRE(message == "ODBC_DuckDB->GetDataStmtResult\n"
-		                   "Unsupported type");
+		REQUIRE(duckdb::StringUtil::Contains(message, "Unsupported type"));
 		row_count++;
 	}
 
@@ -150,8 +145,7 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\n"
-			                   "Invalid Input Error: Failed to cast value: Could not convert string 'main' to INT32");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
 		}
@@ -165,7 +159,7 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 			DATA_CHECK(hstmt, 3, "bool_table");
 			break;
 		case 2:
-			DATA_CHECK(hstmt, 3, "byte_table");
+			DATA_CHECK(hstmt, 3, "bytea_table");
 			break;
 		case 3:
 			DATA_CHECK(hstmt, 3, "interval_table");
@@ -222,8 +216,8 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 
 	std::vector<std::array<std::string, 4>> expected_data = {
 	    {"bool_table", "id", "13", "INTEGER"},      {"bool_table", "t", "25", "VARCHAR"},
-	    {"bool_table", "b", "10", "BOOLEAN"},       {"byte_table", "id", "13", "INTEGER"},
-	    {"byte_table", "t", "26", "BLOB"},          {"interval_table", "id", "13", "INTEGER"},
+	    {"bool_table", "b", "10", "BOOLEAN"},       {"bytea_table", "id", "13", "INTEGER"},
+	    {"bytea_table", "t", "26", "BLOB"},         {"interval_table", "id", "13", "INTEGER"},
 	    {"interval_table", "iv", "27", "INTERVAL"}, {"interval_table", "d", "25", "VARCHAR"},
 	    {"lo_test_table", "id", "13", "INTEGER"},   {"lo_test_table", "large_data", "26", "BLOB"},
 	    {"test_table_1", "id", "13", "INTEGER"},    {"test_table_1", "t", "25", "VARCHAR"},
@@ -235,20 +229,19 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 			std::string state, message;
 			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
 			REQUIRE(state == "07006");
-			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\nInvalid Input Error: Failed to cast value: Could not "
-			                   "convert string 'main' to INT32");
+			REQUIRE(duckdb::StringUtil::Contains(message, "Invalid Input Error"));
 			ret = SQL_SUCCESS;
 		} else {
 			ODBC_CHECK(ret, "SQLFetch");
 		}
 
 		auto &entry = expected_data[i];
-		DATA_CHECK(hstmt, 1, nullptr);
+		DATA_CHECK(hstmt, 1, "");
 		DATA_CHECK(hstmt, 2, "main");
-		DATA_CHECK(hstmt, 3, entry[0].c_str());
-		DATA_CHECK(hstmt, 4, entry[1].c_str());
-		DATA_CHECK(hstmt, 5, entry[2].c_str());
-		DATA_CHECK(hstmt, 6, entry[3].c_str());
+		DATA_CHECK(hstmt, 3, entry[0]);
+		DATA_CHECK(hstmt, 4, entry[1]);
+		DATA_CHECK(hstmt, 5, entry[2]);
+		DATA_CHECK(hstmt, 6, entry[3]);
 	}
 }
 

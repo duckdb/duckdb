@@ -49,13 +49,14 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 && sudo pip3 install cmake-format black
 
       - name: Format Check
         shell: bash
         run: |
           clang-format --version
           clang-format --dump-config
+          black --version
           make format-check-silent
 
       - name: Generated Check
