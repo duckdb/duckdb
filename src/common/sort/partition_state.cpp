@@ -214,7 +214,9 @@ void PartitionLocalMergeState::Scan() {
 	LocalSortState local_sort;
 	local_sort.Initialize(global_sort, global_sort.buffer_manager);
 
-	while (group_data.Scan(chunk_state, payload_chunk)) {
+	TupleDataScanState local_scan;
+	group_data.InitializeScan(local_scan, merge_state->column_ids);
+	while (group_data.Scan(chunk_state, local_scan, payload_chunk)) {
 		sort_chunk.Reset();
 		executor.Execute(payload_chunk, sort_chunk);
 
@@ -343,7 +345,8 @@ void PartitionLocalSinkState::Combine() {
 PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data_p,
                                                      hash_t hash_bin)
     : sink(sink), group_data(std::move(group_data_p)), memory_per_thread(sink.memory_per_thread),
-      stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
+      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const auto group_idx = sink.hash_groups.size();
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
@@ -355,7 +358,6 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 
 	sink.bin_groups[hash_bin] = group_idx;
 
-	vector<column_t> column_ids;
 	column_ids.reserve(sink.payload_types.size());
 	for (column_t i = 0; i < sink.payload_types.size(); ++i) {
 		column_ids.emplace_back(i);
@@ -364,7 +366,6 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 }
 
 void PartitionLocalMergeState::Prepare() {
-	Scan();
 	merge_state->group_data.reset();
 
 	auto &global_sort = *merge_state->global_sort;
@@ -379,6 +380,9 @@ void PartitionLocalMergeState::Merge() {
 
 void PartitionLocalMergeState::ExecuteTask() {
 	switch (stage) {
+	case PartitionSortStage::SCAN:
+		Scan();
+		break;
 	case PartitionSortStage::PREPARE:
 		Prepare();
 		break;
@@ -425,6 +429,11 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 	switch (stage) {
 	case PartitionSortStage::INIT:
+		total_tasks = num_threads;
+		stage = PartitionSortStage::SCAN;
+		return true;
+
+	case PartitionSortStage::SCAN:
 		total_tasks = 1;
 		stage = PartitionSortStage::PREPARE;
 		return true;

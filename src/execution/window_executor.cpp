@@ -344,13 +344,14 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 
 		// when the partition changes, recompute the boundaries
 		if (!is_same_partition || is_jump) {
-			partition_start = row_idx;
-			peer_start = row_idx;
-
 			if (is_jump) {
-				//	Go back as far as the previous partition start
 				idx_t n = 1;
-				partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
+				partition_start = FindPrevStart(partition_mask, 0, row_idx + 1, n);
+				n = 1;
+				peer_start = FindPrevStart(order_mask, 0, row_idx + 1, n);
+			} else {
+				partition_start = row_idx;
+				peer_start = row_idx;
 			}
 
 			// find end of partition

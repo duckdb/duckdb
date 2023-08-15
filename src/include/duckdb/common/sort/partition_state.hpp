@@ -125,7 +125,7 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
 
 class PartitionLocalMergeState;
 
@@ -147,9 +147,11 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
-	TupleDataScanState chunk_state;
+	vector<column_t> column_ids;
+	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
 	const idx_t memory_per_thread;
+	const idx_t num_threads;
 
 private:
 	mutable mutex lock;
