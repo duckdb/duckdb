@@ -397,26 +397,22 @@ bool CanAutoloadExtension(const string &ext_name) {
 
 string FindExtensionForType(const string &name) {
 	idx_t size = sizeof(EXTENSION_TYPES) / sizeof(ExtensionEntry);
-	string res = FindExtensionGeneric(name, EXTENSION_TYPES, size);
-	return CanAutoloadExtension(res) ? res : "";
+	return FindExtensionGeneric(name, EXTENSION_TYPES, size);
 }
 
 string FindExtensionForCopyFunction(const string &name) {
 	idx_t size = sizeof(EXTENSION_COPY_FUNCTIONS) / sizeof(ExtensionEntry);
-	string res = FindExtensionGeneric(name, EXTENSION_COPY_FUNCTIONS, size);
-	return CanAutoloadExtension(res) ? res : "";
+	return FindExtensionGeneric(name, EXTENSION_COPY_FUNCTIONS, size);
 }
 
 string FindExtensionForFunction(const string &name) {
 	idx_t size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionEntry);
-	string res = FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
-	return CanAutoloadExtension(res) ? res : "";
+	return FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
 }
 
 string FindExtensionForSetting(const string &name) {
 	idx_t size = sizeof(EXTENSION_SETTINGS) / sizeof(ExtensionEntry);
-	string res = FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
-	return CanAutoloadExtension(res) ? res : "";
+	return FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
