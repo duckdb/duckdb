@@ -10,15 +10,15 @@
 namespace duckdb {
 
 void TableRef::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("alias", alias);
-	serializer.WriteOptionalProperty("sample", sample);
+	serializer.WriteProperty(100, "type", type);
+	serializer.WriteProperty(101, "alias", alias);
+	serializer.WriteOptionalProperty(102, "sample", sample);
 }
 
 unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<TableReferenceType>("type");
-	auto alias = deserializer.ReadProperty<string>("alias");
-	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>("sample");
+	auto type = deserializer.ReadProperty<TableReferenceType>(100, "type");
+	auto alias = deserializer.ReadProperty<string>(101, "alias");
+	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>(102, "sample");
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -52,18 +52,18 @@ unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserialize
 
 void BaseTableRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("schema_name", schema_name);
-	serializer.WriteProperty("table_name", table_name);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-	serializer.WriteProperty("catalog_name", catalog_name);
+	serializer.WriteProperty(200, "schema_name", schema_name);
+	serializer.WriteProperty(201, "table_name", table_name);
+	serializer.WriteProperty(202, "column_name_alias", column_name_alias);
+	serializer.WriteProperty(203, "catalog_name", catalog_name);
 }
 
 unique_ptr<TableRef> BaseTableRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BaseTableRef>(new BaseTableRef());
-	deserializer.ReadProperty("schema_name", result->schema_name);
-	deserializer.ReadProperty("table_name", result->table_name);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	deserializer.ReadProperty("catalog_name", result->catalog_name);
+	deserializer.ReadProperty(200, "schema_name", result->schema_name);
+	deserializer.ReadProperty(201, "table_name", result->table_name);
+	deserializer.ReadProperty(202, "column_name_alias", result->column_name_alias);
+	deserializer.ReadProperty(203, "catalog_name", result->catalog_name);
 	return std::move(result);
 }
 
@@ -78,86 +78,86 @@ unique_ptr<TableRef> EmptyTableRef::FormatDeserialize(FormatDeserializer &deseri
 
 void ExpressionListRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("expected_names", expected_names);
-	serializer.WriteProperty("expected_types", expected_types);
-	serializer.WriteProperty("values", values);
+	serializer.WriteProperty(200, "expected_names", expected_names);
+	serializer.WriteProperty(201, "expected_types", expected_types);
+	serializer.WriteProperty(202, "values", values);
 }
 
 unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ExpressionListRef>(new ExpressionListRef());
-	deserializer.ReadProperty("expected_names", result->expected_names);
-	deserializer.ReadProperty("expected_types", result->expected_types);
-	deserializer.ReadProperty("values", result->values);
+	deserializer.ReadProperty(200, "expected_names", result->expected_names);
+	deserializer.ReadProperty(201, "expected_types", result->expected_types);
+	deserializer.ReadProperty(202, "values", result->values);
 	return std::move(result);
 }
 
 void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-	serializer.WriteOptionalProperty("condition", condition);
-	serializer.WriteProperty("join_type", type);
-	serializer.WriteProperty("ref_type", ref_type);
-	serializer.WriteProperty("using_columns", using_columns);
+	serializer.WriteProperty(200, "left", *left);
+	serializer.WriteProperty(201, "right", *right);
+	serializer.WriteOptionalProperty(202, "condition", condition);
+	serializer.WriteProperty(203, "join_type", type);
+	serializer.WriteProperty(204, "ref_type", ref_type);
+	serializer.WriteProperty(205, "using_columns", using_columns);
 }
 
 unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<JoinRef>(new JoinRef());
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
-	deserializer.ReadOptionalProperty("condition", result->condition);
-	deserializer.ReadProperty("join_type", result->type);
-	deserializer.ReadProperty("ref_type", result->ref_type);
-	deserializer.ReadProperty("using_columns", result->using_columns);
+	deserializer.ReadProperty(200, "left", result->left);
+	deserializer.ReadProperty(201, "right", result->right);
+	deserializer.ReadOptionalProperty(202, "condition", result->condition);
+	deserializer.ReadProperty(203, "join_type", result->type);
+	deserializer.ReadProperty(204, "ref_type", result->ref_type);
+	deserializer.ReadProperty(205, "using_columns", result->using_columns);
 	return std::move(result);
 }
 
 void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("source", *source);
-	serializer.WriteProperty("aggregates", aggregates);
-	serializer.WriteProperty("unpivot_names", unpivot_names);
-	serializer.WriteProperty("pivots", pivots);
-	serializer.WriteProperty("groups", groups);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-	serializer.WriteProperty("include_nulls", include_nulls);
+	serializer.WriteProperty(200, "source", *source);
+	serializer.WriteProperty(201, "aggregates", aggregates);
+	serializer.WriteProperty(202, "unpivot_names", unpivot_names);
+	serializer.WriteProperty(203, "pivots", pivots);
+	serializer.WriteProperty(204, "groups", groups);
+	serializer.WriteProperty(205, "column_name_alias", column_name_alias);
+	serializer.WriteProperty(206, "include_nulls", include_nulls);
 }
 
 unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<PivotRef>(new PivotRef());
-	deserializer.ReadProperty("source", result->source);
-	deserializer.ReadProperty("aggregates", result->aggregates);
-	deserializer.ReadProperty("unpivot_names", result->unpivot_names);
-	deserializer.ReadProperty("pivots", result->pivots);
-	deserializer.ReadProperty("groups", result->groups);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	deserializer.ReadProperty("include_nulls", result->include_nulls);
+	deserializer.ReadProperty(200, "source", result->source);
+	deserializer.ReadProperty(201, "aggregates", result->aggregates);
+	deserializer.ReadProperty(202, "unpivot_names", result->unpivot_names);
+	deserializer.ReadProperty(203, "pivots", result->pivots);
+	deserializer.ReadProperty(204, "groups", result->groups);
+	deserializer.ReadProperty(205, "column_name_alias", result->column_name_alias);
+	deserializer.ReadProperty(206, "include_nulls", result->include_nulls);
 	return std::move(result);
 }
 
 void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery", *subquery);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
+	serializer.WriteProperty(200, "subquery", *subquery);
+	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 
 unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SubqueryRef>(new SubqueryRef());
-	deserializer.ReadProperty("subquery", result->subquery);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
+	deserializer.ReadProperty(200, "subquery", result->subquery);
+	deserializer.ReadProperty(201, "column_name_alias", result->column_name_alias);
 	return std::move(result);
 }
 
 void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("function", *function);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
+	serializer.WriteProperty(200, "function", *function);
+	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 
 unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableFunctionRef>(new TableFunctionRef());
-	deserializer.ReadProperty("function", result->function);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
+	deserializer.ReadProperty(200, "function", result->function);
+	deserializer.ReadProperty(201, "column_name_alias", result->column_name_alias);
 	return std::move(result);
 }
 

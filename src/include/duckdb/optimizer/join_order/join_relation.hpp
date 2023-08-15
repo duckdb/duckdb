@@ -11,19 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
-class LogicalOperator;
-
-//! Represents a single relation and any metadata accompanying that relation
-struct SingleJoinRelation {
-	LogicalOperator &op;
-	optional_ptr<LogicalOperator> parent;
-
-	SingleJoinRelation(LogicalOperator &op, optional_ptr<LogicalOperator> parent) : op(op), parent(parent) {
-	}
-};
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {
