@@ -182,6 +182,8 @@ jobs:
         ccache: 1
 
     - uses: ./.github/actions/build_extensions
+      env:
+        GEN:ninja
       with:
         vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*

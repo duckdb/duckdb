@@ -190,6 +190,7 @@ jobs:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
       AWS_DEFAULT_REGION: us-east-1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      GEN: ninja
 
     steps:
       - uses: actions/checkout@v3

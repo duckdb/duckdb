@@ -383,37 +383,40 @@ string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], 
 	return "";
 }
 
+bool CanAutoloadExtension(const string &ext_name) {
+	if (ext_name == "") {
+		return false;
+	}
+	for (const auto& ext: AUTOLOADABLE_EXTENSIONS) {
+		if (ext_name == ext) {
+			return true;
+		}
+	}
+	return false;
+}
+
 string FindExtensionForType(const string &name) {
 	idx_t size = sizeof(EXTENSION_TYPES) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_TYPES, size);
+	string res = FindExtensionGeneric(name, EXTENSION_TYPES, size);
+	return CanAutoloadExtension(res) ? res : "";
 }
 
 string FindExtensionForCopyFunction(const string &name) {
 	idx_t size = sizeof(EXTENSION_COPY_FUNCTIONS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_COPY_FUNCTIONS, size);
+	string res = FindExtensionGeneric(name, EXTENSION_COPY_FUNCTIONS, size);
+	return CanAutoloadExtension(res) ? res : "";
 }
 
 string FindExtensionForFunction(const string &name) {
 	idx_t size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
-}
-
-bool CanAutoloadExtension(const string &ext_name) {
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	auto lu = std::find(extensions_excluded_from_autoload.begin(), extensions_excluded_from_autoload.end(), ext_name);
-	if (lu != extensions_excluded_from_autoload.end()) {
-		return false;
-	}
-	return true;
-#endif
-	// TODO: currently we only autoload for builds that properly set the extension headers to ensure we don't autoload
-	//       extensions that are marked with DONT_AUTOLOAD in the extension config.
-	return false;
+	string res = FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
+	return CanAutoloadExtension(res) ? res : "";
 }
 
 string FindExtensionForSetting(const string &name) {
 	idx_t size = sizeof(EXTENSION_SETTINGS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
+	string res = FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
+	return CanAutoloadExtension(res) ? res : "";
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
@@ -497,7 +500,7 @@ void Catalog::AutoloadExtensionOrThrowForConfig(ClientContext &context, const st
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
 		auto extension_name = FindExtensionForSetting(configuration_name);
-		if (!extension_name.empty()) {
+		if (CanAutoloadExtension(extension_name)) {
 			TryAutoloadExtension(context, extension_name);
 			return;
 		}
@@ -514,19 +517,19 @@ bool Catalog::AutoLoadExtensionForFunction(ClientContext &context, CatalogType t
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
 			auto extension_name = FindExtensionForFunction(function_name);
-			if (!extension_name.empty()) {
+			if (CanAutoloadExtension(extension_name)) {
 				TryAutoloadExtension(context, extension_name);
 				return true;
 			}
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 			auto extension_name = FindExtensionForCopyFunction(function_name);
-			if (!extension_name.empty()) {
+			if (CanAutoloadExtension(extension_name)) {
 				TryAutoloadExtension(context, extension_name);
 				return true;
 			}
 		} else if (type == CatalogType::TYPE_ENTRY) {
 			auto extension_name = FindExtensionForType(function_name);
-			if (!extension_name.empty()) {
+			if (CanAutoloadExtension(extension_name)) {
 				TryAutoloadExtension(context, extension_name);
 				return true;
 			}
@@ -541,9 +544,14 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// check if the setting exists in any extensions
 	auto extension_name = FindExtensionForSetting(name);
 	if (!extension_name.empty()) {
+		auto &dbconfig = DBConfig::GetConfig(context);
+		string autoload_hint;
+		if (!dbconfig.options.autoload_known_extensions) {
+			autoload_hint = "\n\nNote that extension autoloading is currently disabled.";
+		}
 		return CatalogException(
 		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" + autoload_hint,
 		    name, extension_name, extension_name, extension_name);
 	}
 	// the setting is not in an extension
@@ -578,9 +586,14 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
 		auto extension_name = FindExtensionForFunction(entry_name);
 		if (!extension_name.empty()) {
+			auto &dbconfig = DBConfig::GetConfig(context);
+			string autoload_hint;
+			if (!dbconfig.options.autoload_known_extensions) {
+				autoload_hint = "\n\nNote that extension autoloading is currently disabled.";
+			}
 			return CatalogException(
 			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;",
+			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" + autoload_hint,
 			    entry_name, extension_name, extension_name, extension_name);
 		}
 	}
