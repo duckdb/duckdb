@@ -182,8 +182,6 @@ jobs:
         ccache: 1
 
     - uses: ./.github/actions/build_extensions
-      env:
-        GEN:ninja
       with:
         vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
@@ -192,6 +190,7 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+        ninja: 1
 
     - uses: actions/upload-artifact@v3
       with:
@@ -230,6 +229,7 @@ jobs:
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
           run_autoload_tests: 0
+          ninja: 1
 
       - uses: actions/upload-artifact@v3
         with:

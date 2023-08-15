@@ -220,6 +220,7 @@ jobs:
           build_in_tree_extensions: 1
           build_out_of_tree_extensions: 1
           run_autoload_tests: ${{ matrix.run_autoload_tests }}
+          ninja: 1
 
       - name: Test statically linked extensions
         if: ${{ matrix.osx_arch == 'x86_64' }}

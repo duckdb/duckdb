@@ -39,6 +39,9 @@ inputs:
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
+  ninja:
+    description: 'Use ninja for building'
+    default: 0
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: ''
@@ -136,6 +139,7 @@ runs:
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
+        GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
       run: |
         ls
         mkdir -p ~/.ssh
@@ -194,6 +198,7 @@ runs:
       env:
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
+        GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
       run: |
         ls
         cd  ${{ inputs.build_dir}}
