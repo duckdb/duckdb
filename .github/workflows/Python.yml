@@ -217,7 +217,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
+        python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
