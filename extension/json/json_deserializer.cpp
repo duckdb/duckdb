@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const field_id_t field_id, const char *tag) {
+void JsonDeserializer::SetTag(const field_id_t, const char *tag) {
 	current_tag = tag;
 }
 
