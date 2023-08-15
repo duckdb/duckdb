@@ -70,25 +70,37 @@ void Node::Free(ART &art, Node &node) {
 		return node.Clear();
 	}
 
-	Node::GetAllocator(art, type).Free(node);
+	GetAllocatorByType(art, type).Free(node);
 	node.Clear();
+}
+
+//===--------------------------------------------------------------------===//
+// Get Allocators
+//===--------------------------------------------------------------------===//
+
+FixedSizeAllocator &Node::GetAllocatorByType(const ART &art, const NType type) {
+	return (*art.allocators)[(uint8_t)type];
+}
+
+FixedSizeAllocator &Node::GetAllocator(const ART &art, const uint8_t idx) {
+	return (*art.allocators)[idx];
 }
 
 //===--------------------------------------------------------------------===//
 // Inserts
 //===--------------------------------------------------------------------===//
 
-void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) {
+void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) const {
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Node4::Get(art, *this).ReplaceChild(byte, child);
+		return Ref<Node4>(art, *this, Node4::N4_IDX).ReplaceChild(byte, child);
 	case NType::NODE_16:
-		return Node16::Get(art, *this).ReplaceChild(byte, child);
+		return Ref<Node16>(art, *this, Node16::N16_IDX).ReplaceChild(byte, child);
 	case NType::NODE_48:
-		return Node48::Get(art, *this).ReplaceChild(byte, child);
+		return Ref<Node48>(art, *this, Node48::N48_IDX).ReplaceChild(byte, child);
 	case NType::NODE_256:
-		return Node256::Get(art, *this).ReplaceChild(byte, child);
+		return Ref<Node256>(art, *this, Node256::N256_IDX).ReplaceChild(byte, child);
 	default:
 		throw InternalException("Invalid node type for ReplaceChild.");
 	}
@@ -134,38 +146,45 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
+template <class NODE>
+optional_ptr<NODE> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const {
 
+	// TODO: is const strict enough here, or do we need to distinguish between
+	// TODO: <const Node4> and <Node4>. Also, do we need to separate the GetChild
+	// TODO: node functions into const and non-const?
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Node4::Get(art, *this).GetChild(byte);
+		return Ref<Node4>(art, *this, Node4::N4_IDX, dirty).GetChild<NODE>(byte);
 	case NType::NODE_16:
-		return Node16::Get(art, *this).GetChild(byte);
+		return Ref<Node16>(art, *this, Node16::N16_IDX, dirty).GetChild<NODE>(byte);
 	case NType::NODE_48:
-		return Node48::Get(art, *this).GetChild(byte);
+		return Ref<Node48>(art, *this, Node48::N48_IDX, dirty).GetChild<NODE>(byte);
 	case NType::NODE_256:
-		return Node256::Get(art, *this).GetChild(byte);
+		return Ref<Node256>(art, *this, Node256::N256_IDX, dirty).GetChild<NODE>(byte);
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
 }
 
-optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
+template <class NODE>
+optional_ptr<NODE> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const {
 
+	// TODO: is const strict enough here, or do we need to distinguish between
+	// TODO: <const Node4> and <Node4>. Also, do we need to separate the GetNextChild
+	// TODO: node functions into const and non-const?
 	D_ASSERT(HasMetadata());
 
-	optional_ptr<Node> child;
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Node4::Get(art, *this).GetNextChild(byte);
+		return Ref<Node4>(art, *this, Node4::N4_IDX, dirty).GetNextChild<NODE>(byte);
 	case NType::NODE_16:
-		return Node16::Get(art, *this).GetNextChild(byte);
+		return Ref<Node16>(art, *this, Node16::N16_IDX, dirty).GetNextChild<NODE>(byte);
 	case NType::NODE_48:
-		return Node48::Get(art, *this).GetNextChild(byte);
+		return Ref<Node48>(art, *this, Node48::N48_IDX, dirty).GetNextChild<NODE>(byte);
 	case NType::NODE_256:
-		return Node256::Get(art, *this).GetNextChild(byte);
+		return Ref<Node256>(art, *this, Node256::N256_IDX, dirty).GetNextChild<NODE>(byte);
 	default:
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
@@ -175,22 +194,22 @@ optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string Node::VerifyAndToString(ART &art, const bool only_verify) {
+string Node::VerifyAndToString(ART &art, const bool only_verify) const {
 
 	D_ASSERT(HasMetadata());
 
 	if (GetType() == NType::LEAF || GetType() == NType::LEAF_INLINED) {
-		auto str = Leaf::VerifyAndToString(art, *this);
+		auto str = Leaf::VerifyAndToString(art, *this, only_verify);
 		return only_verify ? "" : "\n" + str;
 	}
 	if (GetType() == NType::PREFIX) {
-		auto str = Prefix::Get(art, *this).VerifyAndToString(art, *this, only_verify);
+		auto str = Prefix::VerifyAndToString(art, *this, only_verify);
 		return only_verify ? "" : "\n" + str;
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
 	uint8_t byte = 0;
-	auto child = GetNextChild(art, byte);
+	auto child = GetNextChild<const Node>(art, byte, false);
 
 	while (child) {
 		str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
@@ -199,7 +218,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) {
 		}
 
 		byte++;
-		child = GetNextChild(art, byte);
+		child = GetNextChild<const Node>(art, byte, false);
 	}
 
 	return only_verify ? "" : "\n" + str + "]";
@@ -209,13 +228,13 @@ idx_t Node::GetCapacity() const {
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Node::NODE_4_CAPACITY;
+		return NODE_4_CAPACITY;
 	case NType::NODE_16:
-		return Node::NODE_16_CAPACITY;
+		return NODE_16_CAPACITY;
 	case NType::NODE_48:
-		return Node::NODE_48_CAPACITY;
+		return NODE_48_CAPACITY;
 	case NType::NODE_256:
-		return Node::NODE_256_CAPACITY;
+		return NODE_256_CAPACITY;
 	default:
 		throw InternalException("Invalid node type for GetCapacity.");
 	}
@@ -231,10 +250,6 @@ NType Node::GetARTNodeTypeByCount(const idx_t count) {
 		return NType::NODE_48;
 	}
 	return NType::NODE_256;
-}
-
-FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
-	return (*art.allocators)[(uint8_t)type - 1];
 }
 
 //===--------------------------------------------------------------------===//
@@ -253,16 +268,16 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		// iterative
 		return Leaf::InitializeMerge(art, *this, flags);
 	case NType::NODE_4:
-		Node4::Get(art, *this).InitializeMerge(art, flags);
+		Ref<Node4>(art, *this, Node4::N4_IDX).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_16:
-		Node16::Get(art, *this).InitializeMerge(art, flags);
+		Ref<Node16>(art, *this, Node16::N16_IDX).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_48:
-		Node48::Get(art, *this).InitializeMerge(art, flags);
+		Ref<Node48>(art, *this, Node48::N48_IDX).InitializeMerge(art, flags);
 		break;
 	case NType::NODE_256:
-		Node256::Get(art, *this).InitializeMerge(art, flags);
+		Ref<Node256>(art, *this, Node256::N256_IDX).InitializeMerge(art, flags);
 		break;
 	case NType::LEAF_INLINED:
 		return;
@@ -292,7 +307,7 @@ bool MergePrefixContainsOtherPrefix(ART &art, reference<Node> &l_node, reference
 
 	// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
 	auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);
-	auto child_node = l_node.get().GetChild(art, mismatch_byte);
+	auto child_node = l_node.get().GetChild<Node>(art, mismatch_byte);
 
 	// update the prefix of r_node to only consist of the bytes after mismatch_position
 	Prefix::Reduce(art, r_node, mismatch_position);
@@ -401,14 +416,14 @@ bool Node::MergeInternal(ART &art, Node &other) {
 	}
 
 	uint8_t byte = 0;
-	auto r_child = r_node.GetNextChild(art, byte);
+	auto r_child = r_node.GetNextChild<Node>(art, byte);
 
 	// while r_node still has children to merge
 	while (r_child) {
-		auto l_child = l_node.GetChild(art, byte);
+		auto l_child = l_node.GetChild<Node>(art, byte);
 		if (!l_child) {
 			// insert child at empty byte
-			Node::InsertChild(art, l_node, byte, *r_child);
+			InsertChild(art, l_node, byte, *r_child);
 			r_node.ReplaceChild(art, byte, empty_node);
 
 		} else {
@@ -422,10 +437,10 @@ bool Node::MergeInternal(ART &art, Node &other) {
 			break;
 		}
 		byte++;
-		r_child = r_node.GetNextChild(art, byte);
+		r_child = r_node.GetNextChild<Node>(art, byte);
 	}
 
-	Node::Free(art, r_node);
+	Free(art, r_node);
 	return true;
 }
 
@@ -453,7 +468,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	auto &allocator = Node::GetAllocator(art, node_type);
+	auto &allocator = GetAllocatorByType(art, node_type);
 	auto needs_vacuum = flags.vacuum_flags[(uint8_t)GetType() - 1] && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
 		*this = allocator.VacuumPointer(*this);
@@ -463,13 +478,13 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	// recursive functions
 	switch (node_type) {
 	case NType::NODE_4:
-		return Node4::Get(art, *this).Vacuum(art, flags);
+		return Ref<Node4>(art, *this, Node4::N4_IDX).Vacuum(art, flags);
 	case NType::NODE_16:
-		return Node16::Get(art, *this).Vacuum(art, flags);
+		return Ref<Node16>(art, *this, Node16::N16_IDX).Vacuum(art, flags);
 	case NType::NODE_48:
-		return Node48::Get(art, *this).Vacuum(art, flags);
+		return Ref<Node48>(art, *this, Node48::N48_IDX).Vacuum(art, flags);
 	case NType::NODE_256:
-		return Node256::Get(art, *this).Vacuum(art, flags);
+		return Ref<Node256>(art, *this, Node256::N256_IDX).Vacuum(art, flags);
 	default:
 		throw InternalException("Invalid node type for Vacuum.");
 	}

@@ -17,12 +17,13 @@ namespace duckdb {
 class ARTKey;
 
 //! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, and one byte for the count,
-//! and a Node pointer. This pointer either points to another prefix
-//! node or the 'actual' ART node.
+//! and a Node pointer. This pointer either points to a prefix node or another Node.
 class Prefix {
 public:
-	//! Index of the Prefix FixedSizeAllocator
-	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::PREFIX - 1;
+	//! The metadata number of the PREFIX node type
+	static constexpr uint8_t PREFIX = (uint8_t)NType::PREFIX;
+	//! Index of the PREFIX FixedSizeAllocator
+	static constexpr uint8_t PREFIX_IDX = PREFIX - 1;
 
 	//! Delete copy constructors, as any Prefix can never own its memory
 	Prefix(const Prefix &) = delete;
@@ -44,11 +45,6 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	//! Get a reference to the prefix
-	static inline Prefix &Get(const ART &art, const Node ptr) {
-		return *GetAllocator(art).Get<Prefix>(ptr);
-	}
-
 	//! Initializes a merge by incrementing the buffer ID of the prefix and its child node(s)
 	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
 
@@ -58,13 +54,16 @@ public:
 	static void Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node);
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
-	static idx_t Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
+	template <class NODE>
+	static idx_t Traverse(ART &art, reference<NODE> &prefix_node, const ARTKey &key, idx_t &depth,
+	                      const bool dirty = true);
 	//! Traverse two prefixes to find (1) that they match (so far), or (2) that they have a mismatching position,
-	//! or (3) that one prefix contains the other prefix
+	//! or (3) that one prefix contains the other prefix. This function aids in merging Nodes, and, therefore,
+	//! the nodes are not const
 	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position);
 	//! Returns the byte at position
 	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
-		auto &prefix = Prefix::Get(art, prefix_node);
+		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, PREFIX_IDX, false);
 		D_ASSERT(position < Node::PREFIX_SIZE);
 		D_ASSERT(position < prefix.data[Node::PREFIX_SIZE]);
 		return prefix.data[position];
@@ -78,15 +77,10 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
+	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
 
 	//! Vacuum the child of the node
 	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
-
-	//! Get a reference to the Prefix allocator
-	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
-		return (*art.allocators)[ALLOCATOR_IDX];
-	}
 
 private:
 	//! Appends the byte to this prefix node, or creates a subsequent prefix node,

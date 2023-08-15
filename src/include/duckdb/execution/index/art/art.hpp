@@ -103,7 +103,7 @@ public:
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
 
 	//! Find the node with a matching key, or return nullptr if not found
-	Node Lookup(Node node, const ARTKey &key, idx_t depth);
+	optional_ptr<const Node> Lookup(reference<const Node> &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree
 	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 

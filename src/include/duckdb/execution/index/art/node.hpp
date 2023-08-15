@@ -14,6 +14,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/execution/index/fixed_size_allocator.hpp"
 
 namespace duckdb {
 
@@ -27,7 +28,7 @@ enum class NType : uint8_t {
 	NODE_256 = 6,
 	LEAF_INLINED = 7,
 };
-class FixedSizeAllocator;
+
 class ART;
 class Prefix;
 class MetadataReader;
@@ -62,26 +63,36 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
+	//! Get references to the allocator
+	static FixedSizeAllocator &GetAllocatorByType(const ART &art, const NType type);
+	//! Get references to the allocator
+	static FixedSizeAllocator &GetAllocator(const ART &art, const uint8_t idx);
+	//! Get a (const) reference to the node. If dirty is false, then T should be a const class
+	template <class NODE>
+	static inline NODE &Ref(const ART &art, const Node ptr, const uint8_t idx, const bool dirty = true) {
+		return *(GetAllocator(art, idx).Gett<NODE>(ptr, dirty));
+	}
+
 	//! Replace the child node at byte
-	void ReplaceChild(const ART &art, const uint8_t byte, const Node child);
+	void ReplaceChild(const ART &art, const uint8_t byte, const Node child) const;
 	//! Insert the child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child node at byte
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
+	template <class NODE>
+	optional_ptr<NODE> GetChild(ART &art, const uint8_t byte, const bool dirty = true) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
+	template <class NODE>
+	optional_ptr<NODE> GetNextChild(ART &art, uint8_t &byte, const bool dirty = true) const;
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(ART &art, const bool only_verify);
+	string VerifyAndToString(ART &art, const bool only_verify) const;
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
 	//! Returns the matching node type for a given count
 	static NType GetARTNodeTypeByCount(const idx_t count);
-	//! Get references to the different allocators
-	static FixedSizeAllocator &GetAllocator(const ART &art, NType type);
 
 	//! Initializes a merge by incrementing the buffer IDs of a node and its subtree
 	void InitializeMerge(ART &art, const ARTFlags &flags);

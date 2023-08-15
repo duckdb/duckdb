@@ -362,9 +362,10 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(!keys[i].Empty());
-		auto leaf = Lookup(*tree, keys[i], 0);
-		D_ASSERT(leaf.HasMetadata());
-		D_ASSERT(Leaf::ContainsRowId(*this, leaf, row_ids[i]));
+		reference<const Node> root(*tree);
+		auto leaf = Lookup(root, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
 	}
 #endif
 
@@ -425,9 +426,10 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		D_ASSERT(leaf.HasMetadata());
-		D_ASSERT(Leaf::ContainsRowId(*this, leaf, row_identifiers[i]));
+		reference<const Node> root(*tree);
+		auto leaf = Lookup(root, keys[i], 0);
+		D_ASSERT(leaf);
+		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_identifiers[i]));
 	}
 #endif
 
@@ -485,7 +487,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	if (node_type != NType::PREFIX) {
 		D_ASSERT(depth < key.len);
-		auto child = node.GetChild(*this, key[depth]);
+		auto child = node.GetChild<Node>(*this, key[depth]);
 
 		// recurse, if a child exists at key[depth]
 		if (child) {
@@ -507,7 +509,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	// this is a prefix node, traverse
 	reference<Node> next_node(node);
-	auto mismatch_position = Prefix::Traverse(*this, next_node, key, depth);
+	auto mismatch_position = Prefix::Traverse<Node>(*this, next_node, key, depth);
 
 	// prefix matches key
 	if (next_node.get().GetType() != NType::PREFIX) {
@@ -570,9 +572,10 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		if (leaf.HasMetadata()) {
-			D_ASSERT(!Leaf::ContainsRowId(*this, leaf, row_identifiers[i]));
+		reference<const Node> root(*tree);
+		auto leaf = Lookup(root, keys[i], 0);
+		if (leaf) {
+			D_ASSERT(!Leaf::ContainsRowId(*this, *leaf, row_identifiers[i]));
 		}
 	}
 #endif
@@ -602,7 +605,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	}
 
 	D_ASSERT(depth < key.len);
-	auto child = next_node.get().GetChild(*this, key[depth]);
+	auto child = next_node.get().GetChild<Node>(*this, key[depth]);
 	if (child) {
 		D_ASSERT(child->HasMetadata());
 
@@ -669,24 +672,26 @@ static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &val
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids) {
 
-	auto leaf = Lookup(*tree, key, 0);
-	if (!leaf.HasMetadata()) {
+	reference<const Node> root(*tree);
+	auto leaf = Lookup(root, key, 0);
+	if (!leaf) {
 		return true;
 	}
-	return Leaf::GetRowIds(*this, leaf, result_ids, max_count);
+	return Leaf::GetRowIds(*this, *leaf, result_ids, max_count);
 }
 
 void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	auto leaf_node = Lookup(*tree, key, 0);
-	if (!leaf_node.HasMetadata()) {
+	reference<const Node> root(*tree);
+	auto leaf_node = Lookup(root, key, 0);
+	if (!leaf_node) {
 		result_size = 0;
 		return;
 	}
 
 	// we only perform index joins on PK/FK columns
-	D_ASSERT(leaf_node.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(leaf_node->GetType() == NType::LEAF_INLINED);
 	result_size = 1;
 	return;
 }
@@ -695,37 +700,37 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 // Lookup
 //===--------------------------------------------------------------------===//
 
-Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
+optional_ptr<const Node> ART::Lookup(reference<const Node> &node, const ARTKey &key, idx_t depth) {
 
-	while (node.HasMetadata()) {
+	while (node.get().HasMetadata()) {
 
 		// traverse prefix, if exists
-		reference<Node> next_node(node);
+		reference<const Node> next_node(node);
 		if (next_node.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, next_node, key, depth);
+			Prefix::Traverse<const Node>(*this, next_node, key, depth, false);
 			if (next_node.get().GetType() == NType::PREFIX) {
-				return Node();
+				return nullptr;
 			}
 		}
 
 		if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
-			return next_node.get();
+			return &next_node.get();
 		}
 
 		D_ASSERT(depth < key.len);
-		auto child = next_node.get().GetChild(*this, key[depth]);
+		auto child = next_node.get().GetChild<const Node>(*this, key[depth], false);
 		if (!child) {
 			// prefix matches key, but no child at byte, ART/subtree does not contain key
-			return Node();
+			return nullptr;
 		}
 
 		// lookup in child node
 		node = *child;
-		D_ASSERT(node.HasMetadata());
+		D_ASSERT(node.get().HasMetadata());
 		depth++;
 	}
 
-	return Node();
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -943,8 +948,9 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		if (!leaf.HasMetadata()) {
+		reference<const Node> root(*tree);
+		auto leaf = Lookup(root, keys[i], 0);
+		if (!leaf) {
 			if (conflict_manager.AddMiss(i)) {
 				found_conflict = i;
 			}
@@ -953,8 +959,8 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 		// when we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: leaves can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
-		D_ASSERT(leaf.GetType() == NType::LEAF_INLINED);
-		if (conflict_manager.AddHit(i, leaf.GetRowId())) {
+		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
+		if (conflict_manager.AddHit(i, leaf->GetRowId())) {
 			found_conflict = i;
 		}
 	}

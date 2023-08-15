@@ -46,10 +46,10 @@ public:
 	IndexPointer New();
 	//! Free the segment of the IndexPointer
 	void Free(const IndexPointer ptr);
-	//! Get the segment of the IndexPointer
+	//! Returns a pointer of type T to a segment. If dirty is false, then T should be a const class
 	template <class T>
-	inline T *Get(const IndexPointer ptr) {
-		return (T *)Get(ptr);
+	inline T *Gett(const IndexPointer ptr, const bool dirty = true) {
+		return (T *)Get(ptr, dirty);
 	}
 
 	//! Resets the allocator, e.g., during 'DELETE FROM table'
@@ -85,13 +85,8 @@ public:
 	void Deserialize(const BlockPointer &block_ptr);
 
 private:
-	//! Returns the data_ptr_t of an IndexPointer
-	inline data_ptr_t Get(const IndexPointer ptr) {
-		D_ASSERT(ptr.GetBufferId() < buffers.size());
-		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		auto buffer_ptr = buffers[ptr.GetBufferId()].GetPtr(*this);
-		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
-	}
+	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
+	data_ptr_t Get(const IndexPointer ptr, const bool dirty);
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
 

@@ -18,8 +18,10 @@ namespace duckdb {
 //! byte, and which contains the position of the child node in the children array
 class Node48 {
 public:
+	//! The metadata number of the NODE_48 node type
+	static constexpr uint8_t N48 = (uint8_t)NType::NODE_48;
 	//! Index of the Node48 FixedSizeAllocator
-	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_48 - 1;
+	static constexpr uint8_t N48_IDX = N48 - 1;
 
 	//! Delete copy constructors, as any Node48 can never own its memory
 	Node48(const Node48 &) = delete;
@@ -38,10 +40,6 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	//! Get a reference to the node
-	static inline Node48 &Get(const ART &art, const Node ptr) {
-		return *GetAllocator(art).Get<Node48>(ptr);
-	}
 	//! Initializes all the fields of the node while growing a Node16 to a Node48
 	static Node48 &GrowNode16(ART &art, Node &node48, Node &node16);
 	//! Initializes all fields of the node while shrinking a Node256 to a Node48
@@ -62,7 +60,8 @@ public:
 	}
 
 	//! Get the child for the respective byte in the node
-	inline optional_ptr<Node> GetChild(const uint8_t byte) {
+	template <class NODE>
+	inline optional_ptr<NODE> GetChild(const uint8_t byte) {
 		if (child_index[byte] != Node::EMPTY_MARKER) {
 			D_ASSERT(children[child_index[byte]].HasMetadata());
 			return &children[child_index[byte]];
@@ -70,14 +69,10 @@ public:
 		return nullptr;
 	}
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(uint8_t &byte);
+	template <class NODE>
+	optional_ptr<NODE> GetNextChild(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
-
-	//! Get a reference to the Node48 allocator
-	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
-		return (*art.allocators)[ALLOCATOR_IDX];
-	}
 };
 } // namespace duckdb

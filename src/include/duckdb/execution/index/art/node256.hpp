@@ -17,8 +17,10 @@ namespace duckdb {
 //! Node256 holds up to 256 Node children which can be directly indexed by the key byte
 class Node256 {
 public:
+	//! The metadata number of the NODE_256 node type
+	static constexpr uint8_t N256 = (uint8_t)NType::NODE_256;
 	//! Index of the Node256 FixedSizeAllocator
-	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_256 - 1;
+	static constexpr uint8_t N256_IDX = N256 - 1;
 
 	//! Delete copy constructors, as any Node256 can never own its memory
 	Node256(const Node256 &) = delete;
@@ -35,10 +37,6 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	//! Get a reference to the node
-	static inline Node256 &Get(const ART &art, const Node ptr) {
-		return *GetAllocator(art).Get<Node256>(ptr);
-	}
 	//! Initializes all the fields of the node while growing a Node48 to a Node256
 	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
 
@@ -56,21 +54,18 @@ public:
 	}
 
 	//! Get the child for the respective byte in the node
-	inline optional_ptr<Node> GetChild(const uint8_t byte) {
+	template <class NODE>
+	inline optional_ptr<NODE> GetChild(const uint8_t byte) {
 		if (children[byte].HasMetadata()) {
 			return &children[byte];
 		}
 		return nullptr;
 	}
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(uint8_t &byte);
+	template <class NODE>
+	optional_ptr<NODE> GetNextChild(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
-
-	//! Get a reference to the Node256 allocator
-	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
-		return (*art.allocators)[ALLOCATOR_IDX];
-	}
 };
 } // namespace duckdb

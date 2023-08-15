@@ -7,9 +7,9 @@ namespace duckdb {
 
 Node4 &Node4::New(ART &art, Node &node) {
 
-	node = GetAllocator(art).New();
-	node.SetMetadata((uint8_t)NType::NODE_4);
-	auto &n4 = Node4::Get(art, node);
+	node = Node::GetAllocator(art, N4_IDX).New();
+	node.SetMetadata(N4);
+	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
 
 	n4.count = 0;
 	return n4;
@@ -18,7 +18,7 @@ Node4 &Node4::New(ART &art, Node &node) {
 void Node4::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node4::Get(art, node);
+	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
 
 	// free all children
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -28,8 +28,8 @@ void Node4::Free(ART &art, Node &node) {
 
 Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 
-	auto &n4 = Node4::New(art, node4);
-	auto &n16 = Node16::Get(art, node16);
+	auto &n4 = New(art, node4);
+	auto &n16 = Node::Ref<Node16>(art, node16, Node16::N16_IDX);
 
 	D_ASSERT(n16.count <= Node::NODE_4_CAPACITY);
 	n4.count = n16.count;
@@ -53,7 +53,7 @@ void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node4::Get(art, node);
+	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -88,7 +88,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node4::Get(art, node);
+	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
 
 	idx_t child_pos = 0;
 	for (; child_pos < n4.count; child_pos++) {
@@ -120,7 +120,7 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) 
 		auto old_n4_node = node;
 
 		// get only child and concatenate prefixes
-		auto child = *n4.GetChild(n4.key[0]);
+		auto child = *n4.GetChild<Node>(n4.key[0]);
 		Prefix::Concatenate(art, prefix, n4.key[0], child);
 
 		n4.count--;
@@ -137,7 +137,8 @@ void Node4::ReplaceChild(const uint8_t byte, const Node child) {
 	}
 }
 
-optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
+template <class NODE>
+optional_ptr<NODE> Node4::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
@@ -148,7 +149,8 @@ optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
 	return nullptr;
 }
 
-optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
+template <class NODE>
+optional_ptr<NODE> Node4::GetNextChild(uint8_t &byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {

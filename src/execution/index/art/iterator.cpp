@@ -7,34 +7,34 @@
 
 namespace duckdb {
 
-bool IteratorKey::operator>(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() > k.len;
+	return key_bytes.size() > key.len;
 }
 
-bool IteratorKey::operator>=(const ARTKey &k) const {
-	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), k.len); i++) {
-		if (key_bytes[i] > k.data[i]) {
+bool IteratorKey::operator>=(const ARTKey &key) const {
+	for (idx_t i = 0; i < MinValue<idx_t>(key_bytes.size(), key.len); i++) {
+		if (key_bytes[i] > key.data[i]) {
 			return true;
-		} else if (key_bytes[i] < k.data[i]) {
+		} else if (key_bytes[i] < key.data[i]) {
 			return false;
 		}
 	}
-	return key_bytes.size() >= k.len;
+	return key_bytes.size() >= key.len;
 }
 
-bool IteratorKey::operator==(const ARTKey &k) const {
+bool IteratorKey::operator==(const ARTKey &key) const {
 	// NOTE: we only use this for finding the LowerBound, in which case the length
 	// has to be equal
-	D_ASSERT(key_bytes.size() == k.len);
+	D_ASSERT(key_bytes.size() == key.len);
 	for (idx_t i = 0; i < key_bytes.size(); i++) {
-		if (key_bytes[i] != k.data[i]) {
+		if (key_bytes[i] != key.data[i]) {
 			return false;
 		}
 	}
@@ -71,7 +71,7 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 	return true;
 }
 
-void Iterator::FindMinimum(Node &node) {
+void Iterator::FindMinimum(const Node &node) {
 
 	D_ASSERT(node.HasMetadata());
 
@@ -83,7 +83,7 @@ void Iterator::FindMinimum(Node &node) {
 
 	// traverse the prefix
 	if (node.GetType() == NType::PREFIX) {
-		auto &prefix = Prefix::Get(*art, node);
+		auto &prefix = Node::Ref<const Prefix>(*art, node, Prefix::PREFIX_IDX, false);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -93,14 +93,14 @@ void Iterator::FindMinimum(Node &node) {
 
 	// go to the leftmost entry in the current node and recurse
 	uint8_t byte = 0;
-	auto next = node.GetNextChild(*art, byte);
+	auto next = node.GetNextChild<const Node>(*art, byte, false);
 	D_ASSERT(next);
 	current_key.Push(byte);
 	nodes.emplace(node, byte);
 	FindMinimum(*next);
 }
 
-bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
+bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
 	if (!node.HasMetadata()) {
 		return false;
@@ -117,7 +117,7 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 
 	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
-		auto child = node.GetNextChild(*art, next_byte);
+		auto child = node.GetNextChild<const Node>(*art, next_byte, false);
 		if (!child) {
 			// the key is greater than any key in this subtree
 			return Next();
@@ -138,7 +138,7 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 	}
 
 	// resolve the prefix
-	auto &prefix = Prefix::Get(*art, node);
+	auto &prefix = Node::Ref<const Prefix>(*art, node, Prefix::PREFIX_IDX, false);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
@@ -182,7 +182,7 @@ bool Iterator::Next() {
 		}
 
 		top.byte++;
-		auto next_node = top.node.GetNextChild(*art, top.byte);
+		auto next_node = top.node.GetNextChild<const Node>(*art, top.byte, false);
 		if (!next_node) {
 			PopNode();
 			continue;
@@ -199,7 +199,8 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	if (nodes.top().node.GetType() == NType::PREFIX) {
-		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[Node::PREFIX_SIZE];
+		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, Prefix::PREFIX_IDX, false);
+		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {
 		current_key.Pop(1);

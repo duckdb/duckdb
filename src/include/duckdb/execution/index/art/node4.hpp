@@ -17,8 +17,10 @@ namespace duckdb {
 //! Node4 holds up to four Node children sorted by their key byte
 class Node4 {
 public:
+	//! The metadata number of the NODE_4 node type
+	static constexpr uint8_t N4 = (uint8_t)NType::NODE_4;
 	//! Index of the Node4 FixedSizeAllocator
-	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_4 - 1;
+	static constexpr uint8_t N4_IDX = N4 - 1;
 
 	//! Delete copy constructors, as any Node4 can never own its memory
 	Node4(const Node4 &) = delete;
@@ -37,10 +39,6 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	//! Get a reference to the node
-	static inline Node4 &Get(const ART &art, const Node ptr) {
-		return *GetAllocator(art).Get<Node4>(ptr);
-	}
 	//! Initializes all fields of the node while shrinking a Node16 to a Node4
 	static Node4 &ShrinkNode16(ART &art, Node &node4, Node &node16);
 
@@ -55,17 +53,14 @@ public:
 	//! Replace the child node at byte
 	void ReplaceChild(const uint8_t byte, const Node child);
 
-	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChild(const uint8_t byte);
+	//! Get the (const) child for the respective byte in the node
+	template <class NODE>
+	optional_ptr<NODE> GetChild(const uint8_t byte);
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(uint8_t &byte);
+	template <class NODE>
+	optional_ptr<NODE> GetNextChild(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
-
-	//! Get a reference to the Node4 allocator
-	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
-		return (*art.allocators)[ALLOCATOR_IDX];
-	}
 };
 } // namespace duckdb

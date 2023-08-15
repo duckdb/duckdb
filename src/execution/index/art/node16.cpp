@@ -7,9 +7,9 @@ namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
-	node = GetAllocator(art).New();
-	node.SetMetadata((uint8_t)NType::NODE_16);
-	auto &n16 = Node16::Get(art, node);
+	node = Node::GetAllocator(art, N16_IDX).New();
+	node.SetMetadata(N16);
+	auto &n16 = Node::Ref<Node16>(art, node, N16_IDX);
 
 	n16.count = 0;
 	return n16;
@@ -18,7 +18,7 @@ Node16 &Node16::New(ART &art, Node &node) {
 void Node16::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n16 = Node16::Get(art, node);
+	auto &n16 = Node::Ref<Node16>(art, node, N16_IDX);
 
 	// free all children
 	for (idx_t i = 0; i < n16.count; i++) {
@@ -28,8 +28,8 @@ void Node16::Free(ART &art, Node &node) {
 
 Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 
-	auto &n4 = Node4::Get(art, node4);
-	auto &n16 = Node16::New(art, node16);
+	auto &n4 = Node::Ref<Node4>(art, node4, Node4::N4_IDX);
+	auto &n16 = New(art, node16);
 
 	n16.count = n4.count;
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -44,8 +44,8 @@ Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 
 Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 
-	auto &n16 = Node16::New(art, node16);
-	auto &n48 = Node48::Get(art, node48);
+	auto &n16 = New(art, node16);
+	auto &n48 = Node::Ref<Node48>(art, node48, Node48::N48_IDX);
 
 	n16.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -72,7 +72,7 @@ void Node16::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n16 = Node16::Get(art, node);
+	auto &n16 = Node::Ref<Node16>(art, node, N16_IDX);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n16.count; i++) {
@@ -107,7 +107,7 @@ void Node16::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node16::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n16 = Node16::Get(art, node);
+	auto &n16 = Node::Ref<Node16>(art, node, N16_IDX);
 
 	idx_t child_pos = 0;
 	for (; child_pos < n16.count; child_pos++) {
@@ -144,7 +144,8 @@ void Node16::ReplaceChild(const uint8_t byte, const Node child) {
 	}
 }
 
-optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
+template <class NODE>
+optional_ptr<NODE> Node16::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
@@ -155,7 +156,8 @@ optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
 	return nullptr;
 }
 
-optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
+template <class NODE>
+optional_ptr<NODE> Node16::GetNextChild(uint8_t &byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {

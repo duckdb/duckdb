@@ -225,7 +225,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	// new increases the allocation count, we need to counter that here
 	total_segment_count--;
 
-	memcpy(Get(new_ptr), Get(ptr), segment_size);
+	memcpy(Get(new_ptr, true), Get(ptr, true), segment_size);
 	return new_ptr;
 }
 
@@ -269,6 +269,14 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_ptr) {
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
 		buffers_with_free_space.insert(reader.Read<idx_t>());
 	}
+}
+
+data_ptr_t FixedSizeAllocator::Get(const IndexPointer ptr, const bool dirty) {
+	D_ASSERT(ptr.GetBufferId() < buffers.size());
+	D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+	buffers[ptr.GetBufferId()].dirty = dirty;
+	auto buffer_ptr = buffers[ptr.GetBufferId()].GetPtr(*this);
+	return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 }
 
 uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t segment_count) {

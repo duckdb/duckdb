@@ -17,6 +17,15 @@ namespace duckdb {
 //! Node16 holds up to 16 Node children sorted by their key byte
 class Node16 {
 public:
+	//! The metadata number of the NODE_16 node type
+	static constexpr uint8_t N16 = (uint8_t)NType::NODE_16;
+	//! Index of the Node16 FixedSizeAllocator
+	static constexpr uint8_t N16_IDX = N16 - 1;
+
+	//! Delete copy constructors, as any Node16 can never own its memory
+	Node16(const Node16 &) = delete;
+	Node16 &operator=(const Node16 &) = delete;
+
 	//! Number of non-null children
 	uint8_t count;
 	//! Array containing all partial key bytes
@@ -25,22 +34,11 @@ public:
 	Node children[Node::NODE_16_CAPACITY];
 
 public:
-	//! Index of the Node16 FixedSizeAllocator
-	static constexpr uint8_t ALLOCATOR_IDX = (uint8_t)NType::NODE_16 - 1;
-
-	//! Delete copy constructors, as any Node16 can never own its memory
-	Node16(const Node16 &) = delete;
-	Node16 &operator=(const Node16 &) = delete;
-
 	//! Get a new Node16, might cause a new buffer allocation, and initialize it
 	static Node16 &New(ART &art, Node &node);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
-	//! Get a reference to the node
-	static inline Node16 &Get(const ART &art, const Node ptr) {
-		return *GetAllocator(art).Get<Node16>(ptr);
-	}
 	//! Initializes all the fields of the node while growing a Node4 to a Node16
 	static Node16 &GrowNode4(ART &art, Node &node16, Node &node4);
 	//! Initializes all fields of the node while shrinking a Node48 to a Node16
@@ -58,16 +56,13 @@ public:
 	void ReplaceChild(const uint8_t byte, const Node child);
 
 	//! Get the child for the respective byte in the node
-	optional_ptr<Node> GetChild(const uint8_t byte);
+	template <class NODE>
+	optional_ptr<NODE> GetChild(const uint8_t byte);
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(uint8_t &byte);
+	template <class NODE>
+	optional_ptr<NODE> GetNextChild(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
-
-	//! Get a reference to the Node16 allocator
-	static inline FixedSizeAllocator &GetAllocator(const ART &art) {
-		return (*art.allocators)[ALLOCATOR_IDX];
-	}
 };
 } // namespace duckdb
