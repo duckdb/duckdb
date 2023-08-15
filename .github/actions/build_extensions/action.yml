@@ -5,6 +5,9 @@ inputs:
   run_tests:
     description: 'Run extension tests after build'
     default: 1
+  run_autoload_tests:
+    description: 'Runs the autoloading tests'
+    default: 1
 
   # Deploy config
   deploy_as:
@@ -72,9 +75,6 @@ inputs:
   unittest_script:
     description: 'Script/program to execute the unittests'
     default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
-  run_autoload_tests:
-    description: 'Runs the autoloading tests'
-    default: 1
 
 runs:
   using: "composite"
