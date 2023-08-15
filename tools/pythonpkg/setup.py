@@ -163,6 +163,7 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
 
+toolchain_args.extend(['-DENABLE_EXTENSION_AUTOLOADING=1'])
 
 class get_pybind_include(object):
     def __init__(self, user=False):

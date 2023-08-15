@@ -135,7 +135,7 @@ runs:
         DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && '/tmp/local_repository' || ''}}
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
@@ -199,7 +199,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
-        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && '/tmp/local_repository' || ''}}
+        LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
       run: |
         cd  ${{ inputs.build_dir}}
         ${{ inputs.unittest_script }}

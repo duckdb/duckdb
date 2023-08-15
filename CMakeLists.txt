@@ -1136,7 +1136,6 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
           DEPENDS shell
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)
-  add_extension_dependencies(duckdb_local_extension_repo)
   message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
