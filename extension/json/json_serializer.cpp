@@ -205,16 +205,6 @@ void JsonSerializer::WriteValue(double value) {
 	PushValue(val);
 }
 
-void JsonSerializer::WriteValue(interval_t value) {
-	auto val = yyjson_mut_obj(doc);
-	PushValue(val);
-	stack.push_back(val);
-	WriteProperty(100, "months", value.months);
-	WriteProperty(101, "days", value.days);
-	WriteProperty(102, "micros", value.micros);
-	stack.pop_back();
-}
-
 void JsonSerializer::WriteValue(const string &value) {
 	if (skip_if_empty && value.empty()) {
 		return;

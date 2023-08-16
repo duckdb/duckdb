@@ -266,19 +266,6 @@ string JsonDeserializer::ReadString() {
 	return yyjson_get_str(val);
 }
 
-interval_t JsonDeserializer::ReadInterval() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-	interval_t result;
-	ReadProperty(100, "months", result.months);
-	ReadProperty(101, "days", result.days);
-	ReadProperty(102, "micros", result.micros);
-	Pop();
-	return result;
-}
 
 hugeint_t JsonDeserializer::ReadHugeInt() {
 	auto val = GetNextValue();

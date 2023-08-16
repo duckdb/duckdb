@@ -9,6 +9,11 @@
 #pragma once
 
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/binary_common.hpp"
+
+#ifdef DEBUG
+#include "duckdb/common/pair.hpp"
+#endif
 
 namespace duckdb {
 
@@ -21,6 +26,14 @@ private:
 		uint64_t size;
 		// the offset of the object start in the buffer
 		uint64_t offset;
+
+		State(uint32_t field_count, uint64_t size, uint64_t offset)
+		    : field_count(field_count), size(size), offset(offset) {
+		}
+
+#ifdef DEBUG
+		vector<pair<const char *, field_id_t>> seen_fields;
+#endif
 	};
 
 	const char *current_tag;
@@ -40,6 +53,11 @@ private:
 	}
 	void WriteDataInternal(const char *ptr, idx_t write_size) {
 		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
+	}
+
+	void WriteField(field_id_t field_id, BinaryMessageKind kind) {
+		Write<uint32_t>(field_id);
+		Write<uint8_t>(static_cast<uint8_t>(kind));
 	}
 
 	explicit BinarySerializer() {
@@ -92,7 +110,6 @@ public:
 	void WriteValue(hugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
-	void WriteValue(interval_t value) final;
 	void WriteValue(const string_t value) final;
 	void WriteValue(const string &value) final;
 	void WriteValue(const char *value) final;

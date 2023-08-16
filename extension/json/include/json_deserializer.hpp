@@ -85,7 +85,6 @@ private:
 	float ReadFloat() final;
 	double ReadDouble() final;
 	string ReadString() final;
-	interval_t ReadInterval() final;
 	hugeint_t ReadHugeInt() final;
 	void ReadDataPtr(data_ptr_t &ptr, idx_t count) final;
 };

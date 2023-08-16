@@ -78,7 +78,6 @@ public:
 	void WriteValue(hugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
-	void WriteValue(interval_t value) final;
 	void WriteValue(const string_t value) final;
 	void WriteValue(const string &value) final;
 	void WriteValue(const char *value) final;

@@ -1,5 +1,9 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 
+#ifdef DEBUG
+#include "duckdb/common/string_util.hpp"
+#endif
+
 namespace duckdb {
 
 void BinarySerializer::SetTag(const field_id_t field_id, const char *tag) {
@@ -7,6 +11,26 @@ void BinarySerializer::SetTag(const field_id_t field_id, const char *tag) {
 	current_tag = tag;
 	// Increment the number of fields
 	stack.back().field_count++;
+
+#ifdef DEBUG
+
+	// Check that the tag is unique
+	auto &seen_fields = stack.back().seen_fields;
+
+	for (auto &seen_field : seen_fields) {
+		if (seen_field.first == tag || seen_field.second == field_id) {
+			string all_fields;
+			for (auto &field : seen_fields) {
+				all_fields += StringUtil::Format("\"%s\":%d ", field.first, field.second);
+			}
+			throw SerializationException("Duplicate field id/tag in field: \"%s\":%d, other fields: %s", tag, field_id,
+			                             all_fields);
+		}
+	}
+
+	seen_fields.emplace_back(tag, field_id);
+
+#endif
 }
 
 //===--------------------------------------------------------------------===//
@@ -82,83 +106,91 @@ void BinarySerializer::WriteNull() {
 	// This should never be called, optional writes should be handled by OnOptionalBegin
 }
 
+void BinarySerializer::WriteValue(bool value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_8);
+	Write(static_cast<uint8_t>(value));
+}
+
 void BinarySerializer::WriteValue(uint8_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_8);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(int8_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_8);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint16_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_16);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(int16_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_16);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint32_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_32);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(int32_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_32);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint64_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_64);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(int64_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_64);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(hugeint_t value) {
+	WriteField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	Write(static_cast<uint64_t>(sizeof(hugeint_t)));
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(float value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_32);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(double value) {
-	Write(value);
-}
-
-void BinarySerializer::WriteValue(interval_t value) {
+	WriteField(current_field_id, BinaryMessageKind::FIXED_64);
 	Write(value);
 }
 
 void BinarySerializer::WriteValue(const string &value) {
-	auto len = value.length();
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteDataInternal(value.c_str(), len);
-	}
+	WriteField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	uint64_t len = value.length();
+	Write(len);
+	WriteDataInternal(value.c_str(), len);
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
-	auto len = value.GetSize();
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteDataInternal(value.GetDataUnsafe(), len);
-	}
+	WriteField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	uint64_t len = value.GetSize();
+	Write(len);
+	WriteDataInternal(value.GetDataUnsafe(), len);
 }
 
 void BinarySerializer::WriteValue(const char *value) {
-	auto len = strlen(value);
-	Write<uint32_t>((uint32_t)len);
-	if (len > 0) {
-		WriteDataInternal(value, len);
-	}
-}
-
-void BinarySerializer::WriteValue(bool value) {
-	Write(value);
+	WriteField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	uint64_t len = strlen(value);
+	Write(len);
+	WriteDataInternal(value, len);
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
+	WriteField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	Write(static_cast<uint64_t>(count));
 	WriteDataInternal(ptr, count);
 }
 

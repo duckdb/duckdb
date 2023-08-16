@@ -80,68 +80,81 @@ bool BinaryDeserializer::OnOptionalBegin() {
 // Primitive Types
 //===--------------------------------------------------------------------===//
 bool BinaryDeserializer::ReadBool() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
 	return ReadPrimitive<bool>();
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
 	return ReadPrimitive<int8_t>();
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
 	return ReadPrimitive<uint8_t>();
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_16);
 	return ReadPrimitive<int16_t>();
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_16);
 	return ReadPrimitive<uint16_t>();
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
 	return ReadPrimitive<int32_t>();
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
 	return ReadPrimitive<uint32_t>();
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
 	return ReadPrimitive<int64_t>();
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
 	return ReadPrimitive<uint64_t>();
 }
 
 float BinaryDeserializer::ReadFloat() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
 	return ReadPrimitive<float>();
 }
 
 double BinaryDeserializer::ReadDouble() {
+	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
 	return ReadPrimitive<double>();
 }
 
 string BinaryDeserializer::ReadString() {
-	uint32_t size = ReadPrimitive<uint32_t>();
-	if (size == 0) {
+	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	auto len = ReadPrimitive<uint64_t>();
+	if (len == 0) {
 		return string();
 	}
-	auto buffer = make_unsafe_uniq_array<data_t>(size);
-	ReadData(buffer.get(), size);
-	return string(const_char_ptr_cast(buffer.get()), size);
-}
-
-interval_t BinaryDeserializer::ReadInterval() {
-	return ReadPrimitive<interval_t>();
+	auto buffer = make_unsafe_uniq_array<data_t>(len);
+	ReadData(buffer.get(), len);
+	return string(const_char_ptr_cast(buffer.get()), len);
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
+	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	ReadPrimitive<uint64_t>();
 	return ReadPrimitive<hugeint_t>();
 }
 
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
+	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	auto len = ReadPrimitive<uint64_t>();
+	D_ASSERT(len == count);
 	ReadData(ptr, count);
 }
 

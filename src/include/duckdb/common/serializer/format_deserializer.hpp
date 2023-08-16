@@ -367,12 +367,6 @@ private:
 		}
 	}
 
-	// Deserialize a interval_t
-	template <typename T = void>
-	inline typename std::enable_if<std::is_same<T, interval_t>::value, T>::type Read() {
-		return ReadInterval();
-	}
-
 	// Deserialize a hugeint_t
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
@@ -448,7 +442,6 @@ protected:
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
-	virtual interval_t ReadInterval() = 0;
 	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
 

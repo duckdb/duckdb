@@ -264,7 +264,6 @@ protected:
 	virtual void WriteValue(const string_t value) = 0;
 	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const char *str) = 0;
-	virtual void WriteValue(interval_t value) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
