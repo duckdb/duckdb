@@ -23,3 +23,13 @@ select '1.7e39'::UHUGEINT
 
 statement error
 select '4e38'::UHUGEINT
+
+query I
+select 5.4321e4::UHUGEINT
+----
+54321
+
+query I
+select (0.00000000000000000000002e+44)::UHUGEINT;
+----
+2000000000000000000000
