@@ -68,6 +68,7 @@ common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
+common/types/cast_helpers.cpp	2
 common/types/chunk_collection.cpp	94
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	55
@@ -106,7 +107,7 @@ common/vector_operations/vector_copy.cpp	2
 common/vector_operations/vector_hash.cpp	7
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
-core_functions/aggregate/distributive/bitstring_agg.cpp	6
+core_functions/aggregate/distributive/bitstring_agg.cpp	8
 core_functions/aggregate/distributive/entropy.cpp	9
 core_functions/aggregate/distributive/kurtosis.cpp	3
 core_functions/aggregate/distributive/minmax.cpp	2
@@ -155,7 +156,7 @@ execution/expression_executor/execute_comparison.cpp	5
 execution/expression_executor/execute_conjunction.cpp	3
 execution/expression_executor/execute_operator.cpp	3
 execution/expression_executor_state.cpp	2
-execution/index/art/art.cpp	3
+execution/index/art/art.cpp	11
 execution/index/art/art_key.cpp	6
 execution/index/art/iterator.cpp	2
 execution/index/art/node.cpp	6
@@ -251,9 +252,9 @@ function/pragma_function.cpp	6
 function/scalar/generic/constant_or_null.cpp	5
 function/scalar/list/list_concat.cpp	5
 function/scalar/list/list_extract.cpp	10
-function/scalar/operators/add.cpp	4
+function/scalar/operators/add.cpp	6
 function/scalar/operators/arithmetic.cpp	23
-function/scalar/operators/multiply.cpp	3
+function/scalar/operators/multiply.cpp	4
 function/scalar/operators/subtract.cpp	5
 function/scalar/strftime_format.cpp	31
 function/scalar/string/regexp.cpp	5
