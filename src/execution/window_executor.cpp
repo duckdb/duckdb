@@ -1163,9 +1163,9 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector
 		}
 		int64_t val_idx = (int64_t)row_idx;
 		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
-			val_idx += offset;
+			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
-			val_idx -= offset;
+			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		}
 
 		idx_t delta = 0;
