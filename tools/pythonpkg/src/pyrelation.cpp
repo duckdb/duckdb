@@ -297,77 +297,109 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &f
 	return Aggregate(expr, groups);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AnyValue(const std::string &column, const std::string &groups,
+                                                        const std::string &window_spec,
+                                                        const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("any_value", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("any_value", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ArgMax(const std::string &arg_column, const std::string &value_column,
+                                                      const std::string &groups, const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("arg_max", value_column, arg_column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("arg_max", arg_column, groups, value_column, projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ArgMin(const std::string &arg_column, const std::string &value_column,
+                                                      const std::string &groups, const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("arg_max", value_column, arg_column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("arg_max", arg_column, groups, value_column, projected_columns);
+	}
+}
+
+/*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
-	return GenericAggregator("sum", sum_columns, groups);
+    return GenericAggregator("sum", sum_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Count(const string &count_columns, const string &groups) {
-	return GenericAggregator("count", count_columns, groups);
+    return GenericAggregator("count", count_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Median(const string &median_columns, const string &groups) {
-	return GenericAggregator("median", median_columns, groups);
+    return GenericAggregator("median", median_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Quantile(const string &q, const string &quantile_columns,
                                                         const string &groups) {
-	return GenericAggregator("quantile", quantile_columns, groups, q);
+    return GenericAggregator("quantile", quantile_columns, groups, q);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Min(const string &min_columns, const string &groups) {
-	return GenericAggregator("min", min_columns, groups);
+    return GenericAggregator("min", min_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Max(const string &max_columns, const string &groups) {
-	return GenericAggregator("max", max_columns, groups);
+    return GenericAggregator("max", max_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mean(const string &mean_columns, const string &groups) {
-	return GenericAggregator("avg", mean_columns, groups);
+    return GenericAggregator("avg", mean_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Var(const string &var_columns, const string &groups) {
-	return GenericAggregator("var_pop", var_columns, groups);
+    return GenericAggregator("var_pop", var_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::STD(const string &std_columns, const string &groups) {
-	return GenericAggregator("stddev_pop", std_columns, groups);
+    return GenericAggregator("stddev_pop", std_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ValueCounts(const string &count_column, const string &groups) {
-	if (count_column.find(',') != string::npos) {
-		throw InvalidInputException("Only one column is accepted in Value_Counts method");
-	}
-	return GenericAggregator("count", count_column, groups, "", count_column);
+    if (count_column.find(',') != string::npos) {
+        throw InvalidInputException("Only one column is accepted in Value_Counts method");
+    }
+    return GenericAggregator("count", count_column, groups, "", count_column);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::MAD(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("mad", aggr_columns, groups);
+    return GenericAggregator("mad", aggr_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("mode", aggr_columns, groups);
+    return GenericAggregator("mode", aggr_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Abs(const string &columns) {
-	auto expr = GenerateExpressionList("abs", columns);
-	return ProjectFromExpression(expr);
+    auto expr = GenerateExpressionList("abs", columns);
+    return ProjectFromExpression(expr);
 }
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Prod(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("product", aggr_columns, groups);
+    return GenericAggregator("product", aggr_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Skew(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("skewness", aggr_columns, groups);
+    return GenericAggregator("skewness", aggr_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Kurt(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("kurtosis", aggr_columns, groups);
+    return GenericAggregator("kurtosis", aggr_columns, groups);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SEM(const string &aggr_columns, const string &groups) {
-	return GenericAggregator("sem", aggr_columns, groups);
+    return GenericAggregator("sem", aggr_columns, groups);
 }
+*/
 
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
@@ -388,56 +420,58 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Unique(const string &std_columns)
 
 unique_ptr<DuckDBPyRelation>
 DuckDBPyRelation::GenericWindowFunction(const string &function_name, const string &function_parameters,
-                                        const string &aggr_columns, const string &groups, const string &window_spec,
-                                        const bool &ignore_nulls, const string &projected_columns) {
-	auto expr = GenerateExpressionList(function_name, aggr_columns, groups, function_parameters, ignore_nulls,
+                                        const string &aggr_columns, const string &window_spec, const bool &ignore_nulls,
+                                        const string &projected_columns) {
+	auto expr = GenerateExpressionList(function_name, aggr_columns, "", function_parameters, ignore_nulls,
 	                                   projected_columns, window_spec);
 	return make_uniq<DuckDBPyRelation>(rel->Project(expr));
 }
 
+/*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumSum(const string &aggr_columns) {
-	return GenericWindowFunction("sum", "", aggr_columns, "",
-	                             "over (rows between unbounded preceding and current row) ", false, "");
+    return GenericWindowFunction("sum", "", aggr_columns, "",
+                                 "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumProd(const string &aggr_columns) {
-	return GenericWindowFunction("product", "", aggr_columns, "",
-	                             "over (rows between unbounded preceding and current row) ", false, "");
+    return GenericWindowFunction("product", "", aggr_columns, "",
+                                 "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMax(const string &aggr_columns) {
-	return GenericWindowFunction("max", "", aggr_columns, "",
-	                             "over (rows between unbounded preceding and current row) ", false, "");
+    return GenericWindowFunction("max", "", aggr_columns, "",
+                                 "over (rows between unbounded preceding and current row) ", false, "");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns) {
-	return GenericWindowFunction("min", "", aggr_columns, "",
-	                             "over (rows between unbounded preceding and current row) ", false, "");
+    return GenericWindowFunction("min", "", aggr_columns, "",
+                                 "over (rows between unbounded preceding and current row) ", false, "");
 }
+*/
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RowNumber(const string &window_spec, const string &projected_columns) {
-	return GenericWindowFunction("row_number", "", "*", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("row_number", "", "*", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Rank(const string &window_spec, const string &projected_columns) {
-	return GenericWindowFunction("rank", "", "*", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("rank", "", "*", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::DenseRank(const string &window_spec, const string &projected_columns) {
-	return GenericWindowFunction("dense_rank", "", "*", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("dense_rank", "", "*", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::PercentRank(const string &window_spec, const string &projected_columns) {
-	return GenericWindowFunction("percent_rank", "", "*", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("percent_rank", "", "*", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spec, const string &projected_columns) {
-	return GenericWindowFunction("cume_dist", "", "*", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("cume_dist", "", "*", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets,
                                                      const string &projected_columns) {
-	return GenericWindowFunction("ntile", std::to_string(num_buckets), "", "", window_spec, false, projected_columns);
+	return GenericWindowFunction("ntile", std::to_string(num_buckets), "", window_spec, false, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const string &window_spec, const int &offset,
@@ -450,7 +484,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const s
 	if (!default_value.empty()) {
 		lag_params += "," + default_value;
 	}
-	return GenericWindowFunction("lag", lag_params, column, "", window_spec, ignore_nulls, projected_columns);
+	return GenericWindowFunction("lag", lag_params, column, window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const string &window_spec, const int &offset,
@@ -463,23 +497,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const 
 	if (!default_value.empty()) {
 		lead_params += "," + default_value;
 	}
-	return GenericWindowFunction("lead", lead_params, column, "", window_spec, ignore_nulls, projected_columns);
+	return GenericWindowFunction("lead", lead_params, column, window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FirstValue(const string &column, const string &window_spec,
                                                           const bool &ignore_nulls, const string &projected_columns) {
-	return GenericWindowFunction("first_value", "", column, "", window_spec, ignore_nulls, projected_columns);
+	return GenericWindowFunction("first_value", "", column, window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LastValue(const string &column, const string &window_spec,
                                                          const bool &ignore_nulls, const string &projected_columns) {
-	return GenericWindowFunction("last_value", "", column, "", window_spec, ignore_nulls, projected_columns);
+	return GenericWindowFunction("last_value", "", column, window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NthValue(const string &column, const string &window_spec,
                                                         const int &offset, const bool &ignore_nulls,
                                                         const string &projected_columns) {
-	return GenericWindowFunction("nth_value", std::to_string(offset), column, "", window_spec, ignore_nulls,
+	return GenericWindowFunction("nth_value", std::to_string(offset), column, window_spec, ignore_nulls,
 	                             projected_columns);
 }
 

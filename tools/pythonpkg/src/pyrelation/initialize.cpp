@@ -70,6 +70,19 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 }
 
 static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
+	m.def("any_value", &DuckDBPyRelation::AnyValue, "Returns the first non-null value from a given column",
+	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("arg_max", &DuckDBPyRelation::ArgMax,
+	         "Finds the row with the maximum value for a value column and returns the value of that row for an "
+	         "argument column",
+	         py::arg("arg_column"), py::arg("value_column"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "")
+	    .def("arg_min", &DuckDBPyRelation::ArgMin,
+	         "Finds the row with the minimum value for a value column and returns the value of that row for an "
+	         "argument column",
+	         py::arg("arg_column"), py::arg("value_column"), py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "");
+	/*
 	m.def("sum", &DuckDBPyRelation::Sum,
 	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
 	      py::arg("sum_aggr"), py::arg("group_expr") = "")
@@ -129,6 +142,7 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("aggregation_columns"))
 	    .def("cummin", &DuckDBPyRelation::CumMin, "Returns the cumulative minimum of the aggregate column.",
 	         py::arg("aggregation_columns"));
+	*/
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

@@ -28,6 +28,11 @@ def table(duckdb_cursor):
 
 
 class TestRAPIWindows:
+
+    #################################################################
+    ############### GENERAL PURPOSE WIN FUNCTIONS ###################
+    #################################################################
+
     def test_row_number(self, table):
         result = table.row_number("over ()").execute().fetchall()
         expected = list(range(1, 9))
@@ -305,5 +310,31 @@ class TestRAPIWindows:
             (3, -1, 0, None),
             (3, None, 10, None),
         ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    #################################################################
+    ################# AGG FUNCTIONS WITHIN WIN ######################
+    #################################################################
+
+    def test_any_value(self, table):
+        result = (
+            table.any_value("v", window_spec="over (partition by id order by t asc)", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 1), (1, 1), (1, 1), (2, 11), (2, 11), (3, 5), (3, 5), (3, 5)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_arg_max(self, table):
+        result = (
+            table.arg_max("t", "v", window_spec="over (partition by id)", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 3), (1, 3), (1, 3), (2, -1), (2, -1), (3, -2), (3, -2), (3, -2)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
