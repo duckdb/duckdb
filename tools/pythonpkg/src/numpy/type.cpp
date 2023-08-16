@@ -146,7 +146,8 @@ LogicalType NumpyToLogicalType(const NumpyType &col_type) {
 	case NumpyNullableType::DATETIME_US:
 	case NumpyNullableType::DATETIME_NS:
 	case NumpyNullableType::DATETIME_S: {
-		//FIXME: For now we convert these all to TIMESTAMP, when the support for our other TIMESTAMP types matures we might change this
+		// FIXME: For now we convert these all to TIMESTAMP, when the support for our other TIMESTAMP types matures we
+		// might change this
 		if (col_type.has_timezone) {
 			return LogicalType::TIMESTAMP_TZ;
 		}

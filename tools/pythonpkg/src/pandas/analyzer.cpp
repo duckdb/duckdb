@@ -335,7 +335,7 @@ LogicalType PandasAnalyzer::GetItemType(py::object ele, bool &can_convert) {
 		auto extended_type = ConvertNumpyType(ele.attr("dtype"));
 		LogicalType ltype;
 		ltype = NumpyToLogicalType(extended_type);
-		if (extended_type == NumpyNullableType::OBJECT) {
+		if (extended_type.type == NumpyNullableType::OBJECT) {
 			LogicalType converted_type = InnerAnalyze(ele, can_convert, false, 1);
 			if (can_convert) {
 				ltype = converted_type;
