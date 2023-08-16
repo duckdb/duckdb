@@ -163,8 +163,11 @@ bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result) {
 
 template <>
 bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &result) {
+	if (!Uhugeint::AddInPlace(left, right)) {
+		return false;
+	}
 	result = left;
-	return Uhugeint::AddInPlace(result, right);
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
