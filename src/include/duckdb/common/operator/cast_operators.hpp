@@ -763,6 +763,8 @@ template <>
 bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict);
 template <>
 bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict);
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, uhugeint_t &result, bool strict);
 
 struct CastFromBitToBlob {
 	template <class SRC>
