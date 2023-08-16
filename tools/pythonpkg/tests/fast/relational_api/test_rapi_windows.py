@@ -338,3 +338,14 @@ class TestRAPIWindows:
         expected = [(1, 3), (1, 3), (1, 3), (2, -1), (2, -1), (3, -2), (3, -2), (3, -2)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_arg_min(self, table):
+        result = (
+            table.arg_min("t", "v", window_spec="over (partition by id)", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 2), (1, 2), (1, 2), (2, 4), (2, 4), (3, 0), (3, 0), (3, 0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

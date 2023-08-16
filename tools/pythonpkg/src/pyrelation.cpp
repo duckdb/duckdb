@@ -321,9 +321,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ArgMin(const std::string &arg_col
                                                       const std::string &groups, const std::string &window_spec,
                                                       const std::string &projected_columns) {
 	if (!window_spec.empty()) {
-		return GenericWindowFunction("arg_max", value_column, arg_column, window_spec, false, projected_columns);
+		return GenericWindowFunction("arg_min", value_column, arg_column, window_spec, false, projected_columns);
 	} else {
-		return GenericAggregator("arg_max", arg_column, groups, value_column, projected_columns);
+		return GenericAggregator("arg_min", arg_column, groups, value_column, projected_columns);
 	}
 }
 

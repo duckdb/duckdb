@@ -51,5 +51,15 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_arg_min(self, table):
+        result = table.arg_min("t", "v").execute().fetchall()
+        expected = [(0,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.arg_min("t", "v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 2), (2, 4), (3, 0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None
