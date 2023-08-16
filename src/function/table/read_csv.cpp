@@ -1240,14 +1240,14 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &s
 static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	serializer.WriteProperty("extra_info", function.extra_info);
-	serializer.WriteProperty("csv_data", bind_data);
+	serializer.WriteProperty(100, "extra_info", function.extra_info);
+	serializer.WriteProperty(101, "csv_data", bind_data);
 }
 
 static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 	unique_ptr<ReadCSVData> result;
-	deserializer.ReadProperty("extra_info", function.extra_info);
-	deserializer.ReadProperty("csv_data", result);
+	deserializer.ReadProperty(100, "extra_info", function.extra_info);
+	deserializer.ReadProperty(101, "csv_data", result);
 	return std::move(result);
 }
 
