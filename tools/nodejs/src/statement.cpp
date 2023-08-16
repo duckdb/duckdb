@@ -174,7 +174,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 			duckdb::Hugeint::NegateInPlace(val); // remove signing bit
 		}
 		D_ASSERT(val.upper >= 0);
-		const uint64_t words[] = {val.lower, (uint64_t)val.upper};
+		const uint64_t words[] = {val.lower, static_cast<uint64_t>(val.upper)};
 		value = Napi::BigInt::New(env, negative, 2, words);
 	} break;
 	case duckdb::LogicalTypeId::DECIMAL: {

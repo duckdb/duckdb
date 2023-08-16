@@ -139,6 +139,7 @@ for i in range(len(sys.argv)):
     elif sys.argv[i].startswith('--package_name='):
         lib_name = sys.argv[i].split('=', 1)[1]
     elif sys.argv[i].startswith("--compile-flags="):
+        # FIXME: this is overwriting the previously set toolchain_args ?
         toolchain_args = ['-std=c++11'] + [
             x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0
         ]
@@ -320,6 +321,7 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'adbc_driver_duckdb',
 ]
 
 spark_packages = ['pyduckdb.spark', 'pyduckdb.spark.sql']
@@ -334,6 +336,7 @@ setup(
     long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files=data_files,
+    # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
