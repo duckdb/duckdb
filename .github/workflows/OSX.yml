@@ -267,8 +267,6 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             ./scripts/extension-upload-test.sh
-          else
-            ./scripts/extension-upload-test.sh local
           fi
 
       - name: Rebuild DuckDB without any extensions linked, but with same extension config
@@ -289,3 +287,26 @@ jobs:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}
         run: |
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
+          
+
+      # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
+      # extensions linked
+      - name: Rebuild DuckDB without any extensions, but with all extension tests
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        env:
+          EXTENSION_TESTS_ONLY: 1
+          ENABLE_EXTENSION_AUTOLOADING: 1
+        run: |
+          rm -rf build/release
+          make
+
+      # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
+      - name: Run tests with auto loading
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        env:
+          LOCAL_EXTENSION_REPO: ${{ github.workspace }}
+        run: |
+          python3 scripts/get_test_list.py --file-contains 'require ' --list '"*"' > test.list
+          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'

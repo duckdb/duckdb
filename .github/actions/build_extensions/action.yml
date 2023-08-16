@@ -192,7 +192,7 @@ runs:
 
     # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
     # extensions linked
-    - name: Rebuild DuckDB without any extensions linked, but with same extension config
+    - name: Rebuild DuckDB without any extensions, but with all extension tests
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
@@ -216,8 +216,8 @@ runs:
       run: |
         ls
         cd  ${{ inputs.build_dir}}
-        ls
-        ${{ inputs.unittest_script }}
+        python3 scripts/get_test_list.py --file-contains 'require ' --list '"*"' > test.list
+        ${{ inputs.unittest_script }} '-f test.list'
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
     # TODO: load test config for all OOTEs without statically loading them, only statically load the bundled
