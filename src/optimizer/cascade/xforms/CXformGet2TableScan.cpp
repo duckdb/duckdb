@@ -83,9 +83,10 @@ void CXformGet2TableScan::Transform(CXformContext *xform_context, CXformResult *
 		}
 	}
 	// create alternative expression
-	duckdb::unique_ptr<Operator> alternative_expression =
+	duckdb::unique_ptr<PhysicalTableScan> alternative_expression =
 	    make_uniq<PhysicalTableScan>(operator_get->returned_types, operator_get->function, std::move(tmp_bind_data),
 	                                 operator_get->column_ids, operator_get->names, std::move(table_filters), 1);
+	alternative_expression->v_column_binding = operator_get->GetColumnBindings();
 	// add alternative to transformation result
 	xform_result->Add(std::move(alternative_expression));
 }

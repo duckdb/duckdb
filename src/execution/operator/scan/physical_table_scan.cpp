@@ -213,23 +213,6 @@ BOOL PhysicalTableScan::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<Col
 	return result;
 }
 
-vector<ColumnBinding> PhysicalTableScan::GetColumnBindings() {
-	if (column_ids.empty()) {
-		return {ColumnBinding(0, 0)};
-	}
-	vector<ColumnBinding> result;
-	if (projection_ids.empty()) {
-		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-			result.emplace_back(0, col_idx);
-		}
-	} else {
-		for (auto proj_id : projection_ids) {
-			result.emplace_back(0, proj_id);
-		}
-	}
-	return result;
-}
-
 CKeyCollection *PhysicalTableScan::DeriveKeyCollection(CExpressionHandle &exprhdl) {
 	return nullptr;
 }
@@ -266,12 +249,28 @@ Operator *PhysicalTableScan::SelfRehydrate(CCostContext *pcc, duckdb::vector<Ope
 }
 
 duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
+	                           this->function.init_global, this->function.init_local);
+	tmp_function.bind_replace = this->function.bind_replace;
+	tmp_function.in_out_function = this->function.in_out_function;
+	tmp_function.in_out_function_final = this->function.in_out_function_final;
+	tmp_function.statistics = this->function.statistics;
+	tmp_function.dependency = this->function.dependency;
+	tmp_function.cardinality = this->function.cardinality;
+	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
+	tmp_function.to_string = this->function.to_string;
+	tmp_function.table_scan_progress = this->function.table_scan_progress;
+	tmp_function.get_batch_index = this->function.get_batch_index;
+	tmp_function.get_batch_info = this->function.get_batch_info;
+	tmp_function.serialize = this->function.serialize;
+	tmp_function.deserialize = this->function.deserialize;
+	tmp_function.projection_pushdown = this->function.projection_pushdown;
+	tmp_function.filter_pushdown = this->function.filter_pushdown;
+	tmp_function.filter_prune = this->function.filter_prune;
+	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
-	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
-	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
+	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
+	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	if(this->table_filters != nullptr) {
 		table_filters = make_uniq<TableFilterSet>();
@@ -279,34 +278,55 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
 			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
 		}
 	}
+	
+	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if (nullptr != estimated_props) {
-		result->estimated_props = estimated_props->Copy();
+	    this->returned_types, tmp_function, std::move(tmp_bind_data), this->column_ids, this->names, std::move(table_filters), 1);
+	
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
-	for (auto &child : children) {
+	result->types = this->types;
+	result->estimated_cardinality = this->estimated_cardinality;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
+	for (auto &child : this->children) {
 		result->AddChild(child->Copy());
 	}
-	result->m_group_expression = m_group_expression;
-	result->m_cost = m_cost;
+	result->m_group_expression = this->m_group_expression;
+	result->m_cost = this->m_cost;
 	return result;
 }
 
 duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
+	                           this->function.init_global, this->function.init_local);
+	tmp_function.bind_replace = this->function.bind_replace;
+	tmp_function.in_out_function = this->function.in_out_function;
+	tmp_function.in_out_function_final = this->function.in_out_function_final;
+	tmp_function.statistics = this->function.statistics;
+	tmp_function.dependency = this->function.dependency;
+	tmp_function.cardinality = this->function.cardinality;
+	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
+	tmp_function.to_string = this->function.to_string;
+	tmp_function.table_scan_progress = this->function.table_scan_progress;
+	tmp_function.get_batch_index = this->function.get_batch_index;
+	tmp_function.get_batch_info = this->function.get_batch_info;
+	tmp_function.serialize = this->function.serialize;
+	tmp_function.deserialize = this->function.deserialize;
+	tmp_function.projection_pushdown = this->function.projection_pushdown;
+	tmp_function.filter_pushdown = this->function.filter_pushdown;
+	tmp_function.filter_prune = this->function.filter_prune;
+	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
-	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
-	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
+	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
+	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	if(this->table_filters != nullptr) {
 		table_filters = make_uniq<TableFilterSet>();
@@ -314,36 +334,58 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGrou
 			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
 		}
 	}
+
+	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if (nullptr != estimated_props) {
-		result->estimated_props = estimated_props->Copy();
+	    this->returned_types, tmp_function, std::move(tmp_bind_data),
+		this->column_ids, this->names, std::move(table_filters), 1);
+
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+	
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
-	for (auto &child : children) {
+	result->types = this->types;
+	result->estimated_cardinality = this->estimated_cardinality;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
+	for (auto &child :  this->children) {
 		result->AddChild(child->Copy());
 	}
 	result->m_group_expression = pgexpr;
-	result->m_cost = m_cost;
+	result->m_cost = this->m_cost;
 	return result;
 }
 
 duckdb::unique_ptr<Operator>
 PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                        double cost) {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	// unique_ptr<TableFunctionData> tmp_bind_data = make_uniq<TableFunctionData>();
+	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
+	                           this->function.init_global, this->function.init_local);
+	tmp_function.bind_replace = this->function.bind_replace;
+	tmp_function.in_out_function = this->function.in_out_function;
+	tmp_function.in_out_function_final = this->function.in_out_function_final;
+	tmp_function.statistics = this->function.statistics;
+	tmp_function.dependency = this->function.dependency;
+	tmp_function.cardinality = this->function.cardinality;
+	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
+	tmp_function.to_string = this->function.to_string;
+	tmp_function.table_scan_progress = this->function.table_scan_progress;
+	tmp_function.get_batch_index = this->function.get_batch_index;
+	tmp_function.get_batch_info = this->function.get_batch_info;
+	tmp_function.serialize = this->function.serialize;
+	tmp_function.deserialize = this->function.deserialize;
+	tmp_function.projection_pushdown = this->function.projection_pushdown;
+	tmp_function.filter_pushdown = this->function.filter_pushdown;
+	tmp_function.filter_prune = this->function.filter_prune;
+	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
-	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
-	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
+	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
+	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
 	duckdb::unique_ptr<TableFilterSet> table_filters;
 	if(this->table_filters != nullptr) {
 		table_filters = make_uniq<TableFilterSet>();
@@ -351,19 +393,25 @@ PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 			table_filters->filters.insert(make_pair(child.first, child.second->Copy()));
 		}
 	}
+
+	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    returned_types, tmp_function, std::move(tmp_bind_data), column_ids, names, std::move(table_filters), 1);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if (nullptr != estimated_props) {
-		result->estimated_props = estimated_props->Copy();
+	    this->returned_types, tmp_function, std::move(tmp_bind_data), this->column_ids,
+		this->names, std::move(table_filters), 1);
+
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
+	result->types = this->types;
+	result->estimated_cardinality = this->estimated_cardinality;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
 	for (auto &child : pdrgpexpr) {
 		result->AddChild(child->Copy());
 	}

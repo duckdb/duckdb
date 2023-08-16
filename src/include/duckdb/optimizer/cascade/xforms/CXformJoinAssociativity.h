@@ -1,15 +1,16 @@
 //---------------------------------------------------------------------------
 //	@filename:
-//		CXformJoinCommutativity.h
+//		CXformJoinAssociativity.h
 //
 //	@doc:
-//		Join Commutativity, A Join B = B Join A
+//		Join Associativity, A Join B Join C = A Join C Join B
 //---------------------------------------------------------------------------
-#ifndef GPOPT_CXformJoinCommutativity_H
-#define GPOPT_CXformJoinCommutativity_H
+#ifndef GPOPT_CXformJoinAssociativity_H
+#define GPOPT_CXformJoinAssociativity_H
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/xforms/CXformExploration.h"
+#include "duckdb/planner/joinside.hpp"
 
 namespace gpopt
 {
@@ -17,39 +18,42 @@ using namespace gpos;
 
 //---------------------------------------------------------------------------
 //	@class:
-//		CXformJoinCommutativity
+//		CXformJoinAssociativity
 //
 //	@doc:
-//		Commute the join order
+//		Associate the join order
 //
 //---------------------------------------------------------------------------
-class CXformJoinCommutativity : public CXformExploration
+class CXformJoinAssociativity : public CXformExploration
 {
 public:
 	// ctor
-	explicit CXformJoinCommutativity();
+	explicit CXformJoinAssociativity();
     
-    CXformJoinCommutativity(const CXformJoinCommutativity &) = delete;
+    CXformJoinAssociativity(const CXformJoinCommutativity &) = delete;
 	
     // dtor
-	virtual ~CXformJoinCommutativity()
+	virtual ~CXformJoinAssociativity()
 	{
 	}
 
 	// ident accessors
 	virtual EXformId ID() const
 	{
-		return ExfJoinCommutativity;
+		return ExfJoinAssociativity;
 	}
 
 	// return a string for xform name
 	virtual const CHAR* Name() const
 	{
-		return "CXformJoinCommutativity";
+		return "CXformJoinAssociativity";
 	}
 
 	// compute xform promise for a given expression handle
 	virtual EXformPromise XformPromise(CExpressionHandle &exprhdl) const;
+	
+	void CreatePredicates(Operator* join, duckdb::vector<JoinCondition> &upper_join_condition,
+                        duckdb::vector<JoinCondition> &lower_join_condition) const;
 
 	// actual transform
 	void Transform(CXformContext* pxfctxt, CXformResult* pxfres, Operator* pexpr) const override;

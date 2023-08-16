@@ -252,48 +252,13 @@ bool CCostContext::FBetterThan(CCostContext* pcc) const
 //---------------------------------------------------------------------------
 double CCostContext::CostCompute(duckdb::vector<double> pdrgpcostChildren)
 {
-	/* I comment here */
-	/*
-	// derive context stats
-	DeriveStats();
-	ULONG arity = 0;
-	if (nullptr != m_pdrgpoc)
-	{
-		arity = Pdrgpoc()->Size();
+	if(m_pdrgpoc.size() == 0) {
+		return (double)(rand() % 1000) / 1000.0;
+	} 
+	else if(m_pdrgpoc.size() == 1) {
+		return pdrgpcostChildren[0] + this->m_group_expression->m_pop->estimated_cardinality;
 	}
-	m_pstats->AddRef();
-	ICostModel::SCostingInfo ci(arity, new ICostModel::CCostingStats(m_pstats));
-	ICostModel* pcm = COptCtxt::PoctxtFromTLS()->m_cost_model;
-	CExpressionHandle exprhdl();
-	exprhdl.Attach(this);
-	// extract local costing info
-	DOUBLE rows = m_pstats->Rows().Get();
-	ci.SetRows(rows);
-	DOUBLE width = m_pstats->Width(m_poc->m_required_plan_property->m_pcrs).Get();
-	ci.SetWidth(width);
-	DOUBLE num_rebinds = m_pstats->NumRebinds().Get();
-	ci.SetRebinds(num_rebinds);
-	GPOS_ASSERT_IMP(!exprhdl.HasOuterRefs(), GPOPT_DEFAULT_REBINDS == (ULONG)(num_rebinds) && "invalid number of rebinds when there are no outer references");
-	// extract children costing info
-	for (ULONG ul = 0; ul < arity; ul++)
-	{
-		COptimizationContext* pocChild = (*m_pdrgpoc)[ul];
-		CCostContext* pccChild = pocChild->PccBest();
-		IStatistics* child_stats = pccChild->Pstats();
-		child_stats->AddRef();
-		ci.SetChildStats(ul, new ICostModel::CCostingStats(child_stats));
-		DOUBLE dRowsChild = child_stats->Rows().Get();
-		ci.SetChildRows(ul, dRowsChild);
-		DOUBLE dWidthChild = child_stats->Width(pocChild->m_required_plan_property->m_pcrs).Get();
-		ci.SetChildWidth(ul, dWidthChild);
-		DOUBLE dRebindsChild = child_stats->NumRebinds().Get();
-		ci.SetChildRebinds(ul, dRebindsChild);
-		GPOS_ASSERT_IMP(!exprhdl.HasOuterRefs(ul), GPOPT_DEFAULT_REBINDS == (ULONG)(dRebindsChild) && "invalid number of rebinds when there are no outer references");
-		DOUBLE dCostChild = (*pdrgpcostChildren)[ul]->Get();
-		ci.SetChildCost(ul, dCostChild);
-	}
-	// compute cost using the underlying cost model
-	return pcm->Cost(exprhdl, &ci);
-	*/
-	return (double)(rand() % 1000) / 1000.0; 
+	else {
+		return pdrgpcostChildren[0] + 1.2 * pdrgpcostChildren[1] + this->m_group_expression->m_pop->estimated_cardinality;
+	} 
 }

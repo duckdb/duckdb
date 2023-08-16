@@ -186,7 +186,7 @@ bool CGroupExpression::FCostContextExists(COptimizationContext* poc, duckdb::vec
 	CCostContext* pccFound;
 	ShtCC::iterator itr;
 	{
-		auto itr = m_sht.find(poc->HashValue());
+		itr = m_sht.find(poc->HashValue());
 	}
 	while (m_sht.end() != itr)
 	{

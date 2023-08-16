@@ -91,7 +91,6 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
 	unique_ptr<Operator> Copy() override;
 
 	unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression *pgexpr) override;

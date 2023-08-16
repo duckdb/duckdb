@@ -53,11 +53,12 @@ void CXformFilterImplementation::Transform(CXformContext *xform_context, CXformR
 		v.push_back(child->Copy());
 	}
 	// create alternative expression
-	duckdb::unique_ptr<Operator> alternative_expression =
+	duckdb::unique_ptr<PhysicalFilter> alternative_expression =
 	    make_uniq<PhysicalFilter>(operator_filter->types, std::move(v), operator_filter->estimated_cardinality);
 	for (auto &child : expression->children) {
 		alternative_expression->AddChild(child->Copy());
 	}
+	alternative_expression->v_column_binding = operator_filter->GetColumnBindings();
 	// add alternative to transformation result
 	xform_result->Add(std::move(alternative_expression));
 }

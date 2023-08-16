@@ -81,7 +81,7 @@ CQueryContext* CQueryContext::PqcGenerate(duckdb::unique_ptr<Operator> pexpr, du
 {
 	duckdb::vector<ColumnBinding> pcrs;
 	duckdb::vector<ColumnBinding> colref_array;
-	COptCtxt* poptctxt = COptCtxt::PoctxtFromTLS();
+	// COptCtxt* poptctxt = COptCtxt::PoctxtFromTLS();
 	// Collect required properties (prpp) at the top level:
 	COrderSpec* pos = new COrderSpec();
 	// Ensure order, distribution and rewindability meet 'satisfy' matching at the top level

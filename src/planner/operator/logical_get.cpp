@@ -48,6 +48,7 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	vector<ColumnBinding> result;
 	if (projection_ids.empty()) {
 		for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+			/* I change here and may cause new bugs */
 			result.emplace_back(table_index, col_idx);
 		}
 	} else {

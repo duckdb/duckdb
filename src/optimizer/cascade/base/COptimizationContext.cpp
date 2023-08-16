@@ -176,7 +176,7 @@ bool COptimizationContext::FOptimizeSort(CGroupExpression* pgexprParent, CGroupE
 bool COptimizationContext::FOptimizeAgg(CGroupExpression* pgexprParent, CGroupExpression* pgexprAgg, COptimizationContext* poc, ULONG ulSearchStages)
 {
 	// otherwise, we need to avoid optimizing node unless it is a multi-stage agg
-	COptimizationContext* pocFound = pgexprAgg->m_pgroup->PocLookupBest(ulSearchStages, poc->m_prpp);
+	// COptimizationContext* pocFound = pgexprAgg->m_pgroup->PocLookupBest(ulSearchStages, poc->m_prpp);
 	// if (NULL != pocFound && pocFound->FHasMultiStageAggPlan())
 	// {
 	//  	// context already has a multi-stage agg plan, optimize child only if it is also a multi-stage agg

@@ -899,7 +899,6 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 }
 
 unique_ptr<Operator> PhysicalHashJoin::Copy() {
-	/* PhysicalHashJoin fields */
 	LogicalComparisonJoin join(JoinType::INNER);
 	join.types = this->types; 
 	vector<JoinCondition> v;
@@ -911,15 +910,20 @@ unique_ptr<Operator> PhysicalHashJoin::Copy() {
 		v.emplace_back(std::move(jc));
 	}
 	vector<idx_t> left_projection_map;
+	/* PhysicalHashJoin fields */
 	unique_ptr<PhysicalHashJoin> copy = make_uniq<PhysicalHashJoin>(join, this->children[0]->Copy(), this->children[1]->Copy(),
 																std::move(v), this->join_type, left_projection_map, this->right_projection_map, 
 																this->delim_types, this->estimated_cardinality, this->perfect_join_statistics);
+	
+	/* PhysicalOperator fields */
+	copy->v_column_binding = this->v_column_binding;
+
 	/* Operator fields */
 	copy->m_derived_property_relation = this->m_derived_property_relation;
 	copy->m_derived_property_plan = this->m_derived_property_plan;
 	copy->m_required_plan_property = this->m_required_plan_property;
 	if (nullptr != this->estimated_props) {
-		copy->estimated_props = estimated_props->Copy();
+		copy->estimated_props = this->estimated_props->Copy();
 	}
 	copy->types = this->types;
 	copy->estimated_cardinality = this->estimated_cardinality;
@@ -927,15 +931,12 @@ unique_ptr<Operator> PhysicalHashJoin::Copy() {
 		copy->expressions.push_back(child->Copy());
 	}
 	copy->has_estimated_cardinality = this->has_estimated_cardinality;
-	copy->logical_type = this->logical_type;
-	copy->physical_type = this->physical_type;
 	copy->m_group_expression = this->m_group_expression;
 	copy->m_cost = this->m_cost;
 	return copy;
 }
 
 unique_ptr<Operator> PhysicalHashJoin::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
-	/* PhysicalHashJoin fields */
 	LogicalComparisonJoin join(JoinType::INNER);
 	join.types = this->types; 
 	vector<JoinCondition> v;
@@ -947,15 +948,20 @@ unique_ptr<Operator> PhysicalHashJoin::CopyWithNewGroupExpression(CGroupExpressi
 		v.emplace_back(std::move(jc));
 	}
 	vector<idx_t> left_projection_map;
+	/* PhysicalHashJoin fields */
 	unique_ptr<PhysicalHashJoin> copy = make_uniq<PhysicalHashJoin>(join, this->children[0]->Copy(), this->children[1]->Copy(),
 																std::move(v), this->join_type, left_projection_map, this->right_projection_map, 
 																this->delim_types, this->estimated_cardinality, this->perfect_join_statistics);
+	
+	/* PhysicalOperator fields */
+	copy->v_column_binding = this->v_column_binding;
+	
 	/* Operator fields */
 	copy->m_derived_property_relation = this->m_derived_property_relation;
 	copy->m_derived_property_plan = this->m_derived_property_plan;
 	copy->m_required_plan_property = this->m_required_plan_property;
 	if (nullptr != this->estimated_props) {
-		copy->estimated_props = estimated_props->Copy();
+		copy->estimated_props = this->estimated_props->Copy();
 	}
 	copy->types = this->types;
 	copy->estimated_cardinality = this->estimated_cardinality;
@@ -973,7 +979,6 @@ unique_ptr<Operator> PhysicalHashJoin::CopyWithNewGroupExpression(CGroupExpressi
 unique_ptr<Operator> PhysicalHashJoin::CopyWithNewChildren(CGroupExpression *pgexpr,
                                                      duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                                      double cost) {
-	/* PhysicalHashJoin fields */
 	LogicalComparisonJoin join(JoinType::INNER);
 	join.types = this->types; 
 	vector<JoinCondition> v;
@@ -985,15 +990,20 @@ unique_ptr<Operator> PhysicalHashJoin::CopyWithNewChildren(CGroupExpression *pge
 		v.emplace_back(std::move(jc));
 	}
 	vector<idx_t> left_projection_map;
+	/* PhysicalHashJoin fields */
 	unique_ptr<PhysicalHashJoin> copy = make_uniq<PhysicalHashJoin>(join, pdrgpexpr[0]->Copy(), pdrgpexpr[1]->Copy(),
 																std::move(v), this->join_type, left_projection_map, this->right_projection_map, 
 																this->delim_types, this->estimated_cardinality, this->perfect_join_statistics);
+	
+	/* PhysicalOperator fields */
+	copy->v_column_binding = this->v_column_binding;
+	
 	/* Operator fields */
 	copy->m_derived_property_relation = this->m_derived_property_relation;
 	copy->m_derived_property_plan = this->m_derived_property_plan;
 	copy->m_required_plan_property = this->m_required_plan_property;
 	if (nullptr != this->estimated_props) {
-		copy->estimated_props = estimated_props->Copy();
+		copy->estimated_props = this->estimated_props->Copy();
 	}
 	copy->types = this->types;
 	copy->estimated_cardinality = this->estimated_cardinality;

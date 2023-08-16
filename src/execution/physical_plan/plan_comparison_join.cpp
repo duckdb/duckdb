@@ -247,10 +247,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	D_ASSERT(op.children.size() == 2);
 	idx_t lhs_cardinality = op.children[0]->EstimateCardinality(context);
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
-	LogicalOperator* left_pop = (LogicalOperator*)op.children[0].get();
+	unique_ptr<LogicalOperator> left_pop = unique_ptr_cast<Operator, LogicalOperator>(std::move(op.children[0]));
 	auto left = CreatePlan(*left_pop);
-	LogicalOperator* right_pop = (LogicalOperator*)op.children[0].get();
+	op.children[0] = std::move(left_pop);
+	unique_ptr<LogicalOperator> right_pop = unique_ptr_cast<Operator, LogicalOperator>(std::move(op.children[1]));
 	auto right = CreatePlan(*right_pop);
+	op.children[1] = std::move(right_pop);
 	left->estimated_cardinality = lhs_cardinality;
 	right->estimated_cardinality = rhs_cardinality;
 	D_ASSERT(left && right);

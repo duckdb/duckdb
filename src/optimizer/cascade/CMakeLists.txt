@@ -15,6 +15,7 @@ add_library_unity(
   cascade_optimizer
   OBJECT
   Cascade.cpp
+  NewColumnBindingResolver.cpp
   utils.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:cascade_optimizer>

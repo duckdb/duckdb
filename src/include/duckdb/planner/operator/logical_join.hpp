@@ -48,7 +48,6 @@ public:
 	
 	static void Deserialize(LogicalJoin &join, LogicalDeserializationState &state, FieldReader &reader);
 
-protected:
 	void ResolveTypes() override;
 
 public:

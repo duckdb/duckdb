@@ -750,7 +750,7 @@ static unique_ptr<LogicalOperator> ExtractJoinRelation(SingleJoinRelation &rel)
 			// found it! take ownership of it from the parent
 			auto result = std::move(children[i]);
 			children.erase(children.begin() + i);
-			return unique_ptr<LogicalOperator>(((LogicalOperator*)result.get()));
+			return unique_ptr_cast<Operator, LogicalOperator>(std::move(result));
 		}
 	}
 	throw Exception("Could not find relation in parent node (?)");
