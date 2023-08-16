@@ -81,7 +81,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         "Finds the row with the minimum value for a value column and returns the value of that row for an "
 	         "argument column",
 	         py::arg("arg_column"), py::arg("value_column"), py::arg("groups") = "", py::arg("window_spec") = "",
-	         py::arg("projected_columns") = "");
+	         py::arg("projected_columns") = "")
+	    .def("avg", &DuckDBPyRelation::Avg, "Computes the average on a given column", py::arg("column"),
+	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 	/*
 	m.def("sum", &DuckDBPyRelation::Sum,
 	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",

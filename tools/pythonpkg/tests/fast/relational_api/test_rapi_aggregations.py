@@ -61,5 +61,16 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_avg(self, table):
+        result = table.avg("v").execute().fetchall()
+        expected = [(4.14,)]
+        assert len(result) == len(expected)
+        assert round(result[0][0], 2) == expected[0][0]
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.avg("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 1.33), (2, 10.5), (3, 2)]
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None
