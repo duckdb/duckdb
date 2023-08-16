@@ -35,6 +35,15 @@ public:
 	template <class T>
 	static bool TryConvert(T value, uhugeint_t &result);
 
+	template <class T>
+	static uhugeint_t Convert(T value) {
+		uhugeint_t result;
+		if (!TryConvert(value, result)) { // LCOV_EXCL_START
+			throw ValueOutOfRangeException(double(value), GetTypeId<T>(), GetTypeId<uhugeint_t>());
+		} // LCOV_EXCL_STOP
+		return result;
+	}
+
 	// "The negative of an unsigned quantity is computed by subtracting its value from 2^n, where n is the number of
 	// bits in the promoted operand."
 	static void NegateInPlace(uhugeint_t &input) {
