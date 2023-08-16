@@ -18,6 +18,8 @@ if len(sys.argv) != 4:
 duckdb_path = sys.argv[1]
 extension_path = sys.argv[2]
 
+print(f"extension path as received: {extension_path}")
+
 duckdb_invocation = [duckdb_path, '-noheader', '-list', '-c']
 platform_query = duckdb_invocation.copy()
 platform_query.append('SELECT platform FROM pragma_platform();')
