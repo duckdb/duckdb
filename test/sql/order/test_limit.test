@@ -184,3 +184,97 @@ SELECT * FROM integers as int LIMIT (SELECT -1);
 #Subqueries that return strings that can't be converted to integers
 statement error
 SELECT * FROM integers as int LIMIT (SELECT 'ab');
+
+# Test use subquery in limit and offset
+statement ok
+CREATE OR REPLACE TABLE t AS SELECT range x FROM range(10);
+
+statement ok
+PRAGMA enable_verification;
+
+query I
+SELECT * FROM t ORDER BY x;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+query I
+SELECT * FROM t ORDER BY x OFFSET 5;
+----
+5
+6
+7
+8
+9
+
+# scalar subquery in offset
+query I
+SELECT * FROM t ORDER BY x OFFSET (SELECT 5);
+----
+5
+6
+7
+8
+9
+
+# scalar subquery in limit
+query I
+SELECT * FROM t ORDER BY x LIMIT (SELECT 5);
+----
+0
+1
+2
+3
+4
+
+# scalar subquery both in limit and offset
+query I
+SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET (SELECT 3);
+----
+3
+4
+5
+
+# scalar subquery in offset
+query I
+SELECT * FROM t ORDER BY x LIMIT 3 OFFSET (SELECT 3);
+----
+3
+4
+5
+
+# scalar subquery in limit
+query I
+SELECT * FROM t ORDER BY x LIMIT (SELECT 3) OFFSET 3;
+----
+3
+4
+5
+
+# negeive number in the limit
+statement error
+SELECT * FROM t ORDER BY x LIMIT (SELECT -1);
+
+# negeive number in the offset
+statement error
+SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
+
+statement ok
+create table t0(c0 int);
+
+statement ok
+insert into t0 values (1), (2), (3), (4), (5), (6), (7);
+
+# some complex expression in the offset clause
+query I
+SELECT * FROM t0 ORDER BY ALL OFFSET (SELECT DISTINCT 6.5 FROM (SELECT 1) t1(c0) UNION ALL SELECT 3);
+----
+7
