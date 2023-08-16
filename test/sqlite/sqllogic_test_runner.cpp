@@ -547,6 +547,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				for (const auto& ext: AUTOLOADABLE_EXTENSIONS) {
 					if (ext == param) {
 						excluded_from_autoloading = false;
+						break;
 					}
 				}
 
