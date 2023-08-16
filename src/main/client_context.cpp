@@ -317,7 +317,7 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 	if (values) {
 		auto &parameter_values = *values;
 		for (auto &value : parameter_values) {
-			planner.parameter_data.emplace(value);
+			planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
 		}
 	}
 

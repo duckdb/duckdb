@@ -2,9 +2,9 @@
 
 namespace duckdb {
 
-void BinarySerializer::SetTag(const char *tag) {
+void BinarySerializer::SetTag(const field_id_t field_id, const char *tag) {
+	current_field_id = field_id;
 	current_tag = tag;
-
 	// Increment the number of fields
 	stack.back().field_count++;
 }
@@ -45,6 +45,9 @@ void BinarySerializer::OnMapEnd(idx_t count) {
 
 void BinarySerializer::OnObjectBegin() {
 	stack.push_back(State({0, 0, data.size()}));
+	// Store the field id
+	Write<field_id_t>(current_field_id);
+	// Store the offset so we can patch the field count and size later
 	Write<uint32_t>(0); // Placeholder for the field count
 	Write<uint64_t>(0); // Placeholder for the size
 }
@@ -52,9 +55,11 @@ void BinarySerializer::OnObjectBegin() {
 void BinarySerializer::OnObjectEnd() {
 	auto &frame = stack.back();
 	// Patch the field count and size
-	auto message_start = &data[frame.offset];
-	Store<uint32_t>(frame.field_count, message_start);
-	Store<uint64_t>(frame.size, message_start + sizeof(uint32_t));
+	auto ptr = &data[frame.offset];
+	ptr += sizeof(field_id_t); // Skip the field id
+	Store<uint32_t>(frame.field_count, ptr);
+	ptr += sizeof(uint32_t); // Skip the field count
+	Store<uint64_t>(frame.size, ptr);
 	stack.pop_back();
 }
 

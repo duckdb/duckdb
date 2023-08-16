@@ -46,7 +46,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
 		for (auto &pair : bind_values) {
-			prepared_planner.parameter_data.emplace(pair);
+			prepared_planner.parameter_data.emplace(std::make_pair(pair.first, BoundParameterData(pair.second)));
 		}
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = std::move(prepared_planner.plan);

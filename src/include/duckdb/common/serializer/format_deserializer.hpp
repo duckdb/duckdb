@@ -31,22 +31,22 @@ protected:
 public:
 	// Read into an existing value
 	template <typename T>
-	inline void ReadProperty(const char *tag, T &ret) {
-		SetTag(tag);
+	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {
+		SetTag(field_id, tag);
 		ret = Read<T>();
 	}
 
 	// Read and return a value
 	template <typename T>
-	inline T ReadProperty(const char *tag) {
-		SetTag(tag);
+	inline T ReadProperty(const field_id_t field_id, const char *tag) {
+		SetTag(field_id, tag);
 		return Read<T>();
 	}
 
 	// Read optional property and return a value, or forward a default value
 	template <typename T>
-	inline T ReadOptionalPropertyOrDefault(const char *tag, T &&default_value) {
-		SetTag(tag);
+	inline T ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &&default_value) {
+		SetTag(field_id, tag);
 		auto present = OnOptionalBegin();
 		if (present) {
 			auto item = Read<T>();
@@ -60,8 +60,8 @@ public:
 
 	// Read optional property into an existing value, or use a default value
 	template <typename T>
-	inline void ReadOptionalPropertyOrDefault(const char *tag, T &ret, T &&default_value) {
-		SetTag(tag);
+	inline void ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+		SetTag(field_id, tag);
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
@@ -75,8 +75,8 @@ public:
 	// Read optional property and return a value, or default construct it
 	template <typename T>
 	inline typename std::enable_if<std::is_default_constructible<T>::value, T>::type
-	ReadOptionalProperty(const char *tag) {
-		SetTag(tag);
+	ReadOptionalProperty(const field_id_t field_id, const char *tag) {
+		SetTag(field_id, tag);
 		auto present = OnOptionalBegin();
 		if (present) {
 			auto item = Read<T>();
@@ -91,8 +91,8 @@ public:
 	// Read optional property into an existing value, or default construct it
 	template <typename T>
 	inline typename std::enable_if<std::is_default_constructible<T>::value, void>::type
-	ReadOptionalProperty(const char *tag, T &ret) {
-		SetTag(tag);
+	ReadOptionalProperty(const field_id_t field_id, const char *tag, T &ret) {
+		SetTag(field_id, tag);
 		auto present = OnOptionalBegin();
 		if (present) {
 			ret = Read<T>();
@@ -105,8 +105,8 @@ public:
 
 	// Special case:
 	// Read into an existing data_ptr_t
-	inline void ReadProperty(const char *tag, data_ptr_t ret, idx_t count) {
-		SetTag(tag);
+	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
+		SetTag(field_id, tag);
 		ReadDataPtr(ret, count);
 	}
 
@@ -129,8 +129,8 @@ public:
 	}
 
 	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const char *tag) {
-		SetTag(tag);
+	void BeginObject(const field_id_t field_id, const char *tag) {
+		SetTag(field_id, tag);
 		OnObjectBegin();
 	}
 
@@ -398,7 +398,8 @@ private:
 	}
 
 protected:
-	virtual void SetTag(const char *tag) {
+	virtual void SetTag(const field_id_t field_id, const char *tag) {
+		(void)field_id;
 		(void)tag;
 	}
 
