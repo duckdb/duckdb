@@ -550,7 +550,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					}
 				}
 
-				if (!config->options.autoload_known_extensions || excluded_from_autoloading) {
+				if (!config->options.autoload_known_extensions ) {
 					auto result = ExtensionHelper::LoadExtension(*db, param);
 					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 						Printer::Print("\nExtension loaded: " + param);
@@ -563,10 +563,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						// extension known but not build: skip this test
 						return;
 					}
-				} else {
-					Printer::Print("\nDepending on autoloading for: " + param);
+				} else if (excluded_from_autoloading) {
+					return;
 				}
-				// TODO when autoloading, we probably want to skip the test if the extension is not present in the repo
 			}
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_REQUIRE_ENV) {
 			if (InLoop()) {
