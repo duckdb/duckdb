@@ -233,6 +233,4 @@ runs:
         cd  ${{ inputs.build_dir}}
         if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh
-        else
-          ./scripts/extension-upload-test.sh local
         fi
