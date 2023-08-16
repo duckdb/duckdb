@@ -247,7 +247,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				mask.SetInvalid(row);
 				continue;
 			}
-			tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
+			tgt_ptr[row] = Timestamp::FromEpochSeconds(src_ptr[source_idx]);
 		}
 		break;
 	}
