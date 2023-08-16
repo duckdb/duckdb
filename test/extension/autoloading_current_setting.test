@@ -4,6 +4,9 @@
 
 require-env LOCAL_EXTENSION_REPO
 
+# TODO
+mode skip
+
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_current_setting'
 

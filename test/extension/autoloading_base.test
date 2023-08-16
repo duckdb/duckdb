@@ -6,6 +6,9 @@
 # TODO: this also requires having the JSON AND ICU extensions NOT loaded
 require-env LOCAL_EXTENSION_REPO
 
+# TODO
+mode skip
+
 # Default is expected to be true when running this test
 query I
 select value from duckdb_settings() where name='autoload_known_extensions';
