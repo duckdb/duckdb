@@ -108,53 +108,61 @@ Operator* PhysicalProjection::SelfRehydrate(CCostContext* pcc, duckdb::vector<Op
 duckdb::unique_ptr<Operator> PhysicalProjection::Copy()
 {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
-	for(auto &child : select_list)
+	for(auto &child : this->select_list)
 	{
 		v.push_back(child->Copy());
 	}
-	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if(nullptr != estimated_props)
+	/* PhysicalProjection fields */
+	unique_ptr<PhysicalProjection> result =
+		make_uniq<PhysicalProjection>(this->types, std::move(v), this->estimated_cardinality);
+	
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+	
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if(nullptr != this->estimated_props)
 	{
-		result->estimated_props = estimated_props->Copy();
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
-	for(auto &child : children)
+	result->types = this->types;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
+	for(auto &child : this->children)
 	{
 		result->AddChild(child->Copy());
 	}
-	result->m_group_expression = m_group_expression;
-	result->m_cost = m_cost;
+	result->m_group_expression = this->m_group_expression;
+	result->m_cost = this->m_cost;
 	return result;
 }
 
 duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewGroupExpression(CGroupExpression* pgexpr)
 {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
-	for(auto &child : select_list)
+	for(auto &child : this->select_list)
 	{
 		v.push_back(child->Copy());
 	}
-	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if(nullptr != estimated_props)
+	/* PhysicalProjection fields */
+	unique_ptr<PhysicalProjection> result
+		= make_uniq<PhysicalProjection>(this->types, std::move(v), this->estimated_cardinality);
+
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if(nullptr != this->estimated_props)
 	{
-		result->estimated_props = estimated_props->Copy();
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
-	for(auto &child : children)
+	result->types = this->types;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
+	for(auto &child : this->children)
 	{
 		result->AddChild(child->Copy());
 	}
@@ -166,23 +174,26 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewGroupExpression(CGro
 duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost)
 {
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
-	for(auto &child : select_list)
-	{
+	for(auto &child : this->select_list) {
 		v.push_back(child->Copy());
 	}
-	unique_ptr<PhysicalProjection> result = make_uniq<PhysicalProjection>(types, std::move(v), estimated_cardinality);
-	result->m_derived_property_relation = m_derived_property_relation;
-	result->m_derived_property_plan = m_derived_property_plan;
-	result->m_required_plan_property = m_required_plan_property;
-	if(nullptr != estimated_props)
+	/* PhysicalProjection fields */
+	unique_ptr<PhysicalProjection> result
+		= make_uniq<PhysicalProjection>(this->types, std::move(v), this->estimated_cardinality);
+	
+	/* PhysicalOperator fields */
+	result->v_column_binding = this->v_column_binding;
+
+	/* Operator fields */
+	result->m_derived_property_relation = this->m_derived_property_relation;
+	result->m_derived_property_plan = this->m_derived_property_plan;
+	result->m_required_plan_property = this->m_required_plan_property;
+	if(nullptr != this->estimated_props)
 	{
-		result->estimated_props = estimated_props->Copy();
+		result->estimated_props = this->estimated_props->Copy();
 	}
-	result->types = types;
-	result->estimated_cardinality = estimated_cardinality;
-	result->has_estimated_cardinality = has_estimated_cardinality;
-	result->logical_type = logical_type;
-	result->physical_type = physical_type;
+	result->types = this->types;
+	result->has_estimated_cardinality = this->has_estimated_cardinality;
 	for(auto &child : pdrgpexpr)
 	{
 		result->AddChild(child->Copy());

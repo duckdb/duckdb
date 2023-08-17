@@ -113,7 +113,7 @@ void CXformFactory::Instantiate() {
 	Add(new CXformDummyScanImplementation());
 	Add(new CXformInnerJoin2HashJoin());
 	Add(new CXformJoinCommutativity());
-	// Add(new CXformJoinAssociativity());
+	Add(new CXformJoinAssociativity());
 	/*
 	Add(make_shared<CXformInnerJoin2HashJoin();
 	Add(make_shared<CXformIndexGet2IndexScan();
