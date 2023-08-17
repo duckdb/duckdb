@@ -58,7 +58,6 @@ void CXformFilterImplementation::Transform(CXformContext *xform_context, CXformR
 	for (auto &child : expression->children) {
 		alternative_expression->AddChild(child->Copy());
 	}
-	alternative_expression->v_column_binding = operator_filter->GetColumnBindings();
 	// add alternative to transformation result
 	xform_result->Add(std::move(alternative_expression));
 }

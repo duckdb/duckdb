@@ -17,6 +17,8 @@ class PhysicalDummyScan : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DUMMY_SCAN;
 
+	vector<ColumnBinding> v_column_binding;
+
 public:
 	explicit PhysicalDummyScan(vector<LogicalType> types, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DUMMY_SCAN, std::move(types), estimated_cardinality) {
@@ -33,7 +35,6 @@ public:
 
 public:
 	// ------------------------------ ORCA ---------------------------------
-
 	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override;
 
 	// Rehydrate expression from a given cost context and child expressions
@@ -47,5 +48,10 @@ public:
 	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
 	                                                 duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
 	                                                 double cost) override;
+
+	// ------------------------------ DuckDB ---------------------------------
+	vector<ColumnBinding> GetColumnBindings() override {
+		return v_column_binding;	
+	}
 };
 } // namespace duckdb

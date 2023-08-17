@@ -46,6 +46,9 @@ public:
 	bool SinkOrderDependent() const override {
 		return false;
 	}
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
 };
 
 } // namespace duckdb

@@ -22,6 +22,8 @@ public:
 	
 	vector<unique_ptr<Expression>> select_list;
 
+	vector<ColumnBinding> v_column_binding;
+
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 	
@@ -45,5 +47,9 @@ public:
 	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override;
 	
 	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression* pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr, double cost) override;
+
+	vector<ColumnBinding> GetColumnBindings() override {
+		return v_column_binding;
+	}
 };
 } // namespace duckdb

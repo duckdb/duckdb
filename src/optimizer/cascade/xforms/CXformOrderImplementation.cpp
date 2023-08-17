@@ -62,7 +62,6 @@ void CXformOrderImplementation::Transform(CXformContext* pxfctxt, CXformResult* 
     {
         pexprAlt->AddChild(child->Copy());
     }
-    pexprAlt->v_column_binding = popOrder->GetColumnBindings();
 	// add alternative to transformation result
 	pxfres->Add(std::move(pexprAlt));
 }

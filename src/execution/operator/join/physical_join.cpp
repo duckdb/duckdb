@@ -81,4 +81,16 @@ vector<const_reference<PhysicalOperator>> PhysicalJoin::GetSources() const
 	return result;
 }
 
+vector<ColumnBinding> PhysicalJoin::GetColumnBindings() {
+	auto left_bindings = children[0]->GetColumnBindings();
+	if (join_type == JoinType::SEMI || join_type == JoinType::ANTI)
+	{
+		// for SEMI and ANTI join we only project the left hand side
+		return left_bindings;
+	}
+	// for other join types we project both the LHS and the RHS
+	auto right_bindings = children[1]->GetColumnBindings();
+	left_bindings.insert(left_bindings.end(), right_bindings.begin(), right_bindings.end());
+	return left_bindings;
+}
 } // namespace duckdb

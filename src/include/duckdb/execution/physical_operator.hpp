@@ -42,7 +42,6 @@ public:
 	mutex lock;
 	//! total number of optimization requests
 	ULONG m_total_opt_requests;
-	vector<ColumnBinding> v_column_binding;
 
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality);
@@ -212,10 +211,6 @@ public:
 	}
 
 	CReqdProp *PrpCreate() const override;
-
-	vector<ColumnBinding> GetColumnBindings() override {
-		return v_column_binding;
-	}
 
 	bool FUnaryProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired) const;
 
