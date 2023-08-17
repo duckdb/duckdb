@@ -449,3 +449,25 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bool_and(self, table):
+        result = (
+            table.bool_and("t::BOOL", window_spec="over (partition by id)", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, True), (1, True), (1, True), (2, True), (2, True), (3, False), (3, False), (3, False)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bool_or(self, table):
+        result = (
+            table.bool_or("t::BOOL", window_spec="over (partition by id)", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, True), (1, True), (1, True), (2, True), (2, True), (3, True), (3, True), (3, True)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

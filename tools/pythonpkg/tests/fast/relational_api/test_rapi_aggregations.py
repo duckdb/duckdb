@@ -116,5 +116,25 @@ class TestRAPIAggregations(object):
         with pytest.raises(duckdb.InvalidTypeException):
             table.bitstring_agg("v", min="1", max=11)
 
+    def test_bool_and(self, table):
+        result = table.bool_and("v::BOOL").execute().fetchall()
+        expected = [(True,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bool_and("t::BOOL", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, True), (2, True), (3, False)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bool_or(self, table):
+        result = table.bool_or("v::BOOL").execute().fetchall()
+        expected = [(True,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bool_or("v::BOOL", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, True), (2, True), (3, True)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None

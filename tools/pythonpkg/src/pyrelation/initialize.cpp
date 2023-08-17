@@ -93,7 +93,12 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("bitstring_agg", &DuckDBPyRelation::BitStringAgg,
 	         "Computes a bitstring with bits set for each distinct value in a given column", py::arg("column"),
 	         py::arg("min") = py::none(), py::arg("max") = py::none(), py::arg("groups") = "",
-	         py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	         py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("bool_and", &DuckDBPyRelation::BoolAnd, "Computes the logical AND of all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("bool_or", &DuckDBPyRelation::BoolOr, "Computes the logical OR of all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+
 	/*
 	m.def("sum", &DuckDBPyRelation::Sum,
 	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",

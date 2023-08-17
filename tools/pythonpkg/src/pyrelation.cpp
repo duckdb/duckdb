@@ -389,6 +389,26 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitStringAgg(const std::string &c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BoolAnd(const std::string &column, const std::string &groups,
+                                                       const std::string &window_spec,
+                                                       const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bool_and", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("bool_and", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BoolOr(const std::string &column, const std::string &groups,
+                                                      const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bool_or", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("bool_or", column, groups, "", projected_columns);
+	}
+}
+
 /*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
     return GenericAggregator("sum", sum_columns, groups);
