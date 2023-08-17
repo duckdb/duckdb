@@ -72,5 +72,35 @@ class TestRAPIAggregations(object):
         ]
         expected = [(1, 1.33), (2, 10.5), (3, 2)]
 
+    def test_bit_and(self, table):
+        result = table.bit_and("v").execute().fetchall()
+        expected = [(0,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bit_and("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 0), (2, 10), (3, 5)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bit_or(self, table):
+        result = table.bit_or("v").execute().fetchall()
+        expected = [(-1,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bit_or("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 3), (2, 11), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bit_xor(self, table):
+        result = table.bit_xor("v").execute().fetchall()
+        expected = [(-7,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bit_xor("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 2), (2, 1), (3, -6)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None

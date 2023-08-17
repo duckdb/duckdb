@@ -337,6 +337,36 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Avg(const std::string &column, co
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitAnd(const std::string &column, const std::string &groups,
+                                                      const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bit_and", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("bit_and", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitOr(const std::string &column, const std::string &groups,
+                                                     const std::string &window_spec,
+                                                     const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bit_or", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("bit_or", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitXor(const std::string &column, const std::string &groups,
+                                                      const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bit_xor", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("bit_xor", column, groups, "", projected_columns);
+	}
+}
+
 /*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
     return GenericAggregator("sum", sum_columns, groups);
