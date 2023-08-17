@@ -144,19 +144,19 @@ LogicalType NumpyToLogicalType(const NumpyType &col_type) {
 		return LogicalType::INTERVAL;
 	case NumpyNullableType::DATETIME_MS: {
 		if (col_type.has_timezone) {
-			throw NotImplementedException("TIMESTAMP_MS with timezone not supported yet");
+			return LogicalType::TIMESTAMP_TZ;
 		}
 		return LogicalType::TIMESTAMP_MS;
 	}
 	case NumpyNullableType::DATETIME_NS: {
 		if (col_type.has_timezone) {
-			throw NotImplementedException("TIMESTAMP_NS with timezone not supported yet");
+			return LogicalType::TIMESTAMP_TZ;
 		}
 		return LogicalType::TIMESTAMP_NS;
 	}
 	case NumpyNullableType::DATETIME_S: {
 		if (col_type.has_timezone) {
-			throw NotImplementedException("TIMESTAMP_S with timezone not supported yet");
+			return LogicalType::TIMESTAMP_TZ;
 		}
 		return LogicalType::TIMESTAMP_S;
 	}

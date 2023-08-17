@@ -4,7 +4,6 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
-from packaging.version import Version
 
 try:
     import pandas
@@ -20,6 +19,17 @@ try:
     pyarrow_dtypes_enabled = not pa_version_under7p0
 except:
     pyarrow_dtypes_enabled = False
+
+
+def pandas_2_or_higher() -> bool:
+    from packaging.version import Version
+
+    try:
+        import pandas
+
+        return Version(pandas.__version__) >= Version('2.0.0')
+    except:
+        return False
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
@@ -64,9 +74,7 @@ def pandas_supports_arrow_backend():
             return False
     except:
         return False
-    import pandas as pd
-
-    return Version(pd.__version__) >= Version('2.0.0')
+    return pandas_2_or_higher()
 
 
 def numpy_pandas_df(*args, **kwargs):
@@ -132,7 +140,7 @@ class ArrowMockTesting:
 class ArrowPandas:
     def __init__(self):
         self.pandas = pytest.importorskip("pandas")
-        if Version(self.pandas.__version__) >= Version('2.0.0') and pyarrow_dtypes_enabled:
+        if pandas_2_or_higher() and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
             self.DataFrame = arrow_pandas_df
         else:

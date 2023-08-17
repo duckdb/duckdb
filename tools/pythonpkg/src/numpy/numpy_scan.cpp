@@ -245,6 +245,41 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// FIXME: 'has_timezone' is unused still, we should probably extract the timezone and convert the value back to
 		// GMT?
 
+		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
+		timestamp_convert_func convert_func;
+
+		switch (bind_data.numpy_type.type) {
+		case NumpyNullableType::DATETIME_NS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from NS to US
+				convert_func = Timestamp::FromEpochNanoSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_MS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from MS to US
+				convert_func = Timestamp::FromEpochMs;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_US:
+			convert_func = Timestamp::FromEpochMicroSeconds;
+			break;
+		case NumpyNullableType::DATETIME_S:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from S to US
+				convert_func = Timestamp::FromEpochSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		default:
+			throw NotImplementedException("Scan for datetime of this type is not supported yet");
+		};
+
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
 			if (src_ptr[source_idx] <= NumericLimits<int64_t>::Minimum()) {
@@ -253,7 +288,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				continue;
 			}
 			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
-			tgt_ptr[row] = Timestamp::FromEpochMicroSeconds(src_ptr[source_idx]);
+			tgt_ptr[row] = convert_func(src_ptr[source_idx]);
 		}
 		break;
 	}
