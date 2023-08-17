@@ -8,6 +8,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 
@@ -128,6 +129,14 @@ void DependencyManager::EraseObject(CatalogEntry &object) {
 	EraseObjectInternal(object);
 }
 
+catalog_entry_set_t &DependencyManager::GetEntriesThatObjectDependsOn(CatalogEntry &object) {
+	return dependencies_map.at(object);
+}
+
+dependency_set_t &DependencyManager::GetEntriesThatDependOnObject(CatalogEntry &object) {
+	return dependents_map.at(object);
+}
+
 void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
 	if (dependents_map.find(object) == dependents_map.end()) {
 		// dependencies already removed
@@ -135,17 +144,73 @@ void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
 	}
 	D_ASSERT(dependents_map.find(object) != dependents_map.end());
 	D_ASSERT(dependencies_map.find(object) != dependencies_map.end());
-	// now for each of the dependencies, erase the entries from the dependents_map
-	for (auto &dependency : dependencies_map[object]) {
-		auto entry = dependents_map.find(dependency);
-		if (entry != dependents_map.end()) {
-			D_ASSERT(entry->second.find(object) != entry->second.end());
-			entry->second.erase(object);
+
+	auto &entries = GetEntriesThatObjectDependsOn(object);
+	for (auto &other : entries) {
+		// For every entry that 'object' is dependent on, clean up this connection
+		auto dependencies_entry = dependents_map.find(other);
+		if (dependencies_entry == dependents_map.end()) {
+			continue;
 		}
+
+		auto &dependencies = dependencies_entry->second;
+		auto dependent_entry = dependencies.find(object);
+		D_ASSERT(dependent_entry != dependencies.end());
+
+		// Remove the dependency of 'object' on 'other'
+		dependencies.erase(dependent_entry);
 	}
 	// erase the dependents and dependencies for this object
 	dependents_map.erase(object);
 	dependencies_map.erase(object);
+}
+
+bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
+                                                     catalog_entry_set_t &exported) {
+	for (auto &entry : dependencies) {
+		// This is an entry that needs to be written before 'object' can be written
+		if (exported.find(entry) == exported.end()) {
+			// It has not been written yet, abort
+			return false;
+		}
+		// We do not need to check recursively, if the object is written
+		// that means that the objects it depends on have also been written
+	}
+	return true;
+}
+
+catalog_entry_vector_t DependencyManager::GetExportOrder() {
+	catalog_entry_set_t entries;
+	catalog_entry_vector_t export_order;
+
+	queue<reference<CatalogEntry>> backlog;
+	// Populate the backlog with every entry in the dependencies map
+	for (auto &entry : dependencies_map) {
+		backlog.push(entry.first);
+	}
+
+	// First populate our backlog with every entry in dependencies_map
+	while (!backlog.empty()) {
+		auto &object = backlog.front();
+		backlog.pop();
+		if (entries.count(object)) {
+			// This entry has already been written
+			continue;
+		}
+		auto entry = dependencies_map.find(object);
+		if (entry == dependencies_map.end() || AllExportDependenciesWritten(object, entry->second, entries)) {
+			// All dependencies written, we can write this now
+			auto insert_result = entries.insert(object);
+			D_ASSERT(insert_result.second);
+			export_order.push_back(object);
+		} else {
+			for (auto &dependency : entry->second) {
+				backlog.emplace(dependency);
+			}
+			backlog.emplace(object);
+		}
+	}
+	return export_order;
 }
 
 void DependencyManager::Scan(const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {

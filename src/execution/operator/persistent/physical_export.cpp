@@ -9,6 +9,8 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 #include <algorithm>
 #include <sstream>
@@ -17,7 +19,7 @@ namespace duckdb {
 
 using std::stringstream;
 
-static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>> &entries) {
+static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
 	for (auto &entry : entries) {
 		if (entry.get().internal) {
 			continue;
@@ -99,26 +101,36 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
-                                         OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<ExportSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
+static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector_t &to_add) {
+	all_entries.reserve(all_entries.size() + to_add.size());
+	for (auto &entry : to_add) {
+		all_entries.push_back(entry);
 	}
+	to_add.clear();
+}
+
+catalog_entry_vector_t GetDependencyDrivenExportOrder(ExecutionContext &context, DependencyManager &dependency_manager,
+                                                      CopyInfo &info, const BoundExportData &exported_tables) {
+	catalog_entry_vector_t catalog_entries;
+
+	catalog_entries = dependency_manager.GetExportOrder();
+	return catalog_entries;
+}
+
+catalog_entry_vector_t GetNaiveExportOrder(ExecutionContext &context, CopyInfo &info,
+                                           const BoundExportData &exported_tables) {
+	catalog_entry_vector_t schemas;
+	catalog_entry_vector_t custom_types;
+	catalog_entry_vector_t sequences;
+	catalog_entry_vector_t tables;
+	catalog_entry_vector_t views;
+	catalog_entry_vector_t indexes;
+	catalog_entry_vector_t macros;
 
 	auto &ccontext = context.client;
-	auto &fs = FileSystem::GetFileSystem(ccontext);
 
 	// gather all catalog types to export
-	vector<reference<CatalogEntry>> schemas;
-	vector<reference<CatalogEntry>> custom_types;
-	vector<reference<CatalogEntry>> sequences;
-	vector<reference<CatalogEntry>> tables;
-	vector<reference<CatalogEntry>> views;
-	vector<reference<CatalogEntry>> indexes;
-	vector<reference<CatalogEntry>> macros;
-
-	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
+	auto schema_list = Catalog::GetSchemas(ccontext, info.catalog);
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
 		if (!schema.internal) {
@@ -159,18 +171,42 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 		return lhs.get().oid < rhs.get().oid;
 	});
 
-	// write the schema.sql file
+	catalog_entry_vector_t catalog_entries;
+	AddEntries(catalog_entries, schemas);
+	AddEntries(catalog_entries, custom_types);
+	AddEntries(catalog_entries, sequences);
+	AddEntries(catalog_entries, tables);
+	AddEntries(catalog_entries, views);
+	AddEntries(catalog_entries, indexes);
+	AddEntries(catalog_entries, macros);
+	return catalog_entries;
+}
+
+SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<ExportSourceState>();
+	if (state.finished) {
+		return SourceResultType::FINISHED;
+	}
+
+	auto &ccontext = context.client;
+	auto &fs = FileSystem::GetFileSystem(ccontext);
+
+	auto &catalog = Catalog::GetCatalog(ccontext, info->catalog);
+
 	// export order is SCHEMA -> SEQUENCE -> TABLE -> VIEW -> INDEX
+	catalog_entry_vector_t catalog_entries;
+	if (catalog.IsDuckCatalog()) {
+		auto &duck_catalog = catalog.Cast<DuckCatalog>();
+		auto &dependency_manager = duck_catalog.GetDependencyManager();
+		catalog_entries = GetDependencyDrivenExportOrder(context, dependency_manager, *info, exported_tables);
+	} else {
+		catalog_entries = GetNaiveExportOrder(context, *info, exported_tables);
+	}
 
+	// write the schema.sql file
 	stringstream ss;
-	WriteCatalogEntries(ss, schemas);
-	WriteCatalogEntries(ss, custom_types);
-	WriteCatalogEntries(ss, sequences);
-	WriteCatalogEntries(ss, tables);
-	WriteCatalogEntries(ss, views);
-	WriteCatalogEntries(ss, indexes);
-	WriteCatalogEntries(ss, macros);
-
+	WriteCatalogEntries(ss, catalog_entries);
 	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file

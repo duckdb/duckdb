@@ -36,6 +36,9 @@ public:
 
 	void AddOwnership(CatalogTransaction transaction, CatalogEntry &owner, CatalogEntry &entry);
 
+	//! Get the order of entries needed by EXPORT, the objects with no dependencies are exported first
+	catalog_entry_vector_t GetExportOrder();
+
 private:
 	DuckCatalog &catalog;
 	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
@@ -50,5 +53,10 @@ private:
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);
+
+	dependency_set_t &GetEntriesThatDependOnObject(CatalogEntry &object);
+	catalog_entry_set_t &GetEntriesThatObjectDependsOn(CatalogEntry &object);
+	bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
+	                                  catalog_entry_set_t &exported);
 };
 } // namespace duckdb
