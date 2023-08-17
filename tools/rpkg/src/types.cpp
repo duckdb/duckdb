@@ -245,7 +245,7 @@ LogicalType RApiTypes::LogicalTypeFromRType(const RType &rtype, bool experimenta
 		return LogicalType::LIST(RApiTypes::LogicalTypeFromRType(rtype.GetListChildType(), experimental));
 	case RTypeId::STRUCT: {
 		child_list_t<LogicalType> children;
-		for (auto child : rtype.GetStructChildTypes()) {
+		for (const auto &child : rtype.GetStructChildTypes()) {
 			children.push_back(
 			    std::make_pair(child.first, RApiTypes::LogicalTypeFromRType(child.second, experimental)));
 		}
