@@ -28,7 +28,6 @@ def table(duckdb_cursor):
 
 
 class TestRAPIWindows:
-
     # general purpose win functions
     def test_row_number(self, table):
         result = table.row_number("over ()").execute().fetchall()
