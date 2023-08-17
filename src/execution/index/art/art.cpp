@@ -1005,7 +1005,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
 	tree = make_uniq<Node>(reader.Read<Node>());
 
-	for (idx_t i = 0; i < (uint8_t)NType::NODE_256 - 1; i++) {
+	for (idx_t i = 0; i < (uint8_t)NType::NODE_256; i++) {
 		(*allocators)[i].Deserialize(reader.Read<BlockPointer>());
 	}
 }

@@ -79,10 +79,11 @@ void Node::Free(ART &art, Node &node) {
 //===--------------------------------------------------------------------===//
 
 FixedSizeAllocator &Node::GetAllocatorByType(const ART &art, const NType type) {
-	return (*art.allocators)[(uint8_t)type];
+	return (*art.allocators)[(uint8_t)type - 1];
 }
 
 FixedSizeAllocator &Node::GetAllocator(const ART &art, const uint8_t idx) {
+	D_ASSERT(idx < (uint8_t)NType::NODE_256);
 	return (*art.allocators)[idx];
 }
 
