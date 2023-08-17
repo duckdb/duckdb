@@ -367,6 +367,28 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitXor(const std::string &column,
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitStringAgg(const std::string &column, const Optional<py::object> &min,
+                                                            const Optional<py::object> &max, const std::string &groups,
+                                                            const std::string &window_spec,
+                                                            const std::string &projected_columns) {
+	if ((min.is_none() && !max.is_none()) || (!min.is_none() && max.is_none())) {
+		throw InvalidInputException("Both min and max values must be set");
+	}
+	if (!min.is_none()) {
+		if (!py::isinstance<py::int_>(min) or !py::isinstance<py::int_>(max)) {
+			throw InvalidTypeException("min and max must be of type int");
+		}
+	}
+	auto bitstring_agg_params =
+	    min.is_none() ? "" : (std::to_string(min.cast<int>()) + "," + std::to_string(max.cast<int>()));
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("bitstring_agg", bitstring_agg_params, column, window_spec, false,
+		                             projected_columns);
+	} else {
+		return GenericAggregator("bitstring_agg", column, groups, bitstring_agg_params, projected_columns);
+	}
+}
+
 /*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
     return GenericAggregator("sum", sum_columns, groups);

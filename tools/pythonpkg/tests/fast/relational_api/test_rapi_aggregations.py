@@ -102,5 +102,19 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_bitstring_agg(self, table):
+        result = table.bitstring_agg("v").execute().fetchall()
+        expected = [("1011001000011",)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.bitstring_agg("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, "0011000000000"), (2, "0000000000011"), (3, "1000001000000")]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        with pytest.raises(duckdb.InvalidInputException):
+            table.bitstring_agg("v", min="1")
+        with pytest.raises(duckdb.InvalidTypeException):
+            table.bitstring_agg("v", min="1", max=11)
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None

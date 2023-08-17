@@ -94,7 +94,8 @@ public:
 	                                   const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> BitXor(const string &column, const string &groups = "", const string &window_spec = "",
 	                                    const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> BitStringAgg(const string &column, const string &groups = "",
+	unique_ptr<DuckDBPyRelation> BitStringAgg(const string &column, const Optional<py::object> &min,
+	                                          const Optional<py::object> &max, const string &groups = "",
 	                                          const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> BoolAnd(const string &column, const string &groups = "",
 	                                     const string &window_spec = "", const string &projected_columns = "");

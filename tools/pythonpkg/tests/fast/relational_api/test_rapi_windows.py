@@ -412,3 +412,40 @@ class TestRAPIWindows:
         expected = [(1, 1), (1, 0), (1, 2), (2, 11), (2, 1), (3, 5), (3, -6), (3, -6)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_bitstring_agg(self, table):
+        with pytest.raises(duckdb.BinderException, match="Could not retrieve required statistics"):
+            result = (
+                table.bitstring_agg(
+                    "v",
+                    window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                    projected_columns="id",
+                )
+                .order("id")
+                .execute()
+                .fetchall()
+            )
+        result = (
+            table.bitstring_agg(
+                "v",
+                min=-1,
+                max=11,
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, '0010000000000'),
+            (1, '0010000000000'),
+            (1, '0011000000000'),
+            (2, '0000000000001'),
+            (2, '0000000000011'),
+            (3, '0000001000000'),
+            (3, '1000001000000'),
+            (3, '1000001000000'),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
