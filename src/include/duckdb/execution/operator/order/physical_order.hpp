@@ -65,8 +65,6 @@ public:
 	// Rehydrate expression from a given cost context and child expressions
 	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
 
-	vector<ColumnBinding> GetColumnBindings() override;
-
 public:
 	// Source interface
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const override;

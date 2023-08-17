@@ -64,7 +64,7 @@ CReqdPropRelational::~CReqdPropRelational()
 //---------------------------------------------------------------------------
 void CReqdPropRelational::Compute(CExpressionHandle &exprhdl, CReqdProp* prpInput, ULONG child_index, duckdb::vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq)
 {
-	CReqdPropRelational* prprelInput = CReqdPropRelational::GetReqdRelationalProps(prpInput);
+	// CReqdPropRelational* prprelInput = CReqdPropRelational::GetReqdRelationalProps(prpInput);
 	m_pcrsStat = ((LogicalOperator*)exprhdl.Pop())->GetColumnBindings();
 }
 

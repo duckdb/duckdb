@@ -8,8 +8,9 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection &op)
 {
 	D_ASSERT(op.children.size() == 1);
-	LogicalOperator* pop = ((LogicalOperator*)op.children[0].get());
+	unique_ptr<LogicalOperator> pop = unique_ptr_cast<Operator, LogicalOperator>(std::move(op.children[0]));
 	auto plan = CreatePlan(*pop);
+	op.children[0] = std::move(pop);
 	if (plan->types.size() == op.types.size())
 	{
 		// check if this projection can be omitted entirely

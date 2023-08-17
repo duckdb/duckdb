@@ -468,6 +468,8 @@ void CEngine::Optimize() {
 		PssCurrent()->SetBestExpr(pexpr_plan.release());
 		FinalizeSearchStage();
 	}
+	CMemo* memo = this->m_pmemo;
+	return;
 }
 
 //---------------------------------------------------------------------------

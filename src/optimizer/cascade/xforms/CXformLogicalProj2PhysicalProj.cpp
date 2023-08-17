@@ -47,18 +47,19 @@ CXform::EXformPromise CXformLogicalProj2PhysicalProj::XformPromise(CExpressionHa
 //
 //---------------------------------------------------------------------------
 void CXformLogicalProj2PhysicalProj::Transform(CXformContext *pxfctxt, CXformResult *pxfres, Operator *pexpr) const {
-	LogicalProjection *operator_get = static_cast<LogicalProjection *>(pexpr);
+	LogicalProjection *operator_proj = static_cast<LogicalProjection *>(pexpr);
 	// create/extract components for alternative
 	duckdb::vector<duckdb::unique_ptr<Expression>> v;
-	for (auto &child : operator_get->expressions) {
+	for (auto &child : operator_proj->expressions) {
 		v.push_back(child->Copy());
 	}
 	// create alternative expression
-	duckdb::unique_ptr<Operator> alternative_expression =
-	    make_uniq<PhysicalProjection>(operator_get->types, std::move(v), operator_get->estimated_cardinality);
+	duckdb::unique_ptr<PhysicalProjection> alternative_expression =
+	    make_uniq<PhysicalProjection>(operator_proj->types, std::move(v), operator_proj->estimated_cardinality);
 	for (auto &child : pexpr->children) {
 		alternative_expression->AddChild(child->Copy());
 	}
+	alternative_expression->v_column_binding = operator_proj->GetColumnBindings();
 	// add alternative to transformation result
 	pxfres->Add(std::move(alternative_expression));
 }

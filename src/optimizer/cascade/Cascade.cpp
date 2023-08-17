@@ -9,7 +9,6 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/optimizer/cascade/base/CAutoOptCtxt.h"
@@ -20,22 +19,25 @@
 #include "duckdb/optimizer/cascade/task/CWorkerPoolManager.h"
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/optimizer/cascade/NewColumnBindingResolver.h"
+#include "duckdb/execution/column_binding_resolver.hpp"
+
+#include <cstdlib>
 
 namespace duckdb {
 using namespace gpos;
 using namespace gpopt;
 
 duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<LogicalOperator> plan) {
-	auto &profiler = QueryProfiler::Get(context);
-	// first resolve column references
-	profiler.StartPhase("column_binding");
-	ColumnBindingResolver resolver;
-	resolver.VisitOperator(*plan);
-	profiler.EndPhase();
+	/* Used for CCostContext::CostCompute */
+	unsigned seed;
+    seed = time(0);
+	srand(seed);
+	/* */
+	// ColumnBindingResolver resolver;
+	// resolver.VisitOperator(*plan);
 	// now resolve types of all the operators
-	profiler.StartPhase("resolve_types");
 	plan->ResolveOperatorTypes();
-	profiler.EndPhase();
 	// extract dependencies from the logical plan
 	// DependencyExtractor extractor(dependencies);
 	// extractor.VisitOperator(*plan);
@@ -81,6 +83,9 @@ duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<Logica
 	// (void) pexprPlan->PrppCompute(pqc->m_required_plan_property);
 	atp.DestroyAll();
 	wrkr.release();
+	// resolve column references
+	NewColumnBindingResolver new_resolver;
+	new_resolver.VisitOperator(*pexprPlan);
 	return pexprPlan;
 }
 } // namespace duckdb

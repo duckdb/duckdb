@@ -85,8 +85,6 @@ public:
 	BOOL FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,
 	                       ULONG ulOptReq) const override;
 
-	vector<ColumnBinding> GetColumnBindings() override;
-
 	CKeyCollection *DeriveKeyCollection(CExpressionHandle &exprhdl) override;
 
 	CPropConstraint *DerivePropertyConstraint(CExpressionHandle &exprhdl) override;

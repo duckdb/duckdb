@@ -56,12 +56,14 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					// anti/left outer join: replace right side with empty node
 					auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[1]));
 					ReplaceWithEmptyResult(child);
+					join.children[1] = std::move(child);
 					return;
 				}
 				case JoinType::RIGHT:
 				{	auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0]));
 					// right outer join: replace left side with empty node
 					ReplaceWithEmptyResult(child);
+					join.children[0] = std::move(child);
 					return;
 				}
 				default:
@@ -193,10 +195,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	auto first_child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[0]));
 	// first propagate through the children of the join
 	node_stats = PropagateStatistics(first_child);
+	join.children[0] = std::move(first_child);
 	for (idx_t child_idx = 1; child_idx < join.children.size(); child_idx++)
 	{
 		auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[child_idx]));
 		auto child_stats = PropagateStatistics(child);
+		join.children[child_idx] = std::move(child);
 		if (!child_stats)
 		{
 			node_stats = nullptr;
@@ -284,6 +288,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalPosi
 	{
 		auto child = unique_ptr_cast<Operator, LogicalOperator>(std::move(join.children[child_idx]));
 		auto child_stats = PropagateStatistics(child);
+		join.children[child_idx] = std::move(child);
 		if (!child_stats)
 		{
 			node_stats = nullptr;

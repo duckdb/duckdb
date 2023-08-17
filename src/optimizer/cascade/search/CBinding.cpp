@@ -37,7 +37,7 @@ list<CGroupExpression*>::iterator CBinding::PgexprNext(CGroup* pgroup, CGroupExp
 		return ++itr;
 	}
 	// for non-scalar group, we only consider logical expressions in bindings
-	return gp.PgexprNextLogical(itr);
+	return gp.PgexprNextLogical(++itr);
 }
 
 //---------------------------------------------------------------------------

@@ -95,18 +95,6 @@ Operator *PhysicalOrder::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operato
 	return pexpr;
 }
 
-vector<ColumnBinding> PhysicalOrder::GetColumnBindings() {
-	auto child_bindings = ((LogicalOperator *)children[0].get())->GetColumnBindings();
-	if (projections.empty()) {
-		return child_bindings;
-	}
-	vector<ColumnBinding> result;
-	for (auto &col_idx : projections) {
-		result.push_back(child_bindings[col_idx]);
-	}
-	return result;
-}
-
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//

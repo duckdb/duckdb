@@ -57,11 +57,12 @@ void CXformOrderImplementation::Transform(CXformContext* pxfctxt, CXformResult* 
         vorders.push_back(child.Copy());
     }
 	// create alternative expression
-	duckdb::unique_ptr<Operator> pexprAlt = make_uniq<PhysicalOrder>(popOrder->types, popOrder->orders, popOrder->projections, popOrder->estimated_cardinality);
+	duckdb::unique_ptr<PhysicalOrder> pexprAlt = make_uniq<PhysicalOrder>(popOrder->types, popOrder->orders, popOrder->projections, popOrder->estimated_cardinality);
     for(auto &child : pexpr->children)
     {
         pexprAlt->AddChild(child->Copy());
     }
+    pexprAlt->v_column_binding = popOrder->GetColumnBindings();
 	// add alternative to transformation result
 	pxfres->Add(std::move(pexprAlt));
 }

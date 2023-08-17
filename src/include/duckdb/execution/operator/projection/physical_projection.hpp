@@ -39,7 +39,7 @@ public:
 public:
 	// Rehydrate expression from a given cost context and child expressions
 	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
-
+	
 	duckdb::unique_ptr<Operator> Copy() override;
 
 	duckdb::unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override;

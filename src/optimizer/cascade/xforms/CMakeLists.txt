@@ -9,6 +9,8 @@ add_library_unity(
         CXformGet2TableScan.cpp
         CXformImplementation.cpp
         CXformInnerJoin2HashJoin.cpp
+        CXformJoinAssociativity.cpp
+        CXformJoinCommutativity.cpp
         CXformLogicalProj2PhysicalProj.cpp
         CXformOrderImplementation.cpp
         CXformResult.cpp)

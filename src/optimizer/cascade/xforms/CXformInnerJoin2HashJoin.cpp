@@ -68,6 +68,7 @@ void CXformInnerJoin2HashJoin::Transform(CXformContext* pxfctxt, CXformResult* p
                                                                         		popJoin->left_projection_map, popJoin->right_projection_map,
                                                                         		popJoin->delim_types, popJoin->estimated_cardinality,
 																				perfect_join_stats);
+	pexprAlt->v_column_binding = popJoin->GetColumnBindings();
 	// add alternative to transformation result
 	pxfres->Add(std::move(pexprAlt));
 }

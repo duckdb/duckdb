@@ -58,7 +58,7 @@ public:
 	vector<ColumnBinding> getColumnBinding() override
 	{
 		vector<ColumnBinding> v;
-		v.emplace_back(binding.table_index, binding.column_index);
+		v.emplace_back(binding);
 		return v;
 	}
 };
