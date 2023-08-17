@@ -458,6 +458,8 @@ bool Executor::ExecutionIsFinished() {
 }
 
 PendingExecutionResult Executor::ExecuteTask() {
+	// Only executor should return NO_TASKS_AVAILABLE
+	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
 		return execution_result;
 	}
@@ -467,6 +469,10 @@ PendingExecutionResult Executor::ExecuteTask() {
 		// there are! if we don't already have a task, fetch one
 		if (!task) {
 			scheduler.GetTaskFromProducer(*producer, task);
+		}
+		if (!task && !HasError()) {
+			// there are no tasks to be scheduled and there are tasks blocked
+			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}
 		if (task) {
 			// if we have a task, partially process it
@@ -589,6 +595,9 @@ bool Executor::GetPipelinesProgress(double &current_progress) { // LCOV_EXCL_STA
 		total_cardinality += child_cardinality;
 	}
 	current_progress = 0;
+	if (total_cardinality == 0) {
+		return true;
+	}
 	for (size_t i = 0; i < progress.size(); i++) {
 		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
 	}

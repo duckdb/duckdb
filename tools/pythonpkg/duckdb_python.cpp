@@ -151,8 +151,6 @@ static void InitializeConnectionMethods(py::module_ &m) {
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
-	m.def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
@@ -220,11 +218,9 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("values"), py::arg("connection") = py::none())
 	    .def("table_function", &PyConnectionWrapper::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
-	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	         py::arg("parameters") = py::none(), py::arg("connection") = py::none());
 
-	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
+	DefineMethod({"sql", "query", "from_query"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
 	             py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());

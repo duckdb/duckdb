@@ -315,6 +315,7 @@ struct WindowBoundariesState {
 	const bool has_following_range;
 	const bool needs_peer;
 
+	idx_t next_pos = 0;
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
 	idx_t peer_start = 0;
@@ -339,11 +340,18 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
 		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+		const auto is_jump = (next_pos != row_idx);
 
 		// when the partition changes, recompute the boundaries
-		if (!is_same_partition) {
+		if (!is_same_partition || is_jump) {
 			partition_start = row_idx;
 			peer_start = row_idx;
+
+			if (is_jump) {
+				//	Go back as far as the previous partition start
+				idx_t n = 1;
+				partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
+			}
 
 			// find end of partition
 			partition_end = input_size;
@@ -393,6 +401,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		partition_end = input_size;
 		peer_end = partition_end;
 	}
+	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
 	window_start = -1;
@@ -1154,9 +1163,9 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector
 		}
 		int64_t val_idx = (int64_t)row_idx;
 		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
-			val_idx += offset;
+			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
-			val_idx -= offset;
+			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		}
 
 		idx_t delta = 0;
@@ -1191,10 +1200,9 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vec
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		//	Same as NTH_VALUE(..., 1)
@@ -1219,10 +1227,9 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		idx_t n = 1;
@@ -1248,10 +1255,9 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vecto
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);

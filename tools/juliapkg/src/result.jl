@@ -638,7 +638,7 @@ end
 # execute tasks from a pending query result in a loop
 function pending_execute_tasks(pending::PendingQueryResult)::Bool
     ret = DUCKDB_PENDING_RESULT_NOT_READY
-    while ret == DUCKDB_PENDING_RESULT_NOT_READY
+    while !duckdb_pending_execution_is_finished(ret)
         GC.safepoint()
         ret = duckdb_pending_execute_task(pending.handle)
     end

@@ -105,3 +105,23 @@ test_that("dbConnect fails when tz_out_convert is misspecified", {
 
   expect_error(dbConnect(drv, tz_out_convert = "nope"))
 })
+
+test_that("timezone_out and tz_out_convert = force with midnight times (#8547)", {
+  con <- dbConnect(duckdb(), timezone_out = "Etc/GMT+8", tz_out_convert = "force")
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  dbExecute(
+    con,
+    "CREATE TABLE IF NOT EXISTS test( DATE_TIME TIMESTAMP );"
+  )
+
+  dbExecute(
+    con,
+    "INSERT INTO test(DATE_TIME) VALUES ('1975-01-01 00:00:00'),('1975-01-01 15:27:00');"
+  )
+
+  res <- dbGetQuery(con, "SELECT * FROM test;")
+  expect_equal(res[[1]],
+               as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00"),
+                          tz = "Etc/GMT+8"))
+})
