@@ -471,3 +471,18 @@ class TestRAPIWindows:
         expected = [(1, True), (1, True), (1, True), (2, True), (2, True), (3, True), (3, True), (3, True)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_count(self, table):
+        result = (
+            table.count(
+                "id",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

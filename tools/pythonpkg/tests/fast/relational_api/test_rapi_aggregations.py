@@ -136,5 +136,15 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_count(self, table):
+        result = table.count("*").execute().fetchall()
+        expected = [(8,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.count("*", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 3), (2, 2), (3, 3)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
     # def test_describe(self, table):
     #    assert table.describe().fetchall() is not None

@@ -224,6 +224,8 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 	*/
+
+	/* General purpose window functions */
 	unique_ptr<DuckDBPyRelation> RowNumber(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> Rank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> DenseRank(const string &window_spec, const string &projected_columns);

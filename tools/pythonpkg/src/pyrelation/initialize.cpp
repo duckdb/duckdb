@@ -97,6 +97,8 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("bool_and", &DuckDBPyRelation::BoolAnd, "Computes the logical AND of all values present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("bool_or", &DuckDBPyRelation::BoolOr, "Computes the logical OR of all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements within the group or partition",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 
 	/*
