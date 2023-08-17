@@ -20,13 +20,12 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
 	QueryErrorContext error_context(binder.root_statement, function.query_location);
-	auto func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-	                              function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 	if (!func) {
 		// function was not found - check if we this is a table function
-		auto table_func =
-		    Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
-		                      function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		auto table_func = GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
+		                                  function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
 		if (table_func) {
 			throw BinderException(binder.FormatError(
 			    function,
@@ -57,8 +56,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-		                         function.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
+		                       function.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -247,6 +246,13 @@ string ExpressionBinder::UnsupportedAggregateMessage() {
 
 string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
+}
+
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(CatalogType type, const string &catalog,
+                                                             const string &schema, const string &name,
+                                                             OnEntryNotFound on_entry_not_found,
+                                                             QueryErrorContext &error_context) {
+	return binder.GetCatalogEntry(type, catalog, schema, name, on_entry_not_found, error_context);
 }
 
 } // namespace duckdb

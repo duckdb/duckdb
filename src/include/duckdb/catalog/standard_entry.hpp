@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class SchemaCatalogEntry;
+class DependencyList;
 
 //! A StandardEntry is a catalog entry that is a member of a schema
 class StandardEntry : public InCatalogEntry {
@@ -29,6 +30,7 @@ public:
 	SchemaCatalogEntry &ParentSchema() override {
 		return schema;
 	}
+	virtual DependencyList InherentDependencies();
 };
 
 } // namespace duckdb

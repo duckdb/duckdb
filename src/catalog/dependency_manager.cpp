@@ -165,6 +165,26 @@ void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
 	dependencies_map.erase(object);
 }
 
+void DependencyManager::PrintDependencyMap() {
+	Printer::Print("DEPENDENCIES_MAP");
+	for (auto &entry : dependencies_map) {
+		Printer::Print(entry.first.get().ToSQL());
+		for (auto &other : entry.second) {
+			Printer::Print("\t" + other.get().ToSQL());
+		}
+	}
+}
+
+void DependencyManager::PrintDependentsMap() {
+	Printer::Print("DEPENDENTS_MAP");
+	for (auto &entry : dependents_map) {
+		Printer::Print(entry.first.get().ToSQL());
+		for (auto &other : entry.second) {
+			Printer::Print("\t" + other.entry.get().ToSQL());
+		}
+	}
+}
+
 bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
                                                      catalog_entry_set_t &exported) {
 	for (auto &entry : dependencies) {
@@ -182,6 +202,9 @@ bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object, catal
 catalog_entry_vector_t DependencyManager::GetExportOrder() {
 	catalog_entry_set_t entries;
 	catalog_entry_vector_t export_order;
+
+	PrintDependencyMap();
+	PrintDependentsMap();
 
 	queue<reference<CatalogEntry>> backlog;
 	// Populate the backlog with every entry in the dependencies map

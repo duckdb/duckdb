@@ -50,8 +50,10 @@ shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Bin
 }
 
 Binder::Binder(bool, ClientContext &context, shared_ptr<Binder> parent_p, bool inherit_ctes_p)
-    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p) {
+    : context(context), parent(std::move(parent_p)), bound_tables(0), inherit_ctes(inherit_ctes_p),
+      entry_retriever(context) {
 	if (parent) {
+		entry_retriever.SetCallback(parent->entry_retriever.GetCallback());
 
 		// We have to inherit macro and lambda parameter bindings and from the parent binder, if there is a parent.
 		macro_binding = parent->macro_binding;
@@ -494,6 +496,12 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	properties.allow_stream_result = true;
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
+}
+
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+                                                   const string &name, OnEntryNotFound on_entry_not_found,
+                                                   QueryErrorContext &error_context) {
+	return entry_retriever.GetEntry(type, catalog, schema, name, on_entry_not_found, error_context);
 }
 
 } // namespace duckdb

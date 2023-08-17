@@ -22,12 +22,18 @@ public:
 
 	//! The macro function
 	unique_ptr<MacroFunction> function;
+	//! The inherent dependencies of the function
+	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override {
 		return function->ToSQL(schema.name, name);
+	}
+
+	DependencyList InherentDependencies() override {
+		return dependencies;
 	}
 };
 

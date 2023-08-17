@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_create.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 

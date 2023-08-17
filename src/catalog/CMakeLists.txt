@@ -10,6 +10,8 @@ add_library_unity(
   duckdb_catalog
   OBJECT
   catalog_entry.cpp
+  standard_entry.cpp
+  catalog_entry_retriever.cpp
   catalog.cpp
   catalog_search_path.cpp
   catalog_set.cpp

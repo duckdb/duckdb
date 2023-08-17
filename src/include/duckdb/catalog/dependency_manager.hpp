@@ -58,5 +58,8 @@ private:
 	catalog_entry_set_t &GetEntriesThatObjectDependsOn(CatalogEntry &object);
 	bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
 	                                  catalog_entry_set_t &exported);
+
+	void PrintDependencyMap();
+	void PrintDependentsMap();
 };
 } // namespace duckdb

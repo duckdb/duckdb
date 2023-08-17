@@ -172,6 +172,11 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto sel_node = make_uniq<BoundSelectNode>();
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
+	auto &dependencies = base.dependencies;
+	binder.SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) {
+		// Register any catalog entry required to bind the macro function
+		dependencies.AddDependency(entry);
+	});
 	error = binder.Bind(expression, 0, false);
 
 	if (!error.empty()) {
@@ -481,8 +486,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::MACRO_ENTRY: {
 		auto &schema = BindCreateFunctionInfo(*stmt.info);
-		result.plan =
+		auto logical_create =
 		    make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_MACRO, std::move(stmt.info), &schema);
+		result.plan = std::move(logical_create);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {

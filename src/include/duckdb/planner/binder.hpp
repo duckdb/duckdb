@@ -127,6 +127,10 @@ public:
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
 
+	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
+	                                           const string &name, OnEntryNotFound on_entry_not_found,
+	                                           QueryErrorContext &error_context);
+
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
 	//! Find a common table expression by name; returns nullptr if none exists
@@ -216,6 +220,8 @@ private:
 	unordered_set<string> table_names;
 	//! The set of bound views
 	reference_set_t<ViewCatalogEntry> bound_views;
+	//! Used to retrieve CatalogEntry's
+	CatalogEntryRetriever entry_retriever;
 
 private:
 	//! Get the root binder (binder with no parent)

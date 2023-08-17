@@ -10,6 +10,7 @@
 
 #include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/function/macro_function.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,7 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 	CreateMacroInfo(CatalogType type);
 
 	unique_ptr<MacroFunction> function;
+	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;
