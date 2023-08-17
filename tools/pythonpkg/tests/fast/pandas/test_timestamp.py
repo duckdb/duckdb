@@ -6,18 +6,17 @@ import pandas as pd
 
 
 class TestPandasTimestamps(object):
-    def test_timestamp_types_roundtrip(self, duckdb_cursor):
+    @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
+    def test_timestamp_types_roundtrip(self, unit):
         d = {
-            'a': [pd.Timestamp(datetime.datetime.now(), unit='s')],
-            'b': [pd.Timestamp(datetime.datetime.now(), unit='ms')],
-            'c': [pd.Timestamp(datetime.datetime.now(), unit='us')],
-            'd': [pd.Timestamp(datetime.datetime.now(), unit='ns')],
+            'time': [pd.Timestamp(datetime.datetime.now(), unit=unit)],
         }
         df = pd.DataFrame(data=d)
+        print(df)
         df_from_duck = duckdb.from_df(df).df()
         assert df_from_duck.equals(df)
 
-    def test_timestamp_nulls(self, duckdb_cursor):
+    def test_timestamp_nulls(self):
         d = {
             'a': [pd.Timestamp(None, unit='s')],
             'b': [pd.Timestamp(None, unit='ms')],
@@ -28,7 +27,7 @@ class TestPandasTimestamps(object):
         df_from_duck = duckdb.from_df(df).df()
         assert df_from_duck.equals(df)
 
-    def test_timestamp_timedelta(self, duckdb_cursor):
+    def test_timestamp_timedelta(self):
         df = pd.DataFrame(
             {
                 'a': [pd.Timedelta(1, unit='s')],
