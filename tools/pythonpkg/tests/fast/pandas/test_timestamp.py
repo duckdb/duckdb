@@ -19,6 +19,24 @@ class TestPandasTimestamps(object):
         assert df_from_duck.equals(df)
 
     @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
+    def test_timestamp_timezone_roundtrip(self, unit):
+        conn = duckdb.connect()
+        conn.execute("SET TimeZone =UTC")
+        d = {
+            'time': pd.Series(
+                [pd.Timestamp(datetime.datetime(2020, 6, 12, 14, 43, 24, 394587), unit=unit, tz='UTC')],
+                dtype=f'datetime64[{unit}, UTC]',
+            )
+        }
+        df = pd.DataFrame(data=d)
+
+        # Our timezone aware type is in US (microseconds), when we scan a timestamp column that isn't US and has timezone info,
+        # we convert the time unit to US
+        expected = pd.DataFrame(data=d, dtype='datetime64[us, UTC]')
+        df_from_duck = conn.from_df(df).df()
+        assert df_from_duck.equals(expected)
+
+    @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
     def test_timestamp_nulls(self, unit):
         d = {'time': pd.Series([pd.Timestamp(None, unit=unit)], dtype=f'datetime64[{unit}]')}
         df = pd.DataFrame(data=d)
