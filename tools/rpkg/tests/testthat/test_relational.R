@@ -748,3 +748,34 @@ test_that("rel_from_table_function works", {
     df <- as.data.frame(rel)
     expect_equal(df$generate_series, c(1,3,5,7,9))
 })
+
+test_that("we don't crash with evaluation errors", {
+  invisible(DBI::dbExecute(con, "CREATE OR REPLACE MACRO \"==\"(x, y) AS x = y"))
+  df1 <- data.frame(a = "a")
+
+  rel1 <- rel_from_df(con, df1)
+  rel2 <- rel_project(
+    rel1,
+    list(
+      {
+        tmp_expr <- expr_reference("a")
+        expr_set_alias(tmp_expr, "a")
+        tmp_expr
+      },
+      {
+        tmp_expr <- expr_function(
+          "==",
+          list(expr_reference("a"), expr_constant(1))
+        )
+        expr_set_alias(tmp_expr, "b")
+        tmp_expr
+      }
+    )
+  )
+
+  ans <- rapi_rel_to_altrep(rel2)
+
+  # This query is supposed to throw a runtime error.
+  # If this succeeds, find a new query that throws a runtime error.
+  expect_error(nrow(ans), "Error evaluating duckdb query")
+})
