@@ -29,10 +29,7 @@ def table(duckdb_cursor):
 
 class TestRAPIWindows:
 
-    #################################################################
-    ############### GENERAL PURPOSE WIN FUNCTIONS ###################
-    #################################################################
-
+    # general purpose win functions
     def test_row_number(self, table):
         result = table.row_number("over ()").execute().fetchall()
         expected = list(range(1, 9))
@@ -313,10 +310,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    #################################################################
-    ################# AGG FUNCTIONS WITHIN WIN ######################
-    #################################################################
-
+    # agg functions within win
     def test_any_value(self, table):
         result = (
             table.any_value("v", window_spec="over (partition by id order by t asc)", projected_columns="id")
