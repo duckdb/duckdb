@@ -178,7 +178,7 @@ TEST_CASE("Test struct types C API", "[capi]") {
 TEST_CASE("Test struct types creation C API", "[capi]") {
 	duckdb::vector<duckdb_logical_type> types = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
 	                                             duckdb_create_logical_type(DUCKDB_TYPE_VARCHAR)};
-	duckdb::vector<const char*> names = {"a", "b"};
+	duckdb::vector<const char *> names = {"a", "b"};
 
 	auto logical_type = duckdb_create_struct_type(types.data(), names.data(), types.size());
 	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_STRUCT);
