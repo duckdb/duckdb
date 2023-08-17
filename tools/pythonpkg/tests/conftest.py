@@ -4,6 +4,7 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
+from packaging.version import Version
 
 try:
     import pandas
@@ -19,17 +20,6 @@ try:
     pyarrow_dtypes_enabled = not pa_version_under7p0
 except:
     pyarrow_dtypes_enabled = False
-
-
-def pandas_2_or_higher() -> bool:
-    from packaging.version import Version
-
-    try:
-        import pandas
-
-        return Version(pandas.__version__) >= Version('2.0.0')
-    except:
-        return False
 
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
@@ -74,7 +64,9 @@ def pandas_supports_arrow_backend():
             return False
     except:
         return False
-    return pandas_2_or_higher()
+    import pandas as pd
+
+    return Version(pd.__version__) >= Version('2.0.0')
 
 
 def numpy_pandas_df(*args, **kwargs):
@@ -140,7 +132,7 @@ class ArrowMockTesting:
 class ArrowPandas:
     def __init__(self):
         self.pandas = pytest.importorskip("pandas")
-        if pandas_2_or_higher() and pyarrow_dtypes_enabled:
+        if Version(self.pandas.__version__) >= Version('2.0.0') and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
             self.DataFrame = arrow_pandas_df
         else:
@@ -208,31 +200,9 @@ def duckdb_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     cursor.execute('CREATE TABLE integers (i integer)')
-    cursor.execute(
-        """
-        INSERT INTO integers VALUES
-            (0),
-            (1),
-            (2),
-            (3),
-            (4),
-            (5),
-            (6),
-            (7),
-            (8),
-            (9),
-            (NULL)
-    """
-    )
+    cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)')
     cursor.execute('CREATE TABLE timestamps (t timestamp)')
-    cursor.execute(
-        """
-        INSERT INTO timestamps VALUES
-            ('1992-10-03 18:34:45'),
-            ('2010-01-01 00:00:01'),
-            (NULL)
-    """
-    )
+    cursor.execute("INSERT INTO timestamps VALUES ('1992-10-03 18:34:45'), ('2010-01-01 00:00:01'), (NULL)")
     cursor.execute("CALL dbgen(sf=0.01)")
     return cursor
 
