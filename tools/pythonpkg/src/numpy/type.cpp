@@ -142,12 +142,25 @@ LogicalType NumpyToLogicalType(const NumpyType &col_type) {
 		return LogicalType::VARCHAR;
 	case NumpyNullableType::TIMEDELTA:
 		return LogicalType::INTERVAL;
-	case NumpyNullableType::DATETIME_MS:
-	case NumpyNullableType::DATETIME_US:
-	case NumpyNullableType::DATETIME_NS:
+	case NumpyNullableType::DATETIME_MS: {
+		if (col_type.has_timezone) {
+			throw NotImplementedException("TIMESTAMP_MS with timezone not supported yet");
+		}
+		return LogicalType::TIMESTAMP_MS;
+	}
+	case NumpyNullableType::DATETIME_NS: {
+		if (col_type.has_timezone) {
+			throw NotImplementedException("TIMESTAMP_NS with timezone not supported yet");
+		}
+		return LogicalType::TIMESTAMP_NS;
+	}
 	case NumpyNullableType::DATETIME_S: {
-		// FIXME: For now we convert these all to TIMESTAMP, when the support for our other TIMESTAMP types matures we
-		// might change this
+		if (col_type.has_timezone) {
+			throw NotImplementedException("TIMESTAMP_S with timezone not supported yet");
+		}
+		return LogicalType::TIMESTAMP_S;
+	}
+	case NumpyNullableType::DATETIME_US: {
 		if (col_type.has_timezone) {
 			return LogicalType::TIMESTAMP_TZ;
 		}

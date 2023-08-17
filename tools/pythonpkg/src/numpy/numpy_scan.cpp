@@ -242,25 +242,6 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
 
-		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
-		timestamp_convert_func convert_func;
-		switch (bind_data.numpy_type.type) {
-		case NumpyNullableType::DATETIME_NS:
-			convert_func = Timestamp::FromEpochNanoSeconds;
-			break;
-		case NumpyNullableType::DATETIME_MS:
-			convert_func = Timestamp::FromEpochMs;
-			break;
-		case NumpyNullableType::DATETIME_US:
-			convert_func = Timestamp::FromEpochMicroSeconds;
-			break;
-		case NumpyNullableType::DATETIME_S:
-			convert_func = Timestamp::FromEpochSeconds;
-			break;
-		default:
-			throw NotImplementedException("Scan for datetime of this type is not supported yet");
-		};
-
 		// FIXME: 'has_timezone' is unused still, we should probably extract the timezone and convert the value back to
 		// GMT?
 
@@ -271,7 +252,8 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				mask.SetInvalid(row);
 				continue;
 			}
-			tgt_ptr[row] = convert_func(src_ptr[source_idx]);
+			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
+			tgt_ptr[row] = Timestamp::FromEpochMicroSeconds(src_ptr[source_idx]);
 		}
 		break;
 	}
