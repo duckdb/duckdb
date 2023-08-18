@@ -70,6 +70,7 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 }
 
 static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
+	/* General aggregate functions */
 	m.def("any_value", &DuckDBPyRelation::AnyValue, "Returns the first non-null value from a given column",
 	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("arg_max", &DuckDBPyRelation::ArgMax,
@@ -132,68 +133,10 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("projected_columns") = "")
 	    .def("sum", &DuckDBPyRelation::Sum, "Computes the sum of all values present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
-
-	/*
-	m.def("sum", &DuckDBPyRelation::Sum,
-	      "Compute the aggregate sum of a single column or a list of columns by the optional groups on the relation",
-	      py::arg("sum_aggr"), py::arg("group_expr") = "")
-	    .def("count", &DuckDBPyRelation::Count,
-	         "Compute the aggregate count of a single column or a list of columns by the optional groups on the "
-	         "relation",
-	         py::arg("count_aggr"), py::arg("group_expr") = "")
-	    .def("median", &DuckDBPyRelation::Median,
-	         "Compute the aggregate median of a single column or a list of columns by the optional groups on the "
-	         "relation",
-	         py::arg("median_aggr"), py::arg("group_expr") = "")
-	    .def("quantile", &DuckDBPyRelation::Quantile,
-	         "Compute the quantile of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("q"), py::arg("quantile_aggr"), py::arg("group_expr") = "")
-	    .def("min", &DuckDBPyRelation::Min,
-	         "Compute the aggregate min of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("min_aggr"), py::arg("group_expr") = "")
-	    .def("max", &DuckDBPyRelation::Max,
-	         "Compute the aggregate max of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("max_aggr"), py::arg("group_expr") = "")
-	    .def(
-	        "mean", &DuckDBPyRelation::Mean,
-	        "Compute the aggregate mean of a single column or a list of columns by the optional groups on the relation",
-	        py::arg("mean_aggr"), py::arg("group_expr") = "")
-	    .def("var", &DuckDBPyRelation::Var,
-	         "Compute the variance of a single column or a list of columns by the optional groups on the relation",
-	         py::arg("var_aggr"), py::arg("group_expr") = "")
-	    .def("std", &DuckDBPyRelation::STD,
-	         "Compute the standard deviation of a single column or a list of columns by the optional groups on the "
-	         "relation",
-	         py::arg("std_aggr"), py::arg("group_expr") = "")
-	    .def("value_counts", &DuckDBPyRelation::ValueCounts, "Count number of rows with each unique value of variable",
-	         py::arg("value_counts_aggr"), py::arg("group_expr") = "")
-	    .def("mad", &DuckDBPyRelation::MAD,
-	         "Returns the median absolute deviation for the aggregate columns. NULL values are ignored. Temporal "
-	         "types return a positive INTERVAL.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("mode", &DuckDBPyRelation::Mode,
-	         "Returns the most frequent value for the aggregate columns. NULL values are ignored.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("abs", &DuckDBPyRelation::Abs, "Returns the absolute value for the specified columns.",
-	         py::arg("aggregation_columns"))
-	    .def("prod", &DuckDBPyRelation::Prod, "Calculates the product of the aggregate column.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("skew", &DuckDBPyRelation::Skew, "Returns the skewness of the aggregate column.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("kurt", &DuckDBPyRelation::Kurt, "Returns the excess kurtosis of the aggregate column.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("sem", &DuckDBPyRelation::SEM, "Returns the standard error of the mean of the aggregate column.",
-	         py::arg("aggregation_columns"), py::arg("group_columns") = "")
-	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"))
-	    .def("cumsum", &DuckDBPyRelation::CumSum, "Returns the cumulative sum of the aggregate column.",
-	         py::arg("aggregation_columns"))
-	    .def("cumprod", &DuckDBPyRelation::CumProd, "Returns the cumulative product of the aggregate column.",
-	         py::arg("aggregation_columns"))
-	    .def("cummax", &DuckDBPyRelation::CumMax, "Returns the cumulative maximum of the aggregate column.",
-	         py::arg("aggregation_columns"))
-	    .def("cummin", &DuckDBPyRelation::CumMin, "Returns the cumulative minimum of the aggregate column.",
-	         py::arg("aggregation_columns"));
-	*/
+	/* TODO: Approximate aggregate functions */
+	/* TODO: Statistical aggregate functions */
+	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",
+	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

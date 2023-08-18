@@ -127,83 +127,21 @@ public:
 	                                       const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Sum(const string &column, const string &groups = "", const string &window_spec = "",
 	                                 const string &projected_columns = "");
-	/* Approximate aggregate functions */
-	unique_ptr<DuckDBPyRelation> ApproxCountDistinct(const string &column, const string &groups = "",
-	                                                 const string &window_spec = "",
-	                                                 const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> ApproxQuantile(const string &column, const double &quantile = 0.5,
-	                                            const string &groups = "", const string &window_spec = "",
-	                                            const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> ReservoirQuantile(const string &column, const double &quantile = 0.5,
-	                                               const int &sample_size = 8192, const string &groups = "",
-	                                               const string &window_spec = "",
-	                                               const string &projected_columns = "");
-	/* Statistical aggregate functions */
-	unique_ptr<DuckDBPyRelation> Corr(const string &column_a, const string &column_b, const string &groups = "",
-	                                  const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> CovarPop(const string &column_a, const string &column_b, const string &groups = "",
-	                                      const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> CovarSamp(const string &column_a, const string &column_b, const string &groups = "",
-	                                       const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> Entropy(const string &column, const string &groups = "",
-	                                     const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> Kurtosis(const string &column, const string &groups = "",
-	                                      const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> Mad(const string &column, const string &groups = "", const string &window_spec = "",
-	                                 const string &projected_columns = "");
+	/* TODO: Approximate aggregate functions */
+	/* TODO: Statistical aggregate functions */
 	unique_ptr<DuckDBPyRelation> Median(const string &column, const string &groups = "", const string &window_spec = "",
 	                                    const string &projected_columns = "");
-	/*
-	unique_ptr<DuckDBPyRelation> QuantileCont(const string &column, const double &quantile = 0.5, const string &groups =
-	"", const string &window_spec = "", const string &projected_columns = ""); unique_ptr<DuckDBPyRelation>
-	QuantileDisc(const string &column, const double &quantile = 0.5, const string &groups = "", const string
-	&window_spec = "", const string &projected_columns = "");
-	*/
-	unique_ptr<DuckDBPyRelation> Skewness(const string &column, const string &groups = "",
-	                                      const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> StdDevPop(const string &column, const string &groups = "",
-	                                       const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> StdDevSamp(const string &column, const string &groups = "",
-	                                        const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> VarPop(const string &column, const string &groups = "", const string &window_spec = "",
+	unique_ptr<DuckDBPyRelation> Mode(const string &column, const string &groups = "", const string &window_spec = "",
+	                                  const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> QuantileCont(const string &column, const string &groups = "",
+	                                          const string &window_spec = "", const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> QuantileDisc(const string &column, const double &quantile = 0.5,
+	                                          const string &groups = "", const string &window_spec = "",
+	                                          const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> StdPop(const string &column, const string &groups = "", const string &window_spec = "",
 	                                    const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> VarSamp(const string &column, const string &groups = "",
+	unique_ptr<DuckDBPyRelation> StdSamp(const string &column, const string &groups = "",
 	                                     const string &window_spec = "", const string &projected_columns = "");
-
-	/*
-	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Count(const string &count_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Median(const string &median_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Quantile(const string &q, const string &quantile_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Min(const string &min_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Max(const string &max_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Mean(const string &mean_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Var(const string &var_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> STD(const string &std_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> ValueCounts(const string &std_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> MAD(const string &aggr_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Mode(const string &aggr_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Abs(const string &aggr_columns);
-	unique_ptr<DuckDBPyRelation> Prod(const string &aggr_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Skew(const string &aggr_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> Kurt(const string &aggr_columns, const string &groups = "");
-
-	unique_ptr<DuckDBPyRelation> SEM(const string &aggr_columns, const string &groups = "");
-	*/
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
@@ -220,12 +158,6 @@ public:
 	unique_ptr<DuckDBPyRelation> GenericWindowFunction(const string &function_name, const string &function_parameters,
 	                                                   const string &aggr_columns, const string &window_spec,
 	                                                   const bool &ignore_nulls, const string &projected_columns);
-	/*
-	unique_ptr<DuckDBPyRelation> CumSum(const string &aggr_columns);
-	unique_ptr<DuckDBPyRelation> CumProd(const string &aggr_columns);
-	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
-	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
-	*/
 
 	/* General purpose window functions */
 	unique_ptr<DuckDBPyRelation> RowNumber(const string &window_spec, const string &projected_columns);

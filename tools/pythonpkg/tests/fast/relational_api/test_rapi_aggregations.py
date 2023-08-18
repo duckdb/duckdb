@@ -29,6 +29,8 @@ def table(duckdb_cursor):
 
 
 class TestRAPIAggregations(object):
+    # General aggregate functions
+
     def test_any_value(self, table):
         result = table.order("id, t").any_value("v").execute().fetchall()
         expected = [(1,)]
@@ -281,6 +283,19 @@ class TestRAPIAggregations(object):
         assert all([r == e for r, e in zip(result, expected)])
         result = table.sum("v", groups="id", projected_columns="id").execute().fetchall()
         expected = [(1, 4), (2, 21), (3, 4)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    # TODO: Approximate aggregate functions
+
+    # TODO: Statistical aggregate functions
+    def test_median(self, table):
+        result = table.median("v").execute().fetchall()
+        expected = [(2.0,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.median("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 1.0), (2, 10.5), (3, 2.0)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
