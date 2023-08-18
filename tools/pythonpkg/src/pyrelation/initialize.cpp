@@ -82,11 +82,12 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         "Finds the row with the minimum value for a value column and returns the value of that row for an "
 	         "argument column",
 	         py::arg("arg_column"), py::arg("value_column"), py::arg("groups") = "", py::arg("window_spec") = "",
-	         py::arg("projected_columns") = "")
-	    .def("avg", &DuckDBPyRelation::Avg, "Computes the average on a given column", py::arg("column"),
-	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("bit_and", &DuckDBPyRelation::BitAnd, "Computes the bitwise AND of all bits present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	         py::arg("projected_columns") = "");
+	DefineMethod({"avg", "mean"}, m, &DuckDBPyRelation::Avg, "Computes the average on a given column",
+	             py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "",
+	             py::arg("projected_columns") = "");
+	m.def("bit_and", &DuckDBPyRelation::BitAnd, "Computes the bitwise AND of all bits present in a given column",
+	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("bit_or", &DuckDBPyRelation::BitOr, "Computes the bitwise OR of all bits present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("bit_xor", &DuckDBPyRelation::BitXor, "Computes the bitwise XOR of all bits present in a given column",
@@ -142,7 +143,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("quantile_cont", &DuckDBPyRelation::QuantileCont,
 	         "Computes the interpolated quantile value for a given column", py::arg("column"), py::arg("q") = 0.5,
 	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
-	DefineMethod({"quantile_disc", "quantile"}, m, &DuckDBPyRelation::QuantileDisc, "Computes the exact quantile value for a given column", py::arg("column"), py::arg("q") = 0.5, py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	DefineMethod({"quantile_disc", "quantile"}, m, &DuckDBPyRelation::QuantileDisc,
+	             "Computes the exact quantile value for a given column", py::arg("column"), py::arg("q") = 0.5,
+	             py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

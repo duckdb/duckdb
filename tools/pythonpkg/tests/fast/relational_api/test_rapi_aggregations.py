@@ -335,6 +335,27 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    @pytest.mark.parametrize("f", ["quantile_disc", "quantile"])
+    def test_quantile_disc(self, table, f):
+        result = getattr(table, f)("v").execute().fetchall()
+        expected = [(2,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = getattr(table, f)("v", q=[0.2, 0.5]).execute().fetchall()
+        expected = [([1, 2],)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = getattr(table, f)("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 1), (2, 10), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            getattr(table, f)("v", q=[0.2, 0.8], groups="id", projected_columns="id").order("id").execute().fetchall()
+        )
+        expected = [(1, [1, 2]), (2, [10, 11]), (3, [-1, 5])]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None

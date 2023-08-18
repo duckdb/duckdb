@@ -29,7 +29,7 @@ class TestRAPICloseConnRel(object):
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
             rel.median("")
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
-            rel.quantile("", "")
+            rel.quantile("")
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
             rel.apply("", "")
         with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):

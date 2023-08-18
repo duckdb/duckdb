@@ -706,3 +706,42 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["quantile_disc", "quantile"])
+    def test_quantile_disc(self, table, f):
+        result = (
+            getattr(table, f)(
+                "v",
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 2), (1, 1), (1, 1), (2, 10), (2, 10), (3, None), (3, -1), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            getattr(table, f)(
+                "v",
+                q=[0.2, 0.8],
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, [2, 2]),
+            (1, [1, 2]),
+            (1, [1, 2]),
+            (2, [10, 10]),
+            (2, [10, 11]),
+            (3, None),
+            (3, [-1, -1]),
+            (3, [-1, 5]),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
