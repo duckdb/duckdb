@@ -110,6 +110,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         "Computes the sum of all values present in a given column using a more accurate floating point "
 	         "summation (Kahan Sum)",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("geomean", &DuckDBPyRelation::GeoMean,
+	         "Computes the geometric mean over all values present in a given column", py::arg("column"),
+	         py::arg("groups") = "", py::arg("projected_columns") = "")
 	    .def("last", &DuckDBPyRelation::Last, "Returns the last value of a given column", py::arg("column"),
 	         py::arg("groups") = "", py::arg("projected_columns") = "");
 

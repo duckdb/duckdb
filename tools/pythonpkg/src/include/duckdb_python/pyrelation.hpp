@@ -110,7 +110,7 @@ public:
 	unique_ptr<DuckDBPyRelation> FSum(const string &column, const string &groups = "", const string &window_spec = "",
 	                                  const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> GeoMean(const string &column, const string &groups = "",
-	                                     const string &window_spec = "", const string &projected_columns = "");
+	                                     const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Histogram(const string &column, const string &groups = "",
 	                                       const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Last(const string &column, const string &groups = "",

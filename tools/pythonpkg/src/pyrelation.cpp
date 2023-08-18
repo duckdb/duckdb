@@ -446,6 +446,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FSum(const std::string &column, c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GeoMean(const std::string &column, const std::string &groups,
+                                                       const std::string &projected_columns) {
+	return GenericAggregator("geomean", column, groups, "", projected_columns);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const std::string &column, const std::string &groups,
                                                     const std::string &projected_columns) {
 	return GenericAggregator("last", column, groups, "", projected_columns);

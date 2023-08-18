@@ -192,6 +192,19 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_geomean(self, table):
+        result = [round(r[0], 2) for r in table.geomean("f").execute().fetchall()]
+        expected = [0.67]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.geomean("f", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.05), (2, 0.65), (3, 9.52)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None
