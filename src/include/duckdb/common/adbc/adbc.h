@@ -52,6 +52,7 @@
 
 //! @cond Doxygen_Suppress
 namespace duckdb_adbc {
+
 #ifdef __cplusplus
 extern "C" {
 #endif
