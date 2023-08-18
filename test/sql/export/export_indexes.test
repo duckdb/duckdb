@@ -5,19 +5,21 @@
 statement ok
 BEGIN TRANSACTION
 
-statement ok
-CREATE SCHEMA my_schema
-
 # scalar macro
 statement ok
-CREATE MACRO my_schema.elaborate_macro(x, y := 7) AS x + y;
+CREATE MACRO elaborate_macro(x, y := 7) AS x + y;
 
 statement ok
-CREATE TABLE my_schema.tbl (x integer, y varchar);
+CREATE TABLE tbl (x integer, y varchar);
 
 # Index that depends on the 'elaborate_macro' macro function
 statement ok
-CREATE INDEX my_index on my_schema.tbl (my_schema.elaborate_macro(tbl.x));
+CREATE UNIQUE INDEX my_index on tbl (elaborate_macro(tbl.x));
+
+query I
+select index_name from duckdb_indexes();
+----
+my_index
 
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_macros' (FORMAT CSV);
@@ -28,7 +30,20 @@ ROLLBACK
 statement ok
 IMPORT DATABASE '__TEST_DIR__/export_macros'
 
+query I
+select index_name from duckdb_indexes();
+----
+my_index
+
 query T
-SELECT my_schema.elaborate_macro(28, y := 5)
+SELECT elaborate_macro(28, y := 5)
 ----
 33
+
+statement ok
+insert into tbl VALUES (10, 'hello');
+
+statement error
+insert into tbl VALUES (10, 'world');
+----
+Constraint Error: Duplicate key "(x + 7): 17" violates unique constraint.
