@@ -38,7 +38,7 @@ common/hive_partitioning.cpp	55
 common/http_state.cpp	36
 common/local_file_system.cpp	16
 common/multi_file_reader.cpp	15
-common/operator/cast_operators.cpp	72
+common/operator/cast_operators.cpp	83
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
 common/preserved_error.cpp	13
@@ -254,7 +254,7 @@ function/pragma_function.cpp	6
 function/scalar/generic/constant_or_null.cpp	5
 function/scalar/list/list_concat.cpp	5
 function/scalar/list/list_extract.cpp	10
-function/scalar/operators/add.cpp	6
+function/scalar/operators/add.cpp	8
 function/scalar/operators/arithmetic.cpp	23
 function/scalar/operators/multiply.cpp	4
 function/scalar/operators/subtract.cpp	5
@@ -372,6 +372,7 @@ include/duckdb/common/types/hugeint.hpp	2
 include/duckdb/common/types/row/partitioned_tuple_data.hpp	11
 include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
+include/duckdb/common/types/uhugeint.hpp	2
 include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
 include/duckdb/common/vector_operations/aggregate_executor.hpp	17
