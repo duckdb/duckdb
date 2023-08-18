@@ -115,13 +115,6 @@ adbc_statement_init.duckdb_connection_adbc <- function(connection, ...) {
   )
 }
 
-# Such that these objects can be used in S4 objects with adbc_driver
-# slot definitions (e.g., a future DBI wrapper around ADBC)
-setOldClass(c("duckdb_driver_adbc", "adbc_driver", "adbc_xptr"))
-setOldClass(c("duckdb_database_adbc", "adbc_database", "adbc_xptr"))
-setOldClass(c("duckdb_connection_adbc", "adbc_connection", "adbc_xptr"))
-setOldClass(c("duckdb_statement_adbc", "adbc_statement", "adbc_xptr"))
-
 is_installed <- function(pkg) {
   as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
 }
