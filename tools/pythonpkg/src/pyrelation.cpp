@@ -506,6 +506,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Product(const std::string &column
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::StringAgg(const std::string &column, const std::string &sep,
+                                                         const std::string &groups, const std::string &window_spec,
+                                                         const std::string &projected_columns) {
+	auto string_agg_params = "\'" + sep + "\'";
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("string_agg", string_agg_params, column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("string_agg", column, groups, string_agg_params, projected_columns);
+	}
+}
+
 /*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
     return GenericAggregator("sum", sum_columns, groups);

@@ -5,18 +5,18 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_of_table(duckdb_cursor):
-    duckdb_cursor.execute("create table agg(id int, v int, t int, f float);")
+    duckdb_cursor.execute("create table agg(id int, v int, t int, f float, s varchar);")
     duckdb_cursor.execute(
         """
 		insert into agg values
-		(1, 1, 2, 0.54),
-		(1, 1, 1, 0.21),
-		(1, 2, 3, 0.001),
-		(2, 10, 4, 0.04),
-		(2, 11, -1, 10.45),
-		(3, -1, 0, 13.32),
-		(3, 5, -2, 9.87),
-		(3, null, 10, 6.56);
+		(1, 1, 2, 0.54, 'h'),
+		(1, 1, 1, 0.21, 'e'),
+		(1, 2, 3, 0.001, 'l'),
+		(2, 10, 4, 0.04, 'l'),
+		(2, 11, -1, 10.45, 'o'),
+		(3, -1, 0, 13.32, ','),
+		(3, 5, -2, 9.87, 'wor'),
+		(3, null, 10, 6.56, 'ld');
 		"""
     )
     yield
@@ -256,6 +256,21 @@ class TestRAPIAggregations(object):
         assert all([r == e for r, e in zip(result, expected)])
         result = table.product("v", groups="id", projected_columns="id").order("id").execute().fetchall()
         expected = [(1, 2), (2, 110), (3, -5)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_string_agg(self, table):
+        result = table.string_agg("s", sep="/").execute().fetchall()
+        expected = [('h/e/l/l/o/,/wor/ld',)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = (
+            table.string_agg("s", sep="/", groups="id order by t asc", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 'h/e/l'), (2, 'l/o'), (3, ',/wor/ld')]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
