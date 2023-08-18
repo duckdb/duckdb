@@ -6,17 +6,259 @@
 using namespace duckdb;
 using namespace cpp11;
 
+data_ptr_t GetColDataPtr(const RType &rtype, SEXP coldata) {
+	switch (rtype.id()) {
+	case RType::LOGICAL:
+		return (data_ptr_t)LOGICAL_POINTER(coldata);
+	case RType::INTEGER:
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::NUMERIC:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::INTEGER64:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RTypeId::FACTOR:
+		// TODO What about factors that use numeric?
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::STRING:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RType::TIMESTAMP:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::TIME_SECONDS:
+	case RType::TIME_MINUTES:
+	case RType::TIME_HOURS:
+	case RType::TIME_DAYS:
+	case RType::TIME_WEEKS:
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::TIME_SECONDS_INTEGER:
+	case RType::TIME_MINUTES_INTEGER:
+	case RType::TIME_HOURS_INTEGER:
+	case RType::TIME_DAYS_INTEGER:
+	case RType::TIME_WEEKS_INTEGER:
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::DATE:
+		if (!IS_NUMERIC(coldata)) {
+			cpp11::stop("DATE should really be integer");
+		}
+		return (data_ptr_t)NUMERIC_POINTER(coldata);
+	case RType::DATE_INTEGER:
+		if (!IS_INTEGER(coldata)) {
+			cpp11::stop("DATE_INTEGER should really be integer");
+		}
+		return (data_ptr_t)INTEGER_POINTER(coldata);
+	case RType::LIST_OF_NULLS:
+	case RType::BLOB:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RTypeId::LIST:
+		return (data_ptr_t)DATAPTR_RO(coldata);
+	case RTypeId::STRUCT:
+		// Will bind child columns dynamically. Could also optimize by descending early and recording.
+		return (data_ptr_t)coldata;
+	default:
+		cpp11::stop("rapi_execute: Unsupported column type for bind");
+	}
+}
+
+struct DedupPointerEnumType {
+	static bool IsNull(SEXP val) {
+		return val == NA_STRING;
+	}
+	static uintptr_t Convert(SEXP val) {
+		return (uintptr_t)DATAPTR(val);
+	}
+};
+
 template <class SRC, class DST, class RTYPE>
-static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
-	auto result_data = FlatVector::GetData<DST>(result);
+static void AppendColumnSegment(SRC *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
+	source_data += sexp_offset;
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto val = source_data[i];
 		if (RTYPE::IsNull(val)) {
 			result_mask.SetInvalid(i);
 		} else {
+			auto result_data = FlatVector::GetData<DST>(result);
 			result_data[i] = RTYPE::Convert(val);
 		}
+	}
+}
+
+void AppendListColumnSegment(const RType &rtype, SEXP *source_data, idx_t sexp_offset, Vector &result, idx_t count) {
+	source_data += sexp_offset;
+	auto &result_mask = FlatVector::Validity(result);
+	auto child_rtype = rtype.GetListChildType();
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
+	for (idx_t i = 0; i < count; i++) {
+		auto val = source_data[i];
+		if (RSexpType::IsNull(val)) {
+			result_mask.SetInvalid(i);
+		} else {
+			auto len = RApiTypes::GetVecSize(child_rtype, val);
+			result_data[i].offset = ListVector::GetListSize(result);
+			for (R_len_t child_idx = 0; child_idx < len; ++child_idx) {
+				auto child_item = RApiTypes::SexpToValue(val, child_idx);
+				ListVector::PushBack(result, child_item);
+			}
+			result_data[i].length = len;
+		}
+	}
+}
+
+void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t coldata_ptr, idx_t sexp_offset, Vector &v,
+                            idx_t this_count);
+
+void AppendStructColumnSegment(const RType &rtype, bool experimental, SEXP source_data, idx_t sexp_offset,
+                               Vector &result, idx_t count) {
+	// No NULL values for STRUCTs.
+	auto &child_entries = StructVector::GetEntries(result);
+	auto child_rtypes = rtype.GetStructChildTypes();
+	for (size_t i = 0; i < child_entries.size(); ++i) {
+		auto coldata = VECTOR_ELT(source_data, i);
+		auto const &child_rtype = child_rtypes[i].second;
+		auto coldata_ptr = GetColDataPtr(child_rtype, coldata);
+		AppendAnyColumnSegment(child_rtype, experimental, coldata_ptr, sexp_offset, *child_entries[i], count);
+	}
+}
+
+void AppendAnyColumnSegment(const RType &rtype, bool experimental, data_ptr_t coldata_ptr, idx_t sexp_offset, Vector &v,
+                            idx_t this_count) {
+	switch (rtype.id()) {
+	case RType::LOGICAL: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, bool, RBooleanType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, int, RIntegerType>(data_ptr, sexp_offset, v, this_count);
+
+		break;
+	}
+	case RType::NUMERIC: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, double, RDoubleType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::INTEGER64: {
+		auto data_ptr = (int64_t *)coldata_ptr;
+		AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::STRING: {
+		auto data_ptr = (SEXP *)coldata_ptr;
+
+		if (experimental) {
+			D_ASSERT(v.GetType().id() == LogicalTypeId::POINTER);
+			AppendColumnSegment<SEXP, uintptr_t, DedupPointerEnumType>(data_ptr, sexp_offset, v, this_count);
+		} else {
+			AppendColumnSegment<SEXP, string_t, RStringSexpType>(data_ptr, sexp_offset, v, this_count);
+		}
+
+		break;
+	}
+	case RTypeId::FACTOR: {
+		auto data_ptr = (int *)coldata_ptr;
+		switch (v.GetType().InternalType()) {
+		case PhysicalType::UINT8:
+			AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
+			break;
+
+		case PhysicalType::UINT16:
+			AppendColumnSegment<int, uint16_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
+			break;
+
+		case PhysicalType::UINT32:
+			AppendColumnSegment<int, uint32_t, RFactorType>(data_ptr, sexp_offset, v, this_count);
+			break;
+
+		default:
+			cpp11::stop("rapi_execute: Unknown enum type for scan: %s",
+			            TypeIdToString(v.GetType().InternalType()).c_str());
+		}
+		break;
+	}
+	case RType::TIMESTAMP: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_SECONDS: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_MINUTES: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_HOURS: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_DAYS: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_WEEKS: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_SECONDS_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_MINUTES_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_HOURS_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_DAYS_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::TIME_WEEKS_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::DATE: {
+		auto data_ptr = (double *)coldata_ptr;
+		AppendColumnSegment<double, date_t, RDateType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::DATE_INTEGER: {
+		auto data_ptr = (int *)coldata_ptr;
+		AppendColumnSegment<int, date_t, RDateType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RType::LIST_OF_NULLS:
+	case RType::BLOB: {
+		auto data_ptr = (SEXP *)coldata_ptr;
+		AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RTypeId::LIST: {
+		auto data_ptr = (SEXP *)coldata_ptr;
+		AppendListColumnSegment(rtype, data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	case RTypeId::STRUCT: {
+		auto data_ptr = (SEXP)coldata_ptr;
+		AppendStructColumnSegment(rtype, experimental, data_ptr, sexp_offset, v, this_count);
+		break;
+	}
+	default:
+		cpp11::stop("rapi_execute: Unsupported column type for scan");
 	}
 }
 
@@ -75,96 +317,16 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 	vector<data_ptr_t> data_ptrs;
 
 	for (R_xlen_t col_idx = 0; col_idx < df.size(); col_idx++) {
-		auto coldata = df[col_idx];
-		LogicalType duckdb_col_type;
-		data_ptr_t coldata_ptr = nullptr;
-
 		names.push_back(df_names[col_idx]);
-		rtypes.push_back(RApiTypes::DetectRType(coldata, integer64));
 
-		switch (rtypes[col_idx]) {
-		case RType::LOGICAL:
-			duckdb_col_type = LogicalType::BOOLEAN;
-			coldata_ptr = (data_ptr_t)LOGICAL_POINTER(coldata);
-			break;
-		case RType::INTEGER:
-			duckdb_col_type = LogicalType::INTEGER;
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::NUMERIC:
-			duckdb_col_type = LogicalType::DOUBLE;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::INTEGER64:
-			duckdb_col_type = LogicalType::BIGINT;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::FACTOR: {
-			// TODO What about factors that use numeric?
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			strings levels = GET_LEVELS(coldata);
-			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
-			auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
-			for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
-				levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, (string)levels[level_idx]);
-			}
-			duckdb_col_type = LogicalType::ENUM(duckdb_levels, levels.size());
-			break;
-		}
-		case RType::STRING:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
-			if (experimental) {
-				duckdb_col_type = RStringsType::Get();
-			} else {
-				duckdb_col_type = LogicalType::VARCHAR;
-			}
-			break;
-		case RType::TIMESTAMP:
-			duckdb_col_type = LogicalType::TIMESTAMP;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::TIME_SECONDS:
-		case RType::TIME_MINUTES:
-		case RType::TIME_HOURS:
-		case RType::TIME_DAYS:
-		case RType::TIME_WEEKS:
-			duckdb_col_type = LogicalType::TIME;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			break;
-		case RType::TIME_SECONDS_INTEGER:
-		case RType::TIME_MINUTES_INTEGER:
-		case RType::TIME_HOURS_INTEGER:
-		case RType::TIME_DAYS_INTEGER:
-		case RType::TIME_WEEKS_INTEGER:
-			duckdb_col_type = LogicalType::TIME;
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			break;
-		case RType::DATE:
-			if (!IS_NUMERIC(coldata)) {
-				cpp11::stop("DATE should really be integer");
-			}
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
-			duckdb_col_type = LogicalType::DATE;
-			break;
-		case RType::DATE_INTEGER:
-			if (!IS_INTEGER(coldata)) {
-				cpp11::stop("DATE_INTEGER should really be integer");
-			}
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
-			duckdb_col_type = LogicalType::DATE;
-			break;
-		case RType::BLOB:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
-			duckdb_col_type = LogicalType::BLOB;
-			break;
-		default:
-			cpp11::stop("rapi_execute: Unsupported column type for bind");
-		}
+		auto coldata = df[col_idx];
+		auto rtype = RApiTypes::DetectRType(coldata, integer64);
+		rtypes.push_back(rtype);
+		return_types.push_back(RApiTypes::LogicalTypeFromRType(rtype, experimental));
 
-		return_types.push_back(duckdb_col_type);
-		data_ptrs.push_back(coldata_ptr);
+		data_ptrs.push_back(GetColDataPtr(rtype, coldata));
 	}
-	auto row_count = Rf_length(VECTOR_ELT(df, 0));
+	auto row_count = RApiTypes::GetVecSize(rtypes[0], VECTOR_ELT(df, 0));
 	return make_uniq<DataFrameScanBindData>(df, row_count, rtypes, data_ptrs, input.named_parameters);
 }
 
@@ -213,15 +375,6 @@ static unique_ptr<LocalTableFunctionState> DataFrameScanInitLocal(ExecutionConte
 	return std::move(result);
 }
 
-struct DedupPointerEnumType {
-	static bool IsNull(SEXP val) {
-		return val == NA_STRING;
-	}
-	static uintptr_t Convert(SEXP val) {
-		return (uintptr_t)DATAPTR(val);
-	}
-};
-
 static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, DataChunk &output) {
 	auto &bind_data = data.bind_data->Cast<DataFrameScanBindData>();
 	auto &operator_data = data.local_state->Cast<DataFrameLocalState>();
@@ -241,6 +394,7 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		auto &v = output.data[out_col_idx];
 		auto src_df_col_idx = operator_data.column_ids[out_col_idx];
 
+		// Hannes: I love the reference, but would you mind adding a bit of context why this is necessary?
 		if (src_df_col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			Value constant_42 = Value::BIGINT(42);
 			output.data[out_col_idx].Reference(constant_42);
@@ -248,136 +402,8 @@ static void DataFrameScanFunc(ClientContext &context, TableFunctionInput &data, 
 		}
 
 		auto coldata_ptr = bind_data.data_ptrs[src_df_col_idx];
-		switch (bind_data.rtypes[src_df_col_idx]) {
-		case RType::LOGICAL: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, bool, RBooleanType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, int, RIntegerType>(data_ptr, v, this_count);
-
-			break;
-		}
-		case RType::NUMERIC: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::INTEGER64: {
-			auto data_ptr = (int64_t *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int64_t, int64_t, RInteger64Type>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::STRING: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-
-			if (bind_data.experimental) {
-				D_ASSERT(v.GetType().id() == LogicalTypeId::POINTER);
-				AppendColumnSegment<SEXP, uintptr_t, DedupPointerEnumType>(data_ptr, v, this_count);
-			} else {
-				AppendColumnSegment<SEXP, string_t, RStringSexpType>(data_ptr, v, this_count);
-			}
-
-			break;
-		}
-		case RType::FACTOR: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			switch (v.GetType().InternalType()) {
-			case PhysicalType::UINT8:
-				AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, v, this_count);
-				break;
-
-			case PhysicalType::UINT16:
-				AppendColumnSegment<int, uint16_t, RFactorType>(data_ptr, v, this_count);
-				break;
-
-			case PhysicalType::UINT32:
-				AppendColumnSegment<int, uint32_t, RFactorType>(data_ptr, v, this_count);
-				break;
-
-			default:
-				cpp11::stop("rapi_execute: Unknown enum type for scan: %s",
-				            TypeIdToString(v.GetType().InternalType()).c_str());
-			}
-			break;
-		}
-		case RType::TIMESTAMP: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_SECONDS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_MINUTES: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_HOURS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_DAYS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_WEEKS: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_SECONDS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_MINUTES_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_HOURS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_DAYS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::TIME_WEEKS_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::DATE: {
-			auto data_ptr = (double *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::DATE_INTEGER: {
-			auto data_ptr = (int *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::BLOB: {
-			auto data_ptr = (SEXP *)coldata_ptr + sexp_offset;
-			AppendColumnSegment<SEXP, string_t, RRawSexpType>(data_ptr, v, this_count);
-			break;
-		}
-		case RType::LIST_OF_NULLS:
-			break;
-		default:
-			cpp11::stop("rapi_execute: Unsupported column type for scan");
-		}
+		auto rtype = bind_data.rtypes[src_df_col_idx];
+		AppendAnyColumnSegment(rtype, bind_data.experimental, coldata_ptr, sexp_offset, v, this_count);
 	}
 
 	operator_data.position += this_count;
