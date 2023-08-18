@@ -540,6 +540,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Median(const std::string &column,
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const std::string &column, const std::string &groups,
+                                                    const std::string &window_spec,
+                                                    const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("mode", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("mode", column, groups, "", projected_columns);
+	}
+}
+
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();

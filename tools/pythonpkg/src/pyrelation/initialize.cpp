@@ -136,7 +136,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	/* TODO: Approximate aggregate functions */
 	/* TODO: Statistical aggregate functions */
 	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",
-	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("mode", &DuckDBPyRelation::Mode, "Computes the mode over all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

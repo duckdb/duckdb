@@ -299,6 +299,16 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_mode(self, table):
+        result = table.mode("v").execute().fetchall()
+        expected = [(1,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.mode("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 1), (2, 10), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None
