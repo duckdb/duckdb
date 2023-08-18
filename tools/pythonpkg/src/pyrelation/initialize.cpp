@@ -103,7 +103,11 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("favg", &DuckDBPyRelation::FAvg,
 	         "Computes the average of all values present in a given column using a more accurate floating point "
 	         "summation (Kahan Sum)",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("first", &DuckDBPyRelation::First, "Returns the first value of a given column", py::arg("column"),
+	         py::arg("groups") = "", py::arg("projected_columns") = "")
+	    .def("last", &DuckDBPyRelation::Last, "Returns the last value of a given column", py::arg("column"),
+	         py::arg("groups") = "", py::arg("projected_columns") = "");
 
 	/*
 	m.def("sum", &DuckDBPyRelation::Sum,
@@ -181,23 +185,21 @@ static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {
 	      py::arg("window_spec"), py::arg("projected_columns") = "")
 	    .def("cume_dist", &DuckDBPyRelation::CumeDist, "Computes the cumulative distribution within the partition",
 	         py::arg("window_spec"), py::arg("projected_columns") = "")
+	    .def("first_value", &DuckDBPyRelation::FirstValue, "Computes the first value within the group or partition",
+	         py::arg("column"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("n_tile", &DuckDBPyRelation::NTile, "Divides the partition as equally as possible into num_buckets",
 	         py::arg("window_spec"), py::arg("num_buckets"), py::arg("projected_columns") = "")
 	    .def("lag", &DuckDBPyRelation::Lag, "Computes the lag within the partition", py::arg("column"),
 	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
 	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
+	    .def("last_value", &DuckDBPyRelation::LastValue, "Computes the last value within the group or partition",
+	         py::arg("column"), py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("lead", &DuckDBPyRelation::Lead, "Computes the lead within the partition", py::arg("column"),
 	         py::arg("window_spec"), py::arg("offset") = 1, py::arg("default_value") = "NULL",
-	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
-	DefineMethod({"first_value", "first"}, m, &DuckDBPyRelation::FirstValue,
-	             "Computes the first value within the partition", py::arg("column"), py::arg("window_spec"),
-	             py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
-	DefineMethod({"last_value", "last"}, m, &DuckDBPyRelation::LastValue,
-	             "Computes the last value within the partition", py::arg("column"), py::arg("window_spec"),
-	             py::arg("ignore_nulls") = false, py::arg("projected_columns") = "");
-	m.def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
-	      py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
-	      py::arg("projected_columns") = "");
+	         py::arg("ignore_nulls") = false, py::arg("projected_columns") = "")
+	    .def("nth_value", &DuckDBPyRelation::NthValue, "Computes the nth value within the partition", py::arg("column"),
+	         py::arg("window_spec"), py::arg("offset"), py::arg("ignore_nulls") = false,
+	         py::arg("projected_columns") = "");
 }
 
 static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {

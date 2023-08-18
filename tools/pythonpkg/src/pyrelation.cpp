@@ -286,6 +286,8 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, con
 	return expr;
 }
 
+/* Aggregate functions */
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GenericAggregator(const string &function_name,
                                                                  const string &aggregated_columns, const string &groups,
                                                                  const string &function_parameter,
@@ -429,6 +431,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FAvg(const std::string &column, c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::First(const string &column, const std::string &groups,
+                                                     const string &projected_columns) {
+	return GenericAggregator("first", column, groups, "", projected_columns);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const std::string &column, const std::string &groups,
+                                                    const std::string &projected_columns) {
+	return GenericAggregator("last", column, groups, "", projected_columns);
+}
+
 /*
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Sum(const string &sum_columns, const string &groups) {
     return GenericAggregator("sum", sum_columns, groups);
@@ -551,6 +563,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumMin(const string &aggr_columns
 }
 */
 
+/* General-purpose window functions */
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::RowNumber(const string &window_spec, const string &projected_columns) {
 	return GenericWindowFunction("row_number", "", "*", window_spec, false, projected_columns);
 }
@@ -571,6 +585,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CumeDist(const string &window_spe
 	return GenericWindowFunction("cume_dist", "", "*", window_spec, false, projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FirstValue(const string &column, const string &window_spec,
+                                                          const string &projected_columns) {
+	return GenericWindowFunction("first_value", "", column, window_spec, false, projected_columns);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NTile(const string &window_spec, const int &num_buckets,
                                                      const string &projected_columns) {
 	return GenericWindowFunction("ntile", std::to_string(num_buckets), "", window_spec, false, projected_columns);
@@ -589,6 +608,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lag(const string &column, const s
 	return GenericWindowFunction("lag", lag_params, column, window_spec, ignore_nulls, projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LastValue(const std::string &column, const std::string &window_spec,
+                                                         const std::string &projected_columns) {
+	return GenericWindowFunction("last_value", "", column, window_spec, false, projected_columns);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const string &window_spec, const int &offset,
                                                     const string &default_value, const bool &ignore_nulls,
                                                     const string &projected_columns) {
@@ -600,16 +624,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Lead(const string &column, const 
 		lead_params += "," + default_value;
 	}
 	return GenericWindowFunction("lead", lead_params, column, window_spec, ignore_nulls, projected_columns);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FirstValue(const string &column, const string &window_spec,
-                                                          const bool &ignore_nulls, const string &projected_columns) {
-	return GenericWindowFunction("first_value", "", column, window_spec, ignore_nulls, projected_columns);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::LastValue(const string &column, const string &window_spec,
-                                                         const bool &ignore_nulls, const string &projected_columns) {
-	return GenericWindowFunction("last_value", "", column, window_spec, ignore_nulls, projected_columns);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::NthValue(const string &column, const string &window_spec,

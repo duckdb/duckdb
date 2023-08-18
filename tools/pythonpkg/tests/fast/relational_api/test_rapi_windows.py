@@ -225,10 +225,9 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    @pytest.mark.parametrize("f", ["first_value", "first"])
-    def test_first_value(self, table, f):
+    def test_first_value(self, table):
         result = (
-            getattr(table, f)("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
+            table.first_value("v", "over (partition by id order by t asc)", projected_columns="id, v, t")
             .order("id")
             .execute()
             .fetchall()
@@ -246,10 +245,9 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    @pytest.mark.parametrize("f", ["last_value", "last"])
-    def test_last_value(self, table, f):
+    def test_last_value(self, table):
         result = (
-            getattr(table, f)(
+            table.last_value(
                 "v",
                 "over (partition by id order by t asc range between unbounded preceding and unbounded following) ",
                 projected_columns="id, v, t",

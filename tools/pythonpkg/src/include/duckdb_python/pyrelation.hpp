@@ -105,13 +105,15 @@ public:
 	                                   const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> FAvg(const string &column, const string &groups = "", const string &window_spec = "",
 	                                  const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> First(const string &column, const string &groups = "",
+	                                   const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> FSum(const string &column, const string &groups = "", const string &window_spec = "",
 	                                  const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> GeoMean(const string &column, const string &groups = "",
 	                                     const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Histogram(const string &column, const string &groups = "",
 	                                       const string &window_spec = "", const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> Last(const string &column, const string &groups = "", const string &window_spec = "",
+	unique_ptr<DuckDBPyRelation> Last(const string &column, const string &groups = "",
 	                                  const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> List(const string &column, const string &groups = "", const string &window_spec = "",
 	                                  const string &projected_columns = "");
@@ -231,18 +233,19 @@ public:
 	unique_ptr<DuckDBPyRelation> DenseRank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> PercentRank(const string &window_spec, const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> CumeDist(const string &window_spec, const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> FirstValue(const string &column, const string &window_spec = "",
+	                                        const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> NTile(const string &window_spec, const int &num_buckets,
 	                                   const string &projected_columns);
 	unique_ptr<DuckDBPyRelation> Lag(const string &column, const string &window_spec, const int &offset,
 	                                 const string &default_value, const bool &ignore_nulls,
 	                                 const string &projected_columns);
+	unique_ptr<DuckDBPyRelation> LastValue(const string &column, const string &window_spec = "",
+	                                       const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Lead(const string &column, const string &window_spec, const int &offset,
 	                                  const string &default_value, const bool &ignore_nulls,
 	                                  const string &projected_columns);
-	unique_ptr<DuckDBPyRelation> FirstValue(const string &column, const string &window_spec, const bool &ignore_nulls,
-	                                        const string &projected_columns);
-	unique_ptr<DuckDBPyRelation> LastValue(const string &column, const string &window_spec, const bool &ignore_nulls,
-	                                       const string &projected_columns);
+
 	unique_ptr<DuckDBPyRelation> NthValue(const string &column, const string &window_spec, const int &offset,
 	                                      const bool &ignore_nulls, const string &projected_columns);
 

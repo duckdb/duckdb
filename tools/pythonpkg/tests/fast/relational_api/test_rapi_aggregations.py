@@ -159,5 +159,26 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    # def test_describe(self, table):
+    def test_first(self, table):
+        result = table.first("v").execute().fetchall()
+        expected = [(1,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.first("v", "id", "id").order("id").execute().fetchall()
+        expected = [(1, 1), (2, 10), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_last(self, table):
+        result = table.last("v").execute().fetchall()
+        expected = [(None,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.last("v", "id", "id").order("id").execute().fetchall()
+        expected = [(1, 2), (2, 11), (3, None)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+        # def test_describe(self, table):
+
     #    assert table.describe().fetchall() is not None
