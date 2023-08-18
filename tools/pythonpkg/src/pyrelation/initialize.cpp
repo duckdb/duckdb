@@ -98,7 +98,11 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("bool_or", &DuckDBPyRelation::BoolOr, "Computes the logical OR of all values present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements within the group or partition",
+	    .def("count", &DuckDBPyRelation::Count, "Computes the number of elements present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("favg", &DuckDBPyRelation::FAvg,
+	         "Computes the average of all values present in a given column using a more accurate floating point "
+	         "summation (Kahan Sum)",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 
 	/*

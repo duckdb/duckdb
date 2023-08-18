@@ -4,18 +4,18 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def setup_and_teardown_of_table(duckdb_cursor):
-    duckdb_cursor.execute("create table win(id int, v int, t int);")
+    duckdb_cursor.execute("create table win(id int, v int, t int, f float);")
     duckdb_cursor.execute(
         """
-		insert into win values
-		(1, 1, 2),
-		(1, 1, 1),
-		(1, 2, 3),
-		(2, 10, 4),
-		(2, 11, -1),
-		(3, -1, 0),
-		(3, 5, -2),
-		(3, null, 10);
+        insert into win values
+		(1, 1, 2, 0.54),
+		(1, 1, 1, 0.21),
+		(1, 2, 3, 0.001),
+		(2, 10, 4, 0.04),
+		(2, 11, -1, 10.45),
+		(3, -1, 0, 13.32),
+		(3, 5, -2, 9.87),
+		(3, null, 10, 6.56); 
 		"""
     )
     yield
@@ -477,5 +477,21 @@ class TestRAPIWindows:
             .fetchall()
         )
         expected = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (3, 1), (3, 2), (3, 3)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_favg(self, table):
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.favg(
+                "f",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, 0.21), (1, 0.38), (1, 0.25), (2, 10.45), (2, 5.24), (3, 9.87), (3, 11.59), (3, 9.92)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
