@@ -17,11 +17,6 @@ namespace duckdb {
 //! Node16 holds up to 16 Node children sorted by their key byte
 class Node16 {
 public:
-	//! The metadata number of the NODE_16 node type
-	static constexpr uint8_t N16 = (uint8_t)NType::NODE_16;
-	//! Index of the Node16 FixedSizeAllocator
-	static constexpr uint8_t N16_IDX = N16 - 1;
-
 	//! Delete copy constructors, as any Node16 can never own its memory
 	Node16(const Node16 &) = delete;
 	Node16 &operator=(const Node16 &) = delete;

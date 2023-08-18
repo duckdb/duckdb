@@ -83,7 +83,7 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// traverse the prefix
 	if (node.GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(*art, node, Prefix::PREFIX_IDX, false);
+		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX, false);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -138,7 +138,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// resolve the prefix
-	auto &prefix = Node::Ref<const Prefix>(*art, node, Prefix::PREFIX_IDX, false);
+	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX, false);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
@@ -199,7 +199,7 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	if (nodes.top().node.GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, Prefix::PREFIX_IDX, false);
+		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX, false);
 		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {

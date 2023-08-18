@@ -7,9 +7,9 @@ namespace duckdb {
 
 Node4 &Node4::New(ART &art, Node &node) {
 
-	node = Node::GetAllocator(art, N4_IDX).New();
-	node.SetMetadata(N4);
-	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
+	node = Node::GetAllocatorByType(art, NType::NODE_4).New();
+	node.SetMetadata(static_cast<uint8_t>(NType::NODE_4));
+	auto &n4 = Node::Ref<Node4>(art, node, NType::NODE_4);
 
 	n4.count = 0;
 	return n4;
@@ -18,7 +18,7 @@ Node4 &Node4::New(ART &art, Node &node) {
 void Node4::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
+	auto &n4 = Node::Ref<Node4>(art, node, NType::NODE_4);
 
 	// free all children
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -29,7 +29,7 @@ void Node4::Free(ART &art, Node &node) {
 Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 
 	auto &n4 = New(art, node4);
-	auto &n16 = Node::Ref<Node16>(art, node16, Node16::N16_IDX);
+	auto &n16 = Node::Ref<Node16>(art, node16, NType::NODE_16);
 
 	D_ASSERT(n16.count <= Node::NODE_4_CAPACITY);
 	n4.count = n16.count;
@@ -53,7 +53,7 @@ void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
+	auto &n4 = Node::Ref<Node4>(art, node, NType::NODE_4);
 
 	// ensure that there is no other child at the same byte
 	for (idx_t i = 0; i < n4.count; i++) {
@@ -88,7 +88,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n4 = Node::Ref<Node4>(art, node, N4_IDX);
+	auto &n4 = Node::Ref<Node4>(art, node, NType::NODE_4);
 
 	idx_t child_pos = 0;
 	for (; child_pos < n4.count; child_pos++) {

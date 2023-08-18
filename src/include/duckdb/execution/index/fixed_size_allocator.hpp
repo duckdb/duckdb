@@ -82,7 +82,7 @@ public:
 	//! Serializes all in-memory buffers and the metadata
 	BlockPointer Serialize(MetadataWriter &writer);
 	//! Deserializes all metadata
-	void Deserialize(const BlockPointer &block_ptr);
+	void Deserialize(const BlockPointer &block_pointer);
 
 private:
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment

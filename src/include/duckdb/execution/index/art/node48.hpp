@@ -18,11 +18,6 @@ namespace duckdb {
 //! byte, and which contains the position of the child node in the children array
 class Node48 {
 public:
-	//! The metadata number of the NODE_48 node type
-	static constexpr uint8_t N48 = (uint8_t)NType::NODE_48;
-	//! Index of the Node48 FixedSizeAllocator
-	static constexpr uint8_t N48_IDX = N48 - 1;
-
 	//! Delete copy constructors, as any Node48 can never own its memory
 	Node48(const Node48 &) = delete;
 	Node48 &operator=(const Node48 &) = delete;

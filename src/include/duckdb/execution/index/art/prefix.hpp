@@ -20,11 +20,6 @@ class ARTKey;
 //! and a Node pointer. This pointer either points to a prefix node or another Node.
 class Prefix {
 public:
-	//! The metadata number of the PREFIX node type
-	static constexpr uint8_t PREFIX = (uint8_t)NType::PREFIX;
-	//! Index of the PREFIX FixedSizeAllocator
-	static constexpr uint8_t PREFIX_IDX = PREFIX - 1;
-
 	//! Delete copy constructors, as any Prefix can never own its memory
 	Prefix(const Prefix &) = delete;
 	Prefix &operator=(const Prefix &) = delete;
@@ -38,7 +33,7 @@ public:
 	//! Get a new empty prefix node, might cause a new buffer allocation
 	static Prefix &New(ART &art, Node &node);
 	//! Create a new prefix node containing a single byte and a pointer to a next node
-	static Prefix &New(ART &art, Node &node, uint8_t byte, Node next);
+	static Prefix &New(ART &art, Node &node, uint8_t byte, const Node &next = Node());
 	//! Get a new chain of prefix nodes, might cause new buffer allocations,
 	//! with the node parameter holding the tail of the chain
 	static void New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count);
@@ -63,7 +58,7 @@ public:
 	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position);
 	//! Returns the byte at position
 	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
-		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, PREFIX_IDX, false);
+		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX, false);
 		D_ASSERT(position < Node::PREFIX_SIZE);
 		D_ASSERT(position < prefix.data[Node::PREFIX_SIZE]);
 		return prefix.data[position];

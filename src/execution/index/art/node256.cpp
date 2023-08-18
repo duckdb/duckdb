@@ -6,9 +6,9 @@ namespace duckdb {
 
 Node256 &Node256::New(ART &art, Node &node) {
 
-	node = Node::GetAllocator(art, N256_IDX).New();
-	node.SetMetadata(N256);
-	auto &n256 = Node::Ref<Node256>(art, node, N256_IDX);
+	node = Node::GetAllocatorByType(art, NType::NODE_256).New();
+	node.SetMetadata(static_cast<uint8_t>(NType::NODE_256));
+	auto &n256 = Node::Ref<Node256>(art, node, NType::NODE_256);
 
 	n256.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -21,7 +21,7 @@ Node256 &Node256::New(ART &art, Node &node) {
 void Node256::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n256 = Node::Ref<Node256>(art, node, N256_IDX);
+	auto &n256 = Node::Ref<Node256>(art, node, NType::NODE_256);
 
 	if (!n256.count) {
 		return;
@@ -37,7 +37,7 @@ void Node256::Free(ART &art, Node &node) {
 
 Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 
-	auto &n48 = Node::Ref<Node48>(art, node48, Node48::N48_IDX);
+	auto &n48 = Node::Ref<Node48>(art, node48, NType::NODE_48);
 	auto &n256 = New(art, node256);
 
 	n256.count = n48.count;
@@ -66,7 +66,7 @@ void Node256::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n256 = Node::Ref<Node256>(art, node, N256_IDX);
+	auto &n256 = Node::Ref<Node256>(art, node, NType::NODE_256);
 
 	// ensure that there is no other child at the same byte
 	D_ASSERT(!n256.children[byte].HasMetadata());
@@ -79,7 +79,7 @@ void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node c
 void Node256::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n256 = Node::Ref<Node256>(art, node, N256_IDX);
+	auto &n256 = Node::Ref<Node256>(art, node, NType::NODE_256);
 
 	// free the child and decrease the count
 	Node::Free(art, n256.children[byte]);

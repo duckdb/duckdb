@@ -237,10 +237,11 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(segment_size);
-	writer.Write((idx_t)buffers.size());
-	writer.Write((idx_t)buffers_with_free_space.size());
+	writer.Write(static_cast<idx_t>(buffers.size()));
+	writer.Write(static_cast<idx_t>(buffers_with_free_space.size()));
 
 	for (auto &buffer : buffers) {
+		D_ASSERT(buffer.block_ptr.IsValid());
 		writer.Write(buffer.block_ptr);
 		writer.Write(buffer.segment_count);
 	}
@@ -251,9 +252,9 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 	return block_pointer;
 }
 
-void FixedSizeAllocator::Deserialize(const BlockPointer &block_ptr) {
+void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 
-	MetadataReader reader(metadata_manager, block_ptr);
+	MetadataReader reader(metadata_manager, block_pointer);
 	segment_size = reader.Read<idx_t>();
 	auto buffer_count = reader.Read<idx_t>();
 	auto buffers_with_free_space_count = reader.Read<idx_t>();

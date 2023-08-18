@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/index.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
 
@@ -19,7 +20,6 @@ enum class VerifyExistenceType : uint8_t {
 	DELETE_FK = 2  // delete from a table that has a foreign key
 };
 class ConflictManager;
-class Node;
 class ARTKey;
 class FixedSizeAllocator;
 
@@ -37,10 +37,9 @@ public:
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
 	    AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr = nullptr,
 	    const BlockPointer &block = BlockPointer());
-	~ART() override;
 
 	//! Root of the tree
-	unique_ptr<Node> tree;
+	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes
 	shared_ptr<vector<FixedSizeAllocator>> allocators;
 	//! True, if the ART owns its data
@@ -103,7 +102,7 @@ public:
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
 
 	//! Find the node with a matching key, or return nullptr if not found
-	optional_ptr<const Node> Lookup(reference<const Node> &node, const ARTKey &key, idx_t depth);
+	optional_ptr<const Node> Lookup(const Node &node, const ARTKey &key, idx_t depth);
 	//! Insert a key into the tree
 	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 

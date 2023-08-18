@@ -65,12 +65,10 @@ public:
 
 	//! Get references to the allocator
 	static FixedSizeAllocator &GetAllocatorByType(const ART &art, const NType type);
-	//! Get references to the allocator
-	static FixedSizeAllocator &GetAllocator(const ART &art, const uint8_t idx);
 	//! Get a (const) reference to the node. If dirty is false, then T should be a const class
 	template <class NODE>
-	static inline NODE &Ref(const ART &art, const Node ptr, const uint8_t idx, const bool dirty = true) {
-		return *(GetAllocator(art, idx).Gett<NODE>(ptr, dirty));
+	static inline NODE &Ref(const ART &art, const Node ptr, const NType type, const bool dirty = true) {
+		return *(GetAllocatorByType(art, type).Gett<NODE>(ptr, dirty));
 	}
 
 	//! Replace the child node at byte

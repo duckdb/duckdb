@@ -17,11 +17,6 @@ namespace duckdb {
 //! Node256 holds up to 256 Node children which can be directly indexed by the key byte
 class Node256 {
 public:
-	//! The metadata number of the NODE_256 node type
-	static constexpr uint8_t N256 = (uint8_t)NType::NODE_256;
-	//! Index of the Node256 FixedSizeAllocator
-	static constexpr uint8_t N256_IDX = N256 - 1;
-
 	//! Delete copy constructors, as any Node256 can never own its memory
 	Node256(const Node256 &) = delete;
 	Node256 &operator=(const Node256 &) = delete;

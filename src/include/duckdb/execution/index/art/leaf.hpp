@@ -28,13 +28,6 @@ struct BlockPointer;
 //! row ID directly in the node pointer.
 class Leaf {
 public:
-	//! The metadata number of the LEAF_INLINED node type
-	static constexpr uint8_t LEAF_INLINED = (uint8_t)NType::LEAF_INLINED;
-	//! The metadata number of the LEAF node type
-	static constexpr uint8_t LEAF = (uint8_t)NType::LEAF;
-	//! Index of the LEAF FixedSizeAllocator
-	static constexpr uint8_t LEAF_IDX = LEAF - 1;
-
 	//! Delete copy constructors, as any Leaf can never own its memory
 	Leaf(const Leaf &) = delete;
 	Leaf &operator=(const Leaf &) = delete;

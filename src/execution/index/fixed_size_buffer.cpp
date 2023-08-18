@@ -26,6 +26,7 @@ void FixedSizeBuffer::Serialize(FixedSizeAllocator &fixed_size_allocator, Metada
 data_ptr_t FixedSizeBuffer::Deserialize(FixedSizeAllocator &fixed_size_allocator) {
 
 	D_ASSERT(on_disk);
+	D_ASSERT(block_ptr.IsValid());
 
 	dirty = false;
 	in_memory = true;

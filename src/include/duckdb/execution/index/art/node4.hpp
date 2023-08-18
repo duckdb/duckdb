@@ -17,11 +17,6 @@ namespace duckdb {
 //! Node4 holds up to four Node children sorted by their key byte
 class Node4 {
 public:
-	//! The metadata number of the NODE_4 node type
-	static constexpr uint8_t N4 = (uint8_t)NType::NODE_4;
-	//! Index of the Node4 FixedSizeAllocator
-	static constexpr uint8_t N4_IDX = N4 - 1;
-
 	//! Delete copy constructors, as any Node4 can never own its memory
 	Node4(const Node4 &) = delete;
 	Node4 &operator=(const Node4 &) = delete;

@@ -25,7 +25,7 @@ public:
 	    : segment_count(segment_count), dirty(false), in_memory(true), on_disk(false), vacuum(false),
 	      memory_ptr(memory_ptr) {
 	}
-	FixedSizeBuffer(const idx_t segment_count, BlockPointer &block_ptr)
+	FixedSizeBuffer(const idx_t segment_count, const BlockPointer &block_ptr)
 	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), vacuum(false),
 	      block_ptr(block_ptr) {
 	}
