@@ -274,6 +274,16 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_sum(self, table):
+        result = table.sum("v").execute().fetchall()
+        expected = [(29,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.sum("v", groups="id", projected_columns="id").execute().fetchall()
+        expected = [(1, 4), (2, 21), (3, 4)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None

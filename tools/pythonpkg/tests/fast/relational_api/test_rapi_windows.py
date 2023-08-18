@@ -622,3 +622,18 @@ class TestRAPIWindows:
         expected = [(1, 'e'), (1, 'e/h'), (1, 'e/h/l'), (2, 'o'), (2, 'o/l'), (3, 'wor'), (3, 'wor/,'), (3, 'wor/,/ld')]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_sum(self, table):
+        result = (
+            table.sum(
+                "v",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [(1, 1), (1, 2), (1, 4), (2, 11), (2, 21), (3, 5), (3, 4), (3, 4)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
