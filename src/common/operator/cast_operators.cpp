@@ -1824,14 +1824,11 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &result, uint8_t digit) {
-		if (result.intermediate > (NumericLimits<int64_t>::Maximum() - digit) / 2) {
-			// intermediate is full: need to flush it
-			if (!result.Flush()) {
-				return false;
-			}
+		if (result.hugeint & (hugeint_t(1) << 127)) {
+			return false;
 		}
-		result.intermediate = result.intermediate * 2 + digit;
-		result.digits++;
+		result.hugeint <<= 1;
+		result.hugeint += digit;
 		return true;
 	}
 
@@ -1945,14 +1942,11 @@ struct UhugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleBinaryDigit(T &result, uint8_t digit) {
-		if (result.intermediate > (NumericLimits<uint64_t>::Maximum() - digit) / 2) {
-			// intermediate is full: need to flush it
-			if (!result.Flush()) {
-				return false;
-			}
+		if (result.uhugeint & (uhugeint_t(1) << 127)) {
+			return false;
 		}
-		result.intermediate = result.intermediate * 2 + digit;
-		result.digits++;
+		result.uhugeint <<= 1;
+		result.uhugeint += digit;
 		return true;
 	}
 
