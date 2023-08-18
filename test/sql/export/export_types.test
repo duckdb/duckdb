@@ -38,9 +38,9 @@ CREATE TYPE my_union as UNION(a doom, b mood);
 statement ok
 CREATE TYPE mood_map as MAP(doom, mood);
 
-## Create an alias on a regular type, VARCHAR in this case
-#statement ok
-#CREATE TYPE my_special_type as VARCHAR;
+# Create an alias on a regular type, VARCHAR in this case
+statement ok
+CREATE TYPE my_special_type as VARCHAR;
 
 # Create a table containing the doom_mood type
 statement ok
