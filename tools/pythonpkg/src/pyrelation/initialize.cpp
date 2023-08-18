@@ -138,7 +138,11 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",
 	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("mode", &DuckDBPyRelation::Mode, "Computes the mode over all values present in a given column",
-	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("quantile_cont", &DuckDBPyRelation::QuantileCont,
+	         "Computes the interpolated quantile value for a given column", py::arg("column"),
+	         py::arg("quantile") = 0.5, py::arg("groups") = "", py::arg("window_spec") = "",
+	         py::arg("projected_columns") = "");
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

@@ -309,6 +309,16 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_quantile_cont(self, table):
+        result = table.quantile_cont("v").execute().fetchall()
+        expected = [(2.0,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.quantile_cont("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 1.0), (2, 10.5), (3, 2.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None

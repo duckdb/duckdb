@@ -550,6 +550,17 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Mode(const std::string &column, c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QuantileCont(const std::string &column, const double &quantile,
+                                                            const std::string &groups, const std::string &window_spec,
+                                                            const std::string &projected_columns) {
+	auto quantile_params = std::to_string(quantile);
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("quantile_cont", quantile_params, column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("quantile_cont", column, groups, quantile_params, projected_columns);
+	}
+}
+
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
