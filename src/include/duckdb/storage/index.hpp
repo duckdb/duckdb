@@ -125,11 +125,11 @@ public:
 		return (constraint_type == IndexConstraintType::FOREIGN);
 	}
 
-	//! Serializes the index
+	//! Serializes the index to disk
 	virtual BlockPointer Serialize(MetadataWriter &writer);
-	//! Returns the serialized data pointer
-	BlockPointer GetSerializedDataPointer() const {
-		return serialized_data_pointer;
+	//! Returns the serialized root block pointer
+	BlockPointer GetRootBlockPointer() const {
+		return root_block_pointer;
 	}
 
 	//! Execute the index expressions on an input chunk
@@ -139,8 +139,8 @@ public:
 protected:
 	//! Lock used for any changes to the index
 	mutex lock;
-	//! Pointer to serialized index data
-	BlockPointer serialized_data_pointer;
+	//! Pointer to the index on disk
+	BlockPointer root_block_pointer;
 
 private:
 	//! Bound expressions used during expression execution

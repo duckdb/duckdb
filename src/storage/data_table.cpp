@@ -429,13 +429,13 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	data_table.info->indexes.VerifyForeignKey(*dst_keys_ptr, dst_chunk, regular_conflicts);
 	regular_conflicts.Finalize();
 	auto &regular_matches = regular_conflicts.Conflicts();
-	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
-	auto &local_storage = LocalStorage::Get(context, db);
 
+	// check if we can insert the chunk into the reference table's local storage
+	auto &local_storage = LocalStorage::Get(context, db);
 	bool error = IsForeignKeyConstraintError(is_append, count, regular_matches);
 	bool transaction_error = false;
-
 	bool transaction_check = local_storage.Find(data_table);
+
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
 		transact_index.VerifyForeignKey(*dst_keys_ptr, dst_chunk, transaction_conflicts);

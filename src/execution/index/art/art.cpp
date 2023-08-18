@@ -973,8 +973,8 @@ BlockPointer ART::Serialize(MetadataWriter &writer) {
 
 	// early-out, if all allocators are empty
 	if (!tree.HasMetadata()) {
-		serialized_data_pointer = BlockPointer();
-		return serialized_data_pointer;
+		root_block_pointer = BlockPointer();
+		return root_block_pointer;
 	}
 
 	lock_guard<mutex> l(lock);
@@ -983,13 +983,13 @@ BlockPointer ART::Serialize(MetadataWriter &writer) {
 		allocator_pointers.push_back(allocator.Serialize(writer));
 	}
 
-	serialized_data_pointer = writer.GetBlockPointer();
+	root_block_pointer = writer.GetBlockPointer();
 	writer.Write(tree);
 	for (auto &allocator_pointer : allocator_pointers) {
 		writer.Write(allocator_pointer);
 	}
 
-	return serialized_data_pointer;
+	return root_block_pointer;
 }
 
 void ART::Deserialize(const BlockPointer &pointer) {

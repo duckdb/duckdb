@@ -53,16 +53,20 @@ public:
 public:
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if
 	//! the buffer is not in memory
-	inline data_ptr_t GetPtr(FixedSizeAllocator &fixed_size_allocator) {
-		if (in_memory) {
-			return memory_ptr;
+	inline data_ptr_t Get(FixedSizeAllocator &fixed_size_allocator, const bool dirty_p = true) {
+		if (!in_memory) {
+			D_ASSERT(!dirty);
+			Deserialize(fixed_size_allocator);
 		}
-		return Deserialize(fixed_size_allocator);
+		if (dirty_p) {
+			dirty = dirty_p;
+		}
+		return memory_ptr;
 	}
 	//! Serializes a buffer (if dirty or not on disk)
 	void Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer);
 	//! Deserializes a buffer, if not in memory
-	data_ptr_t Deserialize(FixedSizeAllocator &fixed_size_allocator);
+	void Deserialize(FixedSizeAllocator &fixed_size_allocator);
 };
 
 } // namespace duckdb

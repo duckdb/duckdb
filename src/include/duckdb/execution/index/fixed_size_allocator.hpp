@@ -48,7 +48,7 @@ public:
 	void Free(const IndexPointer ptr);
 	//! Returns a pointer of type T to a segment. If dirty is false, then T should be a const class
 	template <class T>
-	inline T *Gett(const IndexPointer ptr, const bool dirty = true) {
+	inline T *Get(const IndexPointer ptr, const bool dirty = true) {
 		return (T *)Get(ptr, dirty);
 	}
 
@@ -86,7 +86,7 @@ public:
 
 private:
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
-	data_ptr_t Get(const IndexPointer ptr, const bool dirty);
+	data_ptr_t Get(const IndexPointer ptr, const bool dirty = true);
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
 

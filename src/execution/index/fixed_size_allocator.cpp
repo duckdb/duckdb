@@ -49,7 +49,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, Allocator &allo
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
-			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
+			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
 			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
@@ -76,12 +76,11 @@ IndexPointer FixedSizeAllocator::New() {
 	D_ASSERT(!buffers_with_free_space.empty());
 	auto buffer_id = (uint32_t)*buffers_with_free_space.begin();
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].GetPtr(*this));
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].Get(*this));
 	ValidityMask mask(bitmask_ptr);
 	auto offset = GetOffset(mask, buffers[buffer_id].segment_count);
 
 	buffers[buffer_id].segment_count++;
-	buffers[buffer_id].dirty = true;
 	total_segment_count++;
 	if (buffers[buffer_id].segment_count == available_segments_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
@@ -95,7 +94,7 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	auto buffer_id = ptr.GetBufferId();
 	auto offset = ptr.GetOffset();
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].GetPtr(*this));
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].Get(*this));
 	ValidityMask mask(bitmask_ptr);
 	D_ASSERT(!mask.RowIsValid(offset));
 	mask.SetValid(offset);
@@ -105,7 +104,6 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(buffers[buffer_id].segment_count > 0);
 
 	buffers[buffer_id].segment_count--;
-	buffers[buffer_id].dirty = true;
 	total_segment_count--;
 }
 
@@ -113,7 +111,7 @@ void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
-			allocator.FreeData(buffer.GetPtr(*this), BUFFER_SIZE);
+			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
 			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
@@ -208,7 +206,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 	while (buffer_it != buffers.end()) {
 		if (buffer_it->vacuum) {
 			D_ASSERT(buffer_it->in_memory);
-			allocator.FreeData(buffer_it->GetPtr(*this), BUFFER_SIZE);
+			allocator.FreeData(buffer_it->Get(*this), BUFFER_SIZE);
 			buffer_it = buffers.erase(buffer_it);
 		} else {
 			buffer_it++;
@@ -225,7 +223,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	// new increases the allocation count, we need to counter that here
 	total_segment_count--;
 
-	memcpy(Get(new_ptr, true), Get(ptr, true), segment_size);
+	memcpy(Get(new_ptr), Get(ptr), segment_size);
 	return new_ptr;
 }
 
@@ -275,8 +273,8 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 data_ptr_t FixedSizeAllocator::Get(const IndexPointer ptr, const bool dirty) {
 	D_ASSERT(ptr.GetBufferId() < buffers.size());
 	D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-	buffers[ptr.GetBufferId()].dirty = dirty;
-	auto buffer_ptr = buffers[ptr.GetBufferId()].GetPtr(*this);
+	auto &buffer = buffers[ptr.GetBufferId()];
+	auto buffer_ptr = buffer.Get(*this, dirty);
 	return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 }
 
