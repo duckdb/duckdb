@@ -14,6 +14,10 @@ void RemoveUselessGroups::VisitOperator(LogicalOperator &op) {
 		// We need to collect the primary key set at first, and we only need to collect once.
 		CollectPrimaryKeySet(op);
 		finish_collection = true;
+		if (table_primary_key_map.size() == 0) {
+			// There are no primary key, so we can return directly.
+			return;
+		}
 	}
 
 	switch (op.type) {
@@ -35,8 +39,8 @@ void RemoveUselessGroups::VisitAggregate(LogicalAggregate &aggr) {
 
 	auto &groups = aggr.groups;
 
-	// This optimization should be put after the `remove_duplicate_groups`, so we need to some checks to guarantee this
-	// conditions.
+	// This optimization should be put after the `remove_duplicate_groups`,
+	// so we need to some checks to guarantee this conditions.
 	column_binding_set_t duplicate_set;
 
 	// The map "table_used_columns_map" is utilized to track the appearance of columns in the current group by keys.
@@ -194,8 +198,8 @@ void RemoveUselessGroups::CollectPrimaryKeySet(LogicalOperator &op) {
 	for (auto index : storage_info.index_info) {
 		// Currently, we are only collecting the primary key information.
 		// We are using a map to store the primary key details.
-		// The keys in the map correspond to table index, while the values store sets of columns that form the primary
-		// key.
+		// The keys in the map correspond to table index,
+		// while the values store sets of columns that form the primary key.
 		if (index.is_primary) {
 			// The column index in the index information is not the same in the output of the get operator.
 			// We need to do some adjust based on the column_ids in the get operator.
