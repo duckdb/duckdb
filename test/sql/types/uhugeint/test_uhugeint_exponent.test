@@ -15,15 +15,6 @@ select '340282366920938463463374607431768211455e0'::UHUGEINT
 ----
 340282366920938463463374607431768211455
 
-statement error
-select '340282366920938463463374607431768211456e0'::UHUGEINT
-
-statement error
-select '1.7e39'::UHUGEINT
-
-statement error
-select '4e38'::UHUGEINT
-
 query I
 select 5.4321e4::UHUGEINT
 ----
@@ -33,3 +24,14 @@ query I
 select (0.00000000000000000000002e+44)::UHUGEINT;
 ----
 2000000000000000000000
+
+# overflow
+statement error
+select '340282366920938463463374607431768211456e0'::UHUGEINT
+
+statement error
+select '1.7e39'::UHUGEINT
+
+statement error
+select '4e38'::UHUGEINT
+
