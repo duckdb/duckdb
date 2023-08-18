@@ -17,6 +17,7 @@
 #include "duckdb/optimizer/regex_range_filter.hpp"
 #include "duckdb/optimizer/remove_duplicate_groups.hpp"
 #include "duckdb/optimizer/remove_unused_columns.hpp"
+#include "duckdb/optimizer/remove_useless_groups.hpp"
 #include "duckdb/optimizer/rule/equal_or_null_simplification.hpp"
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 #include "duckdb/optimizer/rule/list.hpp"
@@ -141,6 +142,12 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 	// Remove duplicate groups from aggregates
 	RunOptimizer(OptimizerType::DUPLICATE_GROUPS, [&]() {
 		RemoveDuplicateGroups remove;
+		remove.VisitOperator(*plan);
+	});
+
+	// Remove useless groups from aggregates
+	RunOptimizer(OptimizerType::USELESS_GROUPS, [&]() {
+		RemoveUselessGroups remove(context);
 		remove.VisitOperator(*plan);
 	});
 
