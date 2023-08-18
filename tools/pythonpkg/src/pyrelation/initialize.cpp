@@ -142,6 +142,7 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("quantile_cont", &DuckDBPyRelation::QuantileCont,
 	         "Computes the interpolated quantile value for a given column", py::arg("column"), py::arg("q") = 0.5,
 	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	DefineMethod({"quantile_disc", "quantile"}, m, &DuckDBPyRelation::QuantileDisc, "Computes the exact quantile value for a given column", py::arg("column"), py::arg("q") = 0.5, py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }
 
 static void InitializeWindowOperators(py::class_<DuckDBPyRelation> &m) {

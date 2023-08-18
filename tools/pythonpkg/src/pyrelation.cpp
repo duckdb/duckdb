@@ -576,6 +576,32 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QuantileCont(const std::string &c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QuantileDisc(const std::string &column, const py::object &q,
+                                                            const std::string &groups, const std::string &window_spec,
+                                                            const std::string &projected_columns) {
+	string quantile_params = "";
+	if (py::isinstance<py::float_>(q)) {
+		quantile_params = std::to_string(q.cast<float>());
+	} else if (py::isinstance<py::list>(q)) {
+		auto aux = q.cast<std::vector<double>>();
+		quantile_params += "[";
+		for (idx_t i = 0; i < aux.size(); i++) {
+			quantile_params += std::to_string(aux[i]);
+			if (i < aux.size() - 1) {
+				quantile_params += ",";
+			}
+		}
+		quantile_params += "]";
+	} else {
+		throw InvalidTypeException("Unsupported type for quantile");
+	}
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("quantile_disc", quantile_params, column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("quantile_disc", column, groups, quantile_params, projected_columns);
+	}
+}
+
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
