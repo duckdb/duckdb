@@ -314,8 +314,24 @@ class TestRAPIAggregations(object):
         expected = [(2.0,)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            list(map(lambda x: round(x, 2), r[0])) for r in table.quantile_cont("v", q=[0.1, 0.5]).execute().fetchall()
+        ]
+        expected = [[0.2, 2.0]]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
         result = table.quantile_cont("v", groups="id", projected_columns="id").order("id").execute().fetchall()
         expected = [(1, 1.0), (2, 10.5), (3, 2.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], list(map(lambda x: round(x, 2), r[1])))
+            for r in table.quantile_cont("v", q=[0.2, 0.5], groups="id", projected_columns="id")
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, [1.0, 1.0]), (2, [10.2, 10.5]), (3, [0.2, 2.0])]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 

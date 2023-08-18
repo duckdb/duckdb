@@ -133,7 +133,7 @@ public:
 	                                    const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> Mode(const string &column, const string &groups = "", const string &window_spec = "",
 	                                  const string &projected_columns = "");
-	unique_ptr<DuckDBPyRelation> QuantileCont(const string &column, const double &quantile, const string &groups = "",
+	unique_ptr<DuckDBPyRelation> QuantileCont(const string &column, const py::object &q, const string &groups = "",
 	                                          const string &window_spec = "", const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> QuantileDisc(const string &column, const double &quantile, const string &groups = "",
 	                                          const string &window_spec = "", const string &projected_columns = "");

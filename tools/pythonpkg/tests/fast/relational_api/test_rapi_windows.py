@@ -682,3 +682,27 @@ class TestRAPIWindows:
         expected = [(1, 2.0), (1, 1.5), (1, 1.0), (2, 10.0), (2, 10.5), (3, None), (3, -1.0), (3, 2.0)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], list(map(lambda x: round(x, 2), r[1])) if r[1] is not None else None)
+            for r in table.quantile_cont(
+                "v",
+                q=[0.2, 0.5],
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [
+            (1, [2.0, 2.0]),
+            (1, [1.2, 1.5]),
+            (1, [1.0, 1.0]),
+            (2, [10.0, 10.0]),
+            (2, [10.2, 10.5]),
+            (3, None),
+            (3, [-1.0, -1.0]),
+            (3, [0.2, 2.0]),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
