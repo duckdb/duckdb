@@ -45,6 +45,12 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES(2,3)
 
+statement error
+drop macro my_macro;
+----
+Dependency Error: Cannot drop entry "my_macro" because there are entries that depend on it
+
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error
 ALTER TABLE tbl DROP COLUMN x;
+
