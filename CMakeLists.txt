@@ -246,12 +246,12 @@ if(Git_FOUND)
             OUTPUT_STRIP_TRAILING_WHITESPACE)
   endif()
   execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
+          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0 ${GIT_COMMIT_HASH}
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
           OUTPUT_VARIABLE GIT_LAST_TAG
           OUTPUT_STRIP_TRAILING_WHITESPACE)
   execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --long
+          COMMAND ${GIT_EXECUTABLE} describe --tags --long ${GIT_COMMIT_HASH}
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
           OUTPUT_VARIABLE GIT_ITERATION
           OUTPUT_STRIP_TRAILING_WHITESPACE)
