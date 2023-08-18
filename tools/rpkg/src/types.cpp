@@ -166,7 +166,7 @@ date_t RDateType::Convert(double val) {
 }
 
 timestamp_t RTimestampType::Convert(double val) {
-	return Timestamp::FromEpochSeconds(val);
+	return Timestamp::FromEpochMicroSeconds(round(val * Interval::MICROS_PER_SEC));
 }
 
 dtime_t RTimeSecondsType::Convert(double val) {
