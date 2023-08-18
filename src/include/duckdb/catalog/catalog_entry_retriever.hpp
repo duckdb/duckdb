@@ -26,11 +26,7 @@ public:
 	optional_ptr<CatalogEntry> GetEntry(CatalogType type, const string &catalog, const string &schema,
 	                                    const string &name,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
-	                                    QueryErrorContext error_context = QueryErrorContext()) {
-		return GetEntryInternal([&]() {
-			return Catalog::GetEntry(context, type, catalog, schema, name, on_entry_not_found, error_context);
-		});
-	}
+	                                    QueryErrorContext error_context = QueryErrorContext());
 
 	optional_ptr<CatalogEntry> GetEntry(CatalogType type, Catalog &catalog, const string &schema, const string &name,
 	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,

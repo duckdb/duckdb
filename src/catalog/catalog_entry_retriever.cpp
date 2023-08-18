@@ -34,6 +34,14 @@ LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &
 	return type_entry.user_type;
 }
 
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(CatalogType type, const string &catalog,
+                                                           const string &schema, const string &name,
+                                                           OnEntryNotFound on_entry_not_found,
+                                                           QueryErrorContext error_context) {
+	return GetEntryInternal(
+	    [&]() { return Catalog::GetEntry(context, type, catalog, schema, name, on_entry_not_found, error_context); });
+}
+
 optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(CatalogType type, Catalog &catalog, const string &schema,
                                                            const string &name, OnEntryNotFound on_entry_not_found,
                                                            QueryErrorContext error_context) {
