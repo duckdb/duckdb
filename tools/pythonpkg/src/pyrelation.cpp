@@ -436,6 +436,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::First(const string &column, const
 	return GenericAggregator("first", column, groups, "", projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FSum(const std::string &column, const std::string &groups,
+                                                    const std::string &window_spec,
+                                                    const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("fsum", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("fsum", column, groups, "", projected_columns);
+	}
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const std::string &column, const std::string &groups,
                                                     const std::string &projected_columns) {
 	return GenericAggregator("last", column, groups, "", projected_columns);

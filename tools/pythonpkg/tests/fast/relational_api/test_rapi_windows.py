@@ -493,3 +493,19 @@ class TestRAPIWindows:
         expected = [(1, 0.21), (1, 0.38), (1, 0.25), (2, 10.45), (2, 5.24), (3, 9.87), (3, 11.59), (3, 9.92)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_fsum(self, table):
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.fsum(
+                "f",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, 0.21), (1, 0.75), (1, 0.75), (2, 10.45), (2, 10.49), (3, 9.87), (3, 23.19), (3, 29.75)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

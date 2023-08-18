@@ -179,6 +179,19 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_fsum(self, table):
+        result = [round(r[0], 2) for r in table.fsum("f").execute().fetchall()]
+        expected = [40.99]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.fsum("f", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.75), (2, 10.49), (3, 29.75)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None
