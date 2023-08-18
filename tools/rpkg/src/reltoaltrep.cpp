@@ -42,11 +42,11 @@ void RelToAltrep::Initialize(DllInfo *dll) {
 template <class T>
 static T *GetFromExternalPtr(SEXP x) {
 	if (!x) {
-		cpp11::stop("need a SEXP pointer");
+		Rf_error("need a SEXP pointer");
 	}
 	auto wrapper = (T *)R_ExternalPtrAddr(R_altrep_data1(x));
 	if (!wrapper) {
-		cpp11::stop("This looks like it has been freed");
+		Rf_error("This looks like it has been freed");
 	}
 	return wrapper;
 }
@@ -68,7 +68,7 @@ struct AltrepRelationWrapper {
 			}
 			res = rel->Execute();
 			if (res->HasError()) {
-				cpp11::stop(res->GetError().c_str());
+				Rf_error("Error evaluating duckdb query: %s", res->GetError().c_str());
 			}
 			D_ASSERT(res->type == QueryResultType::MATERIALIZED_RESULT);
 		}
@@ -159,7 +159,7 @@ void *RelToAltrep::RownamesDataptr(SEXP x, Rboolean writeable) {
 	auto rownames_wrapper = AltrepRownamesWrapper::Get(x);
 	auto row_count = rownames_wrapper->rel->GetQueryResult()->RowCount();
 	if (row_count > (idx_t)NumericLimits<int32_t>::Maximum()) {
-		cpp11::stop("Integer overflow for row.names attribute");
+		Rf_error("Integer overflow for row.names attribute");
 	}
 	rownames_wrapper->rowlen_data[1] = -row_count;
 	return rownames_wrapper->rowlen_data;
@@ -208,7 +208,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	case LogicalTypeId::UUID:
 		return RelToAltrep::string_class;
 	default:
-		cpp11::stop("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
+		Rf_error("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
 	}
 }
 
@@ -243,7 +243,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 
 [[cpp11::register]] SEXP rapi_rel_from_altrep_df(SEXP df) {
 	if (!Rf_inherits(df, "data.frame")) {
-		cpp11::stop("Not a data.frame");
+		Rf_error("Not a data.frame");
 	}
 
 	SEXP row_names = R_NilValue;
@@ -254,11 +254,11 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	}
 
 	if (row_names == R_NilValue || !ALTREP(row_names)) {
-		cpp11::stop("Not a 'special' data.frame");
+		Rf_error("Not a 'special' data.frame");
 	}
 	auto res = R_altrep_data2(row_names);
 	if (res == R_NilValue) {
-		cpp11::stop("NULL in data2?");
+		Rf_error("NULL in data2?");
 	}
 	return res;
 }
@@ -267,15 +267,15 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	D_ASSERT(df);
 	auto first_col = VECTOR_ELT(df, 0);
 	if (!ALTREP(first_col)) {
-		cpp11::stop("Not a lazy data frame");
+		Rf_error("Not a lazy data frame");
 	}
 	auto altrep_data = R_altrep_data1(first_col);
 	if (!altrep_data) {
-		cpp11::stop("Not a lazy data frame");
+		Rf_error("Not a lazy data frame");
 	}
 	auto wrapper = (AltrepVectorWrapper *)R_ExternalPtrAddr(altrep_data);
 	if (!wrapper) {
-		cpp11::stop("Invalid lazy data frame");
+		Rf_error("Invalid lazy data frame");
 	}
 	return wrapper->rel->res.get() != nullptr;
 }
