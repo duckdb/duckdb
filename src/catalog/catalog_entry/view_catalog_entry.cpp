@@ -18,11 +18,16 @@ void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
     : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name) {
 	Initialize(info);
+}
+
+DependencyList ViewCatalogEntry::InherentDependencies() {
+	return dependencies;
 }
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {

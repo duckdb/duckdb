@@ -114,10 +114,16 @@ SchemaCatalogEntry &Binder::BindCreateSchema(CreateInfo &info) {
 	return schema;
 }
 
+void Binder::SetCatalogLookupCallback(catalog_entry_callback_t callback) {
+	entry_retriever.SetCallback(std::move(callback));
+}
+
 void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
 	// note that we bind the original, and replace the original with a copy
 	auto view_binder = Binder::CreateBinder(context);
+	auto &dependencies = base.dependencies;
+	view_binder->SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 	view_binder->can_contain_nulls = true;
 
 	auto copy = base.query->Copy();
