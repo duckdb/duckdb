@@ -1,0 +1,93 @@
+# name: test/optimizer/remove_useless_groups.test
+# description: Test removal of group by columns that are useless in the group by clause of a query plan
+# group: [optimizer]
+
+# Test removal of redundant GROUP BY columns
+
+statement ok
+create table t1 (a int, b int, c int, d int, primary key (a, b));
+
+statement ok
+create table t2 (x int, y int, z int, primary key (x, y));
+
+# Non-primary-key columns can be removed from GROUP BY.
+query II
+explain select count(*), sum(c), a, b from t1 group by a, b, c, d;
+----
+physical_plan	<!REGEX>:.* #3 .*
+
+# Non-primary-key columns can be removed from GROUP BY.
+query II
+explain select a, b from t1 group by d, c, b, a;
+----
+physical_plan	<!REGEX>:.* #2 .*
+
+# Non-primary-key columns can be removed from GROUP BY, because there are only one grouping sets.
+query II
+explain select a, b from t1 group by grouping sets ((a, b, c, d));
+----
+physical_plan	<!REGEX>:.* #2 .*
+
+# Non-primary-key columns can not be removed because of the group by clause.
+query II
+explain select a, b from t1 group by cube(a, b, c, d);
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by rollup(a, b, c, d);
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by grouping sets (a, b, c), grouping sets(a, b, d);
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by a, b, c, grouping sets (d);
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by grouping sets (grouping sets(a, b, c));
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by grouping sets ((a, b, c, d), (a, b, c));
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a, b from t1 group by grouping sets ((a, b, c, d), ());
+----
+physical_plan	<REGEX>:.* #2 .*
+
+# Non-primary-key columns can not be removed from GROUP BY, because the projection list use the other columns.
+query II
+explain select * from t1 group by a, b, c, d;
+----
+physical_plan	<REGEX>:.* #2 .*
+
+# No removal can happen if the complete PK is not present in GROUP BY
+explain select a from t1 group by a, c, d;
+----
+physical_plan	<REGEX>:.* #2 .*
+
+# Test removal across multiple relations
+# After the `remove_useless_groups` optimization, the group by clause has `t1.a, t1.b, t2.z`.
+# Because of the `t2.x` and `t2.y` will be removed through `remove_duplicate_groups` optimization.
+# TODO: We can optimize this case later.
+query II
+explain select t1.a, t1.b, t2.x, t2.y from t1 inner join t2 on t1.a = t2.x and t1.b = t2.y
+    group by t1.a,t1.b,t1.c,t1.d,t2.x,t2.y,t2.z;
+----
+physical_plan	<!REGEX>:.* #3 .*
+
+# Test case where t1 can be optimized but not t2
+query II
+explain select t1.a, t1.b,t2.x,t2.z from t1 inner join t2 on t1.a = t2.x and t1.b = t2.y
+    group by t1.a,t1.b,t1.c,t1.d,t2.x,t2.z;
+----
+physical_plan	<!REGEX>:.* #3 .*
