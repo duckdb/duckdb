@@ -229,6 +229,26 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_max(self, table):
+        result = table.max("v").execute().fetchall()
+        expected = [(11,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.max("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 2), (2, 11), (3, 5)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_min(self, table):
+        result = table.min("v").execute().fetchall()
+        expected = [(-1,)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.min("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [(1, 1), (2, 10), (3, -1)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None
