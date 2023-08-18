@@ -123,7 +123,9 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("max", &DuckDBPyRelation::Max, "Returns the maximum value present in a given column", py::arg("column"),
 	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("min", &DuckDBPyRelation::Min, "Returns the minimum value present in a given column", py::arg("column"),
-	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
+	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("product", &DuckDBPyRelation::Product, "Returns the product of all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 
 	/*
 	m.def("sum", &DuckDBPyRelation::Sum,
