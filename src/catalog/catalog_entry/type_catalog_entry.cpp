@@ -33,44 +33,18 @@ DependencyList TypeCatalogEntry::InherentDependencies() {
 
 string TypeCatalogEntry::ToSQL() const {
 	std::stringstream ss;
-	switch (user_type.id()) {
-	case (LogicalTypeId::ENUM): {
-		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
-		idx_t size = EnumType::GetSize(user_type);
-		ss << "CREATE TYPE ";
-		ss << KeywordHelper::WriteOptionallyQuoted(name);
-		ss << " AS ENUM ( ";
+	ss << "CREATE TYPE ";
+	ss << KeywordHelper::WriteOptionallyQuoted(name);
+	ss << " AS ";
 
-		for (idx_t i = 0; i < size; i++) {
-			ss << "'" << values_insert_order.GetValue(i).ToString() << "'";
-			if (i != size - 1) {
-				ss << ", ";
-			}
-		}
-		ss << ");";
-		break;
-	}
-	case LogicalTypeId::STRUCT: {
-		ss << "CREATE TYPE ";
-		ss << KeywordHelper::WriteOptionallyQuoted(name);
-		ss << " AS STRUCT (";
-		auto &children = StructType::GetChildTypes(user_type);
-		vector<string> struct_types;
-		for (auto &child : children) {
-			auto &name = child.first;
-			auto &type = child.second;
+	auto user_type_copy = user_type;
 
-			struct_types.push_back(StringUtil::Format("%s %s", KeywordHelper::WriteOptionallyQuoted(name),
-			                                          KeywordHelper::WriteOptionallyQuoted(type.ToString())));
-		}
-		ss << StringUtil::Join(struct_types, ", ");
-		ss << ");";
-		break;
-	}
-	default:
-		throw InternalException("Logical Type can't be used as a User Defined Type");
-	}
+	// Strip off the potential alias so ToString doesn't just output the alias
+	user_type_copy.SetAlias("");
+	D_ASSERT(user_type_copy.GetAlias().empty());
 
+	ss << user_type_copy.ToString();
+	ss << ";";
 	return ss.str();
 }
 
