@@ -12,6 +12,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/plan_serialization.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 struct AlterInfo;
@@ -53,6 +54,8 @@ public:
 	bool internal;
 	//! The SQL string of the CREATE statement
 	string sql;
+	//! The inherent dependencies of the created entry
+	DependencyList dependencies;
 
 protected:
 	virtual void SerializeInternal(Serializer &) const = 0;

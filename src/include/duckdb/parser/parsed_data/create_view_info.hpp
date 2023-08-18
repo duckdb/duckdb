@@ -28,8 +28,6 @@ struct CreateViewInfo : public CreateInfo {
 	vector<LogicalType> types;
 	//! The SelectStatement of the view
 	unique_ptr<SelectStatement> query;
-	//! The dependencies of the view
-	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

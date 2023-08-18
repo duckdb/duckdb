@@ -19,7 +19,6 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 	CreateMacroInfo(CatalogType type);
 
 	unique_ptr<MacroFunction> function;
-	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override;

@@ -197,7 +197,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	DependencyList dependencies;
+	DependencyList dependencies = info.dependencies;
 	dependencies.AddDependency(table);
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
