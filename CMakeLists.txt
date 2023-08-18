@@ -237,23 +237,27 @@ endif()
 
 find_package(Git)
 if(Git_FOUND)
-  if (NOT DEFINED GIT_COMMIT_HASH)
+  if (GIT_COMMIT_HASH STREQUAL "")
     execute_process(
             COMMAND ${GIT_EXECUTABLE} log -1 --format=%h
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
             OUTPUT_VARIABLE GIT_COMMIT_HASH
             OUTPUT_STRIP_TRAILING_WHITESPACE)
   endif()
-  execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0 ${GIT_COMMIT_HASH}
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_LAST_TAG
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --long ${GIT_COMMIT_HASH}
-          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-          OUTPUT_VARIABLE GIT_ITERATION
-          OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (GIT_LAST_TAG STREQUAL "")
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0 ${GIT_COMMIT_HASH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            OUTPUT_VARIABLE GIT_LAST_TAG
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+  endif()
+  if (GIT_ITERATION STREQUAL "")
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} describe --tags --long ${GIT_COMMIT_HASH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            OUTPUT_VARIABLE GIT_ITERATION
+            OUTPUT_STRIP_TRAILING_WHITESPACE)
+  endif()
 else()
   message("Git NOT FOUND")
 endif()
