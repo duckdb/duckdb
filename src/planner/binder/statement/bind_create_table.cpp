@@ -168,6 +168,7 @@ void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
 
 	// Create a new binder because we dont need (or want) these bindings in this scope
 	auto binder = Binder::CreateBinder(context);
+	binder->SetCatalogLookupCallback(entry_retriever.GetCallback());
 	binder->bind_context.AddGenericBinding(table_index, base.table, names, types);
 	auto expr_binder = ExpressionBinder(*binder, context);
 	string ignore;

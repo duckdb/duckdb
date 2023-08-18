@@ -5,10 +5,14 @@
 statement ok
 BEGIN TRANSACTION
 
+# Create a macro that the generated column uses
+statement ok
+CREATE MACRO my_macro(b) AS b + 5;
+
 statement ok
 CREATE TABLE tbl (
 	x INTEGER,
-	gen_x AS (x + 5)
+	gen_x AS (my_macro(x))
 );
 
 statement ok
