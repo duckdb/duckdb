@@ -24,9 +24,34 @@ public:
 
 public:
 	optional_ptr<CatalogEntry> GetEntry(CatalogType type, const string &catalog, const string &schema,
-	                                    const string &name, OnEntryNotFound on_entry_not_found,
-	                                    QueryErrorContext &error_context) {
-		auto result = Catalog::GetEntry(context, type, catalog, schema, name, on_entry_not_found, error_context);
+	                                    const string &name,
+	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
+	                                    QueryErrorContext error_context = QueryErrorContext()) {
+		return GetEntryInternal([&]() {
+			return Catalog::GetEntry(context, type, catalog, schema, name, on_entry_not_found, error_context);
+		});
+	}
+
+	optional_ptr<CatalogEntry> GetEntry(CatalogType type, Catalog &catalog, const string &schema, const string &name,
+	                                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
+	                                    QueryErrorContext error_context = QueryErrorContext());
+
+	LogicalType GetType(const string &catalog, const string &schema, const string &name,
+	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
+	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
+
+	void SetCallback(catalog_entry_callback_t callback) {
+		this->callback = callback;
+	}
+	catalog_entry_callback_t GetCallback() {
+		return callback;
+	}
+
+private:
+	using catalog_entry_retrieve_func_t = std::function<optional_ptr<CatalogEntry>()>;
+	optional_ptr<CatalogEntry> GetEntryInternal(catalog_entry_retrieve_func_t retriever) {
+		auto result = retriever();
 		if (!result) {
 			return result;
 		}
@@ -35,13 +60,6 @@ public:
 			callback(*result);
 		}
 		return result;
-	}
-
-	void SetCallback(catalog_entry_callback_t callback) {
-		this->callback = callback;
-	}
-	catalog_entry_callback_t GetCallback() {
-		return callback;
 	}
 
 private:

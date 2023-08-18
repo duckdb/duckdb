@@ -15,6 +15,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
+	this->dependencies = info.dependencies;
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -24,6 +25,10 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->name = name;
 	result->type = user_type;
 	return std::move(result);
+}
+
+DependencyList TypeCatalogEntry::InherentDependencies() {
+	return dependencies;
 }
 
 string TypeCatalogEntry::ToSQL() const {
@@ -42,6 +47,23 @@ string TypeCatalogEntry::ToSQL() const {
 				ss << ", ";
 			}
 		}
+		ss << ");";
+		break;
+	}
+	case LogicalTypeId::STRUCT: {
+		ss << "CREATE TYPE ";
+		ss << KeywordHelper::WriteOptionallyQuoted(name);
+		ss << " AS STRUCT (";
+		auto &children = StructType::GetChildTypes(user_type);
+		vector<string> struct_types;
+		for (auto &child : children) {
+			auto &name = child.first;
+			auto &type = child.second;
+
+			struct_types.push_back(StringUtil::Format("%s %s", KeywordHelper::WriteOptionallyQuoted(name),
+			                                          KeywordHelper::WriteOptionallyQuoted(type.ToString())));
+		}
+		ss << StringUtil::Join(struct_types, ", ");
 		ss << ");";
 		break;
 	}

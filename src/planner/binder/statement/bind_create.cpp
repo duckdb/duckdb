@@ -192,11 +192,10 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindCreateSchema(info);
 }
 
-void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional_ptr<Catalog> catalog,
-                             const string &schema) {
+void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP) {
 		auto child_type = ListType::GetChildType(type);
-		BindLogicalType(context, child_type, catalog, schema);
+		BindLogicalType(child_type, catalog, schema);
 		auto alias = type.GetAlias();
 		if (type.id() == LogicalTypeId::LIST) {
 			type = LogicalType::LIST(child_type);
@@ -209,7 +208,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::STRUCT) {
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			BindLogicalType(context, child_type.second, catalog, schema);
+			BindLogicalType(child_type.second, catalog, schema);
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
@@ -218,7 +217,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);
 		for (auto &member_type : member_types) {
-			BindLogicalType(context, member_type.second, catalog, schema);
+			BindLogicalType(member_type.second, catalog, schema);
 		}
 		// Generate new Union Type
 		auto alias = type.GetAlias();
@@ -231,19 +230,37 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 			// 1) In the same schema as the table
 			// 2) In the same catalog
 			// 3) System catalog
-			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
-
-			if (type.id() == LogicalTypeId::INVALID) {
-				type = catalog->GetType(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
+			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
+			                                      OnEntryNotFound::RETURN_NULL);
+			if (!entry) {
+				type = LogicalType::INVALID;
+			} else {
+				auto &type_entry = entry->Cast<TypeCatalogEntry>();
+				type = type_entry.user_type;
 			}
 
 			if (type.id() == LogicalTypeId::INVALID) {
-				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+				entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
+				                                 OnEntryNotFound::RETURN_NULL);
+				if (!entry) {
+					type = LogicalType::INVALID;
+				} else {
+					auto &type_entry = entry->Cast<TypeCatalogEntry>();
+					type = type_entry.user_type;
+				}
+			}
+
+			if (type.id() == LogicalTypeId::INVALID) {
+				auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, schema, user_type_name);
+				auto &type_entry = entry->Cast<TypeCatalogEntry>();
+				type = type_entry.user_type;
 			}
 		} else {
-			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
+			auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, schema, user_type_name);
+			auto &type_entry = entry->Cast<TypeCatalogEntry>();
+			type = type_entry.user_type;
 		}
-		BindLogicalType(context, type, catalog, schema);
+		BindLogicalType(type, catalog, schema);
 	}
 }
 
@@ -549,8 +566,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				CheckForeignKeyTypes(create_info.columns, create_info.columns, fk);
 			} else {
 				// have to resolve referenced table
-				auto &pk_table_entry_ptr =
-				    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, fk.info.schema, fk.info.table);
+				auto table_entry =
+				    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
+				auto &pk_table_entry_ptr = table_entry->Cast<TableCatalogEntry>();
 				fk_schemas.insert(pk_table_entry_ptr.schema);
 				FindMatchingPrimaryKeyColumns(pk_table_entry_ptr.GetColumns(), pk_table_entry_ptr.GetConstraints(), fk);
 				FindForeignKeyIndexes(pk_table_entry_ptr.GetColumns(), fk.pk_columns, fk.info.pk_keys);
@@ -597,6 +615,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
+			auto &dependencies = create_type_info.dependencies;
+			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
 			create_type_info.query.reset();
@@ -624,10 +644,21 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto inner_type = Catalog::GetType(context, schema.catalog.GetName(), schema.name,
-			                                   UserType::GetTypeName(create_type_info.type));
+			auto &dependencies = create_type_info.dependencies;
+			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
+			auto type_entry_p = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, schema.catalog.GetName(), schema.name,
+			                                             UserType::GetTypeName(create_type_info.type));
+			D_ASSERT(type_entry_p);
+			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
+
+			auto inner_type = type_entry.user_type;
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
+		} else if (create_type_info.type.id() == LogicalTypeId::STRUCT) {
+			auto &dependencies = create_type_info.dependencies;
+			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
+			BindLogicalType(create_type_info.type);
+			(void)dependencies;
 		}
 		break;
 	}
