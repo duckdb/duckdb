@@ -1841,7 +1841,7 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 			serializer.WriteProperty(100, "value", value_.hugeint);
 			break;
 		case PhysicalType::UINT128:
-			serializer.WriteProperty("value", value_.uhugeint);
+			serializer.WriteProperty(100, "value", value_.uhugeint);
 			break;
 		case PhysicalType::FLOAT:
 			serializer.WriteProperty(100, "value", value_.float_);
@@ -1906,7 +1906,7 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(100, "value");
 		break;
 	case PhysicalType::UINT128:
-		new_value.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>("value");
+		new_value.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>(100, "value");
 		break;
 	case PhysicalType::INT128:
 		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(100, "value");
