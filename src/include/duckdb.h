@@ -972,6 +972,12 @@ Clear the params bind to the prepared statement.
 DUCKDB_API duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement);
 
 /*!
+Binds a value to the prepared statement at the specified index.
+*/
+DUCKDB_API duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                          duckdb_value val);
+
+/*!
 Retrieve the index of the parameter for the prepared statement, identified by name
 */
 DUCKDB_API duckdb_state duckdb_bind_parameter_index(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
@@ -2323,6 +2329,16 @@ Fetch the internal arrow schema from the arrow result.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
+
+/*!
+Fetch the internal arrow schema from the prepared statement.
+
+* result: The prepared statement to fetch the schema from.
+* out_schema: The output schema.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
+                                                     duckdb_arrow_schema *out_schema);
 
 /*!
 Fetch an internal arrow array from the arrow result.

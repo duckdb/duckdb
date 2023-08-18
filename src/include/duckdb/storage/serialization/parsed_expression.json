@@ -10,15 +10,18 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "class",
         "type": "ExpressionClass",
         "property": "expression_class"
       },
       {
+        "id": 101,
         "name": "type",
         "type": "ExpressionType"
       },
       {
+        "id": 102,
         "name": "alias",
         "type": "string"
       }
@@ -30,14 +33,17 @@
     "enum": "BETWEEN",
     "members": [
       {
+        "id": 200,
         "name": "input",
         "type": "ParsedExpression*"
       },
       {
+        "id": 201,
         "name": "lower",
         "type": "ParsedExpression*"
       },
       {
+        "id": 202,
         "name": "upper",
         "type": "ParsedExpression*"
       }
@@ -49,10 +55,12 @@
     "enum": "CASE",
     "members": [
       {
+        "id": 200,
         "name": "case_checks",
         "type": "vector<CacheCheck>"
       },
       {
+        "id": 201,
         "name": "else_expr",
         "type": "ParsedExpression*"
       }
@@ -64,14 +72,17 @@
     "enum": "CAST",
     "members": [
       {
+        "id": 200,
         "name": "child",
         "type": "ParsedExpression*"
       },
       {
+        "id": 201,
         "name": "cast_type",
         "type": "LogicalType"
       },
       {
+        "id": 202,
         "name": "try_cast",
         "type": "bool"
       }
@@ -83,10 +94,12 @@
     "enum": "COLLATE",
     "members": [
       {
+        "id": 200,
         "name": "child",
         "type": "ParsedExpression*"
       },
       {
+        "id": 201,
         "name": "collation",
         "type": "string"
       }
@@ -98,6 +111,7 @@
     "enum": "COLUMN_REF",
     "members": [
       {
+        "id": 200,
         "name": "column_names",
         "type": "vector<string>"
       }
@@ -109,10 +123,12 @@
     "enum": "COMPARISON",
     "members": [
       {
+        "id": 200,
         "name": "left",
         "type": "ParsedExpression*"
       },
       {
+        "id": 201,
         "name": "right",
         "type": "ParsedExpression*"
       }
@@ -125,6 +141,7 @@
     "enum": "CONJUNCTION",
     "members": [
       {
+        "id": 200,
         "name": "children",
         "type": "vector<ParsedExpression*>"
       }
@@ -137,6 +154,7 @@
     "enum": "CONSTANT",
     "members": [
       {
+        "id": 200,
         "name": "value",
         "type": "Value"
       }
@@ -155,40 +173,49 @@
     "enum": "FUNCTION",
     "members": [
       {
+        "id": 200,
         "name": "function_name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "children",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 203,
         "name": "filter",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 204,
         "name": "order_bys",
         "type": "OrderModifier*",
         "base": "ResultModifier"
       },
       {
+        "id": 205,
         "name": "distinct",
         "type": "bool"
       },
       {
+        "id": 206,
         "name": "is_operator",
         "type": "bool"
       },
       {
+        "id": 207,
         "name": "export_state",
         "type": "bool"
       },
       {
+        "id": 208,
         "name": "catalog",
         "type": "string"
       }
@@ -200,10 +227,12 @@
     "enum": "LAMBDA",
     "members": [
       {
+        "id": 200,
         "name": "lhs",
         "type": "ParsedExpression*"
       },
       {
+        "id": 201,
         "name": "expr",
         "type": "ParsedExpression*"
       }
@@ -215,6 +244,7 @@
     "enum": "OPERATOR",
     "members": [
       {
+        "id": 200,
         "name": "children",
         "type": "vector<ParsedExpression*>"
       }
@@ -227,6 +257,7 @@
     "enum": "PARAMETER",
     "members": [
       {
+        "id": 200,
         "name": "identifier",
         "type": "string"
       }
@@ -238,6 +269,7 @@
     "enum": "POSITIONAL_REFERENCE",
     "members": [
       {
+        "id": 200,
         "name": "index",
         "type": "idx_t"
       }
@@ -249,22 +281,27 @@
     "enum": "STAR",
     "members": [
       {
+        "id": 200,
         "name": "relation_name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "exclude_list",
         "type": "unordered_set<string>"
       },
       {
+        "id": 202,
         "name": "replace_list",
         "type": "unordered_set<ParsedExpression*>"
       },
       {
+        "id": 203,
         "name": "columns",
         "type": "bool"
       },
       {
+        "id": 204,
         "name": "expr",
         "optional": true,
         "type": "ParsedExpression*"
@@ -277,19 +314,23 @@
     "enum": "SUBQUERY",
     "members": [
       {
+        "id": 200,
         "name": "subquery_type",
         "type": "SubqueryType"
       },
       {
+        "id": 201,
         "name": "subquery",
         "type": "SelectStatement"
       },
       {
+        "id": 202,
         "name": "child",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 203,
         "name": "comparison_type",
         "type": "ExpressionType"
       }
@@ -301,62 +342,76 @@
     "enum": "WINDOW",
     "members": [
       {
+        "id": 200,
         "name": "function_name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "catalog",
         "type": "string"
       },
       {
+        "id": 203,
         "name": "children",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 204,
         "name": "partitions",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 205,
         "name": "orders",
         "type": "vector<OrderByNode>"
       },
       {
+        "id": 206,
         "name": "start",
         "type": "WindowBoundary"
       },
       {
+        "id": 207,
         "name": "end",
         "type": "WindowBoundary"
       },
       {
+        "id": 208,
         "name": "start_expr",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 209,
         "name": "end_expr",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 210,
         "name": "offset_expr",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 211,
         "name": "default_expr",
         "optional": true,
         "type": "ParsedExpression*"
       },
       {
+        "id": 212,
         "name": "ignore_nulls",
         "type": "bool"
       },
       {
+        "id": 213,
         "name": "filter_expr",
         "optional": true,
         "type": "ParsedExpression*"
