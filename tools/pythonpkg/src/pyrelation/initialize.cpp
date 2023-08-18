@@ -116,6 +116,8 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	    .def("histogram", &DuckDBPyRelation::Histogram,
 	         "Computes the histogram over all values present in a given column", py::arg("column"),
 	         py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
+	    .def("list", &DuckDBPyRelation::List, "Returns a list containing all values present in a given column",
+	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
 	    .def("last", &DuckDBPyRelation::Last, "Returns the last value of a given column", py::arg("column"),
 	         py::arg("groups") = "", py::arg("projected_columns") = "");
 

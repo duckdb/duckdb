@@ -461,6 +461,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Histogram(const std::string &colu
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::List(const std::string &column, const std::string &groups,
+                                                    const std::string &window_spec,
+                                                    const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("list", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("list", column, groups, "", projected_columns);
+	}
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const std::string &column, const std::string &groups,
                                                     const std::string &projected_columns) {
 	return GenericAggregator("last", column, groups, "", projected_columns);

@@ -537,3 +537,27 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_list(self, table):
+        result = (
+            table.list(
+                "v",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, [1]),
+            (1, [1, 1]),
+            (1, [1, 1, 2]),
+            (2, [11]),
+            (2, [11, 10]),
+            (3, [5]),
+            (3, [5, -1]),
+            (3, [5, -1, None]),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
