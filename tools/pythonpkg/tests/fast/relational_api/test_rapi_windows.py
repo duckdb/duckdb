@@ -509,3 +509,31 @@ class TestRAPIWindows:
         expected = [(1, 0.21), (1, 0.75), (1, 0.75), (2, 10.45), (2, 10.49), (3, 9.87), (3, 23.19), (3, 29.75)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.skip(reason="geomean is not supported from a windowing context")
+    def test_geomean(self, table):
+        raise RuntimeError()
+
+    def test_histogram(self, table):
+        result = (
+            table.histogram(
+                "v",
+                window_spec="over (partition by id order by t asc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        )
+        expected = [
+            (1, {'key': [1], 'value': [1]}),
+            (1, {'key': [1], 'value': [2]}),
+            (1, {'key': [1, 2], 'value': [2, 1]}),
+            (2, {'key': [11], 'value': [1]}),
+            (2, {'key': [10, 11], 'value': [1, 1]}),
+            (3, {'key': [5], 'value': [1]}),
+            (3, {'key': [-1, 5], 'value': [1, 1]}),
+            (3, {'key': [-1, 5], 'value': [1, 1]}),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

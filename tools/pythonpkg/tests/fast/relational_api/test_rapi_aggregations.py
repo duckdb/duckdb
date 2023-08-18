@@ -205,6 +205,20 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_histogram(self, table):
+        result = table.histogram("v").execute().fetchall()
+        expected = [({'key': [-1, 1, 2, 5, 10, 11], 'value': [1, 2, 1, 1, 1, 1]},)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = table.histogram("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        expected = [
+            (1, {'key': [1, 2], 'value': [2, 1]}),
+            (2, {'key': [10, 11], 'value': [1, 1]}),
+            (3, {'key': [-1, 5], 'value': [1, 1]}),
+        ]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None

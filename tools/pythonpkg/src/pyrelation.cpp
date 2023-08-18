@@ -451,6 +451,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GeoMean(const std::string &column
 	return GenericAggregator("geomean", column, groups, "", projected_columns);
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Histogram(const std::string &column, const std::string &groups,
+                                                         const std::string &window_spec,
+                                                         const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("histogram", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("histogram", column, groups, "", projected_columns);
+	}
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Last(const std::string &column, const std::string &groups,
                                                     const std::string &projected_columns) {
 	return GenericAggregator("last", column, groups, "", projected_columns);
