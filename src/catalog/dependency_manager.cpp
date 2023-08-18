@@ -203,9 +203,6 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 	catalog_entry_set_t entries;
 	catalog_entry_vector_t export_order;
 
-	PrintDependencyMap();
-	PrintDependentsMap();
-
 	queue<reference<CatalogEntry>> backlog;
 	// Populate the backlog with every entry in the dependencies map
 	for (auto &entry : dependencies_map) {
