@@ -40,7 +40,7 @@ Vector RType::GetFactorLevels() const {
 	D_ASSERT(id_ == RTypeId::FACTOR);
 	Vector duckdb_levels(LogicalType::VARCHAR, aux_.size());
 	auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
-	for (R_xlen_t level_idx = 0; level_idx < aux_.size(); level_idx++) {
+	for (size_t level_idx = 0; level_idx < aux_.size(); level_idx++) {
 		levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, aux_[level_idx].first);
 	}
 	return duckdb_levels;
