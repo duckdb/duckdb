@@ -544,14 +544,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else {
 				bool excluded_from_autoloading = true;
-				for (const auto& ext: AUTOLOADABLE_EXTENSIONS) {
+				for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
 					if (ext == param) {
 						excluded_from_autoloading = false;
 						break;
 					}
 				}
 
-				if (!config->options.autoload_known_extensions ) {
+				if (!config->options.autoload_known_extensions) {
 					auto result = ExtensionHelper::LoadExtension(*db, param);
 					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
 						Printer::Print("\nExtension loaded: " + param);
