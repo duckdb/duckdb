@@ -242,9 +242,6 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
 
-		// FIXME: 'has_timezone' is unused still, we should probably extract the timezone and convert the value back to
-		// GMT?
-
 		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
 		timestamp_convert_func convert_func;
 

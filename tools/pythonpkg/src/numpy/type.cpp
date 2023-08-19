@@ -7,19 +7,15 @@
 namespace duckdb {
 
 static bool IsDateTime(NumpyNullableType type) {
-	if (type == NumpyNullableType::DATETIME_NS) {
+	switch (type) {
+	case NumpyNullableType::DATETIME_NS:
+	case NumpyNullableType::DATETIME_S:
+	case NumpyNullableType::DATETIME_MS:
+	case NumpyNullableType::DATETIME_US:
 		return true;
-	}
-	if (type == NumpyNullableType::DATETIME_US) {
-		return true;
-	}
-	if (type == NumpyNullableType::DATETIME_MS) {
-		return true;
-	}
-	if (type == NumpyNullableType::DATETIME_S) {
-		return true;
-	}
-	return false;
+	default:
+		return false;
+	};
 }
 
 static NumpyNullableType ConvertNumpyTypeInternal(const string &col_type_str) {
