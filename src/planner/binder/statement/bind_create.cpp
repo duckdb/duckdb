@@ -123,7 +123,14 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// note that we bind the original, and replace the original with a copy
 	auto view_binder = Binder::CreateBinder(context);
 	auto &dependencies = base.dependencies;
-	view_binder->SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
+	auto &catalog = Catalog::GetCatalog(context, base.catalog);
+	view_binder->SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			// Don't register dependencies between catalogs
+			return;
+		}
+		dependencies.AddDependency(entry);
+	});
 	view_binder->can_contain_nulls = true;
 
 	auto copy = base.query->Copy();
@@ -179,7 +186,12 @@ SchemaCatalogEntry &Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	auto group_info = make_uniq<BoundGroupInformation>();
 	SelectBinder binder(*this, context, *sel_node, *group_info);
 	auto &dependencies = base.dependencies;
-	binder.SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) {
+	auto &catalog = Catalog::GetCatalog(context, info.catalog);
+	binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			// Don't register any cross-catalog dependencies
+			return;
+		}
 		// Register any catalog entry required to bind the macro function
 		dependencies.AddDependency(entry);
 	});
@@ -452,7 +464,14 @@ unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateS
 	// bind the index expressions
 	IndexBinder index_binder(binder, binder.context);
 	auto &dependencies = base.dependencies;
-	index_binder.SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
+	auto &catalog = Catalog::GetCatalog(binder.context, base.catalog);
+	index_binder.SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+		if (&catalog != &entry.ParentCatalog()) {
+			// Don't register any cross-catalog dependencies
+			return;
+		}
+		dependencies.AddDependency(entry);
+	});
 	vector<unique_ptr<Expression>> expressions;
 	expressions.reserve(base.expressions.size());
 	for (auto &expr : base.expressions) {
@@ -613,10 +632,18 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &schema = BindCreateSchema(*stmt.info);
 		auto &create_type_info = stmt.info->Cast<CreateTypeInfo>();
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
+
+		auto &catalog = Catalog::GetCatalog(context, create_type_info.catalog);
+		auto &dependencies = create_type_info.dependencies;
+		SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+			if (&catalog != &entry.ParentCatalog()) {
+				// Don't register any cross-catalog dependencies
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &dependencies = create_type_info.dependencies;
-			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
 			create_type_info.query.reset();
@@ -644,8 +671,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto &dependencies = create_type_info.dependencies;
-			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 			auto type_entry_p = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, schema.catalog.GetName(), schema.name,
 			                                             UserType::GetTypeName(create_type_info.type));
 			D_ASSERT(type_entry_p);
@@ -654,11 +679,12 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			auto inner_type = type_entry.user_type;
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
-		} else if (create_type_info.type.id() == LogicalTypeId::STRUCT) {
-			auto &dependencies = create_type_info.dependencies;
-			SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
+		} else {
+			// This is done so that if the type contains a USER type,
+			// we register this dependency
+			auto preserved_type = create_type_info.type;
 			BindLogicalType(create_type_info.type);
-			(void)dependencies;
+			create_type_info.type = preserved_type;
 		}
 		break;
 	}

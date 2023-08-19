@@ -255,7 +255,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	auto &dependencies = result->dependencies;
-	SetCatalogLookupCallback([&dependencies](CatalogEntry &entry) { dependencies.AddDependency(entry); });
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
@@ -270,10 +269,24 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 		}
+		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
+			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);
 	} else {
+		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
+			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
+				// Don't register dependencies between catalogs
+				return;
+			}
+			dependencies.AddDependency(entry);
+		});
 		CreateColumnDependencyManager(*result);
 		// bind the generated column expressions
 		BindGeneratedColumns(*result);

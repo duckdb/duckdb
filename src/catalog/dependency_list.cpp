@@ -23,4 +23,8 @@ void DependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
 	}
 }
 
+bool DependencyList::Contains(CatalogEntry &entry) {
+	return set.count(entry);
+}
+
 } // namespace duckdb
