@@ -31,20 +31,15 @@ PRAGMA table_info('test.v')
 0	a	INTEGER	0	NULL	0
 1	b	INTEGER	0	NULL	0
 
-# drop the table the view is based on
-statement ok
-DROP TABLE test.t
-
-# we can still query the types and column names
-query IIIIII
-PRAGMA table_info('test.v')
-----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
-
-# but querying the view fails
+# try to drop the table the view is based on
 statement error
-SELECT * FROM test.v
+DROP TABLE test.t;
+----
+Dependency Error: Cannot drop entry "t" because there are entries that depend on it
+
+# drop the table + view
+statement ok
+DROP TABLE test.t CASCADE;
 
 statement ok
 CREATE VIEW test.v2 AS SELECT 42
@@ -57,13 +52,11 @@ loop i 0 2
 # restart the system
 restart
 
-# the view still exists, but the table does not
-# we can check the types, but not query it
-query IIIIII
+# the view no longer exists
+statement error
 PRAGMA table_info('test.v')
 ----
-0	a	INTEGER	0	NULL	0
-1	b	INTEGER	0	NULL	0
+Catalog Error: Table with name v does not exist!
 
 statement error
 SELECT * FROM test.v
@@ -75,8 +68,14 @@ CREATE TABLE test.t (a INTEGER, b INTEGER);
 statement ok
 SELECT * FROM test.t
 
-statement ok
+# We created the table, but the view still doesn't exist
+statement error
 SELECT * FROM test.v
+----
+Catalog Error: Table with name v does not exist!
+
+statement ok
+CREATE VIEW test.v AS SELECT * FROM test.t;
 
 query IIIIII
 PRAGMA table_info('test.v')
@@ -85,10 +84,16 @@ PRAGMA table_info('test.v')
 1	b	INTEGER	0	NULL	0
 
 # drop the table again
-statement ok
-DROP TABLE test.t
-
 statement error
-SELECT * FROM test.v2
+DROP TABLE test.t
+----
+Dependency Error: Cannot drop entry "t" because there are entries that depend on it
+
+# Once we delete the dependent view, we can delete t without CASCADE
+statement ok
+DROP VIEW test.v;
+
+statement ok
+DROP TABLE test.t;
 
 endloop
