@@ -239,9 +239,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 			}
 		}
 		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
-		auto testData = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
-		read_handle->Read(testData.get(), read_handle->GetFileSize());
-		WriteExtensionFileToDisk(fs, temp_path, (void *)testData.get(), read_handle->GetFileSize());
+		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
+		read_handle->Read(test_data.get(), read_handle->GetFileSize());
+		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	}

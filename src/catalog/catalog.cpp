@@ -384,7 +384,7 @@ string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], 
 }
 
 bool CanAutoloadExtension(const string &ext_name) {
-	if (ext_name == "") {
+	if (ext_name.empty()) {
 		return false;
 	}
 	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
