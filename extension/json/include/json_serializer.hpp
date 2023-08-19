@@ -42,7 +42,7 @@ public:
 		return stack.front();
 	};
 
-	void SetTag(const char *tag) final;
+	void SetTag(const field_id_t, const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
