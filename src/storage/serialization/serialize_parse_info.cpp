@@ -295,15 +295,15 @@ unique_ptr<AlterTableInfo> DropNotNullInfo::FormatDeserialize(FormatDeserializer
 void LoadInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ParseInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "filename", filename);
-	serializer.WriteProperty(201, "load_type", load_type);
 	serializer.WriteProperty(202, "repository", repository);
+	serializer.WriteProperty(201, "load_type", load_type);
 }
 
 unique_ptr<ParseInfo> LoadInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LoadInfo>(new LoadInfo());
 	deserializer.ReadProperty(200, "filename", result->filename);
-	deserializer.ReadProperty(201, "load_type", result->load_type);
 	deserializer.ReadProperty(202, "repository", result->repository);
+	deserializer.ReadProperty(201, "load_type", result->load_type);
 	return std::move(result);
 }
 
