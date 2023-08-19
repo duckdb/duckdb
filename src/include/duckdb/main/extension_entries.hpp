@@ -211,7 +211,7 @@ static constexpr ExtensionEntry EXTENSION_COPY_FUNCTIONS[] = {{"parquet", "parqu
 static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"json", "json"}, {"inet", "inet"}, {"geometry", "spatial"}}; // END_OF_EXTENSION_TYPES
 
-static constexpr const char* AUTOLOADABLE_EXTENSIONS[] = {
+static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "autocomplete",
     "excel",
     "fts",

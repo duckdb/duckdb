@@ -387,7 +387,7 @@ bool CanAutoloadExtension(const string &ext_name) {
 	if (ext_name == "") {
 		return false;
 	}
-	for (const auto& ext: AUTOLOADABLE_EXTENSIONS) {
+	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
 		if (ext_name == ext) {
 			return true;
 		}
@@ -547,7 +547,8 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 		}
 		return CatalogException(
 		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" + autoload_hint,
+		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" +
+		        autoload_hint,
 		    name, extension_name, extension_name, extension_name);
 	}
 	// the setting is not in an extension
@@ -589,7 +590,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 			}
 			return CatalogException(
 			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" + autoload_hint,
+			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" +
+			        autoload_hint,
 			    entry_name, extension_name, extension_name, extension_name);
 		}
 	}
