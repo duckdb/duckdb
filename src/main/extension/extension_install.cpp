@@ -118,7 +118,7 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 }
 
 void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
-                                       string repository) {
+                                       const string &repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -128,7 +128,7 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 }
 
 void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
-                                       string repository) {
+                                       const string &repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -159,7 +159,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
                                                const string &local_path, const string &extension, bool force_install,
-                                               string repository) {
+                                               const string &repository) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
