@@ -117,16 +117,16 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
-void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install) {
+void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install, string repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
+	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
 }
 
-void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
+void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install, string repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -135,7 +135,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
 	auto &client_config = ClientConfig::GetConfig(context);
-	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
+	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install, repository);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -156,7 +156,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 }
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-                                               const string &local_path, const string &extension, bool force_install) {
+                                               const string &local_path, const string &extension, bool force_install, string repository) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -191,10 +191,16 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
 	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
-	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
+	string endpoint;
+	if (!repository.empty()) {
+		endpoint = repository;
+	} else if (!custom_endpoint.empty()) {
+		endpoint = custom_endpoint;
+	} else {
+		endpoint = "http://extensions.duckdb.org";
+	}
 	string url_template = endpoint + versioned_path;
 
 	if (is_http_url) {

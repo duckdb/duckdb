@@ -40,8 +40,8 @@ public:
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
-	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
-	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install);
+	static void InstallExtension(ClientContext &context, const string &extension, bool force_install, string respository = "");
+	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install, string respository = "");
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
 
@@ -67,7 +67,7 @@ public:
 
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-	                                     const string &local_path, const string &extension, bool force_install);
+	                                     const string &local_path, const string &extension, bool force_install, string repository);
 	static const vector<string> PathComponents();
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension);
