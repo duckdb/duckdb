@@ -21,7 +21,7 @@ except ImportError as e:
 
 ver = subprocess.check_output(('clang-format', '--version'), text=True)
 if '11.' not in ver:
-    print('you need to run `pip install clang_format==11.0.0 - `', ver)
+    print('you need to run `pip install clang_format==11.0.1 - `', ver)
     exit(-1)
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
