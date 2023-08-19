@@ -28,6 +28,11 @@ explain select a, b from t1 group by grouping sets ((a, b, c, d));
 ----
 physical_plan	<!REGEX>:.* #2 .*
 
+query II
+explain select a, b from t1 group by a, b, c, grouping sets (d);
+----
+physical_plan	<!REGEX>:.* #2 .*
+
 # Non-primary-key columns can not be removed because of the group by clause.
 query II
 explain select a, b from t1 group by cube(a, b, c, d);
@@ -41,11 +46,6 @@ physical_plan	<REGEX>:.* #2 .*
 
 query II
 explain select a, b from t1 group by grouping sets (a, b, c), grouping sets(a, b, d);
-----
-physical_plan	<REGEX>:.* #2 .*
-
-query II
-explain select a, b from t1 group by a, b, c, grouping sets (d);
 ----
 physical_plan	<REGEX>:.* #2 .*
 
@@ -71,6 +71,7 @@ explain select * from t1 group by a, b, c, d;
 physical_plan	<REGEX>:.* #2 .*
 
 # No removal can happen if the complete PK is not present in GROUP BY
+query II
 explain select a from t1 group by a, c, d;
 ----
 physical_plan	<REGEX>:.* #2 .*

@@ -203,13 +203,19 @@ void RemoveUselessGroups::CollectPrimaryKeySet(LogicalOperator &op) {
 		if (index.is_primary) {
 			// The column index in the index information is not the same in the output of the get operator.
 			// We need to do some adjust based on the column_ids in the get operator.
+			size_t col_cnt = 0;
 			for (idx_t column_index : index.column_set) {
 				for (idx_t idx = 0; idx < get.column_ids.size(); idx++) {
 					if (column_index == get.column_ids[idx]) {
 						table_primary_key_map[get.table_index].insert(idx);
+						col_cnt++;
 						break;
 					}
 				}
+			}
+			// Not all of the columns in the primary key have been used.
+			if (col_cnt < index.column_set.size()) {
+				table_primary_key_map.erase(get.table_index);
 			}
 			break;
 		}

@@ -3457,6 +3457,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "COMPRESSED_MATERIALIZATION";
 	case OptimizerType::DUPLICATE_GROUPS:
 		return "DUPLICATE_GROUPS";
+	case OptimizerType::USELESS_GROUPS:
+		return "USELESS_GROUPS";
 	case OptimizerType::REORDER_FILTER:
 		return "REORDER_FILTER";
 	case OptimizerType::EXTENSION:
@@ -3518,6 +3520,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DUPLICATE_GROUPS")) {
 		return OptimizerType::DUPLICATE_GROUPS;
+	}
+	if (StringUtil::Equals(value, "USELESS_GROUPS")) {
+		return OptimizerType::USELESS_GROUPS;
 	}
 	if (StringUtil::Equals(value, "REORDER_FILTER")) {
 		return OptimizerType::REORDER_FILTER;
