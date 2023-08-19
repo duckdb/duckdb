@@ -31,10 +31,13 @@ functions = {}
 def parse_extension_txt():
     extensions_file = os.path.join("..", "build", "extension_configuration", "extensions.txt")
     if not os.path.isfile(extensions_file):
-        print("please run `make extension_configuration` with the desired extension configuration before running the script")
+        print(
+            "please run `make extension_configuration` with the desired extension configuration before running the script"
+        )
         exit(1)
     with open(extensions_file) as f:
         return [line.rstrip() for line in f]
+
 
 extension_names = parse_extension_txt()
 
