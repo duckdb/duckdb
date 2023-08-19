@@ -19,13 +19,24 @@ except ImportError as e:
     print('you need to run `pip install black`', e)
     exit(-1)
 
-ver = subprocess.check_output(('clang-format', '--version'), text=True)
-if '11.' not in ver:
-    print('you need to run `pip install clang_format==11.0.1 - `', ver)
+try:
+    ver = subprocess.check_output(('clang-format', '--version'), text=True)
+    if '11.' not in ver:
+        print('you need to run `pip install clang_format==11.0.1 - `', ver)
+        exit(-1)
+except Exception as e:
+    print('you need to run `pip install clang_format==11.0.1 - `', e)
     exit(-1)
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
+
+try:
+    subprocess.check_output(('cmake-format', '--version'), text=True)
+except Exception as e:
+    print('you need to run `pip install cmake-format`', e)
+    exit(-1)
+
 extensions = [
     '.cpp',
     '.c',
