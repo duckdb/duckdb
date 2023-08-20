@@ -162,6 +162,9 @@ DROP TABLE integers2
 statement ok
 DROP TABLE integers3
 
+statement ok
+DROP VIEW v1 CASCADE;
+
 # create views that read the batches using unions
 statement ok
 CREATE OR REPLACE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'

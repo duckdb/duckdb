@@ -159,13 +159,7 @@ SELECT * FROM integers3 LIMIT 5 OFFSET 9999
 20003
 
 statement ok
-DROP VIEW v1
-
-statement ok
-DROP VIEW v2
-
-statement ok
-DROP VIEW v3
+DROP VIEW v1 CASCADE;
 
 statement ok
 DROP TABLE integers
