@@ -221,6 +221,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 		if (entry == dependencies_map.end() || AllExportDependenciesWritten(object, entry->second, entries)) {
 			// All dependencies written, we can write this now
 			auto insert_result = entries.insert(object);
+			(void)insert_result;
 			D_ASSERT(insert_result.second);
 			export_order.push_back(object);
 		} else {
