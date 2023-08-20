@@ -5,10 +5,10 @@ import pytest
 @pytest.fixture()
 def tbl_table():
     con = duckdb.default_connection
-    con.execute("drop table if exists tbl")
+    con.execute("drop table if exists tbl CASCADE")
     con.execute("create table tbl (i integer)")
     yield
-    con.execute('drop table tbl')
+    con.execute('drop table tbl CASCADE')
 
 
 class TestRAPIQuery(object):
