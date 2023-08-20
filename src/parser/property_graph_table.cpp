@@ -254,7 +254,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 		pg_table->destination_reference = reader.ReadRequired<string>();
 	}
 	reader.Finalize();
-	return pg_table;
+	return std::move(pg_table);
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
@@ -296,7 +296,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	for (auto &key : destination_pk) {
 		result->destination_pk.push_back(key);
 	}
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
