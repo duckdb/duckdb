@@ -106,7 +106,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		}
 	}
 
-	return pg_table;
+	return std::move(pg_table);
 }
 
 unique_ptr<CreateStatement>
@@ -155,7 +155,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 	auto result = make_uniq<CreateStatement>();
 	result->info = std::move(info);
 
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
