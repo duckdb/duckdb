@@ -24,7 +24,7 @@ SELECT * FROM PARQUET_SCAN('https://duckdb.org/');
 
 # straightforward
 query IIII
-SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 10;
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet') LIMIT 10;
 ----
 1	Amanda	Jordan	ajordan0@com.com
 2	Albert	Freeman	afreeman1@is.gd
@@ -40,7 +40,7 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubuse
 
 # with redirects
 query IIII
-SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb/blob/master/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/duckdb/duckdb/blob/main/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
 ----
 1	Amanda	Jordan	ajordan0@com.com
 2	Albert	Freeman	afreeman1@is.gd
@@ -55,7 +55,7 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cw
 
 # with explicit port nr
 query IIII
-SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:443/cwida/duckdb/blob/master/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:443/duckdb/duckdb/blob/main/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
 ----
 1	Amanda	Jordan	ajordan0@com.com
 2	Albert	Freeman	afreeman1@is.gd
@@ -69,11 +69,11 @@ SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:44
 10	Emily	Stewart	estewart9@opensource.org
 
 query IIII
-SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet') LIMIT 1;
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/duckdb/duckdb-data/releases/download/v1.0/us+er+da+ta.parquet') LIMIT 1;
 ----
 1	Amanda	Jordan	ajordan0@com.com
 
 query IIII
-SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb-data/releases/download/v1.0/us%2Ber%2Bda%2Bta.parquet') LIMIT 1;
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/duckdb/duckdb-data/releases/download/v1.0/us%2Ber%2Bda%2Bta.parquet') LIMIT 1;
 ----
 1	Amanda	Jordan	ajordan0@com.com
