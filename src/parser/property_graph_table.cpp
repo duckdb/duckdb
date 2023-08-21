@@ -232,7 +232,7 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
-	auto pg_table = make_uniq<PropertyGraphTable>();
+	auto pg_table = make_shared<PropertyGraphTable>();
 	FieldReader reader(deserializer);
 	pg_table->table_name = reader.ReadRequired<string>();
 	reader.ReadList<string>(pg_table->column_names);
@@ -258,7 +258,7 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 }
 
 shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
-	auto result = make_uniq<PropertyGraphTable>();
+	auto result = make_shared<PropertyGraphTable>();
 
 	result->table_name = table_name;
 	for (auto &column_name : column_names) {
