@@ -5,6 +5,9 @@
 # Test removal of redundant GROUP BY columns
 
 statement ok
+create table t (a int, b int, c int, d int);
+
+statement ok
 create table t1 (a int, b int, c int, d int, primary key (a, b));
 
 statement ok
@@ -73,6 +76,16 @@ physical_plan	<REGEX>:.* #2 .*
 # No removal can happen if the complete PK is not present in GROUP BY
 query II
 explain select a from t1 group by a, c, d;
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a from (select a+1, b+1, c+1 from t1) as tt(a, b, c) group by a, b, c;
+----
+physical_plan	<REGEX>:.* #2 .*
+
+query II
+explain select a+1, b from t1 group by a+1, b, c, d;
 ----
 physical_plan	<REGEX>:.* #2 .*
 
