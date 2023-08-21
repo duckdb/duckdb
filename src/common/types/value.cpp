@@ -1767,6 +1767,7 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
 		switch (type_.InternalType()) {
+		case PhysicalType::BIT:
 		case PhysicalType::BOOL:
 			serializer.WriteProperty(102, "value", value_.boolean);
 			break;
@@ -1806,19 +1807,28 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 		case PhysicalType::INTERVAL:
 			serializer.WriteProperty(102, "value", value_.interval);
 			break;
-		case PhysicalType::VARCHAR:
+		case PhysicalType::VARCHAR: {
 			if (type_.id() == LogicalTypeId::BLOB) {
 				auto blob_str = Blob::ToString(StringValue::Get(*this));
 				serializer.WriteProperty(102, "value", blob_str);
 			} else {
 				serializer.WriteProperty(102, "value", StringValue::Get(*this));
 			}
-			break;
-		default: {
-			Vector v(*this);
-			v.FormatSerialize(serializer, 1);
-			break;
-		}
+		} break;
+		case PhysicalType::LIST: {
+			serializer.BeginObject(102, "value");
+			auto &children = ListValue::GetChildren(*this);
+			serializer.WriteProperty(100, "children", children);
+			serializer.EndObject();
+		} break;
+		case PhysicalType::STRUCT: {
+			serializer.BeginObject(102, "value");
+			auto &struct_children = StructValue::GetChildren(*this);
+			serializer.WriteProperty(100, "children", struct_children);
+			serializer.EndObject();
+		} break;
+		default:
+			throw NotImplementedException("Unimplemented type for FormatSerialize");
 		}
 	}
 }
@@ -1832,6 +1842,7 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	}
 	new_value.is_null = false;
 	switch (type.InternalType()) {
+	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 		new_value.value_.boolean = deserializer.ReadProperty<bool>(102, "value");
 		break;
@@ -1879,12 +1890,20 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 			new_value.value_info_ = make_shared<StringValueInfo>(str);
 		}
 	} break;
-	default: {
-		Vector v(type);
-		v.FormatDeserialize(deserializer, 1);
-		new_value = v.GetValue(0);
-		break;
-	}
+	case PhysicalType::LIST: {
+		deserializer.BeginObject(102, "value");
+		auto children = deserializer.ReadProperty<vector<Value>>(100, "children");
+		new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		deserializer.EndObject();
+	} break;
+	case PhysicalType::STRUCT: {
+		deserializer.BeginObject(102, "value");
+		auto children = deserializer.ReadProperty<vector<Value>>(100, "children");
+		new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		deserializer.EndObject();
+	} break;
+	default:
+		throw NotImplementedException("Unimplemented type for FormatDeserialize");
 	}
 	return new_value;
 }
