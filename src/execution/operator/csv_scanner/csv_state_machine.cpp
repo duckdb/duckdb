@@ -121,6 +121,7 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char
 	dialect_options.delimiter = delim_p;
 	dialect_options.has_format = options.dialect_options.has_format;
 	dialect_options.date_format = options.dialect_options.date_format;
+	dialect_options.skip_rows = options.dialect_options.skip_rows;
 }
 
 void CSVStateMachine::Reset() {

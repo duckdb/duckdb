@@ -87,21 +87,14 @@ BoundPivotInfo BoundPivotInfo::FormatDeserialize(FormatDeserializer &deserialize
 
 void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("has_delimiter", has_delimiter);
-	serializer.WriteProperty("delimiter", delimiter);
 	serializer.WriteProperty("has_quote", has_quote);
-	serializer.WriteProperty("quote", quote);
 	serializer.WriteProperty("has_escape", has_escape);
-	serializer.WriteProperty("escape", escape);
 	serializer.WriteProperty("has_header", has_header);
-	serializer.WriteProperty("header", header);
 	serializer.WriteProperty("ignore_errors", ignore_errors);
-	serializer.WriteProperty("num_cols", num_cols);
 	serializer.WriteProperty("buffer_sample_size", buffer_sample_size);
 	serializer.WriteProperty("null_str", null_str);
 	serializer.WriteProperty("compression", compression);
-	serializer.WriteProperty("new_line", new_line);
 	serializer.WriteProperty("allow_quoted_nulls", allow_quoted_nulls);
-	serializer.WriteProperty("skip_rows", skip_rows);
 	serializer.WriteProperty("skip_rows_set", skip_rows_set);
 	serializer.WriteProperty("maximum_line_size", maximum_line_size);
 	serializer.WriteProperty("normalize_names", normalize_names);
@@ -116,32 +109,32 @@ void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("buffer_size", buffer_size);
 	serializer.WriteProperty("file_options", file_options);
 	serializer.WriteProperty("force_quote", force_quote);
-	serializer.WriteProperty("date_format", date_format);
-	serializer.WriteProperty("has_format", has_format);
 	serializer.WriteProperty("rejects_table_name", rejects_table_name);
 	serializer.WriteProperty("rejects_limit", rejects_limit);
 	serializer.WriteProperty("rejects_recovery_columns", rejects_recovery_columns);
 	serializer.WriteProperty("rejects_recovery_column_ids", rejects_recovery_column_ids);
+	serializer.WriteProperty("dialect_options.delimiter", dialect_options.delimiter);
+	serializer.WriteProperty("dialect_options.quote", dialect_options.quote);
+	serializer.WriteProperty("dialect_options.escape", dialect_options.escape);
+	serializer.WriteProperty("dialect_options.header", dialect_options.header);
+	serializer.WriteProperty("dialect_options.num_cols", dialect_options.num_cols);
+	serializer.WriteProperty("dialect_options.new_line", dialect_options.new_line);
+	serializer.WriteProperty("dialect_options.skip_rows", dialect_options.skip_rows);
+	serializer.WriteProperty("dialect_options.date_format", dialect_options.date_format);
+	serializer.WriteProperty("dialect_options.has_format", dialect_options.has_format);
 }
 
 CSVReaderOptions CSVReaderOptions::FormatDeserialize(FormatDeserializer &deserializer) {
 	CSVReaderOptions result;
 	deserializer.ReadProperty("has_delimiter", result.has_delimiter);
-	deserializer.ReadProperty("delimiter", result.delimiter);
 	deserializer.ReadProperty("has_quote", result.has_quote);
-	deserializer.ReadProperty("quote", result.quote);
 	deserializer.ReadProperty("has_escape", result.has_escape);
-	deserializer.ReadProperty("escape", result.escape);
 	deserializer.ReadProperty("has_header", result.has_header);
-	deserializer.ReadProperty("header", result.header);
 	deserializer.ReadProperty("ignore_errors", result.ignore_errors);
-	deserializer.ReadProperty("num_cols", result.num_cols);
 	deserializer.ReadProperty("buffer_sample_size", result.buffer_sample_size);
 	deserializer.ReadProperty("null_str", result.null_str);
 	deserializer.ReadProperty("compression", result.compression);
-	deserializer.ReadProperty("new_line", result.new_line);
 	deserializer.ReadProperty("allow_quoted_nulls", result.allow_quoted_nulls);
-	deserializer.ReadProperty("skip_rows", result.skip_rows);
 	deserializer.ReadProperty("skip_rows_set", result.skip_rows_set);
 	deserializer.ReadProperty("maximum_line_size", result.maximum_line_size);
 	deserializer.ReadProperty("normalize_names", result.normalize_names);
@@ -156,12 +149,19 @@ CSVReaderOptions CSVReaderOptions::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.ReadProperty("buffer_size", result.buffer_size);
 	deserializer.ReadProperty("file_options", result.file_options);
 	deserializer.ReadProperty("force_quote", result.force_quote);
-	deserializer.ReadProperty("date_format", result.date_format);
-	deserializer.ReadProperty("has_format", result.has_format);
 	deserializer.ReadProperty("rejects_table_name", result.rejects_table_name);
 	deserializer.ReadProperty("rejects_limit", result.rejects_limit);
 	deserializer.ReadProperty("rejects_recovery_columns", result.rejects_recovery_columns);
 	deserializer.ReadProperty("rejects_recovery_column_ids", result.rejects_recovery_column_ids);
+	deserializer.ReadProperty("dialect_options.delimiter", result.dialect_options.delimiter);
+	deserializer.ReadProperty("dialect_options.quote", result.dialect_options.quote);
+	deserializer.ReadProperty("dialect_options.escape", result.dialect_options.escape);
+	deserializer.ReadProperty("dialect_options.header", result.dialect_options.header);
+	deserializer.ReadProperty("dialect_options.num_cols", result.dialect_options.num_cols);
+	deserializer.ReadProperty("dialect_options.new_line", result.dialect_options.new_line);
+	deserializer.ReadProperty("dialect_options.skip_rows", result.dialect_options.skip_rows);
+	deserializer.ReadProperty("dialect_options.date_format", result.dialect_options.date_format);
+	deserializer.ReadProperty("dialect_options.has_format", result.dialect_options.has_format);
 	return result;
 }
 

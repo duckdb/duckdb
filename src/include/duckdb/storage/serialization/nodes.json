@@ -413,40 +413,20 @@
         "type": "bool"
       },
       {
-        "name": "delimiter",
-        "type": "char"
-      },
-      {
         "name": "has_quote",
         "type": "bool"
-      },
-      {
-        "name": "quote",
-        "type": "char"
       },
       {
         "name": "has_escape",
         "type": "bool"
       },
       {
-        "name": "escape",
-        "type": "char"
-      },
-      {
         "name": "has_header",
-        "type": "bool"
-      },
-      {
-        "name": "header",
         "type": "bool"
       },
       {
         "name": "ignore_errors",
         "type": "bool"
-      },
-      {
-        "name": "num_cols",
-        "type": "idx_t"
       },
       {
         "name": "buffer_sample_size",
@@ -461,16 +441,8 @@
         "type": "FileCompressionType"
       },
       {
-        "name": "new_line",
-        "type": "NewLineIdentifier"
-      },
-      {
         "name": "allow_quoted_nulls",
         "type": "bool"
-      },
-      {
-        "name": "skip_rows",
-        "type": "idx_t"
       },
       {
         "name": "skip_rows_set",
@@ -529,14 +501,6 @@
         "type": "vector<bool>"
       },
       {
-        "name": "date_format",
-        "type": "unordered_map<LogicalTypeId, StrpTimeFormat> date_format"
-      },
-      {
-        "name": "has_format",
-        "type": "unordered_map<bool, StrpTimeFormat> date_format"
-      },
-      {
         "name": "rejects_table_name",
         "type": "string"
       },
@@ -551,6 +515,42 @@
       {
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>"
+      },
+      {
+        "name": "dialect_options.delimiter",
+        "type": "char"
+      },
+      {
+        "name": "dialect_options.quote",
+        "type": "char"
+      },
+      {
+        "name": "dialect_options.escape",
+        "type": "char"
+      },
+       {
+        "name": "dialect_options.header",
+        "type": "bool"
+      },
+            {
+        "name": "dialect_options.num_cols",
+        "type": "idx_t"
+      },
+            {
+        "name": "dialect_options.new_line",
+        "type": "NewLineIdentifier"
+      },
+            {
+        "name": "dialect_options.skip_rows",
+        "type": "idx_t"
+      },
+      {
+        "name": "dialect_options.date_format",
+        "type": "unordered_map<LogicalTypeId, StrpTimeFormat> date_format"
+      },
+      {
+        "name": "dialect_options.has_format",
+        "type": "unordered_map<bool, StrpTimeFormat> date_format"
       }
     ],
     "pointer_type": "none"
