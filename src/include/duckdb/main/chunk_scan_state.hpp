@@ -11,10 +11,8 @@ class DataChunk;
 //! Abstract chunk fetcher
 class ChunkScanState {
 public:
-	explicit ChunkScanState() {
-	}
-	virtual ~ChunkScanState() {
-	}
+	explicit ChunkScanState();
+	virtual ~ChunkScanState();
 
 public:
 	ChunkScanState(const ChunkScanState &other) = delete;
