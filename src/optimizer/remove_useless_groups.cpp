@@ -71,7 +71,7 @@ void RemoveUselessGroups::VisitAggregate(LogicalAggregate &aggr) {
 	bool has_useless_keys = false;
 	// We need to iterate through the columns that appear in the GROUP BY clause based on their table index.
 	// This allows us to determine if these columns can cover the primary key of the corresponding table.
-	for (auto const &it : table_used_columns_map) {
+	for (const auto &it : table_used_columns_map) {
 		idx_t table_index = it.first;
 		if (table_primary_key_map.find(table_index) == table_primary_key_map.end()) {
 			continue;
@@ -195,7 +195,7 @@ void RemoveUselessGroups::CollectPrimaryKeySet(LogicalOperator &op) {
 		return;
 	}
 	auto storage_info = table->GetStorageInfo(context);
-	for (auto const &index : storage_info.index_info) {
+	for (const auto &index : storage_info.index_info) {
 		// Currently, we are only collecting the primary key information.
 		// We are using a map to store the primary key details.
 		// The keys in the map correspond to table index,
