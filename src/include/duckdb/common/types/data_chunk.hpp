@@ -14,8 +14,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
-struct ArrowArray;
-
 namespace duckdb {
 class Allocator;
 class ClientContext;
