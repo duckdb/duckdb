@@ -28,8 +28,8 @@ void FixedSizeBuffer::Serialize(FixedSizeAllocator &fixed_size_allocator, Metada
 	writer.WriteData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
 	on_disk = true;
 
-	// FIXME: we want to reset the dirty-flag here. However, this is a temporary fix, which we should remove when
-	// FIXME: fixing the issue explained in test_art_storage_multi_checkpoint.test
+	// FIXME: we want to reset the dirty-flag here. Not resetting the dirty-flag is a temporary fix, which we
+	// FIXME: should remove when fixing the issue explained in test_art_storage_multi_checkpoint.test
 	// dirty = false;
 }
 

@@ -85,12 +85,6 @@ public:
 	void Deserialize(const BlockPointer &block_pointer);
 
 private:
-	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
-	data_ptr_t Get(const IndexPointer ptr, const bool dirty = true);
-	//! Returns the first free offset in a bitmask
-	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
-
-private:
 	//! Allocation size of one segment in a buffer
 	//! We only need this value to calculate bitmask_count, bitmask_offset, and
 	//! available_segments_per_buffer
@@ -113,6 +107,12 @@ private:
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
 	unordered_set<idx_t> vacuum_buffers;
+
+private:
+	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
+	data_ptr_t Get(const IndexPointer ptr, const bool dirty = true);
+	//! Returns the first free offset in a bitmask
+	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
 };
 
 } // namespace duckdb

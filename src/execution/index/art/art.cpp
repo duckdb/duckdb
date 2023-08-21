@@ -999,13 +999,8 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
 	tree = reader.Read<Node>();
 
-	// TODO: I think that this can be merged
-	vector<BlockPointer> block_pointers;
 	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
-		block_pointers.push_back(reader.Read<BlockPointer>());
-	}
-	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
-		(*allocators)[i].Deserialize(block_pointers[i]);
+		(*allocators)[i].Deserialize(reader.Read<BlockPointer>());
 	}
 }
 

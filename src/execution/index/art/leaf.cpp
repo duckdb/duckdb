@@ -20,7 +20,7 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 
 	idx_t copy_count = 0;
 	while (count) {
-		node.get() = Node::GetAllocatorByType(art, NType::LEAF).New();
+		node.get() = Node::GetAllocator(art, NType::LEAF).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 		auto &leaf = Node::Ref<Leaf>(art, node, NType::LEAF);
@@ -44,7 +44,7 @@ void Leaf::Free(ART &art, Node &node) {
 	Node next_node;
 	while (current_node.HasMetadata()) {
 		next_node = Node::Ref<Leaf>(art, current_node, NType::LEAF).ptr;
-		Node::GetAllocatorByType(art, NType::LEAF).Free(current_node);
+		Node::GetAllocator(art, NType::LEAF).Free(current_node);
 		current_node = next_node;
 	}
 
@@ -121,7 +121,7 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 		for (idx_t i = 0; i < last_leaf.count; i++) {
 			l_leaf = l_leaf.get().Append(art, last_leaf.row_ids[i]);
 		}
-		Node::GetAllocatorByType(art, NType::LEAF).Free(last_leaf_node);
+		Node::GetAllocator(art, NType::LEAF).Free(last_leaf_node);
 	}
 }
 
@@ -296,7 +296,7 @@ string Leaf::VerifyAndToString(ART &art, const Node &node, const bool only_verif
 
 void Leaf::Vacuum(ART &art, Node &node) {
 
-	auto &allocator = Node::GetAllocatorByType(art, NType::LEAF);
+	auto &allocator = Node::GetAllocator(art, NType::LEAF);
 
 	reference<Node> node_ref(node);
 	while (node_ref.get().HasMetadata()) {
@@ -313,7 +313,7 @@ void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
 	auto row_id = node.GetRowId();
-	node = Node::GetAllocatorByType(art, NType::LEAF).New();
+	node = Node::GetAllocator(art, NType::LEAF).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 	auto &leaf = Node::Ref<Leaf>(art, node, NType::LEAF);
@@ -328,7 +328,7 @@ Leaf &Leaf::Append(ART &art, const row_t row_id) {
 
 	// we need a new leaf node
 	if (leaf.get().count == Node::LEAF_SIZE) {
-		leaf.get().ptr = Node::GetAllocatorByType(art, NType::LEAF).New();
+		leaf.get().ptr = Node::GetAllocator(art, NType::LEAF).New();
 		leaf.get().ptr.SetMetadata(static_cast<uint8_t>(NType::LEAF));
 
 		leaf = Node::Ref<Leaf>(art, leaf.get().ptr, NType::LEAF);

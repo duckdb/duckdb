@@ -6,7 +6,7 @@ namespace duckdb {
 
 Node256 &Node256::New(ART &art, Node &node) {
 
-	node = Node::GetAllocatorByType(art, NType::NODE_256).New();
+	node = Node::GetAllocator(art, NType::NODE_256).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::NODE_256));
 	auto &n256 = Node::Ref<Node256>(art, node, NType::NODE_256);
 

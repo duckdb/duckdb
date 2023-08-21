@@ -7,7 +7,7 @@ namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
-	node = Node::GetAllocatorByType(art, NType::NODE_16).New();
+	node = Node::GetAllocator(art, NType::NODE_16).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::NODE_16));
 	auto &n16 = Node::Ref<Node16>(art, node, NType::NODE_16);
 

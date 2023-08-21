@@ -70,7 +70,7 @@ void Node::Free(ART &art, Node &node) {
 		return node.Clear();
 	}
 
-	GetAllocatorByType(art, type).Free(node);
+	GetAllocator(art, type).Free(node);
 	node.Clear();
 }
 
@@ -78,7 +78,7 @@ void Node::Free(ART &art, Node &node) {
 // Get Allocators
 //===--------------------------------------------------------------------===//
 
-FixedSizeAllocator &Node::GetAllocatorByType(const ART &art, const NType type) {
+FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
 	return (*art.allocators)[static_cast<uint8_t>(type) - 1];
 }
 
@@ -145,9 +145,6 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 template <class NODE>
 optional_ptr<NODE> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const {
 
-	// FIXME: is const strict enough here, or do we need to distinguish between
-	// FIXME: <const Node4> and <Node4>. Also, do we need to separate the GetNextChild
-	// FIXME: node functions into const and non-const?
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
@@ -167,9 +164,6 @@ optional_ptr<NODE> Node::GetChild(ART &art, const uint8_t byte, const bool dirty
 template <class NODE>
 optional_ptr<NODE> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const {
 
-	// FIXME: is const strict enough here, or do we need to distinguish between
-	// FIXME: <const Node4> and <Node4>. Also, do we need to separate the GetNextChild
-	// FIXME: node functions into const and non-const?
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
@@ -464,7 +458,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	auto &allocator = GetAllocatorByType(art, node_type);
+	auto &allocator = GetAllocator(art, node_type);
 	auto needs_vacuum = flags.vacuum_flags[(uint8_t)GetType() - 1] && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
 		*this = allocator.VacuumPointer(*this);
