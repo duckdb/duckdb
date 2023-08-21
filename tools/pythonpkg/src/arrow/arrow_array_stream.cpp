@@ -198,8 +198,6 @@ py::object GetScalar(Value &constant, const string &timezone_config) {
 		return dataset_scalar(constant.GetValue<uint32_t>());
 	case LogicalTypeId::UBIGINT:
 		return dataset_scalar(constant.GetValue<uint64_t>());
-	case LogicalTypeId::UHUGEINT:
-		return dataset_scalar(constant.GetValue<uhugeint_t>());
 	case LogicalTypeId::FLOAT:
 		return dataset_scalar(constant.GetValue<float>());
 	case LogicalTypeId::DOUBLE:
