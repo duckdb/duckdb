@@ -348,7 +348,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [({'a': 1, 'b': 2},)]
 
-    def test_function_expression(self):
+    def test_function_expression_udf(self):
         con = duckdb.connect()
 
         def my_simple_func(a: int, b: int, c: int) -> int:
@@ -371,6 +371,41 @@ class TestExpression(object):
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(6,)]
+
+    def test_function_expression_basic(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+                FROM (VALUES
+                    (1, 'test', 3),
+                    (2, 'this is a long string', 7),
+                    (3, 'medium length', 4)
+                ) tbl(text, start, "end")
+            """
+        )
+        expr = FunctionExpression('array_slice', "start", "text", "end")
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [('tes',), ('his is',), ('di',)]
+
+    def test_function_expression_aggregate(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+                FROM (VALUES
+                    ('test'),
+                    ('this is a long string'),
+                    ('medium length'),
+                ) tbl(text)
+            """
+        )
+        expr = FunctionExpression('first', 'text')
+        with pytest.raises(
+            duckdb.BinderException, match='Binder Error: Aggregates cannot be present in a Project relation!'
+        ):
+            rel2 = rel.select(expr)
 
     def test_case_expression(self):
         con = duckdb.connect()
