@@ -116,17 +116,25 @@ void FilterPushdown::GenerateFilters() {
 	});
 }
 
-unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalOperator> op) {
-	if (filters.empty()) {
-		// no filters to push
+unique_ptr<LogicalOperator> FilterPushdown::AddLogicalFilter(unique_ptr<LogicalOperator> op,
+                                                             vector<unique_ptr<Expression>> expressions) {
+	if (expressions.empty()) {
+		// No left expressions, so needn't to add an extra filter operator.
 		return op;
 	}
 	auto filter = make_uniq<LogicalFilter>();
-	for (auto &f : filters) {
-		filter->expressions.push_back(std::move(f->filter));
-	}
+	filter->expressions = std::move(expressions);
 	filter->children.push_back(std::move(op));
 	return std::move(filter);
+}
+
+unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalOperator> op) {
+	vector<unique_ptr<Expression>> expressions;
+	for (auto &f : filters) {
+		expressions.push_back(std::move(f->filter));
+	}
+
+	return AddLogicalFilter(std::move(op), std::move(expressions));
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {

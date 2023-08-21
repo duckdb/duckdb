@@ -6,6 +6,9 @@
   s3_register("dbplyr::sql_escape_date", "duckdb_connection")
   s3_register("dbplyr::sql_escape_datetime", "duckdb_connection")
   s3_register("dplyr::tbl", "duckdb_connection")
+  s3_register("adbcdrivermanager::adbc_database_init", "duckdb_driver_adbc")
+  s3_register("adbcdrivermanager::adbc_connection_init", "duckdb_database_adbc")
+  s3_register("adbcdrivermanager::adbc_statement_init", "duckdb_connection_adbc")
 
   invisible()
 }

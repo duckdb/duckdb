@@ -458,6 +458,8 @@ bool Executor::ExecutionIsFinished() {
 }
 
 PendingExecutionResult Executor::ExecuteTask() {
+	// Only executor should return NO_TASKS_AVAILABLE
+	D_ASSERT(execution_result != PendingExecutionResult::NO_TASKS_AVAILABLE);
 	if (execution_result != PendingExecutionResult::RESULT_NOT_READY) {
 		return execution_result;
 	}
@@ -467,6 +469,10 @@ PendingExecutionResult Executor::ExecuteTask() {
 		// there are! if we don't already have a task, fetch one
 		if (!task) {
 			scheduler.GetTaskFromProducer(*producer, task);
+		}
+		if (!task && !HasError()) {
+			// there are no tasks to be scheduled and there are tasks blocked
+			return PendingExecutionResult::NO_TASKS_AVAILABLE;
 		}
 		if (task) {
 			// if we have a task, partially process it
