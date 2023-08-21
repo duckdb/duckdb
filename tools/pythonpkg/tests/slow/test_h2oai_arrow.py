@@ -176,7 +176,8 @@ class TestH2OAIArrow(object):
     def test_group_by(self, threads, function):
         con = duckdb.connect()
         download_file(
-            'https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz', 'G1_1e7_1e2_5_0.csv.gz'
+            'https://github.com/duckdb/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz',
+            'G1_1e7_1e2_5_0.csv.gz',
         )
         arrow_table = read_csv('G1_1e7_1e2_5_0.csv.gz')
         con.register("x", arrow_table)
@@ -207,16 +208,16 @@ class TestH2OAIArrow(object):
 @fixture(scope="module")
 def large_data():
     download_file(
-        'https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz', 'J1_1e7_NA_0_0.csv.gz'
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz', 'J1_1e7_NA_0_0.csv.gz'
     )
     download_file(
-        'https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz', 'J1_1e7_1e1_0_0.csv.gz'
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz', 'J1_1e7_1e1_0_0.csv.gz'
     )
     download_file(
-        'https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz', 'J1_1e7_1e4_0_0.csv.gz'
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz', 'J1_1e7_1e4_0_0.csv.gz'
     )
     download_file(
-        'https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz', 'J1_1e7_1e7_0_0.csv.gz'
+        'https://github.com/duckdb/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz', 'J1_1e7_1e7_0_0.csv.gz'
     )
 
     con = duckdb.connect()

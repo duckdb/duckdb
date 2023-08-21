@@ -435,7 +435,7 @@ def gather_files(dir, source_files, header_files):
 
 
 def write_license(hfile):
-    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
+    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE for licensing information\n\n")
 
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):
