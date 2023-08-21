@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
@@ -19,7 +19,7 @@ on:
       - '.github/config/uncovered_files.csv'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
   cancel-in-progress: true
 
 env:
@@ -46,7 +46,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
     - name: Install ninja
       shell: bash
@@ -104,7 +104,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Install UnixODBC
         shell: bash
@@ -206,7 +206,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.label }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - uses: ./.github/actions/build_extensions
         if: matrix.universal_build == 0
@@ -246,7 +246,7 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
           else
@@ -261,7 +261,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
           AWS_DEFAULT_REGION: us-east-1
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             ./scripts/extension-upload-test.sh
           else
             ./scripts/extension-upload-test.sh local

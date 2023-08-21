@@ -59,7 +59,8 @@ Suggests:
     testthat,
     tibble,
     vctrs,
-    withr
+    withr,
+    adbcdrivermanager
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
