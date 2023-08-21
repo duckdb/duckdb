@@ -41,8 +41,8 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char) {
 	// Set the delimiter if not set yet.
 	SetNewLineDelimiter(carry, carry_followed_by_nl);
-	D_ASSERT(options.new_line == NewLineIdentifier::SINGLE || options.new_line == NewLineIdentifier::CARRY_ON);
-	if (options.new_line == NewLineIdentifier::SINGLE) {
+	D_ASSERT(options.dialect_options.new_line == NewLineIdentifier::SINGLE || options.dialect_options.new_line == NewLineIdentifier::CARRY_ON);
+	if (options.dialect_options.new_line == NewLineIdentifier::SINGLE) {
 		return (!carry) || (carry && !carry_followed_by_nl);
 	}
 	return (carry && carry_followed_by_nl) || (!carry && first_char);
@@ -80,7 +80,7 @@ bool ParallelCSVReader::SetPosition() {
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
 
-		if (options.header) {
+		if (options.dialect_options.header) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 					bool carrier_return = (*buffer)[position_buffer] == '\r';
@@ -147,7 +147,7 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 
-		if (position_buffer > end_buffer && options.new_line == NewLineIdentifier::CARRY_ON &&
+		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
 		    (*buffer)[position_buffer - 1] == '\n') {
 			break;
 		}
@@ -248,7 +248,7 @@ bool AllNewLine(string_t value, idx_t column_amount) {
 
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// If line is not set, we have to figure it out, we assume whatever is in the first line
-	if (options.new_line == NewLineIdentifier::NOT_SET) {
+	if (options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
 		idx_t cur_pos = position_buffer;
 		// we can start in the middle of a new line, so move a bit forward.
 		while (cur_pos < end_buffer) {
@@ -312,7 +312,7 @@ value_start : {
 	offset = 0;
 
 	// this state parses the first character of a value
-	if ((*buffer)[position_buffer] == options.quote) {
+	if ((*buffer)[position_buffer] == options.dialect_options.quote) {
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start_buffer = position_buffer + 1;
@@ -329,10 +329,10 @@ normal : {
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.delimiter) {
+		if (c == options.dialect_options.delimiter) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (c == options.quote && try_add_line) {
+		} else if (c == options.dialect_options.quote && try_add_line) {
 			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
@@ -401,7 +401,7 @@ add_row : {
 			goto final_state;
 		}
 		if ((*buffer)[position_buffer] == '\n') {
-			if (options.new_line == NewLineIdentifier::SINGLE) {
+			if (options.dialect_options.new_line == NewLineIdentifier::SINGLE) {
 				error_message = "Wrong NewLine Identifier. Expecting \\r\\n";
 				return false;
 			}
@@ -416,7 +416,7 @@ add_row : {
 				goto final_state;
 			}
 		} else {
-			if (options.new_line == NewLineIdentifier::CARRY_ON) {
+			if (options.dialect_options.new_line == NewLineIdentifier::CARRY_ON) {
 				error_message = "Wrong NewLine Identifier. Expecting \\r or \\n";
 				return false;
 			}
@@ -429,7 +429,7 @@ add_row : {
 		}
 		goto value_start;
 	} else {
-		if (options.new_line == NewLineIdentifier::CARRY_ON) {
+		if (options.dialect_options.new_line == NewLineIdentifier::CARRY_ON) {
 			error_message = "Wrong NewLine Identifier. Expecting \\r or \\n";
 			return false;
 		}
@@ -459,10 +459,10 @@ in_quotes:
 	position_buffer++;
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.quote) {
+		if (c == options.dialect_options.quote) {
 			// quote: move to unquoted state
 			goto unquote;
-		} else if (c == options.escape) {
+		} else if (c == options.dialect_options.escape) {
 			// escape: store the escaped position and move to handle_escape state
 			escape_positions.push_back(position_buffer - start_buffer);
 			goto handle_escape;
@@ -496,11 +496,11 @@ unquote : {
 		goto final_state;
 	}
 	auto c = (*buffer)[position_buffer];
-	if (c == options.quote && (options.escape == '\0' || options.escape == options.quote)) {
+	if (c == options.dialect_options.quote && (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
-	} else if (c == options.delimiter) {
+	} else if (c == options.dialect_options.delimiter) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
@@ -535,7 +535,7 @@ handle_escape : {
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
-	if ((*buffer)[position_buffer] != options.quote && (*buffer)[position_buffer] != options.escape) {
+	if ((*buffer)[position_buffer] != options.dialect_options.quote && (*buffer)[position_buffer] != options.dialect_options.escape) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());

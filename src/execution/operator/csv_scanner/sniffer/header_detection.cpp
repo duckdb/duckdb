@@ -118,8 +118,8 @@ void CSVSniffer::DetectHeader() {
 
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !best_candidate->options.has_header) ||
-	    (best_candidate->options.has_header && best_candidate->options.header)) {
-		best_candidate->header = true;
+	    (best_candidate->options.has_header && best_candidate->options.dialect_options.header)) {
+		best_candidate->dialect_options.header = true;
 		case_insensitive_map_t<idx_t> name_collision_count;
 
 		// get header names from CSV
@@ -129,7 +129,7 @@ void CSVSniffer::DetectHeader() {
 
 			// generate name if field is empty
 			if (col_name.empty() || val.IsNull()) {
-				col_name = GenerateColumnName(best_candidate->num_cols, col);
+				col_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
 			}
 
 			// normalize names or at least trim whitespace
@@ -151,9 +151,9 @@ void CSVSniffer::DetectHeader() {
 		}
 
 	} else {
-		best_candidate->header = false;
-		for (idx_t col = 0; col < best_candidate->num_cols; col++) {
-			string column_name = GenerateColumnName(best_candidate->num_cols, col);
+		best_candidate->dialect_options.header = false;
+		for (idx_t col = 0; col < best_candidate->dialect_options.num_cols; col++) {
+			string column_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
 			names.push_back(column_name);
 		}
 	}

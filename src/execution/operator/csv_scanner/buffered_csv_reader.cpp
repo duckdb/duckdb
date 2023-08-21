@@ -58,7 +58,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		return_types = requested_types;
 		ResetBuffer();
 	}
-	SkipRowsAndReadHeader(options.skip_rows, options.header);
+	SkipRowsAndReadHeader(options.dialect_options.skip_rows, options.dialect_options.header);
 	InitParseChunk(return_types.size());
 }
 
@@ -231,7 +231,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 		jumping_samples = chunks_fit >= options.sample_chunks;
 
 		// jump back to the beginning
-		JumpToBeginning(options.skip_rows, options.header);
+		JumpToBeginning(options.dialect_options.skip_rows, options.dialect_options.header);
 		sample_chunk_idx++;
 		return true;
 	}
@@ -313,7 +313,7 @@ value_start:
 	offset = 0;
 	/* state: value_start */
 	// this state parses the first character of a value
-	if (buffer[position] == options.quote) {
+	if (buffer[position] == options.dialect_options.quote) {
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start = position + 1;
@@ -330,7 +330,7 @@ normal:
 	do {
 		for (; position < buffer_size; position++) {
 			line_size++;
-			if (buffer[position] == options.delimiter) {
+			if (buffer[position] == options.dialect_options.delimiter) {
 				// delimiter: end the value and add it to the chunk
 				goto add_value;
 			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
@@ -407,10 +407,10 @@ in_quotes:
 	do {
 		for (; position < buffer_size; position++) {
 			line_size++;
-			if (buffer[position] == options.quote) {
+			if (buffer[position] == options.dialect_options.quote) {
 				// quote: move to unquoted state
 				goto unquote;
-			} else if (buffer[position] == options.escape) {
+			} else if (buffer[position] == options.dialect_options.escape) {
 				// escape: store the escaped position and move to handle_escape state
 				escape_positions.push_back(position - start);
 				goto handle_escape;
@@ -432,11 +432,11 @@ unquote:
 		offset = 1;
 		goto final_state;
 	}
-	if (buffer[position] == options.quote && (options.escape == '\0' || options.escape == options.quote)) {
+	if (buffer[position] == options.dialect_options.quote && (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position - start);
 		goto in_quotes;
-	} else if (buffer[position] == options.delimiter) {
+	} else if (buffer[position] == options.dialect_options.delimiter) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
@@ -461,7 +461,7 @@ handle_escape:
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
-	if (buffer[position] != options.quote && buffer[position] != options.escape) {
+	if (buffer[position] != options.dialect_options.quote && buffer[position] != options.dialect_options.escape) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());

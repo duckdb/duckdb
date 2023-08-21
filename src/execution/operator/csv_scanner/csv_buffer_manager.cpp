@@ -8,7 +8,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
       buffer_size(CSV_BUFFER_SIZE) {
 	if (options.skip_rows_set) {
 		// Skip rows if they are set
-		skip_rows = options.skip_rows;
+		skip_rows = options.dialect_options.skip_rows;
 	}
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {

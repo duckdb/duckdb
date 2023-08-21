@@ -38,7 +38,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// Here we identify if we can run this CSV file on parallel or not.
-	bool empty_options = options.delimiter == '\0' || options.escape == '\0' || options.quote == '\0';
+	bool empty_options = options.dialect_options.delimiter == '\0' || options.dialect_options.escape == '\0' || options.dialect_options.quote == '\0';
 	bool not_supported_options = options.null_padding;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -46,7 +46,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 		single_threaded = true;
 	}
 	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || empty_options || not_supported_options ||
-	    options.new_line == NewLineIdentifier::MIX) {
+	    options.dialect_options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -707,8 +707,8 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	}
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
-	    bind_data.options.header && bind_data.options.has_header);
+	    bind_data.options.dialect_options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
+	    bind_data.options.dialect_options.header && bind_data.options.has_header);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1097,25 +1097,66 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
 
+void DialectOptions::Serialize(FieldWriter &writer) const{
+	writer.WriteField<char>(delimiter);
+	writer.WriteField<char>(quote);
+	writer.WriteField<char>(escape);
+	writer.WriteField<bool>(header);
+	writer.WriteField<idx_t>(num_cols);
+	writer.WriteField<NewLineIdentifier>(new_line);
+	writer.WriteField<idx_t>(skip_rows);
+	vector<string> csv_formats;
+	for (auto &format : date_format) {
+		writer.WriteField(has_format.find(format.first)->second);
+		csv_formats.push_back(format.second.format_specifier);
+	}
+	writer.WriteList<string>(csv_formats);
+}
+
+void DialectOptions::Deserialize(FieldReader &reader){
+	delimiter = reader.ReadRequired<char>();
+	quote = reader.ReadRequired<char>();
+	escape = reader.ReadRequired<char>();
+	header = reader.ReadRequired<bool>();
+	num_cols = reader.ReadRequired<idx_t>();
+	new_line = reader.ReadRequired<NewLineIdentifier>();
+	skip_rows = reader.ReadRequired<idx_t>();
+
+	bool has_date = reader.ReadRequired<bool>();
+	bool has_timestamp = reader.ReadRequired<bool>();
+	auto formats = reader.ReadRequiredList<string>();
+
+
+	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
+	if (has_date) {
+		has_format[LogicalTypeId::DATE] = true;
+	}
+	if (has_timestamp) {
+		has_format[LogicalTypeId::TIMESTAMP] = true;
+	}
+	for (idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
+		auto &format = formats[f_idx];
+		auto &type = format_types[f_idx];
+		if (format.empty()) {
+			continue;
+		}
+		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
+	}
+
+}
+
 void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// common options
 	writer.WriteField<bool>(has_delimiter);
-	writer.WriteField<char>(delimiter);
 	writer.WriteField<bool>(has_quote);
-	writer.WriteField<char>(quote);
 	writer.WriteField<bool>(has_escape);
-	writer.WriteField<char>(escape);
 	writer.WriteField<bool>(has_header);
-	writer.WriteField<bool>(header);
 	writer.WriteField<bool>(ignore_errors);
-	writer.WriteField<idx_t>(num_cols);
 	writer.WriteField<idx_t>(buffer_sample_size);
 	writer.WriteString(null_str);
 	writer.WriteField<FileCompressionType>(compression);
-	writer.WriteField<NewLineIdentifier>(new_line);
 	writer.WriteField<bool>(allow_quoted_nulls);
 	// read options
-	writer.WriteField<idx_t>(skip_rows);
 	writer.WriteField<bool>(skip_rows_set);
 	writer.WriteField<idx_t>(maximum_line_size);
 	writer.WriteField<bool>(normalize_names);
@@ -1131,37 +1172,29 @@ void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(file_options);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
-	vector<string> csv_formats;
-	for (auto &format : date_format) {
-		writer.WriteField(has_format.find(format.first)->second);
-		csv_formats.push_back(format.second.format_specifier);
-	}
-	writer.WriteList<string>(csv_formats);
+
+	// reject options
 	writer.WriteString(rejects_table_name);
 	writer.WriteField<idx_t>(rejects_limit);
 	writer.WriteList<string>(rejects_recovery_columns);
 	writer.WriteList<idx_t>(rejects_recovery_column_ids);
+
+	// Serialize Dialect Options
+	dialect_options.Serialize(writer);
 }
 
 void CSVReaderOptions::Deserialize(FieldReader &reader) {
 	// common options
 	has_delimiter = reader.ReadRequired<bool>();
-	delimiter = reader.ReadRequired<char>();
 	has_quote = reader.ReadRequired<bool>();
-	quote = reader.ReadRequired<char>();
 	has_escape = reader.ReadRequired<bool>();
-	escape = reader.ReadRequired<char>();
 	has_header = reader.ReadRequired<bool>();
-	header = reader.ReadRequired<bool>();
 	ignore_errors = reader.ReadRequired<bool>();
-	num_cols = reader.ReadRequired<idx_t>();
 	buffer_sample_size = reader.ReadRequired<idx_t>();
 	null_str = reader.ReadRequired<string>();
 	compression = reader.ReadRequired<FileCompressionType>();
-	new_line = reader.ReadRequired<NewLineIdentifier>();
 	allow_quoted_nulls = reader.ReadRequired<bool>();
 	// read options
-	skip_rows = reader.ReadRequired<idx_t>();
 	skip_rows_set = reader.ReadRequired<bool>();
 	maximum_line_size = reader.ReadRequired<idx_t>();
 	normalize_names = reader.ReadRequired<bool>();
@@ -1177,29 +1210,16 @@ void CSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
-	bool has_date = reader.ReadRequired<bool>();
-	bool has_timestamp = reader.ReadRequired<bool>();
-	auto formats = reader.ReadRequiredList<string>();
-	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
 
-	if (has_date) {
-		has_format[LogicalTypeId::DATE] = true;
-	}
-	if (has_timestamp) {
-		has_format[LogicalTypeId::TIMESTAMP] = true;
-	}
-	for (idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
-		auto &format = formats[f_idx];
-		auto &type = format_types[f_idx];
-		if (format.empty()) {
-			continue;
-		}
-		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
-	}
+	// rejects options
 	rejects_table_name = reader.ReadRequired<string>();
 	rejects_limit = reader.ReadRequired<idx_t>();
 	rejects_recovery_columns = reader.ReadRequiredList<string>();
 	rejects_recovery_column_ids = reader.ReadRequiredList<idx_t>();
+
+	// dialect options
+	dialect_options.Deserialize(reader);
+
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {

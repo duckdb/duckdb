@@ -387,13 +387,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool success;
 			idx_t line_error = 0;
 			bool target_type_not_varchar = false;
-			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
+			if (options.dialect_options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options.date_format, parse_vector, result_vector, parse_chunk.size(),
+				success = TryCastDateVector(options.dialect_options.date_format, parse_vector, result_vector, parse_chunk.size(),
 				                            error_message, line_error);
-			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
+			} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options.date_format, parse_vector, result_vector, parse_chunk.size(),
+				success = TryCastTimestampVector(options.dialect_options.date_format, parse_vector, result_vector, parse_chunk.size(),
 				                                 error_message);
 			} else if (options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
@@ -562,8 +562,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 }
 
 void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
-	if (options.new_line == NewLineIdentifier::NOT_SET) {
-		if (options.new_line == NewLineIdentifier::MIX) {
+	if (options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
+		if (options.dialect_options.new_line == NewLineIdentifier::MIX) {
 			return;
 		}
 		NewLineIdentifier this_line_identifier;
@@ -576,15 +576,15 @@ void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
 		} else {
 			this_line_identifier = NewLineIdentifier::SINGLE;
 		}
-		if (options.new_line == NewLineIdentifier::NOT_SET) {
-			options.new_line = this_line_identifier;
+		if (options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
+			options.dialect_options.new_line = this_line_identifier;
 			return;
 		}
-		if (options.new_line != this_line_identifier) {
-			options.new_line = NewLineIdentifier::MIX;
+		if (options.dialect_options.new_line != this_line_identifier) {
+			options.dialect_options.new_line = NewLineIdentifier::MIX;
 			return;
 		}
-		options.new_line = this_line_identifier;
+		options.dialect_options.new_line = this_line_identifier;
 	}
 }
 } // namespace duckdb

@@ -125,16 +125,16 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 	if (value.IsNull()) {
 		return true;
 	}
-	if (candidate.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
+	if (candidate.dialect_options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return candidate.date_format.find(LogicalTypeId::DATE)
+		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
 		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
-	} else if (candidate.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
+	} else if (candidate.dialect_options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
 	           sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return candidate.date_format.find(LogicalTypeId::TIMESTAMP)
+		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	} else if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
 		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
@@ -150,8 +150,8 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
-	candidate.has_format[sql_type] = true;
-	auto &date_format = candidate.date_format[sql_type];
+	candidate.dialect_options.has_format[sql_type] = true;
+	auto &date_format = candidate.dialect_options.date_format[sql_type];
 	date_format.format_specifier = format_specifier;
 	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 }
@@ -169,8 +169,8 @@ struct SniffValue {
 	inline static bool Process(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values,
 	                           char current_char) {
 
-		if ((machine.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
-		    (machine.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
+		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
 		}
 		machine.pre_previous_state = machine.previous_state;
@@ -235,7 +235,7 @@ void CSVSniffer::DetectTypes() {
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
-		vector<vector<LogicalType>> info_sql_types_candidates(candidate->num_cols,
+		vector<vector<LogicalType>> info_sql_types_candidates(candidate->dialect_options.num_cols,
 		                                                      candidate->options.auto_type_candidates);
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
@@ -244,13 +244,13 @@ void CSVSniffer::DetectTypes() {
 			format_candidates[t.first].clear();
 		}
 
-		if (candidate->num_cols == 0) {
+		if (candidate->dialect_options.num_cols == 0) {
 			continue;
 		}
 
 		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(candidate->num_cols, LogicalType::VARCHAR);
+		return_types.assign(candidate->dialect_options.num_cols, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
 		candidate->Reset();
@@ -289,7 +289,7 @@ void CSVSniffer::DetectTypes() {
 
 		values.erase(values.begin(), values.begin() + values_start);
 		idx_t row_idx = 0;
-		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {
+		if (values.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
@@ -303,8 +303,8 @@ void CSVSniffer::DetectTypes() {
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					bool has_format_is_set = false;
-					auto format_iterator = candidate->has_format.find(sql_type.id());
-					if (format_iterator != candidate->has_format.end()) {
+					auto format_iterator = candidate->dialect_options.has_format.find(sql_type.id());
+					if (format_iterator != candidate->dialect_options.has_format.end()) {
 						has_format_is_set = format_iterator->second;
 					}
 					if (has_format_candidates.count(sql_type.id()) &&
@@ -328,7 +328,7 @@ void CSVSniffer::DetectTypes() {
 								}
 							}
 							//	initialise the first candidate
-							candidate->has_format[sql_type.id()] = true;
+							candidate->dialect_options.has_format[sql_type.id()] = true;
 							//	all formats are constructed to be valid
 							SetDateFormat(*candidate, type_format_candidates.back(), sql_type.id());
 						}
@@ -337,13 +337,13 @@ void CSVSniffer::DetectTypes() {
 						auto save_format_candidates = type_format_candidates;
 						while (!type_format_candidates.empty()) {
 							//	avoid using exceptions for flow control...
-							auto &current_format = candidate->date_format[sql_type.id()];
+							auto &current_format = candidate->dialect_options.date_format[sql_type.id()];
 							if (current_format.Parse(StringValue::Get(dummy_val), result)) {
 								break;
 							}
 							//	doesn't work - move to the next one
 							type_format_candidates.pop_back();
-							candidate->has_format[sql_type.id()] = (!type_format_candidates.empty());
+							candidate->dialect_options.has_format[sql_type.id()] = (!type_format_candidates.empty());
 							if (!type_format_candidates.empty()) {
 								SetDateFormat(*candidate, type_format_candidates.back(), sql_type.id());
 							}
@@ -388,7 +388,7 @@ void CSVSniffer::DetectTypes() {
 			// we have a new best_options candidate
 			if (true_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->skip_rows += true_start;
+				candidate->dialect_options.skip_rows += true_start;
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;

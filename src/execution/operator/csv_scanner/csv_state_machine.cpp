@@ -115,8 +115,12 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char
                                  CSVStateMachineCache &csv_state_machine_cache_p)
     : csv_state_machine_cache(csv_state_machine_cache_p), options(options_p),
       csv_buffer_iterator(std::move(buffer_manager_p)),
-      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)), quote(quote_p), escape(escape_p),
-      delimiter(delim_p), has_format(options.has_format), date_format(options.date_format) {
+      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)){
+	dialect_options.quote = quote_p;
+	dialect_options.escape = escape_p;
+	dialect_options.delimiter = delim_p;
+	dialect_options.has_format = options.dialect_options.has_format;
+	dialect_options.date_format = options.dialect_options.date_format;
 }
 
 void CSVStateMachine::Reset() {

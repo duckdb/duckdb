@@ -61,7 +61,7 @@ static int64_t ParseInteger(const Value &value, const string &loption) {
 }
 
 void CSVReaderOptions::SetHeader(bool input) {
-	this->header = input;
+	this->dialect_options.header = input;
 	this->has_header = true;
 }
 
@@ -73,7 +73,7 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	if (input.size() > 1) {
 		throw InvalidInputException("The escape option cannot exceed a size of 1 byte.");
 	}
-	this->escape = input[0];
+	this->dialect_options.escape = input[0];
 	this->has_escape = true;
 }
 
@@ -86,22 +86,22 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}
-	this->delimiter = delim_str[0];
+	this->dialect_options.delimiter = delim_str[0];
 }
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
 	if (quote_p.size() > 1) {
 		throw InvalidInputException("The quote option cannot exceed a size of 1 byte.");
 	}
-	this->quote = quote_p[0];
+	this->dialect_options.quote = quote_p[0];
 	this->has_quote = true;
 }
 
 void CSVReaderOptions::SetNewline(const string &input) {
 	if (input == "\\n" || input == "\\r") {
-		new_line = NewLineIdentifier::SINGLE;
+		dialect_options.new_line = NewLineIdentifier::SINGLE;
 	} else if (input == "\\r\\n") {
-		new_line = NewLineIdentifier::CARRY_ON;
+		dialect_options.new_line = NewLineIdentifier::CARRY_ON;
 	} else {
 		throw InvalidInputException("This is not accepted as a newline: " + input);
 	}
@@ -111,15 +111,15 @@ void CSVReaderOptions::SetNewline(const string &input) {
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
-		error = StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
-		date_format[type].format_specifier = format;
+		error = StrTimeFormat::ParseFormatSpecifier(format, dialect_options.date_format[type]);
+		dialect_options.date_format[type].format_specifier = format;
 	} else {
 		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
 	}
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
 	}
-	has_format[type] = true;
+	dialect_options.has_format[type] = true;
 }
 
 void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, vector<string> &expected_names) {
@@ -144,7 +144,7 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			sample_chunks = sample_size / STANDARD_VECTOR_SIZE + 1;
 		}
 	} else if (loption == "skip") {
-		skip_rows = ParseInteger(value, loption);
+		dialect_options.skip_rows = ParseInteger(value, loption);
 		skip_rows_set = true;
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
@@ -276,11 +276,11 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 }
 
 std::string CSVReaderOptions::ToString() const {
-	return "  file=" + file_path + "\n  delimiter='" + delimiter +
-	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" + quote +
-	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" + escape +
+	return "  file=" + file_path + "\n  delimiter='" + dialect_options.delimiter +
+	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" + dialect_options.quote +
+	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" + dialect_options.escape +
 	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       "\n  header=" + std::to_string(header) +
+	       "\n  header=" + std::to_string(dialect_options.header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
 	       "\n  sample_size=" + std::to_string(sample_chunk_size * sample_chunks) +
 	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);

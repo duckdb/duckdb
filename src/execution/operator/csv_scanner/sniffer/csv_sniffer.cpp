@@ -33,19 +33,10 @@ SnifferResult CSVSniffer::SniffCSV() {
 	RefineTypes();
 	// We are done, construct and return the result.
 	// Set the CSV Options in the reference
-	options.quote = best_candidate->quote;
-	options.escape = best_candidate->escape;
-	options.delimiter = best_candidate->delimiter;
-	options.new_line = best_candidate->new_line;
-	options.num_cols = best_candidate->num_cols;
-	options.has_header = best_candidate->header;
-	options.header = best_candidate->header;
-	options.has_format = best_candidate->has_format;
-	options.date_format = best_candidate->date_format;
-	options.skip_rows += best_candidate->skip_rows;
-	if (options.skip_rows > 0) {
-		options.skip_rows_set = true;
-	}
+	options.dialect_options = best_candidate->dialect_options;
+	options.has_header = best_candidate->dialect_options.header;
+	options.skip_rows_set = options.dialect_options.skip_rows > 0;
+
 	// Return the types and names
 	return SnifferResult(detected_types, names);
 }

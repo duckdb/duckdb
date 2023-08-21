@@ -311,10 +311,10 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	// set up the CSV reader
 	CSVReaderOptions options;
 	options.auto_detect = false;
-	options.delimiter = '|';
-	options.header = has_header;
-	options.quote = '\"';
-	options.escape = '\"';
+	options.dialect_options.delimiter = '|';
+	options.dialect_options.header = has_header;
+	options.dialect_options.quote = '\"';
+	options.dialect_options.escape = '\"';
 	options.file_path = csv_path;
 
 	// set up the intermediate result chunk

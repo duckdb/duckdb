@@ -46,32 +46,32 @@ void WriteQuoteOrEscape(Serializer &serializer, char quote_or_escape) {
 
 void BaseCSVData::Finalize() {
 	// verify that the options are correct in the final pass
-	if (options.escape == '\0') {
-		options.escape = options.quote;
+	if (options.dialect_options.escape == '\0') {
+		options.dialect_options.escape = options.dialect_options.quote;
 	}
 	// escape and delimiter must not be substrings of each other
 	if (options.has_delimiter && options.has_escape) {
-		AreOptionsEqual(options.delimiter, options.escape, "DELIMITER", "ESCAPE");
+		AreOptionsEqual(options.dialect_options.delimiter, options.dialect_options.escape, "DELIMITER", "ESCAPE");
 	}
 	// delimiter and quote must not be substrings of each other
 	if (options.has_quote && options.has_delimiter) {
-		AreOptionsEqual(options.quote, options.delimiter, "DELIMITER", "QUOTE");
+		AreOptionsEqual(options.dialect_options.quote, options.dialect_options.delimiter, "DELIMITER", "QUOTE");
 	}
 	// escape and quote must not be substrings of each other (but can be the same)
-	if (options.quote != options.escape && options.has_quote && options.has_escape) {
-		AreOptionsEqual(options.quote, options.escape, "QUOTE", "ESCAPE");
+	if (options.dialect_options.quote != options.dialect_options.escape && options.has_quote && options.has_escape) {
+		AreOptionsEqual(options.dialect_options.quote, options.dialect_options.escape, "QUOTE", "ESCAPE");
 	}
 	if (!options.null_str.empty()) {
 		// null string and delimiter must not be substrings of each other
 		if (options.has_delimiter) {
-			SubstringDetection(options.delimiter, options.null_str, "DELIMITER", "NULL");
+			SubstringDetection(options.dialect_options.delimiter, options.null_str, "DELIMITER", "NULL");
 		}
 		// quote/escape and nullstr must not be substrings of each other
 		if (options.has_quote) {
-			SubstringDetection(options.quote, options.null_str, "QUOTE", "NULL");
+			SubstringDetection(options.dialect_options.quote, options.null_str, "QUOTE", "NULL");
 		}
 		if (options.has_escape) {
-			SubstringDetection(options.escape, options.null_str, "ESCAPE", "NULL");
+			SubstringDetection(options.dialect_options.escape, options.null_str, "ESCAPE", "NULL");
 		}
 	}
 
@@ -79,7 +79,7 @@ void BaseCSVData::Finalize() {
 		if (options.prefix.empty() || options.suffix.empty()) {
 			throw BinderException("COPY ... (FORMAT CSV) must have both PREFIX and SUFFIX, or none at all");
 		}
-		if (options.header) {
+		if (options.dialect_options.header) {
 			throw BinderException("COPY ... (FORMAT CSV)'s HEADER cannot be combined with PREFIX/SUFFIX");
 		}
 	}
@@ -106,8 +106,8 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
-	bind_data->requires_quotes[bind_data->options.delimiter] = true;
-	bind_data->requires_quotes[bind_data->options.quote] = true;
+	bind_data->requires_quotes[bind_data->options.dialect_options.delimiter] = true;
+	bind_data->requires_quotes[bind_data->options.dialect_options.quote] = true;
 
 	if (!bind_data->options.write_newline.empty()) {
 		bind_data->newline = bind_data->options.write_newline;
@@ -221,7 +221,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		// simple CSV
 		// do a single loop to check for a quote or escape value
 		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == options.quote || str[i] == options.escape) {
+			if (str[i] == options.dialect_options.quote || str[i] == options.dialect_options.escape) {
 				requires_escape = true;
 				break;
 			}
@@ -229,22 +229,22 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 
 		if (!requires_escape) {
 			// fast path: no need to escape anything
-			WriteQuoteOrEscape(serializer, options.quote);
+			WriteQuoteOrEscape(serializer, options.dialect_options.quote);
 			serializer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(serializer, options.quote);
+			WriteQuoteOrEscape(serializer, options.dialect_options.quote);
 			return;
 		}
 
 		// slow path: need to add escapes
 		string new_val(str, len);
-		new_val = AddEscapes(options.escape, options.escape, new_val);
-		if (options.escape != options.quote) {
+		new_val = AddEscapes(options.dialect_options.escape, options.dialect_options.escape, new_val);
+		if (options.dialect_options.escape != options.dialect_options.quote) {
 			// need to escape quotes separately
-			new_val = AddEscapes(options.quote, options.escape, new_val);
+			new_val = AddEscapes(options.dialect_options.quote, options.dialect_options.escape, new_val);
 		}
-		WriteQuoteOrEscape(serializer, options.quote);
+		WriteQuoteOrEscape(serializer, options.dialect_options.quote);
 		serializer.WriteBufferData(new_val);
-		WriteQuoteOrEscape(serializer, options.quote);
+		WriteQuoteOrEscape(serializer, options.dialect_options.quote);
 	} else {
 		serializer.WriteData(const_data_ptr_cast(str), len);
 	}
@@ -322,12 +322,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
 	}
 
-	if (options.header) {
+	if (options.dialect_options.header) {
 		BufferedSerializer serializer;
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(serializer, options.delimiter);
+				WriteQuoteOrEscape(serializer, options.dialect_options.delimiter);
 			}
 			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -352,11 +352,11 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		if (csv_data.sql_types[col_idx].id() == LogicalTypeId::VARCHAR) {
 			// VARCHAR, just reinterpret (cannot reference, because LogicalTypeId::VARCHAR is used by the JSON type too)
 			cast_chunk.data[col_idx].Reinterpret(input.data[col_idx]);
-		} else if (options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
+		} else if (options.dialect_options.has_format[LogicalTypeId::DATE] && csv_data.sql_types[col_idx].id() == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+		} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
 		           (csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP ||
 		            csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ)) {
 			// use the timestamp format to cast the chunk
@@ -379,7 +379,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer, options.delimiter);
+				WriteQuoteOrEscape(writer, options.dialect_options.delimiter);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

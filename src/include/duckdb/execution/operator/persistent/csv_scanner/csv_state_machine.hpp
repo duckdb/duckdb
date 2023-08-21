@@ -69,16 +69,8 @@ public:
 	string value;
 	idx_t rows_read;
 
-	//! Options resulting from sniffing
-	char quote;
-	char escape;
-	char delimiter;
-	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
-	idx_t num_cols = 0;
-	bool header = false;
-	std::map<LogicalTypeId, bool> has_format;
-	std::map<LogicalTypeId, StrpTimeFormat> date_format;
-	idx_t skip_rows = 0;
+	//! Dialect options resulting from sniffing
+	DialectOptions dialect_options;
 };
 
 } // namespace duckdb

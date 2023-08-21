@@ -89,16 +89,16 @@ struct Parse {
 bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type);
-	if (best_candidate->has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
+	if (best_candidate->dialect_options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
 		idx_t line_error;
-		return BaseCSVReader::TryCastDateVector(best_candidate->date_format, parse_chunk_col, dummy_result, size,
+		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col, dummy_result, size,
 		                                        error_message, line_error);
-	} else if (best_candidate->has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
+	} else if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
-		return BaseCSVReader::TryCastTimestampVector(best_candidate->date_format, parse_chunk_col, dummy_result, size,
+		return BaseCSVReader::TryCastTimestampVector(best_candidate->dialect_options.date_format, parse_chunk_col, dummy_result, size,
 		                                             error_message);
 	} else {
 		// target type is not varchar: perform a cast
@@ -109,12 +109,12 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 
 void CSVSniffer::RefineTypes() {
 	// if data types were provided, exit here if number of columns does not match
-	detected_types.assign(best_candidate->num_cols, LogicalType::VARCHAR);
+	detected_types.assign(best_candidate->dialect_options.num_cols, LogicalType::VARCHAR);
 	if (!requested_types.empty()) {
-		if (requested_types.size() != best_candidate->num_cols) {
+		if (requested_types.size() != best_candidate->dialect_options.num_cols) {
 			throw InvalidInputException(
 			    "Error while determining column types: found %lld columns but expected %d. (%s)",
-			    best_candidate->num_cols, requested_types.size(), best_candidate->options.ToString());
+			    best_candidate->dialect_options.num_cols, requested_types.size(), best_candidate->options.ToString());
 		} else {
 			detected_types = requested_types;
 		}
@@ -156,7 +156,7 @@ void CSVSniffer::RefineTypes() {
 							}
 							//	doesn't work - move to the next one
 							best_type_format_candidates.pop_back();
-							best_candidate->has_format[sql_type.id()] = (!best_type_format_candidates.empty());
+							best_candidate->dialect_options.has_format[sql_type.id()] = (!best_type_format_candidates.empty());
 							if (!best_type_format_candidates.empty()) {
 								SetDateFormat(*best_candidate, best_type_format_candidates.back(), sql_type.id());
 							}
