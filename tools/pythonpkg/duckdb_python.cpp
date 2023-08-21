@@ -171,7 +171,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	m.def("filter", &PyConnectionWrapper::FilterDf, "Filter the DataFrame df by the filter in filter_expr",
 	      py::arg("df"), py::arg("filter_expr"), py::arg("connection") = py::none());
 	m.def("project", &PyConnectionWrapper::ProjectDf, "Project the DataFrame df by the projection in project_expr",
-	      py::arg("df"), py::arg("project_expr"), py::arg("connection") = py::none());
+	      py::kw_only(), py::arg("df"), py::arg("connection") = py::none());
 	m.def("alias", &PyConnectionWrapper::AliasDF, "Create a relation from DataFrame df with the passed alias",
 	      py::arg("df"), py::arg("alias"), py::arg("connection") = py::none());
 	m.def("order", &PyConnectionWrapper::OrderDf, "Reorder the DataFrame df by order_expr", py::arg("df"),

@@ -185,7 +185,7 @@ class TestRelation(object):
 
     def test_df_proj(self, duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.project(test_df, 'i')
+        rel = duckdb.project('i', df=test_df)
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
     def test_project_on_types(self, duckdb_cursor):

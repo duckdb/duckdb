@@ -49,25 +49,31 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromExpression(const strin
 	return projected_relation;
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args) {
 	if (!rel) {
 		return nullptr;
 	}
-	return ProjectFromExpression(expr);
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(const py::args &args) {
-	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto arg : args) {
-		shared_ptr<DuckDBPyExpression> py_expr;
-		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
-			throw InvalidInputException("Please provide arguments of type Expression!");
-		}
-		auto expr = py_expr->GetExpression().Copy();
-		expressions.push_back(std::move(expr));
+	auto arg_count = args.size();
+	if (arg_count == 0) {
+		return nullptr;
 	}
-	vector<string> empty_aliases;
-	return make_uniq<DuckDBPyRelation>(rel->Select(std::move(expressions), empty_aliases));
+	py::handle first_arg = args[0];
+	if (arg_count == 1 && py::isinstance<py::str>(first_arg)) {
+		string expr_string = py::str(first_arg);
+		return ProjectFromExpression(expr_string);
+	} else {
+		vector<unique_ptr<ParsedExpression>> expressions;
+		for (auto arg : args) {
+			shared_ptr<DuckDBPyExpression> py_expr;
+			if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+				throw InvalidInputException("Please provide arguments of type Expression!");
+			}
+			auto expr = py_expr->GetExpression().Copy();
+			expressions.push_back(std::move(expr));
+		}
+		vector<string> empty_aliases;
+		return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), empty_aliases));
+	}
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object &obj) {

@@ -317,7 +317,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, 
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const py::args &expr, const PandasDataFrame &df,
                                                             shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FromDF(df)->Project(expr);
 }

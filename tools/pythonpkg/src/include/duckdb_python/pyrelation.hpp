@@ -67,8 +67,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
 	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
-	unique_ptr<DuckDBPyRelation> Project(const string &expr);
-	unique_ptr<DuckDBPyRelation> Select(const py::args &args);
+	unique_ptr<DuckDBPyRelation> Project(const py::args &args);
 
 	unique_ptr<DuckDBPyRelation> Filter(const py::object &expr);
 	unique_ptr<DuckDBPyRelation> FilterFromExpression(const string &expr);

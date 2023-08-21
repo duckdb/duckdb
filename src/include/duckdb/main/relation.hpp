@@ -84,8 +84,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, const vector<string> &aliases);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, const vector<string> &aliases);
-	DUCKDB_API shared_ptr<Relation> Select(vector<unique_ptr<ParsedExpression>> expressions,
-	                                       const vector<string> &aliases);
+	DUCKDB_API shared_ptr<Relation> Project(vector<unique_ptr<ParsedExpression>> expressions,
+	                                        const vector<string> &aliases);
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
