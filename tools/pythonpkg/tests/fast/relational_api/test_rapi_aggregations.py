@@ -356,6 +356,33 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
+    def test_std_pop(self, table):
+        result = [round(r[0], 2) for r in table.stddev_pop("v").execute().fetchall()]
+        expected = [4.36]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.stddev_pop("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.47), (2, 0.5), (3, 3.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["stddev_samp", "stddev"])
+    def test_std_samp(self, table, f):
+        result = [round(r[0], 2) for r in getattr(table, f)("v").execute().fetchall()]
+        expected = [4.71]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in getattr(table, f)("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.58), (2, 0.71), (3, 4.24)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
         # def test_describe(self, table):
 
     #    assert table.describe().fetchall() is not None

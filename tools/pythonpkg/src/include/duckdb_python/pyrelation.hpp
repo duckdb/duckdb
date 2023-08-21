@@ -141,6 +141,10 @@ public:
 	                                    const string &projected_columns = "");
 	unique_ptr<DuckDBPyRelation> StdSamp(const string &column, const string &groups = "",
 	                                     const string &window_spec = "", const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> VarPop(const string &column, const string &groups = "", const string &window_spec = "",
+	                                    const string &projected_columns = "");
+	unique_ptr<DuckDBPyRelation> VarSamp(const string &column, const string &groups = "",
+	                                     const string &window_spec = "", const string &projected_columns = "");
 
 	unique_ptr<DuckDBPyRelation> Describe();
 

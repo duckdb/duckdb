@@ -745,3 +745,36 @@ class TestRAPIWindows:
         ]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
+
+    def test_stddev_pop(self, table):
+        result = [
+            (r[0], round(r[1], 2)) if r[1] is not None else r
+            for r in table.stddev_pop(
+                "v",
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, 0.0), (1, 0.5), (1, 0.47), (2, 0.0), (2, 0.5), (3, None), (3, 0.0), (3, 3.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["stddev_samp", "stddev"])
+    def test_stddev_samp(self, table, f):
+        result = [
+            (r[0], round(r[1], 2)) if r[1] is not None else r
+            for r in getattr(table, f)(
+                "v",
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, None), (1, 0.71), (1, 0.58), (2, None), (2, 0.71), (3, None), (3, None), (3, 4.24)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])

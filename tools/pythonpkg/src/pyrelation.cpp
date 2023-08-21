@@ -602,6 +602,46 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QuantileDisc(const std::string &c
 	}
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::StdPop(const std::string &column, const std::string &groups,
+                                                      const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("stddev_pop", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("stddev_pop", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::StdSamp(const std::string &column, const std::string &groups,
+                                                       const std::string &window_spec,
+                                                       const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("stddev_samp", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("stddev_samp", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::VarPop(const std::string &column, const std::string &groups,
+                                                      const std::string &window_spec,
+                                                      const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("var_pop", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("var_pop", column, groups, "", projected_columns);
+	}
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::VarSamp(const std::string &column, const std::string &groups,
+                                                       const std::string &window_spec,
+                                                       const std::string &projected_columns) {
+	if (!window_spec.empty()) {
+		return GenericWindowFunction("var_samp", "", column, window_spec, false, projected_columns);
+	} else {
+		return GenericAggregator("var_samp", column, groups, "", projected_columns);
+	}
+}
+
 idx_t DuckDBPyRelation::Length() {
 	auto aggregate_rel = GenericAggregator("count", "*");
 	aggregate_rel->Execute();
