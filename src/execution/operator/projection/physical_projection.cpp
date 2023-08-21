@@ -196,7 +196,7 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewChildren(CGroupExpre
 	result->has_estimated_cardinality = this->has_estimated_cardinality;
 	for(auto &child : pdrgpexpr)
 	{
-		result->AddChild(child->Copy());
+		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;

@@ -56,8 +56,22 @@ void CXformOrderImplementation::Transform(CXformContext* pxfctxt, CXformResult* 
     {
         vorders.push_back(child.Copy());
     }
+    duckdb::vector<idx_t> projections;
+    if (popOrder->projections.empty())
+	{
+		for (idx_t i = 0; i < popOrder->types.size(); i++)
+		{
+			projections.push_back(i);
+		}
+	}
+	else
+	{
+        for(auto child : popOrder->projections) {
+		    projections.push_back(child);
+        }
+	}
 	// create alternative expression
-	duckdb::unique_ptr<PhysicalOrder> pexprAlt = make_uniq<PhysicalOrder>(popOrder->types, popOrder->orders, popOrder->projections, popOrder->estimated_cardinality);
+	duckdb::unique_ptr<PhysicalOrder> pexprAlt = make_uniq<PhysicalOrder>(popOrder->types, std::move(vorders), std::move(projections), popOrder->estimated_cardinality);
     for(auto &child : pexpr->children)
     {
         pexprAlt->AddChild(child->Copy());

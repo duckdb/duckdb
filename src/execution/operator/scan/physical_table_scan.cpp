@@ -191,7 +191,7 @@ ULONG PhysicalTableScan::HashValue() const
 //
 //---------------------------------------------------------------------------
 CEnfdOrder::EPropEnforcingType PhysicalTableScan::EpetOrder(CExpressionHandle &exprhdl,
-                                                            vector<BoundOrderByNode> peo) const {
+                                                            vector<BoundOrderByNode> &peo) const {
 	return CEnfdOrder::EpetRequired;
 }
 
@@ -203,13 +203,9 @@ CEnfdOrder::EPropEnforcingType PhysicalTableScan::EpetOrder(CExpressionHandle &e
 //		Check if required columns are included in output columns
 //
 //---------------------------------------------------------------------------
-BOOL PhysicalTableScan::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,
+bool PhysicalTableScan::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,
                                           ULONG ulOptReq) const {
-	vector<ColumnBinding> pcrs;
-	for (auto &child : projection_ids) {
-		pcrs.emplace_back(ColumnBinding(0, child));
-	}
-	BOOL result = CUtils::ContainsAll(pcrs, pcrsRequired);
+	bool result = CUtils::ContainsAll(v_column_binding, pcrsRequired);
 	return result;
 }
 
@@ -413,7 +409,7 @@ PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 	result->estimated_cardinality = this->estimated_cardinality;
 	result->has_estimated_cardinality = this->has_estimated_cardinality;
 	for (auto &child : pdrgpexpr) {
-		result->AddChild(child->Copy());
+		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;

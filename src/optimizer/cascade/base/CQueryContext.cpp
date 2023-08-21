@@ -77,29 +77,28 @@ LogicalOperator* CQueryContext::PopTop(LogicalOperator* pexpr)
 //		output column ref ids
 //
 //---------------------------------------------------------------------------
-CQueryContext* CQueryContext::PqcGenerate(duckdb::unique_ptr<Operator> pexpr, duckdb::vector<ULONG*> pdrgpulQueryOutputColRefId, duckdb::vector<std::string> pdrgpmdname, bool fDeriveStats)
+CQueryContext* CQueryContext::PqcGenerate(duckdb::unique_ptr<Operator> pexpr,
+										duckdb::vector<ULONG*> pdrgpulQueryOutputColRefId,
+										duckdb::vector<std::string> pdrgpmdname, bool fDeriveStats)
 {
 	duckdb::vector<ColumnBinding> pcrs;
 	duckdb::vector<ColumnBinding> colref_array;
 	// COptCtxt* poptctxt = COptCtxt::PoctxtFromTLS();
 	// Collect required properties (prpp) at the top level:
 	COrderSpec* pos = new COrderSpec();
-	// Ensure order, distribution and rewindability meet 'satisfy' matching at the top level
+	// Ensure order meet 'satisfy' matching at the top level
 	if (LogicalOperatorType::LOGICAL_ORDER_BY == pexpr->logical_type)
 	{
+		duckdb::unique_ptr<LogicalOrder> logical_order = unique_ptr_cast<Operator, LogicalOrder>(std::move(pexpr));
 		// top level operator is a order by, copy order spec to query context
-		for(auto &child : ((LogicalOrder*)pexpr.get())->orders)
+		for(auto &child : logical_order->orders)
 		{
-			pos->m_pdrgpoe.emplace_back(std::move(child));
+			pos->m_pdrgpoe.emplace_back(child.type, child.null_order, child.expression->Copy());
 		}
+		pexpr = std::move(logical_order->children[0]);
 	}
 	CEnfdOrder* peo = new CEnfdOrder(pos, CEnfdOrder::EomSatisfy);
 	CReqdPropPlan* prpp = new CReqdPropPlan(pcrs, peo);
 	// Finally, create the CQueryContext
-	if (LogicalOperatorType::LOGICAL_ORDER_BY == pexpr->logical_type)
-	{
-		// remove top order by
-		return new CQueryContext(std::move(pexpr->children[0]), prpp, colref_array, pdrgpmdname, fDeriveStats);
-	}
 	return new CQueryContext(std::move(pexpr), prpp, colref_array, pdrgpmdname, fDeriveStats);
 }

@@ -40,7 +40,9 @@ Operator *PhysicalDummyScan::SelfRehydrate(CCostContext *pcc, duckdb::vector<Ope
 }
 
 duckdb::unique_ptr<Operator> PhysicalDummyScan::Copy() {
-	return make_uniq<PhysicalDummyScan>(types, estimated_cardinality);
+	unique_ptr<PhysicalDummyScan> copy = make_uniq<PhysicalDummyScan>(types, estimated_cardinality);
+	copy->v_column_binding = this->v_column_binding;
+	return copy;
 }
 
 duckdb::unique_ptr<Operator> PhysicalDummyScan::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
@@ -54,7 +56,7 @@ PhysicalDummyScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
                                        double cost) {
 	auto copy = Copy();
 	for (auto &child : pdrgpexpr) {
-		copy->AddChild(child->Copy());
+		copy->AddChild(std::move(child));
 	}
 	copy->m_group_expression = pgexpr;
 	copy->m_cost = cost;

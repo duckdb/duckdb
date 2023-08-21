@@ -82,7 +82,21 @@ public:
 public:
 	ULONG HashValue() const override;
 	
-	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const override;
+	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const override;
+
+	COrderSpec* PosRequired(CExpressionHandle &exprhdl, gpopt::COrderSpec* posRequired,
+							ULONG child_index, duckdb::vector<CDrvdProp*> pdrgpdpCtxt,
+							ULONG ulOptReq) const override {
+		return nullptr;
+	}
+
+	// derive sort order
+	COrderSpec*
+	PosDerive(CExpressionHandle &exprhdl) const override
+	{
+		// return empty sort order
+		return new COrderSpec();
+	}
 
 	BOOL FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,
 	                       ULONG ulOptReq) const override;

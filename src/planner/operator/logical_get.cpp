@@ -407,7 +407,7 @@ unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
 	result->physical_type = physical_type;
 	for(auto &child : pdrgpexpr)
 	{
-		result->AddChild(child->Copy());
+		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;

@@ -157,7 +157,7 @@ LogicalProjection::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 	result->logical_type = logical_type;
 	result->physical_type = physical_type;
 	for (auto &child : pdrgpexpr) {
-		result->AddChild(child->Copy());
+		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;

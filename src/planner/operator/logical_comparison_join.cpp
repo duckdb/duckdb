@@ -191,7 +191,7 @@ unique_ptr<Operator> LogicalComparisonJoin::CopyWithNewChildren(CGroupExpression
 	copy->physical_type = this->physical_type;
 	for(auto &child : pdrgpexpr)
 	{
-		copy->AddChild(child->Copy());
+		copy->AddChild(std::move(child));
 	}
 	copy->m_group_expression = pgexpr;
 	copy->m_cost = cost;

@@ -91,14 +91,20 @@ bool COrderSpec::FSatisfies(COrderSpec* pos) const
 //		Add required enforcers enforcers to dynamic array
 //
 //---------------------------------------------------------------------------
-void COrderSpec::AppendEnforcers(CExpressionHandle &exprhdl, CReqdPropPlan* prpp, duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexpr, duckdb::unique_ptr<Operator> pexpr)
+void COrderSpec::AppendEnforcers(CExpressionHandle &exprhdl, CReqdPropPlan* prpp,
+								duckdb::vector<duckdb::unique_ptr<Operator>> &pdrgpexpr,
+								duckdb::unique_ptr<Operator> pexpr)
 {
 	duckdb::vector<idx_t> projections;
-	for(idx_t i = 0; i < prpp->m_pcrs.size(); i++)
+	for (idx_t i = 0; i < pexpr->types.size(); i++)
 	{
-		projections.emplace_back(i);
+		projections.push_back(i);
 	}
-	auto pexprSort = make_uniq<PhysicalOrder>(pexpr->types, prpp->m_peo->m_pos->m_pdrgpoe, projections, 0);
+	duckdb::vector<BoundOrderByNode> v_orders;
+	for(auto &child : prpp->m_peo->m_pos->m_pdrgpoe) {
+		v_orders.emplace_back(child.Copy());
+	}
+	auto pexprSort = make_uniq<PhysicalOrder>(pexpr->types, std::move(v_orders), std::move(projections), 0);
 	pexprSort->AddChild(std::move(pexpr));
 	pdrgpexpr.push_back(std::move(pexprSort));
 }

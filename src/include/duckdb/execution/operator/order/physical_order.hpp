@@ -34,7 +34,7 @@ public:
 	vector<idx_t> projections;
 
 public:
-	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> peo) const override;
+	CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const override;
 	
 	COrderSpec* PosRequired(CExpressionHandle &exprhdl, gpopt::COrderSpec* posRequired, ULONG child_index, duckdb::vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq) const override;
 	
@@ -65,6 +65,12 @@ public:
 	// Rehydrate expression from a given cost context and child expressions
 	Operator* SelfRehydrate(CCostContext* pcc, duckdb::vector<Operator*> pdrgpexpr, CDrvdPropCtxtPlan* pdpctxtplan) override;
 
+	unique_ptr<Operator> Copy() override;
+
+	unique_ptr<Operator> CopyWithNewGroupExpression(CGroupExpression* pgexpr) override;
+
+	unique_ptr<Operator> CopyWithNewChildren(CGroupExpression* pgexpr, vector<unique_ptr<Operator>> pdrgpexpr,
+											double cost) override;
 public:
 	// Source interface
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const override;
@@ -122,7 +128,7 @@ public:
 		COrderSpec* result = new COrderSpec();
 		for(auto &child: orders)
 		{
-			result->m_pdrgpoe.emplace_back(child.type, child.null_order, unique_ptr<Expression>(child.expression.get()));
+			result->m_pdrgpoe.emplace_back(child.Copy());
 		}
 		return result;
 	}

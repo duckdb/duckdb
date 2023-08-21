@@ -87,7 +87,7 @@ unique_ptr<Operator> LogicalDummyScan::CopyWithNewChildren(CGroupExpression *exp
 	auto result = Copy();
 	for(auto &child : pdr_exprs)
 	{
-		result->AddChild(child->Copy());
+		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = expr;
 	result->m_cost = cost;

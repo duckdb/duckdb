@@ -226,11 +226,10 @@ CJobGroupExpressionOptimization::EEvent CJobGroupExpressionOptimization::EevtIni
 	CExpressionHandle exprhdl;
 	exprhdl.Attach(pjgeo->m_pgexpr);
 	exprhdl.DeriveProps(NULL);
-	/* I comment here because it has to be true */
-	// if (!psc->m_peng->FCheckReqdProps(exprhdl, pjgeo->m_poc->m_required_plan_property, pjgeo->m_ulOptReq))
-	// {
-	//		return eevFinalized;
-	// }
+	if (!psc->m_peng->FCheckReqdProps(exprhdl, pjgeo->m_poc->m_prpp, pjgeo->m_ulOptReq))
+	{
+		return eevFinalized;
+	}
 	// check if job can be early terminated without optimizing any child
 	double costLowerBound = GPOPT_INVALID_COST;
 	if (psc->m_peng->FSafeToPrune(pjgeo->m_pgexpr, pjgeo->m_poc->m_prpp, NULL, gpos::ulong_max, &costLowerBound))

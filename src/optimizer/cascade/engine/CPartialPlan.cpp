@@ -59,7 +59,7 @@ void CPartialPlan::ExtractChildrenCostingInfo(ICostModel* pcm, CExpressionHandle
 			// skip scalar children
 			continue;
 		}
-		CReqdPropPlan* prppChild = exprhdl.Prpp(ul);
+		// CReqdPropPlan* prppChild = exprhdl.Prpp(ul);
 		if (ul == m_ulChildIndex)
 		{
 			// we have reached a child with a known plan,

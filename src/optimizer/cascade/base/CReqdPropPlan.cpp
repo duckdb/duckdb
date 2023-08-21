@@ -100,10 +100,17 @@ bool CReqdPropPlan::FProvidesReqdCols(CExpressionHandle &exprhdl, ULONG ulOptReq
 	}
 	duckdb::vector<ColumnBinding> pcrsUsed = pps->PcrsUsed();
 	duckdb::vector<ColumnBinding> v;
-	set_difference(pcrsOutput.begin(), pcrsOutput.end(), pcrsUsed.begin(), pcrsUsed.end(), v.begin());
-	if(pcrsOutput.size() == pcrsUsed.size() + v.size())
-	{
+	for(auto &child : pcrsUsed) {
 		fProvidesReqdCols = false;
+		for(auto &sub_child : pcrsOutput) {
+			if(child == sub_child) {
+				fProvidesReqdCols = true;
+				break;
+			}
+		}
+		if(!fProvidesReqdCols) {
+			return fProvidesReqdCols;
+		}
 	}
 	return fProvidesReqdCols;
 }

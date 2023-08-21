@@ -19,7 +19,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 }
 
 CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprhdl,
-                                                        vector<BoundOrderByNode> peo) const {
+                                                        vector<BoundOrderByNode> &peo) const {
 	bool compactible = true;
 	for (size_t ul = 0; ul < peo.size(); ul++) {
 		bool flag = false;
@@ -45,6 +45,8 @@ CEnfdOrder::EPropEnforcingType PhysicalOrder::EpetOrder(CExpressionHandle &exprh
 
 COrderSpec *PhysicalOrder::PosRequired(CExpressionHandle &exprhdl, COrderSpec *pos_required, ULONG child_index,
                                        vector<CDrvdProp *> pdrgpdp_ctxt, ULONG ul_opt_req) const {
+	// sort operator is order-establishing and does not require child to deliver
+	// any sort order; we return an empty sort order as child requirement
 	return new COrderSpec();
 }
 
@@ -89,10 +91,103 @@ Operator *PhysicalOrder::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operato
 		pdrgpcost.push_back(cost_child);
 	}
 	cost = pcc->CostCompute(pdrgpcost);
-	PhysicalOrder *pexpr = new PhysicalOrder(types, orders, projections, 0);
+	vector<BoundOrderByNode> v_orders;
+	for(auto &child : this->orders) {
+		v_orders.emplace_back(child.Copy());
+	}
+	PhysicalOrder *pexpr = new PhysicalOrder(types, std::move(v_orders), projections, 0);
 	pexpr->m_cost = cost;
 	pexpr->m_group_expression = pgexpr;
 	return pexpr;
+}
+
+unique_ptr<Operator> PhysicalOrder::Copy() {
+	/* PhysicalOrder fields */
+	vector<BoundOrderByNode> v_orders;
+	for(auto &child : this->orders) {
+		v_orders.emplace_back(child.Copy());
+	}
+	unique_ptr<PhysicalOrder> copy = make_uniq<PhysicalOrder>(this->types, std::move(v_orders), this->projections, 0);
+	
+	/* PhysicalOperator fields */
+	copy->m_total_opt_requests = this->m_total_opt_requests;
+	
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = this->estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	for(auto &child : this->children) {
+		copy->AddChild(child->Copy());
+	}
+	copy->m_group_expression = this->m_group_expression;
+	copy->m_cost = this->m_cost;
+	return copy;
+}
+
+unique_ptr<Operator> PhysicalOrder::CopyWithNewGroupExpression(CGroupExpression* pgexpr) {
+	/* PhysicalOrder fields */
+	vector<BoundOrderByNode> v_orders;
+	for(auto &child : this->orders) {
+		v_orders.emplace_back(child.Copy());
+	}
+	unique_ptr<PhysicalOrder> copy = make_uniq<PhysicalOrder>(this->types, std::move(v_orders), this->projections, 0);
+	
+	/* PhysicalOperator fields */
+	copy->m_total_opt_requests = this->m_total_opt_requests;
+	
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = this->estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	for(auto &child : this->children) {
+		copy->AddChild(child->Copy());
+	}
+	copy->m_group_expression = pgexpr;
+	copy->m_cost = this->m_cost;
+	return copy;
+}
+
+unique_ptr<Operator> PhysicalOrder::CopyWithNewChildren(CGroupExpression* pgexpr,
+															vector<unique_ptr<Operator>> pdrgpexpr,
+															double cost) {
+	/* PhysicalOrder fields */
+	vector<BoundOrderByNode> v_orders;
+	for(auto &child : this->orders) {
+		v_orders.emplace_back(child.Copy());
+	}
+	unique_ptr<PhysicalOrder> copy = make_uniq<PhysicalOrder>(this->types, std::move(v_orders), this->projections, 0);
+	
+	/* PhysicalOperator fields */
+	copy->m_total_opt_requests = this->m_total_opt_requests;
+	
+	/* Operator fields */
+	copy->m_derived_property_relation = this->m_derived_property_relation;
+	copy->m_derived_property_plan = this->m_derived_property_plan;
+	copy->m_required_plan_property = this->m_required_plan_property;
+	if (nullptr != this->estimated_props) {
+		copy->estimated_props = this->estimated_props->Copy();
+	}
+	copy->types = this->types;
+	copy->estimated_cardinality = this->estimated_cardinality;
+	copy->has_estimated_cardinality = this->has_estimated_cardinality;
+	for(auto &child : pdrgpexpr) {
+		copy->AddChild(std::move(child));
+	}
+	copy->m_group_expression = pgexpr;
+	copy->m_cost = cost;
+	return copy;
 }
 
 //===--------------------------------------------------------------------===//
