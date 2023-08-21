@@ -119,7 +119,7 @@ private:
 			OnObjectEnd();
 		}
 		OnOptionalEnd();
-		return std::move(ptr);
+		return ptr;
 	}
 
 	// Deserialize shared_ptr
@@ -134,7 +134,7 @@ private:
 			OnObjectEnd();
 		}
 		OnOptionalEnd();
-		return std::move(ptr);
+		return ptr;
 	}
 
 	// Deserialize a vector

@@ -52,6 +52,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/binary_common.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
@@ -518,6 +519,44 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 	}
 	if (StringUtil::Equals(value, "SUPER_SIZE")) {
 		return ArrowVariableSizeType::SUPER_SIZE;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<BinaryMessageKind>(BinaryMessageKind value) {
+	switch(value) {
+	case BinaryMessageKind::FIXED_8:
+		return "FIXED_8";
+	case BinaryMessageKind::FIXED_16:
+		return "FIXED_16";
+	case BinaryMessageKind::FIXED_32:
+		return "FIXED_32";
+	case BinaryMessageKind::FIXED_64:
+		return "FIXED_64";
+	case BinaryMessageKind::VARIABLE_LEN:
+		return "VARIABLE_LEN";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+BinaryMessageKind EnumUtil::FromString<BinaryMessageKind>(const char *value) {
+	if (StringUtil::Equals(value, "FIXED_8")) {
+		return BinaryMessageKind::FIXED_8;
+	}
+	if (StringUtil::Equals(value, "FIXED_16")) {
+		return BinaryMessageKind::FIXED_16;
+	}
+	if (StringUtil::Equals(value, "FIXED_32")) {
+		return BinaryMessageKind::FIXED_32;
+	}
+	if (StringUtil::Equals(value, "FIXED_64")) {
+		return BinaryMessageKind::FIXED_64;
+	}
+	if (StringUtil::Equals(value, "VARIABLE_LEN")) {
+		return BinaryMessageKind::VARIABLE_LEN;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
