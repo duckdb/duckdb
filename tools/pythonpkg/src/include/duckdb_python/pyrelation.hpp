@@ -264,6 +264,11 @@ private:
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const bool &ignore_nulls = "", const string &projected_columns = "",
 	                              const string &window_spec = "");
+	unique_ptr<DuckDBPyRelation> ApplyAggOrWin(const string &function_name, const string &agg_columns,
+	                                           const string &function_parameters = "", const string &groups = "",
+	                                           const string &window_spec = "", const string &projected_columns = "",
+	                                           const bool &ignore_nulls = false);
+
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
