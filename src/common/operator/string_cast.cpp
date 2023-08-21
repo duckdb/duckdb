@@ -161,6 +161,56 @@ duckdb::string_t StringCast::Operation(duckdb::string_t input, Vector &result) {
 }
 
 template <>
+string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
+	int32_t time[4];
+	Time::Convert(input.time(), time[0], time[1], time[2], time[3]);
+
+	char micro_buffer[10];
+	const auto time_length = TimeToStringCast::Length(time, micro_buffer);
+	idx_t length = time_length + 3;
+
+	const auto offset = input.offset();
+	const bool negative = (offset < 0);
+
+	auto ss = std::abs(offset);
+	const auto hh = ss / Interval::SECS_PER_HOUR;
+
+	ss %= Interval::SECS_PER_HOUR;
+	const auto mm = ss / Interval::SECS_PER_MINUTE;
+	if (mm) {
+		length += 3;
+	}
+
+	ss %= Interval::SECS_PER_MINUTE;
+	if (ss) {
+		length += 3;
+	}
+
+	string_t result = StringVector::EmptyString(vector, length);
+	auto data = result.GetDataWriteable();
+
+	idx_t pos = 0;
+	TimeToStringCast::Format(data + pos, length, time, micro_buffer);
+	pos += time_length;
+
+	data[pos++] = negative ? '-' : '+';
+	TimeToStringCast::FormatTwoDigits(data + pos, hh);
+
+	if (mm) {
+		data[pos++] = ':';
+		TimeToStringCast::FormatTwoDigits(data + pos, mm);
+	}
+
+	if (ss) {
+		data[pos++] = ':';
+		TimeToStringCast::FormatTwoDigits(data + pos, ss);
+	}
+
+	result.Finalize();
+	return result;
+}
+
+template <>
 string_t StringCastTZ::Operation(dtime_t input, Vector &vector) {
 	int32_t time[4];
 	Time::Convert(input, time[0], time[1], time[2], time[3]);

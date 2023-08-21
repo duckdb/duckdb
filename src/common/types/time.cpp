@@ -129,6 +129,46 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return true;
 }
 
+bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool strict) {
+	dtime_t time_part;
+	if (!Time::TryConvertInternal(buf, len, pos, time_part, false)) {
+		if (!strict) {
+			// last chance, check if we can parse as timestamp
+			timestamp_t timestamp;
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp) == TimestampCastResult::SUCCESS) {
+				if (!Timestamp::IsFinite(timestamp)) {
+					return false;
+				}
+				result = dtime_tz_t(Timestamp::GetTime(timestamp), 0);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	int32_t offset = 0;
+	int hour_offset, minute_offset;
+	if (Timestamp::TryParseUTCOffset(buf, pos, len, hour_offset, minute_offset)) {
+		offset = hour_offset * Interval::SECS_PER_HOUR + minute_offset * Interval::SECS_PER_MINUTE;
+	}
+
+	// in strict mode, check remaining string for non-space characters
+	if (strict) {
+		// skip trailing spaces
+		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
+			pos++;
+		}
+		// check position. if end was not reached, non-space chars remaining
+		if (pos < len) {
+			return false;
+		}
+	}
+
+	result = dtime_tz_t(time_part, offset);
+
+	return true;
+}
+
 string Time::ConversionError(const string &str) {
 	return StringUtil::Format("time field value out of range: \"%s\", "
 	                          "expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])",
