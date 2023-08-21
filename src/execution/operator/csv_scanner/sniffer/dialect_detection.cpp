@@ -183,10 +183,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 
 	// some logic
 	consistent_rows += padding_count;
-	bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
+	bool more_values = (consistent_rows > best_consistent_rows && num_cols >= max_columns_found);
 	bool require_more_padding = padding_count > prev_padding_count;
 	bool require_less_padding = padding_count < prev_padding_count;
-	bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
+	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found;
 	bool rows_consistent = start_row + consistent_rows - options.dialect_options.skip_rows == sniffed_column_counts.size();
 	bool more_than_one_row = (consistent_rows > 1);
 	bool more_than_one_column = (num_cols > 1);
@@ -200,7 +200,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	            (more_than_one_column && require_less_padding)) &&
 	           !invalid_padding) {
 		best_consistent_rows = consistent_rows;
-		best_num_cols = num_cols;
+		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
 		state_machine->start_row = start_row;
 		candidates.clear();
@@ -228,7 +228,7 @@ bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 	bool allow_padding = options.null_padding;
 
 	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-		if (best_num_cols != sniffed_column_counts[row] && !allow_padding) {
+		if (max_columns_found != sniffed_column_counts[row] && !allow_padding) {
 			return false;
 		}
 	}

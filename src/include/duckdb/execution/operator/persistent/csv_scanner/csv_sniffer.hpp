@@ -14,7 +14,10 @@
 namespace duckdb {
 
 //! Different Quote Rules
-enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
+enum class QuoteRule : uint8_t { QUOTES_RFC = 0, //! quote = " escape = (\0 || " || ')
+	                             QUOTES_OTHER = 1, //! quote = ( " || ' ) escape = '\\'
+	                             NO_QUOTES = 2 //! quote = \0 escape = \0
+};
 
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
@@ -44,12 +47,12 @@ public:
 
 private:
 	//! Highest number of columns found
-	idx_t best_num_cols = 0;
+	idx_t max_columns_found = 0;
 	//! The types requested via the CSV Options (If any)
 	const vector<LogicalType> requested_types;
 	//! Current Candidates being considered
 	vector<unique_ptr<CSVStateMachine>> candidates;
-	//! Original Options set
+	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;

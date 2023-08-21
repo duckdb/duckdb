@@ -16,6 +16,9 @@ static constexpr uint32_t NUM_STATES = 7;
 static constexpr uint32_t NUM_TRANSITIONS = 256;
 typedef uint8_t state_machine_t[NUM_STATES][NUM_TRANSITIONS];
 
+//! The CSVStateMachineCache caches state machines, although small ~2kb, the actual creation of multiple State Machines
+//! can become a bottleneck on sniffing, when reading very small csv files.
+//! Hence the cache stores State Machines based on their different delimiter|quote|escape options.
 class CSVStateMachineCache {
 public:
 	CSVStateMachineCache();

@@ -231,7 +231,7 @@ struct SniffValue {
 };
 
 void CSVSniffer::DetectTypes() {
-	idx_t min_varchar_cols = best_num_cols + 1;
+	idx_t min_varchar_cols = max_columns_found + 1;
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
@@ -279,7 +279,7 @@ void CSVSniffer::DetectTypes() {
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < values.size()) {
-			if (values[true_start].second.size() < best_num_cols) {
+			if (values[true_start].second.size() < max_columns_found) {
 				true_start = values[true_start].first;
 				values_start++;
 			} else {
@@ -384,7 +384,7 @@ void CSVSniffer::DetectTypes() {
 		}
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
-		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (best_num_cols * 0.7)) {
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (max_columns_found * 0.7)) {
 			// we have a new best_options candidate
 			if (true_start > 0) {
 				// Add empty rows to skip_rows
