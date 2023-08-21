@@ -3,8 +3,7 @@
 # group: [storage]
 
 statement ok
-CREATE TABLE table1 (column1 integer, column2 integer,
-        )
+CREATE TABLE table1 (column1 integer, column2 integer)
 
 statement ok
 INSERT INTO table1(column1, column2) values(1, 1)
