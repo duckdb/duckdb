@@ -174,7 +174,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const py::args &expr, const PandasDataFrame &df,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const py::object &expr,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> AliasDF(const PandasDataFrame &df, const string &expr,
