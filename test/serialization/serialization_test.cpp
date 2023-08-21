@@ -9,13 +9,13 @@ struct Bar {
 	uint32_t b;
 	void FormatSerialize(FormatSerializer &serializer) const {
 		serializer.WriteProperty<uint32_t>(1, "b", b);
-	};
+	}
 
 	static unique_ptr<Bar> FormatDeserialize(FormatDeserializer &deserializer) {
 		auto result = make_uniq<Bar>();
 		deserializer.ReadProperty<uint32_t>(1, "b", result->b);
 		return result;
-	};
+	}
 };
 
 struct Foo {
@@ -27,7 +27,7 @@ struct Foo {
 		serializer.WriteProperty<int32_t>(1, "a", a);
 		serializer.WritePropertyWithDefault<unique_ptr<Bar>>(2, "bar", bar, unique_ptr<Bar>());
 		serializer.WriteProperty<int32_t>(3, "c", c);
-	};
+	}
 
 	static unique_ptr<Foo> FormatDeserialize(FormatDeserializer &deserializer) {
 		auto result = make_uniq<Foo>();
@@ -35,7 +35,7 @@ struct Foo {
 		deserializer.ReadPropertyWithDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());
 		deserializer.ReadProperty<int32_t>(3, "c", result->c);
 		return result;
-	};
+	}
 };
 
 TEST_CASE("Test default", "[serialization]") {
@@ -68,6 +68,6 @@ TEST_CASE("Test default", "[serialization]") {
 
 	// We should not have written the default value
 	REQUIRE(data_size > data.size());
-};
+}
 
 } // namespace duckdb
