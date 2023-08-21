@@ -1,9 +1,0 @@
-# name: benchmark/micro/csv/cranlogs.benchmark
-# description: Run CSV auto-detection on the lineitem CSV
-# group: [csv]
-
-name CSV cranlogs sniffing Benchmark
-group csv
-
-run
-DESCRIBE SELECT * FROM '/Users/holanda/Documents/Projects/duckdb/test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz'
