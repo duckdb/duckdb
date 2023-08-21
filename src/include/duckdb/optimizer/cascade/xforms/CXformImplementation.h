@@ -28,6 +28,7 @@ private:
 
 public:
 	// ctor
+	CXformImplementation() = default;
 	explicit CXformImplementation(duckdb::unique_ptr<Operator> op) : CXform(std::move(op)) {};
 	// dtor
 	~CXformImplementation() override = default;

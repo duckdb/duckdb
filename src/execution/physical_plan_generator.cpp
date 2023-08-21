@@ -60,6 +60,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.EndPhase();
 
 	plan->Verify();
+
+	// print physical plan in duckdb
+	Printer::Print("Physical Plan in Duckdb: \n");
+	plan->Print();
+
 	return plan;
 }
 

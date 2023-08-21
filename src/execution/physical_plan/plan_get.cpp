@@ -7,26 +7,20 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 
-namespace duckdb
-{
-unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids)
-{
+namespace duckdb {
+unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
 	auto table_filter_set = make_uniq<TableFilterSet>();
-	for (auto &table_filter : table_filters.filters)
-	{
+	for (auto &table_filter : table_filters.filters) {
 		// find the relative column index from the absolute column index into the table
 		idx_t column_index = DConstants::INVALID_INDEX;
-		for (idx_t i = 0; i < column_ids.size(); i++)
-		{
-			if (table_filter.first == column_ids[i])
-			{
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			if (table_filter.first == column_ids[i]) {
 				column_index = i;
 				break;
 			}
 		}
-		if (column_index == DConstants::INVALID_INDEX)
-		{
+		if (column_index == DConstants::INVALID_INDEX) {
 			throw InternalException("Could not find column index for table filter");
 		}
 		table_filter_set->filters[column_index] = std::move(table_filter.second);
@@ -34,49 +28,42 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, v
 	return table_filter_set;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op)
-{
-	if (!op.children.empty())
-	{
+unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
+	if (!op.children.empty()) {
 		// this is for table producing functions that consume subquery results
 		D_ASSERT(op.children.size() == 1);
-		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids, op.estimated_cardinality, std::move(op.projected_input));
-		LogicalOperator* pop = (LogicalOperator*)op.children[0].get();												  
+		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
+		                                                  op.estimated_cardinality, std::move(op.projected_input));
+		LogicalOperator *pop = (LogicalOperator *)op.children[0].get();
 		node->children.push_back(CreatePlan(*pop));
 		return std::move(node);
 	}
-	if (!op.projected_input.empty())
-	{
+	if (!op.projected_input.empty()) {
 		throw InternalException("LogicalGet::project_input can only be set for table-in-out functions");
 	}
 	unique_ptr<TableFilterSet> table_filters;
-	if (!op.table_filters.filters.empty())
-	{
+	if (!op.table_filters.filters.empty()) {
 		table_filters = CreateTableFilterSet(op.table_filters, op.column_ids);
 	}
-	if (op.function.dependency)
-	{
+	if (op.function.dependency) {
 		op.function.dependency(dependencies, op.bind_data.get());
 	}
 	// create the table scan node
-	if (!op.function.projection_pushdown)
-	{
+	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data), op.returned_types, op.column_ids, vector<column_t>(), op.names, std::move(table_filters), op.estimated_cardinality);
+		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
+		                                         op.returned_types, op.column_ids, vector<column_t>(), op.names,
+		                                         std::move(table_filters), op.estimated_cardinality);
 		// first check if an additional projection is necessary
-		if (op.column_ids.size() == op.returned_types.size())
-		{
+		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
-			for (idx_t i = 0; i < op.column_ids.size(); i++)
-			{
-				if (op.column_ids[i] != i)
-				{
+			for (idx_t i = 0; i < op.column_ids.size(); i++) {
+				if (op.column_ids[i] != i) {
 					projection_necessary = true;
 					break;
 				}
 			}
-			if (!projection_necessary)
-			{
+			if (!projection_necessary) {
 				// a projection is not necessary if all columns have been requested in-order
 				// in that case we just return the node
 				return std::move(node);
@@ -85,27 +72,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op)
 		// push a projection on top that does the projection
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
-		for (auto &column_id : op.column_ids)
-		{
-			if (column_id == COLUMN_IDENTIFIER_ROW_ID)
-			{
+		for (auto &column_id : op.column_ids) {
+			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.emplace_back(LogicalType::BIGINT);
 				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
-			}
-			else
-			{
+			} else {
 				auto type = op.returned_types[column_id];
 				types.push_back(type);
 				expressions.push_back(make_uniq<BoundReferenceExpression>(type, column_id));
 			}
 		}
-		auto projection = make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+		auto projection =
+		    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		projection->children.push_back(std::move(node));
 		return std::move(projection);
-	}
-	else
-	{
-		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, op.column_ids, op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality);
+	} else {
+		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
+		                                    op.column_ids, op.projection_ids, op.names, std::move(table_filters),
+		                                    op.estimated_cardinality);
 	}
 }
 } // namespace duckdb
