@@ -71,7 +71,7 @@ protected:
 public:
 	// ----------------- ORCA -------------------------
 	ULONG HashValue() const override;
-	
+
 	// derive join depth
 	ULONG DeriveJoinDepth(CExpressionHandle &exprhdl) override {
 		return 1;

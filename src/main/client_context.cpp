@@ -26,6 +26,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
 #include "duckdb/main/stream_query_result.hpp"
+#include "duckdb/optimizer/cascade/Cascade.h"
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -47,7 +48,6 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/optimizer/cascade/Cascade.h"
 
 namespace duckdb {
 
@@ -336,24 +336,20 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->value_map = std::move(planner.value_map);
 	result->catalog_version = MetaTransaction::Get(*this).catalog_version;
 
-	if (!planner.properties.bound_all_parameters)
-	{
+	if (!planner.properties.bound_all_parameters) {
 		return result;
 	}
 	unique_ptr<PhysicalOperator> physical_plan;
-	if (config.enable_optimizer && plan->RequireOptimizer())
-	{
+	if (config.enable_optimizer && plan->RequireOptimizer()) {
 		profiler.StartPhase("optimizer");
-		if(statement_type == StatementType::SELECT_STATEMENT)
-		{
+		if (statement_type == StatementType::SELECT_STATEMENT) {
 			Optimizer optimizer(*planner.binder, *this, true);
 			plan = optimizer.Optimize(std::move(plan));
 			D_ASSERT(plan);
 			Cascade cascade = Cascade(*this);
 			unique_ptr<LogicalOperator> logical_plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(plan));
 			physical_plan = cascade.Optimize(std::move(logical_plan));
-		}
-		else
+		} else
 		{
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));
@@ -364,11 +360,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		}
 		profiler.EndPhase();
 	}
-	//profiler.StartPhase("physical_planner");
-	// now convert logical query plan into a physical query plan
-	//PhysicalPlanGenerator physical_planner(*this);
-	//physical_plan = physical_planner.CreatePlan(std::move(plan));
-	//profiler.EndPhase();
+	// profiler.StartPhase("physical_planner");
+	//  now convert logical query plan into a physical query plan
+	// PhysicalPlanGenerator physical_planner(*this);
+	// physical_plan = physical_planner.CreatePlan(std::move(plan));
+	// profiler.EndPhase();
 	result->plan = std::move(physical_plan);
 	return result;
 }
@@ -486,32 +482,27 @@ vector<unique_ptr<SQLStatement>> ClientContext::ParseStatementsInternal(ClientCo
 	return std::move(parser.statements);
 }
 
-void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements)
-{
+void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements) {
 	auto lock = LockContext();
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(*lock, statements);
 }
 
-unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query)
-{
+unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	auto lock = LockContext();
 
 	auto statements = ParseStatementsInternal(*lock, query);
-	if (statements.size() != 1)
-	{
+	if (statements.size() != 1) {
 		throw Exception("ExtractPlan can only prepare a single statement");
 	}
 
 	unique_ptr<LogicalOperator> plan;
-	RunFunctionInTransactionInternal(*lock, [&]()
-	{
+	RunFunctionInTransactionInternal(*lock, [&]() {
 		Planner planner(*this);
 		planner.CreatePlan(std::move(statements[0]));
 		D_ASSERT(planner.plan);
 		plan = unique_ptr_cast<Operator, LogicalOperator>(std::move(planner.plan));
-		if (config.enable_optimizer)
-		{
+		if (config.enable_optimizer) {
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(std::move(plan));
 		}
