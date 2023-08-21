@@ -212,7 +212,7 @@ if(${EXPLICIT_EXCEPTIONS})
 endif()
 
 if (ENABLE_EXTENSION_AUTOLOADING)
-  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=${ENABLE_EXTENSION_AUTOLOADING})
+  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
