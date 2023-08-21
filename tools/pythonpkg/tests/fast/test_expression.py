@@ -64,6 +64,69 @@ class TestExpression(object):
         with pytest.raises(duckdb.BinderException, match='Referenced column "d" not found'):
             rel2 = rel.select(column)
 
+    def test_column_expression_explain(self):
+        con = duckdb.connect()
+
+        rel = con.sql("""
+            select 'unused'
+        """)
+        rel = rel.select(
+            ConstantExpression("a").alias('c0'),
+            ConstantExpression(42).alias('c1'),
+            ConstantExpression(None).alias('c2')
+        )
+        res = rel.explain()
+        assert 'c0' in res
+        assert 'c1' in res
+        # 'c2' is not in the explain result because it shows NULL instead
+        assert 'NULL' in res
+        res = rel.fetchall()
+        assert res == [('a', 42, None)]
+
+    def test_column_expression_table(self):
+        con = duckdb.connect()
+
+        con.execute("""
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """)
+        rel = con.table('tbl')
+        rel2 = rel.select('c0', 'c1', 'c2')
+        res = rel2.fetchall()
+        assert res == [('a', 'b', 'c'), ('d', 'e', 'f'), ('g', 'h', 'i')]
+
+    def test_column_expression_view(self):
+        con = duckdb.connect()
+        con.execute("""
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """)
+        con.execute("""
+            CREATE VIEW v1 as select c0 as c3, c2 as c4 from tbl;
+        """)
+        rel = con.view('v1')
+        rel2 = rel.select('c3', 'c4')
+        res = rel2.fetchall()
+        assert res == [('a', 'c'), ('d', 'f'), ('g', 'i')]
+
+    def test_column_expression_replacement_scan(self):
+        con = duckdb.connect()
+
+        pd = pytest.importorskip("pandas")
+        df = pd.DataFrame({'a' : [42, 43, 0], 'b': [True, False, True], 'c': [23.123, 623.213, 0.30234]})
+        rel = con.sql("select * from df")
+        rel2 = rel.select('a', 'b')
+        res = rel2.fetchall()
+        assert res == [(42, True), (43, False), (0, True)]
+
     def test_add_operator(self):
         con = duckdb.connect()
 
