@@ -222,7 +222,8 @@ duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, i
 }
 
 duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_uhugeint val) {
-	return duckdb_bind_value(prepared_statement, param_idx, Value::UHUGEINT(duckdb_internal_uhugeint(val)));
+	auto value = Value::UHUGEINT(duckdb_internal_uhugeint(val));
+	return duckdb_bind_value(prepared_statement, param_idx, (duckdb_value)&value);
 }
 
 duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val) {
