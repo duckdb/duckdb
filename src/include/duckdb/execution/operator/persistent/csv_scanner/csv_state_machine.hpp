@@ -18,14 +18,20 @@ namespace duckdb {
 enum class CSVState : uint8_t {
 	STANDARD = 0,         //! Regular unquoted field state
 	DELIMITER = 1,  //! State after encountering a field separator (e.g., ;)
-	RECORD_SEPARATOR = 2, //! State after encountering a record separator (e.g., \n)
-	CARRIAGE_RETURN = 3,  //! State after encountering a record separator (e.g., \n)
+	RECORD_SEPARATOR = 2, //! State after encountering a record separator (i.e., \n)
+	CARRIAGE_RETURN = 3,  //! State after encountering a carriage return(i.e., \r)
 	QUOTED = 4,           //! State when inside a quoted field
 	UNQUOTED = 5,         //! State when leaving a quoted field
 	ESCAPE = 6,           //! State when encountering an escape character (e.g., \)
 	INVALID = 7           //! Got to an Invalid State, this should error.
 };
 
+//! The CSV State Machine comprises a state transition array (STA).
+//! The STA indicates the current state of parsing based on both the current and preceding characters.
+//! This reveals whether we are dealing with a Field, a New Line, a Delimiter, and so forth.
+//! The STA's creation depends on the provided quote, character, and delimiter options for that state machine.
+//! The motivation behind implementing an STA is to remove branching in regular CSV Parsing by predicting and detecting the states.
+//! Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
 	explicit CSVStateMachine(CSVReaderOptions &options_p, char quote, char escape, char delim,
