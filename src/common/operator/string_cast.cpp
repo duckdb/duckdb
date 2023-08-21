@@ -167,13 +167,17 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 
 	char micro_buffer[10];
 	const auto time_length = TimeToStringCast::Length(time, micro_buffer);
-	idx_t length = time_length + 3;
+	idx_t length = time_length;
 
 	const auto offset = input.offset();
 	const bool negative = (offset < 0);
+	++length;
 
 	auto ss = std::abs(offset);
 	const auto hh = ss / Interval::SECS_PER_HOUR;
+
+	const auto hh_length = (hh < 100) ? 2 : NumericHelper::UnsignedLength(uint32_t(hh));
+	length += hh_length;
 
 	ss %= Interval::SECS_PER_HOUR;
 	const auto mm = ss / Interval::SECS_PER_MINUTE;
@@ -190,20 +194,27 @@ string_t StringCastTZ::Operation(dtime_tz_t input, Vector &vector) {
 	auto data = result.GetDataWriteable();
 
 	idx_t pos = 0;
-	TimeToStringCast::Format(data + pos, length, time, micro_buffer);
+	TimeToStringCast::Format(data + pos, time_length, time, micro_buffer);
 	pos += time_length;
 
 	data[pos++] = negative ? '-' : '+';
-	TimeToStringCast::FormatTwoDigits(data + pos, hh);
+	if (hh < 100) {
+		TimeToStringCast::FormatTwoDigits(data + pos, hh);
+	} else {
+		NumericHelper::FormatUnsigned(hh, data + pos + hh_length);
+	}
+	pos += hh_length;
 
 	if (mm) {
 		data[pos++] = ':';
 		TimeToStringCast::FormatTwoDigits(data + pos, mm);
+		pos += 2;
 	}
 
 	if (ss) {
 		data[pos++] = ':';
 		TimeToStringCast::FormatTwoDigits(data + pos, ss);
+		pos += 2;
 	}
 
 	result.Finalize();

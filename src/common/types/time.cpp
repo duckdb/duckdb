@@ -129,6 +129,71 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return true;
 }
 
+bool Time::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int32_t &offset) {
+	offset = 0;
+	if (pos == len || StringUtil::CharacterIsSpace(str[pos])) {
+		return true;
+	}
+
+	idx_t curpos = pos;
+	// Minimum of 3 characters
+	if (curpos + 3 > len) {
+		// no characters left to parse
+		return false;
+	}
+
+	const auto sign_char = str[curpos];
+	if (sign_char != '+' && sign_char != '-') {
+		// expected either + or -
+		return false;
+	}
+	curpos++;
+
+	int32_t hh = 0;
+	idx_t start = curpos;
+	for (; curpos < len; ++curpos) {
+		const auto c = str[curpos];
+		if (!StringUtil::CharacterIsDigit(c)) {
+			break;
+		}
+		hh = hh * 10 + (c - '0');
+	}
+	//	HH is in [-1559,+1559] and must be at least two digits
+	if (curpos - start < 2 || hh > 1559) {
+		return false;
+	}
+
+	// optional minute specifier: expected ":MM"
+	int32_t mm = 0;
+	if (curpos + 3 <= len && str[curpos] == ':') {
+		++curpos;
+		if (!Date::ParseDoubleDigit(str, len, curpos, mm) || mm >= Interval::MINS_PER_HOUR) {
+			return false;
+		}
+	}
+
+	// optional seconds specifier: expected ":SS"
+	int32_t ss = 0;
+	if (curpos + 3 <= len && str[curpos] == ':') {
+		++curpos;
+		if (!Date::ParseDoubleDigit(str, len, curpos, ss) || ss >= Interval::SECS_PER_MINUTE) {
+			return false;
+		}
+	}
+
+	//	Assemble the offset now that we know nothing went wrong
+	offset += hh * Interval::SECS_PER_HOUR;
+	offset += mm * Interval::SECS_PER_MINUTE;
+	offset += ss;
+	if (sign_char == '-') {
+		offset = -offset;
+	}
+
+	pos = curpos;
+
+	return true;
+}
+
 bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &result, bool strict) {
 	dtime_t time_part;
 	if (!Time::TryConvertInternal(buf, len, pos, time_part, false)) {
@@ -146,10 +211,10 @@ bool Time::TryConvertTimeTZ(const char *buf, idx_t len, idx_t &pos, dtime_tz_t &
 		return false;
 	}
 
+	//	We can't use Timestamp::TryParseUTCOffset because the colon is optional there but required here.
 	int32_t offset = 0;
-	int hour_offset, minute_offset;
-	if (Timestamp::TryParseUTCOffset(buf, pos, len, hour_offset, minute_offset)) {
-		offset = hour_offset * Interval::SECS_PER_HOUR + minute_offset * Interval::SECS_PER_MINUTE;
+	if (!TryParseUTCOffset(buf, pos, len, offset)) {
+		return false;
 	}
 
 	// in strict mode, check remaining string for non-space characters
