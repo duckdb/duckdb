@@ -67,13 +67,15 @@ class TestExpression(object):
     def test_column_expression_explain(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select 'unused'
-        """)
+        """
+        )
         rel = rel.select(
             ConstantExpression("a").alias('c0'),
             ConstantExpression(42).alias('c1'),
-            ConstantExpression(None).alias('c2')
+            ConstantExpression(None).alias('c2'),
         )
         res = rel.explain()
         assert 'c0' in res
@@ -86,14 +88,17 @@ class TestExpression(object):
     def test_column_expression_table(self):
         con = duckdb.connect()
 
-        con.execute("""
+        con.execute(
+            """
             CREATE TABLE tbl as FROM (
                 VALUES
                     ('a', 'b', 'c'),
                     ('d', 'e', 'f'),
                     ('g', 'h', 'i')
             ) t(c0, c1, c2)
-        """)
+        """
+        )
+
         rel = con.table('tbl')
         rel2 = rel.select('c0', 'c1', 'c2')
         res = rel2.fetchall()
@@ -101,17 +106,21 @@ class TestExpression(object):
 
     def test_column_expression_view(self):
         con = duckdb.connect()
-        con.execute("""
+        con.execute(
+            """
             CREATE TABLE tbl as FROM (
                 VALUES
                     ('a', 'b', 'c'),
                     ('d', 'e', 'f'),
                     ('g', 'h', 'i')
             ) t(c0, c1, c2)
-        """)
-        con.execute("""
+        """
+        )
+        con.execute(
+            """
             CREATE VIEW v1 as select c0 as c3, c2 as c4 from tbl;
-        """)
+        """
+        )
         rel = con.view('v1')
         rel2 = rel.select('c3', 'c4')
         res = rel2.fetchall()
@@ -121,7 +130,7 @@ class TestExpression(object):
         con = duckdb.connect()
 
         pd = pytest.importorskip("pandas")
-        df = pd.DataFrame({'a' : [42, 43, 0], 'b': [True, False, True], 'c': [23.123, 623.213, 0.30234]})
+        df = pd.DataFrame({'a': [42, 43, 0], 'b': [True, False, True], 'c': [23.123, 623.213, 0.30234]})
         rel = con.sql("select * from df")
         rel2 = rel.select('a', 'b')
         res = rel2.fetchall()
@@ -451,6 +460,26 @@ class TestExpression(object):
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [('tes',), ('his is',), ('di',)]
+
+    def test_column_expression_function_coverage(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """
+        )
+
+        rel = con.table('tbl')
+        expr = FunctionExpression('||', FunctionExpression('||', 'c0', 'c1'), 'c2')
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [('abc',), ('def',), ('ghi',)]
 
     def test_function_expression_aggregate(self):
         con = duckdb.connect()
