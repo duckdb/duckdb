@@ -11,8 +11,8 @@ namespace duckdb {
 void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[delimiter][quote][escape];
-	for (int i = 0; i < 4; i++) {
-		for (int j = 0; j < 256; j++) {
+	for (uint32_t i = 0; i < 4; i++) {
+		for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 			transition_array[i][j] = static_cast<uint8_t>(CSVState::STANDARD);
 		}
 	}
@@ -46,7 +46,7 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = carriage_return_state;
 	transition_array[carriage_return_state][static_cast<uint8_t>(escape)] = escape_state;
 	// 5) Quoted State
-	for (int j = 0; j < 256; j++) {
+	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 		transition_array[quoted_state][j] = quoted_state;
 	}
 	transition_array[quoted_state][static_cast<uint8_t>(quote)] = unquoted_state;
@@ -55,7 +55,7 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 		transition_array[quoted_state][static_cast<uint8_t>(escape)] = escape_state;
 	}
 	// 6) Unquoted State
-	for (int j = 0; j < 256; j++) {
+	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 		transition_array[unquoted_state][j] = invalid_state;
 	}
 	transition_array[unquoted_state][static_cast<uint8_t>('\n')] = record_separator_state;
@@ -66,7 +66,7 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	}
 
 	// 7) Escaped State
-	for (int j = 0; j < 256; j++) {
+	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 		// Escape is always invalid if not proceeded by another escape or quoted char
 		transition_array[escape_state][j] = invalid_state;
 	}
@@ -125,11 +125,11 @@ void CSVStateMachine::Reset() {
 
 void CSVStateMachine::Print() {
 	std::cout << "{" << std::endl;
-	for (int i = 0; i < 7; ++i) {
+	for (uint32_t i = 0; i < NUM_STATES; ++i) {
 		std::cout << "    {";
-		for (int j = 0; j < 256; ++j) {
+		for (uint32_t j = 0; j < NUM_TRANSITIONS; ++j) {
 			std::cout << std::setw(3) << static_cast<int>(transition_array[i][j]);
-			if (j != 255) {
+			if (j != NUM_TRANSITIONS - 1) {
 				std::cout << ",";
 			}
 			if ((j + 1) % 16 == 0) {
@@ -137,7 +137,7 @@ void CSVStateMachine::Print() {
 			}
 		}
 		std::cout << "}";
-		if (i != 6) {
+		if (i != NUM_STATES -1) {
 			std::cout << ",";
 		}
 		std::cout << std::endl;
