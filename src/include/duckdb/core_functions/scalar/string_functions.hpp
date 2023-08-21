@@ -273,7 +273,7 @@ struct MD5NumberUpperFun {
 struct SHA512Fun {
 	static constexpr const char *Name = "sha512";
 	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns the sha512 hash of the value as a string";
+	static constexpr const char *Description = "Returns the SHA512 hash of the value as a string";
 	static constexpr const char *Example = "sha512('123')";
 
 	static ScalarFunction GetFunction();
