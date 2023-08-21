@@ -108,24 +108,6 @@ private:
 		return val;
 	}
 
-	// Structural Types
-	// Deserialize a unique_ptr
-	/*
-	template <class T = void>
-	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
-	    using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
-	    unique_ptr<ELEMENT_TYPE> ptr = nullptr;
-	    OnObjectBegin();
-	    auto is_present = OnOptionalBegin();
-	    if(is_present) {
-	        ptr = ELEMENT_TYPE::FormatDeserialize(*this);
-	    }
-	    OnOptionalEnd();
-	    OnObjectEnd();
-	    return std::move(ptr);
-	}
-	*/
-
 	template <class T = void>
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;

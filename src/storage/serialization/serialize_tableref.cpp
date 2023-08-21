@@ -93,8 +93,8 @@ unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &de
 
 void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "left", *left);
-	serializer.WriteProperty(201, "right", *right);
+	serializer.WriteProperty(200, "left", left);
+	serializer.WriteProperty(201, "right", right);
 	serializer.WritePropertyWithDefault(202, "condition", condition, unique_ptr<ParsedExpression>());
 	serializer.WriteProperty(203, "join_type", type);
 	serializer.WriteProperty(204, "ref_type", ref_type);
@@ -114,7 +114,7 @@ unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer
 
 void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "source", *source);
+	serializer.WriteProperty(200, "source", source);
 	serializer.WriteProperty(201, "aggregates", aggregates);
 	serializer.WriteProperty(202, "unpivot_names", unpivot_names);
 	serializer.WriteProperty(203, "pivots", pivots);
@@ -137,7 +137,7 @@ unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &deserialize
 
 void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "subquery", *subquery);
+	serializer.WriteProperty(200, "subquery", subquery);
 	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 
@@ -150,7 +150,7 @@ unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserial
 
 void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "function", *function);
+	serializer.WriteProperty(200, "function", function);
 	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 

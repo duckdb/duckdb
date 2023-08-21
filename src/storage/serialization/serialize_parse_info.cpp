@@ -209,7 +209,7 @@ void ChangeColumnTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	AlterTableInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(400, "column_name", column_name);
 	serializer.WriteProperty(401, "target_type", target_type);
-	serializer.WriteProperty(402, "expression", *expression);
+	serializer.WriteProperty(402, "expression", expression);
 }
 
 unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {

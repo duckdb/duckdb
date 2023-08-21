@@ -103,7 +103,7 @@ void BinaryDeserializer::OnOptionalEnd() {
 //===--------------------------------------------------------------------===//
 bool BinaryDeserializer::ReadBool() {
 	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
-	return ReadPrimitive<bool>();
+	return ReadPrimitive<uint8_t>();
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {

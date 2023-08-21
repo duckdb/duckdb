@@ -218,7 +218,7 @@ void LogicalAnyJoin::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(201, "mark_index", mark_index);
 	serializer.WriteProperty(202, "left_projection_map", left_projection_map);
 	serializer.WriteProperty(203, "right_projection_map", right_projection_map);
-	serializer.WriteProperty(204, "condition", *condition);
+	serializer.WriteProperty(204, "condition", condition);
 }
 
 unique_ptr<LogicalOperator> LogicalAnyJoin::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -254,7 +254,7 @@ void LogicalColumnDataGet::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "chunk_types", chunk_types);
-	serializer.WriteProperty(202, "collection", *collection);
+	serializer.WriteProperty(202, "collection", collection);
 }
 
 unique_ptr<LogicalOperator> LogicalColumnDataGet::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -290,7 +290,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeser
 
 void LogicalCreate::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "info", *info);
+	serializer.WriteProperty(200, "info", info);
 }
 
 unique_ptr<LogicalOperator> LogicalCreate::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -301,7 +301,7 @@ unique_ptr<LogicalOperator> LogicalCreate::FormatDeserialize(FormatDeserializer 
 
 void LogicalCreateIndex::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "info", *info);
+	serializer.WriteProperty(200, "info", info);
 	serializer.WriteProperty(201, "unbound_expressions", unbound_expressions);
 }
 
@@ -316,7 +316,7 @@ void LogicalCreateTable::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "catalog", schema.ParentCatalog().GetName());
 	serializer.WriteProperty(201, "schema", schema.name);
-	serializer.WriteProperty(202, "info", *info->base);
+	serializer.WriteProperty(202, "info", info->base);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -682,7 +682,7 @@ unique_ptr<LogicalOperator> LogicalShow::FormatDeserialize(FormatDeserializer &d
 
 void LogicalSimple::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "info", *info);
+	serializer.WriteProperty(200, "info", info);
 }
 
 unique_ptr<LogicalOperator> LogicalSimple::FormatDeserialize(FormatDeserializer &deserializer) {

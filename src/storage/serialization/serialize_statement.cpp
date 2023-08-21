@@ -10,7 +10,7 @@
 namespace duckdb {
 
 void SelectStatement::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "node", *node);
+	serializer.WriteProperty(100, "node", node);
 }
 
 unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {

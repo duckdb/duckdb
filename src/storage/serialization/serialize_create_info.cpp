@@ -98,7 +98,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 void CreateMacroInfo::FormatSerialize(FormatSerializer &serializer) const {
 	CreateInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "name", name);
-	serializer.WriteProperty(201, "function", *function);
+	serializer.WriteProperty(201, "function", function);
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::FormatDeserialize(FormatDeserializer &deserializer) {

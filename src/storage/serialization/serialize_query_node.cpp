@@ -44,8 +44,8 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 void CTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "cte_name", ctename);
-	serializer.WriteProperty(201, "query", *query);
-	serializer.WriteProperty(202, "child", *child);
+	serializer.WriteProperty(201, "query", query);
+	serializer.WriteProperty(202, "child", child);
 	serializer.WriteProperty(203, "aliases", aliases);
 }
 
@@ -62,8 +62,8 @@ void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "cte_name", ctename);
 	serializer.WriteProperty(201, "union_all", union_all);
-	serializer.WriteProperty(202, "left", *left);
-	serializer.WriteProperty(203, "right", *right);
+	serializer.WriteProperty(202, "left", left);
+	serializer.WriteProperty(203, "right", right);
 	serializer.WriteProperty(204, "aliases", aliases);
 }
 
@@ -107,8 +107,8 @@ unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserial
 void SetOperationNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "setop_type", setop_type);
-	serializer.WriteProperty(201, "left", *left);
-	serializer.WriteProperty(202, "right", *right);
+	serializer.WriteProperty(201, "left", left);
+	serializer.WriteProperty(202, "right", right);
 }
 
 unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(FormatDeserializer &deserializer) {

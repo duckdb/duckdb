@@ -32,8 +32,8 @@
 namespace duckdb {
 
 void BoundCaseCheck::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "when_expr", *when_expr);
-	serializer.WriteProperty(101, "then_expr", *then_expr);
+	serializer.WriteProperty(100, "when_expr", when_expr);
+	serializer.WriteProperty(101, "then_expr", then_expr);
 }
 
 BoundCaseCheck BoundCaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -46,7 +46,7 @@ BoundCaseCheck BoundCaseCheck::FormatDeserialize(FormatDeserializer &deserialize
 void BoundOrderByNode::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WriteProperty(101, "null_order", null_order);
-	serializer.WriteProperty(102, "expression", *expression);
+	serializer.WriteProperty(102, "expression", expression);
 }
 
 BoundOrderByNode BoundOrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -166,8 +166,8 @@ BufferedCSVReaderOptions BufferedCSVReaderOptions::FormatDeserialize(FormatDeser
 }
 
 void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "when_expr", *when_expr);
-	serializer.WriteProperty(101, "then_expr", *then_expr);
+	serializer.WriteProperty(100, "when_expr", when_expr);
+	serializer.WriteProperty(101, "then_expr", then_expr);
 }
 
 CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -231,7 +231,7 @@ ColumnList ColumnList::FormatDeserialize(FormatDeserializer &deserializer) {
 
 void CommonTableExpressionInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "aliases", aliases);
-	serializer.WriteProperty(101, "query", *query);
+	serializer.WriteProperty(101, "query", query);
 	serializer.WriteProperty(102, "materialized", materialized);
 }
 
@@ -266,8 +266,8 @@ HivePartitioningIndex HivePartitioningIndex::FormatDeserialize(FormatDeserialize
 }
 
 void JoinCondition::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "left", *left);
-	serializer.WriteProperty(101, "right", *right);
+	serializer.WriteProperty(100, "left", left);
+	serializer.WriteProperty(101, "right", right);
 	serializer.WriteProperty(102, "comparison", comparison);
 }
 
@@ -326,7 +326,7 @@ MultiFileReaderOptions MultiFileReaderOptions::FormatDeserialize(FormatDeseriali
 void OrderByNode::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WriteProperty(101, "null_order", null_order);
-	serializer.WriteProperty(102, "expression", *expression);
+	serializer.WriteProperty(102, "expression", expression);
 }
 
 OrderByNode OrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {

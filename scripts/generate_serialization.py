@@ -465,14 +465,16 @@ def generate_class_code(class_entry):
         is_optional = entry.optional
         if is_pointer(entry.type):
             if not is_optional:
-                write_property_name = '*' + entry.serialize_property
+                # TODO: At ome point we should maybe add checks for non-optional pointers
+                # for now nullable pointers are implicitly handled by providing default values
+                pass
         elif is_optional:
             raise Exception(
                 f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})"
             )
         deserialize_template_str = deserialize_element_class
         if entry.base:
-            write_property_name = f"({entry.base} &)" + write_property_name
+            write_property_name = f"({entry.base} *)" + write_property_name + ".get()"
             deserialize_template_str = deserialize_element_class_base.replace(
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
