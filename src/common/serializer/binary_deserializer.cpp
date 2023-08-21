@@ -5,31 +5,43 @@ namespace duckdb {
 void BinaryDeserializer::SetTag(const field_id_t field_id, const char *tag) {
 	current_field_id = field_id;
 	current_tag = tag;
-	stack.back().read_field_count++;
-	if (stack.back().read_field_count > stack.back().expected_field_count) {
-		throw SerializationException("Attempting to read a required field, but field is missing");
+}
+
+bool BinaryDeserializer::HasTag(const field_id_t field_id, const char *tag) {
+	// Double check that there's space left in the buffer,
+	// we might try to read an optional field at the end
+	if (ptr + sizeof(field_id_t) > end_ptr) {
+		return false;
 	}
+
+	// Check that we dont try to read outside the object
+	auto object_start = stack.back().start_offset;
+	auto object_end = object_start + stack.back().expected_size;
+	if (ptr + sizeof(field_id_t) > object_end) {
+		return false;
+	}
+
+	auto next_field_id = ReadPrimitive<field_id_t>();
+	ptr -= sizeof(field_id_t);
+	return next_field_id == field_id;
 }
 
 //===--------------------------------------------------------------------===//
 // Nested Types Hooks
 //===--------------------------------------------------------------------===//
 void BinaryDeserializer::OnObjectBegin() {
-	auto expected_field_id = ReadPrimitive<field_id_t>();
-	auto expected_field_count = ReadPrimitive<uint32_t>();
+	auto start_offset = ptr;
+	auto expected_field_id = ReadPrimitive<uint32_t>();
+	auto expected_kind = ReadPrimitive<uint8_t>();
 	auto expected_size = ReadPrimitive<uint64_t>();
-	D_ASSERT(expected_field_count > 0);
 	D_ASSERT(expected_size > 0);
 	D_ASSERT(expected_field_id == current_field_id);
-	stack.emplace_back(expected_field_count, expected_size, expected_field_id);
+	D_ASSERT(expected_kind == static_cast<uint8_t>(BinaryMessageKind::VARIABLE_LEN));
+	(void)expected_kind;
+	stack.emplace_back(start_offset, expected_size, expected_field_id);
 }
 
 void BinaryDeserializer::OnObjectEnd() {
-	auto &frame = stack.back();
-	if (frame.read_field_count < frame.expected_field_count) {
-		throw SerializationException("Not all fields were read. This file might have been written with a newer version "
-		                             "of DuckDB and is incompatible with this version of DuckDB.");
-	}
 	stack.pop_back();
 }
 
@@ -73,7 +85,17 @@ void BinaryDeserializer::OnPairEnd() {
 }
 
 bool BinaryDeserializer::OnOptionalBegin() {
-	return ReadPrimitive<bool>();
+	OnObjectBegin();
+	SetTag(0, "is_not_null");
+	auto present = ReadBool();
+	if (present) {
+		SetTag(1, "value");
+	}
+	return present;
+}
+
+void BinaryDeserializer::OnOptionalEnd() {
+	OnObjectEnd();
 }
 
 //===--------------------------------------------------------------------===//

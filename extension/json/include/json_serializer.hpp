@@ -27,6 +27,7 @@ private:
 	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
 	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
 		serialize_enum_as_string = true;
+		serialize_default_values = true;
 	}
 
 public:

@@ -328,7 +328,9 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 
 	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
+		source.BeginObject(201, "values_insert_order");
 		values_insert_order.FormatDeserialize(source, size);
+		source.EndObject();
 		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
@@ -477,7 +479,9 @@ void EnumTypeInfo::Serialize(FieldWriter &writer) const {
 void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "dict_size", dict_size);
+	serializer.BeginObject(201, "values_insert_order");
 	((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
+	serializer.EndObject();
 }
 
 } // namespace duckdb

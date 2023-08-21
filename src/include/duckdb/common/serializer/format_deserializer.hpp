@@ -13,7 +13,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/deserialization_data.hpp"
-#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -42,64 +41,26 @@ public:
 		return Read<T>();
 	}
 
-	// Read optional property and return a value, or forward a default value
+	// Default Value return
 	template <typename T>
-	inline T ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &&default_value) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			auto item = Read<T>();
-			OnOptionalEnd();
-			return item;
-		} else {
-			OnOptionalEnd();
+	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &&default_value) {
+		if (!HasTag(field_id, tag)) {
 			return std::forward<T>(default_value);
 		}
+		SetTag(field_id, tag);
+		return Read<T>();
 	}
 
-	// Read optional property into an existing value, or use a default value
+	// Default value in place
 	template <typename T>
-	inline void ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			ret = Read<T>();
-			OnOptionalEnd();
-		} else {
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+		if (!HasTag(field_id, tag)) {
 			ret = std::forward<T>(default_value);
-			OnOptionalEnd();
+			return;
 		}
-	}
 
-	// Read optional property and return a value, or default construct it
-	template <typename T>
-	inline typename std::enable_if<std::is_default_constructible<T>::value, T>::type
-	ReadOptionalProperty(const field_id_t field_id, const char *tag) {
 		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			auto item = Read<T>();
-			OnOptionalEnd();
-			return item;
-		} else {
-			OnOptionalEnd();
-			return T();
-		}
-	}
-
-	// Read optional property into an existing value, or default construct it
-	template <typename T>
-	inline typename std::enable_if<std::is_default_constructible<T>::value, void>::type
-	ReadOptionalProperty(const field_id_t field_id, const char *tag, T &ret) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			ret = Read<T>();
-			OnOptionalEnd();
-		} else {
-			ret = T();
-			OnOptionalEnd();
-		}
+		ret = Read<T>();
 	}
 
 	// Special case:
@@ -149,23 +110,49 @@ private:
 
 	// Structural Types
 	// Deserialize a unique_ptr
+	/*
+	template <class T = void>
+	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
+	    using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
+	    unique_ptr<ELEMENT_TYPE> ptr = nullptr;
+	    OnObjectBegin();
+	    auto is_present = OnOptionalBegin();
+	    if(is_present) {
+	        ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+	    }
+	    OnOptionalEnd();
+	    OnObjectEnd();
+	    return std::move(ptr);
+	}
+	*/
+
 	template <class T = void>
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
-		OnObjectBegin();
-		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
-		OnObjectEnd();
-		return val;
+		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnOptionalBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			OnObjectEnd();
+		}
+		OnOptionalEnd();
+		return std::move(ptr);
 	}
 
 	// Deserialize shared_ptr
 	template <typename T = void>
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
-		OnObjectBegin();
-		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
-		OnObjectEnd();
-		return val;
+		shared_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnOptionalBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			OnObjectEnd();
+		}
+		OnOptionalEnd();
+		return std::move(ptr);
 	}
 
 	// Deserialize a vector
@@ -390,6 +377,9 @@ protected:
 		(void)field_id;
 		(void)tag;
 	}
+
+	// Peek if the next field has the given tag
+	virtual bool HasTag(const field_id_t field_id, const char *tag) = 0;
 
 	virtual idx_t OnListBegin() = 0;
 	virtual void OnListEnd() {

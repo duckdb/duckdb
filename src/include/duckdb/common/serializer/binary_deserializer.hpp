@@ -44,14 +44,12 @@ private:
 		deserialize_enum_from_string = false;
 	}
 	struct State {
-		uint32_t expected_field_count;
+		data_ptr_t start_offset;
 		idx_t expected_size;
 		field_id_t expected_field_id;
-		uint32_t read_field_count;
 
-		State(uint32_t expected_field_count, idx_t expected_size, field_id_t expected_field_id)
-		    : expected_field_count(expected_field_count), expected_size(expected_size),
-		      expected_field_id(expected_field_id), read_field_count(0) {
+		State(data_ptr_t start_offset, idx_t expected_size, field_id_t expected_field_id)
+		    : start_offset(start_offset), expected_size(expected_size), expected_field_id(expected_field_id) {
 		}
 	};
 
@@ -91,7 +89,7 @@ private:
 
 	// Set the 'tag' of the property to read
 	void SetTag(const field_id_t field_id, const char *tag) final;
-
+	bool HasTag(const field_id_t field_id, const char *tag) final;
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
@@ -106,6 +104,7 @@ private:
 	void OnMapKeyBegin() final;
 	void OnMapValueBegin() final;
 	bool OnOptionalBegin() final;
+	void OnOptionalEnd() final;
 
 	void OnPairBegin() final;
 	void OnPairKeyBegin() final;

@@ -192,7 +192,7 @@ ColumnBinding ColumnBinding::FormatDeserialize(FormatDeserializer &deserializer)
 void ColumnDefinition::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "name", name);
 	serializer.WriteProperty(101, "type", type);
-	serializer.WriteOptionalProperty(102, "expression", expression);
+	serializer.WritePropertyWithDefault(102, "expression", expression, unique_ptr<ParsedExpression>());
 	serializer.WriteProperty(103, "category", category);
 	serializer.WriteProperty(104, "compression_type", compression_type);
 }
@@ -200,7 +200,7 @@ void ColumnDefinition::FormatSerialize(FormatSerializer &serializer) const {
 ColumnDefinition ColumnDefinition::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto name = deserializer.ReadProperty<string>(100, "name");
 	auto type = deserializer.ReadProperty<LogicalType>(101, "type");
-	auto expression = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>(102, "expression");
+	auto expression = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(102, "expression", unique_ptr<ParsedExpression>());
 	auto category = deserializer.ReadProperty<TableColumnType>(103, "category");
 	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty(104, "compression_type", result.compression_type);
@@ -281,12 +281,12 @@ JoinCondition JoinCondition::FormatDeserialize(FormatDeserializer &deserializer)
 
 void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "id", id_);
-	serializer.WriteOptionalProperty(101, "type_info", type_info_);
+	serializer.WritePropertyWithDefault(101, "type_info", type_info_, shared_ptr<ExtraTypeInfo>());
 }
 
 LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>(100, "id");
-	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>(101, "type_info");
+	auto type_info = deserializer.ReadPropertyWithDefault<shared_ptr<ExtraTypeInfo>>(101, "type_info", shared_ptr<ExtraTypeInfo>());
 	LogicalType result(id, std::move(type_info));
 	return result;
 }

@@ -24,6 +24,7 @@ class FormatSerializer {
 
 protected:
 	bool serialize_enum_as_string = false;
+	bool serialize_default_values = false;
 
 public:
 	// Serialize a value
@@ -33,18 +34,15 @@ public:
 		WriteValue(value);
 	}
 
-	// Optional pointer
-	template <class POINTER>
-	void WriteOptionalProperty(const field_id_t field_id, const char *tag, POINTER &&ptr) {
-		SetTag(field_id, tag);
-		if (ptr == nullptr) {
-			OnOptionalBegin(false);
-			OnOptionalEnd(false);
-		} else {
-			OnOptionalBegin(true);
-			WriteValue(*ptr);
-			OnOptionalEnd(true);
+	// Default value
+	template <class T>
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
+		// If current value is default, don't write it
+		if (!serialize_default_values && (value == default_value)) {
+			return;
 		}
+		SetTag(field_id, tag);
+		WriteValue(value);
 	}
 
 	// Special case: data_ptr_T
@@ -82,13 +80,22 @@ protected:
 		WriteValue(ptr.get());
 	}
 
+	// Shared Pointer Ref
+	template <typename T>
+	void WriteValue(const shared_ptr<T> &ptr) {
+		WriteValue(ptr.get());
+	}
+
 	// Pointer
 	template <typename T>
-	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteValue(const T ptr) {
+	void WriteValue(const T *ptr) {
 		if (ptr == nullptr) {
-			WriteNull();
+			OnOptionalBegin(false);
+			OnOptionalEnd(false);
 		} else {
+			OnOptionalBegin(true);
 			WriteValue(*ptr);
+			OnOptionalEnd(true);
 		}
 	}
 

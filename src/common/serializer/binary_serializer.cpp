@@ -36,8 +36,19 @@ void BinarySerializer::SetTag(const field_id_t field_id, const char *tag) {
 //===--------------------------------------------------------------------===//
 // Nested types
 //===--------------------------------------------------------------------===//
+
+// We serialize optional values as a message with a "present" flag, followed by the value.
 void BinarySerializer::OnOptionalBegin(bool present) {
-	Write(present);
+	OnObjectBegin();
+	SetTag(0, "is_not_null");
+	WriteValue(present);
+	if (present) {
+		SetTag(1, "value");
+	}
+}
+
+void BinarySerializer::OnOptionalEnd(bool present) {
+	OnObjectEnd();
 }
 
 void BinarySerializer::OnListBegin(idx_t count) {
@@ -70,21 +81,26 @@ void BinarySerializer::OnMapEnd(idx_t count) {
 void BinarySerializer::OnObjectBegin() {
 	stack.push_back(State({0, 0, data.size()}));
 	// Store the field id
-	Write<field_id_t>(current_field_id);
+	Write<uint32_t>(current_field_id);
+	Write<uint8_t>(static_cast<uint8_t>(BinaryMessageKind::VARIABLE_LEN));
 	// Store the offset so we can patch the field count and size later
-	Write<uint32_t>(0); // Placeholder for the field count
 	Write<uint64_t>(0); // Placeholder for the size
 }
 
 void BinarySerializer::OnObjectEnd() {
 	auto &frame = stack.back();
+	auto size = frame.size;
 	// Patch the field count and size
 	auto ptr = &data[frame.offset];
-	ptr += sizeof(field_id_t); // Skip the field id
-	Store<uint32_t>(frame.field_count, ptr);
-	ptr += sizeof(uint32_t); // Skip the field count
-	Store<uint64_t>(frame.size, ptr);
+	ptr += sizeof(uint32_t); // Skip the field id
+	ptr += sizeof(uint8_t);  // Skip the message kind
+	Store<uint64_t>(size, ptr);
 	stack.pop_back();
+
+	// Add the size to the parent frame
+	if (!stack.empty()) {
+		stack.back().size += size;
+	}
 }
 
 void BinarySerializer::OnPairBegin() {

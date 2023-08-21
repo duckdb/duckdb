@@ -45,7 +45,9 @@ void ${CLASS_NAME}::FormatSerialize(FormatSerializer &serializer) const {
 ${MEMBERS}}
 '''
 
-serialize_element = '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME});\n'
+serialize_element = (
+    '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+)
 
 base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
 
@@ -76,13 +78,9 @@ switch_statement = (
 '''
 )
 
-deserialize_element = (
-    '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n'
-)
-deserialize_element_class = (
-    '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
-)
-deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
+deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
+deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
 
@@ -108,12 +106,15 @@ def replace_pointer(type):
 def get_serialize_element(property_name, property_id, property_key, property_type, is_optional, pointer_type):
     write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
+    default_argument = ''
     if is_optional:
-        write_method = 'WriteOptionalProperty'
+        write_method = 'WritePropertyWithDefault'
+        default_argument = f', {property_type}()'  # TODO: allow this to be passed
     return (
         serialize_element.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_KEY}', property_key)
+        .replace('${PROPERTY_DEFAULT}', default_argument)
         .replace('WriteProperty', write_method)
         .replace('${ASSIGNMENT}', assignment)
     )
@@ -124,12 +125,15 @@ def get_deserialize_element_template(
 ):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
+    default_argument = ''
     if is_optional:
-        read_method = 'ReadOptionalProperty'
+        read_method = 'ReadPropertyWithDefault'
+        default_argument = f', {property_type}()'  # TODO: allow this to be passed
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_ID}', str(property_id))
+        .replace('${PROPERTY_DEFAULT}', default_argument)
         .replace('ReadProperty', read_method)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${ASSIGNMENT}', assignment)

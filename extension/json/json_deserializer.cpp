@@ -7,6 +7,11 @@ void JsonDeserializer::SetTag(const field_id_t, const char *tag) {
 	current_tag = tag;
 }
 
+bool JsonDeserializer::HasTag(const field_id_t, const char *tag) {
+	auto state = Current();
+	return yyjson_obj_get(state.val, tag) != nullptr;
+}
+
 // If inside an object, return the value associated by the current tag (property name)
 // If inside an array, return the next element in the sequence
 yyjson_val *JsonDeserializer::GetNextValue() {
@@ -160,10 +165,22 @@ void JsonDeserializer::OnPairEnd() {
 }
 
 bool JsonDeserializer::OnOptionalBegin() {
+	auto &parent_val = Current();
+	yyjson_arr_iter iter;
+	if (yyjson_is_arr(parent_val.val)) {
+		iter = parent_val.arr_iter;
+	}
 	auto val = GetNextValue();
+
+	// Recover the iterator if we are inside an array
+	if (yyjson_is_arr(parent_val.val)) {
+		parent_val.arr_iter = iter;
+	}
+
 	if (yyjson_is_null(val)) {
 		return false;
 	}
+
 	return true;
 }
 
@@ -266,7 +283,6 @@ string JsonDeserializer::ReadString() {
 	return yyjson_get_str(val);
 }
 
-
 hugeint_t JsonDeserializer::ReadHugeInt() {
 	auto val = GetNextValue();
 	if (!yyjson_is_obj(val)) {
@@ -289,7 +305,7 @@ void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	auto len = yyjson_get_len(val);
 	D_ASSERT(len == count);
 	auto blob = string_t(str, len);
-	Blob::ToString(blob, (char *&)ptr);
+	Blob::ToString(blob, char_ptr_cast(ptr));
 }
 
 } // namespace duckdb

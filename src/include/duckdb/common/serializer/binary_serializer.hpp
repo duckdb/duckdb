@@ -62,6 +62,7 @@ private:
 
 	explicit BinarySerializer() {
 		serialize_enum_as_string = false;
+		serialize_default_values = false;
 	}
 
 public:
@@ -80,6 +81,7 @@ public:
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
 	void OnOptionalBegin(bool present) final;
+	void OnOptionalEnd(bool present) final;
 	void OnListBegin(idx_t count) final;
 	void OnListEnd(idx_t count) final;
 	void OnMapBegin(idx_t count) final;

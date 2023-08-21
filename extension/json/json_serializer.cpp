@@ -142,6 +142,9 @@ void JsonSerializer::OnPairEnd() {
 // Primitive types
 //===--------------------------------------------------------------------===//
 void JsonSerializer::WriteNull() {
+	if (skip_if_null) {
+		return;
+	}
 	auto val = yyjson_mut_null(doc);
 	PushValue(val);
 }
