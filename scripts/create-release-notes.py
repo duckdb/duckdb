@@ -54,7 +54,7 @@ def gh_api(suburl, full_url=''):
 old_release = gh_api('releases/tags/%s' % sys.argv[1])
 print(old_release["published_at"])
 
-pulls = gh_api('pulls?base=master&state=closed')
+pulls = gh_api('pulls?base=main&state=closed')
 for p in pulls:
     if p["merged_at"] is None:
         continue
