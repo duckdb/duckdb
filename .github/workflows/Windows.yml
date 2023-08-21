@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '**'
-      - '!min'
+      - '!main'
       - '!feature'
     tags:
       - '**'
