@@ -15,6 +15,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 #include <algorithm>
 
@@ -998,8 +999,13 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
 	tree = reader.Read<Node>();
 
+	// TODO: I think that this can be merged
+	vector<BlockPointer> block_pointers;
 	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
-		(*allocators)[i].Deserialize(reader.Read<BlockPointer>());
+		block_pointers.push_back(reader.Read<BlockPointer>());
+	}
+	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
+		(*allocators)[i].Deserialize(block_pointers[i]);
 	}
 }
 

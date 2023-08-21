@@ -1,0 +1,44 @@
+# name: test/sql/index/art/storage/test_art_storage_multi_checkpoint.test
+# description: Test that no marked/overwritten blocks are read during deserialization
+# group: [storage]
+
+# FIXME: this test has to run with the following changes:
+# FIXME: reset the dirty-flag of a fixed-size buffer when serializing the buffer
+
+# FIXME: there are currently two temporary fixes for this
+# FIXME: - don't change the dirty-flag of a fixed-size buffer when serializing the buffer
+# FIXME: - commenting out the for-loop in MetadataManager::MarkBlocksAsModified(), which sets blocks as modified
+
+# in the testrunner, we currently perform a CHECKPOINT after each statement (because our WAL size
+# is zero). This causes bugs with the newly introduced functionality to reuse blocks in the MetadataManager
+
+load __TEST_DIR__/test_fk_persistent.db
+
+statement ok
+CREATE TABLE pk_integers(i INTEGER PRIMARY KEY)
+
+statement ok
+INSERT INTO pk_integers VALUES (1)
+
+# CHECKPOINT: we serialize the buffer containing this row ID, and at least one block in the metadata
+# manager still has available space
+
+statement ok
+CREATE TABLE pk_integers2(i INTEGER PRIMARY KEY)
+
+# > metadata_manager.cpp: MetadataManager::MarkBlocksAsModified()
+# > // for any blocks that were modified in the last checkpoint - set them to free blocks currently
+# CHECKPOINT: (as far as I can tell) we now write to the blocks, but we don't overwrite the memory of the previous statement yet
+
+statement ok
+INSERT INTO pk_integers2 VALUES (1)
+
+# CHECKPOINT: (as far as I can tell) now, we overwrite/reuse a block that contains serialized memory from
+# INSERT INTO pk_integers VALUES (1)
+
+restart
+
+query I
+SELECT i FROM pk_integers WHERE i = 1;
+----
+1

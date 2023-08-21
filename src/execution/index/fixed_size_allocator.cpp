@@ -50,7 +50,6 @@ FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
 			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
-			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
 }
@@ -112,7 +111,6 @@ void FixedSizeAllocator::Reset() {
 	for (auto &buffer : buffers) {
 		if (buffer.in_memory) {
 			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
-			// TODO: I don't think that I've to touch any flags here...?
 		}
 	}
 	buffers.clear();
@@ -168,6 +166,12 @@ bool FixedSizeAllocator::InitializeVacuum() {
 			available_segments_in_memory += available_segments_per_buffer - buffers[i].segment_count;
 		}
 	}
+
+	// no buffers in memory
+	if (in_memory_buffers.empty()) {
+		return false;
+	}
+
 	auto excess_buffer_count = available_segments_in_memory / available_segments_per_buffer;
 
 	// calculate the vacuum threshold adaptively

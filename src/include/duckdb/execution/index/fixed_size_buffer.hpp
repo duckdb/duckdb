@@ -55,7 +55,6 @@ public:
 	//! the buffer is not in memory
 	inline data_ptr_t Get(FixedSizeAllocator &fixed_size_allocator, const bool dirty_p = true) {
 		if (!in_memory) {
-			D_ASSERT(!dirty);
 			Deserialize(fixed_size_allocator);
 		}
 		if (dirty_p) {
