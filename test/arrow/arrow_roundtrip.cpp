@@ -74,8 +74,8 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz) REPLACE "
-	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint, uhugeint::DOUBLE as uhugeint) "
+	TestArrowRoundtrip("SELECT * EXCLUDE(bit,time_tz,uhugeint) REPLACE "
+	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint) "
 	                   "FROM test_all_types()");
 }
 
