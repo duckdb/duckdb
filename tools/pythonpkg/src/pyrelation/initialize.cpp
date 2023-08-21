@@ -148,12 +148,12 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	             py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
 	m.def("stddev_pop", &DuckDBPyRelation::StdPop, "Computes the population standard deviation for a given column",
 	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
-	DefineMethod({"stddev_samp", "stddev"}, m, &DuckDBPyRelation::StdSamp,
+	DefineMethod({"stddev_samp", "stddev", "std"}, m, &DuckDBPyRelation::StdSamp,
 	             "Computes the sample standard deviation for a given column", py::arg("column"), py::arg("groups") = "",
 	             py::arg("window_spec") = "", py::arg("projected_columns") = "");
 	m.def("var_pop", &DuckDBPyRelation::VarPop, "Computes the population variance for a given column",
 	      py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "");
-	DefineMethod({"var_samp", "variance"}, m, &DuckDBPyRelation::VarSamp,
+	DefineMethod({"var_samp", "variance", "var"}, m, &DuckDBPyRelation::VarSamp,
 	             "Computes the sample variance for a given column", py::arg("column"), py::arg("groups") = "",
 	             py::arg("window_spec") = "", py::arg("projected_columns") = "");
 }

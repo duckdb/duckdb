@@ -369,7 +369,7 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    @pytest.mark.parametrize("f", ["stddev_samp", "stddev"])
+    @pytest.mark.parametrize("f", ["stddev_samp", "stddev", "std"])
     def test_std_samp(self, table, f):
         result = [round(r[0], 2) for r in getattr(table, f)("v").execute().fetchall()]
         expected = [4.71]
@@ -383,6 +383,32 @@ class TestRAPIAggregations(object):
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-        # def test_describe(self, table):
+    def test_var_pop(self, table):
+        result = [round(r[0], 2) for r in table.var_pop("v").execute().fetchall()]
+        expected = [18.98]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in table.var_pop("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.22), (2, 0.25), (3, 9.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
 
-    #    assert table.describe().fetchall() is not None
+    @pytest.mark.parametrize("f", ["var_samp", "variance", "var"])
+    def test_var_samp(self, table, f):
+        result = [round(r[0], 2) for r in getattr(table, f)("v").execute().fetchall()]
+        expected = [22.14]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+        result = [
+            (r[0], round(r[1], 2))
+            for r in getattr(table, f)("v", groups="id", projected_columns="id").order("id").execute().fetchall()
+        ]
+        expected = [(1, 0.33), (2, 0.5), (3, 18.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_describe(self, table):
+        assert table.describe().fetchall() is not None

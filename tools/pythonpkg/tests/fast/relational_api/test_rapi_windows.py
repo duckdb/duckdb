@@ -762,7 +762,7 @@ class TestRAPIWindows:
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
 
-    @pytest.mark.parametrize("f", ["stddev_samp", "stddev"])
+    @pytest.mark.parametrize("f", ["stddev_samp", "stddev", "std"])
     def test_stddev_samp(self, table, f):
         result = [
             (r[0], round(r[1], 2)) if r[1] is not None else r
@@ -776,5 +776,38 @@ class TestRAPIWindows:
             .fetchall()
         ]
         expected = [(1, None), (1, 0.71), (1, 0.58), (2, None), (2, 0.71), (3, None), (3, None), (3, 4.24)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    def test_var_pop(self, table):
+        result = [
+            (r[0], round(r[1], 2)) if r[1] is not None else r
+            for r in table.var_pop(
+                "v",
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, 0.0), (1, 0.25), (1, 0.22), (2, 0.0), (2, 0.25), (3, None), (3, 0.0), (3, 9.0)]
+        assert len(result) == len(expected)
+        assert all([r == e for r, e in zip(result, expected)])
+
+    @pytest.mark.parametrize("f", ["var_samp", "variance", "var"])
+    def test_var_samp(self, table, f):
+        result = [
+            (r[0], round(r[1], 2)) if r[1] is not None else r
+            for r in getattr(table, f)(
+                "v",
+                window_spec="over (partition by id order by t desc rows between unbounded preceding and current row)",
+                projected_columns="id",
+            )
+            .order("id")
+            .execute()
+            .fetchall()
+        ]
+        expected = [(1, None), (1, 0.5), (1, 0.33), (2, None), (2, 0.5), (3, None), (3, None), (3, 18.0)]
         assert len(result) == len(expected)
         assert all([r == e for r, e in zip(result, expected)])
