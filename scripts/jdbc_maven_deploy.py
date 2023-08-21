@@ -38,7 +38,7 @@ release_tag = sys.argv[1]
 deploy_url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
 is_release = True
 
-if release_tag == 'master':
+if release_tag == 'main':
     # for SNAPSHOT builds we increment the minor version and set patch level to zero.
     # seemed the most sensible
     last_tag = exec('git tag --sort=-committerdate').decode('utf8').split('\n')[0]

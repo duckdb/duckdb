@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
-  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'master') }}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
 
 jobs:
   regression-lto-benchmark-runner:

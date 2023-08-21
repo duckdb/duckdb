@@ -214,9 +214,9 @@ elif os.path.isdir(revision):
     for fname in changed_files:
         print(fname)
 elif not format_all:
-    if revision == 'master':
+    if revision == 'main':
         # fetch new changes when comparing to the master
-        os.system("git fetch origin master:master")
+        os.system("git fetch origin main:main")
     print(action + " since branch or revision: " + revision)
     changed_files = get_changed_files(revision)
     if len(changed_files) == 0:
