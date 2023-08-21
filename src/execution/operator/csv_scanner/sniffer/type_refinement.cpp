@@ -26,7 +26,7 @@ struct Parse {
 		     machine.previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::FIELD_SEPARATOR ||
+		if (machine.previous_state == CSVState::DELIMITER ||
 		    (machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
 		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value

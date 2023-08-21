@@ -17,7 +17,7 @@ namespace duckdb {
 //! All States of CSV Parsing
 enum class CSVState : uint8_t {
 	STANDARD = 0,         //! Regular unquoted field state
-	FIELD_SEPARATOR = 1,  //! State after encountering a field separator (e.g., ;)
+	DELIMITER = 1,  //! State after encountering a field separator (e.g., ;)
 	RECORD_SEPARATOR = 2, //! State after encountering a record separator (e.g., \n)
 	CARRIAGE_RETURN = 3,  //! State after encountering a record separator (e.g., \n)
 	QUOTED = 4,           //! State when inside a quoted field
@@ -66,7 +66,7 @@ public:
 	//! Options resulting from sniffing
 	char quote;
 	char escape;
-	char delim;
+	char delimiter;
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
 	idx_t num_cols = 0;
 	bool header = false;

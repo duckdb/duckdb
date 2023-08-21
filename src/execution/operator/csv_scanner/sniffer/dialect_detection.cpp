@@ -33,7 +33,7 @@ struct SniffDialect {
 		     machine.previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		machine.column_count += machine.previous_state == CSVState::FIELD_SEPARATOR;
+		machine.column_count += machine.previous_state == CSVState::DELIMITER;
 		sniffed_column_counts[machine.cur_rows] = machine.column_count;
 		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
 		machine.column_count -= (machine.column_count - 1) * (machine.previous_state == CSVState::RECORD_SEPARATOR);

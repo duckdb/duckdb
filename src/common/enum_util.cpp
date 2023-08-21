@@ -646,7 +646,7 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 	switch(value) {
 	case CSVState::STANDARD:
 		return "STANDARD";
-	case CSVState::FIELD_SEPARATOR:
+	case CSVState::DELIMITER:
 		return "FIELD_SEPARATOR";
 	case CSVState::RECORD_SEPARATOR:
 		return "RECORD_SEPARATOR";
@@ -671,7 +671,7 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 		return CSVState::STANDARD;
 	}
 	if (StringUtil::Equals(value, "FIELD_SEPARATOR")) {
-		return CSVState::FIELD_SEPARATOR;
+		return CSVState::DELIMITER;
 	}
 	if (StringUtil::Equals(value, "RECORD_SEPARATOR")) {
 		return CSVState::RECORD_SEPARATOR;

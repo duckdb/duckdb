@@ -35,7 +35,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	// Set the CSV Options in the reference
 	options.quote = best_candidate->quote;
 	options.escape = best_candidate->escape;
-	options.delimiter = best_candidate->delim;
+	options.delimiter = best_candidate->delimiter;
 	options.new_line = best_candidate->new_line;
 	options.num_cols = best_candidate->num_cols;
 	options.has_header = best_candidate->header;
