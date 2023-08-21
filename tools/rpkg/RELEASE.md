@@ -18,7 +18,7 @@ revdepcheck::revdep_check(num_workers = 8, env=c(`MAKEVARS`="-j8"))
 ## Source Package
 The R package does not automatically pick up the DuckDB version from the git tag. Make sure the file `tools/rpkg/DESCRIPTION` in the master branch has the `Version` entry that *you want to create*. 
 
-It's important that package builds are created from the master branch of the main repo (not of a fork) because otherwise the git revision ids used to install extensions are wrong.
+It's important that package builds are created from the main branch of the duckdb/duckdb repo (not of a fork) because otherwise the git revision ids used to install extensions are wrong.
 
 You can get the R source tarball either from the build artifacts (r-package-source) or from a GitHub release after CI finishes (`duckdb_[version].tar.gz`).
 

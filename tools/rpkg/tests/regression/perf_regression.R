@@ -10,7 +10,7 @@ source(helpers)
 temp_lib_dir <- dir_create()
 
 versions <- list(
-  master = list(repo = "duckdb/duckdb", branch = "main"),
+  main = list(repo = "duckdb/duckdb", branch = "main"),
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 

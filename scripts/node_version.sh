@@ -6,7 +6,7 @@ cd tools/nodejs
 ./configure
 
 export TAG=''
-# for master do prereleases
+# for main do prereleases
 if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
 	# proper release
 	npm version `echo $GITHUB_REF | sed 's|refs/tags/v||'`
