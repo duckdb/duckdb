@@ -68,27 +68,44 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateInde
 	null_filter->types.emplace_back(LogicalType::ROW_TYPE);
 	null_filter->children.push_back(std::move(projection));
 
-	// order operator
-
-	vector<BoundOrderByNode> orders;
-	vector<idx_t> projections;
-	for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
-		auto col_expr = make_uniq_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(col_expr));
-		projections.emplace_back(i);
+	// determine if we sort the data prior to index creation
+	// we don't sort, if either VARCHAR or compound key
+	auto perform_sorting = true;
+	if (op.unbound_expressions.size() > 1) {
+		perform_sorting = false;
+	} else if (op.unbound_expressions[0]->return_type.InternalType() == PhysicalType::VARCHAR) {
+		perform_sorting = false;
 	}
-	projections.emplace_back(new_column_types.size() - 1);
-
-	auto physical_order =
-	    make_uniq<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections), op.estimated_cardinality);
-	physical_order->children.push_back(std::move(null_filter));
 
 	// actual physical create index operator
 
 	auto physical_create_index =
 	    make_uniq<PhysicalCreateIndex>(op, op.table, op.info->column_ids, std::move(op.info),
-	                                   std::move(op.unbound_expressions), op.estimated_cardinality);
-	physical_create_index->children.push_back(std::move(physical_order));
+	                                   std::move(op.unbound_expressions), op.estimated_cardinality, perform_sorting);
+
+	if (perform_sorting) {
+
+		// optional order operator
+		vector<BoundOrderByNode> orders;
+		vector<idx_t> projections;
+		for (idx_t i = 0; i < new_column_types.size() - 1; i++) {
+			auto col_expr = make_uniq_base<Expression, BoundReferenceExpression>(new_column_types[i], i);
+			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, std::move(col_expr));
+			projections.emplace_back(i);
+		}
+		projections.emplace_back(new_column_types.size() - 1);
+
+		auto physical_order = make_uniq<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
+		                                               op.estimated_cardinality);
+		physical_order->children.push_back(std::move(null_filter));
+
+		physical_create_index->children.push_back(std::move(physical_order));
+	} else {
+
+		// no ordering
+		physical_create_index->children.push_back(std::move(null_filter));
+	}
+
 	return std::move(physical_create_index);
 }
 

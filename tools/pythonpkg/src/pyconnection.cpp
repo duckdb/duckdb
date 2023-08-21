@@ -203,7 +203,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "");
+	             py::arg("query"), py::kw_only(), py::arg("alias") = "", py::arg("params") = py::none());
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -385,7 +385,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	} while (!PendingQueryResult::IsFinished(execution_result));
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
@@ -446,6 +446,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			// TODO: this doesn't take in any prepared parameters?
 			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
 			auto res = CompletePendingQuery(*pending_query);
 
@@ -460,19 +461,6 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		}
 	}
 
-	auto &named_param_map = prep->named_param_map;
-	if (py::isinstance<py::dict>(params)) {
-		if (named_param_map.empty()) {
-			throw InvalidInputException("Param is of type 'dict', but no named parameters were found in the query");
-		}
-		// Transform named parameters to regular positional parameters
-		params = TransformNamedParameters(named_param_map, params);
-		// Clear the map, we don't need it anymore
-		prep->named_param_map.clear();
-	} else if (!named_param_map.empty()) {
-		throw InvalidInputException("Named parameters found, but param is not of type 'dict'");
-	}
-
 	// this is a list of a list of parameters in executemany
 	py::list params_set;
 	if (!many) {
@@ -484,16 +472,29 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 
 	// For every entry of the argument list, execute the prepared statement with said arguments
 	for (pybind11::handle single_query_params : params_set) {
-		if (prep->n_param != py::len(single_query_params)) {
-			throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
-			                            py::len(single_query_params));
+		case_insensitive_map_t<Value> named_values;
+		if (py::isinstance<py::list>(single_query_params) || py::isinstance<py::tuple>(single_query_params)) {
+			if (prep->n_param != py::len(single_query_params)) {
+				throw InvalidInputException("Prepared statement needs %d parameters, %d given", prep->n_param,
+				                            py::len(single_query_params));
+			}
+			auto unnamed_values = DuckDBPyConnection::TransformPythonParamList(single_query_params);
+			for (idx_t i = 0; i < unnamed_values.size(); i++) {
+				auto &value = unnamed_values[i];
+				auto identifier = std::to_string(i + 1);
+				named_values[identifier] = std::move(value);
+			}
+		} else if (py::isinstance<py::dict>(single_query_params)) {
+			auto dict = py::cast<py::dict>(single_query_params);
+			named_values = DuckDBPyConnection::TransformPythonParamDict(dict);
+		} else {
+			throw InvalidInputException("Prepared parameters can only be passed as a list or a dictionary");
 		}
-		auto args = DuckDBPyConnection::TransformPythonParamList(single_query_params);
 		unique_ptr<QueryResult> res;
 		{
 			py::gil_scoped_release release;
 			unique_lock<std::mutex> lock(py_connection_lock);
-			auto pending_query = prep->PendingQuery(args);
+			auto pending_query = prep->PendingQuery(named_values);
 			res = CompletePendingQuery(*pending_query);
 
 			if (res->HasError()) {
@@ -904,21 +905,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
-	if (!connection) {
-		throw ConnectionException("Connection has already been closed");
-	}
-	if (alias.empty()) {
-		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
-	}
-	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
-It can only be used to run individual SELECT statements, and converts the result of that SELECT
-statement into a Relation object.
-Use duckdb.sql to run arbitrary SQL queries.)";
-	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias, const py::object &params) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -927,11 +914,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, s
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
-	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT) {
+	if (parser.statements.size() == 1 && parser.statements[0]->type == StatementType::SELECT_STATEMENT &&
+	    py::none().is(params)) {
 		return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(
 		    unique_ptr_cast<SQLStatement, SelectStatement>(std::move(parser.statements[0])), alias));
 	}
-	auto res = ExecuteInternal(query);
+	auto res = ExecuteInternal(query, params);
 	if (!res) {
 		return nullptr;
 	}
@@ -1559,6 +1547,17 @@ vector<Value> DuckDBPyConnection::TransformPythonParamList(const py::handle &par
 
 	for (auto param : params) {
 		args.emplace_back(TransformPythonValue(param, LogicalType::UNKNOWN, false));
+	}
+	return args;
+}
+
+case_insensitive_map_t<Value> DuckDBPyConnection::TransformPythonParamDict(const py::dict &params) {
+	case_insensitive_map_t<Value> args;
+
+	for (auto pair : params) {
+		auto &key = pair.first;
+		auto &value = pair.second;
+		args[std::string(py::str(key))] = TransformPythonValue(value, LogicalType::UNKNOWN, false);
 	}
 	return args;
 }

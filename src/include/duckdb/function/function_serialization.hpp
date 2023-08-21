@@ -104,13 +104,13 @@ public:
 	static void FormatSerialize(FormatSerializer &serializer, const FUNC &function,
 	                            optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty("name", function.name);
-		serializer.WriteProperty("arguments", function.arguments);
-		serializer.WriteProperty("original_arguments", function.original_arguments);
+		serializer.WriteProperty(500, "name", function.name);
+		serializer.WriteProperty(501, "arguments", function.arguments);
+		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
 		bool has_serialize = function.format_serialize;
-		serializer.WriteProperty("has_serialize", has_serialize);
+		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
-			serializer.BeginObject("function_data");
+			serializer.BeginObject(504, "function_data");
 			function.format_serialize(serializer, bind_info, function);
 			serializer.EndObject();
 			D_ASSERT(function.format_deserialize);
@@ -135,12 +135,12 @@ public:
 	template <class FUNC, class CATALOG_ENTRY>
 	static pair<FUNC, bool> FormatDeserializeBase(FormatDeserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
-		auto name = deserializer.ReadProperty<string>("name");
-		auto arguments = deserializer.ReadProperty<vector<LogicalType>>("arguments");
-		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>("original_arguments");
+		auto name = deserializer.ReadProperty<string>(500, "name");
+		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
+		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
 		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, name, std::move(arguments),
 		                                                         std::move(original_arguments));
-		auto has_serialize = deserializer.ReadProperty<bool>("has_serialize");
+		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		return make_pair(std::move(function), has_serialize);
 	}
 
@@ -150,7 +150,7 @@ public:
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.name);
 		}
-		deserializer.BeginObject("function_data");
+		deserializer.BeginObject(504, "function_data");
 		auto result = function.format_deserialize(deserializer, function);
 		deserializer.EndObject();
 		return result;
