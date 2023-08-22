@@ -985,7 +985,7 @@ unique_ptr<Operator> PhysicalHashJoin::CopyWithNewChildren(CGroupExpression *pge
 	}
 	vector<idx_t> left_projection_map;
 	/* PhysicalHashJoin fields */
-	unique_ptr<PhysicalHashJoin> copy = make_uniq<PhysicalHashJoin>(join, pdrgpexpr[0]->Copy(), pdrgpexpr[1]->Copy(),
+	unique_ptr<PhysicalHashJoin> copy = make_uniq<PhysicalHashJoin>(join, std::move(pdrgpexpr[0]), std::move(pdrgpexpr[1]),
 																std::move(v), this->join_type, left_projection_map, this->right_projection_map, 
 																this->delim_types, this->estimated_cardinality, this->perfect_join_statistics);
 	

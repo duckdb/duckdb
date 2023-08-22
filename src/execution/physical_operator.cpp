@@ -11,6 +11,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/optimizer/cascade/base/CUtils.h"
 #include "duckdb/optimizer/cascade/base/CDrvdPropPlan.h"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 
 namespace duckdb {
 
@@ -245,9 +246,21 @@ CDrvdProp* PhysicalOperator::PdpCreate()
 	return new CDrvdPropPlan();
 }
 
-CEnfdOrder::EOrderMatching PhysicalOperator::Eom(CReqdPropPlan*, ULONG, vector<CDrvdProp*>, ULONG)
-{
+CEnfdOrder::EOrderMatching PhysicalOperator::Eom(CReqdPropPlan*, ULONG, vector<CDrvdProp*>, ULONG) {
 	return CEnfdOrder::EomSatisfy;
+}
+
+// The ColumnBinding will change after pass through the projection operator
+unique_ptr<Expression> PhysicalOperator::ExpressionPassThrough(const PhysicalOperator* op, Expression* expr) {
+	if (op->physical_type == PhysicalOperatorType::PROJECTION) {
+		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_COLUMN_REF);
+		PhysicalProjection* proj = (PhysicalProjection*)op;
+		unique_ptr<BoundColumnRefExpression> result = unique_ptr_cast<Expression, BoundColumnRefExpression>(expr->Copy());
+		idx_t idx = result->binding.column_index;
+		return proj->select_list[idx]->Copy();
+	} else {
+		return expr->Copy();
+	}
 }
 
 bool CachingPhysicalOperator::CanCacheType(const LogicalType &type)
