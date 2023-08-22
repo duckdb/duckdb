@@ -12,6 +12,7 @@
 
 namespace duckdb {
 
-void RegisterICUTimeZoneFunctions(ClientContext &context);
+void RegisterICUTimeZoneFunctions(DatabaseInstance &instance);
+void RegisterICUTimeZoneCasts(ClientContext &context);
 
 } // namespace duckdb

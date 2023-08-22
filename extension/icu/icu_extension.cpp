@@ -269,7 +269,8 @@ void IcuExtension::Load(DuckDB &db) {
 	RegisterICUStrptimeFunctions(*db.instance);
 	RegisterICUStrptimeCasts(*con.context);
 	RegisterICUTimeBucketFunctions(*db.instance);
-	RegisterICUTimeZoneFunctions(*con.context);
+	RegisterICUTimeZoneFunctions(*db.instance);
+	RegisterICUTimeZoneCasts(*con.context);
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
