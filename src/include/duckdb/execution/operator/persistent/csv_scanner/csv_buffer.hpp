@@ -15,11 +15,6 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
-static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
-//! In case the file has a size < 32MB, we will use this size instead
-//! This is to avoid mallocing a lot of memory for a small file
-//! And if it's a compressed file we can't use the actual size of the file
-static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
 
 class CSVBufferHandle {
 public:
@@ -75,6 +70,12 @@ public:
 	char *Ptr() {
 		return char_ptr_cast(handle.Ptr());
 	}
+
+	static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
+	//! In case the file has a size < 32MB, we will use this size instead
+	//! This is to avoid mallocing a lot of memory for a small file
+	//! And if it's a compressed file we can't use the actual size of the file
+	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
 
 private:
 	ClientContext &context;

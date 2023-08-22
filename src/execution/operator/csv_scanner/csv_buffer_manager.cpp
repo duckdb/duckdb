@@ -5,14 +5,14 @@ namespace duckdb {
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileHandle> file_handle_p,
                                    CSVReaderOptions &options, bool cache_buffers_p)
     : file_handle(std::move(file_handle_p)), context(context_p), cache_buffers(cache_buffers_p),
-      buffer_size(CSV_BUFFER_SIZE) {
+      buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	if (options.skip_rows_set) {
 		// Skip rows if they are set
 		skip_rows = options.dialect_options.skip_rows;
 	}
 	auto file_size = file_handle->FileSize();
 	if (file_size > 0 && file_size < buffer_size) {
-		buffer_size = CSV_MINIMUM_BUFFER_SIZE;
+		buffer_size = CSVBuffer::CSV_MINIMUM_BUFFER_SIZE;
 	}
 	for (idx_t i = 0; i < skip_rows; i++) {
 		file_handle->ReadLine();
@@ -56,7 +56,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	return false;
 }
 
-unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection) {
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, bool const auto_detection) {
 	if (auto_detection) {
 		D_ASSERT(pos <= cached_buffers.size());
 		if (pos != 0) {

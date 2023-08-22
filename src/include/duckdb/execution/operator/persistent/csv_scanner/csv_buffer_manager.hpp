@@ -15,8 +15,10 @@
 namespace duckdb {
 class CSVBuffer;
 class CSVStateMachine;
+
 //! This class is used to manage the buffers
 //! Buffers are cached when used for auto detection
+//! Buffers are parts of a decompressed CSV File.
 //! Otherwise they are not cached and just returned
 class CSVBufferManager {
 public:
@@ -24,7 +26,7 @@ public:
 	                 bool cache_buffers = true);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
-	unique_ptr<CSVBufferHandle> GetBuffer(idx_t pos, bool auto_detection);
+	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t pos, const bool auto_detection);
 	//! Returns the starting position of the first buffer
 	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing

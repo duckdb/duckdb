@@ -14,8 +14,9 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 
 	// Initialize Format Candidates
-	for (const auto &t : format_template_candidates) {
-		best_format_candidates[t.first].clear();
+	for (const auto &format_template : format_template_candidates) {
+		auto &logical_type = format_template.first;
+		best_format_candidates[logical_type].clear();
 	}
 }
 
