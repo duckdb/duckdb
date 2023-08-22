@@ -1,12 +1,24 @@
 import os
 import json
 import re
+import argparse
 
-targets = [
-    {'source': 'src/include/duckdb/storage/serialization', 'target': 'src/storage/serialization'},
-    {'source': 'extension/parquet/include/', 'target': 'extension/parquet'},
-    {'source': 'extension/json/include/', 'target': 'extension/json'},
-]
+parser = argparse.ArgumentParser(description='Generate serialization code')
+parser.add_argument('--source', type=str, help='Source directory')
+parser.add_argument('--target', type=str, help='Target directory')
+args = parser.parse_args()
+
+if args.source is None:
+    targets = [
+        {'source': 'src/include/duckdb/storage/serialization', 'target': 'src/storage/serialization'},
+        {'source': 'extension/parquet/include/', 'target': 'extension/parquet'},
+        {'source': 'extension/json/include/', 'target': 'extension/json'},
+    ]
+else:
+    targets = [
+        {'source': args.source, 'target': args.target},
+    ]
+
 
 file_list = []
 for target in targets:
