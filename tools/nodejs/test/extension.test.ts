@@ -37,7 +37,7 @@ const test_httpfs = async function (db: duckdb.Database) {
         }));
     await chai.assert.isRejected(promise, 'IO Error: Connection error for HTTP HEAD');
 
-    await new Promise<void>((resolve, reject) => db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;", function (err: null | Error, rows: TableData) {
+    await new Promise<void>((resolve, reject) => db.all("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/duckdb/duckdb/main/data/parquet-testing/userdata1.parquet') LIMIT 3;", function (err: null | Error, rows: TableData) {
         if (err) {
             if (err.message.startsWith("Unable to connect to URL")) {
                 console.warn("Warning: HTTP request failed in extension.test.js");
