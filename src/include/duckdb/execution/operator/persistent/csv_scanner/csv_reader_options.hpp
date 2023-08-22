@@ -42,9 +42,9 @@ struct DialectOptions {
 	//! Whether or not the file has a header line
 	bool header = false;
 	//! The date format to use (if any is specified)
-	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
-	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
+	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
 
@@ -148,8 +148,7 @@ struct CSVReaderOptions {
 	string write_newline;
 
 	//! The date format to use for writing (if any is specified)
-	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
-	                                                             {LogicalTypeId::TIMESTAMP, {}}};
+	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);

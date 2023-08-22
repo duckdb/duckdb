@@ -9,11 +9,12 @@
 #pragma once
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
-//! Different Quote Rules
+//! Different Rules regarding possible combinations of Quote and Escape Values for CSV Dialects.
+//! Each rule has a comment on the possible combinations.
 enum class QuoteRule : uint8_t {
 	QUOTES_RFC = 0,   //! quote = " escape = (\0 || " || ')
 	QUOTES_OTHER = 1, //! quote = ( " || ' ) escape = '\\'
@@ -95,7 +96,7 @@ private:
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
-	const std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
+	const map<LogicalTypeId, vector<const char *>> format_template_candidates = {
 	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
 	    {LogicalTypeId::TIMESTAMP,
 	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",

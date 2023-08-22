@@ -116,10 +116,14 @@ void CSVSniffer::DetectHeader() {
 			first_row_consistent = false;
 		}
 	}
-
+	bool has_header;
+	if (!best_candidate->options.has_header) {
+		has_header = !first_row_consistent || first_row_nulls;
+	} else {
+		has_header = best_candidate->options.dialect_options.header;
+	}
 	// update parser info, and read, generate & set col_names based on previous findings
-	if (((!first_row_consistent || first_row_nulls) && !best_candidate->options.has_header) ||
-	    (best_candidate->options.has_header && best_candidate->options.dialect_options.header)) {
+	if (has_header) {
 		best_candidate->dialect_options.header = true;
 		case_insensitive_map_t<idx_t> name_collision_count;
 
@@ -141,12 +145,10 @@ void CSVSniffer::DetectHeader() {
 			}
 
 			// avoid duplicate header names
-			const string col_name_raw = col_name;
 			while (name_collision_count.find(col_name) != name_collision_count.end()) {
 				name_collision_count[col_name] += 1;
 				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
-
 			names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
@@ -159,6 +161,7 @@ void CSVSniffer::DetectHeader() {
 		}
 	}
 
+	// If the user provided names, we must replace our header with the user provided names
 	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), best_candidate->options.name_list.size()); i++) {
 		names[i] = best_candidate->options.name_list[i];
 	}

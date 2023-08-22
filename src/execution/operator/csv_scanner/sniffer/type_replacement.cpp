@@ -25,15 +25,15 @@ void CSVSniffer::ReplaceTypes() {
 				throw BinderException(error_msg);
 			}
 		}
-	} else {
-		// types supplied as list
-		if (names.size() < best_candidate->options.sql_type_list.size()) {
-			throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
-			                      best_candidate->options.sql_type_list.size(), names.size());
-		}
-		for (idx_t i = 0; i < best_candidate->options.sql_type_list.size(); i++) {
-			best_sql_types_candidates_per_column_idx[i] = {best_candidate->options.sql_type_list[i]};
-		}
+		return;
+	}
+	// types supplied as list
+	if (names.size() < best_candidate->options.sql_type_list.size()) {
+		throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
+		                      best_candidate->options.sql_type_list.size(), names.size());
+	}
+	for (idx_t i = 0; i < best_candidate->options.sql_type_list.size(); i++) {
+		best_sql_types_candidates_per_column_idx[i] = {best_candidate->options.sql_type_list[i]};
 	}
 }
 } // namespace duckdb
