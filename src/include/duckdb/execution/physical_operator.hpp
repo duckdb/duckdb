@@ -98,6 +98,8 @@ public:
 	virtual CEnfdOrder::EOrderMatching Eom(CReqdPropPlan *, ULONG, vector<CDrvdProp *>, ULONG);
 
 public:
+	static unique_ptr<Expression> ExpressionPassThrough(const PhysicalOperator* op, Expression* expr);
+
 	// return order property enforcing type for this operator
 	virtual CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const {
 		return CEnfdOrder::EPropEnforcingType::EpetRequired;
@@ -107,11 +109,14 @@ public:
 	virtual COrderSpec *PosRequired(CExpressionHandle &exprhdl, COrderSpec *posRequired, ULONG child_index,
 	                                vector<CDrvdProp *> pdrgpdpCtxt, ULONG ulOptReq) const {
 		if (child_index == 0) {
+			auto first_child_cols = children[0]->GetColumnBindings();
 			COrderSpec* res = new COrderSpec();
 			for (auto &child : posRequired->m_pdrgpoe) {
-				if (CUtils::ContainsAll(children[0]->GetColumnBindings(), 
-										child.expression->getColumnBinding())) {
-					res->m_pdrgpoe.push_back(child.Copy());
+				unique_ptr<Expression> expr = ExpressionPassThrough(this, child.expression.get());
+				if (CUtils::ContainsAll(first_child_cols, 
+										expr->getColumnBinding())) {
+					BoundOrderByNode order(child.type, child.null_order, std::move(expr));
+					res->m_pdrgpoe.push_back(std::move(order));
 				}
 			}
 			return res;

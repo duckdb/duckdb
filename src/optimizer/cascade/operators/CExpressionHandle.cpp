@@ -731,6 +731,9 @@ duckdb::vector<ColumnBinding> CExpressionHandle::DeriveOutputColumns(ULONG child
 	if (nullptr != m_pop) {
 		return m_pop->children[child_index]->GetColumnBindings();
 	}
+	else if (nullptr != m_pgexpr) {
+		return m_pgexpr->m_pop->children[child_index]->GetColumnBindings();
+	}
 	return GetRelationalProperties(child_index)->GetOutputColumns();
 }
 

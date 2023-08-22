@@ -55,6 +55,10 @@ bool PhysicalOrder::FProvidesReqdCols(CExpressionHandle &exprhdl, vector<ColumnB
 	return FUnaryProvidesReqdCols(exprhdl, pcrs_required);
 }
 
+vector<ColumnBinding> PhysicalOrder::GetColumnBindings() {
+	return this->children[0]->GetColumnBindings();
+}
+
 //---------------------------------------------------------------------------
 //	@function:
 //		CPhysicalSort::PcrsRequired
@@ -68,11 +72,22 @@ vector<ColumnBinding> PhysicalOrder::PcrsRequired(CExpressionHandle &exprhdl, ve
 	vector<ColumnBinding> pcrs_sort;
 	for (auto &child : orders) {
 		vector<ColumnBinding> cell = child.expression->getColumnBinding();
-		pcrs_sort.insert(pcrs_sort.end(), cell.begin(), cell.begin());
+		pcrs_sort.insert(pcrs_sort.end(), cell.begin(), cell.end());
 	}
-	vector<ColumnBinding> pcrs;
-	std::set_union(pcrs_sort.begin(), pcrs_sort.end(), pcrs_required.begin(), pcrs_required.end(), pcrs.begin());
-	vector<ColumnBinding> pcrs_child_reqd = PcrsChildReqd(exprhdl, pcrs, child_index);
+	/* Union of sort cols and required output cols */
+	for(auto &child : pcrs_required) {
+		bool FAdd = true;
+		for(auto &subchild : pcrs_sort) {
+			if(child == subchild) {
+				FAdd = false;
+				break;
+			}
+		}
+		if(FAdd) {
+			pcrs_sort.push_back(child);
+		}
+	}
+	vector<ColumnBinding> pcrs_child_reqd = PcrsChildReqd(exprhdl, pcrs_sort, child_index);
 	return pcrs_child_reqd;
 }
 

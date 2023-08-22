@@ -94,7 +94,18 @@ void NewColumnBindingResolver::VisitOperator(PhysicalOperator &op)
 		bindings = op.GetColumnBindings();
 		return;
 	}
+	case PhysicalOperatorType::ORDER_BY: {
+		VisitOperatorChildren(op);
+		auto &order = op.Cast<PhysicalOrder>();
+		for (auto &child : order.orders)
+		{
+			VisitExpression(&child.expression);
+		}
+		bindings = op.GetColumnBindings();
+		return;
+	}
 	default:
+		throw InternalException("Add a new case for %s!", PhysicalOperatorToString(op.physical_type));
 		break;
 	}
 	// general case

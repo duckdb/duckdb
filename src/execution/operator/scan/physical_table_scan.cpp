@@ -245,25 +245,6 @@ Operator *PhysicalTableScan::SelfRehydrate(CCostContext *pcc, duckdb::vector<Ope
 }
 
 duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
-	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
-	                           this->function.init_global, this->function.init_local);
-	tmp_function.bind_replace = this->function.bind_replace;
-	tmp_function.in_out_function = this->function.in_out_function;
-	tmp_function.in_out_function_final = this->function.in_out_function_final;
-	tmp_function.statistics = this->function.statistics;
-	tmp_function.dependency = this->function.dependency;
-	tmp_function.cardinality = this->function.cardinality;
-	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
-	tmp_function.to_string = this->function.to_string;
-	tmp_function.table_scan_progress = this->function.table_scan_progress;
-	tmp_function.get_batch_index = this->function.get_batch_index;
-	tmp_function.get_batch_info = this->function.get_batch_info;
-	tmp_function.serialize = this->function.serialize;
-	tmp_function.deserialize = this->function.deserialize;
-	tmp_function.projection_pushdown = this->function.projection_pushdown;
-	tmp_function.filter_pushdown = this->function.filter_pushdown;
-	tmp_function.filter_prune = this->function.filter_prune;
-	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
@@ -277,7 +258,7 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
 	
 	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    this->returned_types, tmp_function, std::move(tmp_bind_data), this->column_ids, this->names, std::move(table_filters), 1);
+	    this->returned_types, this->function, std::move(tmp_bind_data), this->column_ids, this->names, std::move(table_filters), 1);
 	
 	/* PhysicalOperator fields */
 	result->v_column_binding = this->v_column_binding;
@@ -301,25 +282,6 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::Copy() {
 }
 
 duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
-	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
-	                           this->function.init_global, this->function.init_local);
-	tmp_function.bind_replace = this->function.bind_replace;
-	tmp_function.in_out_function = this->function.in_out_function;
-	tmp_function.in_out_function_final = this->function.in_out_function_final;
-	tmp_function.statistics = this->function.statistics;
-	tmp_function.dependency = this->function.dependency;
-	tmp_function.cardinality = this->function.cardinality;
-	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
-	tmp_function.to_string = this->function.to_string;
-	tmp_function.table_scan_progress = this->function.table_scan_progress;
-	tmp_function.get_batch_index = this->function.get_batch_index;
-	tmp_function.get_batch_info = this->function.get_batch_info;
-	tmp_function.serialize = this->function.serialize;
-	tmp_function.deserialize = this->function.deserialize;
-	tmp_function.projection_pushdown = this->function.projection_pushdown;
-	tmp_function.filter_pushdown = this->function.filter_pushdown;
-	tmp_function.filter_prune = this->function.filter_prune;
-	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
@@ -333,7 +295,7 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGrou
 
 	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    this->returned_types, tmp_function, std::move(tmp_bind_data),
+	    this->returned_types, this->function, std::move(tmp_bind_data),
 		this->column_ids, this->names, std::move(table_filters), 1);
 
 	/* PhysicalOperator fields */
@@ -360,25 +322,6 @@ duckdb::unique_ptr<Operator> PhysicalTableScan::CopyWithNewGroupExpression(CGrou
 duckdb::unique_ptr<Operator>
 PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                        double cost) {
-	TableFunction tmp_function(this->function.name, this->function.arguments, this->function.function, this->function.bind,
-	                           this->function.init_global, this->function.init_local);
-	tmp_function.bind_replace = this->function.bind_replace;
-	tmp_function.in_out_function = this->function.in_out_function;
-	tmp_function.in_out_function_final = this->function.in_out_function_final;
-	tmp_function.statistics = this->function.statistics;
-	tmp_function.dependency = this->function.dependency;
-	tmp_function.cardinality = this->function.cardinality;
-	tmp_function.pushdown_complex_filter = this->function.pushdown_complex_filter;
-	tmp_function.to_string = this->function.to_string;
-	tmp_function.table_scan_progress = this->function.table_scan_progress;
-	tmp_function.get_batch_index = this->function.get_batch_index;
-	tmp_function.get_batch_info = this->function.get_batch_info;
-	tmp_function.serialize = this->function.serialize;
-	tmp_function.deserialize = this->function.deserialize;
-	tmp_function.projection_pushdown = this->function.projection_pushdown;
-	tmp_function.filter_pushdown = this->function.filter_pushdown;
-	tmp_function.filter_prune = this->function.filter_prune;
-	tmp_function.function_info = this->function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(this->bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = this->bind_data->Cast<TableFunctionData>().column_ids;
@@ -392,7 +335,7 @@ PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 
 	/* PhysicalTableScan fields */
 	unique_ptr<PhysicalTableScan> result = make_uniq<PhysicalTableScan>(
-	    this->returned_types, tmp_function, std::move(tmp_bind_data), this->column_ids,
+	    this->returned_types, this->function, std::move(tmp_bind_data), this->column_ids,
 		this->names, std::move(table_filters), 1);
 
 	/* PhysicalOperator fields */

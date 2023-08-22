@@ -399,13 +399,17 @@ BOOL PhysicalOperator::FUnaryProvidesReqdCols(CExpressionHandle &exprhdl, vector
 //---------------------------------------------------------------------------
 vector<ColumnBinding> PhysicalOperator::PcrsChildReqd(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG child_index)
 {
-	vector<ColumnBinding> pcrs;
-	// request was not found in map -- we need to compute it
-	pcrs = pcrsRequired;
 	// intersect computed column set with child's output columns
-	vector<ColumnBinding> tmp = exprhdl.DeriveOutputColumns(child_index);
-	vector<ColumnBinding> v;
-	set_intersection(pcrs.begin(), pcrs.end(), tmp.begin(), tmp.end(), v.begin());
-	return v;
+	vector<ColumnBinding> output_cols = exprhdl.DeriveOutputColumns(child_index);
+	vector<ColumnBinding> res;
+	for(auto &child : output_cols) {
+		for(auto &sub_child : pcrsRequired) {
+			if(child == sub_child) {
+				res.push_back(child);
+				break;
+			}
+		}
+	}
+	return res;
 }
 } // namespace duckdb

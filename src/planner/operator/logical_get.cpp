@@ -250,30 +250,11 @@ Operator *LogicalGet::SelfRehydrate(CCostContext *pcc, duckdb::vector<Operator *
 }
 
 unique_ptr<Operator> LogicalGet::Copy() {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	tmp_function.bind_replace = function.bind_replace;
-	tmp_function.in_out_function = function.in_out_function;
-	tmp_function.in_out_function_final = function.in_out_function_final;
-	tmp_function.statistics = function.statistics;
-	tmp_function.dependency = function.dependency;
-	tmp_function.cardinality = function.cardinality;
-	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
-	tmp_function.to_string = function.to_string;
-	tmp_function.table_scan_progress = function.table_scan_progress;
-	tmp_function.get_batch_index = function.get_batch_index;
-	tmp_function.get_batch_info = function.get_batch_info;
-	tmp_function.serialize = function.serialize;
-	tmp_function.deserialize = function.deserialize;
-	tmp_function.projection_pushdown = function.projection_pushdown;
-	tmp_function.filter_pushdown = function.filter_pushdown;
-	tmp_function.filter_prune = function.filter_prune;
-	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
-	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
+	    make_uniq<LogicalGet>(table_index, this->function, std::move(tmp_bind_data), returned_types, names);
 	result->m_derived_property_relation = m_derived_property_relation;
 	result->m_derived_property_plan = m_derived_property_plan;
 	result->m_required_plan_property = m_required_plan_property;
@@ -307,30 +288,11 @@ unique_ptr<Operator> LogicalGet::Copy() {
 }
 
 unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pgexpr) {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	tmp_function.bind_replace = function.bind_replace;
-	tmp_function.in_out_function = function.in_out_function;
-	tmp_function.in_out_function_final = function.in_out_function_final;
-	tmp_function.statistics = function.statistics;
-	tmp_function.dependency = function.dependency;
-	tmp_function.cardinality = function.cardinality;
-	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
-	tmp_function.to_string = function.to_string;
-	tmp_function.table_scan_progress = function.table_scan_progress;
-	tmp_function.get_batch_index = function.get_batch_index;
-	tmp_function.get_batch_info = function.get_batch_info;
-	tmp_function.serialize = function.serialize;
-	tmp_function.deserialize = function.deserialize;
-	tmp_function.projection_pushdown = function.projection_pushdown;
-	tmp_function.filter_pushdown = function.filter_pushdown;
-	tmp_function.filter_prune = function.filter_prune;
-	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
-	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
+	    make_uniq<LogicalGet>(table_index, this->function, std::move(tmp_bind_data), returned_types, names);
 	result->m_derived_property_relation = m_derived_property_relation;
 	result->m_derived_property_plan = m_derived_property_plan;
 	result->m_required_plan_property = m_required_plan_property;
@@ -366,30 +328,11 @@ unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pg
 unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
                                                      duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
                                                      double cost) {
-	TableFunction tmp_function(function.name, function.arguments, function.function, function.bind,
-	                           function.init_global, function.init_local);
-	tmp_function.bind_replace = function.bind_replace;
-	tmp_function.in_out_function = function.in_out_function;
-	tmp_function.in_out_function_final = function.in_out_function_final;
-	tmp_function.statistics = function.statistics;
-	tmp_function.dependency = function.dependency;
-	tmp_function.cardinality = function.cardinality;
-	tmp_function.pushdown_complex_filter = function.pushdown_complex_filter;
-	tmp_function.to_string = function.to_string;
-	tmp_function.table_scan_progress = function.table_scan_progress;
-	tmp_function.get_batch_index = function.get_batch_index;
-	tmp_function.get_batch_info = function.get_batch_info;
-	tmp_function.serialize = function.serialize;
-	tmp_function.deserialize = function.deserialize;
-	tmp_function.projection_pushdown = function.projection_pushdown;
-	tmp_function.filter_pushdown = function.filter_pushdown;
-	tmp_function.filter_prune = function.filter_prune;
-	tmp_function.function_info = function.function_info;
 	unique_ptr<TableScanBindData> tmp_bind_data =
 	    make_uniq<TableScanBindData>(bind_data->Cast<TableScanBindData>().table);
 	tmp_bind_data->column_ids = bind_data->Cast<TableFunctionData>().column_ids;
 	unique_ptr<LogicalGet> result =
-	    make_uniq<LogicalGet>(table_index, tmp_function, std::move(tmp_bind_data), returned_types, names);
+	    make_uniq<LogicalGet>(table_index, this->function, std::move(tmp_bind_data), returned_types, names);
 	result->m_derived_property_relation = m_derived_property_relation;
 	result->m_derived_property_plan = m_derived_property_plan;
 	result->m_required_plan_property = m_required_plan_property;

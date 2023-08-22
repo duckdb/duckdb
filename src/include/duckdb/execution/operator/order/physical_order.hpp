@@ -50,6 +50,8 @@ public:
 		return result;
 	}
 
+	vector<ColumnBinding> GetColumnBindings() override;
+	
 	vector<ColumnBinding> PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired, ULONG child_index, vector<CDrvdProp*> pdrgpdpCtxt, ULONG ulOptReq) override;
 	
 	CKeyCollection* DeriveKeyCollection(CExpressionHandle &exprhdl) override
