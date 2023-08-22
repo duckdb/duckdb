@@ -10,7 +10,7 @@ namespace duckdb {
 
 void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	// Initialize transition array with default values to the Standard option
-	auto &transition_array = state_machine_cache[delimiter][quote][escape];
+	auto &transition_array = state_machine_cache[{delimiter,quote,escape}];
 	for (uint32_t i = 0; i < 4; i++) {
 		for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 			transition_array[i][j] = static_cast<uint8_t>(CSVState::STANDARD);
@@ -94,19 +94,11 @@ CSVStateMachineCache::CSVStateMachineCache() {
 }
 
 state_machine_t &CSVStateMachineCache::Get(char delimiter, char quote, char escape) {
-	bool cached = false;
-	if (state_machine_cache.find(delimiter) != state_machine_cache.end()) {
-		if (state_machine_cache[delimiter].find(quote) != state_machine_cache[delimiter].end()) {
-			if (state_machine_cache[delimiter][quote].find(escape) != state_machine_cache[delimiter][quote].end()) {
-				cached = true;
-			}
-		}
-	}
 	//! Custom State Machine, we need to create it and cache it first
-	if (!cached) {
+	if (state_machine_cache.find({delimiter,quote,escape}) == state_machine_cache.end()) {
 		Insert(delimiter, quote, escape);
 	}
-	auto &transition_array = state_machine_cache[delimiter][quote][escape];
+	auto &transition_array = state_machine_cache[{delimiter,quote,escape}];
 	return transition_array;
 }
 
