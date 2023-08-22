@@ -168,7 +168,7 @@ void EmptyStreamRelease(ArrowArrayStream *) {
 void FactoryGetSchema(uintptr_t stream_factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
 	auto stream = reinterpret_cast<ArrowArrayStream *>(stream_factory_ptr);
 	stream->get_schema(stream, &schema.arrow_schema);
-	
+
 	// Need to nullify the root schema's release function here, because streams don't allow us to set the release
 	// function. For the schema's children, we nullify the release functions in `duckdb_arrow_scan`, so we don't need to
 	// handle them again here. We set this to nullptr and not EmptySchemaRelease to prevent ArrowSchemaWrapper's
