@@ -23,6 +23,7 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	uint8_t quoted_state = static_cast<uint8_t>(CSVState::QUOTED);
 	uint8_t unquoted_state = static_cast<uint8_t>(CSVState::UNQUOTED);
 	uint8_t escape_state = static_cast<uint8_t>(CSVState::ESCAPE);
+	uint8_t empty_line_state = static_cast<uint8_t>(CSVState::EMPTY_LINE);
 	uint8_t invalid_state = static_cast<uint8_t>(CSVState::INVALID);
 
 	// Now set values depending on configuration
@@ -38,12 +39,12 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	transition_array[field_separator_state][static_cast<uint8_t>(quote)] = quoted_state;
 	// 3) Record Separator State
 	transition_array[record_separator_state][static_cast<uint8_t>(delimiter)] = field_separator_state;
-	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
+	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = empty_line_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
 	transition_array[record_separator_state][static_cast<uint8_t>(quote)] = quoted_state;
 	// 4) Carriage Return State
 	transition_array[carriage_return_state][static_cast<uint8_t>('\n')] = record_separator_state;
-	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = carriage_return_state;
+	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = empty_line_state;
 	transition_array[carriage_return_state][static_cast<uint8_t>(escape)] = escape_state;
 	// 5) Quoted State
 	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
@@ -64,7 +65,6 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	if (quote == escape) {
 		transition_array[unquoted_state][static_cast<uint8_t>(escape)] = quoted_state;
 	}
-
 	// 7) Escaped State
 	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
 		// Escape is always invalid if not proceeded by another escape or quoted char
@@ -72,6 +72,13 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	}
 	transition_array[escape_state][static_cast<uint8_t>(quote)] = quoted_state;
 	transition_array[escape_state][static_cast<uint8_t>(escape)] = quoted_state;
+	// 8) Empty Line State
+	for (uint32_t j = 0; j < NUM_TRANSITIONS; j++) {
+		// Escape is always invalid if not proceeded by another escape or quoted char
+		transition_array[empty_line_state][j] = standard_state;
+	}
+	transition_array[empty_line_state][static_cast<uint8_t>('\r')] = empty_line_state;
+	transition_array[empty_line_state][static_cast<uint8_t>('\n')] = empty_line_state;
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {

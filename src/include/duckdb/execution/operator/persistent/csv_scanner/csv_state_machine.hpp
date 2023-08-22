@@ -23,7 +23,8 @@ enum class CSVState : uint8_t {
 	QUOTED = 4,           //! State when inside a quoted field
 	UNQUOTED = 5,         //! State when leaving a quoted field
 	ESCAPE = 6,           //! State when encountering an escape character (e.g., \)
-	INVALID = 7           //! Got to an Invalid State, this should error.
+	EMPTY_LINE = 7,       //! State when encountering an empty line (i.e., \r\r \n\n, \n\r)
+	INVALID = 8           //! Got to an Invalid State, this should error.
 };
 
 //! The CSV State Machine comprises a state transition array (STA).

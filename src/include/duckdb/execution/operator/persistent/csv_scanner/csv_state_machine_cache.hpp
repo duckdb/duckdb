@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
 
 namespace duckdb {
-static constexpr uint32_t NUM_STATES = 7;
+static constexpr uint32_t NUM_STATES = 8;
 static constexpr uint32_t NUM_TRANSITIONS = 256;
 typedef uint8_t state_machine_t[NUM_STATES][NUM_TRANSITIONS];
 

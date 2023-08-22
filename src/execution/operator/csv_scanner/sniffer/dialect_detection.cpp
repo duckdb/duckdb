@@ -25,17 +25,12 @@ struct SniffDialect {
 
 		machine.state = static_cast<CSVState>(
 		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
-		bool empty_line =
-		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
-		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
-		     machine.previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
 		machine.column_count += machine.previous_state == CSVState::DELIMITER;
 		sniffed_column_counts[machine.cur_rows] = machine.column_count;
-		machine.cur_rows += machine.previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		machine.cur_rows +=
+		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
 		machine.column_count -= (machine.column_count - 1) * (machine.previous_state == CSVState::RECORD_SEPARATOR);
 
 		// It means our carriage return is actually a record separator
@@ -59,13 +54,7 @@ struct SniffDialect {
 		if (machine.state == CSVState::INVALID) {
 			return;
 		}
-		bool empty_line =
-		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::CARRIAGE_RETURN) ||
-		    (machine.state == CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.state == CSVState::CARRIAGE_RETURN && machine.previous_state == CSVState::RECORD_SEPARATOR) ||
-		    (machine.pre_previous_state == CSVState::RECORD_SEPARATOR &&
-		     machine.previous_state == CSVState::CARRIAGE_RETURN);
-		if (machine.cur_rows < machine.options.sample_chunk_size && !empty_line) {
+		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
 		}
 		NewLineIdentifier suggested_newline;
