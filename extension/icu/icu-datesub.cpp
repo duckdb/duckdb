@@ -3,6 +3,7 @@
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 
 namespace duckdb {
@@ -138,13 +139,13 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ClientContext &context) {
+	static void AddFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
@@ -265,22 +266,22 @@ struct ICUCalendarDiff : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, Bind);
 	}
 
-	static void AddFunctions(const string &name, ClientContext &context) {
+	static void AddFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUDateSubFunctions(ClientContext &context) {
-	ICUCalendarSub::AddFunctions("date_sub", context);
-	ICUCalendarSub::AddFunctions("datesub", context);
+void RegisterICUDateSubFunctions(DatabaseInstance &instance) {
+	ICUCalendarSub::AddFunctions("date_sub", instance);
+	ICUCalendarSub::AddFunctions("datesub", instance);
 
-	ICUCalendarDiff::AddFunctions("date_diff", context);
-	ICUCalendarDiff::AddFunctions("datediff", context);
+	ICUCalendarDiff::AddFunctions("date_diff", instance);
+	ICUCalendarDiff::AddFunctions("datediff", instance);
 }
 
 } // namespace duckdb
