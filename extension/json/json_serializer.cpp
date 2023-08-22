@@ -19,8 +19,7 @@ void JsonSerializer::PushValue(yyjson_mut_val *val) {
 	}
 }
 
-void JsonSerializer::SetTag(const field_id_t field_id, const char *tag) {
-	(void)field_id;
+void JsonSerializer::SetTag(const field_id_t, const char *tag) {
 	current_tag = yyjson_mut_strcpy(doc, tag);
 }
 
@@ -173,7 +172,7 @@ void JsonSerializer::WriteValue(uint32_t value) {
 }
 
 void JsonSerializer::WriteValue(int32_t value) {
-	auto val = yyjson_mut_int(doc, value);
+	auto val = yyjson_mut_sint(doc, value);
 	PushValue(val);
 }
 

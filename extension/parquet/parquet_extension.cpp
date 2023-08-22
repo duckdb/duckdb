@@ -201,8 +201,9 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (loption == "compression" || loption == "codec") {
-				// CODEC option has no effect on parquet read: we determine codec from the file
+			if (loption == "compression" || loption == "codec" || loption == "row_group_size") {
+				// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
+				// These options are determined from the file.
 				continue;
 			} else if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = true;

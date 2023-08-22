@@ -35,6 +35,9 @@ static scalar_function_t GetScalarIntegerFunction(PhysicalType type) {
 	case PhysicalType::INT64:
 		function = &ScalarFunction::BinaryFunction<int64_t, int64_t, int64_t, OP>;
 		break;
+	case PhysicalType::INT128:
+		function = &ScalarFunction::BinaryFunction<hugeint_t, hugeint_t, hugeint_t, OP>;
+		break;
 	case PhysicalType::UINT8:
 		function = &ScalarFunction::BinaryFunction<uint8_t, uint8_t, uint8_t, OP>;
 		break;
@@ -302,7 +305,7 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<AddOperator, DecimalAddOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction("+", {left_type, right_type}, left_type,
 			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), nullptr,
 			                      nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
@@ -564,7 +567,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<SubtractOperator, DecimalSubtractOverflowCheck>;
 			return function;
-		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+		} else if (left_type.IsIntegral()) {
 			return ScalarFunction(
 			    "-", {left_type, right_type}, left_type,
 			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), nullptr, nullptr,
@@ -768,7 +771,7 @@ void MultiplyFun::RegisterFunction(BuiltinFunctions &set) {
 			function.serialize = SerializeDecimalArithmetic;
 			function.deserialize = DeserializeDecimalArithmetic<MultiplyOperator, DecimalMultiplyOverflowCheck>;
 			functions.AddFunction(function);
-		} else if (TypeIsIntegral(type.InternalType()) && type.id() != LogicalTypeId::HUGEINT) {
+		} else if (TypeIsIntegral(type.InternalType())) {
 			functions.AddFunction(ScalarFunction(
 			    {type, type}, type, GetScalarIntegerFunction<MultiplyOperatorOverflowCheck>(type.InternalType()),
 			    nullptr, nullptr,
