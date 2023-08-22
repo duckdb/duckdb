@@ -60,15 +60,15 @@ private:
 		Write<uint8_t>(static_cast<uint8_t>(kind));
 	}
 
-	explicit BinarySerializer() {
+	explicit BinarySerializer(bool serialize_default_values_p = false) {
+		serialize_default_values = serialize_default_values_p;
 		serialize_enum_as_string = false;
-		serialize_default_values = false;
 	}
 
 public:
 	template <class T>
-	static vector<data_t> Serialize(T &obj) {
-		BinarySerializer serializer;
+	static vector<data_t> Serialize(T &obj, bool serialize_default_values = false) {
+		BinarySerializer serializer(serialize_default_values);
 		serializer.OnObjectBegin();
 		obj.FormatSerialize(serializer);
 		serializer.OnObjectEnd();
