@@ -13,18 +13,40 @@ class TestDateTimeTimeStamp(object):
     def test_timestamp_high(self, pandas):
         duckdb_time = duckdb.query("SELECT '2260-01-01 23:59:00'::TIMESTAMP AS '0'").df()
         df_in = pandas.DataFrame(
-            {0: pandas.Series(data=[datetime.datetime(year=2260, month=1, day=1, hour=23, minute=59)], dtype='object')}
+            {
+                0: pandas.Series(
+                    data=[datetime.datetime(year=2260, month=1, day=1, hour=23, minute=59)],
+                    dtype='datetime64[us]',
+                )
+            }
         )
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_timestamp_low(self, pandas):
-        duckdb_time = duckdb.query("SELECT '1680-01-01 23:59:00'::TIMESTAMP AS '0'").df()
+        duckdb_time = duckdb.query(
+            """
+            SELECT '1680-01-01 23:59:00.234243'::TIMESTAMP AS '0'
+        """
+        ).df()
         df_in = pandas.DataFrame(
-            {0: pandas.Series(data=[datetime.datetime(year=1680, month=1, day=1, hour=23, minute=59)], dtype='object')}
+            {
+                '0': pandas.Series(
+                    data=[
+                        pandas.Timestamp(
+                            datetime.datetime(year=1680, month=1, day=1, hour=23, minute=59, microsecond=234243),
+                            unit='us',
+                        )
+                    ],
+                    dtype='datetime64[us]',
+                )
+            }
         )
+        print('original:', duckdb_time['0'].dtype)
+        print('df_in:', df_in['0'].dtype)
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
+        print('df_out:', df_out['0'].dtype)
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
     @pytest.mark.skipif(
