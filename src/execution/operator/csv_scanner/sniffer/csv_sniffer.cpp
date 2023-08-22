@@ -26,7 +26,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	DetectTypes();
 	// 3. Header Detection
 	DetectHeader();
-	D_ASSERT(best_sql_types_candidates.size() == names.size());
+	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// 4. Type Replacement
 	ReplaceTypes();
 	// 5. Type Refinement

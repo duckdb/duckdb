@@ -38,7 +38,8 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// Here we identify if we can run this CSV file on parallel or not.
-	bool empty_options = options.dialect_options.delimiter == '\0' || options.dialect_options.escape == '\0' || options.dialect_options.quote == '\0';
+	bool empty_options = options.dialect_options.delimiter == '\0' || options.dialect_options.escape == '\0' ||
+	                     options.dialect_options.quote == '\0';
 	bool not_supported_options = options.null_padding;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -707,8 +708,8 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	}
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
-	    bind_data.options.dialect_options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
-	    bind_data.options.dialect_options.header && bind_data.options.has_header);
+	    bind_data.options.dialect_options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism,
+	    input.column_ids, bind_data.options.dialect_options.header && bind_data.options.has_header);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1097,7 +1098,7 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
 
-void DialectOptions::Serialize(FieldWriter &writer) const{
+void DialectOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<char>(delimiter);
 	writer.WriteField<char>(quote);
 	writer.WriteField<char>(escape);
@@ -1113,7 +1114,7 @@ void DialectOptions::Serialize(FieldWriter &writer) const{
 	writer.WriteList<string>(csv_formats);
 }
 
-void DialectOptions::Deserialize(FieldReader &reader){
+void DialectOptions::Deserialize(FieldReader &reader) {
 	delimiter = reader.ReadRequired<char>();
 	quote = reader.ReadRequired<char>();
 	escape = reader.ReadRequired<char>();
@@ -1125,7 +1126,6 @@ void DialectOptions::Deserialize(FieldReader &reader){
 	bool has_date = reader.ReadRequired<bool>();
 	bool has_timestamp = reader.ReadRequired<bool>();
 	auto formats = reader.ReadRequiredList<string>();
-
 
 	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
 	if (has_date) {
@@ -1142,7 +1142,6 @@ void DialectOptions::Deserialize(FieldReader &reader){
 		}
 		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
 	}
-
 }
 
 void CSVReaderOptions::Serialize(FieldWriter &writer) const {
@@ -1219,7 +1218,6 @@ void CSVReaderOptions::Deserialize(FieldReader &reader) {
 
 	// dialect options
 	dialect_options.Deserialize(reader);
-
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {

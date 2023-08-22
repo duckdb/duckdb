@@ -97,7 +97,8 @@ void CSVSniffer::DetectHeader() {
 	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
 	bool first_row_nulls = true;
-	if (!best_candidate->options.null_padding && best_sql_types_candidates.size() != best_header_row.size()) {
+	if (!best_candidate->options.null_padding &&
+	    best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
 		// Something went wrong in the auto-detection
 		throw InvalidInputException(
 		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
@@ -110,7 +111,7 @@ void CSVSniffer::DetectHeader() {
 		}
 
 		// try cast to sql_type of column
-		const auto &sql_type = best_sql_types_candidates[col].back();
+		const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
 		if (!TryCastValue(*best_candidate, dummy_val, sql_type)) {
 			first_row_consistent = false;
 		}

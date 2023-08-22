@@ -115,7 +115,7 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char
                                  CSVStateMachineCache &csv_state_machine_cache_p)
     : csv_state_machine_cache(csv_state_machine_cache_p), options(options_p),
       csv_buffer_iterator(std::move(buffer_manager_p)),
-      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)){
+      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)) {
 	dialect_options.quote = quote_p;
 	dialect_options.escape = escape_p;
 	dialect_options.delimiter = delim_p;
@@ -142,7 +142,7 @@ void CSVStateMachine::Print() {
 			}
 		}
 		std::cout << "}";
-		if (i != NUM_STATES -1) {
+		if (i != NUM_STATES - 1) {
 			std::cout << ",";
 		}
 		std::cout << std::endl;

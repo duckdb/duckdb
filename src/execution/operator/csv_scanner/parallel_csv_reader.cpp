@@ -41,7 +41,8 @@ void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char) {
 	// Set the delimiter if not set yet.
 	SetNewLineDelimiter(carry, carry_followed_by_nl);
-	D_ASSERT(options.dialect_options.new_line == NewLineIdentifier::SINGLE || options.dialect_options.new_line == NewLineIdentifier::CARRY_ON);
+	D_ASSERT(options.dialect_options.new_line == NewLineIdentifier::SINGLE ||
+	         options.dialect_options.new_line == NewLineIdentifier::CARRY_ON);
 	if (options.dialect_options.new_line == NewLineIdentifier::SINGLE) {
 		return (!carry) || (carry && !carry_followed_by_nl);
 	}
@@ -496,7 +497,8 @@ unquote : {
 		goto final_state;
 	}
 	auto c = (*buffer)[position_buffer];
-	if (c == options.dialect_options.quote && (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
+	if (c == options.dialect_options.quote &&
+	    (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
@@ -535,7 +537,8 @@ handle_escape : {
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
-	if ((*buffer)[position_buffer] != options.dialect_options.quote && (*buffer)[position_buffer] != options.dialect_options.escape) {
+	if ((*buffer)[position_buffer] != options.dialect_options.quote &&
+	    (*buffer)[position_buffer] != options.dialect_options.escape) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());

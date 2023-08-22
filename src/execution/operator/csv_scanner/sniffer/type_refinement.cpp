@@ -93,13 +93,14 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		// use the date format to cast the chunk
 		string error_message;
 		idx_t line_error;
-		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col, dummy_result, size,
-		                                        error_message, line_error);
-	} else if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
+		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col,
+		                                        dummy_result, size, error_message, line_error);
+	} else if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+	           sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
-		return BaseCSVReader::TryCastTimestampVector(best_candidate->dialect_options.date_format, parse_chunk_col, dummy_result, size,
-		                                             error_message);
+		return BaseCSVReader::TryCastTimestampVector(best_candidate->dialect_options.date_format, parse_chunk_col,
+		                                             dummy_result, size, error_message);
 	} else {
 		// target type is not varchar: perform a cast
 		string error_message;
@@ -132,9 +133,10 @@ void CSVSniffer::RefineTypes() {
 				// we finished the file: stop
 				// set sql types
 				detected_types.clear();
-				for (auto &best_sql_types_candidate : best_sql_types_candidates) {
-					LogicalType d_type = best_sql_types_candidate.back();
-					if (best_sql_types_candidate.size() == best_candidate->options.auto_type_candidates.size()) {
+				for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
+					LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
+					if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
+					    best_candidate->options.auto_type_candidates.size()) {
 						d_type = LogicalType::VARCHAR;
 					}
 					detected_types.push_back(d_type);
@@ -143,7 +145,7 @@ void CSVSniffer::RefineTypes() {
 			}
 			best_candidate->csv_buffer_iterator.Process<Parse>(*best_candidate, parse_chunk);
 			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
+				vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					//	narrow down the date formats
@@ -156,7 +158,8 @@ void CSVSniffer::RefineTypes() {
 							}
 							//	doesn't work - move to the next one
 							best_type_format_candidates.pop_back();
-							best_candidate->dialect_options.has_format[sql_type.id()] = (!best_type_format_candidates.empty());
+							best_candidate->dialect_options.has_format[sql_type.id()] =
+							    (!best_type_format_candidates.empty());
 							if (!best_type_format_candidates.empty()) {
 								SetDateFormat(*best_candidate, best_type_format_candidates.back(), sql_type.id());
 							}
@@ -183,9 +186,10 @@ void CSVSniffer::RefineTypes() {
 		detected_types.clear();
 	}
 	// set sql types
-	for (auto &best_sql_types_candidate : best_sql_types_candidates) {
-		LogicalType d_type = best_sql_types_candidate.back();
-		if (best_sql_types_candidate.size() == best_candidate->options.auto_type_candidates.size()) {
+	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
+		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
+		if (best_sql_types_candidates_per_column_idx[column_idx].size() ==
+		    best_candidate->options.auto_type_candidates.size()) {
 			d_type = LogicalType::VARCHAR;
 		}
 		detected_types.push_back(d_type);

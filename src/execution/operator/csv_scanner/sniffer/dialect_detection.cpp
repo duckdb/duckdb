@@ -94,8 +94,8 @@ struct SniffDialect {
 
 void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates,
                                                        vector<QuoteRule> &quoterule_candidates,
-                                                       vector<vector<char>> &quote_candidates_map,
-                                                       vector<vector<char>> &escape_candidates_map) {
+                                                       unordered_map<uint8_t, vector<char>> &quote_candidates_map,
+                                                       unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
 		delim_candidates = {options.dialect_options.delimiter};
@@ -105,10 +105,14 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 	}
 	if (options.has_quote) {
 		// user provided quote: use that quote rule
-		quote_candidates_map = {{options.dialect_options.quote}, {options.dialect_options.quote}, {options.dialect_options.quote}};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {options.dialect_options.quote};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {options.dialect_options.quote};
+		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {options.dialect_options.quote};
 	} else {
 		// no quote rule provided: use standard/common quotes
-		quote_candidates_map = {{'\"'}, {'\"', '\''}, {'\0'}};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\"', '\''};
+		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	}
 	if (options.has_escape) {
 		// user provided escape: use that escape rule
@@ -117,7 +121,7 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 		} else {
 			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
-		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.dialect_options.escape};
+		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {options.dialect_options.escape};
 	} else {
 		// no escape provided: try standard/common escapes
 		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
@@ -127,14 +131,14 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
                                                  const vector<char> &delim_candidates,
                                                  const vector<QuoteRule> &quoterule_candidates,
-                                                 const vector<vector<char>> &quote_candidates_map,
-                                                 const vector<vector<char>> &escape_candidates_map) {
+                                                 const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
+                                                 const unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
 	// Generate state machines for all option combinations
-	for (auto quoterule : quoterule_candidates) {
-		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
+	for (const auto quoterule : quoterule_candidates) {
+		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delim : delim_candidates) {
-				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
+				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
 					csv_state_machines.emplace_back(
@@ -187,7 +191,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	bool require_more_padding = padding_count > prev_padding_count;
 	bool require_less_padding = padding_count < prev_padding_count;
 	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found;
-	bool rows_consistent = start_row + consistent_rows - options.dialect_options.skip_rows == sniffed_column_counts.size();
+	bool rows_consistent =
+	    start_row + consistent_rows - options.dialect_options.skip_rows == sniffed_column_counts.size();
 	bool more_than_one_row = (consistent_rows > 1);
 	bool more_than_one_column = (num_cols > 1);
 	bool start_good = !candidates.empty() && (start_row <= candidates.front()->start_row);
@@ -276,9 +281,12 @@ void CSVSniffer::DetectDialect() {
 	// Quote-Rule Candidates
 	vector<QuoteRule> quoterule_candidates;
 	// Candidates for the quote option
-	vector<vector<char>> quote_candidates_map;
+	unordered_map<uint8_t, vector<char>> quote_candidates_map;
 	// Candidates for the escape option
-	vector<vector<char>> escape_candidates_map = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
+	unordered_map<uint8_t, vector<char>> escape_candidates_map;
+	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\0', '\"', '\''};
+	escape_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {'\\'};
+	escape_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {'\0'};
 	// Number of rows read
 	idx_t rows_read = 0;
 	// Best Number of consistent rows (i.e., presenting all columns)

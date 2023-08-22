@@ -125,7 +125,8 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 	if (value.IsNull()) {
 		return true;
 	}
-	if (candidate.dialect_options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
+	if (candidate.dialect_options.has_format.find(LogicalTypeId::DATE)->second &&
+	    sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
 		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
@@ -169,7 +170,8 @@ struct SniffValue {
 	inline static bool Process(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values,
 	                           char current_char) {
 
-		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
+		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
+		     (current_char == '\r' || current_char == '\n')) ||
 		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
 		}
@@ -235,8 +237,10 @@ void CSVSniffer::DetectTypes() {
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
-		vector<vector<LogicalType>> info_sql_types_candidates(candidate->dialect_options.num_cols,
-		                                                      candidate->options.auto_type_candidates);
+		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
+		for (idx_t i = 0; i < candidate->dialect_options.num_cols; i++) {
+			info_sql_types_candidates[i] = candidate->options.auto_type_candidates;
+		}
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
@@ -392,7 +396,7 @@ void CSVSniffer::DetectTypes() {
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
-			best_sql_types_candidates = info_sql_types_candidates;
+			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
 			best_header_row = values[0].second;
 		}

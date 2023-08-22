@@ -277,8 +277,9 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 
 std::string CSVReaderOptions::ToString() const {
 	return "  file=" + file_path + "\n  delimiter='" + dialect_options.delimiter +
-	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" + dialect_options.quote +
-	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" + dialect_options.escape +
+	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" +
+	       dialect_options.quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+	       "\n  escape='" + dialect_options.escape +
 	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 	       "\n  header=" + std::to_string(dialect_options.header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +

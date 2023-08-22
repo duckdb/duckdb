@@ -14,9 +14,10 @@
 namespace duckdb {
 
 //! Different Quote Rules
-enum class QuoteRule : uint8_t { QUOTES_RFC = 0, //! quote = " escape = (\0 || " || ')
-	                             QUOTES_OTHER = 1, //! quote = ( " || ' ) escape = '\\'
-	                             NO_QUOTES = 2 //! quote = \0 escape = \0
+enum class QuoteRule : uint8_t {
+	QUOTES_RFC = 0,   //! quote = " escape = (\0 || " || ')
+	QUOTES_OTHER = 1, //! quote = ( " || ' ) escape = '\\'
+	NO_QUOTES = 2     //! quote = \0 escape = \0
 };
 
 //! Struct to store the result of the Sniffer
@@ -65,14 +66,14 @@ private:
 	//! Functions called in the main DetectDialect(); function
 	//! 1. Generates the search space candidates for the dialect
 	void GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates, vector<QuoteRule> &quoterule_candidates,
-	                                           vector<vector<char>> &quote_candidates_map,
-	                                           vector<vector<char>> &escape_candidates_map);
+	                                           unordered_map<uint8_t, vector<char>> &quote_candidates_map,
+	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 2. Generates the search space candidates for the state machines
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
 	                                     const vector<char> &delim_candidates,
 	                                     const vector<QuoteRule> &quoterule_candidates,
-	                                     const vector<vector<char>> &quote_candidates_map,
-	                                     const vector<vector<char>> &escape_candidates_map);
+	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
+	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<CSVStateMachine>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count, idx_t prev_column_count = 0);
@@ -100,7 +101,7 @@ private:
 	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
 	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
 	};
-	vector<vector<LogicalType>> best_sql_types_candidates;
+	unordered_map<idx_t, vector<LogicalType>> best_sql_types_candidates_per_column_idx;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
 	unique_ptr<CSVStateMachine> best_candidate;
 	vector<Value> best_header_row;

@@ -432,7 +432,8 @@ unquote:
 		offset = 1;
 		goto final_state;
 	}
-	if (buffer[position] == options.dialect_options.quote && (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
+	if (buffer[position] == options.dialect_options.quote &&
+	    (options.dialect_options.escape == '\0' || options.dialect_options.escape == options.dialect_options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position - start);
 		goto in_quotes;

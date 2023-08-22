@@ -389,12 +389,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool target_type_not_varchar = false;
 			if (options.dialect_options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options.dialect_options.date_format, parse_vector, result_vector, parse_chunk.size(),
-				                            error_message, line_error);
-			} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
+				success = TryCastDateVector(options.dialect_options.date_format, parse_vector, result_vector,
+				                            parse_chunk.size(), error_message, line_error);
+			} else if (options.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+			           type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options.dialect_options.date_format, parse_vector, result_vector, parse_chunk.size(),
-				                                 error_message);
+				success = TryCastTimestampVector(options.dialect_options.date_format, parse_vector, result_vector,
+				                                 parse_chunk.size(), error_message);
 			} else if (options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 				success = TryCastFloatingVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),
