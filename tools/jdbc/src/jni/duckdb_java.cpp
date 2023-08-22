@@ -278,18 +278,15 @@ struct ConnectionHolder {
  */
 static Connection *get_connection(JNIEnv *env, jobject conn_ref_buf) {
 	if (!conn_ref_buf) {
-		ThrowJNI(env, "Invalid connection");
-		return nullptr;
+		throw ConnectionException("Invalid connection");
 	}
 	auto conn_holder = (ConnectionHolder *)env->GetDirectBufferAddress(conn_ref_buf);
 	if (!conn_holder) {
-		ThrowJNI(env, "Invalid connection");
-		return nullptr;
+		throw ConnectionException("Invalid connection");
 	}
 	auto conn_ref = conn_holder->connection.get();
 	if (!conn_ref || !conn_ref->context) {
-		ThrowJNI(env, "Invalid connection");
-		return nullptr;
+		throw ConnectionException("Invalid connection");
 	}
 
 	return conn_ref;
@@ -464,16 +461,14 @@ struct ResultHolder {
 jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectArray params) {
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref) {
-		ThrowJNI(env, "Invalid statement");
-		return nullptr;
+		throw InvalidInputException("Invalid statement");
 	}
 	auto res_ref = make_uniq<ResultHolder>();
 	duckdb::vector<Value> duckdb_params;
 
 	idx_t param_len = env->GetArrayLength(params);
 	if (param_len != stmt_ref->stmt->n_param) {
-		ThrowJNI(env, "Parameter count mismatch");
-		return nullptr;
+		throw InvalidInputException("Parameter count mismatch");
 	}
 
 	if (param_len > 0) {
@@ -523,8 +518,7 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 
 				// DECIMAL scale is unsigned, so negative values are not supported
 				if (scale < 0) {
-					ThrowJNI(env, "Converting from a BigDecimal with negative scale is not supported");
-					return nullptr;
+					throw InvalidInputException("Converting from a BigDecimal with negative scale is not supported");
 				}
 
 				if (precision <= 18) { // normal sizes -> avoid string processing
@@ -545,8 +539,7 @@ jobject _duckdb_jdbc_execute(JNIEnv *env, jclass, jobject stmt_ref_buf, jobjectA
 				auto param_string = jstring_to_string(env, (jstring)param);
 				duckdb_params.push_back(Value(param_string));
 			} else {
-				ThrowJNI(env, "Unsupported parameter type");
-				return nullptr;
+				throw InvalidInputException("Unsupported parameter type");
 			}
 		}
 	}
@@ -641,8 +634,7 @@ static jobject build_meta(JNIEnv *env, size_t column_count, size_t n_param, cons
 jobject _duckdb_jdbc_query_result_meta(JNIEnv *env, jclass, jobject res_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
-		ThrowJNI(env, "Invalid result set");
-		return nullptr;
+		throw InvalidInputException("Invalid result set");
 	}
 	auto &result = res_ref->res;
 
@@ -655,8 +647,7 @@ jobject _duckdb_jdbc_prepared_statement_meta(JNIEnv *env, jclass, jobject stmt_r
 
 	auto stmt_ref = (StatementHolder *)env->GetDirectBufferAddress(stmt_ref_buf);
 	if (!stmt_ref || !stmt_ref->stmt || stmt_ref->stmt->HasError()) {
-		ThrowJNI(env, "Invalid statement");
-		return nullptr;
+		throw InvalidInputException("Invalid statement");
 	}
 
 	auto &stmt = stmt_ref->stmt;
@@ -670,8 +661,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 jobjectArray _duckdb_jdbc_fetch(JNIEnv *env, jclass, jobject res_ref_buf, jobject conn_ref_buf) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
-		ThrowJNI(env, "Invalid result set");
-		return nullptr;
+		throw InvalidInputException("Invalid result set");
 	}
 
 	auto conn_ref = get_connection(env, conn_ref_buf);
@@ -871,8 +861,7 @@ jobject _duckdb_jdbc_create_appender(JNIEnv *env, jclass, jobject conn_ref_buf, 
 static Appender *get_appender(JNIEnv *env, jobject appender_ref_buf) {
 	auto appender_ref = (Appender *)env->GetDirectBufferAddress(appender_ref_buf);
 	if (!appender_ref) {
-		ThrowJNI(env, "Invalid appender");
-		return nullptr;
+		throw InvalidInputException("Invalid appender");
 	}
 	return appender_ref;
 }
@@ -940,8 +929,7 @@ void _duckdb_jdbc_appender_append_null(JNIEnv *env, jclass, jobject appender_ref
 jlong _duckdb_jdbc_arrow_stream(JNIEnv *env, jclass, jobject res_ref_buf, jlong batch_size) {
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
-		ThrowJNI(env, "Invalid result set");
-		return 0;
+		throw InvalidInputException("Invalid result set");
 	}
 
 	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
