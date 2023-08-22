@@ -373,7 +373,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::BitStringAgg(const std::string &c
 		throw InvalidInputException("Both min and max values must be set");
 	}
 	if (!min.is_none()) {
-		if (!py::isinstance<py::int_>(min) or !py::isinstance<py::int_>(max)) {
+		if (!py::isinstance<py::int_>(min) || !py::isinstance<py::int_>(max)) {
 			throw InvalidTypeException("min and max must be of type int");
 		}
 	}
