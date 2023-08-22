@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-void RegisterICUTableRangeFunctions(ClientContext &context);
+void RegisterICUTableRangeFunctions(DatabaseInstance &instance);
 
 } // namespace duckdb

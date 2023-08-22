@@ -3,6 +3,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "unicode/calendar.h"
@@ -168,27 +169,29 @@ struct ICUTableRange {
 		output.SetCardinality(size);
 	}
 
-	static void AddICUTableRangeFunction(ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
-
+	static void AddICUTableRangeFunction(DatabaseInstance &instance) {
 		TableFunctionSet range("range");
 		range.AddFunction(TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                ICUTableRangeFunction, Bind<false>, Init));
-		CreateTableFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, range_func_info);
+
+		for (auto &fun : range.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
 		generate_series.AddFunction(
 		    TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                  ICUTableRangeFunction, Bind<true>, Init));
-		CreateTableFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, generate_series_func_info);
+
+		for (auto &fun : generate_series.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUTableRangeFunctions(ClientContext &context) {
-	ICUTableRange::AddICUTableRangeFunction(context);
+void RegisterICUTableRangeFunctions(DatabaseInstance &instance) {
+	ICUTableRange::AddICUTableRangeFunction(instance);
 }
 
 } // namespace duckdb
