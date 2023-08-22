@@ -1,6 +1,7 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
 #include "reltoaltrep.hpp"
+#include "cpp11/declarations.hpp"
 
 using namespace duckdb;
 
@@ -42,11 +43,11 @@ void RelToAltrep::Initialize(DllInfo *dll) {
 template <class T>
 static T *GetFromExternalPtr(SEXP x) {
 	if (!x) {
-		Rf_error("need a SEXP pointer");
+		cpp11::stop("need a SEXP pointer");
 	}
 	auto wrapper = (T *)R_ExternalPtrAddr(R_altrep_data1(x));
 	if (!wrapper) {
-		Rf_error("This looks like it has been freed");
+		cpp11::stop("This looks like it has been freed");
 	}
 	return wrapper;
 }
@@ -68,7 +69,7 @@ struct AltrepRelationWrapper {
 			}
 			res = rel->Execute();
 			if (res->HasError()) {
-				Rf_error("Error evaluating duckdb query: %s", res->GetError().c_str());
+				cpp11::stop("Error evaluating duckdb query: %s", res->GetError().c_str());
 			}
 			D_ASSERT(res->type == QueryResultType::MATERIALIZED_RESULT);
 		}
@@ -129,16 +130,20 @@ struct AltrepVectorWrapper {
 
 Rboolean RelToAltrep::RownamesInspect(SEXP x, int pre, int deep, int pvec,
                                       void (*inspect_subtree)(SEXP, int, int, int)) {
+	BEGIN_CPP11
 	AltrepRownamesWrapper::Get(x); // make sure this is alive
 	Rprintf("DUCKDB_ALTREP_REL_ROWNAMES\n");
 	return TRUE;
+	END_CPP11_EX(FALSE)
 }
 
 Rboolean RelToAltrep::RelInspect(SEXP x, int pre, int deep, int pvec, void (*inspect_subtree)(SEXP, int, int, int)) {
+	BEGIN_CPP11
 	auto wrapper = AltrepVectorWrapper::Get(x); // make sure this is alive
 	auto &col = wrapper->rel->rel->Columns()[wrapper->column_index];
 	Rprintf("DUCKDB_ALTREP_REL_VECTOR %s (%s)\n", col.Name().c_str(), col.Type().ToString().c_str());
 	return TRUE;
+	END_CPP11_EX(FALSE)
 }
 
 // this allows us to set row names on a data frame with an int argument without calling INTPTR on it
@@ -150,31 +155,43 @@ static void install_new_attrib(SEXP vec, SEXP name, SEXP val) {
 }
 
 R_xlen_t RelToAltrep::RownamesLength(SEXP x) {
+	// The BEGIN_CPP11 isn't strictly necessary here, but should be optimized away.
+	// It will become important if we ever support row names.
+	BEGIN_CPP11
 	// row.names vector has length 2 in the "compact" case which we're using
 	// see https://stat.ethz.ch/R-manual/R-devel/library/base/html/row.names.html
 	return 2;
+	END_CPP11_EX(0)
 }
 
 void *RelToAltrep::RownamesDataptr(SEXP x, Rboolean writeable) {
+	BEGIN_CPP11
 	auto rownames_wrapper = AltrepRownamesWrapper::Get(x);
 	auto row_count = rownames_wrapper->rel->GetQueryResult()->RowCount();
 	if (row_count > (idx_t)NumericLimits<int32_t>::Maximum()) {
-		Rf_error("Integer overflow for row.names attribute");
+		cpp11::stop("Integer overflow for row.names attribute");
 	}
 	rownames_wrapper->rowlen_data[1] = -row_count;
 	return rownames_wrapper->rowlen_data;
+	END_CPP11
 }
 
 R_xlen_t RelToAltrep::VectorLength(SEXP x) {
+	BEGIN_CPP11
 	return AltrepVectorWrapper::Get(x)->rel->GetQueryResult()->RowCount();
+	END_CPP11_EX(0)
 }
 
 void *RelToAltrep::VectorDataptr(SEXP x, Rboolean writeable) {
+	BEGIN_CPP11
 	return AltrepVectorWrapper::Get(x)->Dataptr();
+	END_CPP11
 }
 
 SEXP RelToAltrep::VectorStringElt(SEXP x, R_xlen_t i) {
+	BEGIN_CPP11
 	return STRING_ELT(AltrepVectorWrapper::Get(x)->Vector(), i);
+	END_CPP11
 }
 
 static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
@@ -208,7 +225,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	case LogicalTypeId::UUID:
 		return RelToAltrep::string_class;
 	default:
-		Rf_error("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
+		cpp11::stop("rel_to_altrep: Unknown column type for altrep: %s", type.ToString().c_str());
 	}
 }
 
@@ -243,7 +260,7 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 
 [[cpp11::register]] SEXP rapi_rel_from_altrep_df(SEXP df) {
 	if (!Rf_inherits(df, "data.frame")) {
-		Rf_error("Not a data.frame");
+		cpp11::stop("Not a data.frame");
 	}
 
 	SEXP row_names = R_NilValue;
@@ -254,11 +271,11 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	}
 
 	if (row_names == R_NilValue || !ALTREP(row_names)) {
-		Rf_error("Not a 'special' data.frame");
+		cpp11::stop("Not a 'special' data.frame");
 	}
 	auto res = R_altrep_data2(row_names);
 	if (res == R_NilValue) {
-		Rf_error("NULL in data2?");
+		cpp11::stop("NULL in data2?");
 	}
 	return res;
 }
@@ -267,15 +284,15 @@ static R_altrep_class_t LogicalTypeToAltrepType(const LogicalType &type) {
 	D_ASSERT(df);
 	auto first_col = VECTOR_ELT(df, 0);
 	if (!ALTREP(first_col)) {
-		Rf_error("Not a lazy data frame");
+		cpp11::stop("Not a lazy data frame");
 	}
 	auto altrep_data = R_altrep_data1(first_col);
 	if (!altrep_data) {
-		Rf_error("Not a lazy data frame");
+		cpp11::stop("Not a lazy data frame");
 	}
 	auto wrapper = (AltrepVectorWrapper *)R_ExternalPtrAddr(altrep_data);
 	if (!wrapper) {
-		Rf_error("Invalid lazy data frame");
+		cpp11::stop("Invalid lazy data frame");
 	}
 	return wrapper->rel->res.get() != nullptr;
 }
