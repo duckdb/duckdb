@@ -7,6 +7,7 @@
 #include "duckdb/common/vector_operations/senary_executor.hpp"
 #include "duckdb/common/vector_operations/septenary_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 #include "include/icu-datetrunc.hpp"
@@ -57,11 +58,8 @@ struct ICUMakeDate : public ICUDateFunc {
 		return BoundCastInfo(CastToDate, std::move(cast_data));
 	}
 
-	static void AddCasts(ClientContext &context) {
-		auto &config = DBConfig::GetConfig(context);
-		auto &casts = config.GetCastFunctions();
-
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
+	static void AddCasts(DatabaseInstance &instance) {
+		ExtensionUtil::RegisterCastFunction(instance, LogicalType::TIMESTAMP_TZ, LogicalType::DATE, CastToDate);
 	}
 };
 
@@ -146,21 +144,21 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
 	}
 
-	static void AddFunction(const string &name, ClientContext &context) {
+	static void AddFunction(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUMakeDateFunctions(ClientContext &context) {
-	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", context);
-	ICUMakeDate::AddCasts(context);
+void RegisterICUMakeDateFunctions(DatabaseInstance &instance) {
+	ICUMakeTimestampTZFunc::AddFunction("make_timestamptz", instance);
+	ICUMakeDate::AddCasts(instance);
 }
 
 } // namespace duckdb
