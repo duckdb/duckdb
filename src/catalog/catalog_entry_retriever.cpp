@@ -13,8 +13,7 @@ namespace duckdb {
 LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schema, const string &name,
                                            OnEntryNotFound on_entry_not_found) {
 	QueryErrorContext error_context;
-	auto result =
-	    GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, std::move(error_context));
+	auto result = GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, error_context);
 	if (!result) {
 		return LogicalType::INVALID;
 	}
@@ -25,8 +24,7 @@ LogicalType CatalogEntryRetriever::GetType(Catalog &catalog, const string &schem
 LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &schema, const string &name,
                                            OnEntryNotFound on_entry_not_found) {
 	QueryErrorContext error_context;
-	auto result =
-	    GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, std::move(error_context));
+	auto result = GetEntry(CatalogType::TYPE_ENTRY, catalog, schema, name, on_entry_not_found, error_context);
 	if (!result) {
 		return LogicalType::INVALID;
 	}
@@ -46,7 +44,7 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(CatalogType type, Cat
                                                            const string &name, OnEntryNotFound on_entry_not_found,
                                                            QueryErrorContext error_context) {
 	return GetEntryInternal(
-	    [&]() { return catalog.GetEntry(context, type, schema, name, on_entry_not_found, std::move(error_context)); });
+	    [&]() { return catalog.GetEntry(context, type, schema, name, on_entry_not_found, error_context); });
 }
 
 } // namespace duckdb
