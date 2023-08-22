@@ -10,11 +10,11 @@
 namespace duckdb {
 
 void Constraint::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
+	serializer.WriteProperty(100, "type", type);
 }
 
 unique_ptr<Constraint> Constraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ConstraintType>("type");
+	auto type = deserializer.ReadProperty<ConstraintType>(100, "type");
 	unique_ptr<Constraint> result;
 	switch (type) {
 	case ConstraintType::CHECK:
@@ -37,61 +37,61 @@ unique_ptr<Constraint> Constraint::FormatDeserialize(FormatDeserializer &deseria
 
 void CheckConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
-	serializer.WriteProperty("expression", *expression);
+	serializer.WriteProperty(200, "expression", *expression);
 }
 
 unique_ptr<Constraint> CheckConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expression");
+	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>(200, "expression");
 	auto result = duckdb::unique_ptr<CheckConstraint>(new CheckConstraint(std::move(expression)));
 	return std::move(result);
 }
 
 void ForeignKeyConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
-	serializer.WriteProperty("pk_columns", pk_columns);
-	serializer.WriteProperty("fk_columns", fk_columns);
-	serializer.WriteProperty("fk_type", info.type);
-	serializer.WriteProperty("schema", info.schema);
-	serializer.WriteProperty("table", info.table);
-	serializer.WriteProperty("pk_keys", info.pk_keys);
-	serializer.WriteProperty("fk_keys", info.fk_keys);
+	serializer.WriteProperty(200, "pk_columns", pk_columns);
+	serializer.WriteProperty(201, "fk_columns", fk_columns);
+	serializer.WriteProperty(202, "fk_type", info.type);
+	serializer.WriteProperty(203, "schema", info.schema);
+	serializer.WriteProperty(204, "table", info.table);
+	serializer.WriteProperty(205, "pk_keys", info.pk_keys);
+	serializer.WriteProperty(206, "fk_keys", info.fk_keys);
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ForeignKeyConstraint>(new ForeignKeyConstraint());
-	deserializer.ReadProperty("pk_columns", result->pk_columns);
-	deserializer.ReadProperty("fk_columns", result->fk_columns);
-	deserializer.ReadProperty("fk_type", result->info.type);
-	deserializer.ReadProperty("schema", result->info.schema);
-	deserializer.ReadProperty("table", result->info.table);
-	deserializer.ReadProperty("pk_keys", result->info.pk_keys);
-	deserializer.ReadProperty("fk_keys", result->info.fk_keys);
+	deserializer.ReadProperty(200, "pk_columns", result->pk_columns);
+	deserializer.ReadProperty(201, "fk_columns", result->fk_columns);
+	deserializer.ReadProperty(202, "fk_type", result->info.type);
+	deserializer.ReadProperty(203, "schema", result->info.schema);
+	deserializer.ReadProperty(204, "table", result->info.table);
+	deserializer.ReadProperty(205, "pk_keys", result->info.pk_keys);
+	deserializer.ReadProperty(206, "fk_keys", result->info.fk_keys);
 	return std::move(result);
 }
 
 void NotNullConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
-	serializer.WriteProperty("index", index);
+	serializer.WriteProperty(200, "index", index);
 }
 
 unique_ptr<Constraint> NotNullConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto index = deserializer.ReadProperty<LogicalIndex>("index");
+	auto index = deserializer.ReadProperty<LogicalIndex>(200, "index");
 	auto result = duckdb::unique_ptr<NotNullConstraint>(new NotNullConstraint(index));
 	return std::move(result);
 }
 
 void UniqueConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
-	serializer.WriteProperty("is_primary_key", is_primary_key);
-	serializer.WriteProperty("index", index);
-	serializer.WriteProperty("columns", columns);
+	serializer.WriteProperty(200, "is_primary_key", is_primary_key);
+	serializer.WriteProperty(201, "index", index);
+	serializer.WriteProperty(202, "columns", columns);
 }
 
 unique_ptr<Constraint> UniqueConstraint::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<UniqueConstraint>(new UniqueConstraint());
-	deserializer.ReadProperty("is_primary_key", result->is_primary_key);
-	deserializer.ReadProperty("index", result->index);
-	deserializer.ReadProperty("columns", result->columns);
+	deserializer.ReadProperty(200, "is_primary_key", result->is_primary_key);
+	deserializer.ReadProperty(201, "index", result->index);
+	deserializer.ReadProperty(202, "columns", result->columns);
 	return std::move(result);
 }
 

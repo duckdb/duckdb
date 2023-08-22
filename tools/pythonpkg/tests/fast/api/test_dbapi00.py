@@ -88,6 +88,8 @@ class TestSimpleDBAPI(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_pandas_selection(self, duckdb_cursor, pandas):
+        import datetime
+
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchdf()
         arr = numpy.ma.masked_array(numpy.arange(11))
@@ -98,7 +100,18 @@ class TestSimpleDBAPI(object):
 
         duckdb_cursor.execute('SELECT * FROM timestamps')
         result = duckdb_cursor.fetchdf()
-        df = pandas.DataFrame({'t': pandas.to_datetime(['1992-10-03 18:34:45', '2010-01-01 00:00:01', None])})
+        df = pandas.DataFrame(
+            {
+                't': pandas.Series(
+                    data=[
+                        datetime.datetime(year=1992, month=10, day=3, hour=18, minute=34, second=45),
+                        datetime.datetime(year=2010, month=1, day=1, hour=0, minute=0, second=1),
+                        None,
+                    ],
+                    dtype='datetime64[us]',
+                )
+            }
+        )
         pandas.testing.assert_frame_equal(result, df)
 
     # def test_numpy_creation(self, duckdb_cursor):

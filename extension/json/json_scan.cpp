@@ -999,12 +999,12 @@ unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, 
 void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
-	serializer.WriteProperty("scan_data", bind_data);
+	serializer.WriteProperty(100, "scan_data", bind_data);
 }
 
 unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 	unique_ptr<JSONScanData> result;
-	deserializer.ReadProperty("scan_data", result);
+	deserializer.ReadProperty(100, "scan_data", result);
 	return std::move(result);
 }
 

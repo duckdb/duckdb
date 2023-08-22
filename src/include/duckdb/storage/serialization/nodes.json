@@ -7,11 +7,13 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "id",
         "type": "LogicalTypeId",
         "serialize_property": "id_"
       },
       {
+        "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
         "serialize_property": "type_info_",
@@ -28,14 +30,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "aliases",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "query",
         "type": "SelectStatement*"
       },
       {
+        "id": 102,
         "name": "materialized",
         "type": "CTEMaterialize"
       }
@@ -48,6 +53,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "map",
         "type": "unordered_map<string, CommonTableExpressionInfo*>"
       }
@@ -61,14 +67,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "OrderType"
       },
       {
+        "id": 101,
         "name": "null_order",
         "type": "OrderByNullType"
       },
       {
+        "id": 102,
         "name": "expression",
         "type": "ParsedExpression*"
       }
@@ -83,14 +92,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "OrderType"
       },
       {
+        "id": 101,
         "name": "null_order",
         "type": "OrderByNullType"
       },
       {
+        "id": 102,
         "name": "expression",
         "type": "Expression*"
       }
@@ -105,10 +117,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "when_expr",
         "type": "ParsedExpression*"
       },
       {
+        "id": 101,
         "name": "then_expr",
         "type": "ParsedExpression*"
       }
@@ -122,10 +136,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "when_expr",
         "type": "Expression*"
       },
       {
+        "id": 101,
         "name": "then_expr",
         "type": "Expression*"
       }
@@ -139,18 +155,22 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "sample_size",
         "type": "Value"
       },
       {
+        "id": 101,
         "name": "is_percentage",
         "type": "bool"
       },
       {
+        "id": 102,
         "name": "method",
         "type": "SampleMethod"
       },
       {
+        "id": 103,
         "name": "seed",
         "type": "int64_t"
       }
@@ -163,18 +183,22 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "pivot_expressions",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 101,
         "name": "unpivot_names",
         "type": "vector<string>"
       },
       {
+        "id": 102,
         "name": "entries",
         "type": "vector<PivotColumnEntry>"
       },
       {
+        "id": 103,
         "name": "pivot_enum",
         "type": "string"
       }
@@ -188,18 +212,22 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "group_count",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 102,
         "name": "pivot_values",
         "type": "vector<string>"
       },
       {
+        "id": 103,
         "name": "aggregates",
         "type": "vector<Expression*>"
       }
@@ -213,23 +241,28 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 101,
         "name": "type",
         "type": "LogicalType"
       },
       {
+        "id": 102,
         "name": "expression",
         "type": "ParsedExpression*",
         "optional": true
       },
       {
+        "id": 103,
         "name": "category",
         "type": "TableColumnType"
       },
       {
+        "id": 104,
         "name": "compression_type",
         "type": "CompressionType"
       }
@@ -244,6 +277,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "columns",
         "type": "vector<ColumnDefinition>"
       }
@@ -258,10 +292,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "table_index",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "column_index",
         "type": "idx_t"
       }
@@ -275,10 +311,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "value",
         "type": "Value"
       },
       {
+        "id": 101,
         "name": "return_type",
         "type": "LogicalType"
       }
@@ -293,14 +331,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "left",
         "type": "Expression*"
       },
       {
+        "id": 101,
         "name": "right",
         "type": "Expression*"
       },
       {
+        "id": 102,
         "name": "comparison",
         "type": "ExpressionType"
       }
@@ -314,10 +355,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "vacuum",
         "type": "bool"
       },
       {
+        "id": 101,
         "name": "analyze",
         "type": "bool"
       }
@@ -331,6 +374,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filters",
         "type": "unordered_map<idx_t, TableFilter*>"
       }
@@ -344,26 +388,32 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filename",
         "type": "bool"
       },
       {
+        "id": 101,
         "name": "hive_partitioning",
         "type": "bool"
       },
       {
+        "id": 102,
         "name": "auto_detect_hive_partitioning",
         "type": "bool"
       },
       {
+        "id": 103,
         "name": "union_by_name",
         "type": "bool"
       },
       {
+        "id": 104,
         "name": "hive_types_autocast",
         "type": "bool"
       },
       {
+        "id": 105,
         "name": "hive_types_schema",
         "type": "unordered_map<string, LogicalType>"
       }
@@ -377,10 +427,12 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "filename_idx",
         "type": "idx_t"
       },
       {
+        "id": 101,
         "name": "hive_partitioning_indexes",
         "type": "vector<HivePartitioningIndex>"
       }
@@ -391,10 +443,12 @@
     "class": "HivePartitioningIndex",
     "members": [
       {
+        "id": 100,
         "name": "value",
         "type": "string"
       },
       {
+        "id": 101,
         "name": "index",
         "type": "idx_t"
       }
@@ -409,6 +463,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "has_delimiter",
         "type": "bool"
       },
@@ -562,6 +617,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "format_specifier",
         "type": "string"
       }
@@ -576,42 +632,52 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "files",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "csv_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 102,
         "name": "csv_names",
         "type": "vector<string>"
       },
       {
+        "id": 103,
         "name": "return_types",
         "type": "vector<LogicalType>"
       },
       {
+        "id": 104,
         "name": "return_names",
         "type": "vector<string>"
       },
       {
+        "id": 105,
         "name": "filename_col_idx",
         "type": "idx_t"
       },
       {
+        "id": 106,
         "name": "options",
         "type": "BufferedCSVReaderOptions"
       },
       {
+        "id": 107,
         "name": "single_threaded",
         "type": "bool"
       },
       {
+        "id": 108,
         "name": "reader_bind",
         "type": "MultiFileReaderBindData"
       },
       {
+        "id": 109,
         "name": "column_info",
         "type": "vector<ColumnInfo>"
       }
@@ -621,10 +687,12 @@
     "class": "ColumnInfo",
     "members": [
       {
+        "id": 100,
         "name": "names",
         "type": "vector<string>"
       },
       {
+        "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
       }

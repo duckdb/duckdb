@@ -201,8 +201,9 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (loption == "compression" || loption == "codec") {
-				// CODEC option has no effect on parquet read: we determine codec from the file
+			if (loption == "compression" || loption == "codec" || loption == "row_group_size") {
+				// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
+				// These options are determined from the file.
 				continue;
 			} else if (loption == "binary_as_string") {
 				parquet_options.binary_as_string = true;
@@ -437,19 +438,19 @@ public:
 	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                       const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		serializer.WriteProperty("files", bind_data.files);
-		serializer.WriteProperty("types", bind_data.types);
-		serializer.WriteProperty("names", bind_data.names);
-		serializer.WriteProperty("parquet_options", bind_data.parquet_options);
+		serializer.WriteProperty(100, "files", bind_data.files);
+		serializer.WriteProperty(101, "types", bind_data.types);
+		serializer.WriteProperty(102, "names", bind_data.names);
+		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,
 	                                                             TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
-		auto files = deserializer.ReadProperty<vector<string>>("files");
-		auto types = deserializer.ReadProperty<vector<LogicalType>>("types");
-		auto names = deserializer.ReadProperty<vector<string>>("names");
-		auto parquet_options = deserializer.ReadProperty<ParquetOptions>("parquet_options");
+		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
+		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
+		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
+		auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
 		return ParquetScanBindInternal(context, files, types, names, parquet_options);
 	}
 

@@ -45,13 +45,17 @@ private:
 	struct State {
 		uint32_t expected_field_count;
 		idx_t expected_size;
+		field_id_t expected_field_id;
 		uint32_t read_field_count;
-		State(uint32_t expected_field_count, idx_t expected_size)
-		    : expected_field_count(expected_field_count), expected_size(expected_size), read_field_count(0) {
+
+		State(uint32_t expected_field_count, idx_t expected_size, field_id_t expected_field_id)
+		    : expected_field_count(expected_field_count), expected_size(expected_size),
+		      expected_field_id(expected_field_id), read_field_count(0) {
 		}
 	};
 
 	const char *current_tag = nullptr;
+	field_id_t current_field_id = 0;
 	data_ptr_t ptr;
 	data_ptr_t end_ptr;
 	vector<State> stack;
@@ -72,7 +76,7 @@ private:
 	}
 
 	// Set the 'tag' of the property to read
-	void SetTag(const char *tag) final;
+	void SetTag(const field_id_t field_id, const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks

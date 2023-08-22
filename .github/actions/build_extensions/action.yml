@@ -170,7 +170,7 @@ runs:
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
           elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ ]] ; then
+          elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
         fi
@@ -186,7 +186,7 @@ runs:
         AWS_DEFAULT_REGION: us-east-1
       run: |
         cd  ${{ inputs.build_dir}}
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload-test.sh
         else
           ./scripts/extension-upload-test.sh local

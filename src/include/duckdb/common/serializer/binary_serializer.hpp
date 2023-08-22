@@ -24,6 +24,7 @@ private:
 	};
 
 	const char *current_tag;
+	field_id_t current_field_id = 0;
 
 	vector<data_t> data;
 	vector<State> stack;
@@ -55,7 +56,7 @@ public:
 		return std::move(serializer.data);
 	}
 
-	void SetTag(const char *tag) final;
+	void SetTag(const field_id_t field_id, const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
