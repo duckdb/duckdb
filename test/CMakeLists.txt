@@ -48,5 +48,5 @@ endif()
 add_executable(mallocfailtest mallocfailtest.cpp)
 target_link_libraries(mallocfailtest duckdb_static)
 
-target_link_libraries(mallocfailtest
-                      /Users/hannes/source/mallochook/build/libmallochook.dylib)
+# target_link_libraries(mallocfailtest
+# /Users/hannes/source/mallochook/build/libmallochook.dylib)
