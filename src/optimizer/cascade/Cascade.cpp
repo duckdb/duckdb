@@ -9,8 +9,10 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/optimizer/cascade/NewColumnBindingResolver.h"
 #include "duckdb/optimizer/cascade/base/CAutoOptCtxt.h"
 #include "duckdb/optimizer/cascade/base/CQueryContext.h"
 #include "duckdb/optimizer/cascade/engine/CEngine.h"
@@ -19,8 +21,6 @@
 #include "duckdb/optimizer/cascade/task/CWorkerPoolManager.h"
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/optimizer/cascade/NewColumnBindingResolver.h"
-#include "duckdb/execution/column_binding_resolver.hpp"
 
 #include <cstdlib>
 
@@ -31,7 +31,7 @@ using namespace gpopt;
 duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<LogicalOperator> plan) {
 	/* Used for CCostContext::CostCompute */
 	unsigned seed;
-    seed = time(0);
+	seed = time(0);
 	srand(seed);
 	/* */
 	// ColumnBindingResolver resolver;
@@ -74,18 +74,23 @@ duckdb::unique_ptr<PhysicalOperator> Cascade::Optimize(duckdb::unique_ptr<Logica
 	CEngine eng;
 	eng.Init(pqc, search_strategy_arr);
 	eng.Optimize();
-	duckdb::unique_ptr<PhysicalOperator> pexprPlan =
+	duckdb::unique_ptr<PhysicalOperator> physical_plan =
 	    duckdb::unique_ptr<PhysicalOperator>((PhysicalOperator *)eng.PssPrevious()->m_pexprBest.release());
 	/* I comment here */
-	// CExpression* pexprPlan = eng.PexprExtractPlan();
-	// CheckCTEConsistency(pexprPlan);
-	// PrintQueryOrPlan(pexprPlan);
-	// (void) pexprPlan->PrppCompute(pqc->m_required_plan_property);
+	// CExpression* physical_plan = eng.PexprExtractPlan();
+	// CheckCTEConsistency(physical_plan);
+	// PrintQueryOrPlan(physical_plan);
+	// (void) physical_plan->PrppCompute(pqc->m_required_plan_property);
 	atp.DestroyAll();
 	wrkr.release();
 	// resolve column references
 	NewColumnBindingResolver new_resolver;
-	new_resolver.VisitOperator(*pexprPlan);
-	return pexprPlan;
+	new_resolver.VisitOperator(*physical_plan);
+
+	// print physical plan
+	Printer::Print("Physical Plan: \n");
+	physical_plan->Print();
+
+	return physical_plan;
 }
 } // namespace duckdb

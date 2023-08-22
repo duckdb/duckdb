@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -29,10 +29,9 @@ enum class TableFilterType : uint8_t {
 //! TableFilter represents a filter pushed down into the table scan.
 class TableFilter {
 public:
-	TableFilter(TableFilterType filter_type_p) : filter_type(filter_type_p) {
+	explicit TableFilter(TableFilterType filter_type_p) : filter_type(filter_type_p) {
 	}
-	virtual ~TableFilter() {
-	}
+	virtual ~TableFilter() = default;
 
 	TableFilterType filter_type;
 

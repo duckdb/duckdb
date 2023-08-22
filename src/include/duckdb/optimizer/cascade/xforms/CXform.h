@@ -32,12 +32,13 @@ public:
 	duckdb::unique_ptr<Operator> m_operator;
 
 public:
-	// private copy ctor
-	CXform(CXform &);
 	// ctor
+	CXform() = default;
 	explicit CXform(duckdb::unique_ptr<Operator> expression) : m_operator(std::move(expression)) {};
 	// dtor
 	virtual ~CXform() = default;
+	// private copy ctor
+	CXform(CXform &);
 
 public:
 	// identification

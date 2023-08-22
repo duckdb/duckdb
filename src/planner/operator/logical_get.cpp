@@ -196,14 +196,13 @@ vector<idx_t> LogicalGet::GetTableIndex() const {
 	return vector<idx_t> {table_index};
 }
 
-ULONG LogicalGet::HashValue() const
-{
+ULONG LogicalGet::HashValue() const {
 	ULONG ulLogicalType = (ULONG)logical_type;
 	ULONG ulPhysicalType = (ULONG)physical_type;
 	ULONG ulHash = CombineHashes(gpos::HashValue<ULONG>(&ulLogicalType), gpos::HashValue<ULONG>(&ulPhysicalType));
 	ulHash = CombineHashes(ulHash, gpos::HashValue<idx_t>(&table_index));
 	std::string str = ParamsToString();
-	ULONG ulHash2 = std::hash<std::string>{}(str);
+	ULONG ulHash2 = std::hash<std::string> {}(str);
 	ulHash = CombineHashes(ulHash, ulHash2);
 	return ulHash;
 }
@@ -296,7 +295,7 @@ unique_ptr<Operator> LogicalGet::Copy() {
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	for(auto &child : table_filters.filters) {
+	for (auto &child : table_filters.filters) {
 		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
 	}
 	result->parameters.assign(parameters.begin(), parameters.end());
@@ -353,7 +352,7 @@ unique_ptr<Operator> LogicalGet::CopyWithNewGroupExpression(CGroupExpression *pg
 	result->m_cost = m_cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	for(auto &child : table_filters.filters) {
+	for (auto &child : table_filters.filters) {
 		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
 	}
 	result->parameters.assign(parameters.begin(), parameters.end());
@@ -405,15 +404,14 @@ unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
 	result->has_estimated_cardinality = has_estimated_cardinality;
 	result->logical_type = logical_type;
 	result->physical_type = physical_type;
-	for(auto &child : pdrgpexpr)
-	{
+	for(auto &child : pdrgpexpr) {
 		result->AddChild(std::move(child));
 	}
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	result->column_ids.assign(column_ids.begin(), column_ids.end());
 	result->projection_ids.assign(projection_ids.begin(), projection_ids.end());
-	for(auto &child : table_filters.filters) {
+	for (auto &child : table_filters.filters) {
 		result->table_filters.filters.insert(make_pair(child.first, child.second->Copy()));
 	}
 	result->parameters.assign(parameters.begin(), parameters.end());
