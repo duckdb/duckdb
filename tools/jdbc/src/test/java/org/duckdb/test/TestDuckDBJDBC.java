@@ -1962,10 +1962,16 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
             }
 
-            s.execute("INSERT INTO t VALUES ('01:01:00');");
+            s.execute("INSERT INTO t VALUES ('01:01:00'), ('01:02:03+12:30:45'), ('04:05:06-03:10'), ('07:08:09+20');");
             try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
                 rs.next();
                 assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
+                rs.next();
+                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
+                rs.next();
+                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(4, 5, 6), ZoneOffset.ofHoursMinutesSeconds(-3, -10, 0)));
+                rs.next();
+                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(7, 8, 9), ZoneOffset.UTC));
             }
         }
     }
