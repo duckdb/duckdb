@@ -28,14 +28,10 @@ public:
 	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info);
 
 	LogicalType user_type;
-	//! The inherent dependencies of the user type
-	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
 
 	string ToSQL() const override;
-
-	DependencyList InherentDependencies() override;
 };
 } // namespace duckdb

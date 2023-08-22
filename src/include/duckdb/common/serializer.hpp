@@ -114,8 +114,14 @@ public:
 
 	//! Gets the context for the deserializer
 	virtual ClientContext &GetContext() {
-		throw InternalException("This deserializer does not have a client-context");
+		if (!context) {
+			throw InternalException("This deserializer does not have a client-context");
+		}
+		return *context;
 	};
+	virtual void SetContext(ClientContext &context) {
+		this->context = &context;
+	}
 
 	template <class T>
 	T Read() {
@@ -143,6 +149,8 @@ public:
 	}
 
 	void ReadStringVector(vector<string> &list);
+protected:
+	optional_ptr<ClientContext> context;
 };
 
 template <>

@@ -7,6 +7,7 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/helper.hpp"
 namespace duckdb {
 
 class FormatSerializer;   // Forward declare
@@ -98,6 +99,14 @@ struct is_shared_ptr : std::false_type {};
 template <typename T>
 struct is_shared_ptr<shared_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
+};
+
+template <typename T>
+struct is_reference : std::false_type {};
+
+template <typename T>
+struct is_reference<reference<T>> : std::true_type {
+	using ELEMENT_TYPE = T;
 };
 
 template <typename T>

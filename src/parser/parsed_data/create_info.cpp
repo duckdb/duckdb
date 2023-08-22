@@ -19,6 +19,8 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.Write(temporary);
 	serializer.Write(internal);
 	serializer.WriteString(sql);
+	dependencies.Serialize(serializer);
+
 	SerializeInternal(serializer);
 }
 
@@ -29,6 +31,7 @@ void CreateInfo::DeserializeBase(Deserializer &deserializer) {
 	this->temporary = deserializer.Read<bool>();
 	this->internal = deserializer.Read<bool>();
 	this->sql = deserializer.Read<string>();
+	this->dependencies = DependencyList::Deserialize(deserializer);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
@@ -66,6 +69,7 @@ void CreateInfo::CopyProperties(CreateInfo &other) const {
 	other.temporary = temporary;
 	other.internal = internal;
 	other.sql = sql;
+	other.dependencies = dependencies;
 }
 
 unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {

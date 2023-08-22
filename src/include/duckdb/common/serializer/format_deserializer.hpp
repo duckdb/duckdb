@@ -160,12 +160,25 @@ private:
 
 	// Deserialize shared_ptr
 	template <typename T = void>
-	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
+	inline typename std::enable_if<
+		is_shared_ptr<T>::value, T
+	>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
 		OnObjectBegin();
 		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
 		OnObjectEnd();
 		return val;
+	}
+
+	// Deserialize a reference<CatalogEntry>
+	template <typename T = void>
+	inline typename std::enable_if<
+			std::is_same<
+				typename is_reference<T>::ELEMENT_TYPE,
+				CatalogEntry
+			>::value, T
+		>::type Read() {
+		throw NotImplementedException("GOT HERE");
 	}
 
 	// Deserialize a vector

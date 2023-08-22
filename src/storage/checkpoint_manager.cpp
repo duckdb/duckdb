@@ -260,6 +260,7 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 
 void CheckpointReader::ReadSchema(ClientContext &context, MetadataReader &reader) {
 	// read the schema and create it in the catalog
+	reader.SetContext(context);
 	auto info = CatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;

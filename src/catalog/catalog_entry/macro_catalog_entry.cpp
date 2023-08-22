@@ -29,6 +29,8 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->schema = schema.name;
 	info->name = name;
 	info->function = function->Copy();
+	// FIXME: this is error-prone, need to define for every entry separately
+	info->dependencies = dependencies;
 	return std::move(info);
 }
 

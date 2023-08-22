@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
 class SchemaCatalogEntry;
-class DependencyList;
 
 //! A StandardEntry is a catalog entry that is a member of a schema
 class StandardEntry : public InCatalogEntry {
@@ -25,12 +25,13 @@ public:
 
 	//! The schema the entry belongs to
 	SchemaCatalogEntry &schema;
+	//! The dependencies of the entry, can be empty
+	DependencyList dependencies;
 
 public:
 	SchemaCatalogEntry &ParentSchema() override {
 		return schema;
 	}
-	virtual DependencyList InherentDependencies();
 };
 
 } // namespace duckdb

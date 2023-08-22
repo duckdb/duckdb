@@ -26,10 +26,6 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 	Initialize(info);
 }
 
-DependencyList ViewCatalogEntry::InherentDependencies() {
-	return dependencies;
-}
-
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	auto result = make_uniq<CreateViewInfo>();
 	result->schema = schema.name;
@@ -38,6 +34,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	result->aliases = aliases;
 	result->types = types;
+	result->dependencies = dependencies;
 	return std::move(result);
 }
 

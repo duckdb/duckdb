@@ -20,8 +20,4 @@ void BufferedDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {
 	ptr += read_size;
 }
 
-ClientContext &BufferedContextDeserializer::GetContext() {
-	return context;
-}
-
 } // namespace duckdb

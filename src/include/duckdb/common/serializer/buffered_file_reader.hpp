@@ -35,12 +35,9 @@ public:
 	void Seek(uint64_t location);
 	uint64_t CurrentOffset();
 
-	ClientContext &GetContext() override;
-
 private:
 	idx_t file_size;
 	idx_t total_read;
-	optional_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

@@ -24,11 +24,8 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
+	result->dependencies = dependencies;
 	return std::move(result);
-}
-
-DependencyList TypeCatalogEntry::InherentDependencies() {
-	return dependencies;
 }
 
 string TypeCatalogEntry::ToSQL() const {

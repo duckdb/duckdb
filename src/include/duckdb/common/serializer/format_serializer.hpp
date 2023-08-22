@@ -82,6 +82,16 @@ protected:
 		WriteValue(ptr.get());
 	}
 
+	template <typename T>
+	typename std::enable_if<
+		std::is_same<
+			typename is_reference<reference<T>>::ELEMENT_TYPE, // Use ELEMENT_TYPE
+			CatalogEntry
+		>::value, void
+	>::type WriteValue(const reference<T> &ref) {
+		throw NotImplementedException("GOT HERE");
+	}
+
 	// Pointer
 	template <typename T>
 	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteValue(const T ptr) {

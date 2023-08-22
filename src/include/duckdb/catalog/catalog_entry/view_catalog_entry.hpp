@@ -37,8 +37,6 @@ public:
 	vector<string> aliases;
 	//! The returned types of the view
 	vector<LogicalType> types;
-	//! The inherent dependencies of the view
-	DependencyList dependencies;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;
@@ -48,8 +46,6 @@ public:
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	string ToSQL() const override;
-
-	DependencyList InherentDependencies() override;
 
 private:
 	void Initialize(CreateViewInfo &info);
