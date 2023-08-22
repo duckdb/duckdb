@@ -5,6 +5,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -140,13 +141,13 @@ struct ICUDateTrunc : public ICUDateFunc {
 		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, Bind);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
@@ -192,9 +193,9 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	}
 }
 
-void RegisterICUDateTruncFunctions(ClientContext &context) {
-	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", context);
-	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", context);
+void RegisterICUDateTruncFunctions(DatabaseInstance &instance) {
+	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", instance);
+	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", instance);
 }
 
 } // namespace duckdb

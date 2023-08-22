@@ -262,7 +262,7 @@ void IcuExtension::Load(DuckDB &db) {
 	RegisterICUDateAddFunctions(*db.instance);
 	RegisterICUDatePartFunctions(*db.instance);
 	RegisterICUDateSubFunctions(*db.instance);
-	RegisterICUDateTruncFunctions(*con.context);
+	RegisterICUDateTruncFunctions(*db.instance);
 	RegisterICUMakeDateFunctions(*con.context);
 	RegisterICUTableRangeFunctions(*con.context);
 	RegisterICUListRangeFunctions(*con.context);
