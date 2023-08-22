@@ -8,6 +8,7 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -244,11 +245,10 @@ void IcuExtension::Load(DuckDB &db) {
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		catalog.CreateCollation(*con.context, info);
 	}
+
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
-
-	CreateScalarFunctionInfo sort_key_info(std::move(sort_key));
-	catalog.CreateFunction(*con.context, sort_key_info);
+	ExtensionUtil::RegisterFunction(*db.instance, sort_key);
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
@@ -267,10 +267,8 @@ void IcuExtension::Load(DuckDB &db) {
 	RegisterICUTableRangeFunctions(*db.instance);
 	RegisterICUListRangeFunctions(*db.instance);
 	RegisterICUStrptimeFunctions(*db.instance);
-	RegisterICUStrptimeCasts(*con.context);
 	RegisterICUTimeBucketFunctions(*db.instance);
 	RegisterICUTimeZoneFunctions(*db.instance);
-	RegisterICUTimeZoneCasts(*con.context);
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
@@ -279,9 +277,10 @@ void IcuExtension::Load(DuckDB &db) {
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
-	CreateTableFunctionInfo cal_names_info(std::move(cal_names));
-	catalog.CreateTableFunction(*con.context, cal_names_info);
+	ExtensionUtil::RegisterFunction(*db.instance, cal_names);
 
+	RegisterICUStrptimeCasts(*con.context);
+	RegisterICUTimeZoneCasts(*con.context);
 	con.Commit();
 }
 
