@@ -467,143 +467,143 @@
         "name": "has_delimiter",
         "type": "bool"
       },
-      {
+      {"id": 101,
         "name": "has_quote",
         "type": "bool"
       },
-      {
+      {"id": 102,
         "name": "has_escape",
         "type": "bool"
       },
-      {
+      {"id": 103,
         "name": "has_header",
         "type": "bool"
       },
-      {
+      {"id": 104,
         "name": "ignore_errors",
         "type": "bool"
       },
-      {
+      {"id": 105,
         "name": "buffer_sample_size",
         "type": "idx_t"
       },
-      {
+      {"id": 106,
         "name": "null_str",
         "type": "string"
       },
-      {
+      {"id": 107,
         "name": "compression",
         "type": "FileCompressionType"
       },
-      {
+      {"id": 108,
         "name": "allow_quoted_nulls",
         "type": "bool"
       },
-      {
+      {"id": 109,
         "name": "skip_rows_set",
         "type": "bool"
       },
-      {
+      {"id": 110,
         "name": "maximum_line_size",
         "type": "idx_t"
       },
-      {
+      {"id": 111,
         "name": "normalize_names",
         "type": "bool"
       },
-      {
+      {"id": 112,
         "name": "force_not_null",
         "type": "vector<bool>"
       },
-      {
+      {"id": 113,
         "name": "all_varchar",
         "type": "bool"
       },
-      {
+      {"id": 114,
         "name": "sample_chunk_size",
         "type": "idx_t"
       },
-      {
+      {"id": 115,
         "name": "sample_chunks",
         "type": "idx_t"
       },
-      {
+      {"id": 116,
         "name": "auto_detect",
         "type": "bool"
       },
-      {
+      {"id": 117,
         "name": "file_path",
         "type": "string"
       },
-      {
+      {"id": 118,
         "name": "decimal_separator",
         "type": "string"
       },
-      {
+      {"id": 119,
         "name": "null_padding",
         "type": "bool"
       },
-      {
+      {"id": 120,
         "name": "buffer_size",
         "type": "idx_t"
       },
-      {
+      {"id": 121,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       },
-      {
+      {"id": 122,
         "name": "force_quote",
         "type": "vector<bool>"
       },
-      {
+      {"id": 123,
         "name": "rejects_table_name",
         "type": "string"
       },
-      {
+      {"id": 124,
         "name": "rejects_limit",
         "type": "idx_t"
       },
-      {
+      {"id": 125,
         "name": "rejects_recovery_columns",
         "type": "vector<string>"
       },
-      {
+      {"id": 126,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>"
       },
-      {
+      {"id": 127,
         "name": "dialect_options.delimiter",
         "type": "char"
       },
-      {
+      {"id": 128,
         "name": "dialect_options.quote",
         "type": "char"
       },
-      {
+      {"id": 129,
         "name": "dialect_options.escape",
         "type": "char"
       },
-       {
+       {"id": 130,
         "name": "dialect_options.header",
         "type": "bool"
       },
-            {
+            {"id": 131,
         "name": "dialect_options.num_cols",
         "type": "idx_t"
       },
-            {
+            {"id": 132,
         "name": "dialect_options.new_line",
         "type": "NewLineIdentifier"
       },
-            {
+            {"id": 133,
         "name": "dialect_options.skip_rows",
         "type": "idx_t"
       },
-      {
+      {"id": 134,
         "name": "dialect_options.date_format",
         "type": "unordered_map<LogicalTypeId, StrpTimeFormat> date_format"
       },
-      {
+      {"id": 135,
         "name": "dialect_options.has_format",
         "type": "unordered_map<bool, StrpTimeFormat> date_format"
       }
