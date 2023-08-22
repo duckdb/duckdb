@@ -260,7 +260,7 @@ void IcuExtension::Load(DuckDB &db) {
 	                          SetICUTimeZone);
 
 	RegisterICUDateAddFunctions(*db.instance);
-	RegisterICUDatePartFunctions(*con.context);
+	RegisterICUDatePartFunctions(*db.instance);
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 	RegisterICUMakeDateFunctions(*con.context);

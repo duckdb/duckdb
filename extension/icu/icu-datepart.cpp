@@ -8,6 +8,7 @@
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
@@ -445,12 +446,13 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindDatePart);
 	}
 
-	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddUnaryPartCodeFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
-		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, func_info);
+
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -469,13 +471,14 @@ struct ICUDatePart : public ICUDateFunc {
 		return result;
 	}
 
-	static void AddDatePartFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddDatePartFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, func_info);
+
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
@@ -489,12 +492,13 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::DATE, UnaryTimestampFunction<INPUT_TYPE, date_t>,
 		                      BindLastDate);
 	}
-	static void AddLastDayFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddLastDayFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, func_info);
+
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	static unique_ptr<FunctionData> BindMonthName(ClientContext &context, ScalarFunction &bound_function,
@@ -508,12 +512,13 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
 		                      BindMonthName);
 	}
-	static void AddMonthNameFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddMonthNameFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetMonthNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, func_info);
+
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	static unique_ptr<FunctionData> BindDayName(ClientContext &context, ScalarFunction &bound_function,
@@ -527,58 +532,59 @@ struct ICUDatePart : public ICUDateFunc {
 		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
 		                      BindDayName);
 	}
-	static void AddDayNameFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddDayNameFunctions(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDayNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, func_info);
+
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUDatePartFunctions(ClientContext &context) {
+void RegisterICUDatePartFunctions(DatabaseInstance &instance) {
 	// register the individual operators
-	ICUDatePart::AddUnaryPartCodeFunctions("era", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("year", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("month", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("day", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("decade", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("century", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("millennium", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("second", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("minute", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("hour", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("dayofweek", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("isodow", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("week", context); //  Note that WeekOperator is ISO-8601, not US
-	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("quarter", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("epoch", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("timezone", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("era", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("year", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("month", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("day", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("decade", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("century", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("millennium", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("microsecond", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("millisecond", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("second", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("minute", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("hour", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofweek", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("isodow", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("week", instance); //  Note that WeekOperator is ISO-8601, not US
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("quarter", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("epoch", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", instance);
 
 	//  register combinations
-	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", context); //  Note this is ISO year and week
+	ICUDatePart::AddUnaryPartCodeFunctions("yearweek", instance); //  Note this is ISO year and week
 
 	//  register various aliases
-	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("weekday", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("weekofyear", context);
+	ICUDatePart::AddUnaryPartCodeFunctions("dayofmonth", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("weekday", instance);
+	ICUDatePart::AddUnaryPartCodeFunctions("weekofyear", instance);
 
 	//  register the last_day function
-	ICUDatePart::AddLastDayFunctions("last_day", context);
+	ICUDatePart::AddLastDayFunctions("last_day", instance);
 
 	// register the dayname/monthname functions
-	ICUDatePart::AddMonthNameFunctions("monthname", context);
-	ICUDatePart::AddDayNameFunctions("dayname", context);
+	ICUDatePart::AddMonthNameFunctions("monthname", instance);
+	ICUDatePart::AddDayNameFunctions("dayname", instance);
 
 	// finally the actual date_part function
-	ICUDatePart::AddDatePartFunctions("date_part", context);
-	ICUDatePart::AddDatePartFunctions("datepart", context);
+	ICUDatePart::AddDatePartFunctions("date_part", instance);
+	ICUDatePart::AddDatePartFunctions("datepart", instance);
 }
 
 } // namespace duckdb
