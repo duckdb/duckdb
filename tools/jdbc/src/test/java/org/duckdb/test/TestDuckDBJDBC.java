@@ -1967,9 +1967,11 @@ public class TestDuckDBJDBC {
                 rs.next();
                 assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
                 rs.next();
-                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
+                assertEquals(rs.getObject(1),
+                             OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
                 rs.next();
-                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(4, 5, 6), ZoneOffset.ofHoursMinutesSeconds(-3, -10, 0)));
+                assertEquals(rs.getObject(1),
+                             OffsetTime.of(LocalTime.of(4, 5, 6), ZoneOffset.ofHoursMinutesSeconds(-3, -10, 0)));
                 rs.next();
                 assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(7, 8, 9), ZoneOffset.UTC));
             }
