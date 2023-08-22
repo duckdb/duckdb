@@ -86,4 +86,8 @@ private:
 	void Append(ART &art, Node other_prefix);
 };
 
+template <>
+idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty);
+template <>
+idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty);
 } // namespace duckdb

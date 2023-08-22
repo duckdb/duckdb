@@ -65,7 +65,16 @@ public:
 	}
 	//! Get the first child that is greater or equal to the specific byte
 	template <class NODE>
-	optional_ptr<NODE> GetNextChild(uint8_t &byte);
+	inline optional_ptr<NODE> GetNextChild(uint8_t &byte) {
+		for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
+			if (child_index[i] != Node::EMPTY_MARKER) {
+				byte = i;
+				D_ASSERT(children[child_index[i]].HasMetadata());
+				return &children[child_index[i]];
+			}
+		}
+		return nullptr;
+	}
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

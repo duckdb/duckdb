@@ -443,6 +443,7 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	D_ASSERT(HasMetadata());
 
 	auto node_type = GetType();
+	auto node_type_idx = static_cast<uint8_t>(node_type);
 
 	// iterative functions
 	if (node_type == NType::PREFIX) {
@@ -452,17 +453,17 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return;
 	}
 	if (node_type == NType::LEAF) {
-		if (flags.vacuum_flags[(uint8_t)node_type - 1]) {
+		if (flags.vacuum_flags[node_type_idx - 1]) {
 			Leaf::Vacuum(art, *this);
 		}
 		return;
 	}
 
 	auto &allocator = GetAllocator(art, node_type);
-	auto needs_vacuum = flags.vacuum_flags[(uint8_t)GetType() - 1] && allocator.NeedsVacuum(*this);
+	auto needs_vacuum = flags.vacuum_flags[node_type_idx - 1] && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
 		*this = allocator.VacuumPointer(*this);
-		SetMetadata(static_cast<uint8_t>(node_type));
+		SetMetadata(node_type_idx);
 	}
 
 	// recursive functions

@@ -59,6 +59,9 @@ statement ok
 CREATE INDEX idx ON t(i);
 
 # FIXME: enable this test after addressing the issue described in test_art_storage_multi_checkpoint.test
+# FIXME: vacuum now always removes the last excess_buffer_count buffers, which can cause earlier buffers
+# FIXME: to get deserialized, thus, this delete can increase the in-memory size (as we potentially load
+# FIXME: almost everything into memory)
 # FIXME: the increase in the FixedSizeBuffer size possibly also influences this, reinvestigate before merging
 mode skip
 

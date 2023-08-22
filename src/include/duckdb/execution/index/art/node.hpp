@@ -123,5 +123,4 @@ public:
 		Set(ptr.Get());
 	}
 };
-
 } // namespace duckdb

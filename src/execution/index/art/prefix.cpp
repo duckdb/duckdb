@@ -127,8 +127,31 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 	New(art, prefix_node, byte, child_prefix_node);
 }
 
-template <class NODE>
-idx_t Prefix::Traverse(ART &art, reference<NODE> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty) {
+template <>
+idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth,
+                       const bool dirty) {
+
+	D_ASSERT(prefix_node.get().HasMetadata());
+	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
+
+	// compare prefix nodes to key bytes
+	while (prefix_node.get().GetType() == NType::PREFIX) {
+		auto &prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX, dirty);
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			if (prefix.data[i] != key[depth]) {
+				return i;
+			}
+			depth++;
+		}
+		prefix_node = prefix.ptr;
+		D_ASSERT(prefix_node.get().HasMetadata());
+	}
+
+	return DConstants::INVALID_INDEX;
+}
+
+template <>
+idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty) {
 
 	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
@@ -288,7 +311,8 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 		node_ref = prefix.ptr;
 	}
 
-	return only_verify ? "" : str + node_ref.get().VerifyAndToString(art, only_verify);
+	auto subtree = node_ref.get().VerifyAndToString(art, only_verify);
+	return only_verify ? "" : str + subtree;
 }
 
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {

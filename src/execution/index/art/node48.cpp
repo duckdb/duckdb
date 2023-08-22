@@ -150,19 +150,6 @@ void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	}
 }
 
-template <class NODE>
-optional_ptr<NODE> Node48::GetNextChild(uint8_t &byte) {
-
-	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
-		if (child_index[i] != Node::EMPTY_MARKER) {
-			byte = i;
-			D_ASSERT(children[child_index[i]].HasMetadata());
-			return &children[child_index[i]];
-		}
-	}
-	return nullptr;
-}
-
 void Node48::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {

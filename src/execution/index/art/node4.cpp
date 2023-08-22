@@ -137,31 +137,6 @@ void Node4::ReplaceChild(const uint8_t byte, const Node child) {
 	}
 }
 
-template <class NODE>
-optional_ptr<NODE> Node4::GetChild(const uint8_t byte) {
-
-	for (idx_t i = 0; i < count; i++) {
-		if (key[i] == byte) {
-			D_ASSERT(children[i].HasMetadata());
-			return &children[i];
-		}
-	}
-	return nullptr;
-}
-
-template <class NODE>
-optional_ptr<NODE> Node4::GetNextChild(uint8_t &byte) {
-
-	for (idx_t i = 0; i < count; i++) {
-		if (key[i] >= byte) {
-			byte = key[i];
-			D_ASSERT(children[i].HasMetadata());
-			return &children[i];
-		}
-	}
-	return nullptr;
-}
-
 void Node4::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {

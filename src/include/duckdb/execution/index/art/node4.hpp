@@ -50,10 +50,27 @@ public:
 
 	//! Get the (const) child for the respective byte in the node
 	template <class NODE>
-	optional_ptr<NODE> GetChild(const uint8_t byte);
+	inline optional_ptr<NODE> GetChild(const uint8_t byte) {
+		for (idx_t i = 0; i < count; i++) {
+			if (key[i] == byte) {
+				D_ASSERT(children[i].HasMetadata());
+				return &children[i];
+			}
+		}
+		return nullptr;
+	}
 	//! Get the first child that is greater or equal to the specific byte
 	template <class NODE>
-	optional_ptr<NODE> GetNextChild(uint8_t &byte);
+	inline optional_ptr<NODE> GetNextChild(uint8_t &byte) {
+		for (idx_t i = 0; i < count; i++) {
+			if (key[i] >= byte) {
+				byte = key[i];
+				D_ASSERT(children[i].HasMetadata());
+				return &children[i];
+			}
+		}
+		return nullptr;
+	}
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

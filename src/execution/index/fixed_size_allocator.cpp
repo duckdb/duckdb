@@ -178,15 +178,20 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	D_ASSERT(excess_buffer_count < in_memory_buffers.size());
 	idx_t memory_usage = GetMemoryUsage();
 	idx_t excess_memory_usage = excess_buffer_count * BUFFER_SIZE;
-	auto excess_percentage = (double)excess_memory_usage / (double)memory_usage;
-	auto threshold = (double)VACUUM_THRESHOLD / 100.0;
+	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
+	auto threshold = double(VACUUM_THRESHOLD) / 100.0;
 	if (excess_percentage < threshold) {
 		return false;
 	}
 
 	vacuum_buffers.clear();
-	for (idx_t i = excess_buffer_count; i > 0; i--) {
-		auto buffer_id = in_memory_buffers.back();
+	D_ASSERT(excess_buffer_count <= in_memory_buffers.size());
+	D_ASSERT(in_memory_buffers.size() <= buffers.size());
+
+	// we always have to remove the last excess_buffer_count buffers
+	// otherwise, buffer IDs will shift and become invalid
+	for (idx_t i = 0; i < excess_buffer_count; i++) {
+		auto buffer_id = buffers.size() - 1 - i;
 
 		// set up the buffers that can be vacuumed
 		buffers[buffer_id].vacuum = true;
@@ -197,8 +202,6 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		if (it != buffers_with_free_space.end()) {
 			buffers_with_free_space.erase(it);
 		}
-
-		in_memory_buffers.pop_back();
 	}
 
 	return true;
