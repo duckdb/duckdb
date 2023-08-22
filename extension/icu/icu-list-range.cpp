@@ -4,7 +4,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 
@@ -180,28 +180,31 @@ struct ICUListRange : public ICUDateFunc {
 		result.Verify(args.size());
 	}
 
-	static void AddICUListRangeFunction(ClientContext &context) {
-		auto &catalog = Catalog::GetSystemCatalog(context);
+	static void AddICUListRangeFunction(DatabaseInstance &instance) {
 
 		ScalarFunctionSet range("range");
 		range.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                 LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<false>,
 		                                 Bind));
-		CreateScalarFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, range_func_info);
+
+		for (auto &fun : range.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		ScalarFunctionSet generate_series("generate_series");
 		generate_series.AddFunction(
 		    ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                   LogicalType::LIST(LogicalType::TIMESTAMP_TZ), ICUListRangeFunction<true>, Bind));
-		CreateScalarFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, generate_series_func_info);
+
+		for (auto &fun : generate_series.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUListRangeFunctions(ClientContext &context) {
-	ICUListRange::AddICUListRangeFunction(context);
+void RegisterICUListRangeFunctions(DatabaseInstance &instance) {
+	ICUListRange::AddICUListRangeFunction(instance);
 }
 
 } // namespace duckdb
