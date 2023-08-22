@@ -177,6 +177,7 @@ void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
 	auto len = ReadPrimitive<uint64_t>();
 	D_ASSERT(len == count);
+	(void)len;
 	ReadData(ptr, count);
 }
 
