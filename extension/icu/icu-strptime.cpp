@@ -11,6 +11,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/function_binder.hpp"
@@ -391,14 +392,14 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &instance) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {
@@ -485,11 +486,13 @@ struct ICUStrftime : public ICUDateFunc {
 	}
 };
 
-void RegisterICUStrptimeFunctions(ClientContext &context) {
+void RegisterICUStrptimeFunctions(DatabaseInstance &instance) {
+	ICUStrftime::AddBinaryTimestampFunction("strftime", instance);
+}
+
+void RegisterICUStrptimeCasts(ClientContext &context) {
 	ICUStrptime::AddBinaryTimestampFunction("strptime", context);
 	ICUStrptime::AddBinaryTimestampFunction("try_strptime", context);
-
-	ICUStrftime::AddBinaryTimestampFunction("strftime", context);
 
 	// Add string casts
 	ICUStrptime::AddCasts(context);
