@@ -149,6 +149,7 @@ public:
 	}
 
 	void ReadStringVector(vector<string> &list);
+
 protected:
 	optional_ptr<ClientContext> context;
 };

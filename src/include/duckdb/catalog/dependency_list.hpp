@@ -25,13 +25,14 @@ public:
 	DUCKDB_API void VerifyDependencies(Catalog &catalog, const string &name);
 
 	DUCKDB_API bool Contains(CatalogEntry &entry);
+
 public:
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static DependencyList FormatDeserialize(FormatDeserializer &serializer);
 
 	void Serialize(Serializer &serializer) const;
 	static DependencyList Deserialize(Deserializer &deserializer);
-	
+
 private:
 	catalog_entry_set_t set;
 };
