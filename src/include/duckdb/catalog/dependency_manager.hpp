@@ -54,8 +54,8 @@ private:
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);
 
-	dependency_set_t &GetEntriesThatDependOnObject(CatalogEntry &object);
-	catalog_entry_set_t &GetEntriesThatObjectDependsOn(CatalogEntry &object);
+	optional_ptr<dependency_set_t> GetEntriesThatDependOnObject(CatalogEntry &object);
+	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object);
 	bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
 	                                  catalog_entry_set_t &exported);
 

@@ -1,5 +1,6 @@
 catalog/catalog.cpp	16
 catalog/catalog_entry.cpp	11
+catalog/catalog_entry_retriever.cpp	14
 catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2

@@ -129,36 +129,44 @@ void DependencyManager::EraseObject(CatalogEntry &object) {
 	EraseObjectInternal(object);
 }
 
-catalog_entry_set_t &DependencyManager::GetEntriesThatObjectDependsOn(CatalogEntry &object) {
-	return dependencies_map.at(object);
+optional_ptr<catalog_entry_set_t> DependencyManager::GetEntriesThatObjectDependsOn(CatalogEntry &object) {
+	auto entry = dependencies_map.find(object);
+	if (entry == dependencies_map.end()) {
+		return nullptr;
+	}
+	return &entry->second;
 }
 
-dependency_set_t &DependencyManager::GetEntriesThatDependOnObject(CatalogEntry &object) {
-	return dependents_map.at(object);
+optional_ptr<dependency_set_t> DependencyManager::GetEntriesThatDependOnObject(CatalogEntry &object) {
+	auto entry = dependents_map.find(object);
+	if (entry == dependents_map.end()) {
+		return nullptr;
+	}
+	return &entry->second;
 }
 
 void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
-	if (dependents_map.find(object) == dependents_map.end()) {
+	if (!GetEntriesThatDependOnObject(object)) {
 		// dependencies already removed
 		return;
 	}
-	D_ASSERT(dependents_map.find(object) != dependents_map.end());
-	D_ASSERT(dependencies_map.find(object) != dependencies_map.end());
 
-	auto &entries = GetEntriesThatObjectDependsOn(object);
-	for (auto &other : entries) {
+	D_ASSERT(dependents_map.find(object) != dependents_map.end());
+
+	auto entries = GetEntriesThatObjectDependsOn(object);
+	D_ASSERT(entries);
+	for (auto &other : *entries) {
 		// For every entry that 'object' is dependent on, clean up this connection
-		auto dependencies_entry = dependents_map.find(other);
-		if (dependencies_entry == dependents_map.end()) {
+		auto dependencies = GetEntriesThatDependOnObject(other);
+		if (!dependencies) {
 			continue;
 		}
 
-		auto &dependencies = dependencies_entry->second;
-		auto dependent_entry = dependencies.find(object);
-		D_ASSERT(dependent_entry != dependencies.end());
+		auto dependent_entry = dependencies->find(object);
+		D_ASSERT(dependent_entry != dependencies->end());
 
 		// Remove the dependency of 'object' on 'other'
-		dependencies.erase(dependent_entry);
+		dependencies->erase(dependent_entry);
 	}
 	// erase the dependents and dependencies for this object
 	dependents_map.erase(object);

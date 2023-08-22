@@ -269,16 +269,6 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		for (idx_t i = 0; i < names.size(); i++) {
 			base.columns.AddColumn(ColumnDefinition(names[i], sql_types[i]));
 		}
-		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
-			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
-				// Don't register dependencies between catalogs
-				return;
-			}
-			dependencies.AddDependency(entry);
-		});
-		CreateColumnDependencyManager(*result);
-		// bind the generated column expressions
-		BindGeneratedColumns(*result);
 	} else {
 		SetCatalogLookupCallback([&dependencies, &schema](CatalogEntry &entry) {
 			if (&schema.ParentCatalog() != &entry.ParentCatalog()) {
