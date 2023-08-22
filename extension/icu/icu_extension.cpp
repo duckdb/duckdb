@@ -259,7 +259,7 @@ void IcuExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, Value(tz_string),
 	                          SetICUTimeZone);
 
-	RegisterICUDateAddFunctions(*con.context);
+	RegisterICUDateAddFunctions(*db.instance);
 	RegisterICUDatePartFunctions(*con.context);
 	RegisterICUDateSubFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);

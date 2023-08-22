@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/multiply.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-datefunc.hpp"
@@ -237,7 +238,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
-	static void AddDateAddOperators(const string &name, ClientContext &context) {
+	static void AddDateAddOperators(const string &name, DatabaseInstance &instance) {
 		//	temporal + interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
@@ -245,9 +246,9 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
 		                                                                            LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
 	template <typename TA, typename OP>
@@ -260,7 +261,7 @@ struct ICUDateAdd : public ICUDateFunc {
 		return GetBinaryDateFunction<TA, TB, interval_t, OP>(left_type, right_type, LogicalType::INTERVAL);
 	}
 
-	static void AddDateSubOperators(const string &name, ClientContext &context) {
+	static void AddDateSubOperators(const string &name, DatabaseInstance &instance) {
 		//	temporal - interval
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
@@ -270,21 +271,21 @@ struct ICUDateAdd : public ICUDateFunc {
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 
-	static void AddDateAgeFunctions(const string &name, ClientContext &context) {
+	static void AddDateAgeFunctions(const string &name, DatabaseInstance &instance) {
 		//	age(temporal, temporal)
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryAgeFunction<timestamp_t, timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ,
 		                                                                               LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetUnaryAgeFunction<timestamp_t, ICUCalendarAge>(LogicalType::TIMESTAMP_TZ));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
@@ -300,10 +301,10 @@ interval_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t end_date, times
 	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
 }
 
-void RegisterICUDateAddFunctions(ClientContext &context) {
-	ICUDateAdd::AddDateAddOperators("+", context);
-	ICUDateAdd::AddDateSubOperators("-", context);
-	ICUDateAdd::AddDateAgeFunctions("age", context);
+void RegisterICUDateAddFunctions(DatabaseInstance &instance) {
+	ICUDateAdd::AddDateAddOperators("+", instance);
+	ICUDateAdd::AddDateSubOperators("-", instance);
+	ICUDateAdd::AddDateAgeFunctions("age", instance);
 }
 
 } // namespace duckdb
