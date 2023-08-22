@@ -268,7 +268,7 @@ void IcuExtension::Load(DuckDB &db) {
 	RegisterICUListRangeFunctions(*db.instance);
 	RegisterICUStrptimeFunctions(*db.instance);
 	RegisterICUStrptimeCasts(*con.context);
-	RegisterICUTimeBucketFunctions(*con.context);
+	RegisterICUTimeBucketFunctions(*db.instance);
 	RegisterICUTimeZoneFunctions(*con.context);
 
 	// Calendars

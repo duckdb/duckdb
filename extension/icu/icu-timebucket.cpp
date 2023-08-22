@@ -8,7 +8,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "include/icu-datefunc.hpp"
 
@@ -613,7 +613,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		}
 	}
 
-	static void AddTimeBucketFunction(ClientContext &context) {
+	static void AddTimeBucketFunction(DatabaseInstance &instance) {
 		ScalarFunctionSet set("time_bucket");
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
 		                               ICUTimeBucketFunction, Bind));
@@ -624,14 +624,14 @@ struct ICUTimeBucket : public ICUDateFunc {
 		set.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR},
 		                               LogicalType::TIMESTAMP_TZ, ICUTimeBucketTimeZoneFunction, Bind));
 
-		CreateScalarFunctionInfo func_info(set);
-		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, func_info);
+		for (auto &fun : set.functions) {
+			ExtensionUtil::RegisterFunction(instance, fun);
+		}
 	}
 };
 
-void RegisterICUTimeBucketFunctions(ClientContext &context) {
-	ICUTimeBucket::AddTimeBucketFunction(context);
+void RegisterICUTimeBucketFunctions(DatabaseInstance &instance) {
+	ICUTimeBucket::AddTimeBucketFunction(instance);
 }
 
 } // namespace duckdb
