@@ -55,7 +55,7 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 string PhysicalFilter::ParamsToString() const {
 	auto result = expression->GetName();
 	result += "\n[INFOSEPARATOR]\n";
-	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());
+	result += StringUtil::Format("EC: %llu", estimated_cardinality);
 	return result;
 }
 

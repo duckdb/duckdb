@@ -45,7 +45,7 @@ void ${CLASS_NAME}::FormatSerialize(FormatSerializer &serializer) const {
 ${MEMBERS}}
 '''
 
-serialize_element = '\tserializer.WriteProperty("${PROPERTY_KEY}", ${PROPERTY_NAME});\n'
+serialize_element = '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME});\n'
 
 base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
 
@@ -76,9 +76,13 @@ switch_statement = (
 '''
 )
 
-deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>("${PROPERTY_KEY}");\n'
-deserialize_element_class = '\tdeserializer.ReadProperty("${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
-deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>("${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
+deserialize_element = (
+    '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n'
+)
+deserialize_element_class = (
+    '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
+)
+deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
 
@@ -101,20 +105,23 @@ def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 
-def get_serialize_element(property_name, property_key, property_type, is_optional, pointer_type):
+def get_serialize_element(property_name, property_id, property_key, property_type, is_optional, pointer_type):
     write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     if is_optional:
         write_method = 'WriteOptionalProperty'
     return (
         serialize_element.replace('${PROPERTY_NAME}', property_name)
+        .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_KEY}', property_key)
         .replace('WriteProperty', write_method)
         .replace('${ASSIGNMENT}', assignment)
     )
 
 
-def get_deserialize_element_template(template, property_name, property_key, property_type, is_optional, pointer_type):
+def get_deserialize_element_template(
+    template, property_name, property_key, property_id, property_type, is_optional, pointer_type
+):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     if is_optional:
@@ -122,15 +129,16 @@ def get_deserialize_element_template(template, property_name, property_key, prop
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
+        .replace('${PROPERTY_ID}', str(property_id))
         .replace('ReadProperty', read_method)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${ASSIGNMENT}', assignment)
     )
 
 
-def get_deserialize_element(property_name, property_key, property_type, is_optional, pointer_type):
+def get_deserialize_element(property_name, property_key, property_id, property_type, is_optional, pointer_type):
     return get_deserialize_element_template(
-        deserialize_element, property_name, property_key, property_type, is_optional, pointer_type
+        deserialize_element, property_name, property_key, property_id, property_type, is_optional, pointer_type
     )
 
 
@@ -163,6 +171,7 @@ def generate_return(class_entry):
 
 
 supported_member_entries = [
+    'id',
     'name',
     'type',
     'property',
@@ -175,6 +184,7 @@ supported_member_entries = [
 
 class MemberVariable:
     def __init__(self, entry):
+        self.id = entry['id']
         self.name = entry['name']
         self.type = entry['type']
         self.base = None
@@ -289,10 +299,10 @@ def generate_base_class_code(base_class):
             enum_type = entry.type
         is_optional = entry.optional
         base_class_serialize += get_serialize_element(
-            entry.serialize_property, entry.name, type_name, is_optional, base_class.pointer_type
+            entry.serialize_property, entry.id, entry.name, type_name, is_optional, base_class.pointer_type
         )
         base_class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, type_name, is_optional, base_class.pointer_type
+            entry.deserialize_property, entry.name, entry.id, type_name, is_optional, base_class.pointer_type
         )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
@@ -435,7 +445,7 @@ def generate_class_code(class_entry):
         entry = class_entry.members[entry_idx]
         type_name = replace_pointer(entry.type)
         class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, type_name, entry.optional, 'unique_ptr'
+            entry.deserialize_property, entry.name, entry.id, type_name, entry.optional, 'unique_ptr'
         )
 
     class_deserialize += generate_constructor(
@@ -445,6 +455,7 @@ def generate_class_code(class_entry):
         return None
     for entry_idx in range(len(class_entry.members)):
         entry = class_entry.members[entry_idx]
+        property_id = entry.id
         property_key = entry.name
         write_property_name = entry.serialize_property
         is_optional = entry.optional
@@ -463,13 +474,14 @@ def generate_class_code(class_entry):
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(
-            write_property_name, property_key, type_name, is_optional, class_entry.pointer_type
+            write_property_name, property_id, property_key, type_name, is_optional, class_entry.pointer_type
         )
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
                 deserialize_template_str,
                 entry.deserialize_property,
                 property_key,
+                property_id,
                 type_name,
                 is_optional,
                 class_entry.pointer_type,
@@ -492,21 +504,25 @@ def generate_class_code(class_entry):
     return class_generation
 
 
-def check_children_for_duplicate_members(node, parents: list, seen: set):
+def check_children_for_duplicate_members(node, parents: list, seen_names: set, seen_ids: set):
     # Check for duplicate names
     if node.members is not None:
         for member in node.members:
-            if member.name in seen:
+            if member.name in seen_names:
                 # Print the inheritance tree
-                print(
-                    f"Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                exit(
+                    f"Error: Duplicate member name \"{member.name}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
                 )
-                exit()
-            seen.add(member.name)
+            seen_names.add(member.name)
+            if member.id in seen_ids:
+                exit(
+                    f"Error: Duplicate member id \"{member.id}\" in class \"{node.name}\" ({' -> '.join(map(lambda x: x.name, parents))} -> {node.name})"
+                )
+            seen_ids.add(member.id)
 
     # Recurse
     for child in node.children.values():
-        check_children_for_duplicate_members(child, parents + [node], seen.copy())
+        check_children_for_duplicate_members(child, parents + [node], seen_names.copy(), seen_ids.copy())
 
 
 for entry in file_list:
@@ -550,7 +566,7 @@ for entry in file_list:
     for base_class in base_classes:
         if base_class.base is None:
             # Root base class, now traverse the children
-            check_children_for_duplicate_members(base_class, [], set())
+            check_children_for_duplicate_members(base_class, [], set(), set())
 
     with open(target_path, 'w+') as f:
         f.write(

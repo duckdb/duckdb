@@ -49,3 +49,21 @@ DUCKDB_R_DEBUG=1
 ```
 
 If you do this, remember to use `--vanilla` for building release builds.
+
+### Developing with Extensions
+If you wish to build or add extensions to the R package you first need to build duckdb with the 
+`extension_static_build` flag and move the desired extension to a location where it won't be 
+modified by other build scripts. The following commands allow you to add the httpfs extension to 
+a duckdb R build. See the [extension ReadMe](https://github.com/duckdb/duckdb/tree/main/extension#readme) for more 
+information about extensions 
+```sh
+cd duckdb/
+EXTENSION_STATIC_BUILD=1 make
+mv ./build/release/extension/httpfs/httpfs.duckdb_extension {{untouched_path}}/httpfs-extension.duckdb_extension
+```
+Then in R
+```r
+library(“duckdb”)
+con <- DBI::dbConnect(duckdb(config=list(“allow_unsigned_extensions”=“true”)))
+dbExecute(con, “LOAD {{untouched_path}}/httpfs-extension.duckdb_extension")
+```
