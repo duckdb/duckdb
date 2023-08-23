@@ -107,10 +107,13 @@ void *aligned_alloc(size_t alignment, size_t size) {
 void *operator new(std::size_t size) throw(std::bad_alloc) {
 	void *mem = malloc(size == 0 ? 1 : size);
 	if (mem == 0) {
-		Exception::GetStackTrace();
 		throw std::bad_alloc();
 	}
 	return mem;
+}
+
+void *operator new(std::size_t size, const std::nothrow_t& tag) noexcept  {
+	return malloc(size == 0 ? 1 : size);
 }
 
 int main(int argc, char *argv[]) {
