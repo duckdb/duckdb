@@ -57,6 +57,7 @@ public:
 	}
 
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
+	static void MultiplyNoOverflowCheck(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs);
 	static uhugeint_t Subtract(uhugeint_t lhs, uhugeint_t rhs);
