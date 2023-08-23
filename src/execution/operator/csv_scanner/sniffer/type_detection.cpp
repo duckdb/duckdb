@@ -286,9 +286,12 @@ void CSVSniffer::DetectTypes() {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
+		// First line where we start our type detection
+		const idx_t start_idx_detection = row_idx;
 		for (; row_idx < values.size(); row_idx++) {
 			for (idx_t col = 0; col < values[row_idx].second.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
+				auto cur_top_candidate = col_type_candidates.back();
 				auto dummy_val = values[row_idx].second[col];
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
@@ -359,6 +362,13 @@ void CSVSniffer::DetectTypes() {
 					if (TryCastValue(*candidate, dummy_val, sql_type)) {
 						break;
 					} else {
+						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN){
+							// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we immediately pop to varchar.
+							while (col_type_candidates.back() != LogicalType::VARCHAR){
+								col_type_candidates.pop_back();
+							}
+							break;
+						}
 						col_type_candidates.pop_back();
 					}
 				}
