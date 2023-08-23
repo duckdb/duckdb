@@ -46,7 +46,7 @@ TEST_CASE("Test default", "[serialization]") {
 	foo_in.bar->b = 43;
 	foo_in.c = 44;
 
-	auto data = BinarySerializer::Serialize(foo_in);
+	auto data = BinarySerializer::Serialize(foo_in, false);
 	auto data_size = data.size();
 	auto foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
 	auto &foo_out = *foo_out_ptr.get();
@@ -58,7 +58,7 @@ TEST_CASE("Test default", "[serialization]") {
 	// Now try with a default value
 	foo_in.bar = nullptr;
 
-	data = BinarySerializer::Serialize(foo_in);
+	data = BinarySerializer::Serialize(foo_in, false);
 	foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
 	auto &foo_out2 = *foo_out_ptr.get();
 
