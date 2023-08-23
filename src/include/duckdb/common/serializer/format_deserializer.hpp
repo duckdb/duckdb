@@ -172,14 +172,14 @@ private:
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<typename is_reference<T>::ELEMENT_TYPE, CatalogEntry>::value, T>::type
 	Read() {
-		// OnObjectBegin();
 		auto &context = this->data.Get<ClientContext &>();
-		auto catalog = Read<string>();
-		auto schema = Read<string>();
-		auto name = Read<string>();
-		auto type = Read<CatalogType>();
+		BeginObject(0, "catalog_entry_reference");
+		auto catalog = ReadProperty<string>(0, "catalog");
+		auto schema = ReadProperty<string>(1, "schema");
+		auto name = ReadProperty<string>(2, "name");
+		auto type = ReadProperty<CatalogType>(3, "type");
 		auto entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-		// OnObjectEnd();
+		EndObject();
 		return reference<CatalogEntry>(*entry);
 	}
 

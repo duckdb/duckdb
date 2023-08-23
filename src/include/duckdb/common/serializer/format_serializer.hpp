@@ -93,12 +93,12 @@ protected:
 		auto schema = entry.ParentSchema().name;
 		auto name = entry.name;
 
-		// BeginObject(0, "catalog_entry_reference");
-		WriteValue(catalog);
-		WriteValue(schema);
-		WriteValue(name);
-		WriteValue(entry.type);
-		// EndObject();
+		BeginObject(0, "catalog_entry_reference");
+		WriteProperty(0, "catalog", catalog);
+		WriteProperty(1, "schema", schema);
+		WriteProperty(2, "name", name);
+		WriteProperty(3, "type", entry.type);
+		EndObject();
 	}
 
 	// Pointer
