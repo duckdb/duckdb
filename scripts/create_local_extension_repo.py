@@ -17,8 +17,14 @@ if len(sys.argv) != 4:
 
 duckdb_path = sys.argv[1]
 extension_path = sys.argv[2]
+dst_path = sys.argv[3]
 
-print(f"extension path as received: {extension_path}")
+if os.name == 'nt':
+    duckdb_path = duckdb_path.replace("/", "\\")
+    extension_path = extension_path.replace("/", "\\")
+    dst_path = dst_path.replace("/", "\\")
+
+print(f"Paths as received: {duckdb_path},  {extension_path}, {dst_path}")
 
 duckdb_invocation = [duckdb_path, '-noheader', '-list', '-c']
 platform_query = duckdb_invocation.copy()
@@ -39,7 +45,7 @@ source_id = res.stdout.decode('ascii').strip()
 version_path = source_id if "-dev" in duckdb_version else duckdb_version
 
 # Create destination path
-dest_path = os.path.join(sys.argv[3], version_path, duckdb_platform)
+dest_path = os.path.join(dst_path, version_path, duckdb_platform)
 if not os.path.exists(dest_path):
     os.makedirs(dest_path)
 

@@ -124,7 +124,7 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
-option(ENABLE_EXTENSION_AUTOLOADING "Enable extension autoloading by default." TRUE)
+option(ENABLE_EXTENSION_AUTOLOADING "Enable extension autoloading by default." FALSE)
 option(EXTENSION_TESTS_ONLY "Only load the tests for extension, don't actually build any; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
