@@ -23,8 +23,8 @@ void BinarySerializer::SetTag(const field_id_t field_id, const char *tag) {
 			for (auto &field : seen_fields) {
 				all_fields += StringUtil::Format("\"%s\":%d ", field.first, field.second);
 			}
-			throw SerializationException("Duplicate field id/tag in field: \"%s\":%d, other fields: %s", tag, field_id,
-			                             all_fields);
+			throw InternalException("Duplicate field id/tag in field: \"%s\":%d, other fields: %s", tag, field_id,
+			                        all_fields);
 		}
 	}
 
