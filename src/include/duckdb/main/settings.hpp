@@ -225,6 +225,7 @@ struct EnableProgressBarSetting {
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(ClientContext &context);
 };
+
 struct EnableProgressBarPrintSetting {
 	static constexpr const char *Name = "enable_progress_bar_print";
 	static constexpr const char *Description =
