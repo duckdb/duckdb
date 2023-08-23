@@ -24,8 +24,13 @@ SELECT * FROM v1
 43
 
 # now drop the table and create a table that has a different schema
-statement ok
+statement error
 DROP TABLE t1
+----
+Dependency Error: Cannot drop entry "t1" because there are entries that depend on it.
+
+statement ok
+DROP TABLE t1 CASCADE;
 
 statement ok
 CREATE TABLE t1(i DATE)
@@ -52,10 +57,11 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(k INTEGER)
 
-# this is fine: types still match, and the original names will be applied as alias!
-query I
+# v1 was deleted earlier as part of CASCADE
+statement error
 SELECT i FROM v1
 ----
+Catalog Error: Table with name v1 does not exist!
 
 statement ok
 DROP TABLE t1
@@ -63,8 +69,10 @@ DROP TABLE t1
 statement ok
 CREATE TABLE t1(i INTEGER)
 
+statement ok
+CREATE VIEW v1 AS SELECT * FROM t1
+
 # now we can query again!
 query I
 SELECT * FROM v1
 ----
-
