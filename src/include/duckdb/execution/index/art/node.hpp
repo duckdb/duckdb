@@ -123,4 +123,13 @@ public:
 		Set(ptr.Get());
 	}
 };
+
+template <>
+optional_ptr<const Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const;
+template <>
+optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const;
+template <>
+optional_ptr<const Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const;
+template <>
+optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const;
 } // namespace duckdb

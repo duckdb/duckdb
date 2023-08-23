@@ -142,39 +142,77 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 // Get functions
 //===--------------------------------------------------------------------===//
 
-template <class NODE>
-optional_ptr<NODE> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const {
+template <>
+optional_ptr<const Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const {
 
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetChild<NODE>(byte);
+		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetChild<const Node>(byte);
 	case NType::NODE_16:
-		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetChild<NODE>(byte);
+		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetChild<const Node>(byte);
 	case NType::NODE_48:
-		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetChild<NODE>(byte);
+		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetChild<const Node>(byte);
 	case NType::NODE_256:
-		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetChild<NODE>(byte);
+		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetChild<const Node>(byte);
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
 }
 
-template <class NODE>
-optional_ptr<NODE> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const {
+template <>
+optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const {
 
 	D_ASSERT(HasMetadata());
 
 	switch (GetType()) {
 	case NType::NODE_4:
-		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetNextChild<NODE>(byte);
+		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetChild<Node>(byte);
 	case NType::NODE_16:
-		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetNextChild<NODE>(byte);
+		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetChild<Node>(byte);
 	case NType::NODE_48:
-		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetNextChild<NODE>(byte);
+		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetChild<Node>(byte);
 	case NType::NODE_256:
-		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetNextChild<NODE>(byte);
+		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetChild<Node>(byte);
+	default:
+		throw InternalException("Invalid node type for GetChild.");
+	}
+}
+
+template <>
+optional_ptr<const Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const {
+
+	D_ASSERT(HasMetadata());
+
+	switch (GetType()) {
+	case NType::NODE_4:
+		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetNextChild<const Node>(byte);
+	case NType::NODE_16:
+		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetNextChild<const Node>(byte);
+	case NType::NODE_48:
+		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetNextChild<const Node>(byte);
+	case NType::NODE_256:
+		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetNextChild<const Node>(byte);
+	default:
+		throw InternalException("Invalid node type for GetNextChild.");
+	}
+}
+
+template <>
+optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const {
+
+	D_ASSERT(HasMetadata());
+
+	switch (GetType()) {
+	case NType::NODE_4:
+		return Ref<Node4>(art, *this, NType::NODE_4, dirty).GetNextChild<Node>(byte);
+	case NType::NODE_16:
+		return Ref<Node16>(art, *this, NType::NODE_16, dirty).GetNextChild<Node>(byte);
+	case NType::NODE_48:
+		return Ref<Node48>(art, *this, NType::NODE_48, dirty).GetNextChild<Node>(byte);
+	case NType::NODE_256:
+		return Ref<Node256>(art, *this, NType::NODE_256, dirty).GetNextChild<Node>(byte);
 	default:
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
