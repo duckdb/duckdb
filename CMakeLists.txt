@@ -1131,7 +1131,7 @@ if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
   add_custom_target(
           duckdb_local_extension_repo ALL
           COMMAND
-          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> ${CMAKE_CURRENT_BINARY_DIR} ${LOCAL_EXTENSION_REPO}
+          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
           DEPENDS shell
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Create local extension repository)

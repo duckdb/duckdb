@@ -479,14 +479,16 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+// TODO: expose this to extensions, such as AWS that can use it to autoload their dependencies
+//		 - this should provide a way to add even more error info to the exception, formatted such that n-level nesting
+//		   still looks kinda decent
 void Catalog::TryAutoloadExtension(ClientContext &context, const string &extension_name) {
 	try {
-		ExtensionHelper::InstallExtension(context, extension_name, true,
-		                                  context.config.autoload_extension_repo); // TODO REVERT to false!s
+		ExtensionHelper::InstallExtension(context, extension_name, false, context.config.autoload_extension_repo);
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		auto new_exception_message = "Attempted to automatically install the '" + extension_name +
-		                             "' extension, but the following error occured: (" + e.RawMessage() + ") ";
+		                             "' extension, but the following error occurred: (" + e.RawMessage() + ") ";
 		throw Exception(e.type, new_exception_message);
 	}
 }
