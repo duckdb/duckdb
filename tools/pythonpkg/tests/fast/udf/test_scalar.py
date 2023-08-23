@@ -43,7 +43,6 @@ class TestScalarUDF(object):
             (UINTEGER, 4294967295),
             (UBIGINT, 18446744073709551615),
             (HUGEINT, 18446744073709551616),
-            (UHUGEINT, 18446744073709551616),
             (VARCHAR, 'long_string_test'),
             (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
             (FLOAT, 0.12246409803628922),
