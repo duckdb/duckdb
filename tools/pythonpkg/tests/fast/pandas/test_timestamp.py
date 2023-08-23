@@ -4,8 +4,7 @@ import datetime
 import pytest
 import pandas as pd
 
-from tools.pythonpkg.tests.conftest import pandas_2_or_higher
-
+from conftest import pandas_2_or_higher
 
 class TestPandasTimestamps(object):
     @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
