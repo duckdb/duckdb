@@ -122,6 +122,8 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return v_column_binding;
 	}
+
+	void CE() override;
 };
 
 } // namespace duckdb

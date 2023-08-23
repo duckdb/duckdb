@@ -50,5 +50,4 @@ public:
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 };
-
 } // namespace duckdb

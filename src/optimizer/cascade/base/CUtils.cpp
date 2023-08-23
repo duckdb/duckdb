@@ -103,6 +103,31 @@ bool CUtils::ContainsAll(duckdb::vector<ColumnBinding> parent, duckdb::vector<Co
 	return true;
 }
 
+bool CUtils::ContainsAll(duckdb::vector<BoundOrderByNode> &parent, duckdb::vector<BoundOrderByNode> &child)
+{
+	if(parent.size() < child.size())
+	{
+		return false;
+	}
+	for(auto &c1 : child)
+	{
+		bool equal = false;
+		for(auto &c2 : parent)
+		{
+			if(c1.Equals(c2))
+			{
+				equal = true;
+				break;
+			}
+		}
+		if(!equal)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 // check if a given operator is an FEnforcer
 bool CUtils::FEnforcer(Operator* pop)
 {

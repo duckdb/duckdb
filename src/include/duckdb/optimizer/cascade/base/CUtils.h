@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/optimizer/cascade/operators/Operator.h"
+#include "duckdb/planner/bound_result_modifier.hpp"
 
 namespace gpopt
 {
@@ -39,6 +40,8 @@ public:
     static bool Equals(duckdb::vector<ColumnBinding> first, duckdb::vector<ColumnBinding> second);
 
     static bool ContainsAll(duckdb::vector<ColumnBinding> first, duckdb::vector<ColumnBinding> second);
+
+    static bool ContainsAll(duckdb::vector<BoundOrderByNode> &parent, duckdb::vector<BoundOrderByNode> &child);
 
     // check if a given operator is an enforcer
 	static bool FEnforcer(Operator* pop);

@@ -31,6 +31,11 @@ public:
 	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match
 	static void ConstructFullOuterJoinResult(bool *found_match, ColumnDataCollection &input, DataChunk &result,
 	                                         ColumnDataScanState &scan_state);
+
+	vector<ColumnBinding> PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrsRequired,
+	                                    ULONG child_index, vector<CDrvdProp *> pdrgpdpCtxt, ULONG ulOptReq) override;
+
+	void CE() override;
 };
 
 } // namespace duckdb

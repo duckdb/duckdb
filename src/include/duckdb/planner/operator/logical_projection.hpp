@@ -50,5 +50,7 @@ public:
 	duckdb::unique_ptr<Operator> CopyWithNewChildren(CGroupExpression *pgexpr,
 	                                                 duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
 	                                                 double cost) override;
+
+	void CE() override;
 };
 } // namespace duckdb

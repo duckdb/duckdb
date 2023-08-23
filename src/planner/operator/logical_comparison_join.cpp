@@ -197,4 +197,19 @@ unique_ptr<Operator> LogicalComparisonJoin::CopyWithNewChildren(CGroupExpression
 	copy->m_cost = cost;
 	return copy;										
 }
+
+void LogicalComparisonJoin::CE() {
+	if(this->has_estimated_cardinality) {
+		return;
+	}
+	if(!this->children[0]->has_estimated_cardinality) {
+		this->children[0]->CE();
+	}
+	if(this->children[1]->has_estimated_cardinality) {
+		this->children[1]->CE();
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = 0.25 * this->children[0]->estimated_cardinality * this->children[1]->estimated_cardinality;
+	return;
+}
 } // namespace duckdb

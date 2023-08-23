@@ -101,9 +101,7 @@ public:
 	static unique_ptr<Expression> ExpressionPassThrough(const PhysicalOperator* op, Expression* expr);
 
 	// return order property enforcing type for this operator
-	virtual CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const {
-		return CEnfdOrder::EPropEnforcingType::EpetRequired;
-	}
+	virtual CEnfdOrder::EPropEnforcingType EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const;
 
 	// compute required sort order of the n-th child
 	virtual COrderSpec *PosRequired(CExpressionHandle &exprhdl, COrderSpec *posRequired, ULONG child_index,

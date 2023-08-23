@@ -11,6 +11,7 @@
 #include "duckdb/transaction/transaction.hpp"
 
 #include <utility>
+#include <cstdlib>
 
 namespace duckdb {
 using namespace gpopt;
@@ -357,5 +358,14 @@ PhysicalTableScan::CopyWithNewChildren(CGroupExpression *pgexpr, duckdb::vector<
 	result->m_group_expression = pgexpr;
 	result->m_cost = cost;
 	return result;
+}
+
+void PhysicalTableScan::CE() {
+	if(this->has_estimated_cardinality) {
+		return;
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = static_cast<double>(rand() % 1000);
+	return;
 }
 } // namespace duckdb

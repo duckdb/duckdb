@@ -28,7 +28,7 @@ public:
 struct BoundOrderByNode
 {
 public:
-	BoundOrderByNode(const BoundOrderByNode &other);
+	BoundOrderByNode(const BoundOrderByNode& other);
 
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression);
 	

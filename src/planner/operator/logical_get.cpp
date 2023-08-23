@@ -364,4 +364,13 @@ unique_ptr<Operator> LogicalGet::CopyWithNewChildren(CGroupExpression *pgexpr,
 	result->projected_input.assign(projected_input.begin(), projected_input.end());
 	return result;
 }
+
+void LogicalGet::CE() {
+	if(this->has_estimated_cardinality) {
+		return;
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = static_cast<double>(rand() % 1000);
+	return;
+}
 } // namespace duckdb

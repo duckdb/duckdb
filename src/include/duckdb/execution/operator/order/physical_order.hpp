@@ -73,6 +73,9 @@ public:
 
 	unique_ptr<Operator> CopyWithNewChildren(CGroupExpression* pgexpr, vector<unique_ptr<Operator>> pdrgpexpr,
 											double cost) override;
+
+	void CE() override;
+	
 public:
 	// Source interface
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const override;

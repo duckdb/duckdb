@@ -80,4 +80,45 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		}
 	}
 }
+
+vector<ColumnBinding> PhysicalComparisonJoin::PcrsRequired(CExpressionHandle &exprhdl, vector<ColumnBinding> pcrs_required,
+	                                ULONG child_index, vector<CDrvdProp *> pdrgpdpCtxt, ULONG ulOptReq) {
+	vector<ColumnBinding> pcrs_join;
+	for (auto &child : this->conditions) {
+		vector<ColumnBinding> left_cell = child.left->getColumnBinding();
+		pcrs_join.insert(pcrs_join.end(), left_cell.begin(), left_cell.end());
+		vector<ColumnBinding> right_cell = child.right->getColumnBinding();
+		pcrs_join.insert(pcrs_join.end(), right_cell.begin(), right_cell.end());
+	}
+	/* Union of join condition cols and required output cols */
+	for(auto &child : pcrs_required) {
+		bool FAdd = true;
+		for(auto &subchild : pcrs_join) {
+			if(child == subchild) {
+				FAdd = false;
+				break;
+			}
+		}
+		if(FAdd) {
+			pcrs_join.push_back(child);
+		}
+	}
+	vector<ColumnBinding> pcrs_child_reqd = PcrsChildReqd(exprhdl, pcrs_join, child_index);
+	return pcrs_child_reqd;
+}
+
+void PhysicalComparisonJoin::CE() {
+	if(this->has_estimated_cardinality) {
+		return;
+	}
+	if(!this->children[0]->has_estimated_cardinality) {
+		this->children[0]->CE();
+	}
+	if(this->children[1]->has_estimated_cardinality) {
+		this->children[1]->CE();
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = 0.25 * this->children[0]->estimated_cardinality * this->children[1]->estimated_cardinality;
+	return;
+}
 } // namespace duckdb

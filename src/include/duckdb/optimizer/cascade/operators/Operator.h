@@ -189,6 +189,8 @@ public:
 	                                                         duckdb::vector<duckdb::unique_ptr<Operator>> pdrgpexpr,
 	                                                         double cost);
 
+	virtual void CE();
+
 	// ------------------------------------- DuckDB -------------------------------------
 	virtual string ToString() const {
 		return "Something wrong happens";

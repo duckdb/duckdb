@@ -205,6 +205,15 @@ unique_ptr<Operator> PhysicalOrder::CopyWithNewChildren(CGroupExpression* pgexpr
 	return copy;
 }
 
+void PhysicalOrder::CE() {
+	if(this->has_estimated_cardinality)
+		return;
+	if(!this->children[0]->has_estimated_cardinality) {
+		this->children[0]->CE();
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = children[0]->estimated_cardinality;
+}
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//

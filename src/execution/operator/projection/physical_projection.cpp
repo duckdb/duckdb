@@ -202,4 +202,14 @@ duckdb::unique_ptr<Operator> PhysicalProjection::CopyWithNewChildren(CGroupExpre
 	result->m_cost = cost;
 	return result;
 }
+
+void PhysicalProjection::CE() {
+	if(this->has_estimated_cardinality)
+		return;
+	if(!this->children[0]->has_estimated_cardinality) {
+		this->children[0]->CE();
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = children[0]->estimated_cardinality;
+}
 } // namespace duckdb
