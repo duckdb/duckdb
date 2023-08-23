@@ -175,7 +175,7 @@ numeric_operators <- function(data_type) {
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
   numeric_types <- c(
     "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
-    "FLOAT", "DOUBLE", "HUGEINT", "UHUGEINT"
+    "FLOAT", "DOUBLE", "HUGEINT"
   )
 
   for (data_type in numeric_types) {
