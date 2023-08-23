@@ -3435,6 +3435,8 @@ const char* EnumUtil::ToChars<OptimizerType>(OptimizerType value) {
 		return "REGEX_RANGE";
 	case OptimizerType::IN_CLAUSE:
 		return "IN_CLAUSE";
+	case OptimizerType::JOIN_ELIMINATION:
+		return "JOIN_ELIMINATION";
 	case OptimizerType::JOIN_ORDER:
 		return "JOIN_ORDER";
 	case OptimizerType::DELIMINATOR:
@@ -3485,6 +3487,9 @@ OptimizerType EnumUtil::FromString<OptimizerType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "IN_CLAUSE")) {
 		return OptimizerType::IN_CLAUSE;
+	}
+	if (StringUtil::Equals(value, "JOIN_ELIMINATION")) {
+		return OptimizerType::JOIN_ELIMINATION;
 	}
 	if (StringUtil::Equals(value, "JOIN_ORDER")) {
 		return OptimizerType::JOIN_ORDER;
