@@ -75,7 +75,6 @@ jobs:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-latest
-    needs: xcode-debug
     env:
       BUILD_ICU: 1
       BUILD_TPCH: 1
@@ -172,7 +171,6 @@ jobs:
     # Builds extensions for osx_arm64 and osx_amd64
     name: OSX Extensions Release
     runs-on: macos-latest
-    needs: xcode-debug
     strategy:
       matrix:
         label: [ 'x86_64', 'arm64' ]
