@@ -67,6 +67,7 @@ DependencyList DependencyList::Deserialize(Deserializer &deserializer) {
 		auto catalog = deserializer.Read<string>();
 		auto schema = deserializer.Read<string>();
 		auto name = deserializer.Read<string>();
+		// FIXME: this can get called before the dependencies are added to the catalog
 		auto entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
 		dependencies.AddDependency(*entry);
 	}
