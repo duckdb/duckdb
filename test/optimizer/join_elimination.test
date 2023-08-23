@@ -1,0 +1,62 @@
+# name: test/optimizer/join_elimination.test
+# description: Test whether the reduant join can be removed
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table t1(a int unique, b int, c int, d int, unique(b, c));
+
+statement ok
+create table t2(a int primary key, b int, c int, d int, unique(c, d));
+
+query II
+explain select t1.* from t1 left join t2 on t1.b = t2.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from t1 left join t2 on t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t2.* from t1 right join t2 on t2.b = t1.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t2.* from t1 right join t2 on t1.b = t2.b and t2.c = t1.c;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t2.* from t1 right join t2 on t1.a = t2.a and t1.b = t2.c and t2.b = t1.c;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+# The outer join in the following cases can not be removed
+
+# There are some columns from the inner table have been used.
+query II
+explain select t2.a from t1 left join t2 on t1.b = t2.a;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+# The keys in the inner side have not been fully covered by the unique index.
+query II
+explain select t2.a from t1 left join t2 on t1.b = t2.c;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+# The keys in the inner side have not been fully covered by the unique index.
+query II
+explain select t1.* from t1 left join t2 on t1.b = t2.c and t1.d = t2.d and t1.a = t2.b;
+----
+logical_opt	<REGEX>:.*JOIN.*
