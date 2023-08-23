@@ -170,6 +170,7 @@ bool TryAddOperator::Operation(uhugeint_t left, uhugeint_t right, uhugeint_t &re
 	return true;
 }
 
+template <>
 bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
 	if (!Hugeint::AddInPlace(left, right)) {
 		return false;
