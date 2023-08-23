@@ -2718,7 +2718,7 @@ public class TestDuckDBJDBC {
             conn.getSchema();
             fail();
         } catch (SQLException e) {
-            assertEquals(e.getMessage(), "Invalid connection");
+            assertEquals(e.getMessage(), "Connection Error: Invalid connection");
         }
     }
 
