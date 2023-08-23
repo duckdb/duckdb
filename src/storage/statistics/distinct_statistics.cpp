@@ -2,6 +2,8 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 #include <math.h>
 
@@ -47,6 +49,19 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &read
 	auto sample_count = reader.ReadRequired<idx_t>();
 	auto total_count = reader.ReadRequired<idx_t>();
 	return make_uniq<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
+}
+
+void DistinctStatistics::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(100, "sample_count", sample_count);
+	serializer.WriteProperty(101, "total_count", total_count);
+	serializer.WriteProperty(102, "log", log);
+}
+
+unique_ptr<DistinctStatistics> DistinctStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto sample_count = deserializer.ReadProperty<idx_t>(100, "sample_count");
+	auto total_count = deserializer.ReadProperty<idx_t>(101, "total_count");
+	auto log = deserializer.ReadProperty<unique_ptr<HyperLogLog>>(102, "log");
+	return make_uniq<DistinctStatistics>(std::move(log), sample_count, total_count);
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {

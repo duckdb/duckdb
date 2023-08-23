@@ -1,5 +1,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -108,6 +110,23 @@ void TableStatistics::Serialize(Serializer &serializer) {
 void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
 	for (auto &col : columns.Physical()) {
 		auto stats = ColumnStatistics::Deserialize(source, col.GetType());
+		column_stats.push_back(std::move(stats));
+	}
+}
+
+void TableStatistics::FormatSerialize(FormatSerializer &serializer) {
+	for (auto &stats : column_stats) {
+		stats->FormatSerialize(serializer);
+	}
+}
+
+void TableStatistics::FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns) {
+	for (auto &col : columns.Physical()) {
+		// Propagate the logical type
+		auto type = col.GetType();
+		deserializer.Set<LogicalType &>(type);
+		auto stats = ColumnStatistics::FormatDeserialize(deserializer);
+		deserializer.Unset<LogicalType>();
 		column_stats.push_back(std::move(stats));
 	}
 }

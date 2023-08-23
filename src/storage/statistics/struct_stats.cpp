@@ -3,6 +3,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 void StructStats::Construct(BaseStatistics &stats) {
@@ -105,6 +108,32 @@ BaseStatistics StructStats::Deserialize(FieldReader &reader, LogicalType type) {
 	for (idx_t i = 0; i < child_types.size(); i++) {
 		result.child_stats[i].Copy(
 		    reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_types[i].second));
+	}
+	return result;
+}
+
+void StructStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+	auto child_stats = StructStats::GetChildStats(stats);
+	auto child_count = StructType::GetChildCount(stats.GetType());
+
+	// TODO: we need to allow repeated fields here.
+	serializer.BeginObject(200, "child_stats");
+	for (idx_t i = 0; i < child_count; i++) {
+		// TODO: this is a hack and wont work
+		serializer.WriteProperty(100 + i, "child_stats", child_stats[i]);
+	}
+	serializer.EndObject();
+}
+
+BaseStatistics StructStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
+	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+
+	auto &child_types = StructType::GetChildTypes(type);
+	BaseStatistics result(std::move(type));
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_types[i].second));
+		result.child_stats[i].Copy(deserializer.ReadProperty<BaseStatistics>(100 + i, "child_stats"));
+		deserializer.Unset<LogicalType>();
 	}
 	return result;
 }
