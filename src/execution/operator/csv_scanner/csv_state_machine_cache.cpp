@@ -1,15 +1,16 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine_cache.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
-void InitializeTransitionArray(unsigned char* transition_array, const uint8_t state){
+void InitializeTransitionArray(unsigned char *transition_array, const uint8_t state) {
 	for (uint32_t i = 0; i < NUM_TRANSITIONS; i++) {
 		transition_array[i] = state;
 	}
 }
 
 void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
+	D_ASSERT(state_machine_cache.find({delimiter, quote, escape}) == state_machine_cache.end());
 	// Initialize transition array with default values to the Standard option
 	auto &transition_array = state_machine_cache[{delimiter, quote, escape}];
 	const uint8_t standard_state = static_cast<uint8_t>(CSVState::STANDARD);
@@ -25,16 +26,16 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 	for (uint32_t i = 0; i < NUM_STATES; i++) {
 		switch (i) {
 		case quoted_state:
-			InitializeTransitionArray(transition_array[i],quoted_state);
+			InitializeTransitionArray(transition_array[i], quoted_state);
 			break;
 		case unquoted_state:
-			InitializeTransitionArray(transition_array[i],invalid_state);
+			InitializeTransitionArray(transition_array[i], invalid_state);
 			break;
 		case escape_state:
-			InitializeTransitionArray(transition_array[i],invalid_state);
+			InitializeTransitionArray(transition_array[i], invalid_state);
 			break;
 		default:
-			InitializeTransitionArray(transition_array[i],standard_state);
+			InitializeTransitionArray(transition_array[i], standard_state);
 			break;
 		}
 	}
@@ -80,11 +81,6 @@ void CSVStateMachineCache::Insert(char delimiter, char quote, char escape) {
 }
 
 CSVStateMachineCache::CSVStateMachineCache() {
-	vector<char> default_delim = {',', '|', ';', '\t'};
-	vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
-	vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
-	vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
-
 	for (auto quoterule : default_quote_rule) {
 		const auto &quote_candidates = default_quote[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
@@ -106,4 +102,4 @@ state_machine_t &CSVStateMachineCache::Get(char delimiter, char quote, char esca
 	auto &transition_array = state_machine_cache[{delimiter, quote, escape}];
 	return transition_array;
 }
-}
+} // namespace duckdb

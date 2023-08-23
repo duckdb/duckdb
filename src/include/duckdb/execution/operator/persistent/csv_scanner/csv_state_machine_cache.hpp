@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp"
 
 namespace duckdb {
 static constexpr uint32_t NUM_STATES = 8;
@@ -55,5 +56,10 @@ private:
 	void Insert(char delimiter, char quote, char escape);
 	//! Cache on delimiter|quote|escape
 	unordered_map<CSVStateMachineConfig, state_machine_t, HashCSVStateMachineConfig> state_machine_cache;
+	//! Default value for options used to intialize CSV State Machine Cache
+	const vector<char> default_delim = {',', '|', ';', '\t'};
+	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
+	const vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+	const vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
 };
 } // namespace duckdb

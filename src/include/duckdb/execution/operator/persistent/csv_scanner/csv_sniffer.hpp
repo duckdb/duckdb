@@ -10,17 +10,9 @@
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp"
 
 namespace duckdb {
-
-//! Different Rules regarding possible combinations of Quote and Escape Values for CSV Dialects.
-//! Each rule has a comment on the possible combinations.
-enum class QuoteRule : uint8_t {
-	QUOTES_RFC = 0,   //! quote = " escape = (\0 || " || ')
-	QUOTES_OTHER = 1, //! quote = ( " || ' ) escape = '\\'
-	NO_QUOTES = 2     //! quote = \0 escape = \0
-};
-
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
 	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p)

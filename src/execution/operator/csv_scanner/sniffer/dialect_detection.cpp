@@ -173,17 +173,36 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 		return;
 	}
 
-	// some logic
+	// Calculate the total number of consistent rows after adding padding.
 	consistent_rows += padding_count;
+
+	// Whether there are more values (rows) available that are consistent, exceeding the current best.
 	bool more_values = (consistent_rows > best_consistent_rows && num_cols >= max_columns_found);
+
+	// If additional padding is required when compared to the previous padding count.
 	bool require_more_padding = padding_count > prev_padding_count;
+
+	// If less padding is now required when compared to the previous padding count.
 	bool require_less_padding = padding_count < prev_padding_count;
+
+	// If there was only a single column before, and the new number of columns exceeds that.
 	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found;
+
+	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
+	// start row.
 	bool rows_consistent =
 	    start_row + consistent_rows - options.dialect_options.skip_rows == sniffed_column_counts.size();
+
+	// If there are more than one consistent row.
 	bool more_than_one_row = (consistent_rows > 1);
+
+	// If there are more than one column.
 	bool more_than_one_column = (num_cols > 1);
+
+	// If the start position is valid.
 	bool start_good = !candidates.empty() && (start_row <= candidates.front()->start_row);
+
+	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
 	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {

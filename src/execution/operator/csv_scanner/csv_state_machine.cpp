@@ -8,8 +8,6 @@
 
 namespace duckdb {
 
-
-
 CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char escape_p, char delim_p,
                                  shared_ptr<CSVBufferManager> buffer_manager_p,
                                  CSVStateMachineCache &csv_state_machine_cache_p)
