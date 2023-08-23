@@ -489,7 +489,7 @@ main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
 main/extension/extension_install.cpp	97
-main/extension/extension_load.cpp	59
+main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
 main/pending_query_result.cpp	5
