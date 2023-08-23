@@ -61,8 +61,7 @@ private:
 	}
 
 	explicit BinarySerializer(bool serialize_default_values_p) {
-		(void)serialize_default_values_p;
-		serialize_default_values = true;
+		serialize_default_values = serialize_default_values_p;
 		serialize_enum_as_string = false;
 	}
 
