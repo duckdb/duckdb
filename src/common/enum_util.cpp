@@ -1155,6 +1155,8 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::JULIAN_DAY:
+		return "JULIAN_DAY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1230,6 +1232,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
+	}
+	if (StringUtil::Equals(value, "JULIAN_DAY")) {
+		return DatePartSpecifier::JULIAN_DAY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3883,6 +3888,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3898,6 +3905,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return PendingExecutionResult::NO_TASKS_AVAILABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -1,5 +1,5 @@
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/common/types/null_value.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-TableDataReader::TableDataReader(MetaBlockReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
+TableDataReader::TableDataReader(MetadataReader &reader, BoundCreateTableInfo &info) : reader(reader), info(info) {
 	info.data = make_uniq<PersistentTableData>(info.Base().columns.LogicalColumnCount());
 }
 
@@ -23,8 +23,7 @@ void TableDataReader::ReadTableData() {
 
 	// deserialize each of the individual row groups
 	info.data->row_group_count = reader.Read<uint64_t>();
-	info.data->block_id = reader.block->BlockId();
-	info.data->offset = reader.offset;
+	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

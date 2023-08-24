@@ -72,8 +72,19 @@ test_that("experimental string handling works", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
   df <- data.frame(a=c(NA, as.character(1:10000)))
 
- duckdb_register(con, "df", df, experimental=TRUE)
+  duckdb_register(con, "df", df, experimental=TRUE)
 
   expect_equal(df, dbGetQuery(con, "SELECT a::STRING a FROM df"))
   expect_equal(df, dbGetQuery(con, "SELECT a FROM df"))
+})
+
+test_that("can register list of NULL values", {
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+  df <- tibble::tibble(a = 1:2, b = list(NULL))
+
+  expect_silent(duckdb_register(con, "df1", df))
+  expect_silent(duckdb_register(con, "df2", df[0, ]))
+
+  expect_equal(dbGetQuery(con, "SELECT * FROM df1"), as.data.frame(df))
 })
