@@ -6,6 +6,7 @@ import pandas as pd
 
 from conftest import pandas_2_or_higher
 
+
 class TestPandasTimestamps(object):
     @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
     def test_timestamp_types_roundtrip(self, unit):
