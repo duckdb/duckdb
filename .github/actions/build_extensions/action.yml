@@ -42,6 +42,9 @@ inputs:
   ninja:
     description: 'Use ninja for building'
     default: 0
+  sccache:
+    description: 'Use sccache for building'
+    default: 0
   openssl_path:
     description: 'Directory of OpenSSL installation'
     default: ''
@@ -129,6 +132,7 @@ runs:
     - name: Build
       shell: bash
       env:
+        USE_SCCACHE: ${{ inputs.sccache = 1 && 'true' || ''}}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
@@ -196,6 +200,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
+        USE_SCCACHE: ${{ inputs.sccache = 1 && 'true' || ''}}
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
@@ -220,7 +225,7 @@ runs:
         ${{ inputs.unittest_script }} '-f test.list'
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
-    # TODO: load test config for all OOTEs without statically loading them, only statically load the bundled
+    # TODO: this wil rebuild AGAIN, ensure it uses the cache
     - name: Test deployed extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
