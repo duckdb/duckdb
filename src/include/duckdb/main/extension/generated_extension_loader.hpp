@@ -15,8 +15,6 @@
 #if defined(GENERATED_EXTENSION_HEADERS) and !defined(DUCKDB_AMALGAMATION)
 #include "generated_extension_headers.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/main/database.hpp"
-
 
 namespace duckdb {
 
