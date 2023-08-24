@@ -266,6 +266,10 @@ bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
 void CSVSniffer::RefineCandidates() {
 	// It's very frequent that more than one dialect can parse a csv file, hence here we run one state machine
 	// fully on the whole sample dataset, when/if it fails we go to the next one.
+	if (candidates.empty()) {
+		// No candidates to refine
+		return;
+	}
 	if (candidates.size() == 1 || candidates[0]->csv_buffer_iterator.Finished()) {
 		// Only one candidate nothing to refine or all candidates already checked
 		return;

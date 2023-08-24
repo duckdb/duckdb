@@ -223,7 +223,10 @@ struct SniffValue {
 	}
 };
 
-void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine& candidate,map<LogicalTypeId, bool> &has_format_candidates, map<LogicalTypeId, vector<string>> &format_candidates, const LogicalType& sql_type, const string &separator, Value &dummy_val ){
+void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
+                                               map<LogicalTypeId, bool> &has_format_candidates,
+                                               map<LogicalTypeId, vector<string>> &format_candidates,
+                                               const LogicalType &sql_type, const string &separator, Value &dummy_val) {
 	// generate date format candidates the first time through
 	auto &type_format_candidates = format_candidates[sql_type.id()];
 	const auto had_format_candidates = has_format_candidates[sql_type.id()];
@@ -276,7 +279,6 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine& candidate,map<Lo
 		}
 	}
 }
-
 
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
