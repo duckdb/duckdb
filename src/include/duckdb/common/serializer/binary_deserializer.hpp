@@ -78,12 +78,12 @@ private:
 		auto read_field_id = ReadPrimitive<uint32_t>();
 		if (read_field_id != field_id) {
 			throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
-			                             read_field_id);
+			                        read_field_id);
 		}
 		auto read_kind = static_cast<BinaryMessageKind>(ReadPrimitive<uint8_t>());
 		if (read_kind != kind) {
 			throw InternalException("Failed to deserialize: message kind mismatch, expected: %d, got: %d", kind,
-			                             read_kind);
+			                        read_kind);
 		}
 	}
 
