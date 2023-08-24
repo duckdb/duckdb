@@ -224,6 +224,11 @@ jobs:
        with:
          python-version: '3.7'
 
+     - name: Install Ninja
+       shell: bash
+       run: |
+         choco install ninja
+
      - name: Setup Ccache
        uses: hendrikmuhs/ccache-action@main
        with:
@@ -239,3 +244,4 @@ jobs:
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
          unittest_script: ./build/release/test/Release/unittest.exe
+         ninja: 1
