@@ -17,23 +17,9 @@ static constexpr uint32_t NUM_STATES = 8;
 static constexpr uint32_t NUM_TRANSITIONS = 256;
 typedef uint8_t state_machine_t[NUM_STATES][NUM_TRANSITIONS];
 
-//! Struct that holds the configuration of a CSV State Machine
-//! Basically which char, quote and escape were used to generate it.
-struct CSVStateMachineConfig {
-	CSVStateMachineConfig(char delimiter_p, char quote_p, char escape_p)
-	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
-	char delimiter;
-	char quote;
-	char escape;
-
-	bool operator==(const CSVStateMachineConfig &other) const {
-		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
-	}
-};
-
 //! Hash function used in out state machine cache, it hashes and combines all options used to generate a state machine
 struct HashCSVStateMachineConfig {
-	size_t operator()(CSVStateMachineConfig const &config) const noexcept {
+	size_t operator()(CSVStateMachineOptions const &config) const noexcept {
 		auto h_delimiter = Hash(config.delimiter);
 		auto h_quote = Hash(config.quote);
 		auto h_escape = Hash(config.escape);
@@ -50,14 +36,14 @@ public:
 	~CSVStateMachineCache() {};
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
-	state_machine_t &Get(char delimiter, char quote, char escape);
+	state_machine_t &Get(const CSVStateMachineOptions &state_machine_options);
 
 private:
-	void Insert(char delimiter, char quote, char escape);
+	void Insert(const CSVStateMachineOptions &state_machine_options);
 	//! Cache on delimiter|quote|escape
-	unordered_map<CSVStateMachineConfig, state_machine_t, HashCSVStateMachineConfig> state_machine_cache;
+	unordered_map<CSVStateMachineOptions, state_machine_t, HashCSVStateMachineConfig> state_machine_cache;
 	//! Default value for options used to intialize CSV State Machine Cache
-	const vector<char> default_delim = {',', '|', ';', '\t'};
+	const vector<char> default_delimiter = {',', '|', ';', '\t'};
 	const vector<vector<char>> default_quote = {{'\"'}, {'\"', '\''}, {'\0'}};
 	const vector<QuoteRule> default_quote_rule = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	const vector<vector<char>> default_escape = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};

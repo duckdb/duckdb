@@ -73,7 +73,7 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	if (input.size() > 1) {
 		throw InvalidInputException("The escape option cannot exceed a size of 1 byte.");
 	}
-	this->dialect_options.escape = input[0];
+	this->dialect_options.state_machine_options.escape = input[0];
 	this->has_escape = true;
 }
 
@@ -86,14 +86,14 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (input.empty()) {
 		delim_str = string("\0", 1);
 	}
-	this->dialect_options.delimiter = delim_str[0];
+	this->dialect_options.state_machine_options.delimiter = delim_str[0];
 }
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
 	if (quote_p.size() > 1) {
 		throw InvalidInputException("The quote option cannot exceed a size of 1 byte.");
 	}
-	this->dialect_options.quote = quote_p[0];
+	this->dialect_options.state_machine_options.quote = quote_p[0];
 	this->has_quote = true;
 }
 
@@ -275,11 +275,12 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) 
 	return true;
 }
 
-std::string CSVReaderOptions::ToString() const {
-	return "  file=" + file_path + "\n  delimiter='" + dialect_options.delimiter +
+string CSVReaderOptions::ToString() const {
+	return "  file=" + file_path + "\n  delimiter='" + dialect_options.state_machine_options.delimiter +
 	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" +
-	       dialect_options.quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       "\n  escape='" + dialect_options.escape +
+	       dialect_options.state_machine_options.quote +
+	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" +
+	       dialect_options.state_machine_options.escape +
 	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 	       "\n  header=" + std::to_string(dialect_options.header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +

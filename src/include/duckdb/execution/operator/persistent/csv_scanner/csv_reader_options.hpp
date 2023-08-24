@@ -28,13 +28,29 @@ enum class NewLineIdentifier : uint8_t {
 
 enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
-struct DialectOptions {
+//! Struct that holds the configuration of a CSV State Machine
+//! Basically which char, quote and escape were used to generate it.
+struct CSVStateMachineOptions {
+	CSVStateMachineOptions() {};
+	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p)
+	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
 	//! Quote used for columns that contain reserved characters, e.g '
 	char quote = '\"';
 	//! Escape character to escape quote character
 	char escape = '\0';
 	//! Delimiter to separate columns within each line
 	char delimiter = ',';
+
+	bool operator==(const CSVStateMachineOptions &other) const {
+		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
+	}
+
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(FieldReader &reader);
+};
+
+struct DialectOptions {
+	CSVStateMachineOptions state_machine_options;
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
 	//! Expected number of columns
@@ -173,6 +189,6 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 
-	std::string ToString() const;
+	string ToString() const;
 };
 } // namespace duckdb

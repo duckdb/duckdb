@@ -35,7 +35,7 @@ enum class CSVState : uint8_t {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(CSVReaderOptions &options_p, char quote, char escape, char delim,
+	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         shared_ptr<CSVBufferManager> buffer_manager_p,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 	//! Resets the state machine, so it can be used again
@@ -51,7 +51,7 @@ public:
 
 	const CSVReaderOptions &options;
 	CSVBufferIterator csv_buffer_iterator;
-	//! Which one was the identified start row for this file
+	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
 	idx_t start_row = 0;
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters

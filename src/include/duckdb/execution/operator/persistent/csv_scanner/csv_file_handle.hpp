@@ -27,7 +27,6 @@ public:
 public:
 	bool CanSeek();
 	void Seek(idx_t position);
-	idx_t SeekPosition();
 	void Reset();
 	bool OnDiskFile();
 
@@ -56,7 +55,7 @@ private:
 	bool can_seek = false;
 	bool on_disk_file = false;
 	idx_t file_size = 0;
-	//! Reset support
+
 	AllocatedData cached_buffer;
 	idx_t read_position = 0;
 	idx_t buffer_size = 0;

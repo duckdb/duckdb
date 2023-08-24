@@ -8,10 +8,10 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
     : context(context), first_buffer(true), file_number(file_number_p), can_seek(file_handle.CanSeek()) {
 	AllocateBuffer(buffer_size_p);
 	auto buffer = Ptr();
-	actual_size = file_handle.Read(buffer, buffer_size_p);
+	file_size = file_handle.Read(buffer, buffer_size_p);
 	global_csv_start = global_csv_current_position;
 	// BOM check (https://en.wikipedia.org/wiki/Byte_order_mark)
-	if (actual_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
+	if (file_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
 		start_position += 3;
 	}
 	last_buffer = file_handle.FinishedReading();
@@ -22,13 +22,13 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
     : context(context), global_csv_start(global_csv_current_position), file_number(file_number_p),
       can_seek(file_handle.CanSeek()) {
 	AllocateBuffer(buffer_size);
-	actual_size = file_handle.Read(handle.Ptr(), buffer_size);
+	file_size = file_handle.Read(handle.Ptr(), buffer_size);
 	last_buffer = file_handle.FinishedReading();
 }
 
 shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p) {
 	auto next_csv_buffer =
-	    make_shared<CSVBuffer>(file_handle, context, buffer_size, global_csv_start + actual_size, file_number_p);
+	    make_shared<CSVBuffer>(file_handle, context, buffer_size, global_csv_start + file_size, file_number_p);
 	if (next_csv_buffer->GetBufferSize() == 0) {
 		// We are done reading
 		return nullptr;
@@ -43,13 +43,13 @@ void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 }
 
 idx_t CSVBuffer::GetBufferSize() {
-	return actual_size;
+	return file_size;
 }
 
 void CSVBuffer::Reload(CSVFileHandle &file_handle) {
-	AllocateBuffer(actual_size);
+	AllocateBuffer(file_size);
 	file_handle.Seek(global_csv_start);
-	file_handle.Read(handle.Ptr(), actual_size);
+	file_handle.Read(handle.Ptr(), file_size);
 }
 
 unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
@@ -59,7 +59,7 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 		block = nullptr;
 		Reload(file_handle);
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), actual_size);
+	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), file_size);
 }
 
 void CSVBuffer::Unpin() {

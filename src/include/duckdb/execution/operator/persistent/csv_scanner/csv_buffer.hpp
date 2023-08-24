@@ -29,7 +29,6 @@ public:
 	}
 };
 
-
 //! CSV Buffers are parts of a decompressed CSV File.
 //! For a decompressed file of 100Mb. With our Buffer size set to 32Mb, we would generate 4 buffers.
 //! One for the first 32Mb, second and third for the other 32Mb, and the last one with 4 Mb
@@ -85,7 +84,7 @@ public:
 private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
-	idx_t actual_size;
+	idx_t file_size;
 	//! We need to check for Byte Order Mark, to define the start position of this buffer
 	//! https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8
 	idx_t start_position = 0;

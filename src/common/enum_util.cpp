@@ -66,8 +66,8 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -689,6 +689,9 @@ CSVState EnumUtil::FromString<CSVState>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ESCAPE")) {
 		return CSVState::ESCAPE;
+	}
+	if (StringUtil::Equals(value, "EMPTY_LINE")) {
+		return CSVState::EMPTY_LINE;
 	}
 	if (StringUtil::Equals(value, "INVALID")) {
 		return CSVState::INVALID;

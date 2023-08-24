@@ -8,15 +8,13 @@
 
 namespace duckdb {
 
-CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, char quote_p, char escape_p, char delim_p,
+CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
                                  shared_ptr<CSVBufferManager> buffer_manager_p,
                                  CSVStateMachineCache &csv_state_machine_cache_p)
     : csv_state_machine_cache(csv_state_machine_cache_p), options(options_p),
       csv_buffer_iterator(std::move(buffer_manager_p)),
-      transition_array(csv_state_machine_cache.Get(delim_p, quote_p, escape_p)) {
-	dialect_options.quote = quote_p;
-	dialect_options.escape = escape_p;
-	dialect_options.delimiter = delim_p;
+      transition_array(csv_state_machine_cache.Get(state_machine_options)) {
+	dialect_options.state_machine_options = state_machine_options;
 	dialect_options.has_format = options.dialect_options.has_format;
 	dialect_options.date_format = options.dialect_options.date_format;
 	dialect_options.skip_rows = options.dialect_options.skip_rows;

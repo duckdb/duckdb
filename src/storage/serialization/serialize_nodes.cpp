@@ -113,9 +113,9 @@ void CSVReaderOptions::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(124, "rejects_limit", rejects_limit);
 	serializer.WriteProperty(125, "rejects_recovery_columns", rejects_recovery_columns);
 	serializer.WriteProperty(126, "rejects_recovery_column_ids", rejects_recovery_column_ids);
-	serializer.WriteProperty(127, "dialect_options.delimiter", dialect_options.delimiter);
-	serializer.WriteProperty(128, "dialect_options.quote", dialect_options.quote);
-	serializer.WriteProperty(129, "dialect_options.escape", dialect_options.escape);
+	serializer.WriteProperty(127, "dialect_options.state_machine_options.delimiter", dialect_options.state_machine_options.delimiter);
+	serializer.WriteProperty(128, "dialect_options.state_machine_options.quote", dialect_options.state_machine_options.quote);
+	serializer.WriteProperty(129, "dialect_options.state_machine_options.escape", dialect_options.state_machine_options.escape);
 	serializer.WriteProperty(130, "dialect_options.header", dialect_options.header);
 	serializer.WriteProperty(131, "dialect_options.num_cols", dialect_options.num_cols);
 	serializer.WriteProperty(132, "dialect_options.new_line", dialect_options.new_line);
@@ -153,9 +153,9 @@ CSVReaderOptions CSVReaderOptions::FormatDeserialize(FormatDeserializer &deseria
 	deserializer.ReadProperty(124, "rejects_limit", result.rejects_limit);
 	deserializer.ReadProperty(125, "rejects_recovery_columns", result.rejects_recovery_columns);
 	deserializer.ReadProperty(126, "rejects_recovery_column_ids", result.rejects_recovery_column_ids);
-	deserializer.ReadProperty(127, "dialect_options.delimiter", result.dialect_options.delimiter);
-	deserializer.ReadProperty(128, "dialect_options.quote", result.dialect_options.quote);
-	deserializer.ReadProperty(129, "dialect_options.escape", result.dialect_options.escape);
+	deserializer.ReadProperty(127, "dialect_options.state_machine_options.delimiter", result.dialect_options.state_machine_options.delimiter);
+	deserializer.ReadProperty(128, "dialect_options.state_machine_options.quote", result.dialect_options.state_machine_options.quote);
+	deserializer.ReadProperty(129, "dialect_options.state_machine_options.escape", result.dialect_options.state_machine_options.escape);
 	deserializer.ReadProperty(130, "dialect_options.header", result.dialect_options.header);
 	deserializer.ReadProperty(131, "dialect_options.num_cols", result.dialect_options.num_cols);
 	deserializer.ReadProperty(132, "dialect_options.new_line", result.dialect_options.new_line);

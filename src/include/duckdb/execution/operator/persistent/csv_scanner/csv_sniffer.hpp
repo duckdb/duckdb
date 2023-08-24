@@ -63,7 +63,7 @@ private:
 	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 2. Generates the search space candidates for the state machines
 	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
-	                                     const vector<char> &delim_candidates,
+	                                     const vector<char> &delimiter_candidates,
 	                                     const vector<QuoteRule> &quoterule_candidates,
 	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);

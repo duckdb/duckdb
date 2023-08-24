@@ -572,15 +572,15 @@
         "type": "vector<idx_t>"
       },
       {"id": 127,
-        "name": "dialect_options.delimiter",
+        "name": "dialect_options.state_machine_options.delimiter",
         "type": "char"
       },
       {"id": 128,
-        "name": "dialect_options.quote",
+        "name": "dialect_options.state_machine_options.quote",
         "type": "char"
       },
       {"id": 129,
-        "name": "dialect_options.escape",
+        "name": "dialect_options.state_machine_options.escape",
         "type": "char"
       },
        {"id": 130,

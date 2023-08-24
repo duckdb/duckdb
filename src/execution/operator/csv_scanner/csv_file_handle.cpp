@@ -37,13 +37,6 @@ void CSVFileHandle::Seek(idx_t position) {
 	file_handle->Seek(position);
 }
 
-idx_t CSVFileHandle::SeekPosition() {
-	if (!can_seek) {
-		throw InternalException("Cannot seek in this file");
-	}
-	return file_handle->SeekPosition();
-}
-
 void CSVFileHandle::Reset() {
 	requested_bytes = 0;
 	read_position = 0;

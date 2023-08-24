@@ -85,16 +85,16 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
                                                        unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
-		delim_candidates = {options.dialect_options.delimiter};
+		delim_candidates = {options.dialect_options.state_machine_options.delimiter};
 	} else {
 		// no delimiter provided: try standard/common delimiters
 		delim_candidates = {',', '|', ';', '\t'};
 	}
 	if (options.has_quote) {
 		// user provided quote: use that quote rule
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {options.dialect_options.quote};
-		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {options.dialect_options.quote};
-		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {options.dialect_options.quote};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {options.dialect_options.state_machine_options.quote};
+		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_OTHER] = {options.dialect_options.state_machine_options.quote};
+		quote_candidates_map[(uint8_t)QuoteRule::NO_QUOTES] = {options.dialect_options.state_machine_options.quote};
 	} else {
 		// no quote rule provided: use standard/common quotes
 		quote_candidates_map[(uint8_t)QuoteRule::QUOTES_RFC] = {'\"'};
@@ -103,12 +103,13 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 	}
 	if (options.has_escape) {
 		// user provided escape: use that escape rule
-		if (options.dialect_options.escape == '\0') {
+		if (options.dialect_options.state_machine_options.escape == '\0') {
 			quoterule_candidates = {QuoteRule::QUOTES_RFC};
 		} else {
 			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
-		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {options.dialect_options.escape};
+		escape_candidates_map[(uint8_t)quoterule_candidates[0]] = {
+		    options.dialect_options.state_machine_options.escape};
 	} else {
 		// no escape provided: try standard/common escapes
 		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
@@ -116,7 +117,7 @@ void CSVSniffer::GenerateCandidateDetectionSearchSpace(vector<char> &delim_candi
 }
 
 void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
-                                                 const vector<char> &delim_candidates,
+                                                 const vector<char> &delimiter_candidates,
                                                  const vector<QuoteRule> &quoterule_candidates,
                                                  const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
                                                  const unordered_map<uint8_t, vector<char>> &escape_candidates_map) {
@@ -124,12 +125,13 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 	for (const auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map.at((uint8_t)quoterule);
 		for (const auto &quote : quote_candidates) {
-			for (const auto &delim : delim_candidates) {
+			for (const auto &delimiter : delimiter_candidates) {
 				const auto &escape_candidates = escape_candidates_map.at((uint8_t)quoterule);
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
+					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
 					csv_state_machines.emplace_back(
-					    make_uniq<CSVStateMachine>(options, quote, escape, delim, buffer_manager,
+					    make_uniq<CSVStateMachine>(options, state_machine_options, buffer_manager,
 					                               buffer_manager->context.client_data->state_machine_cache));
 				}
 			}
@@ -222,7 +224,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine->dialect_options.quote == candidate->dialect_options.quote) {
+			if (state_machine->dialect_options.state_machine_options.quote ==
+			    candidate->dialect_options.state_machine_options.quote) {
 				same_quote_is_candidate = true;
 			}
 		}

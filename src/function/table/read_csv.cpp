@@ -38,8 +38,9 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// Here we identify if we can run this CSV file on parallel or not.
-	bool empty_options = options.dialect_options.delimiter == '\0' || options.dialect_options.escape == '\0' ||
-	                     options.dialect_options.quote == '\0';
+	bool empty_options = options.dialect_options.state_machine_options.delimiter == '\0' ||
+	                     options.dialect_options.state_machine_options.escape == '\0' ||
+	                     options.dialect_options.state_machine_options.quote == '\0';
 	bool not_supported_options = options.null_padding;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -1097,11 +1098,14 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	}
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
-
-void DialectOptions::Serialize(FieldWriter &writer) const {
+void CSVStateMachineOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<char>(delimiter);
 	writer.WriteField<char>(quote);
 	writer.WriteField<char>(escape);
+}
+
+void DialectOptions::Serialize(FieldWriter &writer) const {
+	state_machine_options.Serialize(writer);
 	writer.WriteField<bool>(header);
 	writer.WriteField<idx_t>(num_cols);
 	writer.WriteField<NewLineIdentifier>(new_line);
@@ -1113,11 +1117,13 @@ void DialectOptions::Serialize(FieldWriter &writer) const {
 	}
 	writer.WriteList<string>(csv_formats);
 }
-
-void DialectOptions::Deserialize(FieldReader &reader) {
+void CSVStateMachineOptions::Deserialize(FieldReader &reader) {
 	delimiter = reader.ReadRequired<char>();
 	quote = reader.ReadRequired<char>();
 	escape = reader.ReadRequired<char>();
+}
+void DialectOptions::Deserialize(FieldReader &reader) {
+	state_machine_options.Deserialize(reader);
 	header = reader.ReadRequired<bool>();
 	num_cols = reader.ReadRequired<idx_t>();
 	new_line = reader.ReadRequired<NewLineIdentifier>();
