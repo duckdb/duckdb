@@ -17,9 +17,9 @@ struct CSVReaderOptions;
 
 class ReadCSVRelation : public TableFunctionRelation {
 public:
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+	ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
 	                vector<ColumnDefinition> columns, string alias = string());
-	ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file, CSVReaderOptions options,
+	ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file, CSVReaderOptions options,
 	                string alias = string());
 
 	string alias;

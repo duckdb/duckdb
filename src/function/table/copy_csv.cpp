@@ -29,7 +29,7 @@ void SubstringDetection(char &str_1, string &str_2, const string &name_str_1, co
 	if (str_1 == '\0' || str_2.empty()) {
 		return;
 	}
-	if (str_2.find(str_1) != std::string::npos) {
+	if (str_2.find(str_1) != string::npos) {
 		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
