@@ -10,6 +10,7 @@ CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle 
 	auto buffer = Ptr();
 	actual_size = file_handle.Read(buffer, buffer_size_p);
 	global_csv_start = global_csv_current_position;
+	// BOM check (https://en.wikipedia.org/wiki/Byte_order_mark)
 	if (actual_size >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
 		start_position += 3;
 	}

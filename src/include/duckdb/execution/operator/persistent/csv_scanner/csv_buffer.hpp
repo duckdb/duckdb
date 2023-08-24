@@ -29,6 +29,11 @@ public:
 	}
 };
 
+
+//! CSV Buffers are parts of a decompressed CSV File.
+//! For a decompressed file of 100Mb. With our Buffer size set to 32Mb, we would generate 4 buffers.
+//! One for the first 32Mb, second and third for the other 32Mb, and the last one with 4 Mb
+//! These buffers are actually used for sniffing and parsing!
 class CSVBuffer {
 public:
 	//! Constructor for Initial Buffer

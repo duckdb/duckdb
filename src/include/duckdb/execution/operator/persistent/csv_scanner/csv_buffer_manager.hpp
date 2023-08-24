@@ -16,10 +16,8 @@ namespace duckdb {
 class CSVBuffer;
 class CSVStateMachine;
 
-//! This class is used to manage the buffers
-//! Buffers are cached when used for auto detection
-//! Buffers are parts of a decompressed CSV File.
-//! Otherwise they are not cached and just returned
+//! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
+//! When parsing, buffer are not cached and just returned.
 class CSVBufferManager {
 public:
 	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, CSVReaderOptions &options,

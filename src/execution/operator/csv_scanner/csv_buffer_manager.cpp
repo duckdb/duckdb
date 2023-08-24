@@ -66,31 +66,28 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, bool co
 			if (!ReadNextAndCacheIt()) {
 				return nullptr;
 			}
-			return cached_buffers[pos]->Pin(*file_handle);
 		}
 		return cached_buffers[pos]->Pin(*file_handle);
-	} else {
-		if (pos < cached_buffers.size()) {
-			auto buffer = cached_buffers[pos];
-			// Invalidate this buffer
-			cached_buffers[pos] = nullptr;
-			return buffer->Pin(*file_handle);
-		} else {
-			if (!last_buffer) {
-				last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0);
-			} else {
-				if (last_buffer->GetCSVGlobalStart() == 0 && pos == 0) {
-					return last_buffer->Pin(*file_handle);
-				}
-				if (!last_buffer->IsCSVFileLastBuffer()) {
-					last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
-				} else {
-					return nullptr;
-				}
-			}
-			return last_buffer->Pin(*file_handle);
-		}
 	}
+
+	if (pos < cached_buffers.size()) {
+		auto buffer = cached_buffers[pos];
+		// Invalidate this buffer
+		cached_buffers[pos] = nullptr;
+		return buffer->Pin(*file_handle);
+	}
+	if (!last_buffer) {
+		last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0);
+		return last_buffer->Pin(*file_handle);
+	}
+	if (last_buffer->GetCSVGlobalStart() == 0 && pos == 0) {
+		return last_buffer->Pin(*file_handle);
+	}
+	if (last_buffer->IsCSVFileLastBuffer()) {
+		return nullptr;
+	}
+	last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
+	return last_buffer->Pin(*file_handle);
 }
 
 bool CSVBufferIterator::Finished() {
