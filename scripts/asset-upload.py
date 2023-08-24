@@ -11,7 +11,7 @@ if len(sys.argv) < 2:
     print("Usage: [filename1] [filename2] ... ")
     exit(1)
 
-# this essentially should run on release tag builds to fill up release assets and master
+# this essentially should run on release tag builds to fill up release assets and main
 
 pr = os.getenv("TRAVIS_PULL_REQUEST", "")
 if pr != "false":
@@ -20,11 +20,11 @@ if pr != "false":
 
 tag = os.getenv("TRAVIS_TAG", '')  # this env var is always present just not always used
 if tag == '':
-    tag = 'master-builds'
+    tag = 'main-builds'
 print("Running on tag %s" % tag)
 
-if tag == "master-builds" and os.getenv("TRAVIS_BRANCH", "") != "master":
-    print("Only running on master branch for %s tag. Exiting." % tag)
+if tag == "main-builds" and os.getenv("TRAVIS_BRANCH", "") != "main":
+    print("Only running on main branch for %s tag. Exiting." % tag)
     exit(0)
 
 

@@ -354,7 +354,7 @@ setup(
     cmdclass={"build_ext": build_ext},
     project_urls={
         "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/master/tools/pythonpkg",
+        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
         "Issues": "https://github.com/duckdb/duckdb/issues",
         "Changelog": "https://github.com/duckdb/duckdb/releases",
     },
