@@ -34,7 +34,8 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		idx_t inner_child_idx, outer_child_idx;
 		auto join_type = join.join_type;
-		// We only need to handle the left outer join here, because the right outer join will be covert to the left outer join.
+		// We only need to handle the left outer join here, because the right outer join will be covert to the left
+		// outer join.
 		if (IsLeftOuterJoin(join_type)) {
 			inner_child_idx = 1;
 			outer_child_idx = 0;
@@ -80,9 +81,9 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			}
 			ColumnBinding &left_column_binding = cond.left->Cast<BoundColumnRefExpression>().binding;
 			ColumnBinding &right_column_binding = cond.right->Cast<BoundColumnRefExpression>().binding;
-			if (inner_bindings_set.find(left_column_binding) != inner_bindings_set.end() &&
-			    outer_bindings_set.find(right_column_binding) != outer_bindings_set.end()) {
-				inner_keys_set.insert(left_column_binding);
+			if (inner_bindings_set.find(right_column_binding) != inner_bindings_set.end() &&
+			    outer_bindings_set.find(left_column_binding) != outer_bindings_set.end()) {
+				inner_keys_set.insert(right_column_binding);
 			} else {
 				join_conditions_valid = false;
 				break;
