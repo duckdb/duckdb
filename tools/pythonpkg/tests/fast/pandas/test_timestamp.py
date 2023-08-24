@@ -3,7 +3,6 @@ import os
 import datetime
 import pytest
 import pandas as pd
-
 from conftest import pandas_2_or_higher
 
 
@@ -22,10 +21,12 @@ class TestPandasTimestamps(object):
 
     @pytest.mark.parametrize('unit', ['s', 'ms', 'us', 'ns'])
     def test_timestamp_timezone_roundtrip(self, unit):
-        try:
+        if pandas_2_or_higher():
             dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit=unit, tz='UTC')
-        except:
+            expected_dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit='us', tz='UTC')
+        else:
             # Older versions of pandas only support 'ns' as timezone unit
+            expected_dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit='ns', tz='UTC')
             dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit='ns', tz='UTC')
 
         conn = duckdb.connect()
@@ -40,12 +41,6 @@ class TestPandasTimestamps(object):
 
         # Our timezone aware type is in US (microseconds), when we scan a timestamp column that isn't US and has timezone info,
         # we convert the time unit to US
-        try:
-            expected_dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit='us', tz='UTC')
-        except:
-            # Older versions of pandas only support 'ns' as timezone unit
-            expected_dtype = pd.core.dtypes.dtypes.DatetimeTZDtype(unit='ns', tz='UTC')
-
         expected = pd.DataFrame(data=d, dtype=expected_dtype)
         df_from_duck = conn.from_df(df).df()
         assert df_from_duck.equals(expected)
