@@ -84,17 +84,16 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		idx_t line_error;
 		return BaseCSVReader::TryCastDateVector(best_candidate->dialect_options.date_format, parse_chunk_col,
 		                                        dummy_result, size, error_message, line_error);
-	} else if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
-	           sql_type == LogicalTypeId::TIMESTAMP) {
+	}
+	if (best_candidate->dialect_options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
 		return BaseCSVReader::TryCastTimestampVector(best_candidate->dialect_options.date_format, parse_chunk_col,
 		                                             dummy_result, size, error_message);
-	} else {
-		// target type is not varchar: perform a cast
-		string error_message;
-		return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);
 	}
+	// target type is not varchar: perform a cast
+	string error_message;
+	return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);
 }
 
 void CSVSniffer::RefineTypes() {

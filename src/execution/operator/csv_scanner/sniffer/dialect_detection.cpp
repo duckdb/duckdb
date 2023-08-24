@@ -208,19 +208,19 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
 	// If requested types are not empty,and do not match with the number of columns. If there is
-    // invalid padding, this state machine is not a suitable candidate.
+	// invalid padding, this state machine is not a suitable candidate.
 	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {
 		return;
 	}
-	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the following
-	// is valid:
-    // - There's a single column before.
-    // - There are more values and no additional padding is required.
-    // - There's more than one column and less padding is required.
+	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
+	// following is valid:
+	// - There's a single column before.
+	// - There are more values and no additional padding is required.
+	// - There's more than one column and less padding is required.
 	if (rows_consistent &&
-	           (single_column_before || (more_values && !require_more_padding) ||
-	            (more_than_one_column && require_less_padding)) &&
-	           !invalid_padding) {
+	    (single_column_before || (more_values && !require_more_padding) ||
+	     (more_than_one_column && require_less_padding)) &&
+	    !invalid_padding) {
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
@@ -231,10 +231,10 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 		return;
 	}
 	// If there's more than one row and column, the start is good, rows are consistent,
-    // no additional padding is required, and there is no invalid padding, and there is not yet a candidate
+	// no additional padding is required, and there is no invalid padding, and there is not yet a candidate
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
-	           !invalid_padding) {
+	    !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
 			if (state_machine->dialect_options.state_machine_options.quote ==
@@ -275,9 +275,9 @@ void CSVSniffer::RefineCandidates() {
 			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
 			if (finished_file || i == options.sample_chunks) {
 				// we finished the file or our chunk sample successfully: stop
-				auto neo = std::move(cur_candidate);
+				auto successful_candidate = std::move(cur_candidate);
 				candidates.clear();
-				candidates.emplace_back(std::move(neo));
+				candidates.emplace_back(std::move(successful_candidate));
 				return;
 			}
 			cur_candidate->cur_rows = 0;

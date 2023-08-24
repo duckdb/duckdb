@@ -1,7 +1,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
-#include <algorithm>
-#include <string>
+#include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 struct TryCastDecimalOperator {
@@ -131,22 +131,24 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 		string error_message;
 		return candidate.dialect_options.date_format.find(LogicalTypeId::DATE)
 		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
-	} else if (candidate.dialect_options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
-	           sql_type.id() == LogicalTypeId::TIMESTAMP) {
+	}
+	if (candidate.dialect_options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
+	    sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
 		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
-	} else if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
-		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	} else if (candidate.options.decimal_separator != "." &&
-	           ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
-		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	} else {
-		Value new_value;
-		string error_message;
-		return value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
 	}
+	if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
+		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
+	}
+	if (candidate.options.decimal_separator != "." &&
+	    ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
+		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
+	}
+	Value new_value;
+	string error_message;
+	return value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
 }
 
 void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
@@ -230,8 +232,8 @@ void CSVSniffer::DetectTypes() {
 		for (idx_t i = 0; i < candidate->dialect_options.num_cols; i++) {
 			info_sql_types_candidates[i] = candidate->options.auto_type_candidates;
 		}
-		std::map<LogicalTypeId, bool> has_format_candidates;
-		std::map<LogicalTypeId, vector<string>> format_candidates;
+		map<LogicalTypeId, bool> has_format_candidates;
+		map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
 			has_format_candidates[t.first] = false;
 			format_candidates[t.first].clear();
