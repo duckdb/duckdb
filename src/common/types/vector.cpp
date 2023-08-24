@@ -2406,14 +2406,6 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetInnerSize();
 }
 
-void ArrayVector::ReserveChildValidity(Vector &array_vector, idx_t count) {
-	D_ASSERT(array_vector.GetType().id() == LogicalTypeId::ARRAY);
-	D_ASSERT(array_vector.auxiliary);
-	auto array_size = ArrayType::GetSize(array_vector.GetType());
-	auto &child_vector = ArrayVector::GetEntry(array_vector);
-	child_vector.validity.Resize(STANDARD_VECTOR_SIZE, array_size * count);
-}
-
 void ArrayVector::AllocateFakeListEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::ARRAY);
 	auto array_size = ArrayType::GetSize(vector.GetType());
