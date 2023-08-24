@@ -46,8 +46,8 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		// This is required for the sniffer to work on Union By Name
 		D_ASSERT(options.file_path == file_handle->GetFilePath());
 		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
-		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
-		CSVSniffer sniffer(options, buffer_manager);
+		auto csv_buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
+		CSVSniffer sniffer(options, csv_buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
 		return_types = sniffer_result.return_types;
 		names = sniffer_result.names;
@@ -68,25 +68,6 @@ void BufferedCSVReader::ResetBuffer() {
 	position = 0;
 	start = 0;
 	cached_buffers.clear();
-}
-
-void BufferedCSVReader::ResetStream() {
-	file_handle->Reset();
-	linenr = 0;
-	linenr_estimated = false;
-	bytes_per_line_avg = 0;
-	sample_chunk_idx = 0;
-	jumping_samples = false;
-}
-
-void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
-	ResetBuffer();
-	ResetStream();
-	sample_chunk_idx = 0;
-	bytes_in_chunk = 0;
-	end_of_file_reached = false;
-	bom_checked = false;
-	SkipRowsAndReadHeader(skip_rows, skip_header);
 }
 
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
@@ -202,91 +183,12 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	}
 }
 
-bool BufferedCSVReader::TryParseCSV(ParserMode mode) {
-	DataChunk dummy_chunk;
-	string error_message;
-	return TryParseCSV(mode, dummy_chunk, error_message);
-}
-
 void BufferedCSVReader::ParseCSV(ParserMode mode) {
 	DataChunk dummy_chunk;
 	string error_message;
 	if (!TryParseCSV(mode, dummy_chunk, error_message)) {
 		throw InvalidInputException(error_message);
 	}
-}
-
-bool BufferedCSVReader::JumpToNextSample() {
-	// get bytes contained in the previously read chunk
-	idx_t remaining_bytes_in_buffer = buffer_size - start;
-	bytes_in_chunk -= remaining_bytes_in_buffer;
-	if (remaining_bytes_in_buffer == 0) {
-		return false;
-	}
-
-	// assess if it makes sense to jump, based on size of the first chunk relative to size of the entire file
-	if (sample_chunk_idx == 0) {
-		idx_t bytes_first_chunk = bytes_in_chunk;
-		double chunks_fit = (file_handle->FileSize() / (double)bytes_first_chunk);
-		jumping_samples = chunks_fit >= options.sample_chunks;
-
-		// jump back to the beginning
-		JumpToBeginning(options.dialect_options.skip_rows, options.dialect_options.header);
-		sample_chunk_idx++;
-		return true;
-	}
-
-	if (end_of_file_reached || sample_chunk_idx >= options.sample_chunks) {
-		return false;
-	}
-
-	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
-	// we just read x continuous chunks from the stream TODO: make jumps possible for zipfiles.
-	if (!file_handle->OnDiskFile() || !jumping_samples) {
-		sample_chunk_idx++;
-		return true;
-	}
-
-	// update average bytes per line
-	double bytes_per_line = bytes_in_chunk / (double)options.sample_chunk_size;
-	bytes_per_line_avg = ((bytes_per_line_avg * (sample_chunk_idx)) + bytes_per_line) / (sample_chunk_idx + 1);
-
-	// if none of the previous conditions were met, we can jump
-	idx_t partition_size = (idx_t)round(file_handle->FileSize() / (double)options.sample_chunks);
-
-	// calculate offset to end of the current partition
-	int64_t offset = partition_size - bytes_in_chunk - remaining_bytes_in_buffer;
-	auto current_pos = file_handle->SeekPosition();
-
-	if (current_pos + offset < file_handle->FileSize()) {
-		// set position in stream and clear failure bits
-		file_handle->Seek(current_pos + offset);
-
-		// estimate linenr
-		linenr += (idx_t)round((offset + remaining_bytes_in_buffer) / bytes_per_line_avg);
-		linenr_estimated = true;
-	} else {
-		// seek backwards from the end in last chunk and hope to catch the end of the file
-		// TODO: actually it would be good to make sure that the end of file is being reached, because
-		// messy end-lines are quite common. For this case, however, we first need a skip_end detection anyways.
-		file_handle->Seek(file_handle->FileSize() - bytes_in_chunk);
-
-		// estimate linenr
-		linenr = (idx_t)round((file_handle->FileSize() - bytes_in_chunk) / bytes_per_line_avg);
-		linenr_estimated = true;
-	}
-
-	// reset buffers and parse chunk
-	ResetBuffer();
-
-	// seek beginning of next line
-	// FIXME: if this jump ends up in a quoted linebreak, we will have a problem
-	string read_line = file_handle->ReadLine();
-	linenr++;
-
-	sample_chunk_idx++;
-
-	return true;
 }
 
 bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {

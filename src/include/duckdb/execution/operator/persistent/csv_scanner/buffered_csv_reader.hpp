@@ -53,23 +53,14 @@ private:
 	void Initialize(const vector<LogicalType> &requested_types);
 	//! Skips skip_rows, reads header row from input stream
 	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
-	//! Jumps back to the beginning of input stream and resets necessary internal states
-	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Resets the buffer
 	void ResetBuffer();
-	//! Resets the steam
-	void ResetStream();
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start, idx_t &line_start);
-	//! Jumps back to the beginning of input stream and resets necessary internal states
-	bool JumpToNextSample();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
 	void ParseCSV(ParserMode mode);
-	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
-	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
-
 	//! Skip Empty lines for tables with over one column
 	void SkipEmptyLines();
 };

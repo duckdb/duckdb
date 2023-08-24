@@ -658,6 +658,8 @@ const char* EnumUtil::ToChars<CSVState>(CSVState value) {
 		return "UNQUOTED";
 	case CSVState::ESCAPE:
 		return "ESCAPE";
+	case CSVState::EMPTY_LINE:
+		return "EMPTY_LINE";
 	case CSVState::INVALID:
 		return "INVALID";
 	default:
