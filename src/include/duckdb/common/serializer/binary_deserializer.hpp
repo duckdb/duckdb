@@ -68,7 +68,7 @@ private:
 
 	void ReadData(data_ptr_t buffer, idx_t read_size) {
 		if (ptr + read_size > end_ptr) {
-			throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
+			throw InternalException("Failed to deserialize: not enough data in buffer to fulfill read request");
 		}
 		memcpy(buffer, ptr, read_size);
 		ptr += read_size;
@@ -77,12 +77,12 @@ private:
 	void ReadField(field_id_t field_id, BinaryMessageKind kind) {
 		auto read_field_id = ReadPrimitive<uint32_t>();
 		if (read_field_id != field_id) {
-			throw SerializationException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
+			throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
 			                             read_field_id);
 		}
 		auto read_kind = static_cast<BinaryMessageKind>(ReadPrimitive<uint8_t>());
 		if (read_kind != kind) {
-			throw SerializationException("Failed to deserialize: message kind mismatch, expected: %d, got: %d", kind,
+			throw InternalException("Failed to deserialize: message kind mismatch, expected: %d, got: %d", kind,
 			                             read_kind);
 		}
 	}
