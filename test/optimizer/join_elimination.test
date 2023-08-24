@@ -60,3 +60,21 @@ query II
 explain select t1.* from t1 left join t2 on t1.b = t2.c and t1.d = t2.d and t1.a = t2.b;
 ----
 logical_opt	<REGEX>:.*JOIN.*
+
+# There are non column reference in the join keys
+query II
+explain select t1.* from t1 left join t2 on t1.b = t2.a+1;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+# There are non column reference in the join keys
+query II
+explain select t1.* from t1 left join t2 on t1.b+1 = t2.a;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+# The join conditions are not all equal conditions.
+query II
+explain select t1.* from t1 left join t2 on t1.b > t2.a;
+----
+logical_opt	<REGEX>:.*JOIN.*

@@ -34,13 +34,10 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		idx_t inner_child_idx, outer_child_idx;
 		auto join_type = join.join_type;
-		// We only handle the left outer join and right outer join now.
+		// We only need to handle the left outer join here, because the right outer join will be covert to the left outer join.
 		if (IsLeftOuterJoin(join_type)) {
 			inner_child_idx = 1;
 			outer_child_idx = 0;
-		} else if (IsRightOuterJoin(join_type)) {
-			inner_child_idx = 0;
-			outer_child_idx = 1;
 		} else {
 			break;
 		}
@@ -86,25 +83,19 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			if (inner_bindings_set.find(left_column_binding) != inner_bindings_set.end() &&
 			    outer_bindings_set.find(right_column_binding) != outer_bindings_set.end()) {
 				inner_keys_set.insert(left_column_binding);
-			} else if (inner_bindings_set.find(right_column_binding) != inner_bindings_set.end() &&
-			           outer_bindings_set.find(left_column_binding) != outer_bindings_set.end()) {
-				inner_keys_set.insert(right_column_binding);
 			} else {
 				join_conditions_valid = false;
 				break;
 			}
 		}
 
-		if (!join_conditions_valid || inner_bindings_set.empty()) {
+		if (!join_conditions_valid || inner_keys_set.empty()) {
 			break;
 		}
 
 		// Check whether all of the inner keys have been covered by the unique constraints set.
 		column_binding_set_t unique_inner_keys_set;
 		for (auto &unique_constraint_set : unique_constraints_set) {
-			if (inner_keys_set.empty()) {
-				break;
-			}
 			bool all_covered = true;
 			for (const auto &column_binding : unique_constraint_set) {
 				if (inner_keys_set.find(column_binding) == inner_keys_set.end()) {
@@ -130,18 +121,7 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 	}
 	LogicalOperatorVisitor::VisitOperatorExpressions(*op);
 
-	column_binding_set_t parent_column_references;
-	if (op->children.size() > 1) {
-		// If there are more than one children. We should copy the column reference from the father
-		// and not let each child influence each other.
-		parent_column_references = column_references;
-	}
-	for (idx_t idx = 0; idx < op->children.size(); idx++) {
-		auto &child = op->children[idx];
-		if (idx > 0) {
-			D_ASSERT(idx < 2);
-			column_references = std::move(parent_column_references);
-		}
+	for (auto &child : op->children) {
 		child = Optimize(std::move(child));
 	}
 
@@ -196,11 +176,6 @@ unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &e
 	// Add a column reference to record which column has been used.
 	column_references.insert(expr.binding);
 	return nullptr;
-}
-
-unique_ptr<Expression> JoinElimination::VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
-	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
 
 } // namespace duckdb
