@@ -184,6 +184,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
 		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
+		if (fs.FileExists(local_extension_path) && force_install) {
+			fs.RemoveFile(local_extension_path);
+		}
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
@@ -242,6 +245,10 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
 		read_handle->Read(test_data.get(), read_handle->GetFileSize());
 		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+
+		if (fs.FileExists(local_extension_path) && force_install) {
+			fs.RemoveFile(local_extension_path);
+		}
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	}
@@ -276,6 +283,10 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
 	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+
+	if (fs.FileExists(local_extension_path) && force_install) {
+		fs.RemoveFile(local_extension_path);
+	}
 	fs.MoveFile(temp_path, local_extension_path);
 #endif
 #endif
