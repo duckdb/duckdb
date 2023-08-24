@@ -21903,7 +21903,7 @@ yyreduce:
 				} else {
 					/* generate a named subpath because of the variable */
 					p = makeNode(PGSubPath);
-					p->mode = PG_PATHMODE_NONE;
+					p->mode = n->mode;
 					p->lower = p->upper = p->single_bind = 1;
 					p->path_var = (yyvsp[-2].keyword);
 					p->path = (yyvsp[0].list);

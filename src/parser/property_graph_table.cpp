@@ -231,8 +231,8 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
-	auto pg_table = make_uniq<PropertyGraphTable>();
+shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
+	auto pg_table = make_shared<PropertyGraphTable>();
 	FieldReader reader(deserializer);
 	pg_table->table_name = reader.ReadRequired<string>();
 	reader.ReadList<string>(pg_table->column_names);
@@ -254,11 +254,11 @@ unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 		pg_table->destination_reference = reader.ReadRequired<string>();
 	}
 	reader.Finalize();
-	return pg_table;
+	return std::move(pg_table);
 }
 
-unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
-	auto result = make_uniq<PropertyGraphTable>();
+shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
+	auto result = make_shared<PropertyGraphTable>();
 
 	result->table_name = table_name;
 	for (auto &column_name : column_names) {
@@ -296,7 +296,7 @@ unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	for (auto &key : destination_pk) {
 		result->destination_pk.push_back(key);
 	}
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

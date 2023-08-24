@@ -17,7 +17,7 @@ public:
 
 	string pg_name;
 	string alias;
-	vector<unique_ptr<PathPattern>> path_list;
+	vector<unique_ptr<PathPattern>> path_patterns;
 
 	vector<unique_ptr<ParsedExpression>> column_list;
 

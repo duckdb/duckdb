@@ -19,9 +19,15 @@ public:
 	bool single_bind;
 	int64_t lower, upper;
 
+	string path_variable;
+
 	// TODO cost_expr, default_value
 public:
 	explicit SubPath(PGQPathReferenceType path_reference_type) : PathReference(path_reference_type) {
+		path_mode = PGQPathMode::NONE;
+		single_bind = true;
+		lower = 1;
+		upper = 1;
 	}
 
 	string ToString() const override;

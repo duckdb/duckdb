@@ -9,10 +9,10 @@ string MatchExpression::ToString() const {
 	string result = "GRAPH_TABLE (";
 	result += pg_name + " MATCH";
 
-	for (idx_t i = 0; i < path_list.size(); i++) {
+	for (idx_t i = 0; i < path_patterns.size(); i++) {
 		(i > 0) ? result += ", " : result;
-		for (idx_t j = 0; j < path_list[i]->path_elements.size(); j++) {
-			auto &path_reference = path_list[i]->path_elements[j];
+		for (idx_t j = 0; j < path_patterns[i]->path_elements.size(); j++) {
+			auto &path_reference = path_patterns[i]->path_elements[j];
 			switch (path_reference->path_reference_type) {
 			case PGQPathReferenceType::PATH_ELEMENT: {
 				auto path_element = reinterpret_cast<PathElement *>(path_reference.get());
@@ -64,13 +64,13 @@ bool MatchExpression::Equals(const BaseExpression &other_p) const {
 		return false;
 	}
 
-	if (path_list.size() != other.path_list.size()) {
+	if (path_patterns.size() != other.path_patterns.size()) {
 		return false;
 	}
 
 	// path_list
-	for (idx_t i = 0; i < path_list.size(); i++) {
-		if (!path_list[i]->Equals(other.path_list[i].get())) {
+	for (idx_t i = 0; i < path_patterns.size(); i++) {
+		if (!path_patterns[i]->Equals(other.path_patterns[i].get())) {
 			return false;
 		}
 	}
@@ -104,8 +104,8 @@ unique_ptr<ParsedExpression> MatchExpression::Copy() const {
 	copy->pg_name = pg_name;
 	copy->alias = alias;
 
-	for (auto &path : path_list) {
-		copy->path_list.push_back(path->Copy());
+	for (auto &path : path_patterns) {
+		copy->path_patterns.push_back(path->Copy());
 	}
 
 	for (auto &column : column_list) {
@@ -120,7 +120,7 @@ unique_ptr<ParsedExpression> MatchExpression::Copy() const {
 void MatchExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(pg_name);
 	writer.WriteString(alias);
-	writer.WriteSerializableList<PathPattern>(path_list);
+	writer.WriteSerializableList<PathPattern>(path_patterns);
 	writer.WriteSerializableList<ParsedExpression>(column_list);
 	writer.WriteOptional(where_clause);
 }
@@ -129,7 +129,7 @@ unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
 	auto result = make_uniq<MatchExpression>();
 	result->pg_name = reader.ReadRequired<string>();
 	result->alias = reader.ReadRequired<string>();
-	result->path_list = reader.ReadRequiredSerializableList<PathPattern>();
+	result->path_patterns = reader.ReadRequiredSerializableList<PathPattern>();
 	result->column_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
 	return std::move(result);

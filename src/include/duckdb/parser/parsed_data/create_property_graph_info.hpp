@@ -27,17 +27,14 @@ struct CreatePropertyGraphInfo : public CreateInfo {
 	//! Property graph name
 	string property_graph_name;
 	//! List of vector tables
-	vector<unique_ptr<PropertyGraphTable>> vertex_tables;
+	vector<shared_ptr<PropertyGraphTable>> vertex_tables;
 
-	vector<unique_ptr<PropertyGraphTable>> edge_tables;
+	vector<shared_ptr<PropertyGraphTable>> edge_tables;
 
 	//! Dictionary to point label to vector or edge table
-	case_insensitive_map_t<PropertyGraphTable *> label_map;
+	case_insensitive_map_t<shared_ptr<PropertyGraphTable>> label_map;
 
 public:
-	//        string ToString() const;
-	//        bool Equals(const BaseExpression *other_p) const;
-	//	void SerializeInternal(Serializer &serializer) const override;
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Serializes a blob into a CreatePropertyGraphInfo

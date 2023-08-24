@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<PropertyGraphTable>
+shared_ptr<PropertyGraphTable>
 Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *graph_table,
                                          case_insensitive_set_t &global_label_set) {
 	vector<string> column_names;
@@ -59,7 +59,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		label_names.emplace_back(label_str);
 	}
 
-	auto pg_table = make_uniq<PropertyGraphTable>(graph_table_name.name, table_name_alias, column_names, label_names);
+	auto pg_table = make_shared<PropertyGraphTable>(graph_table_name.name, table_name_alias, column_names, label_names);
 
 	pg_table->is_vertex_table = graph_table->is_vertex_table;
 	pg_table->except_columns = std::move(except_list);
@@ -106,7 +106,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		}
 	}
 
-	return pg_table;
+	return std::move(pg_table);
 }
 
 unique_ptr<CreateStatement>
@@ -128,9 +128,9 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 		auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(vertex_table->data.ptr_value);
 		auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set);
 		for (auto &label : pg_table->sub_labels) {
-			info->label_map[label] = pg_table.get();
+			info->label_map[label] = pg_table;
 		}
-		info->label_map[pg_table->main_label] = pg_table.get();
+		info->label_map[pg_table->main_label] = pg_table;
 
 		info->vertex_tables.push_back(std::move(pg_table));
 	}
@@ -145,9 +145,9 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 			auto graph_table = reinterpret_cast<duckdb_libpgquery::PGPropertyGraphTable *>(edge_table->data.ptr_value);
 			auto pg_table = TransformPropertyGraphTable(graph_table, global_label_set);
 			for (auto &label : pg_table->sub_labels) {
-				info->label_map[label] = pg_table.get();
+				info->label_map[label] = pg_table;
 			}
-			info->label_map[pg_table->main_label] = pg_table.get();
+			info->label_map[pg_table->main_label] = pg_table;
 			info->edge_tables.push_back(std::move(pg_table));
 		}
 	}
@@ -155,7 +155,7 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 	auto result = make_uniq<CreateStatement>();
 	result->info = std::move(info);
 
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb

@@ -14,7 +14,7 @@
 using namespace duckdb;
 using namespace std;
 
-// code below traverses the test directory and makes individual test cases out
+// code below traverses the test directory and makes indiviual test cases out
 // of each script
 static void listFiles(FileSystem &fs, const string &path, std::function<void(const string &)> cb) {
 	fs.ListFiles(path, [&](string fname, bool is_dir) {

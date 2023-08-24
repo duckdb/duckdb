@@ -19,9 +19,7 @@ public:
 	bool group = false;
 	int32_t topk = false;
 
-	PathPattern() {
-
-	};
+	PathPattern() = default;
 
 	unique_ptr<PathPattern> Copy();
 
