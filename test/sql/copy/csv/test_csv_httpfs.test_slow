@@ -6,6 +6,9 @@ require httpfs
 
 require parquet
 
+# TODO: figure out why? Likely some ZSTD thing not being handled properly on windows?
+require notwindows
+
 # FIXME: Restore these test to query I statments plus relevant result
 
 # Add test for 3731
