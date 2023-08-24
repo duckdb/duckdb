@@ -132,7 +132,7 @@ runs:
     - name: Build
       shell: bash
       env:
-        USE_SCCACHE: ${{ inputs.sccache = 1 && 'true' || ''}}
+        USE_SCCACHE: ${{ inputs.sccache == 1 && 'true' || ''}}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
@@ -200,7 +200,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
-        USE_SCCACHE: ${{ inputs.sccache = 1 && 'true' || ''}}
+        USE_SCCACHE: ${{ inputs.sccache == 1 && 'true' || ''}}
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
