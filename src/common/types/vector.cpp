@@ -455,6 +455,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &val_children = ArrayValue::GetChildren(val);
 		auto stride = ArrayType::GetSize(GetType());
 		auto &entry = ArrayVector::GetEntry(*this);
+		if (!entry.validity.IsMaskSet()) {
+			entry.validity.Initialize(static_cast<idx_t>(stride) * STANDARD_VECTOR_SIZE);
+		}
 		for (idx_t i = 0; i < stride; i++) {
 			entry.SetValue((index * stride) + i, val_children[i]);
 		}
@@ -864,6 +867,11 @@ void Vector::Flatten(idx_t count) {
 			auto flattened_buffer = make_uniq<VectorArrayBuffer>(GetType(), count);
 			auto &new_child = flattened_buffer->GetChild();
 
+			// Make sure to initialize a validity mask for the new child vector with the correct size
+			if (!child.validity.AllValid()) {
+				new_child.validity.Initialize(array_size * count);
+			}
+
 			// Now we need to "unpack" the child vector.
 			// Basically, do this:
 			//
@@ -1183,8 +1191,8 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 		case PhysicalType::ARRAY: {
 			auto &child = ArrayVector::GetEntry(*this);
 			auto array_size = ArrayType::GetSize(type);
-			serializer.WriteProperty<uint64_t>("array_size", array_size);
-			serializer.SetTag("child");
+			serializer.WriteProperty<uint64_t>(103, "array_size", array_size);
+			serializer.SetTag(104, "child");
 			serializer.OnObjectBegin();
 			child.FormatSerialize(serializer, array_size);
 			serializer.OnObjectEnd();
@@ -1278,8 +1286,8 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::ARRAY: {
-			auto array_size = deserializer.ReadProperty<uint64_t>("array_size");
-			deserializer.SetTag("child");
+			auto array_size = deserializer.ReadProperty<uint64_t>(103, "array_size");
+			deserializer.SetTag(104, "child");
 			auto &child = ArrayVector::GetEntry(*this);
 			deserializer.OnObjectBegin();
 			child.FormatDeserialize(deserializer, array_size);
@@ -2396,6 +2404,14 @@ idx_t ArrayVector::GetTotalSize(const Vector &vector) {
 		return ArrayVector::GetTotalSize(child);
 	}
 	return vector.auxiliary->Cast<VectorArrayBuffer>().GetInnerSize();
+}
+
+void ArrayVector::ReserveChildValidity(Vector &array_vector, idx_t count) {
+	D_ASSERT(array_vector.GetType().id() == LogicalTypeId::ARRAY);
+	D_ASSERT(array_vector.auxiliary);
+	auto array_size = ArrayType::GetSize(array_vector.GetType());
+	auto &child_vector = ArrayVector::GetEntry(array_vector);
+	child_vector.validity.Resize(STANDARD_VECTOR_SIZE, array_size * count);
 }
 
 void ArrayVector::AllocateFakeListEntries(Vector &vector) {

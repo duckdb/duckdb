@@ -20,13 +20,21 @@ static void ArrayValueFunction(DataChunk &args, ExpressionState &state, Vector &
 		}
 	}
 
-	auto &child = ArrayVector::GetEntry(result);
-
 	auto num_rows = args.size();
 	auto num_columns = args.ColumnCount();
 
 	if (num_columns > ArrayType::MAX_ARRAY_SIZE) {
 		throw OutOfRangeException("Array size exceeds maximum allowed size");
+	}
+
+	auto &child = ArrayVector::GetEntry(result);
+
+	if (num_columns > 1) {
+		// Ensure that the child has a validity mask of the correct size
+		// The SetValue call below expects the validity mask to be initialized
+		auto &child_validity = FlatVector::Validity(child);
+		D_ASSERT(child_validity.IsMaskSet() == false);
+		child_validity.Initialize(num_rows * num_columns);
 	}
 
 	for (idx_t i = 0; i < num_rows; i++) {

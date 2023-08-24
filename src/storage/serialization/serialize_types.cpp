@@ -72,13 +72,13 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::FormatDeserialize(FormatDeseri
 
 void ArrayTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("child_type", child_type);
-	serializer.WriteProperty("size", size);
+	serializer.WriteProperty(200, "child_type", child_type);
+	serializer.WriteProperty(201, "size", size);
 }
 
 shared_ptr<ExtraTypeInfo> ArrayTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto child_type = deserializer.ReadProperty<LogicalType>("child_type");
-	auto size = deserializer.ReadProperty<uint32_t>("size");
+	auto child_type = deserializer.ReadProperty<LogicalType>(200, "child_type");
+	auto size = deserializer.ReadProperty<uint32_t>(201, "size");
 	auto result = duckdb::shared_ptr<ArrayTypeInfo>(new ArrayTypeInfo(std::move(child_type), size));
 	return std::move(result);
 }

@@ -39,7 +39,9 @@ SELECT array_cross_product([1,NULL,3]::${TYPE}[3], [1,5,7]::${TYPE}[3]);
 Array cross product is not defined for null values
 
 # Now we can also try implict casts
+query I
 SELECT array_cross_product(array_value(1,2,3), array_value(1.0,5.0,7.0)::${TYPE}[3]);
-
+----
+[-1.0, -4.0, 3.0]
 
 endloop

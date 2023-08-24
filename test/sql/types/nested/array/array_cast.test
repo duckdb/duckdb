@@ -111,7 +111,7 @@ Conversion Error: Cannot cast list with length 4 to array with length 3
 
 
 # Should be able to implict cast arrays if the elements are castable
-statemet ok
+statement ok
 CREATE OR REPLACE TABLE t1 AS SELECT [1, 2, 3]::INT[3];
 
 statement ok
