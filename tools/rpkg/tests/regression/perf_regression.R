@@ -10,7 +10,7 @@ source(helpers)
 temp_lib_dir <- dir_create()
 
 versions <- list(
-  master = list(repo = "duckdb/duckdb", branch = "master"),
+  main = list(repo = "duckdb/duckdb", branch = "main"),
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
@@ -56,5 +56,5 @@ res <- bench_mark(
   }
 )
 
-bench_plot(res, check = TRUE, ref = "release", new = "master", threshold = 0.15)
+bench_plot(res, check = TRUE, ref = "release", new = "main", threshold = 0.15)
 ggplot2::ggsave("perf_reg.png", width = 9, height = 11)
