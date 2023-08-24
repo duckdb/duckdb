@@ -15,7 +15,4 @@ vector<string> linked_extensions = {${EXT_NAME_VECTOR_INITIALIZER}
 vector<string> loaded_extension_test_paths = {${EXT_TEST_PATH_INITIALIZER}
 };
 
-vector<string> extensions_excluded_from_autoload = {${EXT_NAME_EXCLUDED_AUTOLOAD_INITIALIZER}
-};
-
 }

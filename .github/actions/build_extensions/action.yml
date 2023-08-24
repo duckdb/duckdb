@@ -209,7 +209,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         ls
         rm -rf build/release
-        make
+        VCPKG_TOOLCHAIN_PATH="" make
         ls
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader

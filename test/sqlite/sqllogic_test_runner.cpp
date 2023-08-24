@@ -554,13 +554,11 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (!config->options.autoload_known_extensions) {
 					auto result = ExtensionHelper::LoadExtension(*db, param);
 					if (result == ExtensionLoadResult::LOADED_EXTENSION) {
-						Printer::Print("\nExtension loaded: " + param);
 						// add the extension to the list of loaded extensions
 						extensions.insert(param);
 					} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 						parser.Fail("unknown extension type: %s", token.parameters[0]);
 					} else if (result == ExtensionLoadResult::NOT_LOADED) {
-						Printer::Print("Test skipped due to extension not available: " + param);
 						// extension known but not build: skip this test
 						return;
 					}

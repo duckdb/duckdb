@@ -8,7 +8,7 @@
 ################# ARROW
 if (NOT WIN32)
     duckdb_extension_load(arrow
-            LOAD_TESTS DONT_LINK DONT_AUTOLOAD
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/arrow
             GIT_TAG 56d24d4224df43cac0e071d71371385de5831129
             APPLY_PATCHES
@@ -17,14 +17,14 @@ endif()
 
 ################# AWS
 duckdb_extension_load(aws
-        LOAD_TESTS DONT_AUTOLOAD
+        LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
         GIT_TAG b769c8aab638bdbdc46c77fcb3c70412dd715d45
         )
 
 ################# AZURE
 duckdb_extension_load(azure
-        LOAD_TESTS DONT_AUTOLOAD
+        LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_azure
         GIT_TAG 1fe568d3eb3c8842118e395ba8031e2a8566daed
         )
@@ -38,7 +38,7 @@ else ()
 endif()
 
 duckdb_extension_load(iceberg
-        ${LOAD_ICEBERG_TESTS} DONT_AUTOLOAD
+        ${LOAD_ICEBERG_TESTS}
         GIT_URL https://github.com/duckdblabs/duckdb_iceberg
         GIT_TAG 6481aa4dd0ab9d724a8df28a1db66800561dd5f9
         APPLY_PATCHES
@@ -48,14 +48,14 @@ duckdb_extension_load(iceberg
 # Note: tests for postgres_scanner are currently not run. All of them need a postgres server running. One test
 #       uses a remote rds server but that's not something we want to run here.
 duckdb_extension_load(postgres_scanner
-        DONT_LINK DONT_AUTOLOAD
+        DONT_LINK
         GIT_URL https://github.com/duckdblabs/postgres_scanner
         GIT_TAG 828578442d18fb3acb53b08f4f54a0683217a2c8
         )
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-        DONT_LINK LOAD_TESTS DONT_AUTOLOAD
+        DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
         GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
         APPLY_PATCHES
@@ -72,7 +72,7 @@ else ()
 endif()
 
 duckdb_extension_load(sqlite_scanner
-        ${STATIC_LINK_SQLITE} LOAD_TESTS DONT_AUTOLOAD
+        ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/sqlite_scanner
         GIT_TAG 9c38a30be2237456cdcd423d527b96c944158c77
         )
@@ -80,7 +80,7 @@ duckdb_extension_load(sqlite_scanner
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
-            LOAD_TESTS DONT_LINK DONT_AUTOLOAD
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/substrait
             GIT_TAG 0cd88fa8b240babe5316924e32fb68aaba408780
             )
