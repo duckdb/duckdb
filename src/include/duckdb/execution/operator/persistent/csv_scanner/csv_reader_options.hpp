@@ -34,12 +34,13 @@ struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
 	CSVStateMachineOptions(char delimiter_p, char quote_p, char escape_p)
 	    : delimiter(delimiter_p), quote(quote_p), escape(escape_p) {};
+
+	//! Delimiter to separate columns within each line
+	char delimiter = ',';
 	//! Quote used for columns that contain reserved characters, e.g '
 	char quote = '\"';
 	//! Escape character to escape quote character
 	char escape = '\0';
-	//! Delimiter to separate columns within each line
-	char delimiter = ',';
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
