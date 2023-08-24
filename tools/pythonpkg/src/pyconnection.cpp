@@ -752,7 +752,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	if (options.has_header) {
 		// 'options' is only used to initialize the ReadCSV relation
 		// we also need to set this in the arguments passed to the function
-		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.header));
+		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.dialect_options.header));
 	}
 
 	if (options.compression != FileCompressionType::AUTO_DETECT) {
