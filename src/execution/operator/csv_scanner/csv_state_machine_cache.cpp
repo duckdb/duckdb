@@ -56,7 +56,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	transition_array[record_separator_state][static_cast<uint8_t>(state_machine_options.delimiter)] =
 	    field_separator_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = empty_line_state;
-	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
+	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = empty_line_state;
 	transition_array[record_separator_state][static_cast<uint8_t>(state_machine_options.quote)] = quoted_state;
 	// 4) Carriage Return State
 	transition_array[carriage_return_state][static_cast<uint8_t>('\n')] = record_separator_state;
