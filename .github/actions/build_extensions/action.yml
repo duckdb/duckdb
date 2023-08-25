@@ -208,7 +208,7 @@ runs:
         ls
         cd  ${{ inputs.build_dir}}
         ls
-        mv build/release/extensions build/extensions_tmp
+        mv build/release/extension build/extension_tmp
         VCPKG_TOOLCHAIN_PATH="" make
         ls
 
@@ -223,8 +223,8 @@ runs:
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*"' > test.list
         ${{ inputs.unittest_script }} '-f test.list'
-        rm -rf build/release/extensions
-        mv build/extensions_tmp build/release/extensions
+        rm -rf build/release/extension
+        mv build/extension_tmp build/release/extension
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
     # TODO: this wil rebuild AGAIN, ensure it uses the cache
