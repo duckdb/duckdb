@@ -56,6 +56,7 @@ public:
 	}
 
 	static bool TryMultiply(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
+	static void MultiplyNoOverflowCheck(hugeint_t lhs, hugeint_t rhs, hugeint_t &result);
 
 	static hugeint_t Add(hugeint_t lhs, hugeint_t rhs);
 	static hugeint_t Subtract(hugeint_t lhs, hugeint_t rhs);

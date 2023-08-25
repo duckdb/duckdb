@@ -632,7 +632,7 @@ uhugeint_t uhugeint_t::operator~() const {
 }
 
 uhugeint_t &uhugeint_t::operator+=(const uhugeint_t &rhs) {
-	upper = upper + rhs.upper + ((lower + rhs.lower) < lower);
+	upper += rhs.upper + ((lower + rhs.lower) < lower);
 	lower += rhs.lower;
 	return *this;
 }
