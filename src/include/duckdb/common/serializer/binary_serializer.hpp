@@ -56,8 +56,10 @@ private:
 	}
 
 	void WriteField(field_id_t field_id, BinaryMessageKind kind) {
-		Write<uint32_t>(field_id);
-		Write<uint8_t>(static_cast<uint8_t>(kind));
+		// We reserve 3 bits for kind and 1 bit for future use
+		D_ASSERT(field_id < (1 << 28));
+		uint32_t header = ((field_id << 4) | (static_cast<uint32_t>(kind) & 0x7));
+		Write<uint32_t>(header);
 	}
 
 	explicit BinarySerializer(bool serialize_default_values_p) {
