@@ -48,6 +48,11 @@ struct PatasCompressionFun {
 	static bool TypeIsSupported(PhysicalType type);
 };
 
+struct AlpCompressionFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 struct FSSTFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(PhysicalType type);
