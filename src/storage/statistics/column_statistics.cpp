@@ -1,5 +1,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 
