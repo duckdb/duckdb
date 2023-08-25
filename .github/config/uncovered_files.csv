@@ -779,7 +779,7 @@ storage/statistics/struct_stats.cpp	7
 storage/storage_manager.cpp	6
 storage/serialization/serialize_expression.cpp	35
 storage/serialization/serialize_logical_operator.cpp	23
-storage/serialization/serialize_parse_info.cpp    61
+storage/serialization/serialize_parse_info.cpp	61
 storage/serialization/serialize_table_filter.cpp	20
 storage/serialization/serialize_types.cpp	2
 storage/metadata/metadata_manager.cpp	4
