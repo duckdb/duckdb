@@ -48,8 +48,8 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, Allocator &allo
 
 FixedSizeAllocator::~FixedSizeAllocator() {
 	for (auto &buffer : buffers) {
-		if (buffer.in_memory) {
-			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
+		if (buffer.second.in_memory) {
+			allocator.FreeData(buffer.second.Get(*this), BUFFER_SIZE);
 		}
 	}
 }
@@ -60,10 +60,9 @@ IndexPointer FixedSizeAllocator::New() {
 	if (buffers_with_free_space.empty()) {
 
 		// add a new buffer
-		idx_t buffer_id = buffers.size();
-		D_ASSERT(buffer_id <= (uint32_t)DConstants::INVALID_INDEX);
 		auto memory_ptr = allocator.AllocateData(BUFFER_SIZE);
-		buffers.emplace_back(0, memory_ptr);
+		auto buffer_id = GetAvailableBufferId();
+		buffers.insert({buffer_id, FixedSizeBuffer(0, memory_ptr)});
 		buffers_with_free_space.insert(buffer_id);
 
 		// set the bitmask
@@ -73,15 +72,17 @@ IndexPointer FixedSizeAllocator::New() {
 
 	// return a pointer
 	D_ASSERT(!buffers_with_free_space.empty());
-	auto buffer_id = (uint32_t)*buffers_with_free_space.begin();
+	auto buffer_id = uint32_t(*buffers_with_free_space.begin());
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].Get(*this));
+	D_ASSERT(buffers.find(buffer_id) != buffers.end());
+	auto &buffer = buffers.find(buffer_id)->second;
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer.Get(*this));
 	ValidityMask mask(bitmask_ptr);
-	auto offset = GetOffset(mask, buffers[buffer_id].segment_count);
+	auto offset = GetOffset(mask, buffer.segment_count);
 
-	buffers[buffer_id].segment_count++;
+	buffer.segment_count++;
 	total_segment_count++;
-	if (buffers[buffer_id].segment_count == available_segments_per_buffer) {
+	if (buffer.segment_count == available_segments_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
 	}
 
@@ -93,24 +94,27 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	auto buffer_id = ptr.GetBufferId();
 	auto offset = ptr.GetOffset();
 
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].Get(*this));
+	D_ASSERT(buffers.find(buffer_id) != buffers.end());
+	auto &buffer = buffers.find(buffer_id)->second;
+
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer.Get(*this));
 	ValidityMask mask(bitmask_ptr);
 	D_ASSERT(!mask.RowIsValid(offset));
 	mask.SetValid(offset);
 	buffers_with_free_space.insert(buffer_id);
 
 	D_ASSERT(total_segment_count > 0);
-	D_ASSERT(buffers[buffer_id].segment_count > 0);
+	D_ASSERT(buffer.segment_count > 0);
 
-	buffers[buffer_id].segment_count--;
+	buffer.segment_count--;
 	total_segment_count--;
 }
 
 void FixedSizeAllocator::Reset() {
 
 	for (auto &buffer : buffers) {
-		if (buffer.in_memory) {
-			allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
+		if (buffer.second.in_memory) {
+			allocator.FreeData(buffer.second.Get(*this), BUFFER_SIZE);
 		}
 	}
 	buffers.clear();
@@ -121,7 +125,7 @@ void FixedSizeAllocator::Reset() {
 idx_t FixedSizeAllocator::GetMemoryUsage() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : buffers) {
-		if (buffer.in_memory) {
+		if (buffer.second.in_memory) {
 			memory_usage += BUFFER_SIZE;
 		}
 	}
@@ -133,15 +137,15 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	D_ASSERT(segment_size == other.segment_size);
 
 	// remember the buffer count and merge the buffers
-	idx_t buffer_count = buffers.size();
+	idx_t upper_bound_id = GetUpperBoundBufferId();
 	for (auto &buffer : other.buffers) {
-		buffers.push_back(buffer);
+		buffers.insert({buffer.first + upper_bound_id, buffer.second});
 	}
 	other.buffers.clear();
 
 	// merge the buffers with free spaces
 	for (auto &buffer_id : other.buffers_with_free_space) {
-		buffers_with_free_space.insert(buffer_id + buffer_count);
+		buffers_with_free_space.insert(buffer_id + upper_bound_id);
 	}
 	other.buffers_with_free_space.clear();
 
@@ -156,52 +160,48 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		return false;
 	}
 
-	vector<idx_t> in_memory_buffers;
+	D_ASSERT(vacuum_buffers.empty());
 	idx_t available_segments_in_memory = 0;
 
-	for (idx_t i = 0; i < buffers.size(); i++) {
-		buffers[i].vacuum = false;
-		if (buffers[i].in_memory) {
-			in_memory_buffers.push_back(i);
-			available_segments_in_memory += available_segments_per_buffer - buffers[i].segment_count;
+	for (auto &buffer : buffers) {
+		buffer.second.vacuum = false;
+		if (buffer.second.in_memory) {
+			vacuum_buffers.insert(buffer.first);
+			available_segments_in_memory += available_segments_per_buffer - buffer.second.segment_count;
 		}
 	}
 
 	// no buffers in memory
-	if (in_memory_buffers.empty()) {
+	if (vacuum_buffers.empty()) {
 		return false;
 	}
 
 	auto excess_buffer_count = available_segments_in_memory / available_segments_per_buffer;
 
 	// calculate the vacuum threshold adaptively
-	D_ASSERT(excess_buffer_count < in_memory_buffers.size());
+	D_ASSERT(excess_buffer_count < vacuum_buffers.size());
 	idx_t memory_usage = GetMemoryUsage();
 	idx_t excess_memory_usage = excess_buffer_count * BUFFER_SIZE;
 	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
 	auto threshold = double(VACUUM_THRESHOLD) / 100.0;
 	if (excess_percentage < threshold) {
+		vacuum_buffers.clear();
 		return false;
 	}
 
-	vacuum_buffers.clear();
-	D_ASSERT(excess_buffer_count <= in_memory_buffers.size());
-	D_ASSERT(in_memory_buffers.size() <= buffers.size());
+	D_ASSERT(excess_buffer_count <= vacuum_buffers.size());
+	D_ASSERT(vacuum_buffers.size() <= buffers.size());
 
-	// we always have to remove the last excess_buffer_count buffers
-	// otherwise, buffer IDs will shift and become invalid
-	for (idx_t i = 0; i < excess_buffer_count; i++) {
-		auto buffer_id = buffers.size() - 1 - i;
+	// adjust the vacuum buffers to contain all to-be-vacuumed buffers
+	while (vacuum_buffers.size() != excess_buffer_count) {
+		vacuum_buffers.erase(vacuum_buffers.begin());
+	}
 
-		// set up the buffers that can be vacuumed
-		buffers[buffer_id].vacuum = true;
-		vacuum_buffers.insert(buffer_id);
-
-		// remove all invalid buffers from the available buffer list to ensure that we do not reuse them
-		auto it = buffers_with_free_space.find(buffer_id);
-		if (it != buffers_with_free_space.end()) {
-			buffers_with_free_space.erase(it);
-		}
+	// adjust the buffers, and erase all to-be-vacuumed buffers from the available buffer list
+	for (auto &buffer_id : vacuum_buffers) {
+		D_ASSERT(buffers.find(buffer_id) != buffers.end());
+		buffers.find(buffer_id)->second.vacuum = true;
+		buffers_with_free_space.erase(buffer_id);
 	}
 
 	return true;
@@ -209,16 +209,13 @@ bool FixedSizeAllocator::InitializeVacuum() {
 
 void FixedSizeAllocator::FinalizeVacuum() {
 
-	auto buffer_it = buffers.begin();
-	while (buffer_it != buffers.end()) {
-		if (buffer_it->vacuum) {
-			D_ASSERT(buffer_it->in_memory);
-			allocator.FreeData(buffer_it->Get(*this), BUFFER_SIZE);
-			buffer_it = buffers.erase(buffer_it);
-		} else {
-			buffer_it++;
-		}
+	for (auto &buffer_id : vacuum_buffers) {
+		D_ASSERT(buffers.find(buffer_id) != buffers.end());
+		auto &buffer = buffers.find(buffer_id)->second;
+		allocator.FreeData(buffer.Get(*this), BUFFER_SIZE);
+		buffers.erase(buffer_id);
 	}
+	vacuum_buffers.clear();
 }
 
 IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
@@ -237,7 +234,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 
 	for (auto &buffer : buffers) {
-		buffer.Serialize(*this, writer);
+		buffer.second.Serialize(*this, writer);
 	}
 
 	auto block_pointer = writer.GetBlockPointer();
@@ -246,9 +243,10 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 	writer.Write(static_cast<idx_t>(buffers_with_free_space.size()));
 
 	for (auto &buffer : buffers) {
-		D_ASSERT(buffer.block_ptr.IsValid());
-		writer.Write(buffer.block_ptr);
-		writer.Write(buffer.segment_count);
+		D_ASSERT(buffer.second.block_ptr.IsValid());
+		writer.Write(buffer.first);
+		writer.Write(buffer.second.block_ptr);
+		writer.Write(buffer.second.segment_count);
 	}
 	for (auto &buffer_id : buffers_with_free_space) {
 		writer.Write(buffer_id);
@@ -267,9 +265,10 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 	total_segment_count = 0;
 
 	for (idx_t i = 0; i < buffer_count; i++) {
+		auto buffer_id = reader.Read<idx_t>();
 		auto buffer_block_ptr = reader.Read<BlockPointer>();
 		auto buffer_segment_count = reader.Read<idx_t>();
-		buffers.emplace_back(buffer_segment_count, buffer_block_ptr);
+		buffers.insert({buffer_id, FixedSizeBuffer(buffer_segment_count, buffer_block_ptr)});
 		total_segment_count += buffer_segment_count;
 	}
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
@@ -278,9 +277,9 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 }
 
 data_ptr_t FixedSizeAllocator::Get(const IndexPointer ptr, const bool dirty) {
-	D_ASSERT(ptr.GetBufferId() < buffers.size());
+	D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 	D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-	auto &buffer = buffers[ptr.GetBufferId()];
+	auto &buffer = buffers.find(ptr.GetBufferId())->second;
 	auto buffer_ptr = buffer.Get(*this, dirty);
 	return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 }
@@ -328,6 +327,25 @@ uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t segment_c
 	}
 
 	throw InternalException("Invalid bitmask for FixedSizeAllocator");
+}
+
+idx_t FixedSizeAllocator::GetAvailableBufferId() const {
+	idx_t buffer_id = buffers.size();
+	while (buffers.find(buffer_id) != buffers.end()) {
+		D_ASSERT(buffer_id > 0);
+		buffer_id--;
+	}
+	return buffer_id;
+}
+
+idx_t FixedSizeAllocator::GetUpperBoundBufferId() const {
+	idx_t upper_bound_id = 0;
+	for (auto &buffer : buffers) {
+		if (buffer.first >= upper_bound_id) {
+			upper_bound_id = buffer.first + 1;
+		}
+	}
+	return upper_bound_id;
 }
 
 } // namespace duckdb

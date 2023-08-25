@@ -58,10 +58,8 @@ public:
 	//! Returns the in-memory usage in bytes
 	inline idx_t GetMemoryUsage() const;
 
-	//! Returns the number of buffers
-	inline idx_t GetBufferCount() const {
-		return buffers.size();
-	}
+	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
+	idx_t GetUpperBoundBufferId() const;
 	//! Merge another FixedSizeAllocator into this allocator. Both must have the same segment size
 	void Merge(FixedSizeAllocator &other);
 
@@ -102,7 +100,7 @@ private:
 	idx_t total_segment_count;
 
 	//! Buffers containing the segments
-	vector<FixedSizeBuffer> buffers;
+	unordered_map<idx_t, FixedSizeBuffer> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
@@ -113,6 +111,8 @@ private:
 	data_ptr_t Get(const IndexPointer ptr, const bool dirty = true);
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
+	//! Returns an available buffer id
+	idx_t GetAvailableBufferId() const;
 };
 
 } // namespace duckdb

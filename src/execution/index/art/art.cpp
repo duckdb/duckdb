@@ -1069,7 +1069,7 @@ void ART::InitializeMerge(ARTFlags &flags) {
 
 	flags.merge_buffer_counts.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.merge_buffer_counts.emplace_back(allocator.GetBufferCount());
+		flags.merge_buffer_counts.emplace_back(allocator.GetUpperBoundBufferId());
 	}
 }
 

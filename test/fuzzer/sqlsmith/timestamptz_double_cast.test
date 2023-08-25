@@ -2,8 +2,6 @@
 # description: Test cast from large double to seconds
 # group: [sqlsmith]
 
-mode skip
-
 require icu
 
 statement ok

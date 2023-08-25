@@ -97,19 +97,14 @@ FROM pragma_database_size() AS current;
 statement ok
 DELETE FROM t WHERE i > 500000;
 
-# FIXME: enable this test after addressing the issue described in test_art_storage_multi_checkpoint.test
-# FIXME: vacuum now always removes the last excess_buffer_count buffers, which can cause earlier buffers
-# FIXME: to get deserialized, thus, this delete can increase the in-memory size (as we potentially load
-# FIXME: almost everything into memory)
-# FIXME: the increase in the FixedSizeBuffer size possibly also influences this, reinvestigate before merging
-mode skip
+# the previous bulk deletion causes a vacuum-operation. We delete excess_buffer_count in-memory buffers
+# during a vacuum. We move their data to buffers that still have free space and that potentially
+# are not yet deserialized, deserializing them. Therefore, our overall ART size decreases, but our in-memory
+# ART size potentially increases, as we deserialize additional buffers
 
-# half the index still is not in-memory, and the DB is persistent,
-# so we don't expect the vacuum to clean up too much memory
-# (since many allocators won't pass the threshold)
-
+# we add some +10MB
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) < db_size.usage + 10000000
 FROM db_size, pragma_database_size() current;
 ----
 1
