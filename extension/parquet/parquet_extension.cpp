@@ -37,8 +37,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/planner/expression/bound_cast_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 #endif
 
@@ -118,10 +116,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
-	//! When we have types that can't be exported to parquet, we cast them to string instead
-	vector<LogicalType> adjusted_types;
-	//! Either a bound cast (if required) or a reference
-	vector<unique_ptr<Expression>> bound_expressions;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
@@ -138,11 +132,9 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, ParquetWriteBindData &bind_data)
-	    : buffer(context, bind_data.adjusted_types, ColumnDataAllocatorType::HYBRID) {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+	    : buffer(context, types, ColumnDataAllocatorType::HYBRID) {
 		buffer.InitializeAppend(append_state);
-		// Note: we initialize the column data collection with the adjusted types
-		// so in Sink we have to apply the cast to the adjusted type before feeding it into the data collection
 	}
 
 	ColumnDataCollection buffer;
@@ -837,23 +829,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	}
 
 	bind_data->sql_types = sql_types;
-	bind_data->adjusted_types = sql_types;
-
-	// Check if any of the received types is not supported by the ParquetWriter
-	for (idx_t i = 0; i < sql_types.size(); i++) {
-		auto &type = sql_types[i];
-		auto bound_ref = make_uniq_base<Expression, BoundReferenceExpression>(type, i);
-		if (ParquetWriter::TypeIsSupported(type)) {
-			bind_data->bound_expressions.push_back(std::move(bound_ref));
-			continue;
-		}
-		// The type is not supported, so we cast it to VARCHAR instead
-		auto bound_cast =
-		    BoundCastExpression::AddCastToType(context, std::move(bound_ref), LogicalType::VARCHAR, false);
-		bind_data->bound_expressions.push_back(std::move(bound_cast));
-		bind_data->adjusted_types[i] = LogicalType::VARCHAR;
-	}
-
 	bind_data->column_names = names;
 	return std::move(bind_data);
 }
@@ -864,23 +839,16 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.adjusted_types, parquet_bind.column_names,
-	                             parquet_bind.codec, parquet_bind.field_ids.Copy());
+	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
+	                                                parquet_bind.codec, parquet_bind.field_ids.Copy());
 	return std::move(global_state);
 }
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
-                      LocalFunctionData &lstate, DataChunk &intermediate) {
+                      LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
-
-	// If we have types that are unsupported this contains bound cast expressions
-	ExpressionExecutor executor(context.client, bind_data.bound_expressions);
-	DataChunk input;
-	input.Initialize(context.client, bind_data.adjusted_types, intermediate.size());
-	executor.Execute(&intermediate, input);
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
@@ -910,7 +878,7 @@ void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, Globa
 
 unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &context, FunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	return make_uniq<ParquetWriteLocalState>(context.client, bind_data);
+	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
 // LCOV_EXCL_START
