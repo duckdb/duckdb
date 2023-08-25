@@ -323,7 +323,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	DuckDB db;
 	Connection con(db);
-	BufferedCSVReader reader(*con.context, std::move(options), sql_types);
+	BufferedCSVReader reader(*con.context, std::move(options), nullptr, sql_types);
 	reader.InitializeProjection();
 
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);

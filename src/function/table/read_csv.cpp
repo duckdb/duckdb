@@ -242,11 +242,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
 		CSVSniffer sniffer(options, result->buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
-
-		auto initial_reader = make_uniq<BufferedCSVReader>(context, options, sniffer_result.return_types);
-		return_types.assign(sniffer_result.return_types.begin(), sniffer_result.return_types.end());
+		return_types = sniffer_result.return_types;
 		if (names.empty()) {
-			names.assign(sniffer_result.names.begin(), sniffer_result.names.end());
+			names = sniffer_result.names;
 		} else {
 			if (explicitly_set_columns) {
 				// The user has influenced the names, can't assume they are valid anymore
@@ -258,7 +256,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			} else {
 				D_ASSERT(return_types.size() == names.size());
 			}
-			initial_reader->names = names;
 		}
 
 	} else {
@@ -844,7 +841,7 @@ private:
 		} else {
 			auto union_by_name = options.file_options.union_by_name;
 			options.file_path = bind_data.files[file_index];
-			result = make_uniq<BufferedCSVReader>(context, std::move(options), csv_types);
+			result = make_uniq<BufferedCSVReader>(context, std::move(options), nullptr, csv_types);
 			if (!union_by_name) {
 				result->names = csv_names;
 			}
@@ -883,7 +880,7 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options,bind_data.buffer_manager,  bind_data.csv_types);
 		if (!bind_data.options.file_options.union_by_name) {
 			result->initial_reader->names = bind_data.csv_names;
 		}

@@ -12,7 +12,7 @@ struct Parse {
 		machine.value = "";
 	}
 
-	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char) {
+	inline static bool Process(CSVStateMachine &machine, DataChunk &parse_chunk, char current_char, idx_t current_pos) {
 
 		machine.pre_previous_state = machine.previous_state;
 		machine.previous_state = machine.state;

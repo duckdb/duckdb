@@ -22,6 +22,12 @@ struct TryCastFloatingOperator {
 	}
 };
 
+struct TupleSniffing{
+	idx_t line_number;
+	idx_t position;
+	vector<Value> values;
+};
+
 bool TryCastDecimalValueCommaSeparated(const string_t &value_str, const LogicalType &sql_type) {
 	auto width = DecimalType::GetWidth(sql_type);
 	auto scale = DecimalType::GetScale(sql_type);
@@ -169,8 +175,8 @@ struct SniffValue {
 		machine.rows_read = 0;
 	}
 
-	inline static bool Process(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values,
-	                           char current_char) {
+	inline static bool Process(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values,
+	                           char current_char, idx_t current_pos) {
 
 		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
@@ -191,11 +197,12 @@ struct SniffValue {
 			machine.VerifyUTF8();
 			if (machine.value.empty() || machine.value == machine.options.null_str) {
 				// We set empty == null value
-				sniffed_values[machine.cur_rows].second.push_back(Value(LogicalType::VARCHAR));
+				sniffed_values[machine.cur_rows].values.push_back(Value(LogicalType::VARCHAR));
 			} else {
-				sniffed_values[machine.cur_rows].second.push_back(Value(machine.value));
+				sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
 			}
-			sniffed_values[machine.cur_rows].first = machine.rows_read;
+			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
+			sniffed_values[machine.cur_rows].position = current_pos;
 			machine.value = "";
 		}
 		if (machine.state == CSVState::STANDARD ||
@@ -213,11 +220,11 @@ struct SniffValue {
 		return false;
 	}
 
-	inline static void Finalize(CSVStateMachine &machine, vector<pair<idx_t, vector<Value>>> &sniffed_values) {
+	inline static void Finalize(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values) {
 		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
-			sniffed_values[machine.cur_rows].first = machine.rows_read;
-			sniffed_values[machine.cur_rows++].second.push_back(Value(machine.value));
+			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
+			sniffed_values[machine.cur_rows++].values.push_back(Value(machine.value));
 		}
 		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - machine.cur_rows), sniffed_values.end());
 	}
@@ -280,6 +287,7 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
 	}
 }
 
+
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	vector<LogicalType> return_types;
@@ -312,17 +320,17 @@ void CSVSniffer::DetectTypes() {
 		if (options.sample_chunk_size == 1) {
 			sample_size++;
 		}
-		vector<pair<idx_t, vector<Value>>> values(sample_size);
-		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, values);
+		vector<TupleSniffing> tuples(sample_size);
+		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
 		idx_t values_start = 0;
-		while (true_start < values.size()) {
-			if (values[true_start].second.empty()) {
-				true_start = values[true_start].first;
+		while (true_start < tuples.size()) {
+			if (tuples[true_start].values.empty()) {
+				true_start = tuples[true_start].line_number;
 				values_start++;
-			} else if (values[true_start].second.size() == 1 && values[true_start].second[0].IsNull()) {
-				true_start = values[true_start].first;
+			} else if (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull()) {
+				true_start = tuples[true_start].line_number;
 				values_start++;
 			} else {
 				break;
@@ -330,28 +338,32 @@ void CSVSniffer::DetectTypes() {
 		}
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
-		while (true_start < values.size()) {
-			if (values[true_start].second.size() < max_columns_found) {
-				true_start = values[true_start].first;
+		while (true_start < tuples.size()) {
+			if (tuples[true_start].values.size() < max_columns_found) {
+				true_start = tuples[true_start].line_number;
 				values_start++;
 			} else {
 				break;
 			}
 		}
 
-		values.erase(values.begin(), values.begin() + values_start);
+		tuples.erase(tuples.begin(), tuples.begin() + values_start);
 		idx_t row_idx = 0;
-		if (values.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
+		if (tuples.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
+		if (!tuples.empty()){
+			best_start_without_header = tuples[0].position;
+		}
+
 		// First line where we start our type detection
 		const idx_t start_idx_detection = row_idx;
-		for (; row_idx < values.size(); row_idx++) {
-			for (idx_t col = 0; col < values[row_idx].second.size(); col++) {
+		for (; row_idx < tuples.size(); row_idx++) {
+			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				auto cur_top_candidate = col_type_candidates.back();
-				auto dummy_val = values[row_idx].second[col];
+				auto dummy_val = tuples[row_idx].values[col];
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -408,7 +420,8 @@ void CSVSniffer::DetectTypes() {
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
-			best_header_row = values[0].second;
+			best_header_row = tuples[0].values;
+			best_start_with_header = tuples[0].position;
 		}
 	}
 

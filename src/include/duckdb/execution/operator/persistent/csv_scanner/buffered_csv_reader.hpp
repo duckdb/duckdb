@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 
 namespace duckdb {
@@ -27,21 +28,24 @@ class BufferedCSVReader : public BaseCSVReader {
 	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 
 public:
-	BufferedCSVReader(ClientContext &context, CSVReaderOptions options,
+	BufferedCSVReader(ClientContext &context, CSVReaderOptions options, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	BufferedCSVReader(ClientContext &context, string filename, CSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	virtual ~BufferedCSVReader() {
 	}
-
-	unsafe_unique_array<char> buffer;
+	char* buffer_ptr;
+	unsafe_unique_array<char> buffer_data;
 	idx_t buffer_size;
 	idx_t position;
 	idx_t start = 0;
+	idx_t buffer_idx = 0;
 
 	vector<unsafe_unique_array<char>> cached_buffers;
 
 	unique_ptr<CSVFileHandle> file_handle;
+	shared_ptr<CSVBufferManager> buffer_manager;
+	unique_ptr<CSVBufferHandle> buffer_handle;
 
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk

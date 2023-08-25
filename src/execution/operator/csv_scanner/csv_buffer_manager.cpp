@@ -56,7 +56,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	return false;
 }
 
-unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, bool const auto_detection) {
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, const bool  auto_detection) {
 	if (auto_detection) {
 		D_ASSERT(pos <= cached_buffers.size());
 		if (pos != 0) {

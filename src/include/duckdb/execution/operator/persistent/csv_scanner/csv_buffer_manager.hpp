@@ -60,6 +60,7 @@ public:
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
 	inline bool Process(CSVStateMachine &machine, T &result) {
+
 		OP::Initialize(machine);
 		//! If current buffer is not set we try to get a new one
 		if (!cur_buffer_handle) {
@@ -77,12 +78,12 @@ public:
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
 			while (cur_pos < cur_buffer_handle->actual_size) {
-				if (OP::Process(machine, result, buffer_handle_ptr[cur_pos++])) {
+				if (OP::Process(machine, result, buffer_handle_ptr[cur_pos], cur_pos)) {
 					//! Not-Done Processing the File, but the Operator is happy!
-					cur_pos--;
 					OP::Finalize(machine, result);
 					return false;
 				}
+				cur_pos++;
 			}
 			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 			cur_pos = 0;

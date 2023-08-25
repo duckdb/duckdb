@@ -12,7 +12,7 @@ struct SniffDialect {
 		machine.column_count = 1;
 	}
 
-	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char) {
+	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char, idx_t current_pos) {
 
 		D_ASSERT(sniffed_column_counts.size() == machine.options.sample_chunk_size);
 
@@ -144,6 +144,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
                                          idx_t prev_column_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
+
 	state_machine->csv_buffer_iterator.Process<SniffDialect>(*state_machine, sniffed_column_counts);
 	idx_t start_row = options.dialect_options.skip_rows;
 	idx_t consistent_rows = 0;

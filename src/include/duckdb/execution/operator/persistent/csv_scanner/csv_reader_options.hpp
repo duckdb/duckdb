@@ -64,6 +64,8 @@ struct DialectOptions {
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
+	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
+	idx_t true_start = 0;
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
