@@ -339,14 +339,19 @@ BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserialize
 	switch (GetStatsType(type)) {
 	case StatisticsType::NUMERIC_STATS:
 		stats = NumericStats::FormatDeserialize(deserializer, type);
+		break;
 	case StatisticsType::STRING_STATS:
 		stats = StringStats::FormatDeserialize(deserializer, type);
+		break;
 	case StatisticsType::LIST_STATS:
 		stats = ListStats::FormatDeserialize(deserializer, type);
+		break;
 	case StatisticsType::STRUCT_STATS:
 		stats = StructStats::FormatDeserialize(deserializer, type);
+		break;
 	default:
 		stats = BaseStatistics(std::move(type));
+		break;
 	}
 
 	stats.has_null = has_null;
