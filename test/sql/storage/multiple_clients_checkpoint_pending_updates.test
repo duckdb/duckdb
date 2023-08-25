@@ -19,6 +19,8 @@ UPDATE test SET i=i+1;
 
 statement error con2
 CHECKPOINT
+----
+TransactionContext Error: Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint
 
 statement ok con2
 FORCE CHECKPOINT
@@ -75,6 +77,8 @@ UPDATE test SET i=i+1 WHERE i > 3000 AND i < 4000
 
 statement error
 CHECKPOINT
+----
+TransactionContext Error: Cannot CHECKPOINT: there are other transactions. Use FORCE CHECKPOINT to abort the other transactions and force a checkpoint
 
 statement ok
 FORCE CHECKPOINT

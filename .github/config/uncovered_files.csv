@@ -162,7 +162,7 @@ execution/index/art/iterator.cpp	2
 execution/index/art/leaf.cpp	3
 execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	1
-execution/index/art/node48.cpp	5
+execution/index/art/node48.cpp	10
 execution/index/art/prefix.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
@@ -492,7 +492,7 @@ main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
 main/extension/extension_install.cpp	97
-main/extension/extension_load.cpp	59
+main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
 main/pending_query_result.cpp	5
