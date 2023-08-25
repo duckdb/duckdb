@@ -85,7 +85,6 @@ add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
 set(generated_loader_obj_files
     $<TARGET_OBJECTS:duckdb_generated_extension_loader>)
 
-
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
