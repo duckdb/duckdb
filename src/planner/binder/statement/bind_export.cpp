@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
@@ -164,7 +165,19 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// We can not export generated columns
 		for (auto &col : table.GetColumns().Physical()) {
-			info->select_list.push_back(make_uniq<ColumnRefExpression>(col.GetName()));
+			auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.GetName());
+			do {
+				if (!StringUtil::CIEquals(info->format, "parquet")) {
+					break;
+				}
+				if (ParquetWriter::TypeIsSupported(col.Type())) {
+					break;
+				}
+				// If the type is not supported by the Parquet Writer, we cast it to VARCHAR instead
+				// so that when the database is imported, it will be implicitly cast back from VARCHAR -> original type
+				expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(expr));
+			} while (false);
+			info->select_list.push_back(std::move(expr));
 		}
 
 		ExportedTableData exported_data;
