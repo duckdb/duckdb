@@ -184,7 +184,9 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	insert.catalog = stmt.info->catalog;
 	for (auto &expr : stmt.info->select_list) {
 		D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
-		insert.columns.push_back(expr->ToString());
+		auto &columnref = expr->Cast<ColumnRefExpression>();
+		D_ASSERT(!columnref.IsQualified());
+		insert.columns.push_back(columnref.ToString());
 	}
 
 	// bind the insert statement to the base table
