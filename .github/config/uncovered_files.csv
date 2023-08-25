@@ -621,7 +621,7 @@ parser/transform/statement/transform_pragma.cpp	11
 parser/transform/statement/transform_prepare.cpp	3
 parser/transform/statement/transform_rename.cpp	2
 parser/transform/statement/transform_select_node.cpp	4
-parser/transform/statement/transform_set.cpp	4
+parser/transform/statement/transform_set.cpp	8
 parser/transform/statement/transform_upsert.cpp	4
 parser/transform/tableref/transform_base_tableref.cpp	2
 parser/transform/tableref/transform_pivot.cpp	4
