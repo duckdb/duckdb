@@ -49,7 +49,11 @@ idx_t CSVBufferManager::GetStartPos() {
 bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
 	if (!last_buffer->IsCSVFileLastBuffer()) {
-		last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
+		auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, 0);
+		if (!maybe_last_buffer){
+			return false;
+		}
+		last_buffer = std::move(maybe_last_buffer);
 		cached_buffers.emplace_back(last_buffer);
 		return true;
 	}
