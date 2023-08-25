@@ -60,7 +60,7 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	// TODO: Get the actual offset
 	auto array_size = ArrayType::GetSize(type);
 	auto child_offset = row_idx * array_size;
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
+	D_ASSERT(child_offset <= child_column->GetMaxEntry()); // TODO: This assert fails
 
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);

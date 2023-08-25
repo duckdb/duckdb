@@ -176,7 +176,7 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		// child data so that len(payload_vector) == len(result_child).
 
 		auto child_count = array_size * count;
-		Vector payload_vector(child_type, child_count);
+		Vector payload_vector(source_cc.GetType(), child_count);
 		SelectionVector sel(child_count);
 
 		for (idx_t i = 0; i < count; i++) {
