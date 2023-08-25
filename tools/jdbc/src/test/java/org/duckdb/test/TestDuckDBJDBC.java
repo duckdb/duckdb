@@ -64,7 +64,6 @@ import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -3654,50 +3653,32 @@ public class TestDuckDBJDBC {
     }
 
     public static void test_race() throws Exception {
-        executeSimultaneousQueries(1000);
-    }
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:")) {
+            ExecutorService executorService = Executors.newFixedThreadPool(10);
 
-    private static final String SIMPLE_QUERY_SQL =
-        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'test' LIMIT 1;";
+            List<Callable<Object>> tasks = Collections.nCopies(1000, () -> {
+                try {
+                    try (PreparedStatement ps = connection.prepareStatement(
+                             "SELECT count(*) FROM information_schema.tables WHERE table_name = 'test' LIMIT 1;")) {
+                        ps.execute();
+                    }
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            List<Future<Object>> results = executorService.invokeAll(tasks);
 
-    private static void executeQuery(Connection connection) throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement(SIMPLE_QUERY_SQL)) {
-            ps.execute();
-        }
-    }
-
-    private static Connection createConnection() throws SQLException, ClassNotFoundException {
-        return DriverManager.getConnection("jdbc:duckdb:");
-    }
-
-    private static void executeSimultaneousQueries(int numberOfQueries) throws Exception {
-        Connection connection = createConnection();
-        ExecutorService executorService = Executors.newFixedThreadPool(10);
-
-        List<Future<Object>> results = executorService.invokeAll(java.util.stream.IntStream.range(0, numberOfQueries)
-                                                                     .mapToObj((i) -> {
-                                                                         java.util.concurrent.Callable<Object> res =
-                                                                             () -> {
-                                                                             try {
-                                                                                 executeQuery(connection);
-                                                                             } catch (SQLException e) {
-                                                                                 throw new RuntimeException(e);
-                                                                             }
-                                                                             return null;
-                                                                         };
-
-                                                                         return res;
-                                                                     })
-                                                                     .collect(java.util.stream.Collectors.toList()));
-
-        try {
-            for (Future<Object> future : results) {
-                future.get();
+            try {
+                for (Future<Object> future : results) {
+                    future.get();
+                }
+                fail("Should have thrown an exception");
+            } catch (java.util.concurrent.ExecutionException ee) {
+                assertEquals(
+                    ee.getCause().getCause().getMessage(),
+                    "Invalid Input Error: Attempting to execute an unsuccessful or closed pending query result");
             }
-            fail("Should have thrown an exception");
-        } catch (java.util.concurrent.ExecutionException ee) {
-            assertEquals(ee.getCause().getCause().getMessage(),
-                         "Invalid Input Error: Attempting to execute an unsuccessful or closed pending query result");
         }
     }
 
