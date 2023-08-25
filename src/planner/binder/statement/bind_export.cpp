@@ -164,7 +164,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 		// We can not export generated columns
 		for (auto &col : table.GetColumns().Physical()) {
-			info->select_list.push_back(col.GetName());
+			info->select_list.push_back(make_uniq<ColumnRefExpression>(col.GetName()));
 		}
 
 		ExportedTableData exported_data;
