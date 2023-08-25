@@ -11,7 +11,7 @@ DeserializedStatementVerifierV2::DeserializedStatementVerifierV2(unique_ptr<SQLS
 unique_ptr<StatementVerifier> DeserializedStatementVerifierV2::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
 
-	auto blob = BinarySerializer::Serialize(select_stmt, true); // <-- Serialize default values
+	auto blob = BinarySerializer::Serialize(select_stmt, /* serialize default values */ true);
 	auto result = BinaryDeserializer::Deserialize<SelectStatement>(blob.data(), blob.size());
 
 	return make_uniq<DeserializedStatementVerifierV2>(std::move(result));
@@ -27,7 +27,7 @@ unique_ptr<StatementVerifier>
 DeserializedStatementVerifierWithoutDefaultValuesV2::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
 
-	auto blob = BinarySerializer::Serialize(select_stmt, false); // <-- dont serialize default values
+	auto blob = BinarySerializer::Serialize(select_stmt, /* dont serialize default values */ false);
 	auto result = BinaryDeserializer::Deserialize<SelectStatement>(blob.data(), blob.size());
 
 	return make_uniq<DeserializedStatementVerifierWithoutDefaultValuesV2>(std::move(result));
