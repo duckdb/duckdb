@@ -270,6 +270,10 @@ void BaseStatistics::CopyValidity(BaseStatistics &stats) {
 	has_no_null = stats.has_no_null;
 }
 
+void BaseStatistics::SetDistinctCount(idx_t count) {
+	this->distinct_count = count;
+}
+
 void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<bool>(has_null);

@@ -71,7 +71,7 @@ void ColumnStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WritePropertyWithDefault(101, "distinct", distinct_stats, unique_ptr<DistinctStatistics>());
 }
 
-static shared_ptr<ColumnStatistics> FormatDeserialize(FormatDeserializer &deserializer) {
+shared_ptr<ColumnStatistics> ColumnStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
 	// TODO: do we read this as an property or into the object itself?
 	// we have this sort of pseudo inheritance going on here which is annoying
 	auto stats = BaseStatistics::FormatDeserialize(deserializer);
