@@ -31,13 +31,15 @@ bool BinaryDeserializer::HasTag(const field_id_t field_id, const char *tag) {
 //===--------------------------------------------------------------------===//
 void BinaryDeserializer::OnObjectBegin() {
 	auto start_offset = ptr;
-	auto expected_field_id = ReadPrimitive<uint32_t>();
-	auto expected_kind = ReadPrimitive<uint8_t>();
+	auto expected_field_id = ReadPrimitive<field_id_t>();
+	auto expected_field_type = ReadPrimitive<uint8_t>();
 	auto expected_size = ReadPrimitive<uint64_t>();
-	D_ASSERT(expected_size > 0);
-	D_ASSERT(expected_field_id == current_field_id);
-	D_ASSERT(expected_kind == static_cast<uint8_t>(BinaryMessageKind::VARIABLE_LEN));
-	(void)expected_kind;
+	if (expected_field_id != current_field_id) {
+		throw SerializationException("Expected field id %d, but got %d", current_field_id, expected_field_id);
+	}
+	if (expected_field_type != static_cast<uint8_t>(BinaryFieldType::VARIABLE_LEN)) {
+		throw SerializationException("Expected variable length field type, but got %d", expected_field_type);
+	}
 	stack.emplace_back(start_offset, expected_size, expected_field_id);
 }
 
@@ -102,62 +104,62 @@ void BinaryDeserializer::OnOptionalEnd() {
 // Primitive Types
 //===--------------------------------------------------------------------===//
 bool BinaryDeserializer::ReadBool() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
+	ReadField(current_field_id, BinaryFieldType::FIXED_8);
 	return ReadPrimitive<uint8_t>();
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
+	ReadField(current_field_id, BinaryFieldType::FIXED_8);
 	return ReadPrimitive<int8_t>();
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_8);
+	ReadField(current_field_id, BinaryFieldType::FIXED_8);
 	return ReadPrimitive<uint8_t>();
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_16);
+	ReadField(current_field_id, BinaryFieldType::FIXED_16);
 	return ReadPrimitive<int16_t>();
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_16);
+	ReadField(current_field_id, BinaryFieldType::FIXED_16);
 	return ReadPrimitive<uint16_t>();
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
+	ReadField(current_field_id, BinaryFieldType::FIXED_32);
 	return ReadPrimitive<int32_t>();
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
+	ReadField(current_field_id, BinaryFieldType::FIXED_32);
 	return ReadPrimitive<uint32_t>();
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
+	ReadField(current_field_id, BinaryFieldType::FIXED_64);
 	return ReadPrimitive<int64_t>();
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
+	ReadField(current_field_id, BinaryFieldType::FIXED_64);
 	return ReadPrimitive<uint64_t>();
 }
 
 float BinaryDeserializer::ReadFloat() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_32);
+	ReadField(current_field_id, BinaryFieldType::FIXED_32);
 	return ReadPrimitive<float>();
 }
 
 double BinaryDeserializer::ReadDouble() {
-	ReadField(current_field_id, BinaryMessageKind::FIXED_64);
+	ReadField(current_field_id, BinaryFieldType::FIXED_64);
 	return ReadPrimitive<double>();
 }
 
 string BinaryDeserializer::ReadString() {
-	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
 	auto len = ReadPrimitive<uint64_t>();
 	if (len == 0) {
 		return string();
@@ -168,17 +170,18 @@ string BinaryDeserializer::ReadString() {
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
-	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
 	ReadPrimitive<uint64_t>();
 	return ReadPrimitive<hugeint_t>();
 }
 
-void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
-	ReadField(current_field_id, BinaryMessageKind::VARIABLE_LEN);
+void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {
+	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
 	auto len = ReadPrimitive<uint64_t>();
-	D_ASSERT(len == count);
-	(void)len;
-	ReadData(ptr, count);
+	if (len != count) {
+		throw SerializationException("Tried to read blob of %d size, but only %d elements are available", count, len);
+	}
+	ReadData(ptr_p, count);
 }
 
 } // namespace duckdb

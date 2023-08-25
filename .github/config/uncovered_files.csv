@@ -50,7 +50,7 @@ common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
 common/row_operations/row_gather.cpp	11
 common/row_operations/row_match.cpp	4
-common/serializer/binary_deserializer.cpp	12
+common/serializer/binary_deserializer.cpp	13
 common/serializer/binary_serializer.cpp	21
 common/serializer/buffered_deserializer.cpp	3
 common/serializer/buffered_file_reader.cpp	11

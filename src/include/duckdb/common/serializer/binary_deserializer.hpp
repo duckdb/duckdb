@@ -74,16 +74,16 @@ private:
 		ptr += read_size;
 	}
 
-	void ReadField(field_id_t field_id, BinaryMessageKind kind) {
-		auto read_field_id = ReadPrimitive<uint32_t>();
+	void ReadField(field_id_t field_id, BinaryFieldType type) {
+		auto read_field_id = ReadPrimitive<field_id_t>();
 		if (read_field_id != field_id) {
 			throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
 			                        read_field_id);
 		}
-		auto read_kind = static_cast<BinaryMessageKind>(ReadPrimitive<uint8_t>());
-		if (read_kind != kind) {
-			throw InternalException("Failed to deserialize: message kind mismatch, expected: %d, got: %d", kind,
-			                        read_kind);
+		auto read_field_type = static_cast<BinaryFieldType>(ReadPrimitive<uint8_t>());
+		if (read_field_type != type) {
+			throw InternalException("Failed to deserialize: field type mismatch, expected: %d, got: %d", type,
+			                        read_field_type);
 		}
 	}
 

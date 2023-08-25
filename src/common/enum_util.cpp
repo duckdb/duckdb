@@ -524,17 +524,17 @@ ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *va
 }
 
 template<>
-const char* EnumUtil::ToChars<BinaryMessageKind>(BinaryMessageKind value) {
+const char* EnumUtil::ToChars<BinaryFieldType>(BinaryFieldType value) {
 	switch(value) {
-	case BinaryMessageKind::FIXED_8:
+	case BinaryFieldType::FIXED_8:
 		return "FIXED_8";
-	case BinaryMessageKind::FIXED_16:
+	case BinaryFieldType::FIXED_16:
 		return "FIXED_16";
-	case BinaryMessageKind::FIXED_32:
+	case BinaryFieldType::FIXED_32:
 		return "FIXED_32";
-	case BinaryMessageKind::FIXED_64:
+	case BinaryFieldType::FIXED_64:
 		return "FIXED_64";
-	case BinaryMessageKind::VARIABLE_LEN:
+	case BinaryFieldType::VARIABLE_LEN:
 		return "VARIABLE_LEN";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
@@ -542,21 +542,21 @@ const char* EnumUtil::ToChars<BinaryMessageKind>(BinaryMessageKind value) {
 }
 
 template<>
-BinaryMessageKind EnumUtil::FromString<BinaryMessageKind>(const char *value) {
+BinaryFieldType EnumUtil::FromString<BinaryFieldType>(const char *value) {
 	if (StringUtil::Equals(value, "FIXED_8")) {
-		return BinaryMessageKind::FIXED_8;
+		return BinaryFieldType::FIXED_8;
 	}
 	if (StringUtil::Equals(value, "FIXED_16")) {
-		return BinaryMessageKind::FIXED_16;
+		return BinaryFieldType::FIXED_16;
 	}
 	if (StringUtil::Equals(value, "FIXED_32")) {
-		return BinaryMessageKind::FIXED_32;
+		return BinaryFieldType::FIXED_32;
 	}
 	if (StringUtil::Equals(value, "FIXED_64")) {
-		return BinaryMessageKind::FIXED_64;
+		return BinaryFieldType::FIXED_64;
 	}
 	if (StringUtil::Equals(value, "VARIABLE_LEN")) {
-		return BinaryMessageKind::VARIABLE_LEN;
+		return BinaryFieldType::VARIABLE_LEN;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
