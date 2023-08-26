@@ -1,3 +1,6 @@
+# name: test/sql/index/create_index_options.test
+# group: [index]
+
 statement ok
 CREATE TABlE t1 (foo INT)
 
