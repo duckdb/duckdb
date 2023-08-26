@@ -47,7 +47,7 @@ public:
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
-	vector<BlockPointer> SerializeIndexes(duckdb::MetaBlockWriter &writer);
+	vector<BlockPointer> SerializeIndexes(duckdb::MetadataWriter &writer);
 
 	vector<column_t> GetRequiredColumns();
 

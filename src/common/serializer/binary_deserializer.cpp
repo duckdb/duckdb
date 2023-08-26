@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-void BinaryDeserializer::SetTag(const char *tag) {
+void BinaryDeserializer::SetTag(const field_id_t field_id, const char *tag) {
+	current_field_id = field_id;
 	current_tag = tag;
 	stack.back().read_field_count++;
 	if (stack.back().read_field_count > stack.back().expected_field_count) {
@@ -14,12 +15,13 @@ void BinaryDeserializer::SetTag(const char *tag) {
 // Nested Types Hooks
 //===--------------------------------------------------------------------===//
 void BinaryDeserializer::OnObjectBegin() {
+	auto expected_field_id = ReadPrimitive<field_id_t>();
 	auto expected_field_count = ReadPrimitive<uint32_t>();
 	auto expected_size = ReadPrimitive<uint64_t>();
 	D_ASSERT(expected_field_count > 0);
 	D_ASSERT(expected_size > 0);
-
-	stack.emplace_back(expected_field_count, expected_size);
+	D_ASSERT(expected_field_id == current_field_id);
+	stack.emplace_back(expected_field_count, expected_size, expected_field_id);
 }
 
 void BinaryDeserializer::OnObjectEnd() {

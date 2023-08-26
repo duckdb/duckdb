@@ -200,6 +200,8 @@ enum class PhysicalType : uint8_t;
 
 enum class PragmaType : uint8_t;
 
+enum class PreparedParamType : uint8_t;
+
 enum class ProfilerPrintFormat : uint8_t;
 
 enum class QueryNodeType : uint8_t;
@@ -532,6 +534,9 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template<>
 const char* EnumUtil::ToChars<PragmaType>(PragmaType value);
+
+template<>
+const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value);
 
 template<>
 const char* EnumUtil::ToChars<ProfilerPrintFormat>(ProfilerPrintFormat value);
@@ -905,6 +910,9 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
 
 template<>
 PragmaType EnumUtil::FromString<PragmaType>(const char *value);
+
+template<>
+PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value);
 
 template<>
 ProfilerPrintFormat EnumUtil::FromString<ProfilerPrintFormat>(const char *value);

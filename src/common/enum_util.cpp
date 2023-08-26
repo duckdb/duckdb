@@ -71,7 +71,7 @@
 #include "duckdb/function/macro_function.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/config.hpp"
@@ -81,6 +81,7 @@
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -1153,6 +1154,8 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::JULIAN_DAY:
+		return "JULIAN_DAY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1228,6 +1231,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
+	}
+	if (StringUtil::Equals(value, "JULIAN_DAY")) {
+		return DatePartSpecifier::JULIAN_DAY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -3876,6 +3882,8 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 		return "RESULT_NOT_READY";
 	case PendingExecutionResult::EXECUTION_ERROR:
 		return "EXECUTION_ERROR";
+	case PendingExecutionResult::NO_TASKS_AVAILABLE:
+		return "NO_TASKS_AVAILABLE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -3891,6 +3899,9 @@ PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *
 	}
 	if (StringUtil::Equals(value, "EXECUTION_ERROR")) {
 		return PendingExecutionResult::EXECUTION_ERROR;
+	}
+	if (StringUtil::Equals(value, "NO_TASKS_AVAILABLE")) {
+		return PendingExecutionResult::NO_TASKS_AVAILABLE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4405,6 +4416,39 @@ PragmaType EnumUtil::FromString<PragmaType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PRAGMA_CALL")) {
 		return PragmaType::PRAGMA_CALL;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<PreparedParamType>(PreparedParamType value) {
+	switch(value) {
+	case PreparedParamType::AUTO_INCREMENT:
+		return "AUTO_INCREMENT";
+	case PreparedParamType::POSITIONAL:
+		return "POSITIONAL";
+	case PreparedParamType::NAMED:
+		return "NAMED";
+	case PreparedParamType::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+PreparedParamType EnumUtil::FromString<PreparedParamType>(const char *value) {
+	if (StringUtil::Equals(value, "AUTO_INCREMENT")) {
+		return PreparedParamType::AUTO_INCREMENT;
+	}
+	if (StringUtil::Equals(value, "POSITIONAL")) {
+		return PreparedParamType::POSITIONAL;
+	}
+	if (StringUtil::Equals(value, "NAMED")) {
+		return PreparedParamType::NAMED;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return PreparedParamType::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -4,7 +4,9 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/index.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
@@ -15,10 +17,10 @@ namespace duckdb {
 PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table_p,
                                                const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
                                                vector<unique_ptr<Expression>> unbound_expressions,
-                                               idx_t estimated_cardinality)
+                                               idx_t estimated_cardinality, const bool sorted)
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
-      table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
-      unbound_expressions(std::move(unbound_expressions)) {
+      table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
+      sorted(sorted) {
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
@@ -75,42 +77,64 @@ unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionCo
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSinkInput &input) const {
+SinkResultType PhysicalCreateARTIndex::SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const {
 
-	D_ASSERT(chunk.ColumnCount() >= 2);
-	auto &lstate = input.local_state.Cast<CreateARTIndexLocalSinkState>();
-	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
+	auto count = l_state.key_chunk.size();
 
-	// generate the keys for the given input
-	lstate.key_chunk.ReferenceColumns(chunk, lstate.key_column_ids);
-	lstate.arena_allocator.Reset();
-	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
+	// get the corresponding row IDs
+	row_identifiers.Flatten(count);
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
+	// insert the row IDs
+	auto &art = l_state.local_index->Cast<ART>();
+	for (idx_t i = 0; i < count; i++) {
+		if (!art.Insert(*art.tree, l_state.keys[i], 0, row_ids[i])) {
+			throw ConstraintException("Data contains duplicates on indexed column(s)");
+		}
+	}
+
+	return SinkResultType::NEED_MORE_INPUT;
+}
+
+SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const {
+
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto &storage = table.GetStorage();
-	auto art = make_uniq<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
-	                          lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db);
-	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
+	auto &l_index = l_state.local_index;
+
+	// create an ART from the chunk
+	auto art = make_uniq<ART>(l_index->column_ids, l_index->table_io_manager, l_index->unbound_expressions,
+	                          l_index->constraint_type, storage.db, l_index->Cast<ART>().allocators);
+	if (!art->ConstructFromSorted(l_state.key_chunk.size(), l_state.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
 	// merge into the local ART
-	if (!lstate.local_index->MergeIndexes(*art)) {
+	if (!l_index->MergeIndexes(*art)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
-#ifdef DEBUG
-	// ensure that all row IDs of this chunk exist in the ART
-	auto &local_art = lstate.local_index->Cast<ART>();
-	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
-		auto leaf = local_art.Lookup(*local_art.tree, lstate.keys[i], 0);
-		D_ASSERT(leaf.IsSet());
-		D_ASSERT(Leaf::ContainsRowId(local_art, leaf, row_ids[i]));
-	}
-#endif
-
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
+
+	D_ASSERT(chunk.ColumnCount() >= 2);
+
+	// generate the keys for the given input
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
+	l_state.key_chunk.ReferenceColumns(chunk, l_state.key_column_ids);
+	l_state.arena_allocator.Reset();
+	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
+
+	// insert the keys and their corresponding row IDs
+	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
+	if (sorted) {
+		return SinkSorted(row_identifiers, input);
+	}
+	return SinkUnsorted(row_identifiers, input);
 }
 
 SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
@@ -124,18 +148,17 @@ SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
-	// vacuum excess memory
-	gstate.global_index->Vacuum();
-
 	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   OperatorSinkFinalizeInput &input) const {
 
-	// here, we just set the resulting global index as the newly created index of the table
-
+	// here, we set the resulting global index as the newly created index of the table
 	auto &state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+
+	// vacuum excess memory and verify
+	state.global_index->Vacuum();
 	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	auto &storage = table.GetStorage();

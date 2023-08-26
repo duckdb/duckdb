@@ -8,6 +8,7 @@
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
@@ -340,6 +341,22 @@ vector<unique_ptr<ParsedExpression>> Parser::ParseExpressionList(const string &s
 	return std::move(select_node.select_list);
 }
 
+GroupByNode Parser::ParseGroupByList(const string &group_by, ParserOptions options) {
+	// construct a mock SELECT query with our group_by expressions
+	string mock_query = StringUtil::Format("SELECT 42 GROUP BY %s", group_by);
+	// parse the query
+	Parser parser(options);
+	parser.ParseQuery(mock_query);
+	// check the result
+	if (parser.statements.size() != 1 || parser.statements[0]->type != StatementType::SELECT_STATEMENT) {
+		throw ParserException("Expected a single SELECT statement");
+	}
+	auto &select = parser.statements[0]->Cast<SelectStatement>();
+	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
+	auto &select_node = select.node->Cast<SelectNode>();
+	return std::move(select_node.groups);
+}
+
 vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOptions options) {
 	// construct a mock query
 	string mock_query = "SELECT * FROM tbl ORDER BY " + select_list;
@@ -351,9 +368,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw ParserException("Expected a single SELECT node");
-	}
+	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = select.node->Cast<SelectNode>();
 	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER ||
 	    select_node.modifiers.size() != 1) {

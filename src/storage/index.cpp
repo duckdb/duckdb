@@ -86,7 +86,7 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
 	return false;
 }
 
-BlockPointer Index::Serialize(MetaBlockWriter &writer) {
+BlockPointer Index::Serialize(MetadataWriter &writer) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
 }
 

@@ -204,19 +204,19 @@ static idx_t FindTypedRangeBound(const WindowInputColumn &over, const idx_t orde
 	WindowColumnIterator<T> begin(over, order_begin);
 	WindowColumnIterator<T> end(over, order_end);
 
-	if (order_begin < prev.first && prev.first < order_end) {
-		const auto first = over.GetCell<T>(prev.first);
+	if (order_begin < prev.start && prev.start < order_end) {
+		const auto first = over.GetCell<T>(prev.start);
 		if (!comp(val, first)) {
 			//	prev.first <= val, so we can start further forward
-			begin += (prev.first - order_begin);
+			begin += (prev.start - order_begin);
 		}
 	}
-	if (order_begin <= prev.second && prev.second < order_end) {
-		const auto second = over.GetCell<T>(prev.second);
+	if (order_begin <= prev.end && prev.end < order_end) {
+		const auto second = over.GetCell<T>(prev.end);
 		if (!comp(second, val)) {
 			//	val <= prev.second, so we can end further back
 			// (prev.second is the largest peer)
-			end -= (order_end - prev.second - 1);
+			end -= (order_end - prev.end - 1);
 		}
 	}
 
@@ -278,8 +278,6 @@ static idx_t FindOrderedRangeBound(const WindowInputColumn &over, const OrderTyp
 }
 
 struct WindowBoundariesState {
-	using FrameBounds = std::pair<idx_t, idx_t>;
-
 	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
 		return expr ? expr->IsScalar() : true;
 	}
@@ -317,6 +315,7 @@ struct WindowBoundariesState {
 	const bool has_following_range;
 	const bool needs_peer;
 
+	idx_t next_pos = 0;
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
 	idx_t peer_start = 0;
@@ -341,11 +340,18 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
 		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+		const auto is_jump = (next_pos != row_idx);
 
 		// when the partition changes, recompute the boundaries
-		if (!is_same_partition) {
+		if (!is_same_partition || is_jump) {
 			partition_start = row_idx;
 			peer_start = row_idx;
+
+			if (is_jump) {
+				//	Go back as far as the previous partition start
+				idx_t n = 1;
+				partition_start = FindPrevStart(partition_mask, partition_start, row_idx + 1, n);
+			}
 
 			// find end of partition
 			partition_end = input_size;
@@ -375,8 +381,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 				}
 
 				//	Reset range hints
-				prev.first = valid_start;
-				prev.second = valid_end;
+				prev.start = valid_start;
+				prev.end = valid_end;
 			}
 		} else if (!is_peer) {
 			peer_start = row_idx;
@@ -395,6 +401,7 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		partition_end = input_size;
 		peer_end = partition_end;
 	}
+	next_pos = row_idx + 1;
 
 	// determine window boundaries depending on the type of expression
 	window_start = -1;
@@ -427,9 +434,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.first = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
 			                                         boundary_start, chunk_idx, prev);
-			window_start = prev.first;
+			window_start = prev.start;
 		}
 		break;
 	}
@@ -437,9 +444,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.first = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, boundary_start,
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, boundary_start,
 			                                         chunk_idx, prev);
-			window_start = prev.first;
+			window_start = prev.start;
 		}
 		break;
 	}
@@ -472,9 +479,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.second = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx,
-			                                           boundary_end, chunk_idx, prev);
-			window_end = prev.second;
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, boundary_end,
+			                                        chunk_idx, prev);
+			window_end = prev.end;
 		}
 		break;
 	}
@@ -482,9 +489,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, const WindowInputColumn 
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.second = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, boundary_end,
-			                                           chunk_idx, prev);
-			window_end = prev.second;
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, boundary_end,
+			                                        chunk_idx, prev);
+			window_end = prev.end;
 		}
 		break;
 	}
@@ -1156,9 +1163,9 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector
 		}
 		int64_t val_idx = (int64_t)row_idx;
 		if (wexpr.type == ExpressionType::WINDOW_LEAD) {
-			val_idx += offset;
+			val_idx = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		} else {
-			val_idx -= offset;
+			val_idx = SubtractOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(val_idx, offset);
 		}
 
 		idx_t delta = 0;
@@ -1193,10 +1200,9 @@ void WindowFirstValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vec
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		//	Same as NTH_VALUE(..., 1)
@@ -1221,10 +1227,9 @@ void WindowLastValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		idx_t n = 1;
@@ -1250,10 +1255,9 @@ void WindowNthValueExecutor::EvaluateInternal(WindowExecutorState &lstate, Vecto
 	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
 	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
+			FlatVector::SetNull(result, i, true);
 			continue;
 		}
 		// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);

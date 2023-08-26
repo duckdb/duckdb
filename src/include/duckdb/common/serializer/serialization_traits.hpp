@@ -1,5 +1,7 @@
 #pragma once
 #include <type_traits>
+#include <cstdint>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -9,6 +11,8 @@ namespace duckdb {
 
 class FormatSerializer;   // Forward declare
 class FormatDeserializer; // Forward declare
+
+typedef uint32_t field_id_t;
 
 // Backport to c++11
 template <class...>
