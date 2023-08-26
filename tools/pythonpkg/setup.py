@@ -105,7 +105,7 @@ if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != 
     try:
         from pybind11.setup_helpers import ParallelCompile
     except ImportError:
-        logging.warn('Pybind11 not available yet')
+        logging.warning('Pybind11 not available yet')
     else:
         ParallelCompile().install()
 
