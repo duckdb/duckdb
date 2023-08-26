@@ -263,6 +263,9 @@ clreldebug:
 
 extension_configuration: build/extension_configuration/vcpkg.json
 
+extension/extension_config_local.cmake:
+	touch extension/extension_config_local.cmake
+
 build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake extension/extension_config.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
