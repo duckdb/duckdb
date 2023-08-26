@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+import logging
 import os
 import sys
 import platform
@@ -102,9 +102,12 @@ def parallel_cpp_compile(
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
 if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
-    import distutils.ccompiler
-
-    distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
+    try:
+        from pybind11.setup_helpers import ParallelCompile
+    except ImportError:
+        logging.warn('Pybind11 not available yet')
+    else:
+        ParallelCompile().install()
 
 
 def open_utf8(fpath, flags):
