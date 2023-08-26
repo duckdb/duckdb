@@ -95,7 +95,7 @@ common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	10
 common/types/value.cpp	180
-common/types/vector.cpp	132
+common/types/vector.cpp	153
 common/value_operations/comparison_operations.cpp	32
 common/vector_operations/generators.cpp	29
 common/vector_operations/is_distinct_from.cpp	49
@@ -330,6 +330,7 @@ include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
 include/duckdb/catalog/catalog_set.hpp	2
 include/duckdb/catalog/mapping_value.hpp	2
 include/duckdb/common/allocator.hpp	2
+include/duckdb/common/serializer/binary_deserializer.hpp	2
 include/duckdb/common/bit_utils.hpp	4
 include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
