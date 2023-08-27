@@ -209,6 +209,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         ls
         mv build/release/extension build/extension_tmp
+        rm -rf build/release
         VCPKG_TOOLCHAIN_PATH="" make
         ls
 
