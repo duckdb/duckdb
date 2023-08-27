@@ -186,7 +186,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
 		auto &columnref = expr->Cast<ColumnRefExpression>();
 		D_ASSERT(!columnref.IsQualified());
-		insert.columns.push_back(columnref.ToString());
+		insert.columns.push_back(columnref.GetColumnName());
 	}
 
 	// bind the insert statement to the base table
