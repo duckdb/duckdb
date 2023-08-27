@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-enum class BinaryMessageKind : uint8_t {
+enum class BinaryFieldType : uint8_t {
 	FIXED_8 = 1,      // 1 byte
 	FIXED_16 = 2,     // 2 bytes
 	FIXED_32 = 3,     // 4 bytes

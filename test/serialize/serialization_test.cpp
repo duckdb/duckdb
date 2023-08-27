@@ -38,7 +38,7 @@ struct Foo {
 	}
 };
 
-TEST_CASE("Test default", "[serialization]") {
+TEST_CASE("Test default values", "[serialization]") {
 
 	Foo foo_in;
 	foo_in.a = 42;

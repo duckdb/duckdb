@@ -36,7 +36,7 @@ unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, c
 	case VerificationType::DESERIALIZED_V2:
 		return DeserializedStatementVerifierV2::Create(statement_p);
 	case VerificationType::DESERIALIZED_V2_NO_DEFAULT:
-		return DeserializedStatementVerifierWithoutDefaultValuesV2::Create(statement_p);
+		return DeserializedStatementVerifierNoDefaultV2::Create(statement_p);
 	case VerificationType::PARSED:
 		return ParsedStatementVerifier::Create(statement_p);
 	case VerificationType::UNOPTIMIZED:

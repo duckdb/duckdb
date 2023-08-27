@@ -32,6 +32,8 @@ private:
 		}
 
 #ifdef DEBUG
+		unordered_set<const char *> seen_field_tags;
+		unordered_set<field_id_t> seen_field_ids;
 		vector<pair<const char *, field_id_t>> seen_fields;
 #endif
 	};
@@ -55,10 +57,10 @@ private:
 		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
 	}
 
-	void WriteField(field_id_t field_id, BinaryMessageKind kind) {
+	void WriteField(field_id_t field_id, BinaryFieldType type) {
 		// We reserve 3 bits for kind and 1 bit for future use
 		D_ASSERT(field_id < (1 << 28));
-		uint32_t header = ((field_id << 4) | (static_cast<uint32_t>(kind) & 0x7));
+		uint32_t header = ((field_id << 4) | (static_cast<uint32_t>(type) & 0x7));
 		Write<uint32_t>(header);
 	}
 
@@ -68,6 +70,9 @@ private:
 	}
 
 public:
+	//! Serializes the given object into a binary blob, optionally serializing default values if
+	//! serialize_default_values is set to true, otherwise properties set to their provided default value
+	//! will not be serialized
 	template <class T>
 	static vector<data_t> Serialize(T &obj, bool serialize_default_values) {
 		BinarySerializer serializer(serialize_default_values);
@@ -82,10 +87,12 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
+	// We serialize optional values as a message with a "present" flag, followed by the value.
 	void OnOptionalBegin(bool present) final;
 	void OnOptionalEnd(bool present) final;
 	void OnListBegin(idx_t count) final;
 	void OnListEnd(idx_t count) final;
+	// Serialize maps as arrays of objects with "key" and "value" properties.
 	void OnMapBegin(idx_t count) final;
 	void OnMapEntryBegin() final;
 	void OnMapEntryEnd() final;
