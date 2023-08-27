@@ -173,7 +173,7 @@ jobs:
     - name: Install
       shell: bash
       run: |
-        pip install cibuildwheel twine pip setuptools -U
+        pip install cibuildwheel twine pip setuptools wheel -U
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
