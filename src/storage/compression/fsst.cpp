@@ -461,7 +461,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	    &sizes_in[0],         /* IN: byte-lengths of the inputs */
 	    &strings_in[0],       /* IN: input string start pointers. */
 	    compress_buffer_size, /* IN: byte-length of output buffer. */
-	    &compress_buffer[0],  /* OUT: memorxy buffer to put the compressed strings in (one after the other). */
+	    &compress_buffer[0],  /* OUT: memory buffer to put the compressed strings in (one after the other). */
 	    &sizes_out[0],        /* OUT: byte-lengths of the compressed strings. */
 	    &strings_out[0]       /* OUT: output string start pointers. Will all point into [output,output+size). */
 	);
