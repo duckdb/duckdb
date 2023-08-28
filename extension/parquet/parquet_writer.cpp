@@ -156,6 +156,32 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 
 bool ParquetWriter::TypeIsSupported(const LogicalType &type) {
 	Type::type unused;
+	auto id = type.id();
+	if (id == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildType(type);
+		return TypeIsSupported(child_type);
+	}
+	if (id == LogicalTypeId::STRUCT) {
+		auto &children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			auto &child_type = child.second;
+			if (!TypeIsSupported(child_type)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	if (id == LogicalTypeId::MAP) {
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		if (!TypeIsSupported(key_type)) {
+			return false;
+		}
+		if (!TypeIsSupported(value_type)) {
+			return false;
+		}
+		return true;
+	}
 	return DuckDBTypeToParquetTypeInternal(type, unused);
 }
 
