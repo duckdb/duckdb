@@ -68,7 +68,7 @@ struct DebugForceNoCrossProduct {
 struct OrderedAggregateThreshold {
 	static constexpr const char *Name = "ordered_aggregate_threshold"; // NOLINT
 	static constexpr const char *Description =                         // NOLINT
-	    "the number of rows to accumulate before sorting, used for tuning";
+	    "The number of rows to accumulate before sorting, used for tuning";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::UBIGINT; // NOLINT
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
@@ -225,6 +225,7 @@ struct EnableProgressBarSetting {
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(ClientContext &context);
 };
+
 struct EnableProgressBarPrintSetting {
 	static constexpr const char *Name = "enable_progress_bar_print";
 	static constexpr const char *Description =
@@ -232,15 +233,6 @@ struct EnableProgressBarPrintSetting {
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
-	static Value GetSetting(ClientContext &context);
-};
-
-struct ExperimentalParallelCSVSetting {
-	static constexpr const char *Name = "experimental_parallel_csv";
-	static constexpr const char *Description = "Whether or not to use the experimental parallel CSV reader";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
-	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
-	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
 	static Value GetSetting(ClientContext &context);
 };
 
