@@ -157,8 +157,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Find the first group to sort
-	auto &groups = state.global_partition->grouping_data->GetPartitions();
-	if (groups.empty()) {
+	if (!state.global_partition->HasMergeTasks()) {
 		// Empty input!
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -532,7 +531,7 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 	if (hash_bin < bin_count) {
 		//	Find a non-empty hash group.
 		for (; hash_bin < hash_groups.size(); hash_bin = next_build++) {
-			if (hash_groups[hash_bin]) {
+			if (hash_groups[hash_bin] && hash_groups[hash_bin]->count) {
 				auto result = CreateTask(hash_bin);
 				if (result.second) {
 					return result;
@@ -550,7 +549,7 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 	}
 
 	//	Work stealing
-	while (tasks_remaining) {
+	while (tasks_remaining && !context.interrupted) {
 		auto result = StealWork();
 		if (result.second) {
 			return result;

@@ -163,8 +163,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort
-	auto &groups = gstate.rhs_sink.grouping_data->GetPartitions();
-	if (groups.empty() && EmptyResultIfRHSIsEmpty()) {
+	if (!gstate.rhs_sink.HasMergeTasks() && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -760,8 +759,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 
 	//	Step 3: Join the partitions
 	auto &lhs_sink = *gsource.gsink.lhs_sink;
-	auto &partitions = lhs_sink.grouping_data->GetPartitions();
-	const auto left_bins = partitions.size();
+	const auto left_bins = lhs_sink.grouping_data ? lhs_sink.grouping_data->GetPartitions().size() : 1;
 	while (gsource.flushed < left_bins) {
 		//	Make sure we have something to flush
 		if (!lsource.probe_buffer.Scanning()) {
