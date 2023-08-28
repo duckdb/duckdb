@@ -706,11 +706,11 @@ bool hugeint_t::operator>=(const hugeint_t &rhs) const {
 }
 
 hugeint_t hugeint_t::operator+(const hugeint_t &rhs) const {
-	return Hugeint::Add(*this, rhs);
+	return hugeint_t(upper + rhs.upper + ((lower + rhs.lower) < lower), lower + rhs.lower);
 }
 
 hugeint_t hugeint_t::operator-(const hugeint_t &rhs) const {
-	return Hugeint::Subtract(*this, rhs);
+	return hugeint_t(upper - rhs.upper - ((lower - rhs.lower) > lower), lower - rhs.lower);
 }
 
 hugeint_t hugeint_t::operator*(const hugeint_t &rhs) const {
@@ -808,11 +808,11 @@ hugeint_t hugeint_t::operator~() const {
 }
 
 hugeint_t &hugeint_t::operator+=(const hugeint_t &rhs) {
-	Hugeint::AddInPlace(*this, rhs);
+	*this = *this + rhs;
 	return *this;
 }
 hugeint_t &hugeint_t::operator-=(const hugeint_t &rhs) {
-	Hugeint::SubtractInPlace(*this, rhs);
+	*this = *this - rhs;
 	return *this;
 }
 hugeint_t &hugeint_t::operator*=(const hugeint_t &rhs) {

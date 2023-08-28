@@ -542,15 +542,11 @@ bool uhugeint_t::operator>=(const uhugeint_t &rhs) const {
 }
 
 uhugeint_t uhugeint_t::operator+(const uhugeint_t &rhs) const {
-	uhugeint_t result = *this;
-	result += rhs;
-	return result;
+	return uhugeint_t(upper + rhs.upper + ((lower + rhs.lower) < lower), lower + rhs.lower);
 }
 
 uhugeint_t uhugeint_t::operator-(const uhugeint_t &rhs) const {
-	uhugeint_t result = *this;
-	result -= rhs;
-	return result;
+	return uhugeint_t(upper - rhs.upper - ((lower - rhs.lower) > lower), lower - rhs.lower);
 }
 
 uhugeint_t uhugeint_t::operator*(const uhugeint_t &rhs) const {
@@ -632,13 +628,11 @@ uhugeint_t uhugeint_t::operator~() const {
 }
 
 uhugeint_t &uhugeint_t::operator+=(const uhugeint_t &rhs) {
-	upper += rhs.upper + ((lower + rhs.lower) < lower);
-	lower += rhs.lower;
+	*this = *this + rhs;
 	return *this;
 }
 uhugeint_t &uhugeint_t::operator-=(const uhugeint_t &rhs) {
-	upper -= rhs.upper - ((lower - rhs.lower) > lower);
-	lower -= rhs.lower;
+	*this = *this - rhs;
 	return *this;
 }
 uhugeint_t &uhugeint_t::operator*=(const uhugeint_t &rhs) {
