@@ -35,7 +35,7 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr,
+         AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const BlockPointer &pointer)
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
       allocators(allocators_ptr), owns_data(false) {
@@ -46,17 +46,16 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// initialize all allocators
 	if (!allocators) {
 		owns_data = true;
-		allocators = make_shared<vector<FixedSizeAllocator>>();
+		auto &block_manager = table_io_manager.GetIndexBlockManager();
 
-		auto &allocator = buffer_manager.GetBufferAllocator();
-		auto &metadata_manager = table_io_manager.GetMetadataManager();
-
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Prefix), allocator, metadata_manager));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Leaf), allocator, metadata_manager));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node4), allocator, metadata_manager));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node16), allocator, metadata_manager));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node48), allocator, metadata_manager));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), allocator, metadata_manager));
+		array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
+		    make_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
+		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
 	if (pointer.IsValid()) {
@@ -981,7 +980,7 @@ BlockPointer ART::Serialize(MetadataWriter &writer) {
 	lock_guard<mutex> l(lock);
 	vector<BlockPointer> allocator_pointers;
 	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator.Serialize(writer));
+		allocator_pointers.push_back(allocator->Serialize(writer));
 	}
 
 	root_block_pointer = writer.GetBlockPointer();
@@ -1000,7 +999,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	tree = reader.Read<Node>();
 
 	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
-		(*allocators)[i].Deserialize(reader.Read<BlockPointer>());
+		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
 	}
 }
 
@@ -1012,7 +1011,7 @@ void ART::InitializeVacuum(ARTFlags &flags) {
 
 	flags.vacuum_flags.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.vacuum_flags.push_back(allocator.InitializeVacuum());
+		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}
 }
 
@@ -1020,7 +1019,7 @@ void ART::FinalizeVacuum(const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < allocators->size(); i++) {
 		if (flags.vacuum_flags[i]) {
-			(*allocators)[i].FinalizeVacuum();
+			(*allocators)[i]->FinalizeVacuum();
 		}
 	}
 }
@@ -1031,7 +1030,7 @@ void ART::Vacuum(IndexLock &state) {
 
 	if (!tree.HasMetadata()) {
 		for (auto &allocator : *allocators) {
-			allocator.Reset();
+			allocator->Reset();
 		}
 		return;
 	}
@@ -1069,7 +1068,7 @@ void ART::InitializeMerge(ARTFlags &flags) {
 
 	flags.merge_buffer_counts.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.merge_buffer_counts.emplace_back(allocator.GetUpperBoundBufferId());
+		flags.merge_buffer_counts.emplace_back(allocator->GetUpperBoundBufferId());
 	}
 }
 
@@ -1090,7 +1089,7 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 		// merge the node storage
 		for (idx_t i = 0; i < allocators->size(); i++) {
-			(*allocators)[i].Merge((*other_art.allocators)[i]);
+			(*allocators)[i]->Merge(*(*other_art.allocators)[i]);
 		}
 	}
 

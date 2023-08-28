@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/index.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 
@@ -32,16 +33,21 @@ struct ARTFlags {
 
 class ART : public Index {
 public:
+	//! FixedSizeAllocator count of the ART
+	static constexpr uint8_t ALLOCATOR_COUNT = 6;
+
+public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-	    AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr = nullptr,
+	    AttachedDatabase &db,
+	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
 	    const BlockPointer &block = BlockPointer());
 
 	//! Root of the tree
 	Node tree = Node();
 	//! Fixed-size allocators holding the ART nodes
-	shared_ptr<vector<FixedSizeAllocator>> allocators;
+	shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data
 	bool owns_data;
 

@@ -54,8 +54,6 @@ public:
 
 	//! Attached database instance
 	AttachedDatabase &db;
-	//! Buffer manager of the database instance
-	BufferManager &buffer_manager;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs

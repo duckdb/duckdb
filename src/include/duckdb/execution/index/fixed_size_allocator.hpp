@@ -15,6 +15,8 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/constants.hpp"
 
 namespace duckdb {
 
@@ -23,8 +25,6 @@ namespace duckdb {
 //! It is also possible to directly request a C++ pointer to the underlying segment of an index pointer.
 class FixedSizeAllocator {
 public:
-	//! Fixed size of the buffers
-	static constexpr idx_t BUFFER_SIZE = Storage::BLOCK_ALLOC_SIZE;
 	//! We can vacuum 10% or more of the total in-memory footprint
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
@@ -33,11 +33,12 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
-	explicit FixedSizeAllocator(const idx_t segment_size, Allocator &allocator, MetadataManager &metadata_manager);
-	~FixedSizeAllocator();
+	explicit FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
+	//! Block manager of the database instance
+	BlockManager &block_manager;
 	//! Buffer manager of the database instance
-	Allocator &allocator;
+	BufferManager &buffer_manager;
 	//! Metadata manager for (de)serialization
 	MetadataManager &metadata_manager;
 
@@ -100,7 +101,7 @@ private:
 	idx_t total_segment_count;
 
 	//! Buffers containing the segments
-	unordered_map<idx_t, FixedSizeBuffer> buffers;
+	unique_ptr<unordered_map<idx_t, unique_ptr<FixedSizeBuffer>>> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)

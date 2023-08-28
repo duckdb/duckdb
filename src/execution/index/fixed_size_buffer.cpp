@@ -1,48 +1,69 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
-#include "duckdb/execution/index/fixed_size_allocator.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
-
 namespace duckdb {
 
-void FixedSizeBuffer::Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer) {
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
+    : block_manager(block_manager), segment_count(0), dirty(false), vacuum(false), block_handle(nullptr) {
+	auto &buffer_manager = block_manager.buffer_manager;
+	buffer_handle = make_uniq<BufferHandle>(buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, false, &block_handle));
+	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+}
 
-	if (!in_memory) {
-		if (!on_disk || dirty) {
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const block_id_t &block_id)
+    : block_manager(block_manager), segment_count(segment_count), dirty(false), vacuum(false), buffer_handle(nullptr) {
+	D_ASSERT(block_id < MAXIMUM_BLOCK);
+	block_handle = block_manager.RegisterBlock(block_id);
+	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+}
+
+FixedSizeBuffer::~FixedSizeBuffer() {
+	//	if (InMemory()) {
+	//		buffer_handle->Destroy();
+	//	}
+	//	if (OnDisk()) {
+	//		block_manager.UnregisterBlock(block_handle->BlockId(), true);
+	//	}
+}
+
+void FixedSizeBuffer::Serialize() {
+
+	if (!InMemory()) {
+		if (!OnDisk() || dirty) {
 			throw InternalException("invalid/missing buffer in FixedSizeAllocator");
 		}
 		return;
 	}
-	if (!dirty && on_disk) {
+	if (!dirty && OnDisk()) {
 		return;
 	}
 
 	// the buffer is in memory
-	D_ASSERT(in_memory);
+	D_ASSERT(InMemory());
 	// the buffer never was on disk, or there were changes to it after loading it from disk
-	D_ASSERT(!on_disk || dirty);
+	D_ASSERT(!OnDisk() || dirty);
 
-	// FIXME: we should not use the metadata writer here, as it only writes blocks of METADATA_BLOCK_SIZE
-	block_ptr = writer.GetBlockPointer();
-	writer.WriteData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
-	on_disk = true;
+	// we persist any changes, so the buffer is no longer dirty
+	dirty = false;
 
-	// FIXME: we want to reset the dirty-flag here. Not resetting the dirty-flag is a temporary fix, which we
-	// FIXME: should remove when fixing the issue explained in test_art_storage_multi_checkpoint.test
-	// dirty = false;
+	// first time writing to disk
+	if (!OnDisk()) {
+		auto block_id = block_manager.GetFreeBlockId();
+		block_handle = block_manager.RegisterBlock(block_id);
+		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
+		return;
+	}
+
+	// overwrite block on disk with changes
+	auto block_id = block_handle->BlockId();
+	D_ASSERT(block_id < MAXIMUM_BLOCK);
+	block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 }
 
-void FixedSizeBuffer::Deserialize(FixedSizeAllocator &fixed_size_allocator) {
+void FixedSizeBuffer::Deserialize() {
 
-	D_ASSERT(on_disk && !dirty && !in_memory);
-	D_ASSERT(block_ptr.IsValid());
-	in_memory = true;
-
-	// FIXME: we should not use the metadata reader here, as it only reads blocks of METADATA_BLOCK_SIZE
-	memory_ptr = fixed_size_allocator.allocator.AllocateData(fixed_size_allocator.BUFFER_SIZE);
-	MetadataReader reader(fixed_size_allocator.metadata_manager, block_ptr);
-	reader.ReadData(memory_ptr, fixed_size_allocator.BUFFER_SIZE);
+	auto &buffer_manager = block_manager.buffer_manager;
+	buffer_handle = make_uniq<BufferHandle>(buffer_manager.Pin(block_handle));
 }
 
 } // namespace duckdb

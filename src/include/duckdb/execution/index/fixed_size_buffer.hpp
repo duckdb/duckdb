@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/typedefs.hpp"
-#include "duckdb/storage/block.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -21,51 +21,60 @@ class MetadataWriter;
 //! serialization.
 class FixedSizeBuffer {
 public:
-	FixedSizeBuffer(const idx_t segment_count, const data_ptr_t memory_ptr)
-	    : segment_count(segment_count), dirty(false), in_memory(true), on_disk(false), vacuum(false),
-	      memory_ptr(memory_ptr) {
-	}
-	FixedSizeBuffer(const idx_t segment_count, const BlockPointer &block_ptr)
-	    : segment_count(segment_count), dirty(false), in_memory(false), on_disk(true), vacuum(false),
-	      block_ptr(block_ptr) {
-	}
+	//! Constructor for a new in-memory buffer
+	explicit FixedSizeBuffer(BlockManager &block_manager);
+	//! Constructor for deserializing buffer metadata from disk
+	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const block_id_t &block_id);
+
+	//! Destroys the in-memory buffer and/or the on-disk block
+	~FixedSizeBuffer();
+
+	//! Block manager of the database instance
+	BlockManager &block_manager;
 
 	//! The number of allocated segments
 	idx_t segment_count;
 
-	//! Flags to manage the memory of this buffer
-
-	//! True: the in-memory buffer is no longer consistent with a (possibly existing)
-	//! copy on disk
+	//! True: the in-memory buffer is no longer consistent with a (possibly existing) copy on disk
 	bool dirty;
-	//! True: the buffer is in memory
-	bool in_memory;
-	//! True: the buffer is serialized to disk
-	bool on_disk;
 	//! True: can be vacuumed after the vacuum operation
 	bool vacuum;
 
-	//! The buffer is in-memory, and memory_ptr points to its location
-	data_ptr_t memory_ptr;
-	//! Holds the block ID and offset of the buffer
-	BlockPointer block_ptr;
-
 public:
-	//! Returns a pointer to the buffer in memory, and calls Deserialize, if
-	//! the buffer is not in memory
-	inline data_ptr_t Get(FixedSizeAllocator &fixed_size_allocator, const bool dirty_p = true) {
-		if (!in_memory) {
-			Deserialize(fixed_size_allocator);
+	//! Returns true, if the buffer is in-memory
+	inline bool InMemory() const {
+		return buffer_handle && buffer_handle->IsValid();
+	}
+	//! Returns true, if the block is on-disk
+	inline bool OnDisk() const {
+		return block_handle != nullptr;
+	}
+	//! Returns the block ID
+	inline block_id_t GetBlockID() const {
+		D_ASSERT(OnDisk());
+		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+		return block_handle->BlockId();
+	}
+	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory
+	inline data_ptr_t Get(const bool dirty_p = true) {
+		if (!InMemory()) {
+			Deserialize();
 		}
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return memory_ptr;
+		return buffer_handle->Ptr();
 	}
 	//! Serializes a buffer (if dirty or not on disk)
-	void Serialize(FixedSizeAllocator &fixed_size_allocator, MetadataWriter &writer);
-	//! Deserializes a buffer, if not in memory
-	void Deserialize(FixedSizeAllocator &fixed_size_allocator);
+	void Serialize();
+	//! Deserialize a buffer (if not in-memory)
+	void Deserialize();
+
+private:
+	//! The buffer handle of the in-memory buffer
+	unique_ptr<BufferHandle> buffer_handle;
+	//! The block handle of the on-disk buffer
+	shared_ptr<BlockHandle> block_handle;
 };
 
 } // namespace duckdb

@@ -79,7 +79,7 @@ void Node::Free(ART &art, Node &node) {
 //===--------------------------------------------------------------------===//
 
 FixedSizeAllocator &Node::GetAllocator(const ART &art, const NType type) {
-	return (*art.allocators)[static_cast<uint8_t>(type) - 1];
+	return *(*art.allocators)[static_cast<uint8_t>(type) - 1];
 }
 
 //===--------------------------------------------------------------------===//
