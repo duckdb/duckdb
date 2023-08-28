@@ -549,7 +549,7 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 	}
 
 	//	Work stealing
-	while (tasks_remaining && !context.interrupted) {
+	while (!context.interrupted && tasks_remaining) {
 		auto result = StealWork();
 		if (result.second) {
 			return result;

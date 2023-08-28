@@ -73,6 +73,48 @@ duckdb_shutdown <- function(drv) {
   invisible(TRUE)
 }
 
+#' @description
+#' Return an [adbcdrivermanager::adbc_driver()] for use with Arrow Database
+#' Connectivity via the adbcdrivermanager package.
+#'
+#' @return An object of class "adbc_driver"
+#' @rdname duckdb
+#' @export
+#' @examplesIf requireNamespace("adbcdrivermanager", quietly = TRUE)
+#' library(adbcdrivermanager)
+#' with_adbc(db <- adbc_database_init(duckdb_adbc()), {
+#'   as.data.frame(read_adbc(db, "SELECT 1 as one;"))
+#' })
+duckdb_adbc <- function() {
+  init_func <- structure(rapi_adbc_init_func(), class = "adbc_driver_init_func")
+  adbcdrivermanager::adbc_driver(init_func, subclass = "duckdb_driver_adbc")
+}
+
+# Registered in zzz.R
+adbc_database_init.duckdb_driver_adbc <- function(driver, ...) {
+  adbcdrivermanager::adbc_database_init_default(
+    driver,
+    list(...),
+    subclass = "duckdb_database_adbc"
+  )
+}
+
+adbc_connection_init.duckdb_database_adbc <- function(database, ...) {
+  adbcdrivermanager::adbc_connection_init_default(
+    database,
+    list(...),
+    subclass = "duckdb_connection_adbc"
+  )
+}
+
+adbc_statement_init.duckdb_connection_adbc <- function(connection, ...) {
+  adbcdrivermanager::adbc_statement_init_default(
+    connection,
+    list(...),
+    subclass = "duckdb_statement_adbc"
+  )
+}
+
 is_installed <- function(pkg) {
   as.logical(requireNamespace(pkg, quietly = TRUE)) == TRUE
 }
