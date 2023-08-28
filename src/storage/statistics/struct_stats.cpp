@@ -116,13 +116,12 @@ void StructStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer 
 	auto child_stats = StructStats::GetChildStats(stats);
 	auto child_count = StructType::GetChildCount(stats.GetType());
 
-	// TODO: we need to allow repeated fields here.
-	serializer.BeginObject(200, "child_stats");
+	// TODO: replace with std::span equivalent instead of allocating a vector
+	vector<reference<const BaseStatistics>> child_stats_vec;
 	for (idx_t i = 0; i < child_count; i++) {
-		// TODO: this is a hack and wont work
-		serializer.WriteProperty(100 + i, "child_stats", child_stats[i]);
+		child_stats_vec.emplace_back(child_stats[i]);
 	}
-	serializer.EndObject();
+	serializer.WriteProperty(201, "child_stats", child_stats_vec);
 }
 
 BaseStatistics StructStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
@@ -130,11 +129,25 @@ BaseStatistics StructStats::FormatDeserialize(FormatDeserializer &deserializer, 
 
 	auto &child_types = StructType::GetChildTypes(type);
 	BaseStatistics result(std::move(type));
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_types[i].second));
-		result.child_stats[i].Copy(deserializer.ReadProperty<BaseStatistics>(100 + i, "child_stats"));
+
+	// Push all the child types to the deserializer state,
+	// they will be consumed one-by-one when deserializing the child stats
+	for (auto &child_type : child_types) {
+		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type.second));
+	}
+
+	auto vec = deserializer.ReadProperty<vector<BaseStatistics>>(201, "child_stats");
+	D_ASSERT(vec.size() == child_types.size());
+
+	for (idx_t i = 0; i < vec.size(); i++) {
+		result.child_stats[i].Copy(vec[i]);
+	}
+
+	// Pop all the child types from the deserializer state
+	for (idx_t i = 0; i < vec.size(); i++) {
 		deserializer.Unset<LogicalType>();
 	}
+
 	return result;
 }
 

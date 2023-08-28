@@ -49,7 +49,7 @@ void BinarySerializer::OnOptionalBegin(bool present) {
 	}
 }
 
-void BinarySerializer::OnOptionalEnd(bool present) {
+void BinarySerializer::OnOptionalEnd() {
 	OnObjectEnd();
 }
 
@@ -57,7 +57,7 @@ void BinarySerializer::OnListBegin(idx_t count) {
 	Write(count);
 }
 
-void BinarySerializer::OnListEnd(idx_t count) {
+void BinarySerializer::OnListEnd() {
 }
 
 void BinarySerializer::OnMapBegin(idx_t count) {
@@ -76,7 +76,7 @@ void BinarySerializer::OnMapValueBegin() {
 void BinarySerializer::OnMapEntryEnd() {
 }
 
-void BinarySerializer::OnMapEnd(idx_t count) {
+void BinarySerializer::OnMapEnd() {
 }
 
 void BinarySerializer::OnObjectBegin() {

@@ -89,16 +89,16 @@ public:
 	//===--------------------------------------------------------------------===//
 	// We serialize optional values as a message with a "present" flag, followed by the value.
 	void OnOptionalBegin(bool present) final;
-	void OnOptionalEnd(bool present) final;
+	void OnOptionalEnd() final;
 	void OnListBegin(idx_t count) final;
-	void OnListEnd(idx_t count) final;
+	void OnListEnd() final;
 	// Serialize maps as arrays of objects with "key" and "value" properties.
 	void OnMapBegin(idx_t count) final;
 	void OnMapEntryBegin() final;
 	void OnMapEntryEnd() final;
 	void OnMapKeyBegin() final;
 	void OnMapValueBegin() final;
-	void OnMapEnd(idx_t count) final;
+	void OnMapEnd() final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
 	void OnPairBegin() final;

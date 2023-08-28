@@ -61,6 +61,20 @@ public:
 		OnObjectEnd();
 	}
 
+	void BeginList(const field_id_t field_id, const char *tag, idx_t count) {
+		SetTag(field_id, tag);
+		OnListBegin(count);
+	}
+
+	template <class T>
+	void WriteListItem(const T &value) {
+		WriteValue(value);
+	}
+
+	void EndList() {
+		OnListEnd();
+	}
+
 protected:
 	template <typename T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
@@ -91,11 +105,11 @@ protected:
 	void WriteValue(const T *ptr) {
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);
-			OnOptionalEnd(false);
+			OnOptionalEnd();
 		} else {
 			OnOptionalBegin(true);
 			WriteValue(*ptr);
-			OnOptionalEnd(true);
+			OnOptionalEnd();
 		}
 	}
 
@@ -112,6 +126,12 @@ protected:
 		OnPairEnd();
 	}
 
+	// Reference Wrapper
+	template <class T>
+	void WriteValue(const reference<T> ref) {
+		WriteValue(ref.get());
+	}
+
 	// Vector
 	template <class T>
 	void WriteValue(const vector<T> &vec) {
@@ -120,7 +140,7 @@ protected:
 		for (auto &item : vec) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	template <class T>
@@ -130,7 +150,7 @@ protected:
 		for (auto &item : vec) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// UnorderedSet
@@ -142,7 +162,7 @@ protected:
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// Set
@@ -154,7 +174,7 @@ protected:
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// Map
@@ -172,7 +192,7 @@ protected:
 			OnMapValueEnd();
 			OnMapEntryEnd();
 		}
-		OnMapEnd(count);
+		OnMapEnd();
 	}
 
 	// Map
@@ -190,7 +210,7 @@ protected:
 			OnMapValueEnd();
 			OnMapEntryEnd();
 		}
-		OnMapEnd(count);
+		OnMapEnd();
 	}
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
@@ -212,14 +232,12 @@ protected:
 	virtual void OnListBegin(idx_t count) {
 		(void)count;
 	}
-	virtual void OnListEnd(idx_t count) {
-		(void)count;
+	virtual void OnListEnd() {
 	}
 	virtual void OnMapBegin(idx_t count) {
 		(void)count;
 	}
-	virtual void OnMapEnd(idx_t count) {
-		(void)count;
+	virtual void OnMapEnd() {
 	}
 	virtual void OnMapEntryBegin() {
 	}
@@ -235,7 +253,7 @@ protected:
 	}
 	virtual void OnOptionalBegin(bool present) {
 	}
-	virtual void OnOptionalEnd(bool present) {
+	virtual void OnOptionalEnd() {
 	}
 	virtual void OnObjectBegin() {
 	}

@@ -50,13 +50,13 @@ public:
 	//===--------------------------------------------------------------------===//
 	void OnOptionalBegin(bool present) final;
 	void OnListBegin(idx_t count) final;
-	void OnListEnd(idx_t count) final;
+	void OnListEnd() final;
 	void OnMapBegin(idx_t count) final;
 	void OnMapEntryBegin() final;
 	void OnMapEntryEnd() final;
 	void OnMapKeyBegin() final;
 	void OnMapValueBegin() final;
-	void OnMapEnd(idx_t count) final;
+	void OnMapEnd() final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
 	void OnPairBegin() final;

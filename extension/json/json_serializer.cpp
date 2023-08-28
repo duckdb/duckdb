@@ -43,7 +43,7 @@ void JsonSerializer::OnListBegin(idx_t count) {
 	stack.push_back(new_value);
 }
 
-void JsonSerializer::OnListEnd(idx_t count) {
+void JsonSerializer::OnListEnd() {
 	stack.pop_back();
 }
 
@@ -74,7 +74,7 @@ void JsonSerializer::OnMapEntryEnd() {
 	stack.pop_back();
 }
 
-void JsonSerializer::OnMapEnd(idx_t count) {
+void JsonSerializer::OnMapEnd() {
 	stack.pop_back();
 }
 

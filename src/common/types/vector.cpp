@@ -1028,7 +1028,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 				auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
 				serializer.WriteValue(str);
 			}
-			serializer.OnListEnd(count);
+			serializer.OnListEnd();
 			break;
 		}
 		case PhysicalType::STRUCT: {
@@ -1043,7 +1043,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 				entry->FormatSerialize(serializer, count);
 				serializer.OnObjectEnd();
 			}
-			serializer.OnListEnd(entries.size());
+			serializer.OnListEnd();
 			break;
 		}
 		case PhysicalType::LIST: {
@@ -1068,7 +1068,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 				serializer.WriteProperty(101, "length", entries[i].length);
 				serializer.OnObjectEnd();
 			}
-			serializer.OnListEnd(count);
+			serializer.OnListEnd();
 			serializer.SetTag(106, "child");
 			serializer.OnObjectBegin();
 			child.FormatSerialize(serializer, list_size);

@@ -927,6 +927,79 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 	return result;
 }
 
+void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {
+	serializer.WriteProperty(100, "row_start", pointer.row_start);
+	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
+	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
+
+	// Checkpoint deletes
+	auto versions = pointer.versions.get();
+
+	if (!versions) {
+		// no version information: write nothing
+		serializer.WriteProperty(103, "versions_count", 0);
+		return;
+	}
+	// first count how many ChunkInfo's we need to deserialize
+	idx_t chunk_info_count = 0;
+	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+		auto chunk_info = versions->info[vector_idx].get();
+		if (!chunk_info) {
+			continue;
+		}
+		chunk_info_count++;
+	}
+
+	// now serialize the actual version information
+	serializer.WriteProperty(103, "versions_count", chunk_info_count);
+	serializer.BeginList(104, "versions", chunk_info_count);
+	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+		auto chunk_info = versions->info[vector_idx].get();
+		if (!chunk_info) {
+			continue;
+		}
+		serializer.BeginObject(105, "version");
+		serializer.WriteProperty(100, "vector_index", vector_idx);
+		serializer.WriteProperty(101, "chunk_info", const_cast<const ChunkInfo *>(chunk_info));
+		serializer.EndObject();
+	}
+	serializer.EndList();
+}
+
+RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
+	RowGroupPointer result;
+	result.row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
+	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
+	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
+	result.versions = nullptr;
+	// Deserialize Deletes
+	auto chunk_count = deserializer.ReadProperty<idx_t>(103, "versions_count");
+	if (chunk_count == 0) {
+		// no deletes
+		return result;
+	}
+
+	auto version_info = make_shared<VersionNode>();
+	auto count = deserializer.BeginList(104, "versions");
+	if (count != chunk_count) {
+		throw SerializationException("Mismatch in chunk count");
+	}
+
+	for (idx_t i = 0; i < chunk_count; i++) {
+		deserializer.BeginObject(105, "version");
+		auto vector_index = deserializer.ReadProperty<idx_t>(100, "vector_index");
+		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
+			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
+		}
+		version_info->info[vector_index] = deserializer.ReadProperty<unique_ptr<ChunkInfo>>(101, "chunk_info");
+		deserializer.EndObject();
+	}
+	deserializer.EndList();
+	result.versions = version_info;
+
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//

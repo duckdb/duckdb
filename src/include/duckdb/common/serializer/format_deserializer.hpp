@@ -98,6 +98,20 @@ public:
 		OnObjectEnd();
 	}
 
+	idx_t BeginList(const field_id_t field_id, const char *tag) {
+		SetTag(field_id, tag);
+		return OnListBegin();
+	}
+
+	template <class T>
+	T ReadListItem(const T &value) {
+		return Read<T>();
+	}
+
+	void EndList() {
+		OnListEnd();
+	}
+
 private:
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>
