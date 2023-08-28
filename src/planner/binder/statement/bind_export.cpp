@@ -167,7 +167,6 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		for (auto &col : table.GetColumns().Physical()) {
 			auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.GetName());
 			// Check if the type is supported
-			bool type_is_supported = true;
 			if (copy_function.function.supports_type && !copy_function.function.supports_type(col.Type())) {
 				// Type is not supported, push a cast to VARCHAR
 				expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(expr));
