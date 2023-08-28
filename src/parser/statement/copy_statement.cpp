@@ -71,7 +71,7 @@ string TablePart(const CopyInfo &info) {
 			if (i > 0) {
 				result += ", ";
 			}
-			result += info.select_list[i]->ToString();
+			result += KeywordHelper::WriteOptionallyQuoted(info.select_list[i]);
 		}
 		result += " )";
 	}

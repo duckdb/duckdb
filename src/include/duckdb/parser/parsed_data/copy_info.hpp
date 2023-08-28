@@ -13,7 +13,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
-#include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
 
@@ -32,7 +31,7 @@ public:
 	//! The table name to copy to/from
 	string table;
 	//! List of columns to copy to/from
-	vector<unique_ptr<ParsedExpression>> select_list;
+	vector<string> select_list;
 	//! Whether or not this is a copy to file (false) or copy from a file (true)
 	bool is_from;
 	//! The file format of the external file
@@ -48,9 +47,7 @@ public:
 		result->catalog = catalog;
 		result->schema = schema;
 		result->table = table;
-		for (auto &expr : select_list) {
-			result->select_list.push_back(expr->Copy());
-		}
+		result->select_list = select_list;
 		result->file_path = file_path;
 		result->is_from = is_from;
 		result->format = format;

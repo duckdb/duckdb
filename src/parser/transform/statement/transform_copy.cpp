@@ -95,7 +95,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGCopySt
 		for (auto n = stmt.attlist->head; n != nullptr; n = n->next) {
 			auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(n->data.ptr_value);
 			if (target->name) {
-				info.select_list.emplace_back(make_uniq<ColumnRefExpression>(target->name));
+				info.select_list.emplace_back(target->name);
 			}
 		}
 	}

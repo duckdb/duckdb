@@ -182,12 +182,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	insert.table = stmt.info->table;
 	insert.schema = stmt.info->schema;
 	insert.catalog = stmt.info->catalog;
-	for (auto &expr : stmt.info->select_list) {
-		D_ASSERT(expr->type == ExpressionType::COLUMN_REF);
-		auto &columnref = expr->Cast<ColumnRefExpression>();
-		D_ASSERT(!columnref.IsQualified());
-		insert.columns.push_back(columnref.ToString());
-	}
+	insert.columns = stmt.info->select_list;
 
 	// bind the insert statement to the base table
 	auto insert_statement = Bind(insert);
@@ -244,12 +239,12 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
-		if (stmt.info->select_list.empty()) {
-			statement->select_list.push_back(make_uniq<StarExpression>());
-		} else {
-			for (auto &expr : stmt.info->select_list) {
-				statement->select_list.push_back(expr->Copy());
+		if (!stmt.info->select_list.empty()) {
+			for (auto &column : stmt.info->select_list) {
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(column));
 			}
+		} else {
+			statement->select_list.push_back(make_uniq<StarExpression>());
 		}
 		stmt.select_statement = std::move(statement);
 	}
