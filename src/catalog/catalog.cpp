@@ -591,6 +591,7 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		auto extension_name = FindExtensionForFunction(entry_name);
 		if (!extension_name.empty()) {
 			auto &dbconfig = DBConfig::GetConfig(context);
+			string autoload_hint;
 			if (!dbconfig.options.autoload_known_extensions) {
 				autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some "
 				                "extensions automatically";

@@ -4,6 +4,11 @@ all: release
 opt: release
 unit: unittest
 
+EXTENSION_CONFIG_STEP ?=
+ifdef USE_MERGED_VCPKG_MANIFEST
+	EXTENSION_CONFIG_STEP = build/extension_configuration/vcpkg.json
+endif
+
 GENERATOR ?=
 FORCE_COLOR ?=
 WARNINGS_AS_ERRORS ?=
@@ -51,6 +56,7 @@ ifeq (${STATIC_LIBCPP}, 1)
 endif
 
 CMAKE_VARS ?=
+CMAKE_VARS_BUILD ?=
 CMAKE_LLVM_VARS ?=
 SKIP_EXTENSIONS ?=
 BUILD_EXTENSIONS ?=
@@ -226,10 +232,10 @@ endif
 
 # Enable VCPKG for this build
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}' -DVCPKG_BUILD=1
+	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}' -DVCPKG_BUILD=1
 endif
 ifneq ("${VCPKG_TARGET_TRIPLET}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
+	CMAKE_VARS_BUILD:=${CMAKE_VARS_BUILD} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
@@ -251,23 +257,23 @@ clean:
 clean-python:
 	tools/pythonpkg/clean.sh
 
-debug:
+debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \
 	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
-release:
+release: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
-cldebug:
+cldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 clreldebug:
@@ -276,7 +282,12 @@ clreldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
-extension_configuration:
+extension_configuration: build/extension_configuration/vcpkg.json
+
+extension/extension_config_local.cmake:
+	touch extension/extension_config_local.cmake
+
+build/extension_configuration/vcpkg.json: extension/extension_config_local.cmake extension/extension_config.cmake
 	mkdir -p ./build/extension_configuration && \
 	cd build/extension_configuration && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
@@ -304,16 +315,16 @@ docs:
 doxygen: docs
 	open build/docs/html/index.html
 
-reldebug:
+reldebug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
-relassert:
+relassert: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/relassert && \
 	cd build/relassert && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 benchmark:
