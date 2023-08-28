@@ -485,12 +485,13 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 void Catalog::TryAutoloadExtension(ClientContext &context, const string &extension_name) {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
-		if (dbconfig.options.autoinstall_known_extensions){
-			ExtensionHelper::InstallExtension(context, extension_name, false, context.config.autoinstall_extension_repo);
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
-		string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load" ;
+		string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load";
 		auto new_exception_message = "Attempted to automatically " + action + " the '" + extension_name +
 		                             "' extension, but the following error occurred: (" + e.RawMessage() + ") ";
 		throw Exception(e.type, new_exception_message);
@@ -549,7 +550,8 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 		auto &dbconfig = DBConfig::GetConfig(context);
 		string autoload_hint;
 		if (!dbconfig.options.autoload_known_extensions) {
-			autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
+			autoload_hint =
+			    "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
 		}
 		return CatalogException(
 		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
@@ -590,7 +592,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		if (!extension_name.empty()) {
 			auto &dbconfig = DBConfig::GetConfig(context);
 			if (!dbconfig.options.autoload_known_extensions) {
-				autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
+				autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some "
+				                "extensions automatically";
 			}
 			return CatalogException(
 			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
