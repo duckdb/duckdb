@@ -1,5 +1,5 @@
-# name: test/sql/export/parquet/export_parquet_map.test
-# description: Test EXPORT DATABASE with MAP columns
+# name: test/sql/export/parquet/export_parquet_list.test
+# description: Test EXPORT DATABASE with LIST columns
 # group: [parquet]
 
 require parquet
@@ -9,10 +9,7 @@ begin transaction;
 
 statement ok
 create table tbl as select val from (
-	select MAP {
-		'hello': '01010101000'::BIT,
-		'HELLO': NULL::BIT
-	} val
+	select ['01010101'::BIT, '01011101001'::BIT] val
 ), range(3);
 
 query I nosort result
