@@ -154,7 +154,7 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	return result;
 }
 
-bool ParquetWriter::TypeIsSupported(LogicalType &type) {
+bool ParquetWriter::TypeIsSupported(const LogicalType &type) {
 	Type::type unused;
 	return DuckDBTypeToParquetTypeInternal(type, unused);
 }

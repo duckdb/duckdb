@@ -166,17 +166,12 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// We can not export generated columns
 		for (auto &col : table.GetColumns().Physical()) {
 			auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.GetName());
-			do {
-				if (!StringUtil::CIEquals(info->format, "parquet")) {
-					break;
-				}
-				if (ParquetWriter::TypeIsSupported(col.Type())) {
-					break;
-				}
-				// If the type is not supported by the Parquet Writer, we cast it to VARCHAR instead
-				// so that when the database is imported, it will be implicitly cast back from VARCHAR -> original type
+			// Check if the type is supported
+			bool type_is_supported = true;
+			if (copy_function.function.supports_type && !copy_function.function.supports_type(col.Type())) {
+				// Type is not supported, push a cast to VARCHAR
 				expr = make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(expr));
-			} while (false);
+			}
 			info->select_list.push_back(std::move(expr));
 		}
 

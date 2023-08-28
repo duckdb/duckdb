@@ -75,7 +75,7 @@ public:
 		return *writer;
 	}
 
-	static bool TypeIsSupported(LogicalType &type);
+	static bool TypeIsSupported(const LogicalType &type);
 
 private:
 	static bool DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,

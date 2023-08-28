@@ -1005,6 +1005,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
+	function.supports_type = ParquetWriter::TypeIsSupported;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);
