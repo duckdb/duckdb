@@ -435,7 +435,7 @@ if(NOT MSVC)
   endif()
   file(STRINGS "${PROJECT_SOURCE_DIR}/.github/workflows/lcov_exclude" COVERAGE_EXCLUDE)
   string(REPLACE "*" ".*" COVERAGE_EXCLUDE "${COVERAGE_EXCLUDE}")
-  set(CMAKE_CXX_FLAGS_COVERAGE "${CMAKE_CXX_FLAGS_DEBUG} -U_FORTIFY_SOURCE --coverage -fprofile-abs-path -fprofile-update=atomic")
+  set(CMAKE_CXX_FLAGS_COVERAGE "${CMAKE_CXX_FLAGS_DEBUG} -U_FORTIFY_SOURCE --coverage -fprofile-update=atomic")
   set(CMAKE_CXX_FLAGS_COVERAGE "${CMAKE_CXX_FLAGS_COVERAGE} -fprofile-exclude-files='${COVERAGE_EXCLUDE}'")
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
