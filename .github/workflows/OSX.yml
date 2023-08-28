@@ -79,6 +79,7 @@ jobs:
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       BUILD_ODBC: 1
       OSX_BUILD_UNIVERSAL: 1
       GEN: ninja
@@ -275,6 +276,7 @@ jobs:
         env:
           EXTENSION_TESTS_ONLY: 1
           ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
           rm -rf build/release
           make
@@ -297,6 +299,7 @@ jobs:
         env:
           EXTENSION_TESTS_ONLY: 1
           ENABLE_EXTENSION_AUTOLOADING: 1
+          ENABLE_EXTENSION_AUTOINSTALL: 1
         run: |
           rm -rf build/release
           make

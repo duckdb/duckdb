@@ -124,7 +124,8 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
-option(ENABLE_EXTENSION_AUTOLOADING "Enable extension autoloading by default." FALSE)
+option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
+option(ENABLE_EXTENSION_AUTOINSTAll "Enable extension auto-installing by default." FALSE)
 option(EXTENSION_TESTS_ONLY "Only load the tests for extension, don't actually build any; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -213,6 +214,9 @@ endif()
 
 if (ENABLE_EXTENSION_AUTOLOADING)
   add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
+endif()
+if (ENABLE_EXTENSION_AUTOINSTALL)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)

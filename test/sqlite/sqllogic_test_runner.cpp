@@ -112,7 +112,7 @@ void SQLLogicTestRunner::Reconnect() {
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		config->options.autoload_known_extensions = true;
-		auto res1 = con->Query("SET autoload_extension_repository='" + string(env_var) + "'");
+		auto res1 = con->Query("SET autoinstall_extension_repository='" + string(env_var) + "'");
 	}
 }
 

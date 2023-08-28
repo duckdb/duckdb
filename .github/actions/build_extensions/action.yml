@@ -203,10 +203,13 @@ runs:
         USE_SCCACHE: ${{ inputs.sccache == 1 && 'true' || ''}}
         EXTENSION_TESTS_ONLY: 1
         ENABLE_EXTENSION_AUTOLOADING: 1
+        ENABLE_EXTENSION_AUTOINSTALL: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*
+        mv build/release/extension build/extension_tmp
+        rm -rf build/release
         VCPKG_TOOLCHAIN_PATH="" make
 
     # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
@@ -219,6 +222,8 @@ runs:
         cd  ${{ inputs.build_dir}}
         python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
         ${{ inputs.unittest_script }} '-f test.list'
+        rm -rf build/release/extension
+        mv build/extension_tmp build/release/extension
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
     # TODO: this wil rebuild AGAIN, ensure it uses the cache

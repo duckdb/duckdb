@@ -483,11 +483,15 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 //		 - this should provide a way to add even more error info to the exception, formatted such that n-level nesting
 //		   still looks kinda decent
 void Catalog::TryAutoloadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
-		ExtensionHelper::InstallExtension(context, extension_name, false, context.config.autoload_extension_repo);
+		if (dbconfig.options.autoinstall_known_extensions){
+			ExtensionHelper::InstallExtension(context, extension_name, false, context.config.autoinstall_extension_repo);
+		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
-		auto new_exception_message = "Attempted to automatically install the '" + extension_name +
+		string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load" ;
+		auto new_exception_message = "Attempted to automatically " + action + " the '" + extension_name +
 		                             "' extension, but the following error occurred: (" + e.RawMessage() + ") ";
 		throw Exception(e.type, new_exception_message);
 	}
@@ -545,13 +549,12 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 		auto &dbconfig = DBConfig::GetConfig(context);
 		string autoload_hint;
 		if (!dbconfig.options.autoload_known_extensions) {
-			autoload_hint = "\n\nNote that extension autoloading is currently disabled.";
+			autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
 		}
 		return CatalogException(
 		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" +
-		        autoload_hint,
-		    name, extension_name, extension_name, extension_name);
+		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;\n\n%s",
+		    name, extension_name, extension_name, extension_name, autoload_hint);
 	}
 	// the setting is not in an extension
 	// get a list of all options
@@ -586,15 +589,13 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		auto extension_name = FindExtensionForFunction(entry_name);
 		if (!extension_name.empty()) {
 			auto &dbconfig = DBConfig::GetConfig(context);
-			string autoload_hint;
 			if (!dbconfig.options.autoload_known_extensions) {
-				autoload_hint = "\n\nNote that extension autoloading is currently disabled.";
+				autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
 			}
 			return CatalogException(
 			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;" +
-			        autoload_hint,
-			    entry_name, extension_name, extension_name, extension_name);
+			    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;\n\n%s",
+			    entry_name, extension_name, extension_name, extension_name, autoload_hint);
 		}
 	}
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);

@@ -32,7 +32,7 @@ set autoload_known_extensions=true
 
 # Override the default repo with a non-existent dir
 statement ok
-set autoload_extension_repository='/tmp/non-existent-repo';
+set autoinstall_extension_repository='/tmp/non-existent-repo';
 
 # Error should inform the user on whats happening
 statement error
@@ -42,7 +42,7 @@ IO Error: Attempted to automatically install the 'icu' extension, but the follow
 
 ### Autoloading with correct tmp repo
 statement ok
-set autoload_extension_repository='${LOCAL_EXTENSION_REPO}';
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
 RESET timezone;
