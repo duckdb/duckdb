@@ -9,6 +9,7 @@ bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &res
 	return context.TryGetCurrentSetting(key, result);
 }
 
+// LCOV_EXCL_START
 bool ClientContextFileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &) {
 	return context.TryGetCurrentSetting(key, result);
 }
@@ -37,5 +38,5 @@ bool FileOpener::TryGetCurrentSetting(FileOpener *opener, const string &key, Val
 bool FileOpener::TryGetCurrentSetting(const string &key, Value &result, FileOpenerInfo &info) {
 	return this->TryGetCurrentSetting(key, result);
 }
-
+// LCOV_EXCL_STOP
 } // namespace duckdb
