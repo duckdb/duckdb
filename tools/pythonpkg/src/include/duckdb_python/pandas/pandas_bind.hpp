@@ -12,7 +12,7 @@ struct RegisteredArray;
 class ClientContext;
 
 struct PandasColumnBindData {
-	NumpyNullableType numpy_type;
+	NumpyType numpy_type;
 	unique_ptr<PandasColumn> pandas_col;
 	unique_ptr<RegisteredArray> mask;
 	//! Only for categorical types

@@ -468,11 +468,12 @@ struct SortedAggregateFunction {
 
 					// These are all simple updates, so use it if available
 					if (simple_update) {
-						simple_update(sliced.data.data(), aggr_bind_info, 1, agg_state.data(), sliced.size());
+						simple_update(sliced.data.data(), aggr_bind_info, sliced.data.size(), agg_state.data(),
+						              sliced.size());
 					} else {
 						// We are only updating a constant state
 						agg_state_vec.SetVectorType(VectorType::CONSTANT_VECTOR);
-						update(sliced.data.data(), aggr_bind_info, 1, agg_state_vec, sliced.size());
+						update(sliced.data.data(), aggr_bind_info, sliced.data.size(), agg_state_vec, sliced.size());
 					}
 
 					consumed += input_count;
