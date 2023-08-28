@@ -14,7 +14,6 @@
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
-#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 
