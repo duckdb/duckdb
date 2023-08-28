@@ -44,7 +44,14 @@ struct QueueProducerToken {
 	duckdb_moodycamel::ProducerToken queue_token;
 };
 
+static void CheckToken(ProducerToken &token) {
+	if (!token.token || token.token->queue_token.valid()) {
+		throw InternalException("Invalid queue token");
+	}
+}
+
 void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
+	CheckToken(token);
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
 		semaphore.signal();
@@ -54,6 +61,8 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	CheckToken(token);
+
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	return q.try_dequeue_from_producer(token.token->queue_token, task);
 }
@@ -116,15 +125,19 @@ TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	auto token = make_uniq<QueueProducerToken>(*queue);
-	return make_uniq<ProducerToken>(*this, std::move(token));
+	auto res = make_uniq<ProducerToken>(*this, std::move(token));
+	CheckToken(*res);
+	return res;
 }
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
+	CheckToken(token);
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	queue->Enqueue(token, std::move(task));
 }
 
 bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
+	CheckToken(token);
 	return queue->DequeueFromProducer(token, task);
 }
 

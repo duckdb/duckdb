@@ -175,6 +175,9 @@ const HTTPException &Exception::AsHTTPException() const {
 
 void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message,
                                        const std::shared_ptr<Exception> &original) {
+	if (message == "std::bad_alloc") {
+		throw std::bad_alloc();
+	}
 	switch (type) {
 	case ExceptionType::OUT_OF_RANGE:
 		throw OutOfRangeException(message);

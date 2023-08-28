@@ -112,7 +112,7 @@ void *operator new(std::size_t size) throw(std::bad_alloc) {
 	return mem;
 }
 
-void *operator new(std::size_t size, const std::nothrow_t& tag) noexcept  {
+void *operator new(std::size_t size, const std::nothrow_t &tag) noexcept {
 	return malloc(size == 0 ? 1 : size);
 }
 
@@ -141,7 +141,7 @@ int main(int argc, char *argv[]) {
 				exit(0);
 			}
 
-		} catch (std::bad_alloc &e) {
+		} catch (...) {
 		}
 	}
 }
