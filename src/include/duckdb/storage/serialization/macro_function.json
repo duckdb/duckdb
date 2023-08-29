@@ -7,14 +7,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "MacroType"
       },
       {
+        "id": 101,
         "name": "parameters",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 102,
         "name": "default_parameters",
         "type": "unordered_map<string, ParsedExpression*>"
       }
@@ -29,6 +32,7 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "expression",
         "type": "ParsedExpression*"
       }
@@ -43,6 +47,7 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "query_node",
         "type": "QueryNode*"
       }

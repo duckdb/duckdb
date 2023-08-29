@@ -12,15 +12,15 @@
 namespace duckdb {
 
 void MacroFunction::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("parameters", parameters);
-	serializer.WriteProperty("default_parameters", default_parameters);
+	serializer.WriteProperty(100, "type", type);
+	serializer.WriteProperty(101, "parameters", parameters);
+	serializer.WriteProperty(102, "default_parameters", default_parameters);
 }
 
 unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<MacroType>("type");
-	auto parameters = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("parameters");
-	auto default_parameters = deserializer.ReadProperty<unordered_map<string, unique_ptr<ParsedExpression>>>("default_parameters");
+	auto type = deserializer.ReadProperty<MacroType>(100, "type");
+	auto parameters = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>(101, "parameters");
+	auto default_parameters = deserializer.ReadProperty<unordered_map<string, unique_ptr<ParsedExpression>>>(102, "default_parameters");
 	unique_ptr<MacroFunction> result;
 	switch (type) {
 	case MacroType::SCALAR_MACRO:
@@ -39,23 +39,23 @@ unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(FormatDeserializer &d
 
 void ScalarMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
-	serializer.WriteProperty("expression", *expression);
+	serializer.WriteProperty(200, "expression", *expression);
 }
 
 unique_ptr<MacroFunction> ScalarMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ScalarMacroFunction>(new ScalarMacroFunction());
-	deserializer.ReadProperty("expression", result->expression);
+	deserializer.ReadProperty(200, "expression", result->expression);
 	return std::move(result);
 }
 
 void TableMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
-	serializer.WriteProperty("query_node", *query_node);
+	serializer.WriteProperty(200, "query_node", *query_node);
 }
 
 unique_ptr<MacroFunction> TableMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableMacroFunction>(new TableMacroFunction());
-	deserializer.ReadProperty("query_node", result->query_node);
+	deserializer.ReadProperty(200, "query_node", result->query_node);
 	return std::move(result);
 }
 

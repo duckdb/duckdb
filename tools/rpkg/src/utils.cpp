@@ -1,8 +1,16 @@
+#include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
+
+typedef uint8_t AdbcStatusCode;
+struct AdbcError;
+extern "C" AdbcStatusCode duckdb_adbc_init(int version, void *raw_driver, struct AdbcError *error);
+
+[[cpp11::register]] SEXP rapi_adbc_init_func() {
+	return R_MakeExternalPtrFn((DL_FUNC)duckdb_adbc_init, R_NilValue, R_NilValue);
+}
 
 SEXP duckdb::ToUtf8(SEXP string_sexp) {
 	cpp11::function enc2utf8 = RStrings::get().enc2utf8_sym;
@@ -97,9 +105,19 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
+R_len_t RApiTypes::GetVecSize(RType rtype, SEXP coldata) {
+	while (rtype.id() == RTypeId::STRUCT) {
+		rtype = rtype.GetStructChildTypes()[0].second;
+		D_ASSERT(TYPEOF(coldata) == VECSXP);
+		coldata = VECTOR_ELT(coldata, 0);
+	}
+	// This still isn't quite accurate, but good enough for the types we support.
+	return Rf_length(coldata);
+}
+
 Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	auto rtype = RApiTypes::DetectRType(valsexp, false); // TODO
-	switch (rtype) {
+	switch (rtype.id()) {
 	case RType::LOGICAL: {
 		auto lgl_val = INTEGER_POINTER(valsexp)[idx];
 		return RBooleanType::IsNull(lgl_val) ? Value(LogicalType::BOOLEAN) : Value::BOOLEAN(lgl_val);
@@ -121,16 +139,9 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		auto str_val = STRING_ELT(ToUtf8(valsexp), idx);
 		return str_val == NA_STRING ? Value(LogicalType::VARCHAR) : Value(CHAR(str_val));
 	}
-	case RType::FACTOR: {
+	case RTypeId::FACTOR: {
 		auto int_val = INTEGER_POINTER(valsexp)[idx];
-		auto levels = GET_LEVELS(valsexp);
-		bool is_null = RIntegerType::IsNull(int_val);
-		if (!is_null) {
-			auto str_val = STRING_ELT(levels, int_val - 1);
-			return Value(CHAR(str_val));
-		} else {
-			return Value(LogicalType::VARCHAR);
-		}
+		return rtype.GetFactorValue(int_val);
 	}
 	case RType::TIMESTAMP: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
@@ -192,10 +203,33 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		return RIntegerType::IsNull(ts_val) ? Value(LogicalType::TIME) : Value::TIME(RTimeWeeksType::Convert(ts_val));
 	}
 	case RType::LIST_OF_NULLS:
-		return Value();
+		// Performance shortcut: this corresponds to the RType::BLOB case,
+		// but we already know that all values are NULL
+		return Value(LogicalType::BLOB);
 	case RType::BLOB: {
 		auto ts_val = VECTOR_ELT(valsexp, idx);
 		return Rf_isNull(ts_val) ? Value(LogicalType::BLOB) : Value::BLOB(RAW(ts_val), Rf_xlength(ts_val));
+	}
+	case RTypeId::LIST: {
+		auto ts_val = VECTOR_ELT(valsexp, idx);
+		auto child_rtype = rtype.GetListChildType();
+		vector<Value> child_values;
+		R_len_t child_len = GetVecSize(child_rtype, ts_val);
+		for (R_len_t child_idx = 0; child_idx < child_len; ++child_idx) {
+			auto value = SexpToValue(ts_val, child_idx);
+			child_values.push_back(value);
+		}
+		return Value::LIST(std::move(child_values));
+	}
+	case RTypeId::STRUCT: {
+		child_list_t<Value> child_values;
+		auto ncol = Rf_length(valsexp);
+		auto child_rtypes = rtype.GetStructChildTypes();
+		for (R_len_t col = 0; col < ncol; ++col) {
+			auto value = SexpToValue(VECTOR_ELT(valsexp, col), idx);
+			child_values.push_back(std::make_pair(child_rtypes[col].first, value));
+		}
+		return Value::STRUCT(std::move(child_values));
 	}
 	default:
 		cpp11::stop("duckdb_sexp_to_value: Unsupported type");

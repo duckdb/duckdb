@@ -77,7 +77,7 @@ common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
 common/types/date.cpp	24
 common/types/hash.cpp	5
-common/types/hugeint.cpp	34
+common/types/hugeint.cpp	35
 common/types/hyperloglog.cpp	11
 common/types/interval.cpp	31
 common/types/row/partitioned_tuple_data.cpp	10
@@ -160,7 +160,7 @@ execution/index/art/iterator.cpp	2
 execution/index/art/leaf.cpp	3
 execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	1
-execution/index/art/node48.cpp	5
+execution/index/art/node48.cpp	10
 execution/index/art/prefix.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
@@ -412,6 +412,7 @@ include/duckdb/main/query_result.hpp	12
 include/duckdb/main/relation.hpp	3
 include/duckdb/main/relation/subquery_relation.hpp	3
 include/duckdb/main/relation/write_parquet_relation.hpp	3
+include/duckdb/optimizer/join_order/estimated_properties.hpp	1
 include/duckdb/optimizer/matcher/function_matcher.hpp	2
 include/duckdb/optimizer/matcher/set_matcher.hpp	2
 include/duckdb/parallel/base_pipeline_event.hpp	2
@@ -455,9 +456,9 @@ include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
 main/appender.cpp	23
 main/attached_database.cpp	14
-main/chunk_scan_state.cpp	21
+main/chunk_scan_state.cpp	25
 main/capi/appender-c.cpp	3
-main/capi/arrow-c.cpp	5
+main/capi/arrow-c.cpp	8
 main/capi/cast/from_decimal-c.cpp	5
 main/capi/cast/utils-c.cpp	3
 main/chunk_scan_state/query_result.cpp	28
@@ -467,8 +468,8 @@ main/capi/duckdb_value-c.cpp	14
 main/capi/helper-c.cpp	49
 main/capi/hugeint-c.cpp	5
 main/capi/logical_types-c.cpp	44
-main/capi/pending-c.cpp	28
-main/capi/prepared-c.cpp	5
+main/capi/pending-c.cpp	32
+main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
 main/capi/result-c.cpp	34
 main/capi/stream-c.cpp	5
@@ -488,7 +489,7 @@ main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
 main/extension/extension_install.cpp	97
-main/extension/extension_load.cpp	59
+main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
 main/pending_query_result.cpp	5
@@ -501,6 +502,7 @@ main/relation/create_view_relation.cpp	7
 main/relation/cross_product_relation.cpp	2
 main/relation/read_json_relation.cpp	10
 main/relation/write_parquet_relation.cpp	22
+main/relation/aggregate_relation.cpp	14
 main/settings/settings.cpp	157
 main/stream_query_result.cpp	7
 optimizer/column_lifetime_analyzer.cpp	2
@@ -514,6 +516,11 @@ optimizer/join_order/cardinality_estimator.cpp	43
 optimizer/join_order/join_node.cpp	18
 optimizer/join_order/join_order_optimizer.cpp	96
 optimizer/join_order/query_graph.cpp	2
+optimizer/join_order/relation_manager.cpp	4
+optimizer/join_order/query_graph_manager.cpp	3
+optimizer/join_order/estimated_properties.cpp	16
+optimizer/join_order/plan_enumerator.cpp	11
+optimizer/join_order/relation_statistics_helper.cpp	2
 optimizer/matcher/expression_matcher.cpp	2
 optimizer/pullup/pullup_projection.cpp	4
 optimizer/pushdown/pushdown_inner_join.cpp	2
@@ -768,7 +775,8 @@ storage/statistics/numeric_stats.cpp	15
 storage/statistics/numeric_stats_union.cpp	3
 storage/statistics/string_stats.cpp	8
 storage/statistics/struct_stats.cpp	7
-storage/storage_manager.cpp	3
+storage/storage_manager.cpp	6
+storage/metadata/metadata_manager.cpp	4
 storage/table/chunk_info.cpp	16
 storage/table/column_checkpoint_state.cpp	20
 storage/table/column_data.cpp	16

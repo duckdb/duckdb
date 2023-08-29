@@ -181,6 +181,8 @@ public:
 	DUCKDB_API static int32_t ExtractISODayOfTheWeek(date_t date);
 	//! Extract the day of the year
 	DUCKDB_API static int32_t ExtractDayOfTheYear(date_t date);
+	//! Extract the day of the year
+	DUCKDB_API static int64_t ExtractJulianDay(date_t date);
 	//! Extract the ISO week number
 	//! ISO weeks start on Monday and the first week of a year
 	//! contains January 4 of that year.

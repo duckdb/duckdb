@@ -2,8 +2,8 @@
 
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
@@ -166,7 +166,7 @@ optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
 	return nullptr;
 }
 
-BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
+BlockPointer Node4::Serialize(ART &art, MetadataWriter &writer) {
 
 	// recurse into children and retrieve child block pointers
 	vector<BlockPointer> child_block_pointers;
@@ -196,8 +196,7 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node4::Deserialize(MetaBlockReader &reader) {
-
+void Node4::Deserialize(MetadataReader &reader) {
 	count = reader.Read<uint8_t>();
 
 	// read key values

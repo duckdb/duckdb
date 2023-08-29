@@ -112,8 +112,8 @@ tz_convert <- function(x, timezone) {
 }
 
 tz_force <- function(x, timezone) {
-  # convert to character, stripping the timezone
-  ct <- as.character(x, usetz = FALSE)
+  # convert to character in ISO format, stripping the timezone
+  ct <- format(x, format = "%Y-%m-%d %H:%M:%OS", usetz = FALSE)
   # recreate the POSIXct with specified timezone
   as.POSIXct(ct, tz = timezone)
 }

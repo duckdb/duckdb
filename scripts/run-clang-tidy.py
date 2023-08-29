@@ -271,7 +271,7 @@ def main():
         else:
             subprocess.check_call(invocation)
     except:
-        print("Unable to run clang-tidy.", file=sys.stderr)
+        print("Unable to run clang-tidy, consider running `pip install clang-tidy`", file=sys.stderr)
         sys.exit(1)
 
     # Load the database and extract all files.

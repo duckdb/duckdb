@@ -97,20 +97,20 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 
 void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty("return_type", return_type);
-	serializer.WriteProperty("children", children);
+	serializer.WriteProperty(200, "return_type", return_type);
+	serializer.WriteProperty(201, "children", children);
 	FunctionSerializer::FormatSerialize(serializer, function, bind_info.get());
-	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
 unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
-	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("children");
+	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children);
 	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
-	deserializer.ReadProperty("is_operator", result->is_operator);
+	deserializer.ReadProperty(202, "is_operator", result->is_operator);
 	return std::move(result);
 }
 
