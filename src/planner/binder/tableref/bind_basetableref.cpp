@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
@@ -22,7 +23,7 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 
 	// Parquet
 	if (StringUtil::EndsWith(lower_name, ".parquet") || StringUtil::Contains(lower_name, ".parquet?")) {
-		Catalog::TryAutoloadExtension(context, "parquet");
+		ExtensionHelper::AutoLoadExtension(context, "parquet");
 		return true;
 	}
 
@@ -30,7 +31,7 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 	if (StringUtil::EndsWith(lower_name, ".json") || StringUtil::Contains(lower_name, ".json?") ||
 	    StringUtil::EndsWith(lower_name, ".jsonl") || StringUtil::Contains(lower_name, ".jsonl?") ||
 	    StringUtil::EndsWith(lower_name, ".ndjson") || StringUtil::Contains(lower_name, ".ndjson?")) {
-		Catalog::TryAutoloadExtension(context, "json");
+		ExtensionHelper::AutoLoadExtension(context, "json");
 		return true;
 	}
 

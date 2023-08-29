@@ -30,7 +30,7 @@ SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &ch
 		// check if this is an extra extension variable
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			Catalog::AutoloadExtensionOrThrowForConfig(context.client, name);
+			Catalog::AutoloadExtensionByConfigName(context.client, name);
 			entry = config.extension_parameters.find(name);
 			D_ASSERT(entry != config.extension_parameters.end());
 		}

@@ -371,13 +371,13 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 	return result;
 }
 
-string FindExtensionGeneric(const string &name, const ExtensionEntry entries[], idx_t size) {
+template <size_t N>
+string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
 	auto lcase = StringUtil::Lower(name);
 
-	auto it =
-	    std::find_if(entries, entries + size, [&](const ExtensionEntry &element) { return element.name == lcase; });
+	auto it = std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
 
-	if (it != entries + size && it->name == lcase) {
+	if (it != entries + N && it->name == lcase) {
 		return it->extension;
 	}
 	return "";
@@ -393,26 +393,6 @@ bool CanAutoloadExtension(const string &ext_name) {
 		}
 	}
 	return false;
-}
-
-string FindExtensionForType(const string &name) {
-	idx_t size = sizeof(EXTENSION_TYPES) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_TYPES, size);
-}
-
-string FindExtensionForCopyFunction(const string &name) {
-	idx_t size = sizeof(EXTENSION_COPY_FUNCTIONS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_COPY_FUNCTIONS, size);
-}
-
-string FindExtensionForFunction(const string &name) {
-	idx_t size = sizeof(EXTENSION_FUNCTIONS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_FUNCTIONS, size);
-}
-
-string FindExtensionForSetting(const string &name) {
-	idx_t size = sizeof(EXTENSION_SETTINGS) / sizeof(ExtensionEntry);
-	return FindExtensionGeneric(name, EXTENSION_SETTINGS, size);
 }
 
 vector<CatalogSearchEntry> GetCatalogEntries(ClientContext &context, const string &catalog, const string &schema) {
@@ -479,32 +459,13 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
-// TODO: expose this to extensions, such as AWS that can use it to autoload their dependencies
-//		 - this should provide a way to add even more error info to the exception, formatted such that n-level nesting
-//		   still looks kinda decent
-void Catalog::TryAutoloadExtension(ClientContext &context, const string &extension_name) {
-	auto &dbconfig = DBConfig::GetConfig(context);
-	try {
-		if (dbconfig.options.autoinstall_known_extensions) {
-			ExtensionHelper::InstallExtension(context, extension_name, false,
-			                                  context.config.autoinstall_extension_repo);
-		}
-		ExtensionHelper::LoadExternalExtension(context, extension_name);
-	} catch (Exception &e) {
-		string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load";
-		auto new_exception_message = "Attempted to automatically " + action + " the '" + extension_name +
-		                             "' extension, but the following error occurred: (" + e.RawMessage() + ") ";
-		throw Exception(e.type, new_exception_message);
-	}
-}
-
-void Catalog::AutoloadExtensionOrThrowForConfig(ClientContext &context, const string &configuration_name) {
+void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
-		auto extension_name = FindExtensionForSetting(configuration_name);
+		auto extension_name = FindExtensionInEntries(configuration_name, EXTENSION_SETTINGS);
 		if (CanAutoloadExtension(extension_name)) {
-			TryAutoloadExtension(context, extension_name);
+			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return;
 		}
 	}
@@ -513,29 +474,23 @@ void Catalog::AutoloadExtensionOrThrowForConfig(ClientContext &context, const st
 	throw Catalog::UnrecognizedConfigurationError(context, configuration_name);
 }
 
-bool Catalog::AutoLoadExtensionForFunction(ClientContext &context, CatalogType type, const string &function_name) {
+bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
 	if (dbconfig.options.autoload_known_extensions) {
+		string extension_name;
 		if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 		    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-			auto extension_name = FindExtensionForFunction(function_name);
-			if (CanAutoloadExtension(extension_name)) {
-				TryAutoloadExtension(context, extension_name);
-				return true;
-			}
+			extension_name = FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
 		} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
-			auto extension_name = FindExtensionForCopyFunction(function_name);
-			if (CanAutoloadExtension(extension_name)) {
-				TryAutoloadExtension(context, extension_name);
-				return true;
-			}
+			extension_name = FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
-			auto extension_name = FindExtensionForType(function_name);
-			if (CanAutoloadExtension(extension_name)) {
-				TryAutoloadExtension(context, extension_name);
-				return true;
-			}
+			extension_name = FindExtensionInEntries(entry_name, EXTENSION_TYPES);
+		}
+
+		if (extension_name != "" && CanAutoloadExtension(extension_name)) {
+			ExtensionHelper::AutoLoadExtension(context, extension_name);
+			return true;
 		}
 	}
 #endif
@@ -545,13 +500,14 @@ bool Catalog::AutoLoadExtensionForFunction(ClientContext &context, CatalogType t
 
 CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context, const string &name) {
 	// check if the setting exists in any extensions
-	auto extension_name = FindExtensionForSetting(name);
+	auto extension_name = FindExtensionInEntries(name, EXTENSION_SETTINGS);
 	if (!extension_name.empty()) {
 		auto &dbconfig = DBConfig::GetConfig(context);
 		string autoload_hint;
 		if (!dbconfig.options.autoload_known_extensions) {
-			autoload_hint =
-			    "Consider enabling extension autoloading. Extension autoloading can load some extensions automatically";
+			autoload_hint = "Additionally, consider enabling extension autoloading. Extension autoloading can load "
+			                "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
+			                "\nSET autoinstall_known_extensions=1;";
 		}
 		return CatalogException(
 		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
@@ -588,13 +544,15 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	// check if the entry exists in any extension
 	if (type == CatalogType::TABLE_FUNCTION_ENTRY || type == CatalogType::SCALAR_FUNCTION_ENTRY ||
 	    type == CatalogType::AGGREGATE_FUNCTION_ENTRY || type == CatalogType::PRAGMA_FUNCTION_ENTRY) {
-		auto extension_name = FindExtensionForFunction(entry_name);
+		auto extension_name = FindExtensionInEntries(entry_name, EXTENSION_FUNCTIONS);
 		if (!extension_name.empty()) {
 			auto &dbconfig = DBConfig::GetConfig(context);
 			string autoload_hint;
 			if (!dbconfig.options.autoload_known_extensions) {
-				autoload_hint = "Consider enabling extension autoloading. Extension autoloading can load some "
-				                "extensions automatically";
+				autoload_hint =
+				    "Additionally, consider enabling extension autoloading. Extension autoloading can load "
+				    "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
+				    "\nSET autoinstall_known_extensions=1;";
 			}
 			return CatalogException(
 			    "Function with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
@@ -714,7 +672,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
-		if (AutoLoadExtensionForFunction(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
 			lookup_entry = LookupEntry(context, type, schema_name, name, if_not_found, error_context);
 		}
 	}
@@ -753,7 +711,7 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 	// Try autoloading extension to resolve lookup TODO: dedup
 	if (!result.Found()) {
-		if (AutoLoadExtensionForFunction(context, type, name)) {
+		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
 			entries = GetCatalogEntries(context, catalog, schema);
 			vector<CatalogLookup> lookups_retry;
 			lookups_retry.reserve(entries.size());

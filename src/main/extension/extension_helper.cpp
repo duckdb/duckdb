@@ -126,6 +126,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
 
+// TODO: should this respect the new autoinstall_known_extension setting?
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	auto lcase = StringUtil::Lower(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
@@ -134,6 +135,32 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 		}
 	}
 	return false;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+	} catch (Exception &e) {
+		string install_hint;
+
+		if (!dbconfig.options.autoinstall_known_extensions) {
+			install_hint =
+			    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
+			    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
+		}
+
+		string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load";
+		auto new_exception_message = "Attempted to automatically " + action + " the '" + extension_name +
+		                             "' extension, but the following error occurred:\n" + e.RawMessage() + "\n\n" +
+		                             install_hint;
+
+		throw Exception(e.type, new_exception_message);
+	}
 }
 
 //===--------------------------------------------------------------------===//

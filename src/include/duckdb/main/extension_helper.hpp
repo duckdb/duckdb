@@ -47,6 +47,9 @@ public:
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
 
+	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
+	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
+
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 

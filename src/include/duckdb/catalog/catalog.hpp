@@ -302,10 +302,9 @@ public:
 	static CatalogException UnrecognizedConfigurationError(ClientContext &context, const string &name);
 
 	//! Autoload the extension required for `configuration_name` or throw a CatalogException
-	static void AutoloadExtensionOrThrowForConfig(ClientContext &context, const string &configuration_name);
+	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
-	static bool AutoLoadExtensionForFunction(ClientContext &context, CatalogType type, const string &function_name);
-	static void TryAutoloadExtension(ClientContext &context, const string &extension_name);
+	static bool AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name);
 
 protected:
 	//! Reference to the database
