@@ -240,8 +240,8 @@ BoundStatement Binder::Bind(CopyStatement &stmt) {
 		auto statement = make_uniq<SelectNode>();
 		statement->from_table = std::move(ref);
 		if (!stmt.info->select_list.empty()) {
-			for (auto &column : stmt.info->select_list) {
-				statement->select_list.push_back(make_uniq<ColumnRefExpression>(column));
+			for (auto &name : stmt.info->select_list) {
+				statement->select_list.push_back(make_uniq<ColumnRefExpression>(name));
 			}
 		} else {
 			statement->select_list.push_back(make_uniq<StarExpression>());

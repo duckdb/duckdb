@@ -210,9 +210,6 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		auto bound_statement = copy_binder->Bind(copy_stmt);
 		auto plan = std::move(bound_statement.plan);
 
-		copy_binder->GenerateTableIndex();
-		auto table_index = plan->GetTableIndex();
-
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
 			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
