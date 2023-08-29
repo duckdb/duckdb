@@ -307,24 +307,24 @@ void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(101, "has_no_null", has_no_null);
 	serializer.WriteProperty(102, "distinct_count", distinct_count);
 	serializer.WriteProperty(103, "stats_type", GetStatsType());
-	serializer.BeginObject(104, "stats");
-	switch (GetStatsType()) {
-	case StatisticsType::NUMERIC_STATS:
-		NumericStats::FormatSerialize(*this, serializer);
-		break;
-	case StatisticsType::STRING_STATS:
-		StringStats::FormatSerialize(*this, serializer);
-		break;
-	case StatisticsType::LIST_STATS:
-		ListStats::FormatSerialize(*this, serializer);
-		break;
-	case StatisticsType::STRUCT_STATS:
-		StructStats::FormatSerialize(*this, serializer);
-		break;
-	default:
-		throw NotImplementedException("Unrecognized StatisticsType for BaseStatistics::FormatSerialize");
-	}
-	serializer.EndObject();
+	serializer.WriteObject(104, "stats", [this](FormatSerializer &serializer) {
+		switch (GetStatsType()) {
+		case StatisticsType::NUMERIC_STATS:
+			NumericStats::FormatSerialize(*this, serializer);
+			break;
+		case StatisticsType::STRING_STATS:
+			StringStats::FormatSerialize(*this, serializer);
+			break;
+		case StatisticsType::LIST_STATS:
+			ListStats::FormatSerialize(*this, serializer);
+			break;
+		case StatisticsType::STRUCT_STATS:
+			StructStats::FormatSerialize(*this, serializer);
+			break;
+		default:
+			throw NotImplementedException("Unrecognized StatisticsType for BaseStatistics::FormatSerialize");
+		}
+	});
 }
 
 BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserializer) {

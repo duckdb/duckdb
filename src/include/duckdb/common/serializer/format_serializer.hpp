@@ -27,6 +27,25 @@ protected:
 	bool serialize_default_values = false;
 
 public:
+	class List {
+		friend FormatSerializer;
+
+	private:
+		FormatSerializer &serializer;
+		explicit List(FormatSerializer &serializer) : serializer(serializer) {
+		}
+
+	public:
+		// Serialize an element
+		template <class T>
+		void WriteElement(const T &value);
+
+		// Serialize an object
+		template <class FUNC>
+		void WriteObject(FUNC f);
+	};
+
+public:
 	// Serialize a value
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
@@ -51,27 +70,23 @@ public:
 		WriteDataPtr(ptr, count);
 	}
 
-	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const field_id_t field_id, const char *tag) {
+	// Manually begin an object
+	template <class FUNC>
+	void WriteObject(const field_id_t field_id, const char *tag, FUNC f) {
 		SetTag(field_id, tag);
 		OnObjectBegin();
-	}
-
-	void EndObject() {
+		f(*this);
 		OnObjectEnd();
 	}
 
-	void BeginList(const field_id_t field_id, const char *tag, idx_t count) {
+	template <class FUNC>
+	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
 		SetTag(field_id, tag);
 		OnListBegin(count);
-	}
-
-	template <class T>
-	void WriteListItem(const T &value) {
-		WriteValue(value);
-	}
-
-	void EndList() {
+		List list {*this};
+		for (idx_t i = 0; i < count; i++) {
+			func(list, i);
+		}
 		OnListEnd();
 	}
 
@@ -301,5 +316,18 @@ protected:
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
 void FormatSerializer::WriteValue(const vector<bool> &vec);
+
+// List Impl
+template <class FUNC>
+void FormatSerializer::List::WriteObject(FUNC f) {
+	serializer.OnObjectBegin();
+	f(serializer);
+	serializer.OnObjectEnd();
+}
+
+template <class T>
+void FormatSerializer::List::WriteElement(const T &value) {
+	serializer.WriteValue(value);
+}
 
 } // namespace duckdb

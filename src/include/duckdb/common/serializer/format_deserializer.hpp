@@ -27,6 +27,25 @@ protected:
 	DeserializationData data;
 
 public:
+	class List {
+		friend FormatDeserializer;
+
+	private:
+		FormatDeserializer &deserializer;
+		explicit List(FormatDeserializer &deserializer) : deserializer(deserializer) {
+		}
+
+	public:
+		// Deserialize an element
+		template <class T>
+		T ReadElement();
+
+		// Deserialize an object
+		template <class FUNC>
+		void ReadObject(FUNC f);
+	};
+
+public:
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {
@@ -88,28 +107,21 @@ public:
 		return data.Unset<T>();
 	}
 
-	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		OnObjectBegin();
-	}
-
-	void EndObject() {
-		OnObjectEnd();
-	}
-
-	idx_t BeginList(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		return OnListBegin();
-	}
-
-	template <class T>
-	T ReadListItem(const T &value) {
-		return Read<T>();
-	}
-
-	void EndList() {
+	template <class FUNC>
+	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
+		auto size = OnListBegin();
+		List list {*this};
+		for (idx_t i = 0; i < size; i++) {
+			func(list, i);
+		}
 		OnListEnd();
+	}
+
+	template <class FUNC>
+	void ReadObject(const field_id_t field_id, const char *tag, FUNC func) {
+		OnObjectBegin();
+		func(*this);
+		OnObjectEnd();
 	}
 
 private:
@@ -430,5 +442,17 @@ protected:
 	virtual string ReadString() = 0;
 	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
+
+template <class FUNC>
+void FormatDeserializer::List::ReadObject(FUNC f) {
+	deserializer.OnObjectBegin();
+	f(deserializer);
+	deserializer.OnObjectEnd();
+}
+
+template <class T>
+T FormatDeserializer::List::ReadElement() {
+	return deserializer.Read<T>();
+}
 
 } // namespace duckdb

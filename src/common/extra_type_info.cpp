@@ -326,11 +326,11 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
-	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
+	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &deserializer, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
-		source.BeginObject(201, "values_insert_order");
-		values_insert_order.FormatDeserialize(source, size);
-		source.EndObject();
+		deserializer.ReadObject(201, "values_insert_order", [&](FormatDeserializer &source) {
+			values_insert_order.FormatDeserialize(source, size);
+		});
 		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
@@ -479,9 +479,9 @@ void EnumTypeInfo::Serialize(FieldWriter &writer) const {
 void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "dict_size", dict_size);
-	serializer.BeginObject(201, "values_insert_order");
-	((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
-	serializer.EndObject();
+	serializer.WriteObject(201, "values_insert_order", [&](FormatSerializer &serializer) {
+		((Vector &)GetValuesInsertOrder()).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
+	});
 }
 
 } // namespace duckdb

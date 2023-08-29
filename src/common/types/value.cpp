@@ -1816,16 +1816,16 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 			}
 		} break;
 		case PhysicalType::LIST: {
-			serializer.BeginObject(102, "value");
-			auto &children = ListValue::GetChildren(*this);
-			serializer.WriteProperty(100, "children", children);
-			serializer.EndObject();
+			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+				auto &children = ListValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
 		} break;
 		case PhysicalType::STRUCT: {
-			serializer.BeginObject(102, "value");
-			auto &struct_children = StructValue::GetChildren(*this);
-			serializer.WriteProperty(100, "children", struct_children);
-			serializer.EndObject();
+			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+				auto &children = StructValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
 		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for FormatSerialize");
@@ -1891,16 +1891,16 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 		}
 	} break;
 	case PhysicalType::LIST: {
-		deserializer.BeginObject(102, "value");
-		auto children = deserializer.ReadProperty<vector<Value>>(100, "children");
-		new_value.value_info_ = make_shared<NestedValueInfo>(children);
-		deserializer.EndObject();
+		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
 	} break;
 	case PhysicalType::STRUCT: {
-		deserializer.BeginObject(102, "value");
-		auto children = deserializer.ReadProperty<vector<Value>>(100, "children");
-		new_value.value_info_ = make_shared<NestedValueInfo>(children);
-		deserializer.EndObject();
+		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
 	} break;
 	default:
 		throw NotImplementedException("Unimplemented type for FormatDeserialize");
