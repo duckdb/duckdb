@@ -55,8 +55,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	D_ASSERT(op->logical_type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->logical_type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
 	unordered_set<idx_t> left_bindings, right_bindings;
-	LogicalJoin::GetTableReferences(*((LogicalOperator*)op->children[0].get()), left_bindings);
-	LogicalJoin::GetTableReferences(*((LogicalOperator*)op->children[1].get()), right_bindings);
+	auto left = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0]));
+	LogicalJoin::GetTableReferences(*left, left_bindings);
+	op->children[0] = std::move(left);
+	auto right = unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1]));
+	LogicalJoin::GetTableReferences(*right, right_bindings);
+	op->children[1] = std::move(right);
 	switch (join.join_type)
 	{
 	case JoinType::INNER:

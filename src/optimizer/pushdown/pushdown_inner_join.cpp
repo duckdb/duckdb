@@ -50,7 +50,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownInnerJoin(unique_ptr<Logical
 	}
 	GenerateFilters();
 	// turn the inner join into a cross product
-	auto cross_product = make_uniq<LogicalCrossProduct>(unique_ptr<LogicalOperator>((LogicalOperator*)op->children[0].get()), unique_ptr<LogicalOperator>((LogicalOperator*)op->children[1].get()));
+	auto cross_product = make_uniq<LogicalCrossProduct>(
+						unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[0])),
+						unique_ptr_cast<Operator, LogicalOperator>(std::move(op->children[1])));
 	// then push down cross product
 	return PushdownCrossProduct(std::move(cross_product));
 }
