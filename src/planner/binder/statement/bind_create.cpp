@@ -635,13 +635,13 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		auto &catalog = Catalog::GetCatalog(context, create_type_info.catalog);
 		auto &dependencies = create_type_info.dependencies;
-		SetCatalogLookupCallback([&dependencies, &catalog](CatalogEntry &entry) {
+		auto dependency_callback = [&dependencies, &catalog](CatalogEntry &entry) {
 			if (&catalog != &entry.ParentCatalog()) {
 				// Don't register any cross-catalog dependencies
 				return;
 			}
 			dependencies.AddDependency(entry);
-		});
+		};
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto query_obj = Bind(*create_type_info.query);
@@ -666,6 +666,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 			result.plan->AddChild(std::move(query));
 		} else if (create_type_info.type.id() == LogicalTypeId::USER) {
+			SetCatalogLookupCallback(dependency_callback);
 			// two cases:
 			// 1: create a type with a non-existant type as source, catalog.GetType(...) will throw exception.
 			// 2: create a type alias with a custom type.
@@ -680,6 +681,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
 		} else {
+			SetCatalogLookupCallback(dependency_callback);
 			// This is done so that if the type contains a USER type,
 			// we register this dependency
 			auto preserved_type = create_type_info.type;
