@@ -43,6 +43,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	if (!last_buffer->IsCSVFileLastBuffer()) {
 		auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, file_idx);
 		if (!maybe_last_buffer) {
+			last_buffer->last_buffer = true;
 			return false;
 		}
 		last_buffer = std::move(maybe_last_buffer);

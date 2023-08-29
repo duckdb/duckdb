@@ -90,7 +90,8 @@ public:
 	//! This is to avoid mallocing a lot of memory for a small file
 	//! And if it's a compressed file we can't use the actual size of the file
 	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
-
+	//! If this is the last buffer of the CSV File
+	bool last_buffer = false;
 private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
@@ -98,8 +99,6 @@ private:
 	//! We need to check for Byte Order Mark, to define the start position of this buffer
 	//! https://en.wikipedia.org/wiki/Byte_order_mark#UTF-8
 	idx_t start_position = 0;
-	//! If this is the last buffer of the CSV File
-	bool last_buffer = false;
 	//! If this is the first buffer of the CSV File
 	bool first_buffer = false;
 	//! Global position from the CSV File where this buffer starts
