@@ -25,6 +25,7 @@ struct TryCastFloatingOperator {
 struct TupleSniffing {
 	idx_t line_number;
 	idx_t position;
+	bool set = false;
 	vector<Value> values;
 };
 
@@ -183,6 +184,7 @@ struct SniffValue {
 		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
 			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
+			sniffed_values[machine.cur_rows].set = true;
 			machine.line_start_pos = current_pos;
 		}
 		machine.pre_previous_state = machine.previous_state;
@@ -226,6 +228,11 @@ struct SniffValue {
 		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
 			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
+			if (!sniffed_values[machine.cur_rows].set){
+				sniffed_values[machine.cur_rows].position = machine.line_start_pos;
+				sniffed_values[machine.cur_rows].set = true;
+			}
+
 			sniffed_values[machine.cur_rows++].values.push_back(Value(machine.value));
 		}
 		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - machine.cur_rows), sniffed_values.end());
