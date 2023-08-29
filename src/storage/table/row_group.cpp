@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
