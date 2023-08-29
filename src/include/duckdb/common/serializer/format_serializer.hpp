@@ -83,24 +83,6 @@ protected:
 		WriteValue(ptr.get());
 	}
 
-	template <typename T>
-	typename std::enable_if<std::is_same<typename is_reference<reference<T>>::ELEMENT_TYPE, // Use ELEMENT_TYPE
-	                                     CatalogEntry>::value,
-	                        void>::type
-	WriteValue(const reference<T> &ref) {
-		CatalogEntry &entry = ref.get();
-		auto catalog = entry.ParentCatalog().GetName();
-		auto schema = entry.ParentSchema().name;
-		auto name = entry.name;
-
-		BeginObject(0, "catalog_entry_reference");
-		WriteProperty(0, "catalog", catalog);
-		WriteProperty(1, "schema", schema);
-		WriteProperty(2, "name", name);
-		WriteProperty(3, "type", entry.type);
-		EndObject();
-	}
-
 	// Pointer
 	template <typename T>
 	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteValue(const T ptr) {

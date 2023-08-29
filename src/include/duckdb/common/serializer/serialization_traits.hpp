@@ -102,14 +102,6 @@ struct is_shared_ptr<shared_ptr<T>> : std::true_type {
 };
 
 template <typename T>
-struct is_reference : std::false_type {};
-
-template <typename T>
-struct is_reference<reference<T>> : std::true_type {
-	using ELEMENT_TYPE = T;
-};
-
-template <typename T>
 struct is_pair : std::false_type {};
 
 template <typename T, typename U>

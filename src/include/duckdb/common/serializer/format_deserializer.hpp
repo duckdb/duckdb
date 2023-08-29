@@ -168,21 +168,6 @@ private:
 		return val;
 	}
 
-	// Deserialize a reference<CatalogEntry>
-	template <typename T = void>
-	inline typename std::enable_if<std::is_same<typename is_reference<T>::ELEMENT_TYPE, CatalogEntry>::value, T>::type
-	Read() {
-		auto &context = this->data.Get<ClientContext &>();
-		BeginObject(0, "catalog_entry_reference");
-		auto catalog = ReadProperty<string>(0, "catalog");
-		auto schema = ReadProperty<string>(1, "schema");
-		auto name = ReadProperty<string>(2, "name");
-		auto type = ReadProperty<CatalogType>(3, "type");
-		auto entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-		EndObject();
-		return reference<CatalogEntry>(*entry);
-	}
-
 	// Deserialize a vector
 	template <typename T = void>
 	inline typename std::enable_if<is_vector<T>::value, T>::type Read() {
