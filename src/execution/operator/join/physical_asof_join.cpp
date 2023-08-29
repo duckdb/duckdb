@@ -432,6 +432,9 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 
 	left_hash = lhs_sink.hash_groups[left_group].get();
 	auto &left_sort = *(left_hash->global_sort);
+	if (left_sort.sorted_blocks.empty()) {
+		return;
+	}
 	lhs_scanner = make_uniq<PayloadScanner>(left_sort, false);
 	left_itr = make_uniq<SBIterator>(left_sort, iterator_comp);
 
@@ -733,6 +736,9 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
 	hash_group = std::move(gsource.gsink.rhs_sink.hash_groups[hash_bin]);
+	if (hash_group->global_sort->sorted_blocks.empty()) {
+		return 0;
+	}
 	scanner = make_uniq<PayloadScanner>(*hash_group->global_sort);
 	found_match = gsource.gsink.right_outers[hash_bin].GetMatches();
 
