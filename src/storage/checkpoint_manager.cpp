@@ -157,10 +157,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 }
 
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
-	auto field_reader = FieldReader(reader);
-	uint32_t entry_count = field_reader.ReadRequired<uint32_t>();
-	field_reader.Finalize();
-
+	uint32_t entry_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < entry_count; i++) {
 		ReadEntry(context, reader);
 	}
@@ -232,6 +229,7 @@ void CheckpointReader::ReadEntry(ClientContext &context, MetadataReader &reader)
 	switch (type) {
 	case CatalogType::SCHEMA_ENTRY: {
 		ReadSchema(context, reader);
+		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
 		ReadType(context, reader);
