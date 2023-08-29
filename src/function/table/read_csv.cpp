@@ -38,16 +38,13 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// Here we identify if we can run this CSV file on parallel or not.
-	bool empty_options = options.dialect_options.state_machine_options.delimiter == '\0' ||
-	                     options.dialect_options.state_machine_options.escape == '\0' ||
-	                     options.dialect_options.state_machine_options.quote == '\0';
 	bool not_supported_options = options.null_padding;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (options.parallel_mode != ParallelMode::PARALLEL && int64_t(files.size() * 2) >= number_of_threads) {
 		single_threaded = true;
 	}
-	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || empty_options || not_supported_options ||
+	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || not_supported_options ||
 	    options.dialect_options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
