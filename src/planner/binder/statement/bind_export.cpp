@@ -41,10 +41,11 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool DependencyIsNotOrderedYet(string &table_name, catalog_entry_vector_t &unordered) {
-	for (auto &entry : unordered) {
+bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
+	for (auto &entry : ordered) {
 		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
-		if (table_entry.name == table_name) {
+		if (table_entry.name == referenced_table) {
+			// The referenced table is already ordered
 			return true;
 		}
 	}
@@ -73,7 +74,7 @@ void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t
 				// This table references a table, don't move it yet
 				move_to_ordered = false;
 				break;
-			} else if (DependencyIsNotOrderedYet(fk.info.table, unordered)) {
+			} else if (!ReferencedTableIsOrdered(fk.info.table, ordered)) {
 				// The table that it references isn't ordered yet
 				move_to_ordered = false;
 				break;
