@@ -56,10 +56,6 @@ private:
 	bool on_disk_file = false;
 	idx_t file_size = 0;
 
-	AllocatedData cached_buffer;
-	idx_t read_position = 0;
-	idx_t buffer_size = 0;
-	idx_t buffer_capacity = 0;
 	idx_t requested_bytes = 0;
 	//! If we finished reading the file
 	bool finished = false;

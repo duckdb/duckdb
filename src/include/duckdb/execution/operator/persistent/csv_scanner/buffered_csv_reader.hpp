@@ -28,24 +28,21 @@ class BufferedCSVReader : public BaseCSVReader {
 	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 
 public:
-	BufferedCSVReader(ClientContext &context, CSVReaderOptions options, shared_ptr<CSVBufferManager> buffer_manager_p,
+	BufferedCSVReader(ClientContext &context, CSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	BufferedCSVReader(ClientContext &context, string filename, CSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	virtual ~BufferedCSVReader() {
 	}
-	char *buffer_ptr;
-	unsafe_unique_array<char> buffer_data;
+
+	unsafe_unique_array<char> buffer;
 	idx_t buffer_size;
 	idx_t position;
 	idx_t start = 0;
-	idx_t buffer_idx = 0;
 
 	vector<unsafe_unique_array<char>> cached_buffers;
 
 	unique_ptr<CSVFileHandle> file_handle;
-	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<CSVBufferHandle> buffer_handle;
 
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk

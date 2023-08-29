@@ -39,7 +39,6 @@ void CSVFileHandle::Seek(idx_t position) {
 
 void CSVFileHandle::Reset() {
 	requested_bytes = 0;
-	read_position = 0;
 	finished = false;
 	if (can_seek) {
 		// we can seek - reset the file handle
@@ -51,7 +50,6 @@ void CSVFileHandle::Reset() {
 		if (!reset_enabled) {
 			throw InternalException("Reset called but reset is not enabled for this CSV Handle");
 		}
-		read_position = 0;
 	}
 }
 bool CSVFileHandle::OnDiskFile() {
@@ -68,57 +66,12 @@ bool CSVFileHandle::FinishedReading() {
 
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
-	if (true) {
-		// if this is a plain file source OR we can seek we are not caching anything
-		auto bytes_read = file_handle->Read(buffer, nr_bytes);
-		if (!finished) {
-			finished = bytes_read == 0;
-		}
-		return bytes_read;
-	}
-	// not a plain file source: we need to do some bookkeeping around the reset functionality
-	idx_t result_offset = 0;
-	if (read_position < buffer_size) {
-		// we need to read from our cached buffer
-		auto buffer_read_count = MinValue<idx_t>(nr_bytes, buffer_size - read_position);
-		memcpy(buffer, cached_buffer.get() + read_position, buffer_read_count);
-		result_offset += buffer_read_count;
-		read_position += buffer_read_count;
-		if (result_offset == nr_bytes) {
-			return nr_bytes;
-		}
-	} else if (!reset_enabled && cached_buffer.IsSet()) {
-		// reset is disabled, but we still have cached data
-		// we can remove any cached data
-		cached_buffer.Reset();
-		buffer_size = 0;
-		buffer_capacity = 0;
-		read_position = 0;
-	}
-	// we have data left to read from the file
-	// read directly into the buffer
-	auto bytes_read = file_handle->Read(char_ptr_cast(buffer) + result_offset, nr_bytes - result_offset);
-	file_size = file_handle->GetFileSize();
-	read_position += bytes_read;
-	if (reset_enabled) {
-		// if reset caching is enabled, we need to cache the bytes that we have read
-		if (buffer_size + bytes_read >= buffer_capacity) {
-			// no space; first enlarge the buffer
-			buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
-
-			auto new_buffer = allocator.Allocate(buffer_capacity);
-			if (buffer_size > 0) {
-				memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
-			}
-			cached_buffer = std::move(new_buffer);
-		}
-		memcpy(cached_buffer.get() + buffer_size, char_ptr_cast(buffer) + result_offset, bytes_read);
-		buffer_size += bytes_read;
-	}
+	// if this is a plain file source OR we can seek we are not caching anything
+	auto bytes_read = file_handle->Read(buffer, nr_bytes);
 	if (!finished) {
-		finished = bytes_read < (int64_t)nr_bytes;
+		finished = bytes_read == 0;
 	}
-	return result_offset + bytes_read;
+	return bytes_read;
 }
 
 string CSVFileHandle::ReadLine() {

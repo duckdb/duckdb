@@ -3,8 +3,8 @@
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileHandle> file_handle_p,
-                                   const CSVReaderOptions &options, idx_t file_idx_p, bool cache_buffers_p)
-    : file_handle(std::move(file_handle_p)), context(context_p), cache_buffers(cache_buffers_p), file_idx(file_idx_p),
+                                   const CSVReaderOptions &options, idx_t file_idx_p)
+    : file_handle(std::move(file_handle_p)), context(context_p), file_idx(file_idx_p),
       buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
 	if (options.skip_rows_set) {
 		// Skip rows if they are set
@@ -27,19 +27,10 @@ void CSVBufferManager::UnpinBuffer(idx_t cache_idx) {
 }
 
 void CSVBufferManager::Initialize() {
-	if (cache_buffers) {
-		if (cached_buffers.empty()) {
-			cached_buffers.emplace_back(
-			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
-			last_buffer = cached_buffers.front();
-		}
-	} else {
-		file_handle->Reset();
-		global_csv_pos = 0;
-		for (idx_t i = 0; i < skip_rows; i++) {
-			file_handle->ReadLine();
-		}
-		last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx);
+	if (cached_buffers.empty()) {
+		cached_buffers.emplace_back(
+		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		last_buffer = cached_buffers.front();
 	}
 	start_pos = last_buffer->GetStart();
 }
@@ -61,43 +52,25 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	return false;
 }
 
-unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, const bool auto_detection) {
-	if (auto_detection) {
-		D_ASSERT(pos <= cached_buffers.size());
-		if (pos != 0) {
-			cached_buffers[pos - 1]->Unpin();
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
+	while (pos >= cached_buffers.size()) {
+		if (done) {
+			return nullptr;
 		}
-		if (pos == cached_buffers.size()) {
-			if (!ReadNextAndCacheIt()) {
-				return nullptr;
-			}
+		if (!ReadNextAndCacheIt()) {
+			done = true;
+			return nullptr;
 		}
-		return cached_buffers[pos]->Pin(*file_handle);
 	}
-
-	if (pos < cached_buffers.size()) {
-		auto buffer = cached_buffers[pos];
-		// Invalidate pre-previous buffer
-		if (pos > 1) {
-			cached_buffers[pos - 2] = nullptr;
+	if (pos != 0) {
+		cached_buffers[pos - 1]->Unpin();
+	}
+	if (pos == cached_buffers.size()) {
+		if (!ReadNextAndCacheIt()) {
+			return nullptr;
 		}
-		return buffer->Pin(*file_handle);
 	}
-	if (!last_buffer) {
-		last_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx);
-		return last_buffer->Pin(*file_handle);
-	}
-	if (last_buffer->GetCSVGlobalStart() == 0 && pos == 0) {
-		return last_buffer->Pin(*file_handle);
-	}
-	if (last_buffer->IsCSVFileLastBuffer()) {
-		return nullptr;
-	}
-	last_buffer = last_buffer->Next(*file_handle, buffer_size, file_idx);
-	if (!last_buffer) {
-		return nullptr;
-	}
-	return last_buffer->Pin(*file_handle);
+	return cached_buffers[pos]->Pin(*file_handle);
 }
 
 bool CSVBufferIterator::Finished() {

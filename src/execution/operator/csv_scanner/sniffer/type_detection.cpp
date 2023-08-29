@@ -182,6 +182,8 @@ struct SniffValue {
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
+			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
+			machine.line_start_pos = current_pos;
 		}
 		machine.pre_previous_state = machine.previous_state;
 		machine.previous_state = machine.state;
@@ -202,7 +204,7 @@ struct SniffValue {
 				sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
 			}
 			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
-			sniffed_values[machine.cur_rows].position = current_pos;
+
 			machine.value = "";
 		}
 		if (machine.state == CSVState::STANDARD ||

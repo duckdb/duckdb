@@ -21,10 +21,10 @@ class CSVStateMachine;
 class CSVBufferManager {
 public:
 	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, const CSVReaderOptions &options,
-	                 idx_t file_idx = 0, bool cache_buffers = true);
+	                 idx_t file_idx = 0);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
-	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t pos, const bool auto_detection);
+	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t pos);
 	//! Returns the starting position of the first buffer
 	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing
@@ -36,8 +36,8 @@ public:
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
-	bool cache_buffers;
 	idx_t file_idx;
+	bool done = false;
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
@@ -69,7 +69,7 @@ public:
 			if (cur_buffer_idx == 0) {
 				cur_pos = buffer_manager->GetStartPos();
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++);
 			if (!cur_buffer_handle) {
 				//! Done Processing the File
 				OP::Finalize(machine, result);
@@ -86,7 +86,7 @@ public:
 				}
 				cur_pos++;
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++, true);
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++);
 			cur_pos = 0;
 		}
 		//! Done Processing the File

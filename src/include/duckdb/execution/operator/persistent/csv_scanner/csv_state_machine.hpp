@@ -69,6 +69,7 @@ public:
 	idx_t column_count;
 	string value;
 	idx_t rows_read;
+	idx_t line_start_pos = 0;
 
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
