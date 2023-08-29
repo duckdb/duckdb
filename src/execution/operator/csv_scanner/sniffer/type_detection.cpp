@@ -228,7 +228,7 @@ struct SniffValue {
 		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
 			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
-			if (!sniffed_values[machine.cur_rows].set){
+			if (!sniffed_values[machine.cur_rows].set) {
 				sniffed_values[machine.cur_rows].position = machine.line_start_pos;
 				sniffed_values[machine.cur_rows].set = true;
 			}

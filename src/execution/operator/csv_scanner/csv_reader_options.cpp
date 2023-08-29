@@ -70,10 +70,14 @@ void CSVReaderOptions::SetCompression(const string &compression_p) {
 }
 
 void CSVReaderOptions::SetEscape(const string &input) {
-	if (input.size() > 1) {
+	auto escape_str = input;
+	if (escape_str.size() > 1) {
 		throw InvalidInputException("The escape option cannot exceed a size of 1 byte.");
 	}
-	this->dialect_options.state_machine_options.escape = input[0];
+	if (escape_str.empty()) {
+		escape_str = string("\0", 1);
+	}
+	this->dialect_options.state_machine_options.escape = escape_str[0];
 	this->has_escape = true;
 }
 
@@ -90,10 +94,14 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 }
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
-	if (quote_p.size() > 1) {
+	auto quote_str = quote_p;
+	if (quote_str.size() > 1) {
 		throw InvalidInputException("The quote option cannot exceed a size of 1 byte.");
 	}
-	this->dialect_options.state_machine_options.quote = quote_p[0];
+	if (quote_str.empty()) {
+		quote_str = string("\0", 1);
+	}
+	this->dialect_options.state_machine_options.quote = quote_str[0];
 	this->has_quote = true;
 }
 

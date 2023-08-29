@@ -92,6 +92,7 @@ public:
 	static constexpr idx_t CSV_MINIMUM_BUFFER_SIZE = 10000000; // 10MB
 	//! If this is the last buffer of the CSV File
 	bool last_buffer = false;
+
 private:
 	ClientContext &context;
 	//! Actual size can be smaller than the buffer size in case we allocate it too optimistically.
