@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const field_id_t field_id, const char *tag) {
+void JsonDeserializer::SetTag(const field_id_t, const char *tag) {
 	current_tag = tag;
 }
 
@@ -43,8 +43,10 @@ void JsonDeserializer::ThrowTypeError(yyjson_val *val, const char *expected) {
 	if (yyjson_is_obj(parent.val)) {
 		auto msg =
 		    StringUtil::Format("property '%s' expected type '%s', but got type: '%s'", current_tag, expected, actual);
+		throw ParserException(msg);
 	} else if (yyjson_is_arr(parent.val)) {
 		auto msg = StringUtil::Format("Sequence expect child of type '%s', but got type: %s", expected, actual);
+		throw ParserException(msg);
 	} else {
 		// unreachable?
 		throw InternalException("cannot get nested value from non object or array-type");
@@ -178,7 +180,7 @@ bool JsonDeserializer::ReadBool() {
 
 int8_t JsonDeserializer::ReadSignedInt8() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int8_t");
 	}
 	return yyjson_get_sint(val);
@@ -194,7 +196,7 @@ uint8_t JsonDeserializer::ReadUnsignedInt8() {
 
 int16_t JsonDeserializer::ReadSignedInt16() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int16_t");
 	}
 	return yyjson_get_sint(val);
@@ -210,7 +212,7 @@ uint16_t JsonDeserializer::ReadUnsignedInt16() {
 
 int32_t JsonDeserializer::ReadSignedInt32() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int32_t");
 	}
 	return yyjson_get_sint(val);
@@ -226,7 +228,7 @@ uint32_t JsonDeserializer::ReadUnsignedInt32() {
 
 int64_t JsonDeserializer::ReadSignedInt64() {
 	auto val = GetNextValue();
-	if (!yyjson_is_sint(val)) {
+	if (!yyjson_is_int(val)) {
 		ThrowTypeError(val, "int64_t");
 	}
 	return yyjson_get_sint(val);

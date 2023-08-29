@@ -82,3 +82,33 @@ void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* messag
 	}
 	mbedtls_md_free(&hmac_ctx);
 }
+
+MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
+	mbedtls_sha256_init((mbedtls_sha256_context*)sha_context);
+
+	if (mbedtls_sha256_starts((mbedtls_sha256_context*)sha_context, false)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+MbedTlsWrapper::SHA256State::~SHA256State() {
+	mbedtls_sha256_free((mbedtls_sha256_context*)sha_context);
+	delete (mbedtls_sha256_context*)sha_context;
+}
+
+void MbedTlsWrapper::SHA256State::AddString(const std::string & str) {
+	if (mbedtls_sha256_update((mbedtls_sha256_context*)sha_context, (unsigned char*)str.data(), str.size())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+std::string MbedTlsWrapper::SHA256State::Finalize() {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA256_HASH_BYTES);
+
+	if (mbedtls_sha256_finish((mbedtls_sha256_context*)sha_context, (unsigned char*)hash.data())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+
+	return hash;
+}

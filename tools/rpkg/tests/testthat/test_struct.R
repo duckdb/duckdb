@@ -108,3 +108,69 @@ test_that("structs give the same results via Arrow", {
     )
   ))
 })
+
+test_that("nested lists of atomic values can be written", {
+  skip_if_not_installed("vctrs")
+
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  df <- vctrs::data_frame(a = 1:3, b = list(4:6, 2:3, 1L))
+  dbWriteTable(con, "df", df)
+  expect_equal(dbReadTable(con, "df"), df)
+
+  duckdb_register(con, "df_reg", df)
+  expect_equal(dbReadTable(con, "df_reg"), df)
+
+  df2 <- vctrs::data_frame(a = 1:2, b = list(4:6, letters[2:3]))
+  expect_error(dbWriteTable(con, "df2", df2), "register")
+  expect_error(duckdb_register(con, "df2_reg", df2), "register")
+})
+
+test_that("nested and packed columns work in full", {
+  skip_if_not_installed("vctrs")
+
+  con <- dbConnect(duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
+  df <- vctrs::data_frame(
+    a = vctrs::data_frame(
+      x = 1:5,
+      y = as.numeric(6:10),
+      z = vctrs::data_frame(
+        k = c(TRUE, FALSE, NA, TRUE, FALSE),
+        l = letters[1:5]
+      )
+    ),
+    b = list(
+      vctrs::data_frame(
+        u = structure(as.numeric(19577:19578), class = "Date"),
+        v = structure(19577:19578, class = "Date"),
+        w = structure(1691507820, class = c("POSIXct", "POSIXt"), tzone = "UTC") + 0:1
+      )
+    ),
+    c = list(
+      vctrs::data_frame(
+        # TIME_MINUTES, TIME_MINUTES_INTEGER, TIME_HOURS, ... etc.: Loss ok
+        d = structure(as.numeric(13:16), class = "difftime", units = "secs"),
+        e = vctrs::data_frame(
+          u = structure(17:20, class = "difftime", units = "secs"),
+          v = 5:8,
+          w = as.list(9:12)
+        )
+      )
+    ),
+    f = list(
+      vctrs::data_frame(
+        g = list(as.raw(13), as.raw(14:15), as.raw(16:18), as.raw(19:22)),
+        h = vctrs::data_frame(u = 1:4, v = 5:8, w = list(vctrs::data_frame(s = 9:10)))
+      )
+    ),
+    i = "plain old"
+  )
+  dbWriteTable(con, "df", df)
+  expect_equal(dbReadTable(con, "df"), df)
+
+  duckdb_register(con, "df_reg", df)
+  expect_equal(dbReadTable(con, "df_reg"), df)
+})
