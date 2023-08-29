@@ -41,7 +41,7 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool IsExistMainKeyTable(string &table_name, catalog_entry_vector_t &unordered) {
+bool DependencyIsNotOrderedYet(string &table_name, catalog_entry_vector_t &unordered) {
 	for (auto &entry : unordered) {
 		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
 		if (table_entry.name == table_name) {
@@ -73,7 +73,7 @@ void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t
 				// This table references a table, don't move it yet
 				move_to_ordered = false;
 				break;
-			} else if (IsExistMainKeyTable(fk.info.table, unordered)) {
+			} else if (DependencyIsNotOrderedYet(fk.info.table, unordered)) {
 				// The table that it references isn't ordered yet
 				move_to_ordered = false;
 				break;
