@@ -44,9 +44,6 @@ public:
 	//! Aux Function for string UTF8 Verification
 	void VerifyUTF8();
 
-	//! Prints the transition array
-	void Print();
-
 	CSVStateMachineCache &csv_state_machine_cache;
 
 	const CSVReaderOptions &options;

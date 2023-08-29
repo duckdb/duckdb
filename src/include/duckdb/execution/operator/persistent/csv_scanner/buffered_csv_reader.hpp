@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 
 namespace duckdb {

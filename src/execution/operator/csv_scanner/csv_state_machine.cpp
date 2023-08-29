@@ -4,8 +4,6 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine_cache.hpp"
 
-#include <iomanip>
-
 namespace duckdb {
 
 CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
@@ -22,28 +20,6 @@ CSVStateMachine::CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMach
 
 void CSVStateMachine::Reset() {
 	csv_buffer_iterator.Reset();
-}
-
-void CSVStateMachine::Print() {
-	std::cout << "{" << std::endl;
-	for (uint32_t i = 0; i < NUM_STATES; ++i) {
-		std::cout << "    {";
-		for (uint32_t j = 0; j < NUM_TRANSITIONS; ++j) {
-			std::cout << std::setw(3) << static_cast<int>(transition_array[i][j]);
-			if (j != NUM_TRANSITIONS - 1) {
-				std::cout << ",";
-			}
-			if ((j + 1) % 16 == 0) {
-				std::cout << std::endl << "     ";
-			}
-		}
-		std::cout << "}";
-		if (i != NUM_STATES - 1) {
-			std::cout << ",";
-		}
-		std::cout << std::endl;
-	}
-	std::cout << "};" << std::endl;
 }
 
 void CSVStateMachine::VerifyUTF8() {
