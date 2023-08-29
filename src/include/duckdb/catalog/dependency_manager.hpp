@@ -56,7 +56,7 @@ private:
 
 	optional_ptr<dependency_set_t> GetEntriesThatDependOnObject(CatalogEntry &object);
 	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object);
-	bool AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
+	bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies,
 	                                  catalog_entry_set_t &exported);
 
 	void PrintDependencyMap();

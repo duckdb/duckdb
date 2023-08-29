@@ -9,6 +9,8 @@
 #include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/common/queue.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/parser/constraints/foreign_key_constraint.hpp"
 
 namespace duckdb {
 
@@ -194,8 +196,51 @@ void DependencyManager::PrintDependentsMap() {
 	}
 }
 
-bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object, catalog_entry_set_t &dependencies,
+static bool CheckForeignKeyDependencies(CatalogEntry &entry, catalog_entry_vector_t &exported) {
+	if (entry.type != CatalogType::TABLE_ENTRY) {
+		return true;
+	}
+	// Check foreign key dependencies
+	auto &table_entry = entry.Cast<TableCatalogEntry>();
+	auto &constraints = table_entry.GetConstraints();
+	for (auto &constraint_p : constraints) {
+		auto &con = *constraint_p;
+		if (con.type != ConstraintType::FOREIGN_KEY) {
+			continue;
+		}
+		auto &fk = con.Cast<ForeignKeyConstraint>();
+		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+			continue;
+		}
+		auto referenced_table = fk.info.table;
+		// Check if the referenced table is already exported
+		bool already_exported = false;
+		for (auto &other : exported) {
+			if (other.get().type != CatalogType::TABLE_ENTRY) {
+				continue;
+			}
+			auto &other_table = other.get().Cast<TableCatalogEntry>();
+			if (referenced_table == other_table.name) {
+				already_exported = true;
+				break;
+			}
+		}
+		if (!already_exported) {
+			// The referenced table is not exported yet
+			return false;
+		}
+	}
+	return true;
+}
+
+bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object,
+                                                     optional_ptr<catalog_entry_set_t> dependencies_p,
                                                      catalog_entry_set_t &exported) {
+	if (dependencies_p) {
+		// This object has no dependencies at all
+		return true;
+	}
+	auto &dependencies = *dependencies_p;
 	for (auto &entry : dependencies) {
 		// This is an entry that needs to be written before 'object' can be written
 		if (exported.find(entry) == exported.end()) {
@@ -226,16 +271,25 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 			// This entry has already been written
 			continue;
 		}
-		auto entry = dependencies_map.find(object);
-		if (entry == dependencies_map.end() || AllExportDependenciesWritten(object, entry->second, entries)) {
+		auto dependents = GetEntriesThatObjectDependsOn(object);
+		bool is_ordered = true;
+		// FIXME: once we register actual dependencies for ForeignKey constraints
+		// this can be deleted
+		is_ordered = CheckForeignKeyDependencies(object, export_order);
+		if (is_ordered) {
+			is_ordered = AllExportDependenciesWritten(object, dependents, entries);
+		}
+		if (is_ordered) {
 			// All dependencies written, we can write this now
 			auto insert_result = entries.insert(object);
 			(void)insert_result;
 			D_ASSERT(insert_result.second);
 			export_order.push_back(object);
 		} else {
-			for (auto &dependency : entry->second) {
-				backlog.emplace(dependency);
+			if (dependents) {
+				for (auto &dependency : *dependents) {
+					backlog.emplace(dependency);
+				}
 			}
 			backlog.emplace(object);
 		}
