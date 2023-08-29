@@ -13,6 +13,7 @@
 namespace duckdb {
 
 enum class DatePartSpecifier : uint8_t {
+	//	BIGINT values
 	YEAR,
 	MONTH,
 	DAY,
@@ -35,8 +36,15 @@ enum class DatePartSpecifier : uint8_t {
 	ERA,
 	TIMEZONE,
 	TIMEZONE_HOUR,
-	TIMEZONE_MINUTE
+	TIMEZONE_MINUTE,
+
+	//	DOUBLE values
+	JULIAN_DAY
 };
+
+inline bool IsBigintDatepart(DatePartSpecifier part_code) {
+	return size_t(part_code) < size_t(DatePartSpecifier::JULIAN_DAY);
+}
 
 DUCKDB_API bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);
 DUCKDB_API DatePartSpecifier GetDatePartSpecifier(const string &specifier);

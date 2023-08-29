@@ -139,7 +139,7 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	// you can't malloc a struct with a non-trivial C++ constructor
 	// and std::string has a non-trivial constructor. so we need
 	// to use new and delete rather than malloc and free.
-	auto wrapper = new DuckDBAdbcDatabaseWrapper;
+	auto wrapper = new (std::nothrow) DuckDBAdbcDatabaseWrapper;
 	if (!wrapper) {
 		SetError(error, "Allocation error");
 		return ADBC_STATUS_INVALID_ARGUMENT;
