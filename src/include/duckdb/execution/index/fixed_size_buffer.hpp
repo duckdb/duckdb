@@ -26,9 +26,6 @@ public:
 	//! Constructor for deserializing buffer metadata from disk
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const block_id_t &block_id);
 
-	//! Destroys the in-memory buffer and/or the on-disk block
-	~FixedSizeBuffer();
-
 	//! Block manager of the database instance
 	BlockManager &block_manager;
 
@@ -47,12 +44,11 @@ public:
 	}
 	//! Returns true, if the block is on-disk
 	inline bool OnDisk() const {
-		return block_handle != nullptr;
+		return (block_handle != nullptr) && (block_handle->BlockId() < MAXIMUM_BLOCK);
 	}
 	//! Returns the block ID
 	inline block_id_t GetBlockID() const {
 		D_ASSERT(OnDisk());
-		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 		return block_handle->BlockId();
 	}
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory
@@ -65,6 +61,8 @@ public:
 		}
 		return buffer_handle->Ptr();
 	}
+	//! Destroys the in-memory buffer and the on-disk block
+	void Destroy();
 	//! Serializes a buffer (if dirty or not on disk)
 	void Serialize();
 	//! Deserialize a buffer (if not in-memory)

@@ -13,9 +13,9 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 
 	buffers = make_uniq<unordered_map<idx_t, unique_ptr<FixedSizeBuffer>>>();
 
-	auto max_segment_size = Storage::BLOCK_ALLOC_SIZE + sizeof(validity_t);
-	if (segment_size > max_segment_size) {
-		throw InternalException("The maximum segment size of fixed-size allocators is " + to_string(max_segment_size));
+	if (segment_size > Storage::BLOCK_ALLOC_SIZE - sizeof(validity_t)) {
+		throw InternalException("The maximum segment size of fixed-size allocators is " +
+		                        to_string(Storage::BLOCK_ALLOC_SIZE - sizeof(validity_t)));
 	}
 
 	// calculate how many segments fit into one buffer (available_segments_per_buffer)
@@ -107,6 +107,9 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 }
 
 void FixedSizeAllocator::Reset() {
+	for (auto &buffer : *buffers) {
+		buffer.second->Destroy();
+	}
 	buffers->clear();
 	buffers_with_free_space.clear();
 	total_segment_count = 0;
@@ -203,6 +206,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 		D_ASSERT(buffers->find(buffer_id) != buffers->end());
 		auto &buffer = buffers->find(buffer_id)->second;
 		D_ASSERT(buffer->InMemory());
+		buffer->Destroy();
 		buffers->erase(buffer_id);
 	}
 	vacuum_buffers.clear();

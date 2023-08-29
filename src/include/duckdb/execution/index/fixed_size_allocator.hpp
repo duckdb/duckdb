@@ -33,7 +33,7 @@ public:
 	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
 
 public:
-	explicit FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
+	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
