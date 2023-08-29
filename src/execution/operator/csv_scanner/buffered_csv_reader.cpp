@@ -26,14 +26,16 @@
 
 namespace duckdb {
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, CSVReaderOptions options_p,
+                                     shared_ptr<CSVBufferManager> buffer_manager_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0), buffer_manager(std::move(buffer_manager_p)) {
-	if (!buffer_manager){
+    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0),
+      buffer_manager(std::move(buffer_manager_p)) {
+	if (!buffer_manager) {
 		file_handle = OpenCSV(context, options);
 	}
 	Initialize(requested_types);
-	if (buffer_manager){
+	if (buffer_manager) {
 		file_handle = std::move(buffer_manager->file_handle);
 	}
 }
@@ -49,7 +51,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect && options.file_options.union_by_name) {
 		// This is required for the sniffer to work on Union By Name
-		D_ASSERT(options.file_path == file_handle->GetFilePath());
 		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto csv_buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
 		CSVSniffer sniffer(options, csv_buffer_manager);
@@ -136,10 +137,10 @@ void UpdateMaxLineLength(ClientContext &context, idx_t line_length) {
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
-	if (buffer_idx == 0 && buffer_manager){
+	if (buffer_idx == 0 && buffer_manager) {
 		buffer_manager->file_handle = std::move(file_handle);
 		buffer_handle = buffer_manager->GetBuffer(buffer_idx++, false);
-		if (buffer_handle){
+		if (buffer_handle) {
 			buffer_ptr = buffer_handle->Ptr();
 			bytes_in_chunk = buffer_handle->actual_size;
 			buffer_size = buffer_handle->actual_size;
@@ -153,10 +154,10 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 		return false;
 	}
 	auto old_buffer = std::move(buffer_data);
-	char* old_buffer_ptr = nullptr;
-	if (!old_buffer && buffer_handle){
+	char *old_buffer_ptr = nullptr;
+	if (!old_buffer && buffer_handle) {
 		old_buffer_ptr = buffer_handle->Ptr();
-	} else{
+	} else {
 		old_buffer_ptr = old_buffer.get();
 	}
 

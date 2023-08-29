@@ -73,8 +73,7 @@ void ParallelCSVReader::SkipEmptyLines() {
 }
 
 bool ParallelCSVReader::SetPosition() {
-	if (buffer->buffer->is_first_buffer && start_buffer == position_buffer &&
-	    start_buffer == first_pos_first_buffer) {
+	if (buffer->buffer->is_first_buffer && start_buffer == position_buffer && start_buffer == first_pos_first_buffer) {
 		start_buffer = buffer->buffer->start_position;
 		position_buffer = start_buffer;
 		verification_positions.beginning_of_first_line = position_buffer;

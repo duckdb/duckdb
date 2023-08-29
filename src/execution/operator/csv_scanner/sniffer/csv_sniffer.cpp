@@ -38,7 +38,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	options.dialect_options = best_candidate->dialect_options;
 	options.has_header = best_candidate->dialect_options.header;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
-	if (options.has_header){
+	if (options.has_header) {
 		options.dialect_options.true_start = best_start_with_header;
 	} else {
 		options.dialect_options.true_start = best_start_without_header;

@@ -12,7 +12,8 @@ struct SniffDialect {
 		machine.column_count = 1;
 	}
 
-	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char, idx_t current_pos) {
+	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char,
+	                           idx_t current_pos) {
 
 		D_ASSERT(sniffed_column_counts.size() == machine.options.sample_chunk_size);
 

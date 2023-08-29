@@ -59,7 +59,8 @@ unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 		block = nullptr;
 		Reload(file_handle);
 	}
-	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), file_size, first_buffer, last_buffer, global_csv_start, start_position);
+	return make_uniq<CSVBufferHandle>(buffer_manager.Pin(block), file_size, first_buffer, last_buffer, global_csv_start,
+	                                  start_position, file_number);
 }
 
 void CSVBuffer::Unpin() {

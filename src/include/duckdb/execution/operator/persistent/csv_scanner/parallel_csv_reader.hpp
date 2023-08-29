@@ -61,7 +61,7 @@ struct CSVBufferRead {
 		} else if (start_buffer >= buffer->actual_size) {
 			// 2) It's all in the next buffer
 			D_ASSERT(next_buffer);
-			D_ASSERT(next_buffer->GetBufferSize() >= length + (start_buffer - buffer->GetBufferSize()));
+			D_ASSERT(next_buffer->actual_size >= length + (start_buffer - buffer->actual_size));
 			auto buffer_ptr = next_buffer->Ptr();
 			return string_t(buffer_ptr + (start_buffer - buffer->actual_size), length);
 		} else {

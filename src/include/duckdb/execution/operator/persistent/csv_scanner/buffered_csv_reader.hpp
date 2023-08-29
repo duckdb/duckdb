@@ -34,7 +34,7 @@ public:
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	virtual ~BufferedCSVReader() {
 	}
-	char* buffer_ptr;
+	char *buffer_ptr;
 	unsafe_unique_array<char> buffer_data;
 	idx_t buffer_size;
 	idx_t position;

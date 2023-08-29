@@ -22,7 +22,7 @@ struct TryCastFloatingOperator {
 	}
 };
 
-struct TupleSniffing{
+struct TupleSniffing {
 	idx_t line_number;
 	idx_t position;
 	vector<Value> values;
@@ -175,8 +175,8 @@ struct SniffValue {
 		machine.rows_read = 0;
 	}
 
-	inline static bool Process(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values,
-	                           char current_char, idx_t current_pos) {
+	inline static bool Process(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values, char current_char,
+	                           idx_t current_pos) {
 
 		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
@@ -287,7 +287,6 @@ void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
 	}
 }
 
-
 void CSVSniffer::DetectTypes() {
 	idx_t min_varchar_cols = max_columns_found + 1;
 	vector<LogicalType> return_types;
@@ -353,7 +352,7 @@ void CSVSniffer::DetectTypes() {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
-		if (!tuples.empty()){
+		if (!tuples.empty()) {
 			best_start_without_header = tuples[0].position;
 		}
 
