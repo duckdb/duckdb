@@ -663,6 +663,20 @@ Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
 
 	result.type_ = LogicalType::MAP(child_type);
 	result.is_null = false;
+	for (auto &val : values) {
+		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
+		auto &children = StructValue::GetChildren(val);
+
+		// Ensure that the field containing the keys is called 'key'
+		// and that the field containing the values is called 'value'
+		// this is required to make equality checks work
+		D_ASSERT(children.size() == 2);
+		child_list_t<Value> new_children;
+		new_children.reserve(2);
+		new_children.push_back(std::make_pair("key", children[0]));
+		new_children.push_back(std::make_pair("value", children[1]));
+		val = Value::STRUCT(std::move(new_children));
+	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;
 }
