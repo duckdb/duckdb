@@ -36,7 +36,7 @@ public:
 	~CSVStateMachineCache() {};
 	//! Gets a state machine from the cache, if it's not from one the default options
 	//! It first caches it, then returns it.
-	state_machine_t &Get(const CSVStateMachineOptions &state_machine_options);
+	const state_machine_t &Get(const CSVStateMachineOptions &state_machine_options);
 
 private:
 	void Insert(const CSVStateMachineOptions &state_machine_options);

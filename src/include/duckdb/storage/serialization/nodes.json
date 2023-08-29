@@ -601,11 +601,11 @@
       },
       {"id": 134,
         "name": "dialect_options.date_format",
-        "type": "unordered_map<LogicalTypeId, StrpTimeFormat> date_format"
+        "type": "unordered_map<LogicalTypeId, StrpTimeFormat>"
       },
       {"id": 135,
         "name": "dialect_options.has_format",
-        "type": "unordered_map<bool, StrpTimeFormat> date_format"
+        "type": "unordered_map<bool, StrpTimeFormat>"
       }
     ],
     "pointer_type": "none"

@@ -96,12 +96,12 @@ CSVStateMachineCache::CSVStateMachineCache() {
 	}
 }
 
-state_machine_t &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
+const state_machine_t &CSVStateMachineCache::Get(const CSVStateMachineOptions &state_machine_options) {
 	//! Custom State Machine, we need to create it and cache it first
 	if (state_machine_cache.find(state_machine_options) == state_machine_cache.end()) {
 		Insert(state_machine_options);
 	}
-	auto &transition_array = state_machine_cache[state_machine_options];
+	const auto &transition_array = state_machine_cache[state_machine_options];
 	return transition_array;
 }
 } // namespace duckdb

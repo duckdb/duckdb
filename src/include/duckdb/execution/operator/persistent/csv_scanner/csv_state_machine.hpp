@@ -55,7 +55,7 @@ public:
 	idx_t start_row = 0;
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
-	state_machine_t &transition_array;
+	const state_machine_t &transition_array;
 
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
