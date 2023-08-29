@@ -271,7 +271,7 @@ public:
 	virtual string GetDBPath() = 0;
 
 public:
-	template <class T> // FIXME: 2
+	template <class T>
 	static optional_ptr<T> GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
 	                                const string &name, OnEntryNotFound if_not_found,
 	                                QueryErrorContext error_context = QueryErrorContext()) {
@@ -284,7 +284,7 @@ public:
 		}
 		return &entry->template Cast<T>();
 	}
-	template <class T> // FIXME: 1
+	template <class T>
 	static T &GetEntry(ClientContext &context, const string &catalog_name, const string &schema_name,
 	                   const string &name, QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry =
@@ -318,6 +318,9 @@ private:
 	static CatalogEntryLookup LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
 	                                      const string &name, OnEntryNotFound if_not_found,
 	                                      QueryErrorContext error_context = QueryErrorContext());
+	static CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &catalog,
+	                                        const string &schema, const string &name, OnEntryNotFound if_not_found,
+	                                        QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,

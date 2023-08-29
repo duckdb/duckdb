@@ -178,13 +178,11 @@ jobs:
             osx_arch: x86_64
             duckdb_arch: osx_amd64
             vcpkg_triplet: x64-osx
-            universal_build: 0
             run_autoload_tests: 1
           - label: arm64
             osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
-            universal_build: 0
             run_autoload_tests: 0
 
     env:
@@ -212,7 +210,6 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - uses: ./.github/actions/build_extensions
-        if: matrix.universal_build == 0
         with:
           treat_warn_as_error: 0
           run_tests: 0
@@ -230,7 +227,6 @@ jobs:
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
 
       - name: Sign Extension Binaries
-        if: matrix.universal_build == 0
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
@@ -243,7 +239,6 @@ jobs:
 
       - name: Deploy
         shell: bash
-        if: matrix.universal_build == 0
         env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
@@ -271,29 +266,6 @@ jobs:
           fi
 
       - name: Rebuild DuckDB without any extensions linked, but with same extension config
-        if: ${{ matrix.osx_arch == 'x86_64' }}
-        shell: bash
-        env:
-          EXTENSION_TESTS_ONLY: 1
-          ENABLE_EXTENSION_AUTOLOADING: 1
-          ENABLE_EXTENSION_AUTOINSTALL: 1
-        run: |
-          rm -rf build/release
-          make
-
-      # Run all unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
-      - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'x86_64' }}
-        shell: bash
-        env:
-          LOCAL_EXTENSION_REPO: ${{ github.workspace }}
-        run: |
-          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
-          
-
-      # The reason we need to rebuild is we need to test auto-loading extensions: this is only possible without the other
-      # extensions linked
-      - name: Rebuild DuckDB without any extensions, but with all extension tests
         if: ${{ matrix.osx_arch == 'x86_64' }}
         shell: bash
         env:

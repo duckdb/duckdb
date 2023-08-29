@@ -372,7 +372,7 @@ SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const
 }
 
 template <size_t N>
-string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
+static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
 	auto lcase = StringUtil::Lower(name);
 
 	auto it = std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
@@ -383,7 +383,7 @@ string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries
 	return "";
 }
 
-bool CanAutoloadExtension(const string &ext_name) {
+static bool CanAutoloadExtension(const string &ext_name) {
 	if (ext_name.empty()) {
 		return false;
 	}
@@ -652,6 +652,26 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 	}
 }
 
+CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &catalog,
+                                        const string &schema, const string &name, OnEntryNotFound if_not_found,
+                                        QueryErrorContext error_context) {
+	auto entries = GetCatalogEntries(context, catalog, schema);
+	vector<CatalogLookup> lookups;
+	lookups.reserve(entries.size());
+	for (auto &entry : entries) {
+		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
+			if (!catalog_entry) {
+				return {nullptr, nullptr, PreservedError()};
+			}
+			lookups.emplace_back(*catalog_entry, entry.schema);
+		} else {
+			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
+		}
+	}
+	return Catalog::LookupEntry(context, lookups, type, name, if_not_found, error_context);
+}
+
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
 	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
 
@@ -692,41 +712,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
                                              const string &schema, const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
-	//	Printer::Print("GetEntry3s: " + CatalogTypeToString(type) + " -> " + name);
-	auto entries = GetCatalogEntries(context, catalog, schema);
-	vector<CatalogLookup> lookups;
-	lookups.reserve(entries.size());
-	for (auto &entry : entries) {
-		if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-			auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
-			if (!catalog_entry) {
-				return nullptr;
-			}
-			lookups.emplace_back(*catalog_entry, entry.schema);
-		} else {
-			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
-		}
-	}
-	auto result = LookupEntry(context, lookups, type, name, if_not_found, error_context);
+	auto result = LookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 
-	// Try autoloading extension to resolve lookup TODO: dedup
+	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
-			entries = GetCatalogEntries(context, catalog, schema);
-			vector<CatalogLookup> lookups_retry;
-			lookups_retry.reserve(entries.size());
-			for (auto &entry : entries) {
-				if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-					auto catalog_entry = Catalog::GetCatalogEntry(context, entry.catalog);
-					if (!catalog_entry) {
-						return nullptr;
-					}
-					lookups_retry.emplace_back(*catalog_entry, entry.schema);
-				} else {
-					lookups_retry.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
-				}
-			}
-			result = LookupEntry(context, lookups_retry, type, name, if_not_found, error_context);
+			result = LookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 		}
 	}
 
@@ -743,7 +734,6 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog, const string &schema,
                                 const string &name, QueryErrorContext error_context) {
-	//	Printer::Print("GetEntry: " + CatalogTypeToString(type) + " -> " + name);
 	return *Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 }
 

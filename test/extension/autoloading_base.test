@@ -2,12 +2,9 @@
 # description: Base tests for the autoloading mechanism for extensions
 # group: [extension]
 
-# TODO: this currently also means autoloading is enabled, should be separate those?
-# TODO: this also requires having the JSON AND ICU extensions NOT loaded
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
-
-# TODO
-mode skip
 
 # Default is expected to be true when running this test
 query I

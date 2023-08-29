@@ -126,7 +126,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
 
-// TODO: should this respect the new autoinstall_known_extension setting?
+// TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	auto lcase = StringUtil::Lower(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {

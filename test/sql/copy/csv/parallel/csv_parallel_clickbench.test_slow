@@ -2,9 +2,6 @@
 # description: Test parallel read CSV function on Clickbench
 # group: [parallel]
 
-# TODO
-mode skip
-
 require parquet
 
 require httpfs

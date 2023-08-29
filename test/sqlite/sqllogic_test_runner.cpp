@@ -107,8 +107,7 @@ void SQLLogicTestRunner::Reconnect() {
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}
-	// Set the local extension repo for autoinstalling extensions TODO might want to do prepared statement here
-	// TODO: also maybe not use env var here
+	// Set the local extension repo for autoinstalling extensions
 	auto env_var = std::getenv("LOCAL_EXTENSION_REPO");
 	if (env_var) {
 		config->options.autoload_known_extensions = true;
