@@ -4,17 +4,18 @@
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
 
-void DependencyList::AddDependency(CatalogEntry &entry) {
+void PhysicalDependencyList::AddDependency(CatalogEntry &entry) {
 	if (entry.internal) {
 		return;
 	}
 	set.insert(entry);
 }
 
-void DependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
+void PhysicalDependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
 	for (auto &dep_entry : set) {
 		auto &dep = dep_entry.get();
 		if (&dep.ParentCatalog() != &catalog) {
@@ -26,52 +27,146 @@ void DependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
 	}
 }
 
-bool DependencyList::Contains(CatalogEntry &entry) {
+LogicalDependencyList PhysicalDependencyList::GetLogical() const {
+	LogicalDependencyList result;
+	for (auto &entry : set) {
+		result.AddDependency(entry);
+	}
+	return result;
+}
+
+bool PhysicalDependencyList::Contains(CatalogEntry &entry) {
 	return set.count(entry);
 }
 
-void DependencyList::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "set", set);
+uint64_t CreateInfoHashFunction::operator()(const LogicalDependency &a) const {
+	hash_t hash = duckdb::Hash(a.name.c_str());
+	hash = CombineHash(hash, duckdb::Hash(a.schema.c_str()));
+	hash = CombineHash(hash, duckdb::Hash(a.catalog.c_str()));
+	hash = CombineHash(hash, duckdb::Hash<uint8_t>(static_cast<uint8_t>(a.type)));
+	return hash;
 }
 
-DependencyList DependencyList::FormatDeserialize(FormatDeserializer &serializer) {
-	DependencyList dependencies;
-	dependencies.set = serializer.ReadProperty<catalog_entry_set_t>(100, "set");
+bool CreateInfoEquality::operator()(const LogicalDependency &a, const LogicalDependency &b) const {
+	if (a.type != b.type) {
+		return false;
+	}
+	if (a.name != b.name) {
+		return false;
+	}
+	if (a.schema != b.schema) {
+		return false;
+	}
+	if (a.catalog != b.catalog) {
+		return false;
+	}
+	return true;
+}
+
+LogicalDependency::LogicalDependency() : name(), schema(), catalog(), type(CatalogType::INVALID) {
+}
+
+LogicalDependency::LogicalDependency(CatalogEntry &entry) {
+	this->name = entry.name;
+	this->schema = INVALID_SCHEMA;
+	if (entry.type != CatalogType::SCHEMA_ENTRY) {
+		this->schema = entry.ParentSchema().name;
+	}
+	this->catalog = entry.ParentCatalog().GetName();
+	this->type = entry.type;
+}
+
+void LogicalDependency::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(0, "name", name);
+	serializer.WriteProperty(1, "schema", schema);
+	serializer.WriteProperty(2, "catalog", catalog);
+	serializer.WriteProperty(3, "type", type);
+}
+
+LogicalDependency LogicalDependency::FormatDeserialize(FormatDeserializer &deserializer) {
+	LogicalDependency dependency;
+	dependency.name = deserializer.ReadProperty<string>(0, "name");
+	dependency.schema = deserializer.ReadProperty<string>(1, "schema");
+	dependency.catalog = deserializer.ReadProperty<string>(2, "catalog");
+	dependency.type = deserializer.ReadProperty<CatalogType>(3, "type");
+	return dependency;
+}
+
+void LogicalDependencyList::AddDependency(LogicalDependency entry) {
+	set.insert(entry);
+}
+
+void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
+	LogicalDependency dependency(entry);
+	set.insert(dependency);
+}
+
+bool LogicalDependencyList::Contains(LogicalDependency &entry) {
+	return set.count(entry);
+}
+
+bool LogicalDependencyList::Contains(CatalogEntry &entry) {
+	LogicalDependency dependency(entry);
+	return set.count(dependency);
+}
+
+PhysicalDependencyList LogicalDependencyList::GetPhysical(ClientContext &context) const {
+	PhysicalDependencyList dependencies;
+	for (auto &entry : set) {
+		auto &name = entry.name;
+		auto &catalog = entry.catalog;
+		auto &schema = entry.schema;
+		auto &type = entry.type;
+
+		auto catalog_entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+		dependencies.AddDependency(*catalog_entry);
+	}
 	return dependencies;
 }
 
-void DependencyList::Serialize(Serializer &serializer) const {
-	idx_t size = set.size();
-	serializer.Write(size);
-	for (auto &entry_p : set) {
-		auto &entry = entry_p.get();
-		auto type = entry.type;
-		auto catalog = entry.ParentCatalog().GetName();
-		auto schema = entry.ParentSchema().name;
-		auto name = entry.name;
+PhysicalDependencyList LogicalDependencyList::GetPhysical(optional_ptr<ClientContext> context_p) const {
+	if (set.empty()) {
+		return PhysicalDependencyList();
+	}
+	if (!context_p) {
+		throw InternalException("ClientContext is required to convert logical to physical dependency!");
+	}
+	auto &context = *context_p;
+	return GetPhysical(context);
+}
 
-		serializer.Write(type);
-		serializer.WriteString(catalog);
-		serializer.WriteString(schema);
-		serializer.WriteString(name);
+void LogicalDependencyList::Serialize(Serializer &writer) const {
+	writer.Write<idx_t>(set.size());
+	for (auto &entry : set) {
+		writer.WriteString(entry.name);
+		writer.WriteString(entry.schema);
+		writer.WriteString(entry.catalog);
+		writer.Write(entry.type);
 	}
 }
 
-DependencyList DependencyList::Deserialize(Deserializer &deserializer) {
-	DependencyList dependencies;
-
-	auto count = deserializer.Read<idx_t>();
-	auto &context = deserializer.GetContext();
-	for (idx_t i = 0; i < count; i++) {
-		auto type = deserializer.Read<CatalogType>();
-		auto catalog = deserializer.Read<string>();
-		auto schema = deserializer.Read<string>();
-		auto name = deserializer.Read<string>();
-		// FIXME: this can get called before the dependencies are added to the catalog
-		auto entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-		dependencies.AddDependency(*entry);
+LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &source) {
+	LogicalDependencyList result;
+	auto size = source.Read<idx_t>();
+	for (idx_t i = 0; i < size; i++) {
+		LogicalDependency dependency;
+		dependency.name = source.Read<string>();
+		dependency.schema = source.Read<string>();
+		dependency.catalog = source.Read<string>();
+		dependency.type = source.Read<CatalogType>();
+		result.set.insert(dependency);
 	}
-	return dependencies;
+	return result;
+}
+
+void LogicalDependencyList::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(0, "logical_dependencies", set);
+}
+
+LogicalDependencyList LogicalDependencyList::FormatDeserialize(FormatDeserializer &deserializer) {
+	LogicalDependencyList dependency;
+	dependency.set = deserializer.ReadProperty<create_info_set_t>(0, "logical_dependencies");
+	return dependency;
 }
 
 } // namespace duckdb

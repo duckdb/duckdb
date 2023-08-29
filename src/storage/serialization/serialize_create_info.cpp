@@ -35,7 +35,7 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 	auto internal = deserializer.ReadProperty<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadProperty<string>(106, "sql");
-	auto dependencies = deserializer.ReadProperty<DependencyList>(107, "dependencies");
+	auto dependencies = deserializer.ReadProperty<LogicalDependencyList>(107, "dependencies");
 	unique_ptr<CreateInfo> result;
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:

@@ -27,7 +27,7 @@ unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
 	result->sql = sql;
 	result->index_type = index->type;
 	result->constraint_type = index->constraint_type;
-	result->dependencies = dependencies;
+	result->dependencies = dependencies.GetLogical();
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}

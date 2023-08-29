@@ -44,7 +44,7 @@
 	  {
 		"id": 107,
 		"name": "dependencies",
-		"type": "DependencyList"
+		"type": "LogicalDependencyList"
 	  }
     ]
   },

@@ -127,7 +127,7 @@ static unique_ptr<FunctionData> NextValBind(ClientContext &context, ScalarFuncti
 	return make_uniq<NextvalBindData>(sequence);
 }
 
-static void NextValDependency(BoundFunctionExpression &expr, DependencyList &dependencies) {
+static void NextValDependency(BoundFunctionExpression &expr, PhysicalDependencyList &dependencies) {
 	auto &info = expr.bind_info->Cast<NextvalBindData>();
 	if (info.sequence) {
 		dependencies.AddDependency(*info.sequence);

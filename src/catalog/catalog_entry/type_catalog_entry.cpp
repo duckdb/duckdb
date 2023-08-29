@@ -15,7 +15,8 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	this->dependencies = info.dependencies;
+	throw InternalException("CONVERT DEPENDENCIES");
+	// this->dependencies = info.dependencies;
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
@@ -24,7 +25,7 @@ unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->name = name;
 	result->type = user_type;
-	result->dependencies = dependencies;
+	result->dependencies = dependencies.GetLogical();
 	return std::move(result);
 }
 

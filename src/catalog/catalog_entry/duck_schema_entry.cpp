@@ -74,7 +74,7 @@ DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, string name_p, bool is_intern
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction transaction,
                                                              unique_ptr<StandardEntry> entry,
                                                              OnCreateConflict on_conflict,
-                                                             DependencyList dependencies) {
+                                                             PhysicalDependencyList dependencies) {
 	auto entry_name = entry->name;
 	auto entry_type = entry->type;
 	auto result = entry.get();
@@ -179,7 +179,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntry(CatalogTransaction transaction, unique_ptr<StandardEntry> entry,
                                                      OnCreateConflict on_conflict) {
-	DependencyList dependencies = entry->dependencies;
+	PhysicalDependencyList dependencies = entry->dependencies;
 	return AddEntryInternal(transaction, std::move(entry), on_conflict, dependencies);
 }
 
@@ -200,7 +200,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transa
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	DependencyList dependencies = info.dependencies;
+	PhysicalDependencyList dependencies = info.dependencies.GetPhysical(context);
 	dependencies.AddDependency(table);
 	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);

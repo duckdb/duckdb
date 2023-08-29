@@ -21,7 +21,7 @@
 namespace duckdb {
 
 class BaseStatistics;
-class DependencyList;
+class PhysicalDependencyList;
 class LogicalGet;
 class TableFilterSet;
 
@@ -194,7 +194,7 @@ typedef BindInfo (*table_function_get_bind_info)(const FunctionData *bind_data);
 
 typedef double (*table_function_progress_t)(ClientContext &context, const FunctionData *bind_data,
                                             const GlobalTableFunctionState *global_state);
-typedef void (*table_function_dependency_t)(DependencyList &dependencies, const FunctionData *bind_data);
+typedef void (*table_function_dependency_t)(PhysicalDependencyList &dependencies, const FunctionData *bind_data);
 typedef unique_ptr<NodeStatistics> (*table_function_cardinality_t)(ClientContext &context,
                                                                    const FunctionData *bind_data);
 typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context, LogicalGet &get,

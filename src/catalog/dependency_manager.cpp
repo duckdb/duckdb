@@ -15,7 +15,8 @@ namespace duckdb {
 DependencyManager::DependencyManager(DuckCatalog &catalog) : catalog(catalog) {
 }
 
-void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies) {
+void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &object,
+                                  PhysicalDependencyList &dependencies) {
 	// check for each object in the sources if they were not deleted yet
 	for (auto &dep : dependencies.set) {
 		auto &dependency = dep.get();

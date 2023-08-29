@@ -55,7 +55,7 @@ public:
 	//! The SQL string of the CREATE statement
 	string sql;
 	//! The inherent dependencies of the created entry
-	DependencyList dependencies;
+	LogicalDependencyList dependencies;
 
 protected:
 	virtual void SerializeInternal(Serializer &) const = 0;

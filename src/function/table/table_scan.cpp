@@ -186,7 +186,7 @@ BindInfo TableScanGetBindInfo(const FunctionData *bind_data) {
 	return BindInfo(ScanType::TABLE);
 }
 
-void TableScanDependency(DependencyList &entries, const FunctionData *bind_data_p) {
+void TableScanDependency(PhysicalDependencyList &entries, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	entries.AddDependency(bind_data.table);
 }

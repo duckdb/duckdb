@@ -19,7 +19,7 @@
 namespace duckdb {
 class DuckCatalog;
 class ClientContext;
-class DependencyList;
+class PhysicalDependencyList;
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -49,7 +49,7 @@ private:
 	catalog_entry_map_t<catalog_entry_set_t> dependencies_map;
 
 private:
-	void AddObject(CatalogTransaction transaction, CatalogEntry &object, DependencyList &dependencies);
+	void AddObject(CatalogTransaction transaction, CatalogEntry &object, PhysicalDependencyList &dependencies);
 	void DropObject(CatalogTransaction transaction, CatalogEntry &object, bool cascade);
 	void AlterObject(CatalogTransaction transaction, CatalogEntry &old_obj, CatalogEntry &new_obj);
 	void EraseObjectInternal(CatalogEntry &object);

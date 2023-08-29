@@ -31,7 +31,7 @@ void CreateInfo::DeserializeBase(Deserializer &deserializer) {
 	this->temporary = deserializer.Read<bool>();
 	this->internal = deserializer.Read<bool>();
 	this->sql = deserializer.Read<string>();
-	this->dependencies = DependencyList::Deserialize(deserializer);
+	this->dependencies = LogicalDependencyList::Deserialize(deserializer);
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {

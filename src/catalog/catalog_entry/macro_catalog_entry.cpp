@@ -12,7 +12,8 @@ MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       function(std::move(info.function)) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	this->dependencies = info.dependencies;
+	throw InternalException("CONVERT DEPENDENCIES");
+	// this->dependencies = info.dependencies;
 }
 
 ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
@@ -30,7 +31,7 @@ unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {
 	info->name = name;
 	info->function = function->Copy();
 	// FIXME: this is error-prone, need to define for every entry separately
-	info->dependencies = dependencies;
+	info->dependencies = dependencies.GetLogical();
 	return std::move(info);
 }
 

@@ -37,7 +37,7 @@ struct FunctionLocalState {
 
 class Binder;
 class BoundFunctionExpression;
-class DependencyList;
+class PhysicalDependencyList;
 class ScalarFunctionCatalogEntry;
 
 struct FunctionStatisticsInput {
@@ -62,7 +62,7 @@ typedef unique_ptr<FunctionLocalState> (*init_local_state_t)(ExpressionState &st
                                                              FunctionData *bind_data);
 typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &context, FunctionStatisticsInput &input);
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
-typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyList &dependencies);
+typedef void (*dependency_function_t)(BoundFunctionExpression &expr, PhysicalDependencyList &dependencies);
 
 typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                      const ScalarFunction &function);
