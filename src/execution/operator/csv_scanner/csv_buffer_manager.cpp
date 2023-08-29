@@ -60,16 +60,10 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 		}
 		if (!ReadNextAndCacheIt()) {
 			done = true;
-			return nullptr;
 		}
 	}
 	if (pos != 0) {
 		cached_buffers[pos - 1]->Unpin();
-	}
-	if (pos == cached_buffers.size()) {
-		if (!ReadNextAndCacheIt()) {
-			return nullptr;
-		}
 	}
 	return cached_buffers[pos]->Pin(*file_handle);
 }
