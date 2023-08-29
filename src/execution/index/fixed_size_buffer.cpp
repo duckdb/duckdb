@@ -47,41 +47,19 @@ void FixedSizeBuffer::Serialize() {
 	// we persist any changes, so the buffer is no longer dirty
 	dirty = false;
 
-	// first time writing to disk
 	if (!OnDisk()) {
 		// temporary block - convert to persistent
 		auto block_id = block_manager.GetFreeBlockId();
 		D_ASSERT(block_id < MAXIMUM_BLOCK);
+		block_handle = block_manager.ConvertToPersistent(block_id, std::move(block_handle));
+		buffer_handle->Destroy();
 
-		// TODO: should we use this option? Currently causes 'read memory from 0x338 failed (0 of 1 bytes read)'
-		// option 1
-		//		block_handle = block_manager.ConvertToPersistent(block_idd, std::move(block_handle));
-
-		// option 2
-		block_handle = block_manager.RegisterBlock(block_id);
-		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
-		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 	} else {
 		// already a persistent block - only need to write it
 		auto block_id = block_handle->BlockId();
 		D_ASSERT(block_id < MAXIMUM_BLOCK);
 		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 	}
-
-	//	// first time writing to disk
-	//	if (!OnDisk()) {
-	//		auto block_id = block_manager.GetFreeBlockId();
-	//		D_ASSERT(block_id < MAXIMUM_BLOCK);
-	//		block_handle = block_manager.RegisterBlock(block_id);
-	//		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
-	//		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
-	//		return;
-	//	}
-	//
-	//	// overwrite block on disk with changes
-	//	auto block_id = block_handle->BlockId();
-	//	D_ASSERT(block_id < MAXIMUM_BLOCK);
-	//	block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 }
 
 void FixedSizeBuffer::Pin() {
