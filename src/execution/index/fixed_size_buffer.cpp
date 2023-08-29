@@ -6,7 +6,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
     : block_manager(block_manager), segment_count(0), dirty(false), vacuum(false), block_handle(nullptr) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE, false, &block_handle);
+	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
 	buffer_handle = make_uniq<BufferHandle>(std::move(new_buffer_handle));
 }
 
@@ -15,7 +15,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
 
 	D_ASSERT(block_id < MAXIMUM_BLOCK);
 	block_handle = block_manager.RegisterBlock(block_id);
-	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+	D_ASSERT(BlockId() < MAXIMUM_BLOCK);
 }
 
 void FixedSizeBuffer::Destroy() {
@@ -23,7 +23,7 @@ void FixedSizeBuffer::Destroy() {
 		buffer_handle->Destroy();
 	}
 	if (OnDisk()) {
-		block_manager.UnregisterBlock(GetBlockID(), true);
+		block_manager.UnregisterBlock(BlockId(), true);
 	}
 }
 
@@ -49,24 +49,45 @@ void FixedSizeBuffer::Serialize() {
 
 	// first time writing to disk
 	if (!OnDisk()) {
+		// temporary block - convert to persistent
 		auto block_id = block_manager.GetFreeBlockId();
 		D_ASSERT(block_id < MAXIMUM_BLOCK);
+
+		// TODO: should we use this option? Currently causes 'read memory from 0x338 failed (0 of 1 bytes read)'
+		// option 1
+		//		block_handle = block_manager.ConvertToPersistent(block_idd, std::move(block_handle));
+
+		// option 2
 		block_handle = block_manager.RegisterBlock(block_id);
 		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
-		return;
+	} else {
+		// already a persistent block - only need to write it
+		auto block_id = block_handle->BlockId();
+		D_ASSERT(block_id < MAXIMUM_BLOCK);
+		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 	}
 
-	// overwrite block on disk with changes
-	auto block_id = block_handle->BlockId();
-	D_ASSERT(block_id < MAXIMUM_BLOCK);
-	block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
+	//	// first time writing to disk
+	//	if (!OnDisk()) {
+	//		auto block_id = block_manager.GetFreeBlockId();
+	//		D_ASSERT(block_id < MAXIMUM_BLOCK);
+	//		block_handle = block_manager.RegisterBlock(block_id);
+	//		D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+	//		block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
+	//		return;
+	//	}
+	//
+	//	// overwrite block on disk with changes
+	//	auto block_id = block_handle->BlockId();
+	//	D_ASSERT(block_id < MAXIMUM_BLOCK);
+	//	block_manager.Write(buffer_handle->GetFileBuffer(), block_id);
 }
 
-void FixedSizeBuffer::Deserialize() {
+void FixedSizeBuffer::Pin() {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+	D_ASSERT(BlockId() < MAXIMUM_BLOCK);
 	buffer_handle = make_uniq<BufferHandle>(buffer_manager.Pin(block_handle));
 }
 

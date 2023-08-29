@@ -13,9 +13,9 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 
 	buffers = make_uniq<unordered_map<idx_t, unique_ptr<FixedSizeBuffer>>>();
 
-	if (segment_size > Storage::BLOCK_ALLOC_SIZE - sizeof(validity_t)) {
+	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
-		                        to_string(Storage::BLOCK_ALLOC_SIZE - sizeof(validity_t)));
+		                        to_string(Storage::BLOCK_SIZE - sizeof(validity_t)));
 	}
 
 	// calculate how many segments fit into one buffer (available_segments_per_buffer)
@@ -26,7 +26,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 	bitmask_count = 0;
 	available_segments_per_buffer = 0;
 
-	while (byte_count < Storage::BLOCK_ALLOC_SIZE) {
+	while (byte_count < Storage::BLOCK_SIZE) {
 		if (!bitmask_count || (bitmask_count * bits_per_value) % available_segments_per_buffer == 0) {
 			// we need to add another validity_t value to the bitmask, to allow storing another
 			// bits_per_value segments on a buffer
@@ -34,7 +34,7 @@ FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &b
 			byte_count += sizeof(validity_t);
 		}
 
-		auto remaining_bytes = Storage::BLOCK_ALLOC_SIZE - byte_count;
+		auto remaining_bytes = Storage::BLOCK_SIZE - byte_count;
 		auto remaining_segments = MinValue(remaining_bytes / segment_size, bits_per_value);
 
 		if (remaining_segments == 0) {
@@ -119,7 +119,7 @@ idx_t FixedSizeAllocator::GetMemoryUsage() const {
 	idx_t memory_usage = 0;
 	for (auto &buffer : *buffers) {
 		if (buffer.second->InMemory()) {
-			memory_usage += Storage::BLOCK_ALLOC_SIZE;
+			memory_usage += Storage::BLOCK_SIZE;
 		}
 	}
 	return memory_usage;
@@ -174,7 +174,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	// calculate the vacuum threshold adaptively
 	D_ASSERT(excess_buffer_count < vacuum_buffers.size());
 	idx_t memory_usage = GetMemoryUsage();
-	idx_t excess_memory_usage = excess_buffer_count * Storage::BLOCK_ALLOC_SIZE;
+	idx_t excess_memory_usage = excess_buffer_count * Storage::BLOCK_SIZE;
 	auto excess_percentage = double(excess_memory_usage) / double(memory_usage);
 	auto threshold = double(VACUUM_THRESHOLD) / 100.0;
 	if (excess_percentage < threshold) {
@@ -238,7 +238,7 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 
 	for (auto &buffer : *buffers) {
 		writer.Write(buffer.first);
-		writer.Write(buffer.second->GetBlockID());
+		writer.Write(buffer.second->BlockId());
 		writer.Write(buffer.second->segment_count);
 	}
 	for (auto &buffer_id : buffers_with_free_space) {

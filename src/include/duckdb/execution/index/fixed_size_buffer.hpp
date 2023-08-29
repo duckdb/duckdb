@@ -47,14 +47,14 @@ public:
 		return (block_handle != nullptr) && (block_handle->BlockId() < MAXIMUM_BLOCK);
 	}
 	//! Returns the block ID
-	inline block_id_t GetBlockID() const {
+	inline block_id_t BlockId() const {
 		D_ASSERT(OnDisk());
 		return block_handle->BlockId();
 	}
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory
 	inline data_ptr_t Get(const bool dirty_p = true) {
 		if (!InMemory()) {
-			Deserialize();
+			Pin();
 		}
 		if (dirty_p) {
 			dirty = dirty_p;
@@ -65,8 +65,8 @@ public:
 	void Destroy();
 	//! Serializes a buffer (if dirty or not on disk)
 	void Serialize();
-	//! Deserialize a buffer (if not in-memory)
-	void Deserialize();
+	//! Pin a buffer (if not in-memory)
+	void Pin();
 
 private:
 	//! The buffer handle of the in-memory buffer
