@@ -14,6 +14,22 @@ create table t2 (a enum1);
 statement ok
 insert into t2 values ('1'), ('2'), ('3'), ('1'), ('2');
 
+query I
+select distinct(t1.a) from t1, t2 where t1.a != t2.a order by t1.a;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+mode skip
+
 query II
 select * from t1, t2 where t1.a = t2.a order by t1.a;
 ----
@@ -22,4 +38,3 @@ select * from t1, t2 where t1.a = t2.a order by t1.a;
 2	2
 2	2
 3	3
-
