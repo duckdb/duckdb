@@ -70,9 +70,11 @@ void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t
 			}
 
 			if (move_primary_keys_only) {
+				// This table references a table, don't move it yet
 				move_to_ordered = false;
 				break;
 			} else if (IsExistMainKeyTable(fk.info.table, unordered)) {
+				// The table that it references isn't ordered yet
 				move_to_ordered = false;
 				break;
 			}
@@ -90,8 +92,11 @@ void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t
 void ReorderTableEntries(catalog_entry_vector_t &tables) {
 	catalog_entry_vector_t ordered;
 	catalog_entry_vector_t unordered = tables;
+	// First only move the tables that don't have any dependencies
 	ScanForeignKeyTable(ordered, unordered, true);
 	while (!unordered.empty()) {
+		// Now we will start moving tables that have foreign key constraints
+		// if the tables they reference are already moved
 		ScanForeignKeyTable(ordered, unordered, false);
 	}
 	tables = ordered;
