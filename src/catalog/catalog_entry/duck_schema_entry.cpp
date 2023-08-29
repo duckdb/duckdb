@@ -109,7 +109,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::AddEntryInternal(CatalogTransaction 
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	auto table = make_uniq<DuckTableEntry>(catalog, *this, info);
+	auto table = make_uniq<DuckTableEntry>(catalog, *this, info, transaction.context);
 	auto &storage = table->GetStorage();
 	storage.info->cardinality = storage.GetTotalRows();
 

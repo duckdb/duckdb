@@ -52,7 +52,8 @@ public:
 
 public:
 	//! Create a TableCatalogEntry and initialize storage for it
-	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
+	DUCKDB_API TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+	                             optional_ptr<ClientContext> context);
 
 public:
 	DUCKDB_API unique_ptr<CreateInfo> GetInfo() const override;

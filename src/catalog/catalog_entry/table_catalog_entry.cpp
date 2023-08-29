@@ -19,12 +19,12 @@
 
 namespace duckdb {
 
-TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
+TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+                                     optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
-	throw InternalException("CONVERT DEPENDENCIES");
-	// this->dependencies = info.dependencies;
+	this->dependencies = info.dependencies.GetPhysical(context);
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {
