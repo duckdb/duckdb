@@ -41,7 +41,7 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool IsExistMainKeyTable(string &table_name, vector<reference<TableCatalogEntry>> &unordered) {
+bool IsExistMainKeyTable(string &table_name, catalog_entry_vector_t &unordered) {
 	for (idx_t i = 0; i < unordered.size(); i++) {
 		if (unordered[i].get().name == table_name) {
 			return true;
@@ -50,12 +50,11 @@ bool IsExistMainKeyTable(string &table_name, vector<reference<TableCatalogEntry>
 	return false;
 }
 
-void ScanForeignKeyTable(vector<reference<TableCatalogEntry>> &ordered, vector<reference<TableCatalogEntry>> &unordered,
-                         bool move_only_pk_table) {
+void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t &unordered, bool move_only_pk_table) {
 	for (auto i = unordered.begin(); i != unordered.end();) {
-		auto table_entry = *i;
+		auto &table_entry = i->get().Cast<TableCatalogEntry>();
 		bool move_to_ordered = true;
-		auto &constraints = table_entry.get().GetConstraints();
+		auto &constraints = table_entry.GetConstraints();
 		for (idx_t j = 0; j < constraints.size(); j++) {
 			auto &cond = constraints[j];
 			if (cond->type == ConstraintType::FOREIGN_KEY) {
@@ -77,9 +76,9 @@ void ScanForeignKeyTable(vector<reference<TableCatalogEntry>> &ordered, vector<r
 	}
 }
 
-void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables) {
-	vector<reference<TableCatalogEntry>> ordered;
-	vector<reference<TableCatalogEntry>> unordered = tables;
+void ReorderTableEntries(catalog_entry_vector_t &tables) {
+	catalog_entry_vector_t ordered;
+	catalog_entry_vector_t unordered = tables;
 	ScanForeignKeyTable(ordered, unordered, true);
 	while (!unordered.empty()) {
 		ScanForeignKeyTable(ordered, unordered, false);
@@ -115,7 +114,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	// gather a list of all the tables
 	string catalog = stmt.database.empty() ? INVALID_CATALOG : stmt.database;
-	vector<reference<TableCatalogEntry>> tables;
+	catalog_entry_vector_t tables;
 	auto schemas = Catalog::GetSchemas(context, catalog);
 	for (auto &schema : schemas) {
 		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
@@ -136,7 +135,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 
 	unordered_set<string> table_name_index;
 	for (auto &t : tables) {
-		auto &table = t.get();
+		auto &table = t.get().Cast<TableCatalogEntry>();
 		auto info = make_uniq<CopyInfo>();
 		// we copy the options supplied to the EXPORT
 		info->format = stmt.info->format;

@@ -6,6 +6,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -69,7 +70,9 @@ AttachedDatabase::~AttachedDatabase() {
 			if (!config.options.checkpoint_on_shutdown) {
 				return;
 			}
-			storage->CreateCheckpoint(true);
+			// FIXME: is this super ugly???
+			ClientContext context(db.shared_from_this());
+			storage->CreateCheckpoint(context, true);
 		}
 	} catch (...) {
 	}

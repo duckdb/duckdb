@@ -31,13 +31,16 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
 
 namespace duckdb {
 
-void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables);
+catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string &catalog);
+void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
-    : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(ClientContext &context, AttachedDatabase &db,
+                                                       BlockManager &block_manager)
+    : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT), context(context) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -79,12 +82,22 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
-	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
+
+	catalog_entry_vector_t catalog_entries;
+	if (catalog.IsDuckCatalog()) {
+		auto &duck_catalog = catalog.Cast<DuckCatalog>();
+		auto &dependency_manager = duck_catalog.GetDependencyManager();
+		catalog_entries = dependency_manager.GetExportOrder();
+	} else {
+		catalog_entries = GetNaiveExportOrder(context, catalog.GetName());
+	}
+
 	// write the actual data into the database
-	// write the amount of schemas
-	metadata_writer->Write<uint32_t>(schemas.size());
-	for (auto &schema : schemas) {
-		WriteSchema(schema.get());
+	// write the amount of entries (including schemas)
+	metadata_writer->Write<uint32_t>(catalog_entries.size());
+
+	for (auto &entry : catalog_entries) {
+		WriteEntry(entry);
 	}
 	partial_block_manager.FlushPartialBlocks();
 	metadata_writer->Flush();
@@ -144,9 +157,63 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 }
 
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
-	uint32_t schema_count = reader.Read<uint32_t>();
-	for (uint32_t i = 0; i < schema_count; i++) {
-		ReadSchema(context, reader);
+	auto field_reader = FieldReader(reader);
+	uint32_t entry_count = field_reader.ReadRequired<uint32_t>();
+	field_reader.Finalize();
+
+	for (uint32_t i = 0; i < entry_count; i++) {
+		ReadEntry(context, reader);
+	}
+}
+
+void CheckpointWriter::WriteEntry(CatalogEntry &entry) {
+	FieldWriter writer(GetMetadataWriter());
+	writer.WriteField<CatalogType>(entry.type);
+	writer.Finalize();
+
+	switch (entry.type) {
+	case CatalogType::SCHEMA_ENTRY: {
+		auto &schema = entry.Cast<SchemaCatalogEntry>();
+		WriteSchema(schema);
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		auto &custom_type = entry.Cast<TypeCatalogEntry>();
+		WriteType(custom_type);
+		break;
+	}
+	case CatalogType::SEQUENCE_ENTRY: {
+		auto &seq = entry.Cast<SequenceCatalogEntry>();
+		WriteSequence(seq);
+		break;
+	}
+	case CatalogType::TABLE_ENTRY: {
+		auto &table = entry.Cast<TableCatalogEntry>();
+		WriteTable(table);
+		break;
+	}
+	case CatalogType::VIEW_ENTRY: {
+		auto &view = entry.Cast<ViewCatalogEntry>();
+		WriteView(view);
+		break;
+	}
+	case CatalogType::MACRO_ENTRY: {
+		auto &macro = entry.Cast<ScalarMacroCatalogEntry>();
+		WriteMacro(macro);
+		break;
+	}
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		auto &macro = entry.Cast<TableMacroCatalogEntry>();
+		WriteTableMacro(macro);
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		auto &index = entry.Cast<IndexCatalogEntry>();
+		WriteIndex(index);
+		break;
+	}
+	default:
+		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
 }
 
@@ -156,105 +223,46 @@ void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &re
 void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(GetMetadataWriter());
-	// then, we fetch the tables/views/sequences information
-	vector<reference<TableCatalogEntry>> tables;
-	vector<reference<ViewCatalogEntry>> views;
-	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::TABLE_ENTRY) {
-			tables.push_back(entry.Cast<TableCatalogEntry>());
-		} else if (entry.type == CatalogType::VIEW_ENTRY) {
-			views.push_back(entry.Cast<ViewCatalogEntry>());
-		} else {
-			throw NotImplementedException("Catalog type for entries");
-		}
-	});
-	vector<reference<SequenceCatalogEntry>> sequences;
-	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		sequences.push_back(entry.Cast<SequenceCatalogEntry>());
-	});
+}
 
-	vector<reference<TypeCatalogEntry>> custom_types;
-	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		custom_types.push_back(entry.Cast<TypeCatalogEntry>());
-	});
-
-	vector<reference<ScalarMacroCatalogEntry>> macros;
-	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::MACRO_ENTRY) {
-			macros.push_back(entry.Cast<ScalarMacroCatalogEntry>());
-		}
-	});
-
-	vector<reference<TableMacroCatalogEntry>> table_macros;
-	schema.Scan(CatalogType::TABLE_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
-		if (entry.internal) {
-			return;
-		}
-		if (entry.type == CatalogType::TABLE_MACRO_ENTRY) {
-			table_macros.push_back(entry.Cast<TableMacroCatalogEntry>());
-		}
-	});
-
-	vector<reference<IndexCatalogEntry>> indexes;
-	schema.Scan(CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) {
-		D_ASSERT(!entry.internal);
-		indexes.push_back(entry.Cast<IndexCatalogEntry>());
-	});
-
-	FieldWriter writer(GetMetadataWriter());
-	writer.WriteField<uint32_t>(custom_types.size());
-	writer.WriteField<uint32_t>(sequences.size());
-	writer.WriteField<uint32_t>(tables.size());
-	writer.WriteField<uint32_t>(views.size());
-	writer.WriteField<uint32_t>(macros.size());
-	writer.WriteField<uint32_t>(table_macros.size());
-	writer.WriteField<uint32_t>(indexes.size());
-	writer.Finalize();
-
-	// write the custom_types
-	for (auto &custom_type : custom_types) {
-		WriteType(custom_type);
+void CheckpointReader::ReadEntry(ClientContext &context, MetadataReader &reader) {
+	FieldReader field_reader(reader);
+	auto type = field_reader.ReadRequired<CatalogType>();
+	field_reader.Finalize();
+	switch (type) {
+	case CatalogType::SCHEMA_ENTRY: {
+		ReadSchema(context, reader);
 	}
-
-	// write the sequences
-	for (auto &seq : sequences) {
-		WriteSequence(seq);
+	case CatalogType::TYPE_ENTRY: {
+		ReadType(context, reader);
+		break;
 	}
-	// reorder tables because of foreign key constraint
-	ReorderTableEntries(tables);
-	// Write the tables
-	for (auto &table : tables) {
-		WriteTable(table);
+	case CatalogType::SEQUENCE_ENTRY: {
+		ReadSequence(context, reader);
+		break;
 	}
-	// Write the views
-	for (auto &view : views) {
-		WriteView(view);
+	case CatalogType::TABLE_ENTRY: {
+		ReadTable(context, reader);
+		break;
 	}
-
-	// Write the macros
-	for (auto &macro : macros) {
-		WriteMacro(macro);
+	case CatalogType::VIEW_ENTRY: {
+		ReadView(context, reader);
+		break;
 	}
-
-	// Write the table's macros
-	for (auto &macro : table_macros) {
-		WriteTableMacro(macro);
+	case CatalogType::MACRO_ENTRY: {
+		ReadMacro(context, reader);
+		break;
 	}
-	// Write the indexes
-	for (auto &index : indexes) {
-		WriteIndex(index);
+	case CatalogType::TABLE_MACRO_ENTRY: {
+		ReadTableMacro(context, reader);
+		break;
+	}
+	case CatalogType::INDEX_ENTRY: {
+		ReadIndex(context, reader);
+		break;
+	}
+	default:
+		throw InternalException("Unrecognized catalog type in CheckpointWriter::WriteEntry");
 	}
 }
 
@@ -265,47 +273,6 @@ void CheckpointReader::ReadSchema(ClientContext &context, MetadataReader &reader
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info->Cast<CreateSchemaInfo>());
-
-	// first read all the counts
-	FieldReader field_reader(reader);
-	uint32_t enum_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t seq_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t table_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t view_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t macro_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t table_macro_count = field_reader.ReadRequired<uint32_t>();
-	uint32_t table_index_count = field_reader.ReadRequired<uint32_t>();
-	field_reader.Finalize();
-
-	// now read the enums
-	for (uint32_t i = 0; i < enum_count; i++) {
-		ReadType(context, reader);
-	}
-
-	// read the sequences
-	for (uint32_t i = 0; i < seq_count; i++) {
-		ReadSequence(context, reader);
-	}
-	// read the table count and recreate the tables
-	for (uint32_t i = 0; i < table_count; i++) {
-		ReadTable(context, reader);
-	}
-	// now read the views
-	for (uint32_t i = 0; i < view_count; i++) {
-		ReadView(context, reader);
-	}
-
-	// finally read the macro's
-	for (uint32_t i = 0; i < macro_count; i++) {
-		ReadMacro(context, reader);
-	}
-
-	for (uint32_t i = 0; i < table_macro_count; i++) {
-		ReadTableMacro(context, reader);
-	}
-	for (uint32_t i = 0; i < table_index_count; i++) {
-		ReadIndex(context, reader);
-	}
 }
 
 //===--------------------------------------------------------------------===//

@@ -17,6 +17,8 @@
 
 namespace duckdb {
 
+void ReorderTableEntries(catalog_entry_vector_t &tables);
+
 using std::stringstream;
 
 static void WriteCatalogEntries(stringstream &ss, catalog_entry_vector_t &entries) {
@@ -109,16 +111,7 @@ static void AddEntries(catalog_entry_vector_t &all_entries, catalog_entry_vector
 	to_add.clear();
 }
 
-catalog_entry_vector_t GetDependencyDrivenExportOrder(ExecutionContext &context, DependencyManager &dependency_manager,
-                                                      CopyInfo &info, const BoundExportData &exported_tables) {
-	catalog_entry_vector_t catalog_entries;
-
-	catalog_entries = dependency_manager.GetExportOrder();
-	return catalog_entries;
-}
-
-catalog_entry_vector_t GetNaiveExportOrder(ExecutionContext &context, CopyInfo &info,
-                                           const BoundExportData &exported_tables) {
+catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string &catalog) {
 	catalog_entry_vector_t schemas;
 	catalog_entry_vector_t custom_types;
 	catalog_entry_vector_t sequences;
@@ -127,44 +120,42 @@ catalog_entry_vector_t GetNaiveExportOrder(ExecutionContext &context, CopyInfo &
 	catalog_entry_vector_t indexes;
 	catalog_entry_vector_t macros;
 
-	auto &ccontext = context.client;
-
 	// gather all catalog types to export
-	auto schema_list = Catalog::GetSchemas(ccontext, info.catalog);
+	auto schema_list = Catalog::GetSchemas(context, catalog);
 	for (auto &schema_p : schema_list) {
 		auto &schema = schema_p.get();
 		if (!schema.internal) {
 			schemas.push_back(schema);
 		}
-		schema.Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 			if (entry.internal) {
 				return;
 			}
-			if (entry.type != CatalogType::TABLE_ENTRY) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
+				auto &table_entry = entry.Cast<TableCatalogEntry>();
+				tables.push_back(table_entry);
+			} else if (entry.type == CatalogType::VIEW_ENTRY) {
 				views.push_back(entry);
+			} else {
+				throw InternalException("Encountered an unrecognized entry type in GetNaiveExportOrder");
 			}
 		});
-		schema.Scan(context.client, CatalogType::SEQUENCE_ENTRY,
-		            [&](CatalogEntry &entry) { sequences.push_back(entry); });
-		schema.Scan(context.client, CatalogType::TYPE_ENTRY,
-		            [&](CatalogEntry &entry) { custom_types.push_back(entry); });
-		schema.Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
-		schema.Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry &entry) { sequences.push_back(entry); });
+		schema.Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry &entry) { custom_types.push_back(entry); });
+		schema.Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
+		schema.Scan(context, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
 				macros.push_back(entry);
 			}
 		});
-		schema.Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+		schema.Scan(context, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
 			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
 				macros.push_back(entry);
 			}
 		});
 	}
 
-	// consider the order of tables because of foreign key constraint
-	for (idx_t i = 0; i < exported_tables.data.size(); i++) {
-		tables.push_back(exported_tables.data[i].entry);
-	}
+	ReorderTableEntries(tables);
 
 	// order macro's by timestamp so nested macro's are imported nicely
 	sort(macros.begin(), macros.end(), [](const reference<CatalogEntry> &lhs, const reference<CatalogEntry> &rhs) {
@@ -199,9 +190,9 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	if (catalog.IsDuckCatalog()) {
 		auto &duck_catalog = catalog.Cast<DuckCatalog>();
 		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		catalog_entries = GetDependencyDrivenExportOrder(context, dependency_manager, *info, exported_tables);
+		catalog_entries = dependency_manager.GetExportOrder();
 	} else {
-		catalog_entries = GetNaiveExportOrder(context, *info, exported_tables);
+		catalog_entries = GetNaiveExportOrder(context.client, info->catalog);
 	}
 
 	// write the schema.sql file

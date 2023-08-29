@@ -228,14 +228,14 @@ bool SingleFileStorageManager::IsCheckpointClean(MetaBlockPointer checkpoint_id)
 	return block_manager->IsRootBlock(checkpoint_id);
 }
 
-void SingleFileStorageManager::CreateCheckpoint(bool delete_wal, bool force_checkpoint) {
+void SingleFileStorageManager::CreateCheckpoint(ClientContext &context, bool delete_wal, bool force_checkpoint) {
 	if (InMemory() || read_only || !wal) {
 		return;
 	}
 	auto &config = DBConfig::Get(db);
 	if (wal->GetWALSize() > 0 || config.options.force_checkpoint || force_checkpoint) {
 		// we only need to checkpoint if there is anything in the WAL
-		SingleFileCheckpointWriter checkpointer(db, *block_manager);
+		SingleFileCheckpointWriter checkpointer(context, db, *block_manager);
 		checkpointer.CreateCheckpoint();
 	}
 	if (delete_wal) {

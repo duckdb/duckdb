@@ -38,6 +38,7 @@ public:
 	virtual unique_ptr<TableDataWriter> GetTableDataWriter(TableCatalogEntry &table) = 0;
 
 protected:
+	virtual void WriteEntry(CatalogEntry &entry);
 	virtual void WriteSchema(SchemaCatalogEntry &schema);
 	virtual void WriteTable(TableCatalogEntry &table);
 	virtual void WriteView(ViewCatalogEntry &table);
@@ -61,6 +62,7 @@ protected:
 protected:
 	virtual void LoadCheckpoint(ClientContext &context, MetadataReader &reader);
 	virtual void ReadSchema(ClientContext &context, MetadataReader &reader);
+	virtual void ReadEntry(ClientContext &context, MetadataReader &reader);
 	virtual void ReadTable(ClientContext &context, MetadataReader &reader);
 	virtual void ReadView(ClientContext &context, MetadataReader &reader);
 	virtual void ReadSequence(ClientContext &context, MetadataReader &reader);
@@ -94,7 +96,7 @@ class SingleFileCheckpointWriter final : public CheckpointWriter {
 	friend class SingleFileTableDataWriter;
 
 public:
-	SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager);
+	SingleFileCheckpointWriter(ClientContext &context, AttachedDatabase &db, BlockManager &block_manager);
 
 	//! Checkpoint the current state of the WAL and flush it to the main storage. This should be called BEFORE any
 	//! connection is available because right now the checkpointing cannot be done online. (TODO)
@@ -114,6 +116,7 @@ private:
 	//! Because this is single-file storage, we can share partial blocks across
 	//! an entire checkpoint.
 	PartialBlockManager partial_block_manager;
+	ClientContext &context;
 };
 
 } // namespace duckdb
