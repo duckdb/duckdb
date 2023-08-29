@@ -1,0 +1,25 @@
+# name: test/sql/types/enum/test_enum_to_numbers.test
+# description: ENUM types used in table tests
+# group: [enum]
+
+statement ok
+create type enum1 as enum ('1', '2', '3');
+
+statement ok
+create table t1 as select range as a from range(10);
+
+statement ok
+create table t2 (a enum1);
+
+statement ok
+insert into t2 values ('1'), ('2'), ('3'), ('1'), ('2');
+
+query II
+select * from t1, t2 where t1.a = t2.a order by t1.a;
+----
+1	1
+1	1
+2	2
+2	2
+3	3
+

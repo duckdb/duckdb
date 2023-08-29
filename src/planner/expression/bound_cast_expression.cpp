@@ -84,7 +84,14 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 	if (!target_type.IsValid()) {
 		return expr;
 	}
+	if (target_type.id() == LogicalTypeId::ENUM && expr->return_type.id() != LogicalTypeId::VARCHAR) {
+		auto extra_cast = cast_functions.GetCastFunction(expr->return_type, LogicalTypeId::VARCHAR, get_input);
+		auto new_expr = AddCastExpressionInternal(std::move(expr), LogicalTypeId::VARCHAR, std::move(extra_cast), try_cast);
 
+		auto cast_function = cast_functions.GetCastFunction(new_expr->return_type, target_type, get_input);
+		auto result = AddCastExpressionInternal(std::move(new_expr), target_type, std::move(cast_function), try_cast);
+		return result;
+	}
 	auto cast_function = cast_functions.GetCastFunction(expr->return_type, target_type, get_input);
 	return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);
 }
