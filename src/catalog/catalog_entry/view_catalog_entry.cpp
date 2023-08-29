@@ -11,20 +11,20 @@
 
 namespace duckdb {
 
-void ViewCatalogEntry::Initialize(CreateViewInfo &info) {
+void ViewCatalogEntry::Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
 	this->types = info.types;
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
-	throw InternalException("CONVERT DEPENDENCIES");
-	// this->dependencies = info.dependencies;
+	this->dependencies = info.dependencies.GetPhysical(context);
 }
 
-ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info)
+ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info,
+                                   optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name) {
-	Initialize(info);
+	Initialize(info, context);
 }
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
@@ -78,7 +78,7 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	create_info.temporary = temporary;
 	create_info.sql = sql;
 
-	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info);
+	return make_uniq<ViewCatalogEntry>(catalog, schema, create_info, &context);
 }
 
 } // namespace duckdb

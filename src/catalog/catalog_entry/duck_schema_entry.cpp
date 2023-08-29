@@ -148,27 +148,29 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateFunction(CatalogTransaction tr
 	unique_ptr<StandardEntry> function;
 	switch (info.type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY:
-		function = make_uniq_base<StandardEntry, ScalarFunctionCatalogEntry>(catalog, *this,
-		                                                                     info.Cast<CreateScalarFunctionInfo>());
+		function = make_uniq_base<StandardEntry, ScalarFunctionCatalogEntry>(
+		    catalog, *this, info.Cast<CreateScalarFunctionInfo>(), transaction.context);
 		break;
 	case CatalogType::TABLE_FUNCTION_ENTRY:
-		function = make_uniq_base<StandardEntry, TableFunctionCatalogEntry>(catalog, *this,
-		                                                                    info.Cast<CreateTableFunctionInfo>());
+		function = make_uniq_base<StandardEntry, TableFunctionCatalogEntry>(
+		    catalog, *this, info.Cast<CreateTableFunctionInfo>(), transaction.context);
 		break;
 	case CatalogType::MACRO_ENTRY:
 		// create a macro function
-		function = make_uniq_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>());
+		function = make_uniq_base<StandardEntry, ScalarMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>(),
+		                                                                  transaction.context);
 		break;
 
 	case CatalogType::TABLE_MACRO_ENTRY:
 		// create a macro table function
-		function = make_uniq_base<StandardEntry, TableMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>());
+		function = make_uniq_base<StandardEntry, TableMacroCatalogEntry>(catalog, *this, info.Cast<CreateMacroInfo>(),
+		                                                                 transaction.context);
 		break;
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
 		D_ASSERT(info.type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
 		// create an aggregate function
 		function = make_uniq_base<StandardEntry, AggregateFunctionCatalogEntry>(
-		    catalog, *this, info.Cast<CreateAggregateFunctionInfo>());
+		    catalog, *this, info.Cast<CreateAggregateFunctionInfo>(), transaction.context);
 		break;
 	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info.type));
@@ -189,20 +191,21 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateSequence(CatalogTransaction tr
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, *this, info);
+	auto type_entry = make_uniq<TypeCatalogEntry>(catalog, *this, info, transaction.context);
 	return AddEntry(transaction, std::move(type_entry), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
-	auto view = make_uniq<ViewCatalogEntry>(catalog, *this, info);
+	auto view = make_uniq<ViewCatalogEntry>(catalog, *this, info, transaction.context);
 	return AddEntry(transaction, std::move(view), info.on_conflict);
 }
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateIndex(ClientContext &context, CreateIndexInfo &info,
                                                         TableCatalogEntry &table) {
-	PhysicalDependencyList dependencies = info.dependencies.GetPhysical(context);
-	dependencies.AddDependency(table);
-	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info);
+	info.dependencies.AddDependency(table);
+	auto index = make_uniq<DuckIndexEntry>(catalog, *this, info, &context);
+
+	PhysicalDependencyList dependencies = index->dependencies;
 	return AddEntryInternal(GetCatalogTransaction(context), std::move(index), info.on_conflict, dependencies);
 }
 
@@ -214,7 +217,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCollation(CatalogTransaction t
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTableFunction(CatalogTransaction transaction,
                                                                 CreateTableFunctionInfo &info) {
-	auto table_function = make_uniq<TableFunctionCatalogEntry>(catalog, *this, info);
+	auto table_function = make_uniq<TableFunctionCatalogEntry>(catalog, *this, info, transaction.context);
 	table_function->internal = info.internal;
 	return AddEntry(transaction, std::move(table_function), info.on_conflict);
 }
@@ -228,7 +231,7 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateCopyFunction(CatalogTransactio
 
 optional_ptr<CatalogEntry> DuckSchemaEntry::CreatePragmaFunction(CatalogTransaction transaction,
                                                                  CreatePragmaFunctionInfo &info) {
-	auto pragma_function = make_uniq<PragmaFunctionCatalogEntry>(catalog, *this, info);
+	auto pragma_function = make_uniq<PragmaFunctionCatalogEntry>(catalog, *this, info, transaction.context);
 	pragma_function->internal = info.internal;
 	return AddEntry(transaction, std::move(pragma_function), info.on_conflict);
 }

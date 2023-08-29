@@ -16,13 +16,13 @@ namespace duckdb {
 //! An aggregate function in the catalog
 class FunctionEntry : public StandardEntry {
 public:
-	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info)
+	FunctionEntry(CatalogType type, Catalog &catalog, SchemaCatalogEntry &schema, CreateFunctionInfo &info,
+	              optional_ptr<ClientContext> context)
 	    : StandardEntry(type, schema, catalog, info.name) {
 		description = std::move(info.description);
 		parameter_names = std::move(info.parameter_names);
 		example = std::move(info.example);
-		throw InternalException("CONVERT DEPENDENCIES");
-		// this->dependencies = info.dependencies;
+		this->dependencies = info.dependencies.GetPhysical(context);
 	}
 
 	//! The description (if any)

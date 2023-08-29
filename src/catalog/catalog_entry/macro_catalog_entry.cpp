@@ -5,23 +5,24 @@
 
 namespace duckdb {
 
-MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
+MacroCatalogEntry::MacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info,
+                                     optional_ptr<ClientContext> context)
     : FunctionEntry(
           (info.function->type == MacroType::SCALAR_MACRO ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY),
-          catalog, schema, info),
+          catalog, schema, info, context),
       function(std::move(info.function)) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	throw InternalException("CONVERT DEPENDENCIES");
-	// this->dependencies = info.dependencies;
 }
 
-ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
-    : MacroCatalogEntry(catalog, schema, info) {
+ScalarMacroCatalogEntry::ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info,
+                                                 optional_ptr<ClientContext> context)
+    : MacroCatalogEntry(catalog, schema, info, context) {
 }
 
-TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info)
-    : MacroCatalogEntry(catalog, schema, info) {
+TableMacroCatalogEntry::TableMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info,
+                                               optional_ptr<ClientContext> context)
+    : MacroCatalogEntry(catalog, schema, info, context) {
 }
 
 unique_ptr<CreateInfo> MacroCatalogEntry::GetInfo() const {

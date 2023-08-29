@@ -4,9 +4,11 @@
 
 namespace duckdb {
 
-IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
+IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info,
+                                     optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), index(nullptr), sql(info.sql) {
 	this->temporary = info.temporary;
+	this->dependencies = info.dependencies.GetPhysical(context);
 }
 
 string IndexCatalogEntry::ToSQL() const {

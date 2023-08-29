@@ -11,12 +11,12 @@
 
 namespace duckdb {
 
-TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
+TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info,
+                                   optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	throw InternalException("CONVERT DEPENDENCIES");
-	// this->dependencies = info.dependencies;
+	this->dependencies = info.dependencies.GetPhysical(context);
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {
