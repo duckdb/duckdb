@@ -68,11 +68,11 @@ bool CSVFileHandle::FinishedReading() {
 
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
-	if (on_disk_file || can_seek) {
+	if (true) {
 		// if this is a plain file source OR we can seek we are not caching anything
 		auto bytes_read = file_handle->Read(buffer, nr_bytes);
 		if (!finished) {
-			finished = bytes_read < (int64_t)nr_bytes;
+			finished = bytes_read == 0;
 		}
 		return bytes_read;
 	}

@@ -73,9 +73,9 @@ void ParallelCSVReader::SkipEmptyLines() {
 }
 
 bool ParallelCSVReader::SetPosition() {
-	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
+	if (buffer->buffer->is_first_buffer && start_buffer == position_buffer &&
 	    start_buffer == first_pos_first_buffer) {
-		start_buffer = buffer->buffer->GetStart();
+		start_buffer = buffer->buffer->start_position;
 		position_buffer = start_buffer;
 		verification_positions.beginning_of_first_line = position_buffer;
 		verification_positions.end_of_last_line = position_buffer;
@@ -197,9 +197,9 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	start_buffer = buffer_read_p->buffer_start;
 	end_buffer = buffer_read_p->buffer_end;
 	if (buffer_read_p->next_buffer) {
-		buffer_size = buffer_read_p->buffer->GetBufferSize() + buffer_read_p->next_buffer->GetBufferSize();
+		buffer_size = buffer_read_p->buffer->actual_size + buffer_read_p->next_buffer->actual_size;
 	} else {
-		buffer_size = buffer_read_p->buffer->GetBufferSize();
+		buffer_size = buffer_read_p->buffer->actual_size;
 	}
 	buffer = std::move(buffer_read_p);
 
@@ -211,8 +211,8 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 }
 
 VerificationPositions ParallelCSVReader::GetVerificationPositions() {
-	verification_positions.beginning_of_first_line += buffer->buffer->GetCSVGlobalStart();
-	verification_positions.end_of_last_line += buffer->buffer->GetCSVGlobalStart();
+	verification_positions.beginning_of_first_line += buffer->buffer->csv_global_start;
+	verification_positions.end_of_last_line += buffer->buffer->csv_global_start;
 	return verification_positions;
 }
 
@@ -470,7 +470,7 @@ in_quotes:
 		}
 	}
 	if (!BufferRemainder()) {
-		if (buffer->buffer->IsCSVFileLastBuffer()) {
+		if (buffer->buffer->is_last_buffer) {
 			if (try_add_line) {
 				return false;
 			}
@@ -532,7 +532,7 @@ handle_escape : {
 	if (!BufferRemainder()) {
 		goto final_state;
 	}
-	if (position_buffer >= buffer_size && buffer->buffer->IsCSVFileLastBuffer()) {
+	if (position_buffer >= buffer_size && buffer->buffer->is_last_buffer) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
@@ -569,8 +569,8 @@ final_state : {
 		return true;
 	}
 	// If this is the last buffer, we have to read the last value
-	if (buffer->buffer->IsCSVFileLastBuffer() || !buffer->next_buffer ||
-	    (buffer->next_buffer && buffer->next_buffer->IsCSVFileLastBuffer())) {
+	if (buffer->buffer->is_last_buffer || !buffer->next_buffer ||
+	    (buffer->next_buffer && buffer->next_buffer->is_last_buffer)) {
 		if (column > 0 || start_buffer != position_buffer || try_add_line ||
 		    (insert_chunk.data.size() == 1 && start_buffer != position_buffer)) {
 			// remaining values to be added to the chunk
@@ -639,7 +639,7 @@ void ParallelCSVReader::ParseCSV(DataChunk &insert_chunk) {
 idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool stop_at_first) {
 	while (true) {
 		if (buffer->line_info->CanItGetLine(file_idx, buffer_idx)) {
-			auto cur_start = verification_positions.beginning_of_first_line + buffer->buffer->GetCSVGlobalStart();
+			auto cur_start = verification_positions.beginning_of_first_line + buffer->buffer->csv_global_start;
 			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start, false, stop_at_first);
 		}
 	}

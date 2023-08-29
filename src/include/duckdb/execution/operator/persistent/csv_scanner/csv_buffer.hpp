@@ -18,12 +18,17 @@ namespace duckdb {
 
 class CSVBufferHandle {
 public:
-	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p)
-	    : handle(std::move(handle_p)), actual_size(actual_size_p) {};
-	CSVBufferHandle() : actual_size(0) {};
+	CSVBufferHandle(BufferHandle handle_p, idx_t actual_size_p, const bool is_first_buffer_p,const bool is_final_buffer_p,idx_t csv_global_state_p, idx_t start_position_p)
+	    : handle(std::move(handle_p)), actual_size(actual_size_p), is_first_buffer(is_first_buffer_p),
+	      is_last_buffer(is_final_buffer_p), csv_global_start(csv_global_state_p), start_position(start_position_p) {};
+	CSVBufferHandle() : actual_size(0), is_first_buffer(false), is_last_buffer(false), csv_global_start(0), start_position(0) {};
 	//! Handle created during allocation
 	BufferHandle handle;
 	const idx_t actual_size;
+	const bool is_first_buffer;
+	const bool is_last_buffer;
+	const idx_t csv_global_start;
+	const idx_t start_position;
 	inline char *Ptr() {
 		return char_ptr_cast(handle.Ptr());
 	}

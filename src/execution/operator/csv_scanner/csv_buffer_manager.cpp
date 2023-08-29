@@ -76,8 +76,10 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos, const b
 
 	if (pos < cached_buffers.size()) {
 		auto buffer = cached_buffers[pos];
-		// Invalidate this buffer
-		cached_buffers[pos] = nullptr;
+		// Invalidate pre-previous buffer
+		if (pos > 1){
+			cached_buffers[pos-2] = nullptr;
+		}
 		return buffer->Pin(*file_handle);
 	}
 	if (!last_buffer) {

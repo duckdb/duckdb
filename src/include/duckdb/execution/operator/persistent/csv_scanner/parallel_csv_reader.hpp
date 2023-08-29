@@ -20,13 +20,13 @@
 namespace duckdb {
 
 struct CSVBufferRead {
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
+	CSVBufferRead(unique_ptr<CSVBufferHandle> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
 	              idx_t local_batch_index_p, optional_ptr<LineInfo> line_info_p)
 	    : buffer(std::move(buffer_p)), line_info(line_info_p), buffer_start(buffer_start_p), buffer_end(buffer_end_p),
 	      batch_index(batch_index), local_batch_index(local_batch_index_p) {
 		if (buffer) {
-			if (buffer_end > buffer->GetBufferSize()) {
-				buffer_end = buffer->GetBufferSize();
+			if (buffer_end > buffer->actual_size) {
+				buffer_end = buffer->actual_size;
 			}
 		} else {
 			buffer_start = 0;
@@ -34,7 +34,7 @@ struct CSVBufferRead {
 		}
 	}
 
-	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
+	CSVBufferRead(unique_ptr<CSVBufferHandle> buffer_p, unique_ptr<CSVBufferHandle> nxt_buffer_p, idx_t buffer_start_p,
 	              idx_t buffer_end_p, idx_t batch_index, idx_t local_batch_index, optional_ptr<LineInfo> line_info_p)
 	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, local_batch_index,
 	                    line_info_p) {
@@ -44,33 +44,33 @@ struct CSVBufferRead {
 	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
 
 	const char &operator[](size_t i) const {
-		if (i < buffer->GetBufferSize()) {
+		if (i < buffer->actual_size) {
 			auto buffer_ptr = buffer->Ptr();
 			return buffer_ptr[i];
 		}
 		auto next_ptr = next_buffer->Ptr();
-		return next_ptr[i - buffer->GetBufferSize()];
+		return next_ptr[i - buffer->actual_size];
 	}
 
 	string_t GetValue(idx_t start_buffer, idx_t position_buffer, idx_t offset) {
 		idx_t length = position_buffer - start_buffer - offset;
 		// 1) It's all in the current buffer
-		if (start_buffer + length <= buffer->GetBufferSize()) {
+		if (start_buffer + length <= buffer->actual_size) {
 			auto buffer_ptr = buffer->Ptr();
 			return string_t(buffer_ptr + start_buffer, length);
-		} else if (start_buffer >= buffer->GetBufferSize()) {
+		} else if (start_buffer >= buffer->actual_size) {
 			// 2) It's all in the next buffer
 			D_ASSERT(next_buffer);
 			D_ASSERT(next_buffer->GetBufferSize() >= length + (start_buffer - buffer->GetBufferSize()));
 			auto buffer_ptr = next_buffer->Ptr();
-			return string_t(buffer_ptr + (start_buffer - buffer->GetBufferSize()), length);
+			return string_t(buffer_ptr + (start_buffer - buffer->actual_size), length);
 		} else {
 			// 3) It starts in the current buffer and ends in the next buffer
 			D_ASSERT(next_buffer);
 			auto intersection = make_unsafe_uniq_array<char>(length);
 			idx_t cur_pos = 0;
 			auto buffer_ptr = buffer->Ptr();
-			for (idx_t i = start_buffer; i < buffer->GetBufferSize(); i++) {
+			for (idx_t i = start_buffer; i < buffer->actual_size; i++) {
 				intersection[cur_pos++] = buffer_ptr[i];
 			}
 			idx_t nxt_buffer_pos = 0;
@@ -83,8 +83,8 @@ struct CSVBufferRead {
 		}
 	}
 
-	shared_ptr<CSVBuffer> buffer;
-	shared_ptr<CSVBuffer> next_buffer;
+	unique_ptr<CSVBufferHandle> buffer;
+	unique_ptr<CSVBufferHandle> next_buffer;
 	vector<unsafe_unique_array<char>> intersections;
 	optional_ptr<LineInfo> line_info;
 
