@@ -9,6 +9,14 @@ test_that("we can create a relation from a df", {
   expect_s3_class(rel, "duckdb_relation")
 })
 
+test_that("we don't add optional quotes to columns", {
+  df1 <- data.frame(a.b = 1)
+  rel3 <- rel_from_df(con, df1)
+  rel4 <- rel_project(rel3, list(expr_reference("a.b")))
+  rel5 <- rel_to_altrep(rel4)
+  expect_equal(df1, rel5)
+})
+
 test_that("we won't crash when creating a relation from odd things", {
   # na seems to be fine, single col data frame with a single row with NA in it
   rel_from_df(con, NA)
@@ -213,6 +221,7 @@ test_that("semi join works", {
   dim(rel_df)
   expected_result <- data.frame(left_b = c(1))
   expect_equal(rel_df, expected_result)
+
 })
 
 test_that("anti join works", {
