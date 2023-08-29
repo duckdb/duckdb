@@ -11,6 +11,7 @@
 #include "duckdb/optimizer/cascade/base/CDrvdPropCtxtPlan.h"
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include <cstdlib>
 
 namespace gpopt {
 
@@ -144,6 +145,16 @@ duckdb::unique_ptr<Operator> Operator::CopyWithNewChildren(CGroupExpression *gro
 	result->m_cost = cost;
 	return result;
 }
+
+void Operator::CE() {
+	if(this->has_estimated_cardinality) {
+		return;
+	}
+	this->has_estimated_cardinality = true;
+	this->estimated_cardinality = static_cast<double>(rand() % 1000);
+	return;
+}
+
 CDrvdProp *Operator::Pdp(const CDrvdProp::EPropType ept) const {
 	switch (ept) {
 	case CDrvdProp::EptRelational:

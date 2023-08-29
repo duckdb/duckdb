@@ -263,6 +263,30 @@ unique_ptr<Expression> PhysicalOperator::ExpressionPassThrough(const PhysicalOpe
 	}
 }
 
+CEnfdOrder::EPropEnforcingType PhysicalOperator::EpetOrder(CExpressionHandle &exprhdl, vector<BoundOrderByNode> &peo) const {
+	if (exprhdl.Pgexpr() != nullptr) {
+		vector<BoundOrderByNode> v;
+		/* In case inconsistence */
+		for(auto &child : peo) {
+			unique_ptr<Expression> new_expr = ExpressionPassThrough(this, child.expression.get());
+			v.emplace_back(child.type, child.null_order, std::move(new_expr));
+		}
+		// derive all the possible order of this CGroupExpression
+		CGroupExpression* pgexpr = exprhdl.Pgexpr();
+		if(pgexpr->m_pdrgpgroup.size() > 0) {
+			// Only the order of the first child influence the order of its parent
+			CGroup* gp = pgexpr->m_pdrgpgroup[0];
+			for (auto iter = gp->m_sht.begin(); iter != gp->m_sht.end(); iter++) {
+				auto op_ctxt = iter->second;
+				if(CUtils::ContainsAll(op_ctxt->m_prpp->m_peo->m_pos->m_pdrgpoe, v)) {
+					return CEnfdOrder::EPropEnforcingType::EpetOptional;
+				}
+			}
+		}
+	}
+	return CEnfdOrder::EPropEnforcingType::EpetRequired;
+}
+
 bool CachingPhysicalOperator::CanCacheType(const LogicalType &type)
 {
 	switch (type.id()) {
