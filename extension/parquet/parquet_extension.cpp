@@ -37,6 +37,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
+
 #endif
 
 namespace duckdb {
@@ -826,6 +827,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 	if (!row_group_size_bytes_set) {
 		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
+
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
 	return std::move(bind_data);
@@ -1003,6 +1005,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
 	function.serialize = ParquetCopySerialize;
 	function.deserialize = ParquetCopyDeserialize;
+	function.supports_type = ParquetWriter::TypeIsSupported;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);

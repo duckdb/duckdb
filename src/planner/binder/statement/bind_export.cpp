@@ -11,6 +11,9 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/parser/constraints/foreign_key_constraint.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include <algorithm>
@@ -96,6 +99,18 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
+unique_ptr<QueryNode> CreateSelectStatement(CopyStatement &stmt, vector<unique_ptr<ParsedExpression>> select_list) {
+	auto ref = make_uniq<BaseTableRef>();
+	ref->catalog_name = stmt.info->catalog;
+	ref->schema_name = stmt.info->schema;
+	ref->table_name = stmt.info->table;
+
+	auto statement = make_uniq<SelectNode>();
+	statement->from_table = std::move(ref);
+	statement->select_list = std::move(select_list);
+	return std::move(statement);
+}
+
 BoundStatement Binder::Bind(ExportStatement &stmt) {
 	// COPY TO a file
 	auto &config = DBConfig::GetConfig(context);
@@ -163,7 +178,15 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		info->table = table.name;
 
 		// We can not export generated columns
+		vector<unique_ptr<ParsedExpression>> expressions;
 		for (auto &col : table.GetColumns().Physical()) {
+			auto expression = make_uniq_base<ParsedExpression, ColumnRefExpression>(col.GetName());
+			auto is_supported = copy_function.function.supports_type;
+			if (is_supported && !is_supported(col.Type())) {
+				expression =
+				    make_uniq_base<ParsedExpression, CastExpression>(LogicalType::VARCHAR, std::move(expression));
+			}
+			expressions.push_back(std::move(expression));
 			info->select_list.push_back(col.GetName());
 		}
 
@@ -181,17 +204,19 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 		// generate the copy statement and bind it
 		CopyStatement copy_stmt;
 		copy_stmt.info = std::move(info);
+		copy_stmt.select_statement = CreateSelectStatement(copy_stmt, std::move(expressions));
 
 		auto copy_binder = Binder::CreateBinder(context, this);
 		auto bound_statement = copy_binder->Bind(copy_stmt);
+		auto plan = std::move(bound_statement.plan);
+
 		if (child_operator) {
 			// use UNION ALL to combine the individual copy statements into a single node
-			auto copy_union =
-			    make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
-			                                   std::move(bound_statement.plan), LogicalOperatorType::LOGICAL_UNION);
+			auto copy_union = make_uniq<LogicalSetOperation>(GenerateTableIndex(), 1, std::move(child_operator),
+			                                                 std::move(plan), LogicalOperatorType::LOGICAL_UNION);
 			child_operator = std::move(copy_union);
 		} else {
-			child_operator = std::move(bound_statement.plan);
+			child_operator = std::move(plan);
 		}
 	}
 
