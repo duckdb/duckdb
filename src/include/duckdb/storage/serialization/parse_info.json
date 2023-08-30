@@ -420,14 +420,14 @@
         "type": "string"
       },
       {
-        "id": 202,
-        "name": "repository",
-        "type": "string"
-      },
-      {
         "id": 201,
         "name": "load_type",
         "type": "LoadType"
+      },
+      {
+        "id": 202,
+        "name": "repository",
+        "type": "string"
       }
     ]
   },

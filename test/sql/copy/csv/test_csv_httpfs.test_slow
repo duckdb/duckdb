@@ -6,13 +6,13 @@ require httpfs
 
 require parquet
 
-# FIXME: Restore these test to query I statments plus relevant result
-
 # Add test for 3731
-statement ok
+query I
 SELECT count(*) FROM read_csv_auto('https://datasets.imdbws.com/name.basics.tsv.gz', delim='\t', quote='',header=True)
+----
+12783090
 
-statement ok
+query I
   copy (
     SELECT *
       REPLACE (
@@ -23,3 +23,5 @@ statement ok
       )
     FROM read_csv_auto('https://datasets.imdbws.com/name.basics.tsv.gz', delim='\t', quote='',header=True)
   ) to '__TEST_DIR__/name_basics.parquet' (FORMAT 'parquet', CODEC 'ZSTD')
+----
+12783090

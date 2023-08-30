@@ -280,7 +280,7 @@ public:
 	}
 };
 
-class MissingExtensionException : public StandardException {
+class MissingExtensionException : public Exception {
 public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
 

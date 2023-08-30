@@ -44,6 +44,37 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 	return false;
 }
 
+
+unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext& context, const string &table_name, BaseTableRef &ref) {
+	auto &config = DBConfig::GetConfig(context);
+	if (context.config.use_replacement_scans) {
+		for (auto &scan : config.replacement_scans) {
+			auto replacement_function = scan.function(context, table_name, scan.data.get());
+			if (replacement_function) {
+				if (!ref.alias.empty()) {
+					// user-provided alias overrides the default alias
+					replacement_function->alias = ref.alias;
+				} else if (replacement_function->alias.empty()) {
+					// if the replacement scan itself did not provide an alias we use the table name
+					replacement_function->alias = ref.table_name;
+				}
+				if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
+					auto &table_function = replacement_function->Cast<TableFunctionRef>();
+					table_function.column_name_alias = ref.column_name_alias;
+				} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
+					auto &subquery = replacement_function->Cast<SubqueryRef>();
+					subquery.column_name_alias = ref.column_name_alias;
+				} else {
+					throw InternalException("Replacement scan should return either a table function or a subquery");
+				}
+				return Bind(*replacement_function);
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(root_statement, ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
@@ -135,59 +166,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 		table_name += (!table_name.empty() ? "." : "") + ref.table_name;
 		// table could not be found: try to bind a replacement scan
-		auto &config = DBConfig::GetConfig(context);
-
-		if (context.config.use_replacement_scans) {
-			for (auto &scan : config.replacement_scans) {
-				auto replacement_function = scan.function(context, table_name, scan.data.get());
-				if (replacement_function) {
-					if (!ref.alias.empty()) {
-						// user-provided alias overrides the default alias
-						replacement_function->alias = ref.alias;
-					} else if (replacement_function->alias.empty()) {
-						// if the replacement scan itself did not provide an alias we use the table name
-						replacement_function->alias = ref.table_name;
-					}
-					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-						auto &table_function = replacement_function->Cast<TableFunctionRef>();
-						table_function.column_name_alias = ref.column_name_alias;
-					} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-						auto &subquery = replacement_function->Cast<SubqueryRef>();
-						subquery.column_name_alias = ref.column_name_alias;
-					} else {
-						throw InternalException("Replacement scan should return either a table function or a subquery");
-					}
-					return Bind(*replacement_function);
-				}
-			}
+		// Try replacement scan bind
+		auto replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+		if (replacement_scan_bind_result) {
+			return replacement_scan_bind_result;
 		}
-		// TODO dedup
+
+		// Try autoloading an extension, then retry the replacement scan bind
 		auto extension_loaded = TryLoadExtensionForReplacementScan(context, table_name);
 		if (extension_loaded) {
-			if (context.config.use_replacement_scans) {
-				for (auto &scan : config.replacement_scans) {
-					auto replacement_function = scan.function(context, table_name, scan.data.get());
-					if (replacement_function) {
-						if (!ref.alias.empty()) {
-							// user-provided alias overrides the default alias
-							replacement_function->alias = ref.alias;
-						} else if (replacement_function->alias.empty()) {
-							// if the replacement scan itself did not provide an alias we use the table name
-							replacement_function->alias = ref.table_name;
-						}
-						if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
-							auto &table_function = replacement_function->Cast<TableFunctionRef>();
-							table_function.column_name_alias = ref.column_name_alias;
-						} else if (replacement_function->type == TableReferenceType::SUBQUERY) {
-							auto &subquery = replacement_function->Cast<SubqueryRef>();
-							subquery.column_name_alias = ref.column_name_alias;
-						} else {
-							throw InternalException(
-							    "Replacement scan should return either a table function or a subquery");
-						}
-						return Bind(*replacement_function);
-					}
-				}
+			replacement_scan_bind_result = BindWithReplacementScan(context, table_name, ref);
+			if (replacement_scan_bind_result) {
+				return replacement_scan_bind_result;
 			}
 		}
 

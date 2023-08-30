@@ -7,8 +7,6 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-mode skip
-
 foreach csv_name greek_utf8.csv imdb_movie_info_escaped.csv lineitem_sample.csv ncvoter.csv nfc_normalization.csv ontime_sample.csv voter.tsv web_page.csv
 
 statement ok

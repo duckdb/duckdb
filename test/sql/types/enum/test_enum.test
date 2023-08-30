@@ -8,15 +8,6 @@ PRAGMA enable_verification
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
-# Delete ENUMs
-statement ok
-DROP TYPE mood;
-
-statement error
-DROP TYPE mood;
-
-mode skip
-
 # Casts should work
 query I
 select 'happy'::mood;
