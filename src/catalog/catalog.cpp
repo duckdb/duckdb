@@ -478,17 +478,9 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// check if the setting exists in any extensions
 	auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
 	if (!extension_name.empty()) {
-		auto &dbconfig = DBConfig::GetConfig(context);
-		string autoload_hint;
-		if (!dbconfig.options.autoload_known_extensions) {
-			autoload_hint = "Additionally, consider enabling extension autoloading. Extension autoloading can load "
-			                "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
-			                "\nSET autoinstall_known_extensions=1;";
-		}
-		return CatalogException(
-		    "Setting with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-		    "install and load the extension, run:\nINSTALL %s;\nLOAD %s;\n\n%s",
-		    name, extension_name, extension_name, extension_name, autoload_hint);
+		auto error_message = "Setting with name \"" + name + "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
+		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
+		return CatalogException(error_message);
 	}
 	// the setting is not in an extension
 	// get a list of all options
@@ -530,17 +522,9 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 
 	// if we found an extension that can handle this catalog entry, create an error hinting the user
 	if (!extension_name.empty()) {
-		auto &dbconfig = DBConfig::GetConfig(context);
-		string autoload_hint;
-		if (!dbconfig.options.autoload_known_extensions) {
-			autoload_hint = "Additionally, consider enabling extension autoloading. Extension autoloading can load "
-			                "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
-			                "\nSET autoinstall_known_extensions=1;";
-		}
-		return CatalogException("%s with name \"%s\" is not in the catalog, but it exists in the %s extension.\n\nTo "
-		                        "install and load the extension, run:\nINSTALL %s;\nLOAD %s;\n\n%s",
-		                        CatalogTypeToString(type), entry_name, extension_name, extension_name, extension_name,
-		                        autoload_hint);
+		auto error_message = CatalogTypeToString(type) + " with name \"" + entry_name + "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
+		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
+		return CatalogException(error_message);
 	}
 
 	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);

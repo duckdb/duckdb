@@ -89,6 +89,10 @@ public:
 	//! extension_entries.hpp)
 	static bool CanAutoloadExtension(const string &ext_name);
 
+	//! Utility functions for creating meaningful error messages regarding missing extensions
+	static string WrapAutoLoadExtensionErrorMsg(ClientContext& context, const string& base_error, const string& extension_name);
+	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string& base_error, const string& extension_name);
+
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
 	                                     const string &local_path, const string &extension, bool force_install,

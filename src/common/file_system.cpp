@@ -411,21 +411,11 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension)) {
-				throw InternalException(
-				    "Extension \"%s\" is setup for autoloading file \"%s\", but it's not autoloadable",
-				    required_extension, pattern);
-			}
-
 			auto &dbconfig = DBConfig::GetConfig(context);
-			if (!dbconfig.options.autoload_known_extensions) {
-				throw MissingExtensionException(
-				    "File \"%s\" requires the extension \"%s\" to be loaded. To install the extension run:\n\n"
-				    "INSTALL %s;\nLOAD %s;\n\nAlternatively, consider enabling extension autoloading. Extension "
-				    "autoloading can load "
-				    "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
-				    "\nSET autoinstall_known_extensions=1;",
-				    pattern, required_extension, pattern, pattern);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) || !dbconfig.options.autoload_known_extensions) {
+				auto error_message = "File " + pattern + " requires the extension " + required_extension + " to be loaded";
+				error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
+				throw MissingExtensionException(error_message);
 			}
 			// an extension is required to read this file, but it is not loaded - try to load it
 			ExtensionHelper::AutoLoadExtension(context, required_extension);
