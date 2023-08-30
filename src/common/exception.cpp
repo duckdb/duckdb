@@ -158,6 +158,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Parameter Not Allowed";
 	case ExceptionType::DEPENDENCY:
 		return "Dependency";
+	case ExceptionType::MISSING_EXTENSION:
+		return "Missing Extension";
 	case ExceptionType::HTTP:
 		return "HTTP";
 	default:
@@ -344,7 +346,7 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 }
 
 MissingExtensionException::MissingExtensionException(const string &msg)
-    : Exception(ExceptionType::MISSING_EXTENSION, msg) {
+    : StandardException(ExceptionType::MISSING_EXTENSION, msg) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {

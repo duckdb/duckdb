@@ -2,46 +2,44 @@
 # description: Testing reset setting that lives in an extension that can be autoloaded
 # group: [extension]
 
-# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# This test assumes httpfs and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_reset_setting'
 
-# Default should be true when running unit tests
-query I
-select value from duckdb_settings() where name='autoload_known_extensions';
-----
-true
-
 ### No autoloading: throw error with installation hint
 statement ok
 set autoload_known_extensions=false
 
+statement ok
+set autoinstall_known_extensions=false
+
 # Testing reset setting
 statement error
-RESET timezone;
+RESET s3_region;
 ----
-Catalog Error: Setting with name "timezone" is not in the catalog, but it exists in the icu extension.
+Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
 
-### Autoloading, but the autoloading repository is set to non-existent location
+### Autoloading, but no auto install
 statement ok
 set autoload_known_extensions=true
 
-# Override the default repo with a non-existent dir
-statement ok
-set autoinstall_extension_repository='/tmp/non-existent-repo';
-
 # Error should inform the user on whats happening
 statement error
-RESET timezone;
+RESET s3_region;
 ----
-IO Error: Attempted to automatically install the 'icu' extension, but the following error occured: (Failed to copy local extension "icu" at PATH
+IO Error: Attempted to automatically load the 'httpfs' extension, but the following error occurred:
+Extension
 
-### Autoloading with correct tmp repo
+
+### Autoloading with correct tmp repo and autoinstall
 statement ok
 set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
 
 statement ok
-RESET timezone;
+set autoinstall_known_extensions=true
+
+statement ok
+RESET s3_region;

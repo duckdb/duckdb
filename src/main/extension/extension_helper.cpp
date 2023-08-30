@@ -137,6 +137,18 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	return false;
 }
 
+bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
+	if (ext_name.empty()) {
+		return false;
+	}
+	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+		if (ext_name == ext) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {

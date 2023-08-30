@@ -319,8 +319,8 @@ private:
 	                                      const string &name, OnEntryNotFound if_not_found,
 	                                      QueryErrorContext error_context = QueryErrorContext());
 	static CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &catalog,
-	                                        const string &schema, const string &name, OnEntryNotFound if_not_found,
-	                                        QueryErrorContext error_context);
+	                                      const string &schema, const string &name, OnEntryNotFound if_not_found,
+	                                      QueryErrorContext error_context);
 
 	//! Return an exception with did-you-mean suggestion.
 	static CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name,

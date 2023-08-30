@@ -239,7 +239,17 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
     {"geometry", "spatial"}
 }; // END_OF_EXTENSION_TYPES
 
-static constexpr string AUTOLOADABLE_EXTENSIONS[] = {
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_FS_PREFIXES[] = {
+    {"http://", "httpfs"},
+    {"https://", "httpfs"},
+    {"s3://", "httpfs"},
+//    {"azure://", "azure"}
+}; // EXTENSION_FS_PROTOCOLS
+
+static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
+//    "azure",
     "autocomplete",
     "excel",
     "fts",

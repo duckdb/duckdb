@@ -10,6 +10,7 @@
 
 #include <string>
 #include "duckdb.hpp"
+#include "duckdb/main/extension_entries.hpp"
 
 namespace duckdb {
 class DuckDB;
@@ -69,6 +70,24 @@ public:
 
 	static string GetExtensionName(const string &extension);
 	static bool IsFullPath(const string &extension);
+
+	//! Lookup a name in an ExtensionEntry list
+	template <size_t N>
+	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
+		auto lcase = StringUtil::Lower(name);
+
+		auto it =
+		    std::find_if(entries, entries + N, [&](const ExtensionEntry &element) { return element.name == lcase; });
+
+		if (it != entries + N && it->name == lcase) {
+			return it->extension;
+		}
+		return "";
+	}
+
+	//! Whether an extension can be autoloaded (i.e. it's registered as an autoloadable extension in
+	//! extension_entries.hpp)
+	static bool CanAutoloadExtension(const string &ext_name);
 
 private:
 	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,

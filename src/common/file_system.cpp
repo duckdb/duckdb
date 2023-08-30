@@ -397,15 +397,37 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+static string LookupExtensionForPattern(const string &pattern) {
+	for (const auto &entry : EXTENSION_FS_PREFIXES) {
+		if (StringUtil::StartsWith(pattern, entry.name)) {
+			return entry.extension;
+		}
+	}
+	return "";
+}
+
 vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
-		string required_extension;
-		if (FileSystem::IsRemoteFile(pattern)) {
-			required_extension = "httpfs";
-		}
+		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			// an extension is required to read this file but it is not loaded - try to load it
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension)) {
+				throw InternalException(
+				    "Extension \"%s\" is setup for autoloading file \"%s\", but it's not autoloadable",
+				    required_extension, pattern);
+			}
+
+			auto &dbconfig = DBConfig::GetConfig(context);
+			if (!dbconfig.options.autoload_known_extensions) {
+				throw MissingExtensionException(
+				    "File \"%s\" requires the extension \"%s\" to be loaded. To install the extension run:\n\n"
+				    "INSTALL %s;\nLOAD %s;\n\nAlternatively, consider enabling extension autoloading. Extension "
+				    "autoloading can load "
+				    "this extension automatically. To enable autoloading run:\nSET autoload_known_extensions=1;"
+				    "\nSET autoinstall_known_extensions=1;",
+				    pattern, required_extension, pattern, pattern);
+			}
+			// an extension is required to read this file, but it is not loaded - try to load it
 			ExtensionHelper::AutoLoadExtension(context, required_extension);
 			// success! glob again
 			// check the extension is loaded just in case to prevent an infinite loop here

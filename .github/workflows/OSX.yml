@@ -283,5 +283,6 @@ jobs:
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}
         run: |
-          python3 scripts/get_test_list.py --file-contains 'require ' --list '"*"' > test.list
+          python3 scripts/get_test_list.py --file-contains 'require ' --list '"*.test"' > test.list
+          python3 scripts/get_test_list.py --file-contains 'require-env LOCAL_EXTENSION_REPO' --list '"*.test"' >> test.list
           python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest '-f test.list'

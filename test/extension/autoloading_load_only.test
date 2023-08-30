@@ -1,15 +1,16 @@
-# name: test/extension/autoloading_current_setting.test
-# description: More tests for extension autoloading.
+# name: test/extension/autoloading_load_only.test
+# description: Tests for autoloading with no autoinstall
 # group: [extension]
 
 # This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
 # -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
 require-env LOCAL_EXTENSION_REPO
 
+# Ensure we have a clean extension directory without any preinstalled extensions
 statement ok
-set extension_directory='__TEST_DIR__/autoloading_current_setting'
+set extension_directory='__TEST_DIR__/autoloading_load_only'
 
-### No autoloading: throw error with installation hint
+### No autoloading nor installing: throw error with installation hint
 statement ok
 set autoload_known_extensions=false
 
@@ -17,27 +18,24 @@ statement ok
 set autoinstall_known_extensions=false
 
 statement error
-select current_setting('s3_region');
+SET s3_region='eu-west-1';
 ----
 Catalog Error: Setting with name "s3_region" is not in the catalog, but it exists in the httpfs extension.
 
-### Autoloading, but but not autoinstall
+### Autoloading but not autoinstall, while the extension is not installed: still not working
 statement ok
 set autoload_known_extensions=true
 
-# Error should inform the user on whats happening
 statement error
-select current_setting('s3_region');
+SET s3_region='eu-west-1';
 ----
 IO Error: Attempted to automatically load the 'httpfs' extension, but the following error occurred:
 Extension
 
-### Autoloading with autoinstall and correct extension repo
+### Manually install the extension from the local repo
 statement ok
-set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+INSTALL httpfs FROM '${LOCAL_EXTENSION_REPO}'
 
+# now autoloading works!
 statement ok
-set autoinstall_known_extensions=true
-
-statement ok
-select current_setting('s3_region');
+SET s3_region='eu-west-1';
