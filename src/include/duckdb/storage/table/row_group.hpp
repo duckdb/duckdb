@@ -41,6 +41,7 @@ class CollectionScanState;
 class TableFilterSet;
 struct ColumnFetchState;
 struct RowGroupAppendState;
+class MetadataManager;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
@@ -124,8 +125,8 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	bool AllDeleted();
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
-	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, MetadataManager &manager);
+	static RowGroupPointer Deserialize(Deserializer &source, MetadataManager &manager, const vector<LogicalType> &columns);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -156,8 +157,8 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
-	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
-	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
+	static MetaBlockPointer CheckpointDeletes(optional_ptr<VersionNode> versions, MetadataManager &manager);
+	static shared_ptr<VersionNode> DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 private:
 	mutex row_group_lock;

@@ -847,11 +847,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-void RowGroup::CheckpointDeletes(VersionNode *versions, Serializer &serializer) {
+MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<VersionNode> versions, MetadataManager &manager) {
 	if (!versions) {
 		// no version information: write nothing
-		serializer.Write<idx_t>(0);
-		return;
+		return MetaBlockPointer();
 	}
 	// first count how many ChunkInfo's we need to deserialize
 	idx_t chunk_info_count = 0;
@@ -862,25 +861,31 @@ void RowGroup::CheckpointDeletes(VersionNode *versions, Serializer &serializer) 
 		}
 		chunk_info_count++;
 	}
+
+	MetadataWriter writer(manager);
+	auto delete_location = writer.GetMetaBlockPointer();
 	// now serialize the actual version information
-	serializer.Write<idx_t>(chunk_info_count);
+	writer.Write<idx_t>(chunk_info_count);
 	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		auto chunk_info = versions->info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
 		}
-		serializer.Write<idx_t>(vector_idx);
-		chunk_info->Serialize(serializer);
+		writer.Write<idx_t>(vector_idx);
+		chunk_info->Serialize(writer);
 	}
+	writer.Flush();
+	return delete_location;
 }
 
-shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
-	auto chunk_count = source.Read<idx_t>();
-	if (chunk_count == 0) {
-		// no deletes
+shared_ptr<VersionNode> RowGroup::DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager) {
+	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
+	MetadataReader source(manager, delete_pointer);
 	auto version_info = make_shared<VersionNode>();
+	auto chunk_count = source.Read<idx_t>();
+	D_ASSERT(chunk_count > 0);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
 		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
@@ -891,7 +896,7 @@ shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
 	return version_info;
 }
 
-void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) {
+void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, MetadataManager &manager) {
 	FieldWriter writer(main_serializer);
 	writer.WriteField<uint64_t>(pointer.row_start);
 	writer.WriteField<uint64_t>(pointer.tuple_count);
@@ -900,11 +905,13 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 		serializer.Write<idx_t>(data_pointer.block_pointer);
 		serializer.Write<uint32_t>(data_pointer.offset);
 	}
-	CheckpointDeletes(pointer.versions.get(), serializer);
+	auto delete_pointer = CheckpointDeletes(pointer.versions.get(), manager);
+	serializer.Write<idx_t>(delete_pointer.block_pointer);
+	serializer.Write<uint32_t>(delete_pointer.offset);
 	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<LogicalType> &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager &manager, const vector<LogicalType> &columns) {
 	RowGroupPointer result;
 
 	FieldReader reader(main_source);
@@ -921,7 +928,10 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 		pointer.offset = source.Read<uint32_t>();
 		result.data_pointers.push_back(pointer);
 	}
-	result.versions = DeserializeDeletes(source);
+	MetaBlockPointer delete_pointer;
+	delete_pointer.block_pointer = source.Read<idx_t>();
+	delete_pointer.offset = source.Read<uint32_t>();
+	result.versions = DeserializeDeletes(delete_pointer, manager);
 
 	reader.Finalize();
 	return result;

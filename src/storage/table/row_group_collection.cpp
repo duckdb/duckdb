@@ -35,7 +35,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 		finished_loading = true;
 		return nullptr;
 	}
-	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
+	auto row_group_pointer = RowGroup::Deserialize(*reader, reader->GetMetadataManager(), collection.GetTypes());
 	current_row_group++;
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }

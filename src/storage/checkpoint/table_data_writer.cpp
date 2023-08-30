@@ -56,7 +56,7 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		if (row_group_count > total_rows) {
 			total_rows = row_group_count;
 		}
-		RowGroup::Serialize(row_group_pointer, table_data_writer);
+		RowGroup::Serialize(row_group_pointer, table_data_writer, checkpoint_manager.GetMetadataManager());
 	}
 
 	// Pointer to the table itself goes to the metadata stream.
