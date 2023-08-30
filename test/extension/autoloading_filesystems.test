@@ -20,7 +20,7 @@ set autoinstall_known_extensions=false
 statement error
 SELECT * FROM 's3://some-bucket/a-file.csv'
 ----
-Missing Extension Error: File "s3://some-bucket/a-file.csv" requires the extension "httpfs" to be loaded. To install the extension run:
+Missing Extension Error: File s3://some-bucket/a-file.csv requires the extension httpfs to be loaded
 
 ### With autoloading, install and correct repo
 statement ok
