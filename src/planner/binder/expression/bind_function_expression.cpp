@@ -130,15 +130,14 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 
-	// bind the children of the function expression
-	string error;
-
 	if (function.children.size() != 2) {
-		throw BinderException("Invalid function arguments!");
+		throw BinderException("Invalid function arguments! Expected two arguments: " + function.function_name +
+		                      "(LIST, lambda)");
 	}
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
 	// bind the list parameter
+	string error;
 	BindChild(function.children[0], depth, error);
 	if (!error.empty()) {
 		return BindResult(error);
@@ -148,7 +147,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
 	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-		throw BinderException(" Invalid LIST argument to " + function.function_name + "!");
+		throw BinderException("Invalid LIST argument to " + function.function_name + "!");
 	}
 
 	LogicalType list_child_type = list_child->return_type.id();
@@ -157,25 +156,31 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		list_child_type = ListType::GetChildType(list_child->return_type);
 	}
 
+	// get the callback function for the lambda parameter types
+	// lambdas cannot be overloaded
+	D_ASSERT(func.functions.functions.size() == 1);
+	auto &scalar_function = func.functions.functions.front();
+	auto &bind_lambda_function = scalar_function.bind_lambda;
+	if (!bind_lambda_function) {
+		throw BinderException("Scalar function " + function.function_name + " does not support lambdas!");
+	}
+
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[1]->Cast<LambdaExpression>();
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type);
+	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type, &bind_lambda_function);
 
 	if (bind_lambda_result.HasError()) {
-		error = bind_lambda_result.error;
-	} else {
-		// successfully bound: replace the node with a BoundExpression
-		auto alias = function.children[1]->alias;
-		bind_lambda_result.expression->alias = alias;
-		if (!alias.empty()) {
-			bind_lambda_result.expression->alias = alias;
-		}
-		function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+		return BindResult(bind_lambda_result.error);
 	}
 
-	if (!error.empty()) {
-		return BindResult(error);
+	// successfully bound: replace the node with a BoundExpression
+	auto alias = function.children[1]->alias;
+	bind_lambda_result.expression->alias = alias;
+	if (!alias.empty()) {
+		bind_lambda_result.expression->alias = alias;
 	}
+	function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
+
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
@@ -190,8 +195,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
-	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr,
-	                     bound_lambda_expr.parameter_count);
+	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, list_child_type);
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
@@ -208,29 +212,24 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	bound_function_expr.children.pop_back();
 	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
 
-	bound_lambda.index = bound_lambda.parameter_count == 2;
-
-	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda expression
-	// (rhs)
+	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
+	// expression (rhs)
 	if (lambda_bindings) {
-		if (bound_lambda.index) {
-			throw BinderException("Lambda index is not supported in nested lambdas");
-		}
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 
 			idx_t lambda_index = lambda_bindings->size() - i + 1;
 			auto &binding = (*lambda_bindings)[i - 1];
 
-			D_ASSERT(binding.names.size() == 1);
-			D_ASSERT(binding.types.size() == 1);
-
-			auto bound_lambda_param =
-			    make_uniq<BoundReferenceExpression>(binding.names[0], binding.types[0], lambda_index);
-			bound_function_expr.children.push_back(std::move(bound_lambda_param));
+			D_ASSERT(binding.names.size() == binding.types.size());
+			for (idx_t column_idx = 0; column_idx < binding.names.size(); column_idx++) {
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(binding.names[column_idx],
+				                                                              binding.types[column_idx], lambda_index);
+				bound_function_expr.children.push_back(std::move(bound_lambda_param));
+			}
 		}
 	}
 
-	// push back the captures into the children vector and the correct return types into the bound_function arguments
+	// push back the captures into the children vector
 	for (auto &capture : bound_lambda.captures) {
 		bound_function_expr.children.push_back(std::move(capture));
 	}

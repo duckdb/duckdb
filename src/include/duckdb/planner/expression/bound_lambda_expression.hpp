@@ -23,9 +23,8 @@ public:
 
 	unique_ptr<Expression> lambda_expr;
 	vector<unique_ptr<Expression>> captures;
+	//! The number of lhs parameters of the lambda function
 	idx_t parameter_count;
-
-	bool index = false;
 
 public:
 	string ToString() const override;

@@ -93,9 +93,6 @@ statement error
 SELECT list_transform([1, 2], (x, y, z) -> x + y + z)
 
 statement error
-SELECT list_filter([1, 2], (x, y) -> x >= y)
-
-statement error
 SELECT list_filter([1, 2], (x, y, z) -> x >= y AND y >= z)
 
 # using lambdas in functions that do not support them

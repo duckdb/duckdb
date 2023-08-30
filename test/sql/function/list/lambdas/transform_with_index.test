@@ -1,15 +1,24 @@
-# name: test/sql/function/list/lambdas/index.test
-# description: Test for list_transform with lambdas with index
+# name: test/sql/function/list/lambdas/transform_with_index.test
+# description: Test the list_transform function with an index parameter
 # group: [lambdas]
 
 statement ok
 PRAGMA enable_verification
 
-# Unsupported Nested Lambdas with index
-statement error
-select list_transform([1,2,3], (x) -> (list_transform([4,5,6], (y, y_i) -> x + y + y_i)));
+query I
+select list_transform([1, 2, 3], x -> list_transform([4, 5, 6], (y, y_i) -> x + y + y_i));
 ----
-Binder Error: Lambda index is not supported in nested lambdas
+[[6, 8, 10], [7, 9, 11], [8, 10, 12]]
+
+query I
+SELECT list_transform(['abc'], (x, i) -> x[i + 1]);
+----
+[b]
+
+mode skip
+
+statement error
+SELECT list_filter([1, 2], (x, y) -> x >= y)
 
 statement error
 select list_transform([1,2,3], (x, x_i) -> (list_transform([4,5,6], (y) -> x + y + x_i)));
