@@ -1,7 +1,7 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
 #include "duckdb/storage/block_manager.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 

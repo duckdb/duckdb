@@ -10,6 +10,7 @@
 
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 
