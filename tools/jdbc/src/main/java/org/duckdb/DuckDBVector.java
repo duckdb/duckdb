@@ -103,6 +103,8 @@ class DuckDBVector {
             return getTimestamp(idx);
         case TIMESTAMP_WITH_TIME_ZONE:
             return getOffsetDateTime(idx);
+        case JSON:
+            return getJsonObject(idx);
         case BLOB:
             return getBlob(idx);
         case UUID:

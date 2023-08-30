@@ -178,6 +178,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
             return Timestamp.class.getName();
         case TIMESTAMP_WITH_TIME_ZONE:
             return OffsetDateTime.class.getName();
+        case JSON:
+            return JsonNode.class.getName();
         case BLOB:
             return DuckDBResultSet.DuckDBBlobResult.class.getName();
         case UUID:

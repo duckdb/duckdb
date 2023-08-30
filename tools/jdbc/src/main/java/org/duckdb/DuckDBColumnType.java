@@ -30,6 +30,7 @@ public enum DuckDBColumnType {
     STRUCT,
     ENUM,
     UUID,
+    JSON,
     MAP,
     UNKNOWN,
     UNION;
