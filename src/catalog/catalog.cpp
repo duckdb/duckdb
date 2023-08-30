@@ -464,7 +464,7 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 		}
 
-		if (extension_name != "" && ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
 			ExtensionHelper::AutoLoadExtension(context, extension_name);
 			return true;
 		}
