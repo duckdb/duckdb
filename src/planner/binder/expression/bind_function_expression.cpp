@@ -131,8 +131,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
                                                 idx_t depth) {
 
 	if (function.children.size() != 2) {
-		throw BinderException("Invalid function arguments! Expected two arguments: " + function.function_name +
-		                      "(LIST, lambda)");
+		throw BinderException("Invalid function arguments!");
 	}
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 

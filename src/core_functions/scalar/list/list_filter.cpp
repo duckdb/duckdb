@@ -44,7 +44,7 @@ static LogicalType ListFilterBindLambda(const idx_t parameter_idx, const Logical
 	case 1:
 		return LogicalType::BIGINT;
 	default:
-		throw BinderException("Lambda function only supports up to two lambda parameters!");
+		throw BinderException("This lambda function only supports up to two lambda parameters!");
 	}
 }
 

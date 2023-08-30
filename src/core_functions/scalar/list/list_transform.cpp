@@ -35,7 +35,7 @@ static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const Logi
 	case 1:
 		return LogicalType::BIGINT;
 	default:
-		throw BinderException("Lambda only supports up to two lambda parameters!");
+		throw BinderException("This lambda function only supports up to two lambda parameters!");
 	}
 }
 
