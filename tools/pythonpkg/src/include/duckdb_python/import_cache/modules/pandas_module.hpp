@@ -13,9 +13,9 @@
 namespace duckdb {
 
 // pandas.core.arrays.arrow.dtype
-struct PandasCoreArraysArrowDtypeCacheItem : public PythonImportCacheItem {
+struct PandasCoreDtypesDtypesCacheItem : public PythonImportCacheItem {
 public:
-	~PandasCoreArraysArrowDtypeCacheItem() override {
+	~PandasCoreDtypesDtypesCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
@@ -36,11 +36,11 @@ public:
 	~PandasCoreArraysArrowCacheItem() override {
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		dtype.LoadModule("pandas.core.arrays.arrow.dtype", cache);
+		dtype.LoadModule("pandas.core.dtypes.dtypes", cache);
 	}
 
 public:
-	PandasCoreArraysArrowDtypeCacheItem dtype;
+	PandasCoreDtypesDtypesCacheItem dtype;
 
 protected:
 	bool IsRequired() const override final {
