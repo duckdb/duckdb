@@ -129,11 +129,13 @@ statement ok
 UPDATE db_size SET usage = (SELECT mem_to_bytes(current.memory_usage) AS usage
 FROM pragma_database_size() AS current);
 
+# only ~6250 values remaining (~4MB), and we are only slightly under 4MB after the vacuum (~3.6MB)
+# which we then round up to 4MB in our mem_to_bytes macro
 statement ok
 DELETE FROM t;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) < db_size.usage
+SELECT mem_to_bytes(current.memory_usage) <= db_size.usage
 FROM db_size, pragma_database_size() current;
 ----
 1

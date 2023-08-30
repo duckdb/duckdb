@@ -1,5 +1,8 @@
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 
+#include "duckdb/storage/block_manager.hpp"
+#include "duckdb/storage/buffer/buffer_handle.hpp"
+
 namespace duckdb {
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
@@ -23,7 +26,7 @@ void FixedSizeBuffer::Destroy() {
 		buffer_handle->Destroy();
 	}
 	if (OnDisk()) {
-		block_manager.UnregisterBlock(BlockId(), true);
+		block_manager.MarkBlockAsFree(BlockId());
 	}
 }
 
