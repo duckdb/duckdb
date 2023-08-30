@@ -172,7 +172,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 
 	for (expr_extptr_t expr : exprs) {
 		auto dexpr = expr->Copy();
-		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
+		aliases.push_back(dexpr->GetName());
 		projections.push_back(std::move(dexpr));
 	}
 
