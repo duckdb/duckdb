@@ -23,16 +23,22 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 
 	// Parquet
 	if (StringUtil::EndsWith(lower_name, ".parquet") || StringUtil::Contains(lower_name, ".parquet?")) {
-		ExtensionHelper::AutoLoadExtension(context, "parquet");
-		return true;
+		auto &dbconfig = DBConfig::GetConfig(context);
+		if (dbconfig.options.autoload_known_extensions) {
+			ExtensionHelper::AutoLoadExtension(context, "parquet");
+			return true;
+		}
 	}
 
 	// JSON
 	if (StringUtil::EndsWith(lower_name, ".json") || StringUtil::Contains(lower_name, ".json?") ||
 	    StringUtil::EndsWith(lower_name, ".jsonl") || StringUtil::Contains(lower_name, ".jsonl?") ||
 	    StringUtil::EndsWith(lower_name, ".ndjson") || StringUtil::Contains(lower_name, ".ndjson?")) {
-		ExtensionHelper::AutoLoadExtension(context, "json");
-		return true;
+		auto &dbconfig = DBConfig::GetConfig(context);
+		if (dbconfig.options.autoload_known_extensions) {
+			ExtensionHelper::AutoLoadExtension(context, "json");
+			return true;
+		}
 	}
 
 	return false;
