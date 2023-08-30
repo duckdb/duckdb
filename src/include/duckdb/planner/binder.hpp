@@ -235,7 +235,8 @@ private:
 	void MoveCorrelatedExpressions(Binder &other);
 
 	//! Tries to bind the table name with replacement scans
-	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext& context, const string &table_name, BaseTableRef &ref);
+	unique_ptr<BoundTableRef> BindWithReplacementScan(ClientContext &context, const string &table_name,
+	                                                  BaseTableRef &ref);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);

@@ -412,9 +412,12 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
 			auto &dbconfig = DBConfig::GetConfig(context);
-			if (!ExtensionHelper::CanAutoloadExtension(required_extension) || !dbconfig.options.autoload_known_extensions) {
-				auto error_message = "File " + pattern + " requires the extension " + required_extension + " to be loaded";
-				error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			    !dbconfig.options.autoload_known_extensions) {
+				auto error_message =
+				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
+				error_message =
+				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
 				throw MissingExtensionException(error_message);
 			}
 			// an extension is required to read this file, but it is not loaded - try to load it

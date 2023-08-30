@@ -44,8 +44,8 @@ static bool TryLoadExtensionForReplacementScan(ClientContext &context, const str
 	return false;
 }
 
-
-unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext& context, const string &table_name, BaseTableRef &ref) {
+unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context, const string &table_name,
+                                                          BaseTableRef &ref) {
 	auto &config = DBConfig::GetConfig(context);
 	if (context.config.use_replacement_scans) {
 		for (auto &scan : config.replacement_scans) {

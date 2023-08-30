@@ -478,7 +478,8 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	// check if the setting exists in any extensions
 	auto extension_name = ExtensionHelper::FindExtensionInEntries(name, EXTENSION_SETTINGS);
 	if (!extension_name.empty()) {
-		auto error_message = "Setting with name \"" + name + "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
+		auto error_message = "Setting with name \"" + name + "\" is not in the catalog, but it exists in the " +
+		                     extension_name + " extension.";
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
 		return CatalogException(error_message);
 	}
@@ -522,7 +523,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 
 	// if we found an extension that can handle this catalog entry, create an error hinting the user
 	if (!extension_name.empty()) {
-		auto error_message = CatalogTypeToString(type) + " with name \"" + entry_name + "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
+		auto error_message = CatalogTypeToString(type) + " with name \"" + entry_name +
+		                     "\" is not in the catalog, but it exists in the " + extension_name + " extension.";
 		error_message = ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
 		return CatalogException(error_message);
 	}

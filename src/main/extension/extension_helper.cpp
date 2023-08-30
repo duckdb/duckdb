@@ -153,7 +153,8 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 	return false;
 }
 
-string ExtensionHelper::WrapAutoLoadExtensionErrorMsg(ClientContext& context, const string& base_error, const string& extension_name) {
+string ExtensionHelper::WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
+                                                      const string &extension_name) {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load";
 
@@ -161,19 +162,24 @@ string ExtensionHelper::WrapAutoLoadExtensionErrorMsg(ClientContext& context, co
 	       "' extension, but the following error occurred:\n" + base_error;
 }
 
-string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string& base_error, const string& extension_name) {
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
+                                                          const string &extension_name) {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	string install_hint;
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
-		install_hint = "Please try installing and loading the "+ extension_name +" extension:\nINSTALL " + extension_name + ";\nLOAD " +
-		               extension_name + ";\n\n%s";
+		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
+		               extension_name + ";\nLOAD " + extension_name + ";\n\n%s";
 	} else if (!dbconfig.options.autoload_known_extensions) {
-		install_hint = "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
-		               extension_name + ";\nLOAD " + extension_name + ";\n\nAlternatively, consider enabling auto-install "
-		                                                              "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
+		install_hint =
+		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
+		    extension_name + ";\nLOAD " + extension_name +
+		    ";\n\nAlternatively, consider enabling auto-install "
+		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
 	} else if (!dbconfig.options.autoinstall_known_extensions) {
-		install_hint = "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name + ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
+		install_hint =
+		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
+		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
 	}
 
 	if (!install_hint.empty()) {
