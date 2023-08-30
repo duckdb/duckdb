@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "pathlib";
 
 public:
-	~PathLibCacheItem() override {
+	PathLibCacheItem() : PythonImportCacheItem("pathlib"), Path("Path", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		Path.LoadAttribute("Path", cache, *this);
+	~PathLibCacheItem() override {
 	}
 
 public:

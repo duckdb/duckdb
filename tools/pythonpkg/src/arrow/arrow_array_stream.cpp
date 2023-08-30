@@ -23,7 +23,7 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 
 void VerifyArrowDatasetLoaded() {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (!import_cache.arrow_dataset().IsLoaded()) {
+	if (!import_cache.arrow.dataset()) {
 		throw InvalidInputException("Optional module 'pyarrow.dataset' is required to perform this action");
 	}
 }
@@ -31,16 +31,16 @@ void VerifyArrowDatasetLoaded() {
 PyArrowObjectType GetArrowType(const py::handle &obj) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	// First Verify Lib Types
-	auto table_class = import_cache.arrow_lib().Table();
-	auto record_batch_reader_class = import_cache.arrow_lib().RecordBatchReader();
+	auto table_class = import_cache.arrow.Table();
+	auto record_batch_reader_class = import_cache.arrow.RecordBatchReader();
 	if (py::isinstance(obj, table_class)) {
 		return PyArrowObjectType::Table;
 	} else if (py::isinstance(obj, record_batch_reader_class)) {
 		return PyArrowObjectType::RecordBatchReader;
 	}
 	// Then Verify dataset types
-	auto dataset_class = import_cache.arrow_dataset().Dataset();
-	auto scanner_class = import_cache.arrow_dataset().Scanner();
+	auto dataset_class = import_cache.arrow.dataset.Dataset();
+	auto scanner_class = import_cache.arrow.dataset.Scanner();
 
 	if (py::isinstance(obj, scanner_class)) {
 		return PyArrowObjectType::Scanner;

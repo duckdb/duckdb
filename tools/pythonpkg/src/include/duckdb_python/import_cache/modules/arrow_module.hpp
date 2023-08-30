@@ -12,29 +12,13 @@
 
 namespace duckdb {
 
-struct ArrowLibCacheItem : public PythonImportCacheItem {
-public:
-	static constexpr const char *Name = "pyarrow";
-	~ArrowLibCacheItem() override {
-	}
-	void LoadSubtypes(PythonImportCache &cache) override {
-		Table.LoadAttribute("Table", cache, *this);
-		RecordBatchReader.LoadAttribute("RecordBatchReader", cache, *this);
-	}
-
-public:
-	PythonImportCacheItem Table;
-	PythonImportCacheItem RecordBatchReader;
-};
-
 struct ArrowDatasetCacheItem : public PythonImportCacheItem {
 public:
 	static constexpr const char *Name = "pyarrow.dataset";
-	~ArrowDatasetCacheItem() override {
+	ArrowDatasetCacheItem()
+	    : PythonImportCacheItem("pyarrow.dataset"), Dataset("Dataset", this), Scanner("Scanner", this) {
 	}
-	void LoadSubtypes(PythonImportCache &cache) override {
-		Dataset.LoadAttribute("Dataset", cache, *this);
-		Scanner.LoadAttribute("Scanner", cache, *this);
+	~ArrowDatasetCacheItem() override {
 	}
 
 public:
@@ -45,6 +29,22 @@ protected:
 	bool IsRequired() const final {
 		return false;
 	}
+};
+
+struct ArrowLibCacheItem : public PythonImportCacheItem {
+public:
+	static constexpr const char *Name = "pyarrow";
+	ArrowLibCacheItem()
+	    : PythonImportCacheItem("pyarrow"), dataset(), Table("Table", this),
+	      RecordBatchReader("RecordBatchReader", this) {
+	}
+	~ArrowLibCacheItem() override {
+	}
+
+public:
+	ArrowDatasetCacheItem dataset;
+	PythonImportCacheItem Table;
+	PythonImportCacheItem RecordBatchReader;
 };
 
 } // namespace duckdb

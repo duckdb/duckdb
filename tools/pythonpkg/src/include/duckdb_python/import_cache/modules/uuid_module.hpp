@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "uuid";
 
 public:
-	~UUIDCacheItem() override {
+	UUIDCacheItem() : PythonImportCacheItem("uuid"), UUID("UUID", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UUID.LoadAttribute("UUID", cache, *this);
+	~UUIDCacheItem() override {
 	}
 
 public:

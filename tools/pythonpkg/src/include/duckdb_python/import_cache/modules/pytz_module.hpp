@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "pytz";
 
 public:
-	~PyTzCacheItem() override {
+	PyTzCacheItem() : PythonImportCacheItem("pytz"), timezone("timezone", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		timezone.LoadAttribute("timezone", cache, *this);
+	~PyTzCacheItem() override {
 	}
 
 public:

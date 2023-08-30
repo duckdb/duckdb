@@ -16,14 +16,14 @@ struct PyDuckDBFileSystemCacheItem : public PythonImportCacheItem {
 	static constexpr const char *Name = "pyduckdb.filesystem";
 
 public:
-	~PyDuckDBFileSystemCacheItem() override {
+	PyDuckDBFileSystemCacheItem()
+	    : PythonImportCacheItem("pyduckdb.filesystem"), ModifiedMemoryFileSystem("ModifiedMemoryFileSystem", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		modified_memory_filesystem.LoadAttribute("ModifiedMemoryFileSystem", cache, *this);
+	~PyDuckDBFileSystemCacheItem() override {
 	}
 
 public:
-	PythonImportCacheItem modified_memory_filesystem;
+	PythonImportCacheItem ModifiedMemoryFileSystem;
 };
 
 struct PyDuckDBCacheItem : public PythonImportCacheItem {
@@ -31,11 +31,9 @@ public:
 	static constexpr const char *Name = "pyduckdb";
 
 public:
-	~PyDuckDBCacheItem() override {
+	PyDuckDBCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), value("value", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		filesystem.LoadModule("pyduckdb.filesystem", cache);
-		value.LoadAttribute("Value", cache, *this);
+	~PyDuckDBCacheItem() override {
 	}
 
 public:

@@ -340,10 +340,10 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (import_cache.pandas().libs.NAType.IsLoaded()) {
+				if (import_cache.pandas.libs.NAType(false)) {
 					// If pandas is imported, check if the type is NAType
 					auto val_type = Py_TYPE(val);
-					auto na_type = reinterpret_cast<PyTypeObject *>(import_cache.pandas().libs.NAType().ptr());
+					auto na_type = reinterpret_cast<PyTypeObject *>(import_cache.pandas.libs.NAType().ptr());
 					if (val_type == na_type) {
 						out_mask.SetInvalid(row);
 						continue;

@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "ipywidgets";
 
 public:
-	~IpywidgetsCacheItem() override {
+	IpywidgetsCacheItem() : PythonImportCacheItem("ipywidgets"), FloatProgress("FloatProgress", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		FloatProgress.LoadAttribute("FloatProgress", cache, *this);
+	~IpywidgetsCacheItem() override {
 	}
 
 public:

@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "typing";
 
 public:
-	~TypingCacheItem() override {
+	TypingCacheItem() : PythonImportCacheItem("typing"), _UnionGenericAlias("_UnionGenericAlias", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		_UnionGenericAlias.LoadAttribute("_UnionGenericAlias", cache, *this);
+	~TypingCacheItem() override {
 	}
 
 public:

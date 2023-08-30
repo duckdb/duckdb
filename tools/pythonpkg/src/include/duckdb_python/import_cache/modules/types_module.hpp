@@ -17,11 +17,10 @@ public:
 	static constexpr const char *Name = "types";
 
 public:
-	~TypesCacheItem() override {
+	TypesCacheItem()
+	    : PythonImportCacheItem("types"), UnionType("UnionType", this), GenericAlias("GenericAlias", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		UnionType.LoadAttribute("UnionType", cache, *this);
-		GenericAlias.LoadAttribute("GenericAlias", cache, *this);
+	~TypesCacheItem() override {
 	}
 
 public:

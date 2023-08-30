@@ -72,10 +72,10 @@ public:
 // pandas.libs
 struct PandasLibsCacheItem : public PythonImportCacheItem {
 public:
-	~PandasLibsCacheItem() override {
+	PandasLibsCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("pandas._libs.missing"), NAType("NAType", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		NAType.LoadAttribute("NAType", cache, *this);
+	~PandasLibsCacheItem() override {
 	}
 
 public:
@@ -92,14 +92,21 @@ public:
 	static constexpr const char *Name = "pandas";
 
 public:
+	PandasCacheItem()
+	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), libs(this), isnull("isnull", this),
+	      ArrowDtype("ArrowDtype", this) {
+	}
 	~PandasCacheItem() override {
 	}
+<<<<<<< Updated upstream
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		DataFrame.LoadAttribute("DataFrame", cache, *this);
 		libs.LoadModule("pandas._libs.missing", cache);
 		core.LoadModule("pandas.core", cache);
 		isnull.LoadAttribute("isnull", cache, *this);
 	}
+=======
+>>>>>>> Stashed changes
 
 public:
 	//! pandas.DataFrame

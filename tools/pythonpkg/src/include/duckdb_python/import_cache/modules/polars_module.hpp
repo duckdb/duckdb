@@ -17,11 +17,9 @@ public:
 	static constexpr const char *Name = "polars";
 
 public:
-	~PolarsCacheItem() override {
+	PolarsCacheItem() : PythonImportCacheItem("polars"), DataFrame("DataFrame", this), LazyFrame("LazyFrame", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		DataFrame.LoadAttribute("DataFrame", cache, *this);
-		LazyFrame.LoadAttribute("LazyFrame", cache, *this);
+	~PolarsCacheItem() override {
 	}
 
 public:

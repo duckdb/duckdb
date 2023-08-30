@@ -14,10 +14,10 @@ namespace duckdb {
 
 struct IPythonDisplayCacheItem : public PythonImportCacheItem {
 public:
-	~IPythonDisplayCacheItem() override {
+	IPythonDisplayCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("display", parent), display("display", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		display.LoadAttribute("display", cache, *this);
+	~IPythonDisplayCacheItem() override {
 	}
 
 public:
@@ -29,11 +29,10 @@ public:
 	static constexpr const char *Name = "IPython";
 
 public:
-	~IPythonCacheItem() override {
+	IPythonCacheItem() : PythonImportCacheItem("IPython"), get_ipython("get_ipython", this), display(this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		get_ipython.LoadAttribute("get_ipython", cache, *this);
-		display.LoadModule("IPython.display", cache);
+
+	~IPythonCacheItem() override {
 	}
 
 public:

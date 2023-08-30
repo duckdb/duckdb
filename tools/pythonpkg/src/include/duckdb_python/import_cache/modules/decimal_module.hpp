@@ -17,10 +17,9 @@ public:
 	static constexpr const char *Name = "decimal";
 
 public:
-	~DecimalCacheItem() override {
+	DecimalCacheItem() : PythonImportCacheItem("decimal"), Decimal("Decimal", this) {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		Decimal.LoadAttribute("Decimal", cache, *this);
+	~DecimalCacheItem() override {
 	}
 
 public:
