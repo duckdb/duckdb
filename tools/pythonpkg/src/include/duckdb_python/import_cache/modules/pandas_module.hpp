@@ -12,60 +12,6 @@
 
 namespace duckdb {
 
-// pandas.core.arrays.arrow.dtype
-struct PandasCoreArraysArrowDtypeCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreArraysArrowDtypeCacheItem() override {
-	}
-
-public:
-	PythonImportCacheItem ArrowDtype;
-};
-
-// pandas.core.arrays.arrow
-struct PandasCoreArraysArrowCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreArraysArrowCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		dtype.LoadModule("pandas.core.arrays.arrow.dtype", cache);
-	}
-
-public:
-	PandasCoreArraysArrowDtypeCacheItem dtype;
-
-protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
-// pandas.core.arrays
-struct PandasCoreArraysCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreArraysCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		arrow.LoadModule("pandas.core.arrays.arrow", cache);
-	}
-
-public:
-	PandasCoreArraysArrowCacheItem arrow;
-};
-
-// pandas.core
-struct PandasCoreCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		arrays.LoadModule("pandas.core.arrays", cache);
-	}
-
-public:
-	PandasCoreArraysCacheItem arrays;
-};
-
 // pandas.libs
 struct PandasLibsCacheItem : public PythonImportCacheItem {
 public:
@@ -93,15 +39,13 @@ public:
 	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), libs(this), isnull("isnull", this),
 	      ArrowDtype("ArrowDtype", this) {
 	}
-	~PandasCacheItem() override {
-	}
 
 public:
 	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
 	PandasLibsCacheItem libs;
-	PandasCoreCacheItem core;
 	PythonImportCacheItem isnull;
+	PythonImportCacheItem ArrowDtype;
 
 protected:
 	bool IsRequired() const override final {

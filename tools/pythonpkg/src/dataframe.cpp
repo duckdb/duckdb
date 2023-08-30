@@ -37,11 +37,7 @@ bool PandasDataFrame::IsPyArrowBacked(const py::handle &df) {
 		return false;
 	}
 
-<<<<<<< Updated upstream
-	auto arrow_dtype = import_cache.pandas().core.arrays.arrow.dtype.ArrowDtype();
-=======
 	auto arrow_dtype = import_cache.pandas.ArrowDtype();
->>>>>>> Stashed changes
 	for (auto &dtype : dtypes) {
 		if (py::isinstance(dtype, arrow_dtype)) {
 			return true;
