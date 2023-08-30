@@ -12,68 +12,6 @@
 
 namespace duckdb {
 
-// pandas.core.arrays.arrow.dtype
-struct PandasCoreDtypesDtypesCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreDtypesDtypesCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
-	}
-
-public:
-	PythonImportCacheItem ArrowDtype;
-
-protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
-// pandas.core.arrays.arrow
-struct PandasCoreArraysArrowCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreArraysArrowCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		dtype.LoadModule("pandas.core.dtypes.dtypes", cache);
-	}
-
-public:
-	PandasCoreDtypesDtypesCacheItem dtype;
-
-protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
-// pandas.core.arrays
-struct PandasCoreArraysCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreArraysCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		arrow.LoadModule("pandas.core.arrays.arrow", cache);
-	}
-
-public:
-	PandasCoreArraysArrowCacheItem arrow;
-};
-
-// pandas.core
-struct PandasCoreCacheItem : public PythonImportCacheItem {
-public:
-	~PandasCoreCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		arrays.LoadModule("pandas.core.arrays", cache);
-	}
-
-public:
-	PandasCoreArraysCacheItem arrays;
-};
-
 // pandas.libs
 struct PandasLibsCacheItem : public PythonImportCacheItem {
 public:
@@ -102,16 +40,16 @@ public:
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		DataFrame.LoadAttribute("DataFrame", cache, *this);
 		libs.LoadModule("pandas._libs.missing", cache);
-		core.LoadModule("pandas.core", cache);
 		isnull.LoadAttribute("isnull", cache, *this);
+		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
 	}
 
 public:
 	//! pandas.DataFrame
 	PythonImportCacheItem DataFrame;
 	PandasLibsCacheItem libs;
-	PandasCoreCacheItem core;
 	PythonImportCacheItem isnull;
+	PythonImportCacheItem ArrowDtype;
 
 protected:
 	bool IsRequired() const override final {
