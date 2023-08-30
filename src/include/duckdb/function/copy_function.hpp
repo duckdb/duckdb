@@ -99,13 +99,16 @@ typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch);
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
+typedef bool (*copy_supports_type_t)(const LogicalType &type);
+
 class CopyFunction : public Function {
 public:
 	explicit CopyFunction(string name)
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
 	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
+	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), supports_type(nullptr),
+	      copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -125,6 +128,8 @@ public:
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;
+
+	copy_supports_type_t supports_type;
 
 	copy_from_bind_t copy_from_bind;
 	TableFunction copy_from_function;
