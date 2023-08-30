@@ -28,6 +28,6 @@ third_party/*
 */enums/expression_type.cpp
 */serialization/*
 */json_enums.cpp
+*/common/assert.cpp
 */include/duckdb/common/helper.hpp
 */include/duckdb/common/unique_ptr.hpp
-*/include/duckdb/common/types/selection_vector.hpp
