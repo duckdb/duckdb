@@ -48,7 +48,6 @@ public:
 			return;
 		}
 		value_buffer[0] = (T)0;
-		// TODO: Here you must call decompression on the vector
 		alp::AlpDecompression<T>::Decompress(
 		    for_encoded, value_buffer, count, v_factor, v_exponent,
 		    exceptions_count, exceptions, exceptions_positions, frame_of_reference, bit_width);
@@ -59,7 +58,8 @@ public:
 	T values[AlpConstants::ALP_VECTOR_SIZE];
 	T exceptions[AlpConstants::ALP_VECTOR_SIZE];
 	uint16_t exceptions_positions[AlpConstants::ALP_VECTOR_SIZE];
-	uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8]; //! Make room for decompression
+	//! Make room for decompression
+	uint8_t for_encoded[AlpConstants::ALP_VECTOR_SIZE * 8];
 	uint8_t v_exponent;
 	uint8_t v_factor;
 	uint16_t exceptions_count;

@@ -61,6 +61,20 @@ struct AlpCompression {
 		return static_cast<int64_t>(n) - static_cast<int64_t>(AlpPrimitives<T>::MAGIC_NUMBER);
 	}
 
+	static int64_t NumberToInt64_WO(T n){
+		n = n + AlpPrimitives<T>::MAGIC_NUMBER - AlpPrimitives<T>::MAGIC_NUMBER;
+		//printf("N %f | ", n);
+		if (std::isinf(n) || std::isnan(n) || n > std::numeric_limits<int64_t>::max()){ //! TODO: Better strategy to prevent overflow undefined behaviour
+			return std::numeric_limits<int64_t>::max();
+		}
+		return static_cast<int64_t>(n);
+	}
+
+	static T NumberToInt64_T(T n){
+		return n + AlpPrimitives<T>::MAGIC_NUMBER - AlpPrimitives<T>::MAGIC_NUMBER;
+		//return static_cast<int64_t>(n) - static_cast<int64_t>(AlpPrimitives<T>::MAGIC_NUMBER);
+	}
+
 	/*
 	 * Function to sort best combinations from each vector sampled from the rowgroup
 	 * First criteria is number of times it appears
@@ -86,13 +100,14 @@ struct AlpCompression {
 		// For each vector in the rg_sample
 		for (idx_t smp_vector_i = 0; smp_vector_i < vectors_sampled; smp_vector_i++){
 			vector<pair<int, int>> local_combinations;
-			uint8_t found_factor;
-			uint8_t found_exponent;
+			uint8_t found_factor {AlpPrimitives<T>::MAX_EXPONENT};
+			uint8_t found_exponent {AlpPrimitives<T>::MAX_EXPONENT};
 			idx_t best_total_bits = (smp_per_vector * (EXACT_TYPE_BITSIZE + 16)) + (smp_per_vector * EXACT_TYPE_BITSIZE);
 
 			// We test all combinations (~170 combinations)
 			for (int exp_ref = AlpPrimitives<T>::MAX_EXPONENT; exp_ref >= 0; exp_ref--){
 				for (int factor_idx = exp_ref; factor_idx >= 0; factor_idx--){
+					printf("Factor %d | ", factor_idx);
 					uint32_t exception_c {0};
 					uint32_t matches_c {0};
 					uint32_t bits_per_digit {0};
@@ -107,9 +122,9 @@ struct AlpCompression {
 						T  cd;
 
 						cd     = dbl * AlpPrimitives<T>::EXP_ARR[exp_ref] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
-						digits = NumberToInt64(cd);
-						// printf("digits %d - ", digits);
-						orig   = digits * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
+						digits = NumberToInt64_WO(cd);
+						//! The cast to T is needed to prevent a signed integer overflow
+						orig   = static_cast<T>(digits) * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
 						if (orig == dbl) {
 							matches_c++;
 							if (digits > local_max_digits) { local_max_digits = digits; };
@@ -122,13 +137,13 @@ struct AlpCompression {
 					if (matches_c < 2) { // We skip combinations which yields to less than 2 matches
 						continue;
 					}
-
+					printf("Factor2 %d | ", factor_idx);
 					// Evaluate factor/exponent performance (we optimize for FOR)
 					uint64_t delta = local_max_digits - local_min_digits;
 					bits_per_digit = ceil(log2(delta + 1));
 					local_total_bits += smp_per_vector * bits_per_digit;
 					local_total_bits += exception_c * (EXACT_TYPE_BITSIZE + 16); // TODO: Depends on EXACT TYPE
-
+					printf("Factor3 %d | ", factor_idx);
 					if (
 					    (local_total_bits < best_total_bits) ||
 					    // We prefer bigger exponents
@@ -144,6 +159,7 @@ struct AlpCompression {
 				}
 			}
 			std::pair<int, int> cmb = std::make_pair(found_exponent, found_factor);
+			printf("ff %d | ee %d \n", found_exponent, found_factor);
 			if (global_combinations.count(cmb)){
 				global_combinations[cmb] += 1;
 			} else {
@@ -154,6 +170,7 @@ struct AlpCompression {
 		std::vector<std::pair<std::pair<int, int>, int>> comb_pairs;
 		// Convert map pairs to vector for sort
 		for (auto const& itr : global_combinations){
+			printf("fff %d | eee %d \n", itr.first.first, itr.first.second);
 			comb_pairs.emplace_back(
 			    itr.first, // Pair exp, fac
 			    itr.second // N of times it appeared
@@ -168,6 +185,7 @@ struct AlpCompression {
 		}
 		// Save best exp,fac pairs
 		for (idx_t i {0}; i < n_comb; i++){
+			printf("FACTOR %d | EXPONENT %d \n", comb_pairs[i].first.first, comb_pairs[i].first.second);
 			state.combinations.push_back(comb_pairs[i].first);
 		}
 	}
@@ -197,8 +215,9 @@ struct AlpCompression {
 				T  cd;
 
 				cd     = dbl * AlpPrimitives<T>::EXP_ARR[exp_ref] * AlpPrimitives<T>::FRAC_ARR[factor_idx];
-				digits = NumberToInt64(cd);
-				orig   = digits * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
+				digits = NumberToInt64_WO(cd);
+				//! The cast to T is needed to prevent a signed integer overflow
+				orig   = static_cast<T>(digits) * AlpConstants::FACT_ARR[factor_idx] * AlpPrimitives<T>::FRAC_ARR[exp_ref];
 				if (orig == dbl) {
 					matches_c++;
 					if (digits > local_max_digits) { local_max_digits = digits; }
@@ -253,16 +272,20 @@ struct AlpCompression {
 			state.v_factor = state.combinations[0].second;
 		}
 
-		// printf("Encoding %d values\n",  input_vector.size());
+		printf("Encoding %d values\n",  input_vector.size());
+		printf("Exponent %d\n",  state.v_exponent);
+		printf("Factor %d\n",  state.v_factor);
 
 		for (idx_t i {0}; i < input_vector.size(); i++) {
 			auto dbl = input_vector[i];
-			printf("dbl %f | ", dbl);
+			//printf("dbl %f | ", dbl);
 			// Attempt conversion
 			cd = dbl * AlpPrimitives<T>::EXP_ARR[state.v_exponent] * AlpPrimitives<T>::FRAC_ARR[state.v_factor];
-			tmp_digit = NumberToInt64(cd);
+			//printf("cd %f | ", cd);
+			tmp_digit = NumberToInt64_WO(cd);
+			//printf("tmpdigit %lld | ", (long long) tmp_digit);
 			state.dig[i] = tmp_digit;
-			orig = static_cast<T>(tmp_digit * AlpConstants::FACT_ARR[state.v_factor]) *
+			orig = static_cast<T>(tmp_digit) * AlpConstants::FACT_ARR[state.v_factor] *
 			       AlpPrimitives<T>::FRAC_ARR[state.v_exponent];
 			tmp_dbl_arr[i] = orig;
 		}
@@ -308,20 +331,24 @@ struct AlpCompression {
 		auto* dig_u = reinterpret_cast<uint64_t*>(state.dig);
 		auto const min_u = static_cast<uint64_t>(min);
 
+		printf("min_u %d | ", min_u);
+
 		// Subtract FOR
 		if (!EMPTY){ // only if not analyze
 			for (idx_t i = 0; i < input_vector.size(); i++) {
 				//state.dig[i] -= min;
+				//printf("ENCa %lld | ", (long long) dig_u[i]);
 				dig_u[i] -= min_u;
+				//printf("ENCb %lld | ", (long long) dig_u[i]);
 			}
 		}
 
 		auto width = BitpackingPrimitives::MinimumBitWidth<uint64_t, false>(min_max_diff);
 		auto bp_size = BitpackingPrimitives::GetRequiredSize(input_vector.size(), width);
-		//	printf("BP SIZE %d\n", bp_size);
-		//	printf("BW %d\n", width);
-		//	printf("FOR %d\n", min);
-		if (!EMPTY){ // only if not analyze
+		printf("BP SIZE %d\n", bp_size);
+		printf("BW %d\n", width);
+		printf("FOR %d\n", min);
+		if (!EMPTY && width > 0){ // only if not analyze
 			// state.encoded.reserve(bp_size); // reserving
 			//data_ptr_t src = data_ptr_cast(state.dig);
 			//data_ptr_t dst = data_ptr_cast(state.encoded.get());
@@ -349,10 +376,12 @@ struct AlpDecompression {
 		uint64_t factor = AlpConstants::U_FACT_ARR[v_factor];
 		T frac10 = AlpPrimitives<T>::FRAC_ARR[v_exponent];
 
-		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8];
+		uint8_t for_decoded[AlpConstants::ALP_VECTOR_SIZE * 8] = {0};
 
 		// TODO: Manage case of bit_width equal to 0
-		BitpackingPrimitives::UnPackBuffer<uint64_t>(for_decoded, for_encoded, count, bit_width);
+		if (bit_width > 0){
+			BitpackingPrimitives::UnPackBuffer<uint64_t>(for_decoded, for_encoded, count, bit_width);
+		}
 
 		uint64_t *dig = reinterpret_cast<uint64_t*>(data_ptr_cast(for_decoded));
 
@@ -363,7 +392,9 @@ struct AlpDecompression {
 
 		for (idx_t i = 0; i < count; i++) {
 			auto digit = dig[i];
-			out[i] = static_cast<T>(static_cast<int64_t>(digit * factor)) * frac10;
+			//printf("DECa %lld | ", (long long) digit);
+			out[i] = static_cast<T>(static_cast<int64_t>(digit)) * factor * frac10;
+			//printf("OUT %f | ", out[i]);
 		}
 		//printf("EXCEPTIONS COUNT DECOMPRESS %d", exceptions_count);
 		for (idx_t i = 0; i < exceptions_count; i++) {

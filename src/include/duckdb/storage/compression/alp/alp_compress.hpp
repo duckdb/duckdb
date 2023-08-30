@@ -245,16 +245,16 @@ public:
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count){
 		auto data = UnifiedVectorFormat::GetData<T>(vdata);
-
+		T null_replacement = 0;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			if (vdata.validity.RowIsValid(idx)){
-				input_vector.push_back(data[idx]);
-			} else {
-				// TODO: CHANGE THIS TO MANAGE NULLS
+			T value = data[idx];
+			if (!vdata.validity.RowIsValid(idx)){
 				printf("Found null... \n");
-				input_vector.push_back(0);
+				value = null_replacement;
 			}
+			null_replacement = value;
+			input_vector.push_back(value);
 			group_idx++;
 			if (group_idx == AlpConstants::ALP_VECTOR_SIZE){
 				printf("Group Starting... \n");

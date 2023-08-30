@@ -108,20 +108,20 @@ bool AlpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	// printf("Vector IDX %ld\n", analyze_state.vector_idx);
 	// printf("Vector Sampled %d\n", 	analyze_state.vectors_sampled);
 
+	T null_replacement = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		// TODO: Manage Null values
-		 if (!vdata.validity.RowIsValid(idx)) {
-			 // printf("NA %ld - ", i);
-			 continue;
-		 }
-		 // TODO
-		 // So we have a problem here because for each vector I am pushing 2048, but each vector in ALP is 1024
-		 // So I end up sampling more than what I should
-		 analyze_state.all_data.push_back(data[idx]); // I will use this later to test the analyze
-		// analyze_state.have_valid_row = true;
+		T value = data[idx];
+		if (!vdata.validity.RowIsValid(idx)) {
+			value = null_replacement;
+		}
+		null_replacement = value;
+		// TODO
+		// So we have a problem here because for each vector I am pushing 2048, but each vector in ALP is 1024
+		// So I end up sampling more than what I should
+		analyze_state.all_data.push_back(value); // I will use this later to test the analyze
 		if (i % ( count / AlpConstants::SAMPLES_PER_VECTOR) == 0) { // This will ensure I always take 32 samples per vector
-			analyze_state.rg_sample.push_back(data[idx]);
+			analyze_state.rg_sample.push_back(value);
 		}
 	}
 	analyze_state.vectors_sampled++;

@@ -69,7 +69,7 @@ template <>
 struct AlpPrimitives<float> {
 
 	static constexpr float MAGIC_NUMBER = 12582912.0; //! 2^22 + 2^23
-	static constexpr double MAX_EXPONENT = 9;
+	static constexpr uint8_t MAX_EXPONENT = 9;
 
 	static constexpr const float EXP_ARR[] = {
 	    1.0,
@@ -104,7 +104,7 @@ template <>
 struct AlpPrimitives<double> {
 
 	static constexpr double MAGIC_NUMBER = 6755399441055744.0; //! 2^51 + 2^52
-	static constexpr double MAX_EXPONENT = 18;
+	static constexpr uint8_t MAX_EXPONENT = 18;
 
 	static constexpr const double EXP_ARR[] = {
 	    1.0,
