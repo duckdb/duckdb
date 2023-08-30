@@ -23,6 +23,11 @@ public:
 
 public:
 	PythonImportCacheItem ArrowDtype;
+
+protected:
+	bool IsRequired() const override final {
+		return false;
+	}
 };
 
 // pandas.core.arrays.arrow
