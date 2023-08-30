@@ -5,6 +5,7 @@
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -119,6 +120,23 @@ PhysicalDependencyList LogicalDependencyList::GetPhysical(ClientContext &context
 		auto &type = entry.type;
 
 		auto catalog_entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+		dependencies.AddDependency(*catalog_entry);
+	}
+	return dependencies;
+}
+
+PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, ClientContext &context) const {
+	PhysicalDependencyList dependencies;
+	for (auto &entry : set) {
+		auto &name = entry.name;
+		auto &catalog_name = entry.catalog;
+		auto &schema = entry.schema;
+		auto &type = entry.type;
+
+		D_ASSERT(catalog_name == catalog.GetName());
+		auto lookup = catalog.LookupEntry(context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+		D_ASSERT(lookup.Found());
+		auto catalog_entry = lookup.entry;
 		dependencies.AddDependency(*catalog_entry);
 	}
 	return dependencies;

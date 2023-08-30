@@ -66,6 +66,16 @@ class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
 
+//! Return value of Catalog::LookupEntry
+struct CatalogEntryLookup {
+	optional_ptr<SchemaCatalogEntry> schema;
+	optional_ptr<CatalogEntry> entry;
+
+	DUCKDB_API bool Found() const {
+		return entry;
+	}
+};
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -305,11 +315,13 @@ protected:
 	//! Reference to the database
 	AttachedDatabase &db;
 
+public:
+	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
+	                               OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext());
+
 private:
 	CatalogEntryLookup LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
 	                                       const string &name);
-	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
-	                               OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext());
 	static CatalogEntryLookup LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
 	                                      const string &name, OnEntryNotFound if_not_found,
 	                                      QueryErrorContext error_context = QueryErrorContext());
