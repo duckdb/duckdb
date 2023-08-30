@@ -304,6 +304,7 @@ static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate)
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return DateDiff::DayOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::DECADE:
 		return DateDiff::DecadeOperator::template Operation<TA, TB, TR>(startdate, enddate);
@@ -359,6 +360,7 @@ static void DateDiffBinaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		DateDiff::BinaryExecute<TA, TB, TR, DateDiff::DayOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::DECADE:

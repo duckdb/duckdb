@@ -506,7 +506,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, H
 	} else {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared<HTTPMetadataCache>(true, false);
+			auto cache = make_shared<HTTPMetadataCache>(true, true);
 			client_context->registered_state["http_cache"] = cache;
 			return cache.get();
 		} else {

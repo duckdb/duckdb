@@ -1272,6 +1272,27 @@ bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict) {
 	return true;
 }
 
+template <>
+bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict) {
+	result = dtime_tz_t(input, 0);
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From Time With Time Zone (Offset)
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(dtime_tz_t input, dtime_tz_t &result, bool strict) {
+	result = input;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(dtime_tz_t input, dtime_t &result, bool strict) {
+	result = input.time();
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Timestamps
 //===--------------------------------------------------------------------===//
@@ -1293,6 +1314,15 @@ bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
 	result = input;
+	return true;
+}
+
+template <>
+bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict) {
+	if (!Timestamp::IsFinite(input)) {
+		return false;
+	}
+	result = dtime_tz_t(Timestamp::GetTime(input), 0);
 	return true;
 }
 
@@ -1581,6 +1611,33 @@ bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
 template <>
 dtime_t Cast::Operation(string_t input) {
 	return Time::FromCString(input.GetData(), input.GetSize());
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To TimeTZ
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, string *error_message, bool strict) {
+	if (!TryCast::Operation<string_t, dtime_tz_t>(input, result, strict)) {
+		HandleCastError::AssignError(Time::ConversionError(input), error_message);
+		return false;
+	}
+	return true;
+}
+
+template <>
+bool TryCast::Operation(string_t input, dtime_tz_t &result, bool strict) {
+	idx_t pos;
+	return Time::TryConvertTimeTZ(input.GetData(), input.GetSize(), pos, result, strict);
+}
+
+template <>
+dtime_tz_t Cast::Operation(string_t input) {
+	dtime_tz_t result;
+	if (!TryCast::Operation(input, result, false)) {
+		throw ConversionException(Time::ConversionError(input));
+	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//

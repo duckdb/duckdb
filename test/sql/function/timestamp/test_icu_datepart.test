@@ -387,9 +387,39 @@ NULL
 
 # Beware the ides of March
 query I
-SELECT DATE_PART('era', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
+SELECT DATE_PART('julian', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
 ----
-0
+1705428.5
+
+query I
+SELECT JULIAN(ts) FROM timestamps;
+----
+1705426.0699535608
+2437877.2227792065
+2459215.6666666665
+2459247.6666666665
+2459545.0939018917
+2459534.1041666665
+2459534.0625
+2459573.5833333335
+NULL
+NULL
+NULL
+
+query I
+SELECT DATE_PART('julian', ts) FROM timestamps;
+----
+1705426.0699535608
+2437877.2227792065
+2459215.6666666665
+2459247.6666666665
+2459545.0939018917
+2459534.1041666665
+2459534.0625
+2459573.5833333335
+NULL
+NULL
+NULL
 
 query I
 SELECT DATE_PART('timezone', ts) FROM timestamps;
@@ -509,7 +539,7 @@ NULL	NULL
 NULL	NULL
 
 # Correctness: Compare date_part to named function
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow dayofyear yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT *
@@ -527,7 +557,7 @@ endloop
 #
 
 # Correctness: Compare struct values with scalar values
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS pc, DATE_PART(['${partcode}'], ts) AS st
@@ -539,21 +569,21 @@ endloop
 
 # Date parts
 query II
-SELECT DATE_PART(['era', 'year', 'month', 'day'], ts), ts
+SELECT DATE_PART(['era', 'year', 'month', 'day', 'julian'], ts), ts
 FROM timestamps
 ORDER BY 2
 ----
 NULL	NULL
-{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	-infinity
-{'era': 0, 'year': 44, 'month': 3, 'day': 13}	0044-03-13 (BC) 01:40:43.987654-07:52
-{'era': 1, 'year': 1962, 'month': 7, 'day': 31}	1962-07-31 05:20:48.123456-07
-{'era': 1, 'year': 2020, 'month': 12, 'day': 31}	2020-12-31 16:00:00-08
-{'era': 1, 'year': 2021, 'month': 2, 'day': 1}	2021-02-01 16:00:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 01:30:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 15}	2021-11-15 02:30:00-08
-{'era': 1, 'year': 2021, 'month': 11, 'day': 26}	2021-11-26 02:15:13.123456-08
-{'era': 1, 'year': 2021, 'month': 12, 'day': 24}	2021-12-24 14:00:00-08
-{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL}	infinity
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL, 'julian': NULL}	-infinity
+{'era': 0, 'year': 44, 'month': 3, 'day': 13, 'julian': 1705426.0699535608}	0044-03-13 (BC) 01:40:43.987654-07:52
+{'era': 1, 'year': 1962, 'month': 7, 'day': 31, 'julian': 2437877.2227792065}	1962-07-31 05:20:48.123456-07
+{'era': 1, 'year': 2020, 'month': 12, 'day': 31, 'julian': 2459215.6666666665}	2020-12-31 16:00:00-08
+{'era': 1, 'year': 2021, 'month': 2, 'day': 1, 'julian': 2459247.6666666665}	2021-02-01 16:00:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15, 'julian': 2459534.0625}	2021-11-15 01:30:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 15, 'julian': 2459534.1041666665}	2021-11-15 02:30:00-08
+{'era': 1, 'year': 2021, 'month': 11, 'day': 26, 'julian': 2459545.0939018917}	2021-11-26 02:15:13.123456-08
+{'era': 1, 'year': 2021, 'month': 12, 'day': 24, 'julian': 2459573.5833333335}	2021-12-24 14:00:00-08
+{'era': NULL, 'year': NULL, 'month': NULL, 'day': NULL, 'julian': NULL}	infinity
 
 # Time parts
 query II
@@ -646,7 +676,7 @@ NULL	NULL
 {'epoch': NULL, 'second': NULL, 'timezone': NULL, 'timezone_hour': NULL, 'timezone_minute': NULL}	infinity
 
 # Correctness: Compare struct values with scalar values
-foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear epoch timezone timezone_hour timezone_minute
+foreach partcode era millennium century decade year quarter month day hour minute second millisecond microsecond week weekday isodow doy yearweek isoyear julian epoch timezone timezone_hour timezone_minute
 
 query III
 SELECT ts, DATE_PART('${partcode}', ts) AS p, DATE_PART(['${partcode}'], ts) AS s
@@ -784,4 +814,4 @@ ORDER BY ALL;
 5872	10	October
 5872	11	November
 5872	12	December
-5872	13	Undecember
+5872	13	Undecimber

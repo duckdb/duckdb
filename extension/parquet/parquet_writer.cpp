@@ -76,27 +76,32 @@ private:
 	Serializer &serializer;
 };
 
-Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
+bool ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type, Type::type &parquet_type) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return Type::BOOLEAN;
+		parquet_type = Type::BOOLEAN;
+		break;
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return Type::INT32;
+		parquet_type = Type::INT32;
+		break;
 	case LogicalTypeId::BIGINT:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::FLOAT:
-		return Type::FLOAT;
+		parquet_type = Type::FLOAT;
+		break;
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::HUGEINT:
-		return Type::DOUBLE;
+		parquet_type = Type::DOUBLE;
+		break;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BIT:
-		return Type::BYTE_ARRAY;
+		parquet_type = Type::BYTE_ARRAY;
+		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
@@ -104,31 +109,80 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		return Type::INT32;
+		parquet_type = Type::INT32;
+		break;
 	case LogicalTypeId::UBIGINT:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::UUID:
-		return Type::FIXED_LEN_BYTE_ARRAY;
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+		break;
 	case LogicalTypeId::DECIMAL:
 		switch (duckdb_type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
-			return Type::INT32;
+			parquet_type = Type::INT32;
+			break;
 		case PhysicalType::INT64:
-			return Type::INT64;
+			parquet_type = Type::INT64;
+			break;
 		case PhysicalType::INT128:
-			return Type::FIXED_LEN_BYTE_ARRAY;
+			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+			break;
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}
+		break;
 	default:
+		// Anything that is not supported returns false
+		return false;
+	}
+	return true;
+}
+
+Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
+	Type::type result;
+	if (!DuckDBTypeToParquetTypeInternal(duckdb_type, result)) {
 		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 	}
+	return result;
+}
+
+bool ParquetWriter::TypeIsSupported(const LogicalType &type) {
+	Type::type unused;
+	auto id = type.id();
+	if (id == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildType(type);
+		return TypeIsSupported(child_type);
+	}
+	if (id == LogicalTypeId::STRUCT) {
+		auto &children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			auto &child_type = child.second;
+			if (!TypeIsSupported(child_type)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	if (id == LogicalTypeId::MAP) {
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		if (!TypeIsSupported(key_type)) {
+			return false;
+		}
+		if (!TypeIsSupported(value_type)) {
+			return false;
+		}
+		return true;
+	}
+	return DuckDBTypeToParquetTypeInternal(type, unused);
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
