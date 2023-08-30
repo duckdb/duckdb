@@ -58,8 +58,6 @@ enum class ArrowDateTimeType : uint8_t;
 
 enum class ArrowVariableSizeType : uint8_t;
 
-enum class BinaryFieldType : uint8_t;
-
 enum class BindingMode : uint8_t;
 
 enum class BitpackingMode : uint8_t;
@@ -325,9 +323,6 @@ const char* EnumUtil::ToChars<ArrowDateTimeType>(ArrowDateTimeType value);
 
 template<>
 const char* EnumUtil::ToChars<ArrowVariableSizeType>(ArrowVariableSizeType value);
-
-template<>
-const char* EnumUtil::ToChars<BinaryFieldType>(BinaryFieldType value);
 
 template<>
 const char* EnumUtil::ToChars<BindingMode>(BindingMode value);
@@ -707,9 +702,6 @@ ArrowDateTimeType EnumUtil::FromString<ArrowDateTimeType>(const char *value);
 
 template<>
 ArrowVariableSizeType EnumUtil::FromString<ArrowVariableSizeType>(const char *value);
-
-template<>
-BinaryFieldType EnumUtil::FromString<BinaryFieldType>(const char *value);
 
 template<>
 BindingMode EnumUtil::FromString<BindingMode>(const char *value);

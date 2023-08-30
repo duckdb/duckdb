@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -20,8 +20,6 @@
 namespace duckdb {
 
 class FormatSerializer {
-	friend Vector;
-
 protected:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
@@ -49,8 +47,9 @@ public:
 	// Serialize a value
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		WriteValue(value);
+		OnPropertyEnd();
 	}
 
 	// Default value
@@ -58,36 +57,42 @@ public:
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
 		// If current value is default, don't write it
 		if (!serialize_default_values && (value == default_value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
 			return;
 		}
-		SetTag(field_id, tag);
+		OnOptionalPropertyBegin(field_id, tag, true);
 		WriteValue(value);
+		OnOptionalPropertyEnd(true);
 	}
 
 	// Special case: data_ptr_T
 	void WriteProperty(const field_id_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		WriteDataPtr(ptr, count);
+		OnPropertyEnd();
 	}
 
 	// Manually begin an object
 	template <class FUNC>
 	void WriteObject(const field_id_t field_id, const char *tag, FUNC f) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		OnObjectBegin();
 		f(*this);
 		OnObjectEnd();
+		OnPropertyEnd();
 	}
 
 	template <class FUNC>
 	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		OnListBegin(count);
 		List list {*this};
 		for (idx_t i = 0; i < count; i++) {
 			func(list, i);
 		}
 		OnListEnd();
+		OnPropertyEnd();
 	}
 
 protected:
@@ -119,26 +124,23 @@ protected:
 	template <typename T>
 	void WriteValue(const T *ptr) {
 		if (ptr == nullptr) {
-			OnOptionalBegin(false);
-			OnOptionalEnd();
+			OnNullableBegin(false);
+			OnNullableEnd();
 		} else {
-			OnOptionalBegin(true);
+			OnNullableBegin(true);
 			WriteValue(*ptr);
-			OnOptionalEnd();
+			OnNullableEnd();
 		}
 	}
 
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {
-		OnPairBegin();
-		OnPairKeyBegin();
-		WriteValue(pair.first);
-		OnPairKeyEnd();
-		OnPairValueBegin();
+		OnObjectBegin();
+		WriteProperty(0, "first", pair.first);
+		WriteProperty(1, "second", pair.second);
 		WriteValue(pair.second);
-		OnPairValueEnd();
-		OnPairEnd();
+		OnObjectEnd();
 	}
 
 	// Reference Wrapper
@@ -193,99 +195,55 @@ protected:
 	}
 
 	// Map
+	// serialized as a list of pairs
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const duckdb::unordered_map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
-		OnMapBegin(count);
+		OnListBegin(count);
 		for (auto &item : map) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			WriteValue(item.first);
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			WriteValue(item.second);
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			WriteProperty(0, "key", item.first);
+			WriteProperty(1, "value", item.second);
+			OnObjectEnd();
 		}
-		OnMapEnd();
+		OnListEnd();
 	}
 
 	// Map
+	// serialized as a list of pairs
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const duckdb::map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
-		OnMapBegin(count);
+		OnListBegin(count);
 		for (auto &item : map) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			WriteValue(item.first);
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			WriteValue(item.second);
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			WriteProperty(0, "key", item.first);
+			WriteProperty(1, "value", item.second);
+			OnObjectEnd();
 		}
-		OnMapEnd();
+		OnListEnd();
 	}
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
-		// Else, we defer to the .FormatSerialize method
 		OnObjectBegin();
 		value.FormatSerialize(*this);
 		OnObjectEnd();
 	}
 
-	// Handle setting a "tag" (optional)
-	virtual void SetTag(const field_id_t field_id, const char *tag) {
-		(void)field_id;
-		(void)tag;
-	}
-
+protected:
 	// Hooks for subclasses to override to implement custom behavior
-	virtual void OnListBegin(idx_t count) {
-		(void)count;
-	}
-	virtual void OnListEnd() {
-	}
-	virtual void OnMapBegin(idx_t count) {
-		(void)count;
-	}
-	virtual void OnMapEnd() {
-	}
-	virtual void OnMapEntryBegin() {
-	}
-	virtual void OnMapEntryEnd() {
-	}
-	virtual void OnMapKeyBegin() {
-	}
-	virtual void OnMapKeyEnd() {
-	}
-	virtual void OnMapValueBegin() {
-	}
-	virtual void OnMapValueEnd() {
-	}
-	virtual void OnOptionalBegin(bool present) {
-	}
-	virtual void OnOptionalEnd() {
-	}
-	virtual void OnObjectBegin() {
-	}
-	virtual void OnObjectEnd() {
-	}
-	virtual void OnPairBegin() {
-	}
-	virtual void OnPairKeyBegin() {
-	}
-	virtual void OnPairKeyEnd() {
-	}
-	virtual void OnPairValueBegin() {
-	}
-	virtual void OnPairValueEnd() {
-	}
-	virtual void OnPairEnd() {
-	}
+	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnPropertyEnd() = 0;
+	virtual void OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) = 0;
+	virtual void OnOptionalPropertyEnd(bool present) = 0;
+	virtual void OnObjectBegin() = 0;
+	virtual void OnObjectEnd() = 0;
+	virtual void OnListBegin(idx_t count) = 0;
+	virtual void OnListEnd() = 0;
+	virtual void OnNullableBegin(bool present) = 0;
+	virtual void OnNullableEnd() = 0;
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;

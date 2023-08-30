@@ -20,8 +20,6 @@
 namespace duckdb {
 
 class FormatDeserializer {
-	friend Vector;
-
 protected:
 	bool deserialize_enum_from_string = false;
 	DeserializationData data;
@@ -49,44 +47,51 @@ public:
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		ret = Read<T>();
+		OnPropertyEnd();
 	}
 
 	// Read and return a value
 	template <typename T>
 	inline T ReadProperty(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		return Read<T>();
+		OnPropertyBegin(field_id, tag);
+		auto ret = Read<T>();
+		OnPropertyEnd();
+		;
+		return ret;
 	}
 
 	// Default Value return
 	template <typename T>
 	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &&default_value) {
-		if (!HasTag(field_id, tag)) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
 			return std::forward<T>(default_value);
 		}
-		SetTag(field_id, tag);
-		return Read<T>();
+		auto ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+		return ret;
 	}
 
 	// Default value in place
 	template <typename T>
 	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
-		if (!HasTag(field_id, tag)) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
+			OnOptionalPropertyEnd(false);
 			return;
 		}
-
-		SetTag(field_id, tag);
 		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
 	}
 
 	// Special case:
 	// Read into an existing data_ptr_t
 	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
+		OnPropertyEnd();
 	}
 
 	//! Set a serialization property
@@ -109,19 +114,23 @@ public:
 
 	template <class FUNC>
 	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
 		auto size = OnListBegin();
 		List list {*this};
 		for (idx_t i = 0; i < size; i++) {
 			func(list, i);
 		}
 		OnListEnd();
+		OnPropertyEnd();
 	}
 
 	template <class FUNC>
 	void ReadObject(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
 		OnObjectBegin();
 		func(*this);
 		OnObjectEnd();
+		OnPropertyEnd();
 	}
 
 private:
@@ -138,13 +147,13 @@ private:
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
 		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
-		auto is_present = OnOptionalBegin();
+		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
 			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
 			OnObjectEnd();
 		}
-		OnOptionalEnd();
+		OnNullableEnd();
 		return ptr;
 	}
 
@@ -153,13 +162,13 @@ private:
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
 		shared_ptr<ELEMENT_TYPE> ptr = nullptr;
-		auto is_present = OnOptionalBegin();
+		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
 			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
 			OnObjectEnd();
 		}
-		OnOptionalEnd();
+		OnNullableEnd();
 		return ptr;
 	}
 
@@ -173,7 +182,6 @@ private:
 			vec.push_back(Read<ELEMENT_TYPE>());
 		}
 		OnListEnd();
-
 		return vec;
 	}
 
@@ -197,19 +205,15 @@ private:
 		using VALUE_TYPE = typename is_unordered_map<T>::VALUE_TYPE;
 
 		T map;
-		auto size = OnMapBegin();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			auto key = Read<KEY_TYPE>();
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			auto value = Read<VALUE_TYPE>();
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
 			map[std::move(key)] = std::move(value);
 		}
-		OnMapEnd();
+		OnListEnd();
 		return map;
 	}
 
@@ -219,19 +223,15 @@ private:
 		using VALUE_TYPE = typename is_map<T>::VALUE_TYPE;
 
 		T map;
-		auto size = OnMapBegin();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			auto key = Read<KEY_TYPE>();
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			auto value = Read<VALUE_TYPE>();
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
 			map[std::move(key)] = std::move(value);
 		}
-		OnMapEnd();
+		OnListEnd();
 		return map;
 	}
 
@@ -266,15 +266,10 @@ private:
 	inline typename std::enable_if<is_pair<T>::value, T>::type Read() {
 		using FIRST_TYPE = typename is_pair<T>::FIRST_TYPE;
 		using SECOND_TYPE = typename is_pair<T>::SECOND_TYPE;
-
-		OnPairBegin();
-		OnPairKeyBegin();
-		FIRST_TYPE first = Read<FIRST_TYPE>();
-		OnPairKeyEnd();
-		OnPairValueBegin();
-		SECOND_TYPE second = Read<SECOND_TYPE>();
-		OnPairValueEnd();
-		OnPairEnd();
+		OnObjectBegin();
+		auto first = ReadProperty<FIRST_TYPE>(0, "first");
+		auto second = ReadProperty<SECOND_TYPE>(1, "second");
+		OnObjectEnd();
 		return std::make_pair(first, second);
 	}
 
@@ -381,52 +376,20 @@ private:
 	}
 
 protected:
-	virtual void SetTag(const field_id_t field_id, const char *tag) {
-		(void)field_id;
-		(void)tag;
-	}
+	// Hooks for subclasses to override to implement custom behavior
+	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnPropertyEnd() = 0;
+	virtual bool OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnOptionalPropertyEnd(bool present) = 0;
 
-	// Peek if the next field has the given tag
-	virtual bool HasTag(const field_id_t field_id, const char *tag) = 0;
-
+	virtual void OnObjectBegin() = 0;
+	virtual void OnObjectEnd() = 0;
 	virtual idx_t OnListBegin() = 0;
-	virtual void OnListEnd() {
-	}
-	virtual idx_t OnMapBegin() = 0;
-	virtual void OnMapEnd() {
-	}
-	virtual void OnMapEntryBegin() {
-	}
-	virtual void OnMapEntryEnd() {
-	}
-	virtual void OnMapKeyBegin() {
-	}
-	virtual void OnMapKeyEnd() {
-	}
-	virtual void OnMapValueBegin() {
-	}
-	virtual void OnMapValueEnd() {
-	}
-	virtual bool OnOptionalBegin() = 0;
-	virtual void OnOptionalEnd() {
-	}
-	virtual void OnObjectBegin() {
-	}
-	virtual void OnObjectEnd() {
-	}
-	virtual void OnPairBegin() {
-	}
-	virtual void OnPairKeyBegin() {
-	}
-	virtual void OnPairKeyEnd() {
-	}
-	virtual void OnPairValueBegin() {
-	}
-	virtual void OnPairValueEnd() {
-	}
-	virtual void OnPairEnd() {
-	}
+	virtual void OnListEnd() = 0;
+	virtual bool OnNullableBegin() = 0;
+	virtual void OnNullableEnd() = 0;
 
+	// Handle primitive types, a serializer needs to implement these.
 	virtual bool ReadBool() = 0;
 	virtual int8_t ReadSignedInt8() = 0;
 	virtual uint8_t ReadUnsignedInt8() = 0;

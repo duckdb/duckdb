@@ -43,26 +43,20 @@ public:
 		return stack.front();
 	};
 
-	void SetTag(const field_id_t, const char *tag) final;
-
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
-	void OnOptionalBegin(bool present) final;
+	void OnPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnPropertyEnd() final;
+	void OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) final;
+	void OnOptionalPropertyEnd(bool present) final;
+
 	void OnListBegin(idx_t count) final;
 	void OnListEnd() final;
-	void OnMapBegin(idx_t count) final;
-	void OnMapEntryBegin() final;
-	void OnMapEntryEnd() final;
-	void OnMapKeyBegin() final;
-	void OnMapValueBegin() final;
-	void OnMapEnd() final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
-	void OnPairBegin() final;
-	void OnPairKeyBegin() final;
-	void OnPairValueBegin() final;
-	void OnPairEnd() final;
+	void OnNullableBegin(bool present) final;
+	void OnNullableEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types

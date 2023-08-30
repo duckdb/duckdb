@@ -19,17 +19,32 @@ void JsonSerializer::PushValue(yyjson_mut_val *val) {
 	}
 }
 
-void JsonSerializer::SetTag(const field_id_t, const char *tag) {
-	current_tag = yyjson_mut_strcpy(doc, tag);
+void JsonSerializer::OnPropertyBegin(const field_id_t field_id, const char *tag) {
+	throw NotImplementedException("JsonSerializer::OnPropertyBegin");
 }
 
-//===--------------------------------------------------------------------===//
-// Nested types
-//===--------------------------------------------------------------------===//
-void JsonSerializer::OnOptionalBegin(bool present) {
+void JsonSerializer::OnPropertyEnd() {
+	throw NotImplementedException("JsonSerializer::OnPropertyEnd");
+}
+
+void JsonSerializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) {
+	throw NotImplementedException("JsonSerializer::OnOptionalPropertyBegin");
+}
+
+void JsonSerializer::OnOptionalPropertyEnd(bool present) {
+	throw NotImplementedException("JsonSerializer::OnOptionalPropertyEnd");
+}
+
+//-------------------------------------------------------------------------
+// Nested Types
+//-------------------------------------------------------------------------
+void JsonSerializer::OnNullableBegin(bool present) {
 	if (!present && !skip_if_null) {
 		WriteNull();
 	}
+}
+
+void JsonSerializer::OnNullableEnd() {
 }
 
 void JsonSerializer::OnListBegin(idx_t count) {
@@ -44,37 +59,6 @@ void JsonSerializer::OnListBegin(idx_t count) {
 }
 
 void JsonSerializer::OnListEnd() {
-	stack.pop_back();
-}
-
-// Serialize maps as arrays of objects with "key" and "value" properties.
-void JsonSerializer::OnMapBegin(idx_t count) {
-	auto new_value = yyjson_mut_arr(doc);
-	if (!(count == 0 && skip_if_empty)) {
-		PushValue(new_value);
-	}
-	stack.push_back(new_value);
-}
-
-void JsonSerializer::OnMapEntryBegin() {
-	auto new_value = yyjson_mut_obj(doc);
-	PushValue(new_value);
-	stack.push_back(new_value);
-}
-
-void JsonSerializer::OnMapKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonSerializer::OnMapValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonSerializer::OnMapEntryEnd() {
-	stack.pop_back();
-}
-
-void JsonSerializer::OnMapEnd() {
 	stack.pop_back();
 }
 
@@ -120,27 +104,9 @@ void JsonSerializer::OnObjectEnd() {
 	}
 }
 
-void JsonSerializer::OnPairBegin() {
-	auto new_value = yyjson_mut_obj(doc);
-	PushValue(new_value);
-	stack.push_back(new_value);
-}
-
-void JsonSerializer::OnPairKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonSerializer::OnPairValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonSerializer::OnPairEnd() {
-	stack.pop_back();
-}
-
-//===--------------------------------------------------------------------===//
-// Primitive types
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
+// Primitive Types
+//-------------------------------------------------------------------------
 void JsonSerializer::WriteNull() {
 	if (skip_if_null) {
 		return;
@@ -238,7 +204,7 @@ void JsonSerializer::WriteValue(bool value) {
 }
 
 void JsonSerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
-	auto blob = Blob::ToBlob(string_t((const char *)ptr, count));
+	auto blob = Blob::ToBlob(string_t(const_char_ptr_cast(ptr), count));
 	auto val = yyjson_mut_strcpy(doc, blob.c_str());
 	PushValue(val);
 }

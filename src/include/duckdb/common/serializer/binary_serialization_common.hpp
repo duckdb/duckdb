@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/binary_common.hpp
+// duckdb/common/serializer/serializer_common.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,12 +12,6 @@
 
 namespace duckdb {
 
-enum class BinaryFieldType : uint8_t {
-	FIXED_8 = 1,      // 1 byte
-	FIXED_16 = 2,     // 2 bytes
-	FIXED_32 = 3,     // 4 bytes
-	FIXED_64 = 4,     // 8 bytes
-	VARIABLE_LEN = 5, // 8 bytes length + data
-};
+enum class SerializerState { OBJECT, LIST };
 
 } // namespace duckdb

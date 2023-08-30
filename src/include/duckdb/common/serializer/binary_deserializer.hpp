@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/binary_common.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -21,6 +20,7 @@ public:
 		OnObjectBegin();
 		auto result = T::FormatDeserialize(*this);
 		OnObjectEnd();
+		D_ASSERT(nesting_level == 0); // make sure we are at the root level
 		return result;
 	}
 
@@ -42,22 +42,13 @@ public:
 private:
 	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
 		deserialize_enum_from_string = false;
+		current_field = ReadPrimitive<field_id_t>();
 	}
-	struct State {
-		data_ptr_t start_offset;
-		idx_t expected_size;
-		field_id_t expected_field_id;
 
-		State(data_ptr_t start_offset, idx_t expected_size, field_id_t expected_field_id)
-		    : start_offset(start_offset), expected_size(expected_size), expected_field_id(expected_field_id) {
-		}
-	};
-
-	const char *current_tag = nullptr;
-	field_id_t current_field_id = 0;
 	data_ptr_t ptr;
 	data_ptr_t end_ptr;
-	vector<State> stack;
+	idx_t nesting_level = 0;
+	field_id_t current_field = 0;
 
 	template <class T>
 	T ReadPrimitive() {
@@ -74,46 +65,19 @@ private:
 		ptr += read_size;
 	}
 
-	void ReadField(field_id_t field_id, BinaryFieldType type) {
-		// We reserve 3 bits for kind and 1 bit for future use
-		D_ASSERT(field_id < (1 << 28));
-		auto header = ReadPrimitive<uint32_t>();
-		auto read_field_id = header >> 4;
-		auto read_field_type = static_cast<BinaryFieldType>(header & 0x7);
-
-		if (read_field_id != field_id) {
-			throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
-			                        read_field_id);
-		}
-		if (read_field_type != type) {
-			throw InternalException("Failed to deserialize: field type mismatch, expected: %d, got: %d", type,
-			                        read_field_type);
-		}
-	}
-
-	// Set the 'tag' of the property to read
-	void SetTag(const field_id_t field_id, const char *tag) final;
-	bool HasTag(const field_id_t field_id, const char *tag) final;
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
+	void OnPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnPropertyEnd() final;
+	bool OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnOptionalPropertyEnd(bool present) final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
 	idx_t OnListBegin() final;
 	void OnListEnd() final;
-	idx_t OnMapBegin() final;
-	void OnMapEnd() final;
-	void OnMapEntryBegin() final;
-	void OnMapEntryEnd() final;
-	void OnMapKeyBegin() final;
-	void OnMapValueBegin() final;
-	bool OnOptionalBegin() final;
-	void OnOptionalEnd() final;
-
-	void OnPairBegin() final;
-	void OnPairKeyBegin() final;
-	void OnPairValueBegin() final;
-	void OnPairEnd() final;
+	bool OnNullableBegin() final;
+	void OnNullableEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types

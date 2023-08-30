@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/binary_common.hpp"
 
 #ifdef DEBUG
 #include "duckdb/common/pair.hpp"
@@ -19,30 +18,16 @@ namespace duckdb {
 
 struct BinarySerializer : public FormatSerializer {
 private:
-	struct State {
-		// how many fields are present in the object
-		uint32_t field_count;
-		// the size of the object
-		uint64_t size;
-		// the offset of the object start in the buffer
-		uint64_t offset;
-
-		State(uint32_t field_count, uint64_t size, uint64_t offset)
-		    : field_count(field_count), size(size), offset(offset) {
-		}
-
 #ifdef DEBUG
+	struct DebugState {
 		unordered_set<const char *> seen_field_tags;
 		unordered_set<field_id_t> seen_field_ids;
 		vector<pair<const char *, field_id_t>> seen_fields;
-#endif
 	};
-
-	const char *current_tag;
-	field_id_t current_field_id = 0;
+	vector<DebugState> debug_stack;
+#endif
 
 	vector<data_t> data;
-	vector<State> stack;
 
 	template <class T>
 	void Write(T element) {
@@ -51,17 +36,9 @@ private:
 	}
 	void WriteDataInternal(const_data_ptr_t buffer, idx_t write_size) {
 		data.insert(data.end(), buffer, buffer + write_size);
-		stack.back().size += write_size;
 	}
 	void WriteDataInternal(const char *ptr, idx_t write_size) {
 		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
-	}
-
-	void WriteField(field_id_t field_id, BinaryFieldType type) {
-		// We reserve 3 bits for kind and 1 bit for future use
-		D_ASSERT(field_id < (1 << 28));
-		uint32_t header = ((field_id << 4) | (static_cast<uint32_t>(type) & 0x7));
-		Write<uint32_t>(header);
 	}
 
 	explicit BinarySerializer(bool serialize_default_values_p) {
@@ -82,33 +59,24 @@ public:
 		return std::move(serializer.data);
 	}
 
-	void SetTag(const field_id_t field_id, const char *tag) final;
-
-	//===--------------------------------------------------------------------===//
-	// Nested Types Hooks
-	//===--------------------------------------------------------------------===//
+	//-------------------------------------------------------------------------
+	// Nested Type Hooks
+	//-------------------------------------------------------------------------
 	// We serialize optional values as a message with a "present" flag, followed by the value.
-	void OnOptionalBegin(bool present) final;
-	void OnOptionalEnd() final;
+	void OnPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnPropertyEnd() final;
+	void OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) final;
+	void OnOptionalPropertyEnd(bool present) final;
 	void OnListBegin(idx_t count) final;
 	void OnListEnd() final;
-	// Serialize maps as arrays of objects with "key" and "value" properties.
-	void OnMapBegin(idx_t count) final;
-	void OnMapEntryBegin() final;
-	void OnMapEntryEnd() final;
-	void OnMapKeyBegin() final;
-	void OnMapValueBegin() final;
-	void OnMapEnd() final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
-	void OnPairBegin() final;
-	void OnPairKeyBegin() final;
-	void OnPairValueBegin() final;
-	void OnPairEnd() final;
+	void OnNullableBegin(bool present) final;
+	void OnNullableEnd() final;
 
-	//===--------------------------------------------------------------------===//
+	//-------------------------------------------------------------------------
 	// Primitive Types
-	//===--------------------------------------------------------------------===//
+	//-------------------------------------------------------------------------
 	void WriteNull() final;
 	void WriteValue(uint8_t value) final;
 	void WriteValue(int8_t value) final;

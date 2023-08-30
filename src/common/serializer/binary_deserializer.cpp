@@ -2,165 +2,131 @@
 
 namespace duckdb {
 
-void BinaryDeserializer::SetTag(const field_id_t field_id, const char *tag) {
-	current_field_id = field_id;
-	current_tag = tag;
+//-------------------------------------------------------------------------
+// Nested Type Hooks
+//-------------------------------------------------------------------------
+void BinaryDeserializer::OnPropertyBegin(const field_id_t field_id, const char *) {
+	if (current_field != field_id) {
+		throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
+		                        current_field);
+	}
 }
 
-bool BinaryDeserializer::HasTag(const field_id_t field_id, const char *tag) {
-	// Double check that there's space left in the buffer,
-	// we might try to read an optional field at the end
-	if (ptr + sizeof(field_id_t) > end_ptr) {
-		return false;
+void BinaryDeserializer::OnPropertyEnd() {
+	// Move to the next field, unless we are at the terminator on level 0 (always the last field ID written)
+	// If we are at nesting level 0 and read a terminator, we are done
+	if (current_field != MESSAGE_TERMINATOR_FIELD_ID || nesting_level != 0) {
+		current_field = ReadPrimitive<field_id_t>();
 	}
-
-	// Check that we dont try to read outside the object
-	auto object_start = stack.back().start_offset;
-	auto object_end = object_start + stack.back().expected_size;
-	if (ptr + sizeof(field_id_t) > object_end) {
-		return false;
-	}
-
-	auto next_field_id = ReadPrimitive<field_id_t>();
-	ptr -= sizeof(field_id_t);
-	return next_field_id == field_id;
 }
 
-//===--------------------------------------------------------------------===//
-// Nested Types Hooks
-//===--------------------------------------------------------------------===//
+bool BinaryDeserializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *s) {
+	if (current_field != field_id) {
+		return false;
+	}
+	return true;
+}
+
+void BinaryDeserializer::OnOptionalPropertyEnd(bool present) {
+	// If the property was present, (and we presumably consumed it)
+	// move to the next field, unless we are at the terminator on level 0
+	if (present && (current_field != MESSAGE_TERMINATOR_FIELD_ID || nesting_level != 0)) {
+		current_field = ReadPrimitive<field_id_t>();
+	}
+}
+
 void BinaryDeserializer::OnObjectBegin() {
-	auto start_offset = ptr;
-	auto expected_field_id = ReadPrimitive<field_id_t>();
-	auto expected_field_type = ReadPrimitive<uint8_t>();
-	auto expected_size = ReadPrimitive<uint64_t>();
-	if (expected_field_id != current_field_id) {
-		throw SerializationException("Expected field id %d, but got %d", current_field_id, expected_field_id);
-	}
-	if (expected_field_type != static_cast<uint8_t>(BinaryFieldType::VARIABLE_LEN)) {
-		throw SerializationException("Expected variable length field type, but got %d", expected_field_type);
-	}
-	stack.emplace_back(start_offset, expected_size, expected_field_id);
+	nesting_level++;
 }
 
 void BinaryDeserializer::OnObjectEnd() {
-	stack.pop_back();
+	if (current_field != MESSAGE_TERMINATOR_FIELD_ID) {
+		throw InternalException("Failed to deserialize: expected terminator, got: %d", current_field);
+	}
+	nesting_level--;
+
+	if (nesting_level > 0) {
+		// Move to the next field
+		current_field = ReadPrimitive<field_id_t>();
+	}
 }
 
 idx_t BinaryDeserializer::OnListBegin() {
-	return ReadPrimitive<idx_t>();
+	auto count = ReadPrimitive<idx_t>();
+	return count;
 }
 
 void BinaryDeserializer::OnListEnd() {
 }
 
-// Deserialize maps as [ { key: ..., value: ... } ]
-idx_t BinaryDeserializer::OnMapBegin() {
-	return ReadPrimitive<idx_t>();
-}
-
-void BinaryDeserializer::OnMapEntryBegin() {
-}
-
-void BinaryDeserializer::OnMapKeyBegin() {
-}
-
-void BinaryDeserializer::OnMapValueBegin() {
-}
-
-void BinaryDeserializer::OnMapEntryEnd() {
-}
-
-void BinaryDeserializer::OnMapEnd() {
-}
-
-void BinaryDeserializer::OnPairBegin() {
-}
-
-void BinaryDeserializer::OnPairKeyBegin() {
-}
-
-void BinaryDeserializer::OnPairValueBegin() {
-}
-
-void BinaryDeserializer::OnPairEnd() {
-}
-
-bool BinaryDeserializer::OnOptionalBegin() {
-	OnObjectBegin();
-	SetTag(0, "is_not_null");
-	auto present = ReadBool();
-	if (present) {
-		SetTag(1, "value");
-	}
+bool BinaryDeserializer::OnNullableBegin() {
+	auto present = ReadPrimitive<bool>();
 	return present;
 }
 
-void BinaryDeserializer::OnOptionalEnd() {
-	OnObjectEnd();
+void BinaryDeserializer::OnNullableEnd() {
 }
 
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
 // Primitive Types
-//===--------------------------------------------------------------------===//
+//-------------------------------------------------------------------------
 bool BinaryDeserializer::ReadBool() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_8);
-	return ReadPrimitive<uint8_t>();
+	auto value = ReadPrimitive<uint8_t>();
+	return value;
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_8);
-	return ReadPrimitive<int8_t>();
+	auto value = ReadPrimitive<int8_t>();
+	return value;
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_8);
-	return ReadPrimitive<uint8_t>();
+	auto value = ReadPrimitive<uint8_t>();
+	return value;
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_16);
-	return ReadPrimitive<int16_t>();
+	auto value = ReadPrimitive<int16_t>();
+	return value;
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_16);
-	return ReadPrimitive<uint16_t>();
+	auto value = ReadPrimitive<uint16_t>();
+	return value;
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_32);
-	return ReadPrimitive<int32_t>();
+	auto value = ReadPrimitive<int32_t>();
+	return value;
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_32);
-	return ReadPrimitive<uint32_t>();
+	auto value = ReadPrimitive<uint32_t>();
+	return value;
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_64);
-	return ReadPrimitive<int64_t>();
+	auto value = ReadPrimitive<int64_t>();
+	return value;
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_64);
-	return ReadPrimitive<uint64_t>();
+	auto value = ReadPrimitive<uint64_t>();
+	return value;
 }
 
 float BinaryDeserializer::ReadFloat() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_32);
-	return ReadPrimitive<float>();
+	auto value = ReadPrimitive<float>();
+	return value;
 }
 
 double BinaryDeserializer::ReadDouble() {
-	ReadField(current_field_id, BinaryFieldType::FIXED_64);
-	return ReadPrimitive<double>();
+	auto value = ReadPrimitive<double>();
+	return value;
 }
 
 string BinaryDeserializer::ReadString() {
-	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
-	auto len = ReadPrimitive<uint64_t>();
+	auto len = ReadPrimitive<uint32_t>();
 	if (len == 0) {
 		return string();
 	}
@@ -170,13 +136,12 @@ string BinaryDeserializer::ReadString() {
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
-	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
-	ReadPrimitive<uint64_t>();
-	return ReadPrimitive<hugeint_t>();
+	auto upper = ReadPrimitive<int64_t>();
+	auto lower = ReadPrimitive<uint64_t>();
+	return hugeint_t(upper, lower);
 }
 
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {
-	ReadField(current_field_id, BinaryFieldType::VARIABLE_LEN);
 	auto len = ReadPrimitive<uint64_t>();
 	if (len != count) {
 		throw SerializationException("Tried to read blob of %d size, but only %d elements are available", count, len);

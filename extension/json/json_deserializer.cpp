@@ -3,13 +3,20 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const field_id_t, const char *tag) {
-	current_tag = tag;
+void JsonDeserializer::OnPropertyBegin(const field_id_t field_id, const char *tag) {
+	throw NotImplementedException("JsonDeserializer::OnPropertyBegin");
 }
 
-bool JsonDeserializer::HasTag(const field_id_t, const char *tag) {
-	auto state = Current();
-	return yyjson_obj_get(state.val, tag) != nullptr;
+void JsonDeserializer::OnPropertyEnd() {
+	throw NotImplementedException("JsonDeserializer::OnPropertyEnd");
+}
+
+bool JsonDeserializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) {
+	throw NotImplementedException("JsonDeserializer::OnOptionalPropertyBegin");
+}
+
+void JsonDeserializer::OnOptionalPropertyEnd(bool present) {
+	throw NotImplementedException("JsonDeserializer::OnOptionalPropertyEnd");
 }
 
 // If inside an object, return the value associated by the current tag (property name)
@@ -110,61 +117,7 @@ void JsonDeserializer::OnListEnd() {
 	Pop();
 }
 
-// Deserialize maps as [ { key: ..., value: ... } ]
-idx_t JsonDeserializer::OnMapBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_arr(val)) {
-		ThrowTypeError(val, "array");
-	}
-	Push(val);
-	return yyjson_arr_size(val);
-}
-
-void JsonDeserializer::OnMapEntryBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-}
-
-void JsonDeserializer::OnMapKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonDeserializer::OnMapValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonDeserializer::OnMapEntryEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnMapEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnPairBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-}
-
-void JsonDeserializer::OnPairKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonDeserializer::OnPairValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonDeserializer::OnPairEnd() {
-	stack.pop_back();
-}
-
-bool JsonDeserializer::OnOptionalBegin() {
+bool JsonDeserializer::OnNullableBegin() {
 	auto &parent_val = Current();
 	yyjson_arr_iter iter;
 	if (yyjson_is_arr(parent_val.val)) {
@@ -182,6 +135,9 @@ bool JsonDeserializer::OnOptionalBegin() {
 	}
 
 	return true;
+}
+
+void JsonDeserializer::OnNullableEnd() {
 }
 
 //===--------------------------------------------------------------------===//
