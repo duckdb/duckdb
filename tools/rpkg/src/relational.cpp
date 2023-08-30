@@ -54,9 +54,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	for (auto name : rnames) {
 		names.push_back(name);
 	}
-	auto res = make_external<ColumnRefExpression>("duckdb_expr", names);
-	res->alias = StringUtil::Join(names, ".");
-	return res;
+	return make_external<ColumnRefExpression>("duckdb_expr", names);;
 }
 
 [[cpp11::register]] SEXP rapi_expr_constant(sexp val) {
