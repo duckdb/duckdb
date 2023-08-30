@@ -32,8 +32,8 @@ rapi_unregister_arrow <- function(conn, name) {
   invisible(.Call(`_duckdb_rapi_unregister_arrow`, conn, name))
 }
 
-rapi_expr_reference <- function(name, table) {
-  .Call(`_duckdb_rapi_expr_reference`, name, table)
+rapi_expr_reference <- function(rnames) {
+  .Call(`_duckdb_rapi_expr_reference`, rnames)
 }
 
 rapi_expr_constant <- function(val) {

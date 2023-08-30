@@ -1,18 +1,21 @@
 # expressions
 
 #' Create a column reference expression
-#' @param name the column name to be referenced
+#' @param names the column name to be referenced, could be a list to refer to schema.table.column etc.
 #' @param table the optional table name or a relation object to be referenced
 #' @return a column reference expression
 #' @noRd
 #' @examples
 #' col_ref_expr <- expr_reference("some_column_name")
 #' col_ref_expr2 <- expr_reference("some_column_name", "some_table_name")
-expr_reference <- function(name, table = "") {
+expr_reference <- function(names, table = NA) {
   if (inherits(table, "duckdb_relation")) {
-    table <- rel_alias(table)
+    names <- c(rel_alias(table), names)
   }
-  rapi_expr_reference(name, table)
+  if (is.character(table)) {
+    names <- c(table, names)
+  }
+  rapi_expr_reference(names)
 }
 
 #' Create a constant expression

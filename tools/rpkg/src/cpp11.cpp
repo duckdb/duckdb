@@ -68,10 +68,10 @@ extern "C" SEXP _duckdb_rapi_unregister_arrow(SEXP conn, SEXP name) {
   END_CPP11
 }
 // relational.cpp
-SEXP rapi_expr_reference(std::string name, std::string table);
-extern "C" SEXP _duckdb_rapi_expr_reference(SEXP name, SEXP table) {
+SEXP rapi_expr_reference(r_vector<r_string> rnames);
+extern "C" SEXP _duckdb_rapi_expr_reference(SEXP rnames) {
   BEGIN_CPP11
-    return cpp11::as_sexp(rapi_expr_reference(cpp11::as_cpp<cpp11::decay_t<std::string>>(name), cpp11::as_cpp<cpp11::decay_t<std::string>>(table)));
+    return cpp11::as_sexp(rapi_expr_reference(cpp11::as_cpp<cpp11::decay_t<r_vector<r_string>>>(rnames)));
   END_CPP11
 }
 // relational.cpp
@@ -389,7 +389,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_duckdb_rapi_execute_arrow",           (DL_FUNC) &_duckdb_rapi_execute_arrow,           2},
     {"_duckdb_rapi_expr_constant",           (DL_FUNC) &_duckdb_rapi_expr_constant,           1},
     {"_duckdb_rapi_expr_function",           (DL_FUNC) &_duckdb_rapi_expr_function,           4},
-    {"_duckdb_rapi_expr_reference",          (DL_FUNC) &_duckdb_rapi_expr_reference,          2},
+    {"_duckdb_rapi_expr_reference",          (DL_FUNC) &_duckdb_rapi_expr_reference,          1},
     {"_duckdb_rapi_expr_set_alias",          (DL_FUNC) &_duckdb_rapi_expr_set_alias,          2},
     {"_duckdb_rapi_expr_tostring",           (DL_FUNC) &_duckdb_rapi_expr_tostring,           1},
     {"_duckdb_rapi_expr_window",             (DL_FUNC) &_duckdb_rapi_expr_window,             9},
