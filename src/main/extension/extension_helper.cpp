@@ -138,6 +138,10 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 }
 
 bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	return false;
+#endif
+
 	if (ext_name.empty()) {
 		return false;
 	}
