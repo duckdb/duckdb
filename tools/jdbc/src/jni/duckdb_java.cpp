@@ -772,7 +772,11 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
 
-	switch (vec.GetType().id()) {
+	// this allows us to treat aliased (usually extension) types as strings
+	auto type = vec.GetType();
+	auto type_id = type.HasAlias() ? LogicalTypeId::UNKNOWN : type.id();
+
+	switch (actual) {
 	case LogicalTypeId::BOOLEAN:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 		break;
