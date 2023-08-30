@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp
+// duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 
 namespace duckdb {
 class CSVBuffer;

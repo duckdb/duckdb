@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
 
 namespace duckdb {

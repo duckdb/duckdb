@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp
+// duckdb/execution/operator/scan/csv/csv_sniffer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
 //! Struct to store the result of the Sniffer

@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp
+// duckdb/execution/operator/scan/csv/csv_reader_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"

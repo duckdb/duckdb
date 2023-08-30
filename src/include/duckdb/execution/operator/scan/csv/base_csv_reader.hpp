@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp
+// duckdb/execution/operator/scan/csv/base_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,9 +15,9 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_line_info.hpp"
 
 #include <sstream>
 

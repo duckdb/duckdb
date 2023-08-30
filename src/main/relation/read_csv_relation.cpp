@@ -1,9 +1,9 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

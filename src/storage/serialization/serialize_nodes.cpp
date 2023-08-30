@@ -25,7 +25,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 

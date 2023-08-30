@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
 namespace duckdb {
 struct Parse {
 	inline static void Initialize(CSVStateMachine &machine) {

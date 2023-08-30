@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp
+// duckdb/execution/operator/scan/csv/quote_rules.hpp
 //
 //
 //===----------------------------------------------------------------------===//

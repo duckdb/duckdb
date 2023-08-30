@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp
+// duckdb/execution/operator/scan/csv/csv_buffer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"

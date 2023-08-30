@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
 
 namespace duckdb {

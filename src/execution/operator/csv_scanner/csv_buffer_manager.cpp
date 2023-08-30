@@ -1,5 +1,5 @@
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileHandle> file_handle_p,

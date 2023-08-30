@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -7,8 +7,8 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"

@@ -1,16 +1,16 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/csv_state_machine_cache.hpp
+// duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/quote_rules.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
 static constexpr uint32_t NUM_STATES = 8;

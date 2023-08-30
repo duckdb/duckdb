@@ -69,7 +69,7 @@ if '--extended' in sys.argv:
             "duckdb/storage/statistics/base_statistics.hpp",
             "duckdb/planner/filter/conjunction_filter.hpp",
             "duckdb/planner/filter/constant_filter.hpp",
-            "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp",
+            "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp",
             "duckdb/common/types/vector_cache.hpp",
             "duckdb/common/string_map_set.hpp",
             "duckdb/planner/filter/null_filter.hpp",

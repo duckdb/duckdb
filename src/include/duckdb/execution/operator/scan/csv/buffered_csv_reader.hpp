@@ -1,15 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp
+// duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
 
 namespace duckdb {
 struct CopyInfo;

@@ -2,7 +2,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/main/appender.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/client_data.hpp"

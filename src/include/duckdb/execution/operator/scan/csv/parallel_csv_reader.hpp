@@ -1,18 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/csv_scanner/parallel_csv_reader.hpp
+// duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
+#include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_line_info.hpp"
 
 #include <sstream>
 #include <utility>
