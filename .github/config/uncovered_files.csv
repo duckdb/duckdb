@@ -324,7 +324,7 @@ extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
 extension/parquet/parquet_timestamp.cpp	12
-extension/parquet/parquet_writer.cpp	7
+extension/parquet/parquet_writer.cpp	9
 extension/parquet/zstd_file_system.cpp	6
 include/duckdb/catalog/catalog.hpp	3
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
