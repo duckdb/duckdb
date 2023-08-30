@@ -27,4 +27,5 @@ static void SHA256Function(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunction SHA256Fun::GetFunction() {
 	return ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, SHA256Function);
 }
+
 } // namespace duckdb
