@@ -236,7 +236,7 @@ static bool CheckForeignKeyDependencies(CatalogEntry &entry, catalog_entry_vecto
 bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object,
                                                      optional_ptr<catalog_entry_set_t> dependencies_p,
                                                      catalog_entry_set_t &exported) {
-	if (dependencies_p) {
+	if (!dependencies_p) {
 		// This object has no dependencies at all
 		return true;
 	}
