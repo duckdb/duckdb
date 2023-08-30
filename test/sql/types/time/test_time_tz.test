@@ -1,5 +1,5 @@
 # name: test/sql/types/time/test_time_tz.test
-# description: Test IEJoin
+# description: Test Time With Time Zone
 # group: [time]
 
 statement ok
@@ -9,3 +9,79 @@ query I
 select timetz '02:30:00';
 ----
 02:30:00+00
+
+# VARCHAR => TIMETZ
+query I
+SELECT '02:30:00+04'::TIMETZ;
+----
+02:30:00+04
+
+query I
+SELECT '02:30:00+04:30'::TIMETZ;
+----
+02:30:00+04:30
+
+query I
+SELECT '02:30:00+04:30:45'::TIMETZ;
+----
+02:30:00+04:30:45
+
+query I
+SELECT '2023-08-20 16:15:03.123456'::TIMETZ;
+----
+16:15:03.123456+00
+
+query I
+SELECT '02:30:00+1200'::TIMETZ;
+----
+02:30:00+1200
+
+query I
+SELECT '02:30:00-1200'::TIMETZ;
+----
+02:30:00-1200
+
+# TIMESTAMP => TIMETZ
+query I
+SELECT '2023-08-20 16:15:03.123456'::TIMESTAMP::TIMETZ;
+----
+16:15:03.123456+00
+
+# TIME => TIMETZ
+query I
+SELECT '16:15:03.123456'::TIME::TIMETZ;
+----
+16:15:03.123456+00
+
+# TIMETZ => TIME
+query I
+SELECT '02:30:00+04'::TIMETZ::TIME;
+----
+02:30:00
+
+query I
+SELECT '2021-08-20'::TIME;
+----
+00:00:00
+
+# Coverage
+statement error
+SELECT '02:30:00>04'::TIMETZ;
+
+statement error
+SELECT '02:30:00+4'::TIMETZ;
+
+statement error
+SELECT '02:30:00+4xx'::TIMETZ;
+
+statement error
+SELECT '02:30:00+2000'::TIMETZ;
+
+statement error
+SELECT '02:30:00+20:xx'::TIMETZ;
+
+statement error
+SELECT '02:30:00+20:45:xx'::TIMETZ;
+
+statement error
+SELECT 'infinity'::TIMETZ;
