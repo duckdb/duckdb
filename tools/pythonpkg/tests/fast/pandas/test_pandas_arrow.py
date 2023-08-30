@@ -56,8 +56,8 @@ class TestPandasArrow(object):
         python_df = pd.DataFrame({'a': pd.Series(['test', [5, 4, 3], {'a': 42}])}).convert_dtypes()
 
         df = pd.concat([numpy_df['a'], arrow_df['a'], python_df['a']], axis=1, keys=['numpy', 'arrow', 'python'])
-        assert isinstance(df.dtypes['numpy'], pd.core.arrays.integer.IntegerDtype)
-        assert isinstance(df.dtypes['arrow'], pd.core.dtypes.dtypes.ArrowDtype)
+        assert isinstance(df.dtypes['numpy'], pd.Int64Dtype)
+        assert isinstance(df.dtypes['arrow'], pd.ArrowDtype)
         assert isinstance(df.dtypes['python'], np.dtype('O').__class__)
 
         with pytest.raises(duckdb.InvalidInputException, match='Conversion failed for column python with type object'):
