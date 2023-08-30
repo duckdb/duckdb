@@ -1603,11 +1603,16 @@ bool StructColumnWriter::HasAnalyze() {
 void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	auto &child_vectors = StructVector::GetEntries(vector);
+	idx_t vector_offset = 0;
+	if (vector.GetType().id() == LogicalTypeId::UNION) {
+		// Skip the tag field
+		vector_offset = 1;
+	}
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// Need to check again. It might be that just one child needs it but the rest not
 		if (child_writers[child_idx]->HasAnalyze()) {
-			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p, *child_vectors[child_idx],
-			                                  count);
+			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p,
+			                                  *child_vectors[child_idx + vector_offset], count);
 		}
 	}
 }
@@ -1635,8 +1640,14 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 	HandleRepeatLevels(state_p, parent, count, max_repeat);
 	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, max_define - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
+	idx_t vector_offset = 0;
+	if (vector.GetType().id() == LogicalTypeId::UNION) {
+		// Skip the tag field
+		vector_offset = 1;
+	}
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, *child_vectors[child_idx], count);
+		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p,
+		                                  *child_vectors[child_idx + vector_offset], count);
 	}
 }
 
@@ -1650,8 +1661,14 @@ void StructColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
 	auto &state = state_p.Cast<StructColumnWriterState>();
 	auto &child_vectors = StructVector::GetEntries(vector);
+	auto vector_offset = 0;
+	if (vector.GetType().id() == LogicalTypeId::UNION) {
+		// We skip the first field for union, because it's the tag field
+		vector_offset = 1;
+	}
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Write(*state.child_states[child_idx], *child_vectors[child_idx], count);
+		child_writers[child_idx]->Write(*state.child_states[child_idx], *child_vectors[child_idx + vector_offset],
+		                                count);
 	}
 }
 
@@ -1824,8 +1841,20 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		}
 	}
 
-	if (type.id() == LogicalTypeId::STRUCT) {
-		auto &child_types = StructType::GetChildTypes(type);
+	if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION) {
+		child_list_t<LogicalType> child_types;
+		if (type.id() == LogicalTypeId::UNION) {
+			// Skip the tag field
+			auto &struct_types = StructType::GetChildTypes(type);
+			D_ASSERT(struct_types.size() >= 2);
+			for (idx_t i = 1; i < struct_types.size(); i++) {
+				auto &struct_type = struct_types[i];
+				child_types.push_back(struct_type);
+			}
+		} else {
+			child_types = StructType::GetChildTypes(type);
+		}
+
 		// set up the schema element for this struct
 		duckdb_parquet::format::SchemaElement schema_element;
 		schema_element.repetition_type = null_type;

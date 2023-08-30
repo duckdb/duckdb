@@ -161,6 +161,16 @@ bool ParquetWriter::TypeIsSupported(const LogicalType &type) {
 		auto &child_type = ListType::GetChildType(type);
 		return TypeIsSupported(child_type);
 	}
+	if (id == LogicalTypeId::UNION) {
+		auto count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < count; i++) {
+			auto &member_type = UnionType::GetMemberType(type, i);
+			if (!TypeIsSupported(member_type)) {
+				return false;
+			}
+		}
+		return true;
+	}
 	if (id == LogicalTypeId::STRUCT) {
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &child : children) {
