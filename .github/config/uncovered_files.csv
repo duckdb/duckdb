@@ -38,7 +38,7 @@ common/hive_partitioning.cpp	54
 common/http_state.cpp	36
 common/local_file_system.cpp	16
 common/multi_file_reader.cpp	15
-common/operator/cast_operators.cpp	72
+common/operator/cast_operators.cpp	81
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
 common/preserved_error.cpp	13
@@ -90,7 +90,7 @@ common/types/row/tuple_data_iterator.cpp	5
 common/types/row/tuple_data_scatter_gather.cpp	17
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
-common/types/time.cpp	21
+common/types/time.cpp	25
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	10
@@ -304,7 +304,7 @@ extension/json/json_functions/read_json.cpp	18
 extension/json/json_functions/read_json_objects.cpp	3
 extension/json/json_scan.cpp	100
 extension/json/json_serializer.cpp	96
-extension/parquet/column_reader.cpp	103
+extension/parquet/column_reader.cpp	108
 extension/parquet/column_writer.cpp	28
 extension/parquet/include/boolean_column_reader.hpp	6
 extension/parquet/include/cast_column_reader.hpp	6
@@ -323,7 +323,7 @@ extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
 extension/parquet/parquet_timestamp.cpp	12
-extension/parquet/parquet_writer.cpp	7
+extension/parquet/parquet_writer.cpp	9
 extension/parquet/zstd_file_system.cpp	6
 include/duckdb/catalog/catalog.hpp	3
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
@@ -347,6 +347,7 @@ include/duckdb/common/arrow/appender/varchar_data.hpp	2
 include/duckdb/common/operator/abs.hpp	1
 include/duckdb/common/operator/add.hpp	2
 include/duckdb/common/operator/decimal_cast_operators.hpp	3
+include/duckdb/common/operator/convert_to_string.hpp	1
 include/duckdb/common/operator/multiply.hpp	2
 include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
@@ -471,7 +472,7 @@ main/capi/logical_types-c.cpp	44
 main/capi/pending-c.cpp	32
 main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
-main/capi/result-c.cpp	34
+main/capi/result-c.cpp	36
 main/capi/stream-c.cpp	5
 main/capi/table_function-c.cpp	85
 main/capi/threading-c.cpp	52

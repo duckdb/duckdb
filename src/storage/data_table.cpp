@@ -1073,20 +1073,19 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
                                         const vector<PhysicalIndex> &column_ids) {
 	auto &constraints = table.GetConstraints();
 	auto &bound_constraints = table.GetBoundConstraints();
-	for (idx_t i = 0; i < bound_constraints.size(); i++) {
-		auto &base_constraint = constraints[i];
-		auto &constraint = bound_constraints[i];
+	for (idx_t constr_idx = 0; constr_idx < bound_constraints.size(); constr_idx++) {
+		auto &base_constraint = constraints[constr_idx];
+		auto &constraint = bound_constraints[constr_idx];
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
 			auto &bound_not_null = *reinterpret_cast<BoundNotNullConstraint *>(constraint.get());
 			auto &not_null = *reinterpret_cast<NotNullConstraint *>(base_constraint.get());
 			// check if the constraint is in the list of column_ids
-			// FIXME: double usage of 'i'?
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (column_ids[i] == bound_not_null.index) {
+			for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+				if (column_ids[col_idx] == bound_not_null.index) {
 					// found the column id: check the data in
 					auto &col = table.GetColumn(LogicalIndex(not_null.index));
-					VerifyNotNullConstraint(table, chunk.data[i], chunk.size(), col.Name());
+					VerifyNotNullConstraint(table, chunk.data[col_idx], chunk.size(), col.Name());
 					break;
 				}
 			}
@@ -1122,10 +1121,10 @@ void DataTable::VerifyUpdateConstraints(ClientContext &context, TableCatalogEntr
 void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
                        const vector<PhysicalIndex> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
-
 	D_ASSERT(column_ids.size() == updates.ColumnCount());
-	auto count = updates.size();
 	updates.Verify();
+
+	auto count = updates.size();
 	if (count == 0) {
 		return;
 	}
@@ -1138,24 +1137,36 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	VerifyUpdateConstraints(context, table, updates, column_ids);
 
 	// now perform the actual update
-	auto &transaction = DuckTransaction::Get(context, db);
+	Vector max_row_id_vec(Value::BIGINT(MAX_ROW_ID));
+	Vector row_ids_slice(LogicalType::BIGINT);
+	DataChunk updates_slice;
+	updates_slice.InitializeEmpty(updates.GetTypes());
 
-	updates.Flatten();
-	row_ids.Flatten(count);
-	auto ids = FlatVector::GetData<row_t>(row_ids);
-	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	if (first_id >= MAX_ROW_ID) {
-		// update is in transaction-local storage: push update into local storage
-		auto &local_storage = LocalStorage::Get(context, db);
-		local_storage.Update(*this, row_ids, column_ids, updates);
-		return;
+	SelectionVector sel_local_update(count), sel_global_update(count);
+	auto n_local_update = VectorOperations::GreaterThanEquals(row_ids, max_row_id_vec, nullptr, count,
+	                                                          &sel_local_update, &sel_global_update);
+	auto n_global_update = count - n_local_update;
+
+	// row id > MAX_ROW_ID? transaction-local storage
+	if (n_local_update > 0) {
+		updates_slice.Slice(updates, sel_local_update, n_local_update);
+		updates_slice.Flatten();
+		row_ids_slice.Slice(row_ids, sel_local_update, n_local_update);
+		row_ids_slice.Flatten(n_local_update);
+
+		LocalStorage::Get(context, db).Update(*this, row_ids_slice, column_ids, updates_slice);
 	}
 
-	// update is in the row groups
-	// we need to figure out for each id to which row group it belongs
-	// usually all (or many) ids belong to the same row group
-	// we iterate over the ids and check for every id if it belongs to the same row group as their predecessor
-	row_groups->Update(transaction, ids, column_ids, updates);
+	// otherwise global storage
+	if (n_global_update > 0) {
+		updates_slice.Slice(updates, sel_global_update, n_global_update);
+		updates_slice.Flatten();
+		row_ids_slice.Slice(row_ids, sel_global_update, n_global_update);
+		row_ids_slice.Flatten(n_global_update);
+
+		row_groups->Update(DuckTransaction::Get(context, db), FlatVector::GetData<row_t>(row_ids_slice), column_ids,
+		                   updates_slice);
+	}
 }
 
 void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,
