@@ -405,7 +405,7 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy.datetime64())) {
 		return PythonObjectType::NdDatetime;
-	} else if (py::isinstance(ele, import_cache.pyduckdb.value())) {
+	} else if (py::isinstance(ele, import_cache.pyduckdb.Value())) {
 		return PythonObjectType::Value;
 	} else {
 		return PythonObjectType::Other;

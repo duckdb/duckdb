@@ -17,9 +17,6 @@ struct PandasCoreArraysArrowDtypeCacheItem : public PythonImportCacheItem {
 public:
 	~PandasCoreArraysArrowDtypeCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		ArrowDtype.LoadAttribute("ArrowDtype", cache, *this);
-	}
 
 public:
 	PythonImportCacheItem ArrowDtype;
@@ -98,15 +95,6 @@ public:
 	}
 	~PandasCacheItem() override {
 	}
-<<<<<<< Updated upstream
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		DataFrame.LoadAttribute("DataFrame", cache, *this);
-		libs.LoadModule("pandas._libs.missing", cache);
-		core.LoadModule("pandas.core", cache);
-		isnull.LoadAttribute("isnull", cache, *this);
-	}
-=======
->>>>>>> Stashed changes
 
 public:
 	//! pandas.DataFrame

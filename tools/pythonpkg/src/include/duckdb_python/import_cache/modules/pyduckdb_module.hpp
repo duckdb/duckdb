@@ -31,14 +31,14 @@ public:
 	static constexpr const char *Name = "pyduckdb";
 
 public:
-	PyDuckDBCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), value("value", this) {
+	PyDuckDBCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), Value("Value", this) {
 	}
 	~PyDuckDBCacheItem() override {
 	}
 
 public:
 	PyDuckDBFileSystemCacheItem filesystem;
-	PythonImportCacheItem value;
+	PythonImportCacheItem Value;
 };
 
 } // namespace duckdb
