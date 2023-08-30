@@ -911,7 +911,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, 
 	writer.Finalize();
 }
 
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager &manager, const vector<LogicalType> &columns) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager &manager,
+                                      const vector<LogicalType> &columns) {
 	RowGroupPointer result;
 
 	FieldReader reader(main_source);
