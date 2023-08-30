@@ -173,4 +173,13 @@ void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, 
 #endif
 }
 
+void ValidityMask::Serialize(Serializer &serializer, idx_t count) {
+	serializer.WriteData(const_data_ptr_cast(GetData()), ValidityMask::ValidityMaskSize(count));
+}
+
+void ValidityMask::Deserialize(Deserializer &source, idx_t count) {
+	Initialize(count);
+	source.ReadData(data_ptr_cast(GetData()), ValidityMask::ValidityMaskSize(count));
+}
+
 } // namespace duckdb

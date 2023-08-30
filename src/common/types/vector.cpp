@@ -938,7 +938,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteData(const_data_ptr_cast(flat_mask.GetData()), flat_mask.ValidityMaskSize(count));
+		flat_mask.Serialize(serializer, count);
 	}
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
@@ -1175,8 +1175,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	validity.Reset();
 	const auto has_validity = source.Read<bool>();
 	if (has_validity) {
-		validity.Initialize(count);
-		source.ReadData(data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
+		validity.Deserialize(source, count);
 	}
 
 	if (TypeIsConstantSize(type.InternalType())) {

@@ -243,7 +243,7 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	for (idx_t i = 0; i < count; i++) {
 		mask.SetInvalid(sel.get_index(i));
 	}
-	serializer.WriteData(const_data_ptr_cast(mask.GetData()), ValidityMask::ValidityMaskSize(STANDARD_VECTOR_SIZE));
+	mask.Serialize(serializer, STANDARD_VECTOR_SIZE);
 }
 
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
@@ -264,9 +264,8 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 
 	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
-	ValidityMask mask(STANDARD_VECTOR_SIZE);
-	mask.Initialize(STANDARD_VECTOR_SIZE);
-	source.ReadData(data_ptr_cast(mask.GetData()), ValidityMask::ValidityMaskSize(STANDARD_VECTOR_SIZE));
+	ValidityMask mask;
+	mask.Deserialize(source, STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (mask.RowIsValid(i)) {
 			result->deleted[i] = 0;

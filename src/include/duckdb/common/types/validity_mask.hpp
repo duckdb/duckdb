@@ -332,6 +332,9 @@ public:
 	DUCKDB_API string ToString(idx_t count) const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
+
+	void Serialize(Serializer &serializer, idx_t count);
+	void Deserialize(Deserializer &source, idx_t count);
 };
 
 } // namespace duckdb
