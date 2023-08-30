@@ -3327,10 +3327,8 @@ public class TestDuckDBJDBC {
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
                 rs.next();
-                assertEquals(toJavaObject(rs.getObject(1)), mapOf("world", "bar", "hello", "foo"));
-                Blob object = (Blob) rs.getObject(2);
-                String bytes = Arrays.toString(object.getBytes(0L, (int) object.length()));
-                assertEquals(bytes, "[-86]");
+                assertEquals(rs.getObject(1), "{world=bar, hello=foo}");
+                assertEquals(rs.getObject(2), "\\xAA");
             }
         }
     }
