@@ -238,14 +238,12 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	// write a boolean vector
 	serializer.Write<ChunkInfoType>(ChunkInfoType::VECTOR_INFO);
 	serializer.Write<idx_t>(start);
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		deleted_tuples[i] = true;
-	}
+	ValidityMask mask(STANDARD_VECTOR_SIZE);
+	mask.Initialize(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
-		deleted_tuples[sel.get_index(i)] = false;
+		mask.SetInvalid(sel.get_index(i));
 	}
-	serializer.WriteData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
+	serializer.WriteData(const_data_ptr_cast(mask.GetData()), ValidityMask::ValidityMaskSize(STANDARD_VECTOR_SIZE));
 }
 
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
@@ -266,10 +264,11 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 
 	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	source.ReadData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
+	ValidityMask mask(STANDARD_VECTOR_SIZE);
+	mask.Initialize(STANDARD_VECTOR_SIZE);
+	source.ReadData(data_ptr_cast(mask.GetData()), ValidityMask::ValidityMaskSize(STANDARD_VECTOR_SIZE));
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (deleted_tuples[i]) {
+		if (mask.RowIsValid(i)) {
 			result->deleted[i] = 0;
 		}
 	}
