@@ -157,6 +157,22 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
+string ExtensionHelper::ExtensionUrlTemplate(ClientConfig *client_config, string repository) {
+	string default_endpoint = "http://extensions.duckdb.org";
+	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
+	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
+	string endpoint;
+	if (!repository.empty()) {
+		endpoint = repository;
+	} else if (!custom_endpoint.empty()) {
+		endpoint = custom_endpoint;
+	} else {
+		endpoint = default_endpoint;
+	}
+	string url_template = endpoint + versioned_path;
+	return url_template;
+}
+
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
                                                const string &local_path, const string &extension, bool force_install,
                                                const string &repository) {
@@ -197,18 +213,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
-	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
-	string endpoint;
-	if (!repository.empty()) {
-		endpoint = repository;
-	} else if (!custom_endpoint.empty()) {
-		endpoint = custom_endpoint;
-	} else {
-		endpoint = "http://extensions.duckdb.org";
-	}
-
-	string url_template = endpoint + versioned_path;
+	string url_template = ExtensionUrlTemplate(client_config, repository);
 
 	if (is_http_url) {
 		url_template = extension;
@@ -227,7 +232,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	}
 
 	// Special case to install extension from a local file, useful for testing
-	if (!StringUtil::Contains(endpoint, "http://")) {
+	if (!StringUtil::Contains(url_template, "http://")) {
 		string file = fs.ConvertSeparators(url);
 		if (!fs.FileExists(file)) {
 			// check for non-gzipped variant
