@@ -147,7 +147,7 @@ public:
 
 private:
 	shared_ptr<RowVersionManager> &GetVersionInfo();
-	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
+	RowVersionManager &GetOrCreateVersionInfo();
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
@@ -156,7 +156,6 @@ private:
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
 	static MetaBlockPointer CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager);
-	static shared_ptr<RowVersionManager> DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 private:
 	mutex row_group_lock;

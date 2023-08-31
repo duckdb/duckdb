@@ -541,53 +541,53 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 }
 
 shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
+	if (!deletes_pointer.IsValid() || deletes_is_loaded) {
+		return version_info;
+	}
+	lock_guard<mutex> lock(row_group_lock);
 	if (deletes_pointer.IsValid() && !deletes_is_loaded) {
-		version_info = DeserializeDeletes(deletes_pointer, GetBlockManager().GetMetadataManager());
+		version_info = RowVersionManager::Deserialize(deletes_pointer, GetBlockManager().GetMetadataManager());
 		deletes_is_loaded = true;
 	}
 	return version_info;
 }
 
-optional_ptr<ChunkInfo> RowGroup::GetChunkInfo(idx_t vector_idx) {
-	auto &vinfo = GetVersionInfo();
+RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
+	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
-		return nullptr;
+		lock_guard<mutex> lock(row_group_lock);
+		if (!version_info) {
+			version_info = make_shared<RowVersionManager>();
+		}
 	}
-	return vinfo->info[vector_idx].get();
+	return *version_info;
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
                              idx_t max_count) {
-	lock_guard<mutex> lock(row_group_lock);
-
-	auto info = GetChunkInfo(vector_idx);
-	if (!info) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return max_count;
 	}
-	return info->GetSelVector(transaction, sel_vector, max_count);
+	return vinfo->GetSelVector(transaction, vector_idx, sel_vector, max_count);
 }
 
 idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
                                       SelectionVector &sel_vector, idx_t max_count) {
-	lock_guard<mutex> lock(row_group_lock);
-
-	auto info = GetChunkInfo(vector_idx);
-	if (!info) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return max_count;
 	}
-	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
+	return vinfo->GetCommittedSelVector(start_time, transaction_id, vector_idx, sel_vector, max_count);
 }
 
 bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	D_ASSERT(row < this->count);
-	lock_guard<mutex> lock(row_group_lock);
-
-	idx_t vector_index = row / STANDARD_VECTOR_SIZE;
-	auto info = GetChunkInfo(vector_index);
-	if (!info) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return true;
 	}
-	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
+	return vinfo->Fetch(transaction, row);
 }
 
 void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
@@ -614,60 +614,15 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 	if (row_group_end > Storage::ROW_GROUP_SIZE) {
 		row_group_end = Storage::ROW_GROUP_SIZE;
 	}
-	lock_guard<mutex> lock(row_group_lock);
-
 	// create the version_info if it doesn't exist yet
-	auto &vinfo = GetVersionInfo();
-	if (!vinfo) {
-		vinfo = make_shared<RowVersionManager>();
-	}
-	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
-	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
-		idx_t end =
-		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-		if (start == 0 && end == STANDARD_VECTOR_SIZE) {
-			// entire vector is encapsulated by append: append a single constant
-			auto constant_info = make_uniq<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
-			constant_info->insert_id = transaction.transaction_id;
-			constant_info->delete_id = NOT_DELETED_ID;
-			vinfo->info[vector_idx] = std::move(constant_info);
-		} else {
-			// part of a vector is encapsulated: append to that part
-			ChunkVectorInfo *info;
-			if (!vinfo->info[vector_idx]) {
-				// first time appending to this vector: create new info
-				auto insert_info = make_uniq<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
-				info = insert_info.get();
-				vinfo->info[vector_idx] = std::move(insert_info);
-			} else {
-				D_ASSERT(vinfo->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-				// use existing vector
-				info = &vinfo->info[vector_idx]->Cast<ChunkVectorInfo>();
-			}
-			info->Append(start, end, transaction.transaction_id);
-		}
-	}
+	auto &vinfo = GetOrCreateVersionInfo();
+	vinfo.AppendVersionInfo(transaction, count, row_group_start, row_group_end, this->start);
 	this->count = row_group_end;
 }
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
-	D_ASSERT(version_info.get());
-	auto &vinfo = GetVersionInfo();
-	idx_t row_group_end = row_group_start + count;
-	lock_guard<mutex> lock(row_group_lock);
-
-	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
-	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
-	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
-		idx_t end =
-		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
-
-		auto info = vinfo->info[vector_idx].get();
-		info->CommitAppend(commit_id, start, end);
-	}
+	auto &vinfo = GetOrCreateVersionInfo();
+	vinfo.CommitAppend(commit_id, row_group_start, count);
 }
 
 void RowGroup::RevertAppend(idx_t row_group_start) {
@@ -675,11 +630,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	if (!vinfo) {
 		return;
 	}
-	idx_t start_row = row_group_start - this->start;
-	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
-	for (idx_t vector_idx = start_vector_idx; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		vinfo->info[vector_idx].reset();
-	}
+	vinfo->RevertAppend(row_group_start - this->start);
 	for (auto &column : columns) {
 		column->RevertAppend(row_group_start);
 	}
@@ -840,51 +791,7 @@ MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<RowVersionManager> ver
 		// no version information: write nothing
 		return MetaBlockPointer();
 	}
-	// first count how many ChunkInfo's we need to deserialize
-	idx_t chunk_info_count = 0;
-	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		auto chunk_info = versions->info[vector_idx].get();
-		if (!chunk_info) {
-			continue;
-		}
-		chunk_info_count++;
-	}
-	if (chunk_info_count == 0) {
-		return MetaBlockPointer();
-	}
-
-	MetadataWriter writer(manager);
-	auto delete_location = writer.GetMetaBlockPointer();
-	// now serialize the actual version information
-	writer.Write<idx_t>(chunk_info_count);
-	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		auto chunk_info = versions->info[vector_idx].get();
-		if (!chunk_info) {
-			continue;
-		}
-		writer.Write<idx_t>(vector_idx);
-		chunk_info->Serialize(writer);
-	}
-	writer.Flush();
-	return delete_location;
-}
-
-shared_ptr<RowVersionManager> RowGroup::DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager) {
-	if (!delete_pointer.IsValid()) {
-		return nullptr;
-	}
-	MetadataReader source(manager, delete_pointer);
-	auto version_info = make_shared<RowVersionManager>();
-	auto chunk_count = source.Read<idx_t>();
-	D_ASSERT(chunk_count > 0);
-	for (idx_t i = 0; i < chunk_count; i++) {
-		idx_t vector_index = source.Read<idx_t>();
-		if (vector_index >= Storage::ROW_GROUP_VECTOR_COUNT) {
-			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
-		}
-		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
-	}
-	return version_info;
+	return versions->Checkpoint(manager);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, MetadataManager &manager) {
@@ -994,22 +901,22 @@ void VersionDeleteState::Delete(row_t row_id) {
 			info.version_info = make_shared<RowVersionManager>();
 		}
 
-		if (!info.version_info->info[vector_idx]) {
+		if (!info.version_info->vector_info[vector_idx]) {
 			// no info yet: create it
-			info.version_info->info[vector_idx] =
+			info.version_info->vector_info[vector_idx] =
 			    make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
-		} else if (info.version_info->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-			auto &constant = info.version_info->info[vector_idx]->Cast<ChunkConstantInfo>();
+		} else if (info.version_info->vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
+			auto &constant = info.version_info->vector_info[vector_idx]->Cast<ChunkConstantInfo>();
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 			new_info->insert_id = constant.insert_id.load();
 			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 				new_info->inserted[i] = constant.insert_id.load();
 			}
-			info.version_info->info[vector_idx] = std::move(new_info);
+			info.version_info->vector_info[vector_idx] = std::move(new_info);
 		}
-		D_ASSERT(info.version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-		current_info = &info.version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
+		D_ASSERT(info.version_info->vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+		current_info = &info.version_info->vector_info[vector_idx]->Cast<ChunkVectorInfo>();
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}
