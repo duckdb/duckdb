@@ -12,10 +12,9 @@ struct SHA256Operator {
 
 		duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
 		state.AddString(input.GetString());
-    state.Finish(hash.GetDataWriteable());
+		state.Finish(hash.GetDataWriteable());
 
-    hash.Finalize();
-
+		hash.Finalize();
 		return hash;
 	}
 };
