@@ -31,10 +31,68 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 
 void ReconstructTagVector(Vector &result, idx_t count) {
 	auto &type = result.GetType();
-	auto member_count = UnionType::GetMemberCount(type);
+	auto member_count = static_cast<union_tag_t>(UnionType::GetMemberCount(type));
 
+	// Keep track for every row if the tag is (already) set
+	vector<bool> tag_is_set(count, false);
+
+	vector<LogicalType> types;
+	types.push_back(LogicalType::BOOLEAN);
+	DataChunk tag_chunk;
+	auto &allocator = Allocator::DefaultAllocator();
+	tag_chunk.Initialize(allocator, types, count);
+
+	auto &tags = UnionVector::GetTags(result);
+	UnifiedVectorFormat tag_format;
+	tags.ToUnifiedFormat(count, tag_format);
+	auto tag_data = UnifiedVectorFormat::GetDataNoConst<union_tag_t>(tag_format);
+	auto &tag_validity = FlatVector::Validity(tags);
+
+	// FIXME: the validity mask for the tag vector should also be set
+
+	for (union_tag_t member_idx = 0; member_idx < member_count; member_idx++) {
+		tag_chunk.Reset();
+		auto &result_child_vector = UnionVector::GetMember(result, member_idx);
+		UnifiedVectorFormat format;
+		result_child_vector.ToUnifiedFormat(count, format);
+		if (format.validity.AllValid()) {
+			// Fast pass, this means every value has this tag
+			for (idx_t i = 0; i < count; i++) {
+				tag_data[i] = member_idx;
+			}
+			// Verify that no tag has been set yet
+			for (idx_t i = 0; i < count; i++) {
+				if (tag_is_set[i]) {
+					throw InvalidInputException(
+					    "STRUCT -> UNION cast could not be performed because multiple fields are none-null");
+				}
+			}
+			for (idx_t i = 0; i < count; i++) {
+				tag_is_set[i] = true;
+			}
+			// Don't return yet, have to verify that no other tags are non-null
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				if (!format.validity.RowIsValidUnsafe(i)) {
+					continue;
+				}
+				if (tag_is_set[i]) {
+					throw InvalidInputException(
+					    "STRUCT -> UNION cast could not be performed because multiple fields are none-null");
+				}
+				tag_is_set[i] = true;
+				tag_data[i] = member_idx;
+			}
+		}
+	}
+
+	// Set the validity mask for the tag vector
 	for (idx_t i = 0; i < count; i++) {
-		auto
+		if (!tag_is_set[i]) {
+			tag_validity.SetInvalid(i);
+		} else {
+			tag_validity.SetValid(i);
+		}
 	}
 }
 
@@ -58,6 +116,9 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 			all_converted = false;
 		}
 	}
+
+	ReconstructTagVector(result, count);
+
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
@@ -65,6 +126,7 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		source.Flatten(count);
 		FlatVector::Validity(result) = FlatVector::Validity(source);
 	}
+	result.Verify(count);
 	return all_converted;
 }
 
