@@ -31,6 +31,7 @@ public:
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
+	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
