@@ -124,7 +124,7 @@ std::string MbedTlsWrapper::SHA256State::Finalize() {
 	return hash;
 }
 
-void MbedTlsWrapper::SHA256State::Finish(char *out) {
+void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 

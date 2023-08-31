@@ -28,7 +28,7 @@ public:
 		~SHA256State();
 		void AddString(const std::string & str);
 		std::string Finalize();
-		void Finish(char *out);
+		void FinishHex(char *out);
 	private:
 		void *sha_context;
 	};
