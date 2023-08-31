@@ -319,10 +319,6 @@ void Catalog::DropEntry(ClientContext &context, DropInfo &info) {
 
 	auto lookup = LookupEntry(context, info.type, info.schema, info.name, info.if_not_found);
 
-	if (lookup.error) {
-		lookup.error.Throw();
-	}
-
 	if (!lookup.Found()) {
 		return;
 	}
@@ -548,8 +544,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 	                                                  entry_name, did_you_mean));
 }
 
-CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, CatalogType type, const string &schema,
-                                                const string &name) {
+CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, CatalogType type,
+                                                   const string &schema, const string &name) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
 		return {nullptr, nullptr, PreservedError()};
@@ -561,9 +557,9 @@ CatalogEntryLookup Catalog::LookupEntryInternal(CatalogTransaction transaction, 
 	return {schema_entry, entry, PreservedError()};
 }
 
-CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
-                                        const string &name, OnEntryNotFound if_not_found,
-                                        QueryErrorContext error_context) {
+CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &schema,
+                                           const string &name, OnEntryNotFound if_not_found,
+                                           QueryErrorContext error_context) {
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
@@ -571,7 +567,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
 			auto transaction = GetCatalogTransaction(context);
-			auto result = LookupEntryInternal(transaction, type, candidate_schema, name);
+			auto result = TryLookupEntryInternal(transaction, type, candidate_schema, name);
 			if (result.Found()) {
 				return result;
 			}
@@ -581,7 +577,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		}
 	} else {
 		auto transaction = GetCatalogTransaction(context);
-		auto result = LookupEntryInternal(transaction, type, schema, name);
+		auto result = TryLookupEntryInternal(transaction, type, schema, name);
 		if (result.Found()) {
 			return result;
 		}
@@ -598,13 +594,25 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	}
 }
 
-CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
+CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema,
                                         const string &name, OnEntryNotFound if_not_found,
                                         QueryErrorContext error_context) {
+	auto res = TryLookupEntry(context, type, schema, name, if_not_found, error_context);
+
+	if (res.error) {
+		res.error.Throw();
+	}
+
+	return res;
+}
+
+CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, vector<CatalogLookup> &lookups, CatalogType type,
+                                           const string &name, OnEntryNotFound if_not_found,
+                                           QueryErrorContext error_context) {
 	reference_set_t<SchemaCatalogEntry> schemas;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
-		auto result = lookup.catalog.LookupEntryInternal(transaction, type, lookup.schema, name);
+		auto result = lookup.catalog.TryLookupEntryInternal(transaction, type, lookup.schema, name);
 		if (result.Found()) {
 			return result;
 		}
@@ -621,9 +629,9 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, vector<CatalogLo
 	}
 }
 
-CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &catalog,
-                                        const string &schema, const string &name, OnEntryNotFound if_not_found,
-                                        QueryErrorContext error_context) {
+CatalogEntryLookup Catalog::TryLookupEntry(ClientContext &context, CatalogType type, const string &catalog,
+                                           const string &schema, const string &name, OnEntryNotFound if_not_found,
+                                           QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(context, catalog, schema);
 	vector<CatalogLookup> lookups;
 	lookups.reserve(entries.size());
@@ -638,7 +646,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 			lookups.emplace_back(Catalog::GetCatalog(context, entry.catalog), entry.schema);
 		}
 	}
-	return Catalog::LookupEntry(context, lookups, type, name, if_not_found, error_context);
+	return Catalog::TryLookupEntry(context, lookups, type, name, if_not_found, error_context);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
@@ -657,12 +665,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                              const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
-	auto lookup_entry = LookupEntry(context, type, schema_name, name, if_not_found, error_context);
+	auto lookup_entry = TryLookupEntry(context, type, schema_name, name, if_not_found, error_context);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
-			lookup_entry = LookupEntry(context, type, schema_name, name, if_not_found, error_context);
+			lookup_entry = TryLookupEntry(context, type, schema_name, name, if_not_found, error_context);
 		}
 	}
 
@@ -681,12 +689,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType type, const 
 optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType type, const string &catalog,
                                              const string &schema, const string &name, OnEntryNotFound if_not_found,
                                              QueryErrorContext error_context) {
-	auto result = LookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
+	auto result = TryLookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
 		if (AutoLoadExtensionByCatalogEntry(context, type, name)) {
-			result = LookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
+			result = TryLookupEntry(context, type, catalog, schema, name, if_not_found, error_context);
 		}
 	}
 
@@ -796,10 +804,6 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetAllSchemas(ClientContext &cont
 void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 	ModifyCatalog();
 	auto lookup = LookupEntry(context, info.GetCatalogType(), info.schema, info.name, info.if_not_found);
-
-	if (lookup.error) {
-		lookup.error.Throw();
-	}
 
 	if (!lookup.Found()) {
 		return;
