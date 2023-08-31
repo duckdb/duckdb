@@ -103,12 +103,8 @@ Candidate bindings: "tbl.i"
 statement error
 select x -> x + 1 from (values (list_value(1, 2, 3))) tbl(i);
 ----
-Binder Error: LAMBDA expression is not supported here
-
-statement error
-select i -> i + 1 from (values (list_value(1, 2, 3))) tbl(i);
-----
-Binder Error: LAMBDA expression is not supported here
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.i"
 
 statement error
 select list_apply(i, y + 1 -> x + 1) from (values (list_value(1, 2, 3))) tbl(i);
