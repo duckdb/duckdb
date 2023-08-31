@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/batched_write/parquet_write_memory_limit.test_slow
+# name: test/sql/copy/parquet/writer/parquet_write_memory_limit.test_slow
 # description: Verify data is streamed and memory limit is not exceeded in Parquet write
 # group: [writer]
 
