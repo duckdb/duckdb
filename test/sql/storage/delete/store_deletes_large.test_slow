@@ -1,6 +1,6 @@
-# name: test/sql/storage/store_deletes_large.test_slow
+# name: test/sql/storage/delete/store_deletes_large.test_slow
 # description: Test storing large deletes
-# group: [storage]
+# group: [delete]
 
 mode skip
 
