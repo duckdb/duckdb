@@ -34,7 +34,6 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	projection_map[expr] = index;
 	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
 	                                           ColumnBinding(projection_index, index));
 }
@@ -43,6 +42,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	if (!extra_list) {
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
+	projection_map[*expr] = extra_list->size();
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(std::move(expr));
 	return result;
