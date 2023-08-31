@@ -49,6 +49,6 @@ public:
 	string ToSQL() const override;
 
 private:
-	void Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context);
+	void Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context, Catalog &catalog);
 };
 } // namespace duckdb

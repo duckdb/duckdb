@@ -16,7 +16,7 @@ TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
 	this->temporary = info.temporary;
 	this->internal = info.internal;
-	this->dependencies = info.dependencies.GetPhysical(context);
+	this->dependencies = info.dependencies.GetPhysical(catalog, context);
 }
 
 unique_ptr<CreateInfo> TypeCatalogEntry::GetInfo() const {

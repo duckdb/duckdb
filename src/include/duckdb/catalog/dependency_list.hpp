@@ -72,9 +72,7 @@ public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
 	DUCKDB_API bool Contains(LogicalDependency &entry);
 	DUCKDB_API bool Contains(CatalogEntry &entry);
-	DUCKDB_API PhysicalDependencyList GetPhysical(Catalog &catalog, ClientContext &context) const;
-	DUCKDB_API PhysicalDependencyList GetPhysical(ClientContext &context) const;
-	DUCKDB_API PhysicalDependencyList GetPhysical(optional_ptr<ClientContext> context) const;
+	DUCKDB_API PhysicalDependencyList GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const;
 
 public:
 	void Serialize(Serializer &serializer) const;

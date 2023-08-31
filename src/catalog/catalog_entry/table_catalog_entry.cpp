@@ -24,7 +24,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
-	this->dependencies = info.dependencies.GetPhysical(context);
+	this->dependencies = info.dependencies.GetPhysical(catalog, context);
 }
 
 bool TableCatalogEntry::HasGeneratedColumns() const {

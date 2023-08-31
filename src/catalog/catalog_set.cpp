@@ -152,7 +152,8 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 
 bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
                              LogicalDependencyList &dependencies) {
-	auto physical_dependencies = dependencies.GetPhysical(context);
+	auto &catalog = GetCatalog();
+	auto physical_dependencies = dependencies.GetPhysical(catalog, &context);
 	return CreateEntry(catalog.GetCatalogTransaction(context), name, std::move(value), physical_dependencies);
 }
 

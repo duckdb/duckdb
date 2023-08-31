@@ -111,46 +111,21 @@ bool LogicalDependencyList::Contains(CatalogEntry &entry) {
 	return set.count(dependency);
 }
 
-PhysicalDependencyList LogicalDependencyList::GetPhysical(ClientContext &context) const {
+PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const {
 	PhysicalDependencyList dependencies;
+
 	for (auto &entry : set) {
 		auto &name = entry.name;
-		auto &catalog = entry.catalog;
+		// Don't use the serialized catalog name, could be attached with a different name
 		auto &schema = entry.schema;
 		auto &type = entry.type;
 
-		auto catalog_entry = Catalog::GetEntry(context, type, catalog, schema, name, OnEntryNotFound::THROW_EXCEPTION);
-		dependencies.AddDependency(*catalog_entry);
-	}
-	return dependencies;
-}
-
-PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, ClientContext &context) const {
-	PhysicalDependencyList dependencies;
-	for (auto &entry : set) {
-		auto &name = entry.name;
-		auto &catalog_name = entry.catalog;
-		auto &schema = entry.schema;
-		auto &type = entry.type;
-
-		D_ASSERT(catalog_name == catalog.GetName());
-		auto lookup = catalog.LookupEntry(context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
+		auto lookup = catalog.LookupEntry(*context, type, schema, name, OnEntryNotFound::THROW_EXCEPTION);
 		D_ASSERT(lookup.Found());
 		auto catalog_entry = lookup.entry;
 		dependencies.AddDependency(*catalog_entry);
 	}
 	return dependencies;
-}
-
-PhysicalDependencyList LogicalDependencyList::GetPhysical(optional_ptr<ClientContext> context_p) const {
-	if (set.empty()) {
-		return PhysicalDependencyList();
-	}
-	if (!context_p) {
-		throw InternalException("ClientContext is required to convert logical to physical dependency!");
-	}
-	auto &context = *context_p;
-	return GetPhysical(context);
 }
 
 void LogicalDependencyList::Serialize(Serializer &writer) const {

@@ -8,7 +8,7 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
                                      optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), index(nullptr), sql(info.sql) {
 	this->temporary = info.temporary;
-	this->dependencies = info.dependencies.GetPhysical(catalog, *context);
+	this->dependencies = info.dependencies.GetPhysical(catalog, context);
 }
 
 string IndexCatalogEntry::ToSQL() const {

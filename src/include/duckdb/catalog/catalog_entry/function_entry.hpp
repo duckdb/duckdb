@@ -22,7 +22,7 @@ public:
 		description = std::move(info.description);
 		parameter_names = std::move(info.parameter_names);
 		example = std::move(info.example);
-		this->dependencies = info.dependencies.GetPhysical(context);
+		this->dependencies = info.dependencies.GetPhysical(catalog, context);
 	}
 
 	//! The description (if any)

@@ -11,20 +11,20 @@
 
 namespace duckdb {
 
-void ViewCatalogEntry::Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context) {
+void ViewCatalogEntry::Initialize(CreateViewInfo &info, optional_ptr<ClientContext> context, Catalog &catalog) {
 	query = std::move(info.query);
 	this->aliases = info.aliases;
 	this->types = info.types;
 	this->temporary = info.temporary;
 	this->sql = info.sql;
 	this->internal = info.internal;
-	this->dependencies = info.dependencies.GetPhysical(context);
+	this->dependencies = info.dependencies.GetPhysical(catalog, context);
 }
 
 ViewCatalogEntry::ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info,
                                    optional_ptr<ClientContext> context)
     : StandardEntry(CatalogType::VIEW_ENTRY, schema, catalog, info.view_name) {
-	Initialize(info, context);
+	Initialize(info, context, catalog);
 }
 
 unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
