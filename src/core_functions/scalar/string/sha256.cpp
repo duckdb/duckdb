@@ -1,18 +1,21 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/core_functions/scalar/string_functions.hpp"
-#include "duckdb/common/crypto/sha256.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
 struct SHA256Operator {
 	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		auto hash = StringVector::EmptyString(result, SHA256Context::SHA256_HASH_LENGTH_TEXT);
-		SHA256Context context;
-		context.Add(input);
-		context.Finish(hash.GetDataWriteable());
-		hash.Finalize();
+		auto hash = StringVector::EmptyString(result, duckdb_mbedtls::MbedTlsWrapper::SHA256_HASH_LENGTH_TEXT);
+
+		duckdb_mbedtls::MbedTlsWrapper::SHA256State state;
+		state.AddString(input.GetString());
+    state.Finish(hash.GetDataWriteable());
+
+    hash.Finalize();
+
 		return hash;
 	}
 };
