@@ -115,6 +115,7 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
+core_functions/aggregate/nested/histogram.cpp	1
 core_functions/aggregate/nested/list.cpp	4
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
@@ -724,7 +725,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	24
+planner/operator/logical_extension_operator.cpp	25
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
