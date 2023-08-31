@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/schema/physical_create_index.hpp"
+#include "duckdb/execution/operator/schema/physical_create_art_index.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
@@ -14,10 +14,10 @@
 
 namespace duckdb {
 
-PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table_p,
-                                         const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
-                                         vector<unique_ptr<Expression>> unbound_expressions,
-                                         idx_t estimated_cardinality, const bool sorted)
+PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table_p,
+                                               const vector<column_t> &column_ids, unique_ptr<CreateIndexInfo> info,
+                                               vector<unique_ptr<Expression>> unbound_expressions,
+                                               idx_t estimated_cardinality, const bool sorted)
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)), unbound_expressions(std::move(unbound_expressions)),
       sorted(sorted) {
@@ -31,15 +31,15 @@ PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry 
 // Sink
 //===--------------------------------------------------------------------===//
 
-class CreateIndexGlobalSinkState : public GlobalSinkState {
+class CreateARTIndexGlobalSinkState : public GlobalSinkState {
 public:
 	//! Global index to be added to the table
 	unique_ptr<Index> global_index;
 };
 
-class CreateIndexLocalSinkState : public LocalSinkState {
+class CreateARTIndexLocalSinkState : public LocalSinkState {
 public:
-	explicit CreateIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
+	explicit CreateARTIndexLocalSinkState(ClientContext &context) : arena_allocator(Allocator::Get(context)) {};
 
 	unique_ptr<Index> local_index;
 	ArenaAllocator arena_allocator;
@@ -48,37 +48,26 @@ public:
 	vector<column_t> key_column_ids;
 };
 
-unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_uniq<CreateIndexGlobalSinkState>();
+unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientContext &context) const {
+	auto state = make_uniq<CreateARTIndexGlobalSinkState>();
 
 	// create the global index
-	switch (info->index_type) {
-	case IndexType::ART: {
-		auto &storage = table.GetStorage();
-		state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                     info->constraint_type, storage.db);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented index type");
-	}
+	auto &storage = table.GetStorage();
+	state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
+	                                     info->constraint_type, storage.db);
+
 	return (std::move(state));
 }
 
-unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_uniq<CreateIndexLocalSinkState>(context.client);
+unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionContext &context) const {
+	auto state = make_uniq<CreateARTIndexLocalSinkState>(context.client);
 
 	// create the local index
-	switch (info->index_type) {
-	case IndexType::ART: {
-		auto &storage = table.GetStorage();
-		state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                    info->constraint_type, storage.db);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented index type");
-	}
+
+	auto &storage = table.GetStorage();
+	state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
+	                                    info->constraint_type, storage.db);
+
 	state->keys = vector<ARTKey>(STANDARD_VECTOR_SIZE);
 	state->key_chunk.Initialize(Allocator::Get(context.client), state->local_index->logical_types);
 
@@ -88,9 +77,9 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateIndex::SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const {
+SinkResultType PhysicalCreateARTIndex::SinkUnsorted(Vector &row_identifiers, OperatorSinkInput &input) const {
 
-	auto &l_state = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto count = l_state.key_chunk.size();
 
 	// get the corresponding row IDs
@@ -108,9 +97,9 @@ SinkResultType PhysicalCreateIndex::SinkUnsorted(Vector &row_identifiers, Operat
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkResultType PhysicalCreateIndex::SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const {
+SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, OperatorSinkInput &input) const {
 
-	auto &l_state = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	auto &storage = table.GetStorage();
 	auto &l_index = l_state.local_index;
 
@@ -129,12 +118,13 @@ SinkResultType PhysicalCreateIndex::SinkSorted(Vector &row_identifiers, Operator
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
 
 	D_ASSERT(chunk.ColumnCount() >= 2);
 
 	// generate the keys for the given input
-	auto &l_state = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	l_state.key_chunk.ReferenceColumns(chunk, l_state.key_column_ids);
 	l_state.arena_allocator.Reset();
 	ART::GenerateKeys(l_state.arena_allocator, l_state.key_chunk, l_state.keys);
@@ -147,10 +137,11 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	return SinkUnsorted(row_identifiers, input);
 }
 
-SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
+                                                      OperatorSinkCombineInput &input) const {
 
-	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
-	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
@@ -160,11 +151,11 @@ SinkCombineResultType PhysicalCreateIndex::Combine(ExecutionContext &context, Op
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                               OperatorSinkFinalizeInput &input) const {
+SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                  OperatorSinkFinalizeInput &input) const {
 
 	// here, we set the resulting global index as the newly created index of the table
-	auto &state = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	auto &state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
 
 	// vacuum excess memory and verify
 	state.global_index->Vacuum();
@@ -199,8 +190,8 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
-                                              OperatorSourceInput &input) const {
+SourceResultType PhysicalCreateARTIndex::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	return SourceResultType::FINISHED;
 }
 
