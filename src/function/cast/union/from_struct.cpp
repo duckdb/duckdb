@@ -48,8 +48,6 @@ void ReconstructTagVector(Vector &result, idx_t count) {
 	auto tag_data = UnifiedVectorFormat::GetDataNoConst<union_tag_t>(tag_format);
 	auto &tag_validity = FlatVector::Validity(tags);
 
-	// FIXME: the validity mask for the tag vector should also be set
-
 	for (union_tag_t member_idx = 0; member_idx < member_count; member_idx++) {
 		tag_chunk.Reset();
 		auto &result_child_vector = UnionVector::GetMember(result, member_idx);
