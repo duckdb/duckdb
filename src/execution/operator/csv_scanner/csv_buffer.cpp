@@ -54,7 +54,7 @@ void CSVBuffer::Reload(CSVFileHandle &file_handle) {
 
 unique_ptr<CSVBufferHandle> CSVBuffer::Pin(CSVFileHandle &file_handle) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	if (can_seek && !block->IsSwizzled()) {
+	if (can_seek && block->IsUnloaded()) {
 		// We have to reload it from disk
 		block = nullptr;
 		Reload(file_handle);

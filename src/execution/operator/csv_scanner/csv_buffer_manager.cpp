@@ -14,6 +14,9 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	if (file_size > 0 && file_size < buffer_size) {
 		buffer_size = CSVBuffer::CSV_MINIMUM_BUFFER_SIZE;
 	}
+	if (options.buffer_size < buffer_size){
+		buffer_size = options.buffer_size;
+	}
 	for (idx_t i = 0; i < skip_rows; i++) {
 		file_handle->ReadLine();
 	}
