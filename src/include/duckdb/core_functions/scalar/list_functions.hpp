@@ -249,4 +249,25 @@ struct ListDistanceFunAlias {
 	static constexpr const char *Name = "<->";
 };
 
+struct ListInnerProductFun {
+	static constexpr const char *Name = "list_inner_product";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the inner product between two lists.";
+	static constexpr const char *Example = "list_inner_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListDotProductFun {
+	using ALIAS = ListInnerProductFun;
+
+	static constexpr const char *Name = "list_dot_product";
+};
+
+struct ListInnerProductFunAlias {
+	using ALIAS = ListInnerProductFun;
+
+	static constexpr const char *Name = "<#>";
+};
+
 } // namespace duckdb

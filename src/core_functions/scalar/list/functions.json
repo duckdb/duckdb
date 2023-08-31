@@ -109,5 +109,13 @@
         "example": "list_distance([1, 2, 3], [1, 2, 3])",
         "type": "scalar_function_set",
         "aliases": ["<->"]
+    },
+    {
+        "name": "list_inner_product",
+        "parameters": "list1,list2",
+        "description": "Compute the inner product between two lists.",
+        "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["list_dot_product", "<#>"]
     }
 ]
