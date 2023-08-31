@@ -26,13 +26,15 @@ Catalog Error: Setting with name "s3_region" is not in the catalog, but it exist
 statement ok
 set autoload_known_extensions=true
 
+statement ok
+set autoinstall_extension_repository='/tmp/non-existent-repo';
+
 # Error should inform the user on whats happening
 statement error
 RESET s3_region;
 ----
-IO Error: Attempted to automatically load the 'httpfs' extension, but the following error occurred:
+Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
 Extension
-
 
 ### Autoloading with correct tmp repo and autoinstall
 statement ok

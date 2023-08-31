@@ -39,7 +39,7 @@ set autoload_known_extensions=true
 statement ok
 set autoinstall_known_extensions=true
 
-# Override the default repo with a non-existent dir
+# Override the default repo with a non-existent local repo
 statement ok
 set autoinstall_extension_repository='/tmp/non-existent-repo';
 
@@ -47,14 +47,31 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 SET s3_region='eu-west-1';
 ----
-IO Error: Attempted to automatically install and load the 'httpfs' extension, but the following error occurred:
-Failed to copy local extension "httpfs" at PATH
+Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
+Failed to copy local extension
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-IO Error: Attempted to automatically install and load the 'json' extension, but the following error occurred:
-Failed to copy local extension "json" at PATH
+Extension Autoloading Error: An error occured while trying to automatically install the required extension 'json':
+Failed to copy local extension
+
+# Now override with non-existent remote repo
+statement ok
+set autoinstall_extension_repository='http://duckdb.org/what/are/the/odds/we/actually/make/this/path/and/break/this/tests';
+
+# Error should inform the user on whats happening
+statement error
+SET s3_region='eu-west-1';
+----
+Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
+Failed to download extension "httpfs" at URL
+
+statement error
+select * from read_json_auto('data/json/example_n.ndjson');
+----
+Extension Autoloading Error: An error occured while trying to automatically install the required extension 'json':
+Failed to download extension "json" at URL
 
 statement error
 select * from thistablefunctionwillnotexistfosho();

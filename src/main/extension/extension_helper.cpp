@@ -153,15 +153,6 @@ bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
 	return false;
 }
 
-string ExtensionHelper::WrapAutoLoadExtensionErrorMsg(ClientContext &context, const string &base_error,
-                                                      const string &extension_name) {
-	auto &dbconfig = DBConfig::GetConfig(context);
-	string action = dbconfig.options.autoinstall_known_extensions ? "install and load" : "load";
-
-	return "Attempted to automatically " + action + " the '" + extension_name +
-	       "' extension, but the following error occurred:\n" + base_error;
-}
-
 string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
                                                           const string &extension_name) {
 	auto &dbconfig = DBConfig::GetConfig(context);
@@ -169,7 +160,7 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 
 	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
 		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
-		               extension_name + ";\nLOAD " + extension_name + ";\n\n%s";
+		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
 	} else if (!dbconfig.options.autoload_known_extensions) {
 		install_hint =
 		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
@@ -198,10 +189,7 @@ void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &ex
 		}
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
-		string error_message = e.RawMessage();
-		error_message = WrapAutoLoadExtensionErrorMsg(context, error_message, extension_name);
-		error_message = AddExtensionInstallHintToErrorMsg(context, error_message, extension_name);
-		throw Exception(e.type, error_message);
+		throw AutoloadException(extension_name, e);
 	}
 }
 

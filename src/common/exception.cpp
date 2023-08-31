@@ -162,6 +162,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Missing Extension";
 	case ExceptionType::HTTP:
 		return "HTTP";
+	case ExceptionType::AUTOLOAD:
+		return "Extension Autoloading";
 	default:
 		return "Unknown";
 	}
@@ -227,6 +229,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	case ExceptionType::HTTP: {
 		original->AsHTTPException().Throw();
 	}
+	case ExceptionType::MISSING_EXTENSION:
+		throw MissingExtensionException(message);
 	default:
 		throw Exception(type, message);
 	}
@@ -347,6 +351,13 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
+}
+
+AutoloadException::AutoloadException(const string &extension_name, Exception &e)
+    : Exception(ExceptionType::AUTOLOAD,
+                "An error occured while trying to automatically install the required extension '" + extension_name +
+                    "':\n" + e.RawMessage()),
+      wrapped_exception(e) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {
