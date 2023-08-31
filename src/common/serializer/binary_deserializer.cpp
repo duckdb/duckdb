@@ -6,33 +6,25 @@ namespace duckdb {
 // Nested Type Hooks
 //-------------------------------------------------------------------------
 void BinaryDeserializer::OnPropertyBegin(const field_id_t field_id, const char *) {
-	if (current_field != field_id) {
-		throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id,
-		                        current_field);
+	auto field = NextField();
+	if (field != field_id) {
+		throw InternalException("Failed to deserialize: field id mismatch, expected: %d, got: %d", field_id, field);
 	}
 }
 
 void BinaryDeserializer::OnPropertyEnd() {
-	// Move to the next field, unless we are at the terminator on level 0 (always the last field ID written)
-	// If we are at nesting level 0 and read a terminator, we are done
-	if (current_field != MESSAGE_TERMINATOR_FIELD_ID || nesting_level != 0) {
-		current_field = ReadPrimitive<field_id_t>();
-	}
 }
 
 bool BinaryDeserializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *s) {
-	if (current_field != field_id) {
-		return false;
+	auto next_field = PeekField();
+	auto present = next_field == field_id;
+	if (present) {
+		ConsumeField();
 	}
-	return true;
+	return present;
 }
 
 void BinaryDeserializer::OnOptionalPropertyEnd(bool present) {
-	// If the property was present, (and we presumably consumed it)
-	// move to the next field, unless we are at the terminator on level 0
-	if (present && (current_field != MESSAGE_TERMINATOR_FIELD_ID || nesting_level != 0)) {
-		current_field = ReadPrimitive<field_id_t>();
-	}
 }
 
 void BinaryDeserializer::OnObjectBegin() {
@@ -40,15 +32,11 @@ void BinaryDeserializer::OnObjectBegin() {
 }
 
 void BinaryDeserializer::OnObjectEnd() {
-	if (current_field != MESSAGE_TERMINATOR_FIELD_ID) {
-		throw InternalException("Failed to deserialize: expected terminator, got: %d", current_field);
+	auto next_field = NextField();
+	if (next_field != MESSAGE_TERMINATOR_FIELD_ID) {
+		throw InternalException("Failed to deserialize: expected end of object, but found field id: %d", next_field);
 	}
 	nesting_level--;
-
-	if (nesting_level > 0) {
-		// Move to the next field
-		current_field = ReadPrimitive<field_id_t>();
-	}
 }
 
 idx_t BinaryDeserializer::OnListBegin() {

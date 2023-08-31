@@ -42,13 +42,36 @@ public:
 private:
 	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
 		deserialize_enum_from_string = false;
-		current_field = ReadPrimitive<field_id_t>();
 	}
 
 	data_ptr_t ptr;
 	data_ptr_t end_ptr;
 	idx_t nesting_level = 0;
-	field_id_t current_field = 0;
+
+	// Allow peeking 1 field ahead
+	bool has_buffered_field = false;
+	field_id_t buffered_field = 0;
+	field_id_t PeekField() {
+		if (!has_buffered_field) {
+			buffered_field = ReadPrimitive<field_id_t>();
+			has_buffered_field = true;
+		}
+		return buffered_field;
+	}
+	void ConsumeField() {
+		if (!has_buffered_field) {
+			buffered_field = ReadPrimitive<field_id_t>();
+		} else {
+			has_buffered_field = false;
+		}
+	}
+	field_id_t NextField() {
+		if (has_buffered_field) {
+			has_buffered_field = false;
+			return buffered_field;
+		}
+		return ReadPrimitive<field_id_t>();
+	}
 
 	template <class T>
 	T ReadPrimitive() {

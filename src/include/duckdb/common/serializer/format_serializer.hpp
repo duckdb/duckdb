@@ -139,7 +139,6 @@ protected:
 		OnObjectBegin();
 		WriteProperty(0, "first", pair.first);
 		WriteProperty(1, "second", pair.second);
-		WriteValue(pair.second);
 		OnObjectEnd();
 	}
 
