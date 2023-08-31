@@ -90,14 +90,44 @@ void MbedTlsWrapper::Hmac256(const char *key, size_t key_len, const char *messag
 	mbedtls_md_free(&hmac_ctx);
 }
 
-MbedTlsGcmContext::MbedTlsGcmContext() {
+MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
+	mbedtls_sha256_init((mbedtls_sha256_context *)sha_context);
+
+	if (mbedtls_sha256_starts((mbedtls_sha256_context *)sha_context, false)) {
+		throw std::runtime_error("SHA256 Error");
+	}
 }
 
-MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
+MbedTlsWrapper::SHA256State::~SHA256State() {
+	mbedtls_sha256_free((mbedtls_sha256_context *)sha_context);
+	delete (mbedtls_sha256_context *)sha_context;
+}
+
+void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
+	if (mbedtls_sha256_update((mbedtls_sha256_context *)sha_context, (unsigned char *)str.data(), str.size())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+std::string MbedTlsWrapper::SHA256State::Finalize() {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA256_HASH_BYTES);
+
+	if (mbedtls_sha256_finish((mbedtls_sha256_context *)sha_context, (unsigned char *)hash.data())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+
+	return hash;
+}
+
+MbedTlsWrapper::MbedTlsGcmContext::MbedTlsGcmContext() {
+}
+
+MbedTlsWrapper::MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
 	Initialize(key);
 }
 
-void MbedTlsGcmContext::Initialize(const std::string &key) {
+void MbedTlsWrapper::MbedTlsGcmContext::Initialize(const std::string &key) {
 	context_ptr = reinterpret_cast<char *>(malloc(sizeof(mbedtls_gcm_context)));
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
 	mbedtls_gcm_init(context);
@@ -107,7 +137,7 @@ void MbedTlsGcmContext::Initialize(const std::string &key) {
 	}
 }
 
-MbedTlsGcmContext::~MbedTlsGcmContext() {
+MbedTlsWrapper::MbedTlsGcmContext::~MbedTlsGcmContext() {
 	if (!context_ptr) {
 		return;
 	}
@@ -116,15 +146,15 @@ MbedTlsGcmContext::~MbedTlsGcmContext() {
 	free(context_ptr.get());
 }
 
-void MbedTlsGcmContext::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+void MbedTlsWrapper::MbedTlsGcmContext::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
 	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_DECRYPT, iv, iv_len) != 0) {
 		throw runtime_error("Unable to initialize AES decryption");
 	}
 }
 
-size_t MbedTlsGcmContext::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
-                                  duckdb::idx_t out_len) {
+size_t MbedTlsWrapper::MbedTlsGcmContext::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len,
+                                                  duckdb::data_ptr_t out, duckdb::idx_t out_len) {
 	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
 	size_t result;
 	if (mbedtls_gcm_update(context, in, in_len, out, out_len, &result) != 0) {
@@ -132,44 +162,3 @@ size_t MbedTlsGcmContext::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_
 	}
 	return result;
 }
-
-// MbedTlsAesContext MbedTlsAesContext::CreateEncryptionContext(const std::string &key) {
-//	MbedTlsAesContext result;
-//	result.context_ptr = malloc(sizeof(mbedtls_aes_context));
-//	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
-//	mbedtls_aes_init(context);
-//	if (mbedtls_aes_setkey_enc(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
-//		throw runtime_error("Invalid AES key length");
-//	}
-//	return result;
-// }
-//
-// MbedTlsAesContext MbedTlsAesContext::CreateDecryptionContext(const std::string &key) {
-//	MbedTlsAesContext result;
-//	result.context_ptr = malloc(sizeof(mbedtls_aes_context));
-//	auto context = reinterpret_cast<mbedtls_aes_context *>(result.context_ptr);
-//	mbedtls_aes_init(context);
-//	if (mbedtls_aes_setkey_dec(context, reinterpret_cast<const unsigned char *>(key.c_str()), key.length() * 8) != 0) {
-//		throw runtime_error("Invalid AES key length");
-//	}
-//	return result;
-// }
-//
-// MbedTlsAesContext::~MbedTlsAesContext() {
-//	mbedtls_aes_free(reinterpret_cast<mbedtls_aes_context *>(context_ptr));
-//	free(context_ptr);
-// }
-//
-// void MbedTlsWrapper::Encrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
-//	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_ENCRYPT, in_len,
-//	                          iv, in, in) != 0) {
-//		throw runtime_error("Invalid AES input length");
-//	}
-// }
-//
-// void MbedTlsWrapper::Decrypt(MbedTlsAesContext &context, unsigned char iv[16], unsigned char *in, size_t in_len) {
-//	if (mbedtls_aes_crypt_cbc(reinterpret_cast<mbedtls_aes_context *>(context.context_ptr), MBEDTLS_AES_DECRYPT, in_len,
-//	                          iv, in, in) != 0) {
-//		throw runtime_error("Invalid AES input length");
-//	}
-// }

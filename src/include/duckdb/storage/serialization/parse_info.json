@@ -7,6 +7,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "info_type",
         "type": "ParseInfoType"
       }
@@ -22,26 +23,32 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "type",
         "type": "AlterType"
       },
       {
+        "id": 201,
         "name": "catalog",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "schema",
         "type": "string"
       },
       {
+        "id": 203,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 204,
         "name": "if_not_found",
         "type": "OnEntryNotFound"
       },
       {
+        "id": 205,
         "name": "allow_internal",
         "type": "bool"
       }
@@ -57,6 +64,7 @@
     ],
     "members": [
       {
+        "id": 300,
         "name": "alter_table_type",
         "type": "AlterTableType"
       }
@@ -68,10 +76,12 @@
     "enum": "RENAME_COLUMN",
     "members": [
       {
+        "id": 400,
         "name": "old_name",
         "type": "string"
       },
       {
+        "id": 401,
         "name": "new_name",
         "type": "string"
       }
@@ -83,6 +93,7 @@
     "enum": "RENAME_TABLE",
     "members": [
       {
+        "id": 400,
         "name": "new_table_name",
         "type": "string"
       }
@@ -94,10 +105,12 @@
     "enum": "ADD_COLUMN",
     "members": [
       {
+        "id": 400,
         "name": "new_column",
         "type": "ColumnDefinition"
       },
       {
+        "id": 401,
         "name": "if_column_not_exists",
         "type": "bool"
       }
@@ -110,14 +123,17 @@
     "enum": "REMOVE_COLUMN",
     "members": [
       {
+        "id": 400,
         "name": "removed_column",
         "type": "string"
       },
       {
+        "id": 401,
         "name": "if_column_exists",
         "type": "bool"
       },
       {
+        "id": 402,
         "name": "cascade",
         "type": "bool"
       }
@@ -129,14 +145,17 @@
     "enum": "ALTER_COLUMN_TYPE",
     "members": [
       {
+        "id": 400,
         "name": "column_name",
         "type": "string"
       },
       {
+        "id": 401,
         "name": "target_type",
         "type": "LogicalType"
       },
       {
+        "id": 402,
         "name": "expression",
         "type": "ParsedExpression*"
       }
@@ -148,10 +167,12 @@
     "enum": "SET_DEFAULT",
     "members": [
       {
+        "id": 400,
         "name": "column_name",
         "type": "string"
       },
       {
+        "id": 401,
         "name": "expression",
         "type": "ParsedExpression*",
         "optional": true
@@ -164,26 +185,32 @@
     "enum": "FOREIGN_KEY_CONSTRAINT",
     "members": [
       {
+        "id": 400,
         "name": "fk_table",
         "type": "string"
       },
       {
+        "id": 401,
         "name": "pk_columns",
         "type": "vector<string>"
       },
       {
+        "id": 402,
         "name": "fk_columns",
         "type": "vector<string>"
       },
       {
+        "id": 403,
         "name": "pk_keys",
         "type": "vector<PhysicalIndex>"
       },
       {
+        "id": 404,
         "name": "fk_keys",
         "type": "vector<PhysicalIndex>"
       },
       {
+        "id": 405,
         "name": "alter_fk_type",
         "property": "type",
         "type": "AlterForeignKeyType"
@@ -196,6 +223,7 @@
     "enum": "SET_NOT_NULL",
     "members": [
       {
+        "id": 400,
         "name": "column_name",
         "type": "string"
       }
@@ -207,6 +235,7 @@
     "enum": "DROP_NOT_NULL",
     "members": [
       {
+        "id": 400,
         "name": "column_name",
         "type": "string"
       }
@@ -219,6 +248,7 @@
     "class_type": "alter_view_type",
     "members": [
       {
+        "id": 300,
         "name": "alter_view_type",
         "type": "AlterViewType"
       }
@@ -230,6 +260,7 @@
     "enum": "RENAME_VIEW",
     "members": [
       {
+        "id": 400,
         "name": "new_view_name",
         "type": "string"
       }
@@ -244,14 +275,17 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "path",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "options",
         "type": "unordered_map<string, Value>"
       }
@@ -266,34 +300,42 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "catalog",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "schema",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "table",
         "type": "string"
       },
       {
+        "id": 203,
         "name": "select_list",
         "type": "vector<string>"
       },
       {
+        "id": 204,
         "name": "is_from",
         "type": "bool"
       },
       {
+        "id": 205,
         "name": "format",
         "type": "string"
       },
       {
+        "id": 206,
         "name": "file_path",
         "type": "string"
       },
       {
+        "id": 207,
         "name": "options",
         "type": "unordered_map<vector<Value>>"
       }
@@ -308,10 +350,12 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "if_not_found",
         "type": "OnEntryNotFound"
       }
@@ -326,30 +370,37 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "type",
         "type": "CatalogType"
       },
       {
+        "id": 201,
         "name": "catalog",
         "type": "string"
       },
       {
+        "id": 202,
         "name": "schema",
         "type": "string"
       },
       {
+        "id": 203,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 204,
         "name": "if_not_found",
         "type": "OnEntryNotFound"
       },
       {
+        "id": 205,
         "name": "cascade",
         "type": "bool"
       },
       {
+        "id": 206,
         "name": "allow_drop_internal",
         "type": "bool"
       }
@@ -364,10 +415,12 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "filename",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "load_type",
         "type": "LoadType"
       }
@@ -382,14 +435,17 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "name",
         "type": "string"
       },
       {
+        "id": 201,
         "name": "parameters",
         "type": "vector<Value>"
       },
       {
+        "id": 202,
         "name": "named_parameters",
         "type": "unordered_map<string, Value>"
       }
@@ -404,6 +460,7 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "type",
         "type": "TransactionType"
       }
@@ -418,6 +475,7 @@
     ],
     "members": [
       {
+        "id": 200,
         "name": "options",
         "type": "VacuumOptions"
       }

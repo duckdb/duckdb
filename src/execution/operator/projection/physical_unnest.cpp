@@ -308,40 +308,37 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 				// UNNEST(NULL)
 				chunk.SetCardinality(0);
 				break;
+			}
 
-			} else {
+			auto &vector_data = state.list_vector_data[col_idx];
+			auto current_idx = vector_data.sel->get_index(state.current_row);
 
-				auto &vector_data = state.list_vector_data[col_idx];
-				auto current_idx = vector_data.sel->get_index(state.current_row);
+			if (!vector_data.validity.RowIsValid(current_idx)) {
+				UnnestNull(0, this_chunk_len, result_vector);
+				continue;
+			}
 
-				if (!vector_data.validity.RowIsValid(current_idx)) {
-					UnnestNull(0, this_chunk_len, result_vector);
+			auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+			auto list_entry = list_data[current_idx];
 
-				} else {
+			idx_t list_count = 0;
+			if (state.list_position < list_entry.length) {
+				// there are still list_count elements to unnest
+				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
 
-					auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
-					auto list_entry = list_data[current_idx];
+				auto &list_vector = state.list_data.data[col_idx];
+				auto &child_vector = ListVector::GetEntry(list_vector);
+				auto list_size = ListVector::GetListSize(list_vector);
+				auto &child_vector_data = state.list_child_data[col_idx];
 
-					idx_t list_count = 0;
-					if (state.list_position < list_entry.length) {
-						// there are still list_count elements to unnest
-						list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
+				auto base_offset = list_entry.offset + state.list_position;
+				UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
+				             result_vector);
+			}
 
-						auto &list_vector = state.list_data.data[col_idx];
-						auto &child_vector = ListVector::GetEntry(list_vector);
-						auto list_size = ListVector::GetListSize(list_vector);
-						auto &child_vector_data = state.list_child_data[col_idx];
-
-						auto base_offset = list_entry.offset + state.list_position;
-						UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
-						             result_vector);
-					}
-
-					// fill the rest with NULLs
-					if (list_count != this_chunk_len) {
-						UnnestNull(list_count, this_chunk_len, result_vector);
-					}
-				}
+			// fill the rest with NULLs
+			if (list_count != this_chunk_len) {
+				UnnestNull(list_count, this_chunk_len, result_vector);
 			}
 		}
 

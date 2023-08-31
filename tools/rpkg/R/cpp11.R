@@ -200,6 +200,10 @@ rapi_execute <- function(stmt, arrow, integer64) {
   .Call(`_duckdb_rapi_execute`, stmt, arrow, integer64)
 }
 
+rapi_adbc_init_func <- function() {
+  .Call(`_duckdb_rapi_adbc_init_func`)
+}
+
 rapi_ptr_to_str <- function(extptr) {
   .Call(`_duckdb_rapi_ptr_to_str`, extptr)
 }

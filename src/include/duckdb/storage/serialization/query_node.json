@@ -7,14 +7,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "type",
         "type": "QueryNodeType"
       },
       {
+        "id": 101,
         "name": "modifiers",
         "type": "vector<ResultModifier*>"
       },
       {
+        "id": 102,
         "name": "cte_map",
         "type": "CommonTableExpressionMap"
       }
@@ -26,44 +29,53 @@
     "enum": "SELECT_NODE",
     "members": [
       {
+        "id": 200,
         "name": "select_list",
         "type": "vector<ParsedExpression*>"
       },
       {
+        "id": 201,
         "name": "from_table",
         "type": "TableRef*",
         "optional": true
       },
       {
+        "id": 202,
         "name": "where_clause",
         "type": "ParsedExpression*",
         "optional": true
       },
       {
+        "id": 203,
         "name": "group_expressions",
         "type": "vector<ParsedExpression*>",
         "property": "groups.group_expressions"
       },
       {
+        "id": 204,
         "name": "group_sets",
         "type": "set<idx_t>",
         "property": "groups.grouping_sets"
       },
       {
+        "id": 205,
         "name": "aggregate_handling",
         "type": "AggregateHandling"
       },
       {
+        "id": 206,
         "name": "having",
         "type": "ParsedExpression*",
         "optional": true
       },
       {
+        "id": 207,
         "name": "sample",
         "type": "SampleOptions*",
         "optional": true
       },
       {
+        "id": 208,
         "name": "qualify",
         "type": "ParsedExpression*",
         "optional": true
@@ -76,14 +88,17 @@
     "enum": "SET_OPERATION_NODE",
     "members": [
       {
+        "id": 200,
         "name": "setop_type",
         "type": "SetOperationType"
       },
       {
+        "id": 201,
         "name": "left",
         "type": "QueryNode*"
       },
       {
+        "id": 202,
         "name": "right",
         "type": "QueryNode*"
       }
@@ -95,23 +110,28 @@
     "enum": "RECURSIVE_CTE_NODE",
     "members": [
       {
+        "id": 200,
         "name": "cte_name",
         "type": "string",
         "property": "ctename"
       },
       {
+        "id": 201,
         "name": "union_all",
         "type": "bool"
       },
       {
+        "id": 202,
         "name": "left",
         "type": "QueryNode*"
       },
       {
+        "id": 203,
         "name": "right",
         "type": "QueryNode*"
       },
       {
+        "id": 204,
         "name": "aliases",
         "type": "vector<string>"
       }
@@ -123,19 +143,23 @@
     "enum": "CTE_NODE",
     "members": [
       {
+        "id": 200,
         "name": "cte_name",
         "type": "string",
         "property": "ctename"
       },
       {
+        "id": 201,
         "name": "query",
         "type": "QueryNode*"
       },
       {
+        "id": 202,
         "name": "child",
         "type": "QueryNode*"
       },
       {
+        "id": 203,
         "name": "aliases",
         "type": "vector<string>"
       }

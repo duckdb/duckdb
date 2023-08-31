@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-PREPARE boaz_bug AS from read_csv_auto('https://github.com/duckdb/duckdb/raw/master/data/csv/customer.csv')
+PREPARE boaz_bug AS from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv')
 
 query IIIIIIIIIIIIIIIIII
 EXECUTE boaz_bug

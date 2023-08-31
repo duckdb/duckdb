@@ -75,7 +75,11 @@ public:
 		return *writer;
 	}
 
+	static bool TypeIsSupported(const LogicalType &type);
+
 private:
+	static bool DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
+	                                            duckdb_parquet::format::Type::type &type);
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;

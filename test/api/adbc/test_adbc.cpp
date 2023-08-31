@@ -7,15 +7,17 @@ using namespace std;
 
 using namespace duckdb;
 
-bool SUCCESS(duckdb_adbc::AdbcStatusCode status) {
+using namespace duckdb_adbc;
+
+bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 
 class ADBCTestDatabase {
 public:
-	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
-		duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	explicit ADBCTestDatabase(const string &path_parameter = ":memory:") {
+		duckdb_adbc::InitializeADBCError(&adbc_error);
 		path = TestCreatePath(path_parameter);
 		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -62,20 +64,22 @@ public:
 	void CreateTable(const string &table_name, ArrowArrayStream &input_data) {
 		REQUIRE(input_data.release);
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+		REQUIRE(SUCCESS(StatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
-		                                                table_name.c_str(), &adbc_error)));
+		REQUIRE(SUCCESS(
+		    StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
-		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &arrow_stream, &adbc_error)));
+		REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
 		REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+		input_data.release = nullptr;
+		arrow_stream.release = nullptr;
 	}
 
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::AdbcDatabase adbc_database;
-	duckdb_adbc::AdbcConnection adbc_connection;
-	duckdb_adbc::AdbcStatement adbc_statement;
+	AdbcError adbc_error;
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+	AdbcStatement adbc_statement;
 	ArrowArrayStream arrow_stream;
 	std::string path;
 };
@@ -123,15 +127,15 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	duckdb_adbc::AdbcStatusCode adbc_status;
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
-	duckdb_adbc::AdbcDatabase adbc_database;
+	AdbcStatusCode adbc_status;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	AdbcDatabase adbc_database;
 	// NULL error
-	adbc_status = duckdb_adbc::DatabaseInit(&adbc_database, nullptr);
+	adbc_status = DatabaseInit(&adbc_database, nullptr);
 	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
 	// NULL database
-	adbc_status = duckdb_adbc::DatabaseInit(nullptr, &adbc_error);
+	adbc_status = DatabaseInit(nullptr, &adbc_error);
 	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
 	REQUIRE(std::strcmp(adbc_error.message, "ADBC Database has an invalid pointer") == 0);
 
@@ -139,7 +143,7 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 	adbc_error.release(&adbc_error);
 
 	// Null Error and Database
-	adbc_status = duckdb_adbc::DatabaseInit(nullptr, nullptr);
+	adbc_status = DatabaseInit(nullptr, nullptr);
 	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
 }
 
@@ -147,9 +151,9 @@ TEST_CASE("Test Invalid Path", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
-	duckdb_adbc::AdbcDatabase adbc_database;
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+	AdbcDatabase adbc_database;
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
@@ -167,12 +171,12 @@ TEST_CASE("Error Release", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
 
-	duckdb_adbc::AdbcDatabase adbc_database;
-	duckdb_adbc::AdbcConnection adbc_connection;
-	duckdb_adbc::AdbcStatement adbc_statement;
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+	AdbcStatement adbc_statement;
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;
 
@@ -270,11 +274,11 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	duckdb_adbc::AdbcDatabase adbc_database;
-	duckdb_adbc::AdbcConnection adbc_connection;
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
 
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
 
 	// Create connection - database and whatnot
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -292,12 +296,221 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	REQUIRE(std::strcmp(adbc_error.message, "Read Partitions are not supported in DuckDB") == 0);
 	adbc_error.release(&adbc_error);
 
-	duckdb_adbc::AdbcStatement adbc_statement;
+	AdbcStatement adbc_statement;
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
 	status = AdbcStatementExecutePartitions(&adbc_statement, nullptr, nullptr, nullptr, &adbc_error);
 	REQUIRE(status == ADBC_STATUS_NOT_IMPLEMENTED);
 	REQUIRE(std::strcmp(adbc_error.message, "Execute Partitions are not supported in DuckDB") == 0);
+	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("Test ADBC ConnectionGetInfo", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatusCode status = ADBC_STATUS_OK;
+	ArrowArrayStream out_stream;
+
+	// ==== UNHAPPY PATH ====
+
+	static uint32_t test_info_codes[] = {100, 4, 3};
+	static constexpr size_t TEST_INFO_CODE_LENGTH = sizeof(test_info_codes) / sizeof(uint32_t);
+
+	// No error
+	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, nullptr);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No connection
+	status = AdbcConnectionGetInfo(nullptr, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// Invalid connection
+	AdbcConnection bogus_connection;
+	bogus_connection.private_data = nullptr;
+	bogus_connection.private_driver = nullptr;
+	status = AdbcConnectionGetInfo(&bogus_connection, test_info_codes, TEST_INFO_CODE_LENGTH, &out_stream, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No stream
+	status = AdbcConnectionGetInfo(&adbc_connection, test_info_codes, TEST_INFO_CODE_LENGTH, nullptr, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// ==== HAPPY PATH ====
+
+	// This returns all known info codes
+	status = AdbcConnectionGetInfo(&adbc_connection, nullptr, 42, &out_stream, &adbc_error);
+	REQUIRE(status == ADBC_STATUS_OK);
+	REQUIRE(out_stream.release != nullptr);
+
+	out_stream.release(&out_stream);
+}
+
+TEST_CASE("Test ADBC Statement Bind (unhappy)", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	string query = "select ?, ?, ?";
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	ADBCTestDatabase db;
+	auto &input_data = db.Query("SELECT 42, true, 'this is a string'");
+	ArrowArray prepared_array;
+	ArrowSchema prepared_schema;
+	input_data.get_next(&input_data, &prepared_array);
+	input_data.get_schema(&input_data, &prepared_schema);
+
+	AdbcStatusCode status = ADBC_STATUS_OK;
+	// No error passed in
+	// This is not an error, this only means we can't provide a message
+	status = AdbcStatementBind(&adbc_statement, &prepared_array, &prepared_schema, nullptr);
+	REQUIRE(status == ADBC_STATUS_OK);
+
+	// No statement
+	status = AdbcStatementBind(nullptr, &prepared_array, &prepared_schema, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No valid statement
+	AdbcStatement bogus_statement;
+	bogus_statement.private_data = nullptr;
+	bogus_statement.private_driver = nullptr;
+	status = AdbcStatementBind(&bogus_statement, &prepared_array, &prepared_schema, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No array
+	status = AdbcStatementBind(&adbc_statement, nullptr, &prepared_schema, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No schema
+	status = AdbcStatementBind(&adbc_statement, &prepared_array, nullptr, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// ---- Get Parameter Schema ----
+
+	// No error passed in
+	ArrowSchema result;
+	result.release = nullptr;
+	status = AdbcStatementGetParameterSchema(&adbc_statement, &result, nullptr);
+	REQUIRE(status == ADBC_STATUS_OK);
+
+	// No statement
+	status = AdbcStatementGetParameterSchema(nullptr, &result, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No valid statement
+	status = AdbcStatementGetParameterSchema(&bogus_statement, &result, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	// No result
+	status = AdbcStatementGetParameterSchema(&adbc_statement, nullptr, &adbc_error);
+	REQUIRE(status != ADBC_STATUS_OK);
+
+	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+
+	// Create prepared parameter array
+	auto &input_data = db.Query("SELECT 42, true, 'this is a string'");
+	string query = "select ?, ?, ?";
+
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	ArrowSchema expected_schema;
+	expected_schema.release = nullptr;
+	REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &expected_schema, &adbc_error)));
+	REQUIRE(expected_schema.n_children == 3);
+	for (int64_t i = 0; i < expected_schema.n_children; i++) {
+		auto child = expected_schema.children[i];
+		std::string child_name = child->name;
+		std::string expected_name = StringUtil::Format("%d", i);
+		REQUIRE(child_name == expected_name);
+	}
+	expected_schema.release(&expected_schema);
+
+	ArrowArray prepared_array;
+	ArrowSchema prepared_schema;
+	input_data.get_next(&input_data, &prepared_array);
+	input_data.get_schema(&input_data, &prepared_schema);
+	REQUIRE(SUCCESS(AdbcStatementBind(&adbc_statement, &prepared_array, &prepared_schema, &adbc_error)));
+	REQUIRE(prepared_array.release == nullptr);
+	REQUIRE(prepared_schema.release == nullptr);
+
+	int64_t rows_affected;
+	ArrowArrayStream arrow_stream;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	input_data.release(&input_data);
+
+	ArrowArray result_array;
+	arrow_stream.get_next(&arrow_stream, &result_array);
+	REQUIRE(((int32_t *)result_array.children[0]->buffers[1])[0] == 42);
+
+	result_array.release(&result_array);
+	arrow_stream.release(&arrow_stream);
 	adbc_error.release(&adbc_error);
 }
 
@@ -313,13 +526,13 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	string table_name = "test";
 	string query = "select count(*) from test";
 
-	duckdb_adbc::AdbcDatabase adbc_database;
-	duckdb_adbc::AdbcConnection adbc_connection;
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
 
-	duckdb_adbc::AdbcConnection adbc_connection_2;
+	AdbcConnection adbc_connection_2;
 
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;
 
@@ -338,18 +551,18 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection_2, &adbc_database, &adbc_error)));
 
 	// Let's first insert with Auto-Commit On
-	duckdb_adbc::AdbcStatement adbc_statement;
+	AdbcStatement adbc_statement;
 
-	duckdb_adbc::AdbcStatement adbc_statement_2;
+	AdbcStatement adbc_statement_2;
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
-	                                                table_name.c_str(), &adbc_error)));
+	REQUIRE(
+	    SUCCESS(StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
@@ -369,15 +582,15 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
-	                                                table_name.c_str(), &adbc_error)));
+	REQUIRE(
+	    SUCCESS(StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
 	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
@@ -416,15 +629,15 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
-	                                                table_name.c_str(), &adbc_error)));
+	REQUIRE(
+	    SUCCESS(StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
 	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
 	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	// If we check from con1, we should have 3
 	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
@@ -471,9 +684,9 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
 	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
@@ -507,9 +720,9 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_MODE,
 	                                                ADBC_INGEST_OPTION_MODE_APPEND, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+	REQUIRE(SUCCESS(StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
 
-	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+	REQUIRE(SUCCESS(StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
 
 	// Auto-Commit is on, so this should just be commited
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
@@ -536,11 +749,11 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
 	}
-	duckdb_adbc::AdbcDatabase adbc_database;
-	duckdb_adbc::AdbcConnection adbc_connection;
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
 
-	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
 
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
@@ -586,7 +799,7 @@ TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
 	duckdb_adbc::AdbcConnection adbc_connection;
 
 	duckdb_adbc::AdbcError adbc_error;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::InitializeADBCError(&adbc_error);
 
 	ArrowSchema arrow_schema;
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -657,7 +870,7 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::AdbcStatement adbc_statement;
-	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::InitializeADBCError(&adbc_error);
 
 	ArrowArrayStream arrow_stream;
 	ArrowArray arrow_array;
@@ -729,4 +942,248 @@ TEST_CASE("Test ADBC Substrait", "[adbc]") {
 	REQUIRE(std::strcmp(adbc_error.message, "Conversion Error: Invalid hex escape code encountered in string -> blob "
 	                                        "conversion: unterminated escape code at end of blob") == 0);
 	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("Test ADBC Prepared Statement - Prepare nop", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitializeADBCError(&adbc_error);
+
+	duckdb_adbc::AdbcStatement adbc_statement;
+
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	// Statement Prepare is a nop for us, so it should just work, although it just does some error checking.
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	REQUIRE(!SUCCESS(AdbcStatementPrepare(nullptr, &adbc_error)));
+
+	REQUIRE(std::strcmp(adbc_error.message, "Missing statement object") == 0);
+	adbc_error.release(&adbc_error);
+
+	AdbcStatementRelease(&adbc_statement, &adbc_error);
+	REQUIRE(!SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	REQUIRE(std::strcmp(adbc_error.message, "Invalid statement object") == 0);
+	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db("AdbcConnectionGetTableTypes.db");
+
+	// Create Arrow Result
+	auto input_data = db.Query("SELECT 42");
+	// Create Table 'my_table' from the Arrow Result
+	db.CreateTable("my_table", input_data);
+
+	ArrowArrayStream arrow_stream;
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitializeADBCError(&adbc_error);
+	AdbcConnectionGetTableTypes(&db.adbc_connection, &arrow_stream, &adbc_error);
+
+	db.CreateTable("result", arrow_stream);
+
+	DuckDB db_check(db.path);
+	Connection con(db_check);
+	auto res = con.Query("Select * from result");
+	REQUIRE(res->ColumnCount() == 1);
+	REQUIRE(res->GetValue(0, 0).ToString() == "BASE TABLE");
+	db.arrow_stream.release = nullptr;
+}
+
+void TestFilters(ADBCTestDatabase &db, duckdb_adbc::AdbcError &adbc_error, idx_t depth) {
+	{
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, "bla", nullptr, nullptr, nullptr, &arrow_stream,
+		                         &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->RowCount() == 0);
+		db.Query("Drop table result;");
+	}
+	{
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, "bla", nullptr, nullptr, &arrow_stream,
+		                         &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->RowCount() == 0);
+		db.Query("Drop table result;");
+	}
+	{
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, depth, nullptr, nullptr, nullptr, nullptr, "bla", &arrow_stream,
+		                         &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->RowCount() == 0);
+		db.Query("Drop table result;");
+	}
+}
+
+TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	// Lets first try what works
+	// 1. Test ADBC_OBJECT_DEPTH_DB_SCHEMAS
+
+	{
+		ADBCTestDatabase db("ADBC_OBJECT_DEPTH_DB_SCHEMAS.db");
+		// Create Arrow Result
+		auto input_data = db.Query("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
+
+		duckdb_adbc::AdbcError adbc_error;
+		duckdb_adbc::InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->ColumnCount() == 1);
+		REQUIRE(res->GetValue(0, 0).ToString() == "main");
+		db.Query("Drop table result;");
+		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_DB_SCHEMAS);
+	}
+
+	// 2. Test ADBC_OBJECT_DEPTH_TABLES
+	{
+		ADBCTestDatabase db("test_table_depth");
+		// Create Arrow Result
+		auto input_data = db.Query("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
+
+		duckdb_adbc::AdbcError adbc_error;
+		duckdb_adbc::InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_TABLES, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->ColumnCount() == 2);
+		REQUIRE(res->GetValue(0, 0).ToString() == "main");
+		REQUIRE(res->GetValue(1, 0).ToString() == "[{'table_name': my_table}]");
+		db.Query("Drop table result;");
+		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_TABLES);
+	}
+
+	// 3.Test  ADBC_OBJECT_DEPTH_COLUMNS
+	{
+		ADBCTestDatabase db("test_column_depth");
+		// Create Arrow Result
+		auto input_data = db.Query("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
+
+		duckdb_adbc::AdbcError adbc_error;
+		duckdb_adbc::InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->ColumnCount() == 2);
+		REQUIRE(res->GetValue(0, 0).ToString() == "main");
+		REQUIRE(
+		    res->GetValue(1, 0).ToString() ==
+		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
+		db.Query("Drop table result;");
+		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_COLUMNS);
+	}
+	// 4.Test ADBC_OBJECT_DEPTH_ALL
+	{
+		ADBCTestDatabase db("test_all_depth");
+		// Create Arrow Result
+		auto input_data = db.Query("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
+
+		duckdb_adbc::AdbcError adbc_error;
+		duckdb_adbc::InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		db.CreateTable("result", arrow_stream);
+		DuckDB db_check(db.path);
+		Connection con(db_check);
+		auto res = con.Query("Select * from result");
+		REQUIRE(res->ColumnCount() == 2);
+		REQUIRE(res->GetValue(0, 0).ToString() == "main");
+		REQUIRE(
+		    res->GetValue(1, 0).ToString() ==
+		    "[{'table_name': my_table, 'table_columns': [{'column_name': 42, 'ordinal_position': 2, 'remarks': }]}]");
+		db.Query("Drop table result;");
+		TestFilters(db, adbc_error, ADBC_OBJECT_DEPTH_ALL);
+	}
+	// Now lets test some errors
+	{
+		ADBCTestDatabase db("test_errors");
+		// Create Arrow Result
+		auto input_data = db.Query("SELECT 42");
+		// Create Table 'my_table' from the Arrow Result
+		db.CreateTable("my_table", input_data);
+
+		duckdb_adbc::AdbcError adbc_error;
+		duckdb_adbc::InitializeADBCError(&adbc_error);
+		ArrowArrayStream arrow_stream;
+
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_CATALOGS, nullptr, nullptr, nullptr, nullptr,
+		                         nullptr, &arrow_stream, &adbc_error);
+		REQUIRE(std::strcmp(adbc_error.message, "ADBC_OBJECT_DEPTH_CATALOGS not yet supported") == 0);
+		adbc_error.release(&adbc_error);
+
+		AdbcConnectionGetObjects(&db.adbc_connection, 42, nullptr, nullptr, nullptr, nullptr, nullptr, &arrow_stream,
+		                         &adbc_error);
+		REQUIRE(std::strcmp(adbc_error.message, "Invalid value of Depth") == 0);
+		adbc_error.release(&adbc_error);
+
+		const char table_types = '\0';
+		auto table_type_ptr = &table_types;
+		auto table_type_ptr_ptr = &table_type_ptr;
+		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr,
+		                         reinterpret_cast<const char **>(table_type_ptr_ptr), nullptr, &arrow_stream,
+		                         &adbc_error);
+		REQUIRE(std::strcmp(adbc_error.message, "Table types parameter not yet supported") == 0);
+		adbc_error.release(&adbc_error);
+
+		AdbcConnectionGetObjects(nullptr, ADBC_OBJECT_DEPTH_ALL, nullptr, nullptr, nullptr, nullptr, nullptr,
+		                         &arrow_stream, &adbc_error);
+		REQUIRE(std::strcmp(adbc_error.message, "connection can't be null") == 0);
+		adbc_error.release(&adbc_error);
+	}
 }

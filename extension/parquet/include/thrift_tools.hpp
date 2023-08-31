@@ -213,7 +213,7 @@ public:
 	}
 
 	void InitializeDecryption(const string &key) {
-		aes = make_uniq<duckdb_mbedtls::MbedTlsGcmContext>(key);
+		aes = make_uniq<duckdb_mbedtls::MbedTlsWrapper::MbedTlsGcmContext>(key);
 		aes_iv_buffer = allocator.Allocate(16);
 		read(aes_iv_buffer.get(), 16);
 //		auto cipher_len = Load<uint32_t>(aes_iv_buffer.get());
@@ -237,7 +237,7 @@ private:
 	// Whether we are currently decrypting
 	bool is_decrypting;
 	// AES decryption context
-	unique_ptr<duckdb_mbedtls::MbedTlsGcmContext> aes;
+	unique_ptr<duckdb_mbedtls::MbedTlsWrapper::MbedTlsGcmContext> aes;
 	// AES buffer that stores the IV
 	AllocatedData aes_iv_buffer;
 };
