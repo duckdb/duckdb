@@ -36,12 +36,12 @@ class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
 struct TransactionData;
-struct VersionNode;
 class CollectionScanState;
 class TableFilterSet;
 struct ColumnFetchState;
 struct RowGroupAppendState;
 class MetadataManager;
+class RowVersionManager;
 
 struct RowGroupWriteData {
 	vector<unique_ptr<ColumnCheckpointState>> states;
@@ -54,10 +54,6 @@ public:
 	friend class VersionDeleteState;
 
 public:
-	static constexpr const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
-	static constexpr const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
-
-public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
 	~RowGroup();
@@ -66,7 +62,7 @@ private:
 	//! The RowGroupCollection this row-group is a part of
 	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<VersionNode> version_info;
+	shared_ptr<RowVersionManager> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 
@@ -150,7 +146,7 @@ public:
 	void NextVector(CollectionScanState &state);
 
 private:
-	shared_ptr<VersionNode> &GetVersionInfo();
+	shared_ptr<RowVersionManager> &GetVersionInfo();
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
@@ -159,8 +155,8 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
-	static MetaBlockPointer CheckpointDeletes(optional_ptr<VersionNode> versions, MetadataManager &manager);
-	static shared_ptr<VersionNode> DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager);
+	static MetaBlockPointer CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager);
+	static shared_ptr<RowVersionManager> DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager);
 
 private:
 	mutex row_group_lock;
@@ -170,13 +166,6 @@ private:
 	MetaBlockPointer deletes_pointer;
 	atomic<bool> deletes_is_loaded;
 
-};
-
-struct VersionNode {
-	unique_ptr<ChunkInfo> info[RowGroup::ROW_GROUP_VECTOR_COUNT];
-
-	void SetStart(idx_t start);
-	idx_t GetCommittedDeletedCount(idx_t count);
 };
 
 } // namespace duckdb

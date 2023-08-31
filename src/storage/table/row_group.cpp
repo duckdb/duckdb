@@ -18,11 +18,9 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
-
-constexpr const idx_t RowGroup::ROW_GROUP_VECTOR_COUNT;
-constexpr const idx_t RowGroup::ROW_GROUP_SIZE;
 
 RowGroup::RowGroup(RowGroupCollection &collection, idx_t start, idx_t count)
     : SegmentBase<RowGroup>(start, count), collection(collection) {
@@ -57,31 +55,6 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start)
 	if (vinfo) {
 		vinfo->SetStart(new_start);
 	}
-}
-
-void VersionNode::SetStart(idx_t start) {
-	idx_t current_start = start;
-	for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
-		if (info[i]) {
-			info[i]->start = current_start;
-		}
-		current_start += STANDARD_VECTOR_SIZE;
-	}
-}
-
-idx_t VersionNode::GetCommittedDeletedCount(idx_t count) {
-	idx_t deleted_count = 0;
-	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
-		if (!info[i]) {
-			continue;
-		}
-		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
-		if (max_count == 0) {
-			break;
-		}
-		deleted_count += info[i]->GetCommittedDeletedCount(max_count);
-	}
-	return deleted_count;
 }
 
 RowGroup::~RowGroup() {
@@ -567,7 +540,7 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-shared_ptr<VersionNode> &RowGroup::GetVersionInfo() {
+shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
 	if (deletes_pointer.IsValid() && !deletes_is_loaded) {
 		version_info = DeserializeDeletes(deletes_pointer, GetBlockManager().GetMetadataManager());
 		deletes_is_loaded = true;
@@ -638,15 +611,15 @@ void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, co
 void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 	idx_t row_group_start = this->count.load();
 	idx_t row_group_end = row_group_start + count;
-	if (row_group_end > RowGroup::ROW_GROUP_SIZE) {
-		row_group_end = RowGroup::ROW_GROUP_SIZE;
+	if (row_group_end > Storage::ROW_GROUP_SIZE) {
+		row_group_end = Storage::ROW_GROUP_SIZE;
 	}
 	lock_guard<mutex> lock(row_group_lock);
 
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
-		vinfo = make_shared<VersionNode>();
+		vinfo = make_shared<RowVersionManager>();
 	}
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
@@ -704,7 +677,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	}
 	idx_t start_row = row_group_start - this->start;
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
-	for (idx_t vector_idx = start_vector_idx; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = start_vector_idx; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		vinfo->info[vector_idx].reset();
 	}
 	for (auto &column : columns) {
@@ -862,14 +835,14 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<VersionNode> versions, MetadataManager &manager) {
+MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager) {
 	if (!versions) {
 		// no version information: write nothing
 		return MetaBlockPointer();
 	}
 	// first count how many ChunkInfo's we need to deserialize
 	idx_t chunk_info_count = 0;
-	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		auto chunk_info = versions->info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
@@ -884,7 +857,7 @@ MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<VersionNode> versions,
 	auto delete_location = writer.GetMetaBlockPointer();
 	// now serialize the actual version information
 	writer.Write<idx_t>(chunk_info_count);
-	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		auto chunk_info = versions->info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
@@ -896,17 +869,17 @@ MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<VersionNode> versions,
 	return delete_location;
 }
 
-shared_ptr<VersionNode> RowGroup::DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager) {
+shared_ptr<RowVersionManager> RowGroup::DeserializeDeletes(MetaBlockPointer delete_pointer, MetadataManager &manager) {
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
 	MetadataReader source(manager, delete_pointer);
-	auto version_info = make_shared<VersionNode>();
+	auto version_info = make_shared<RowVersionManager>();
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		idx_t vector_index = source.Read<idx_t>();
-		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
+		if (vector_index >= Storage::ROW_GROUP_VECTOR_COUNT) {
 			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
 		}
 		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
@@ -1018,7 +991,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 		Flush();
 
 		if (!info.version_info) {
-			info.version_info = make_shared<VersionNode>();
+			info.version_info = make_shared<RowVersionManager>();
 		}
 
 		if (!info.version_info->info[vector_idx]) {

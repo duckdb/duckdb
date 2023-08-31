@@ -208,7 +208,7 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t parallel_scan_vector_count = RowGroup::ROW_GROUP_VECTOR_COUNT;
+	idx_t parallel_scan_vector_count = Storage::ROW_GROUP_VECTOR_COUNT;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
