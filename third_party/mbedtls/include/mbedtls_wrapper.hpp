@@ -20,7 +20,7 @@ public:
 	static void ToBase16(char *in, char *out, size_t len);
 
 	static constexpr size_t SHA256_HASH_LENGTH_BYTES = 32;
-  static constexpr size_t SHA256_HASH_LENGTH_TEXT = 64;
+	static constexpr size_t SHA256_HASH_LENGTH_TEXT = 64;
 
 	class SHA256State {
 	public:
@@ -28,7 +28,7 @@ public:
 		~SHA256State();
 		void AddString(const std::string & str);
 		std::string Finalize();
-    void Finish(char *out);
+		void Finish(char *out);
 	private:
 		void *sha_context;
 	};
