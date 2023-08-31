@@ -10,13 +10,13 @@ import org.duckdb.DuckDBStruct;
 import org.duckdb.DuckDBTimestamp;
 import org.duckdb.JsonNode;
 import org.duckdb.TestExtensionTypes;
+import org.duckdb.Util;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -4225,15 +4225,15 @@ public class TestDuckDBJDBC {
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
              PreparedStatement s = connection.prepareStatement("select ?")) {
             s.setObject(1, "YWJj".getBytes());
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            byte[] out = null;
 
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
-                    rs.getBlob(1).getBinaryStream().transferTo(out);
+                    out = Util.readAllBytes(rs.getBlob(1).getBinaryStream());
                 }
             }
 
-            assertEquals(out.toString(), "YWJj");
+            assertEquals(new String(out), "YWJj");
         }
     }
 

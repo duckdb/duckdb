@@ -893,13 +893,13 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         throw new SQLFeatureNotSupportedException("setAsciiStream");
     }
 
-    private static byte[] readAllBytes(InputStream x) throws IOException {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] thing = new byte[256];
-            while (x.read(thing) != 0) {
-                out.write(thing);
-            }
-            return out.toByteArray();
+    static byte[] readAllBytes(InputStream x) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] thing = new byte[256];
+        while (x.read(thing) != 0) {
+            out.write(thing);
+        }
+        return out.toByteArray();
     }
 
     @Override
