@@ -141,8 +141,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 }
 
 void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machine, idx_t &rows_read,
-                                         idx_t &best_consistent_rows, idx_t &prev_padding_count,
-                                         idx_t prev_column_count) {
+                                         idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
 
@@ -170,11 +169,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
 		}
-	}
-
-	if (num_cols < prev_column_count) {
-		// Early return if we have less columns than the previous chunk run
-		return;
 	}
 
 	// Calculate the total number of consistent rows after adding padding.

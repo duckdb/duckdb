@@ -66,7 +66,7 @@ private:
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
 	void AnalyzeDialectCandidate(unique_ptr<CSVStateMachine>, idx_t &rows_read, idx_t &best_consistent_rows,
-	                             idx_t &prev_padding_count, idx_t prev_column_count = 0);
+	                             idx_t &prev_padding_count);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 	//! Checks if candidate still produces good values for the next chunk
