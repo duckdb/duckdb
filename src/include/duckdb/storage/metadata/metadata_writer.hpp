@@ -24,6 +24,9 @@ public:
 
 	BlockPointer GetBlockPointer();
 	MetaBlockPointer GetMetaBlockPointer();
+	MetadataManager &GetManager () {
+		return manager;
+	}
 
 protected:
 	virtual MetadataHandle NextHandle();

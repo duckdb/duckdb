@@ -150,7 +150,8 @@ public:
 	void NextVector(CollectionScanState &state);
 
 private:
-	ChunkInfo *GetChunkInfo(idx_t vector_idx);
+	shared_ptr<VersionNode> &GetVersionInfo();
+	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
@@ -166,6 +167,9 @@ private:
 	mutex stats_lock;
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
+	MetaBlockPointer deletes_pointer;
+	atomic<bool> deletes_is_loaded;
+
 };
 
 struct VersionNode {

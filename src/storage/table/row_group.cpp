@@ -41,7 +41,8 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 	for (idx_t c = 0; c < columns.size(); c++) {
 		this->is_loaded[c] = false;
 	}
-	this->version_info = std::move(pointer.versions);
+	this->deletes_pointer = pointer.deletes_pointer;
+	this->deletes_is_loaded = false;
 
 	Verify();
 }
@@ -52,8 +53,9 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start)
 	for (auto &column : GetColumns()) {
 		column->SetStart(new_start);
 	}
-	if (version_info) {
-		version_info->SetStart(new_start);
+	auto &vinfo = GetVersionInfo();
+	if (vinfo) {
+		vinfo->SetStart(new_start);
 	}
 }
 
@@ -264,7 +266,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = version_info;
+	row_group->version_info = GetVersionInfo();
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
 		if (i == changed_idx) {
@@ -303,7 +305,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = version_info;
+	row_group->version_info = GetVersionInfo();
 	row_group->columns = GetColumns();
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
@@ -318,7 +320,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	D_ASSERT(removed_column < columns.size());
 
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = version_info;
+	row_group->version_info = GetVersionInfo();
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -565,11 +567,20 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 	}
 }
 
-ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
-	if (!version_info) {
+shared_ptr<VersionNode> &RowGroup::GetVersionInfo() {
+	if (deletes_pointer.IsValid() && !deletes_is_loaded) {
+		version_info = DeserializeDeletes(deletes_pointer, GetBlockManager().GetMetadataManager());
+		deletes_is_loaded = true;
+	}
+	return version_info;
+}
+
+optional_ptr<ChunkInfo> RowGroup::GetChunkInfo(idx_t vector_idx) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return nullptr;
 	}
-	return version_info->info[vector_idx].get();
+	return vinfo->info[vector_idx].get();
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
@@ -633,8 +644,9 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 	lock_guard<mutex> lock(row_group_lock);
 
 	// create the version_info if it doesn't exist yet
-	if (!version_info) {
-		version_info = make_shared<VersionNode>();
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
+		vinfo = make_shared<VersionNode>();
 	}
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
@@ -647,19 +659,19 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			auto constant_info = make_uniq<ChunkConstantInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 			constant_info->insert_id = transaction.transaction_id;
 			constant_info->delete_id = NOT_DELETED_ID;
-			version_info->info[vector_idx] = std::move(constant_info);
+			vinfo->info[vector_idx] = std::move(constant_info);
 		} else {
 			// part of a vector is encapsulated: append to that part
 			ChunkVectorInfo *info;
-			if (!version_info->info[vector_idx]) {
+			if (!vinfo->info[vector_idx]) {
 				// first time appending to this vector: create new info
 				auto insert_info = make_uniq<ChunkVectorInfo>(this->start + vector_idx * STANDARD_VECTOR_SIZE);
 				info = insert_info.get();
-				version_info->info[vector_idx] = std::move(insert_info);
+				vinfo->info[vector_idx] = std::move(insert_info);
 			} else {
-				D_ASSERT(version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+				D_ASSERT(vinfo->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
-				info = &version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
+				info = &vinfo->info[vector_idx]->Cast<ChunkVectorInfo>();
 			}
 			info->Append(start, end, transaction.transaction_id);
 		}
@@ -669,6 +681,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 
 void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count) {
 	D_ASSERT(version_info.get());
+	auto &vinfo = GetVersionInfo();
 	idx_t row_group_end = row_group_start + count;
 	lock_guard<mutex> lock(row_group_lock);
 
@@ -679,19 +692,20 @@ void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_
 		idx_t end =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 
-		auto info = version_info->info[vector_idx].get();
+		auto info = vinfo->info[vector_idx].get();
 		info->CommitAppend(commit_id, start, end);
 	}
 }
 
 void RowGroup::RevertAppend(idx_t row_group_start) {
-	if (!version_info) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return;
 	}
 	idx_t start_row = row_group_start - this->start;
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		version_info->info[vector_idx].reset();
+		vinfo->info[vector_idx].reset();
 	}
 	for (auto &column : columns) {
 		column->RevertAppend(row_group_start);
@@ -805,10 +819,11 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 }
 
 bool RowGroup::AllDeleted() {
-	if (!version_info) {
+	auto &vinfo = GetVersionInfo();
+	if (!vinfo) {
 		return false;
 	}
-	return version_info->GetCommittedDeletedCount(count) == count;
+	return vinfo->GetCommittedDeletedCount(count) == count;
 }
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
@@ -842,7 +857,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		// can cascade recursively into more pointer writes.
 		state->WriteDataPointers(writer);
 	}
-	row_group_pointer.versions = version_info;
+	row_group_pointer.deletes_pointer = CheckpointDeletes(version_info.get(), writer.GetPayloadWriter().GetManager());
 	Verify();
 	return row_group_pointer;
 }
@@ -908,8 +923,7 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, 
 		serializer.Write<idx_t>(data_pointer.block_pointer);
 		serializer.Write<uint32_t>(data_pointer.offset);
 	}
-	auto delete_pointer = CheckpointDeletes(pointer.versions.get(), manager);
-	serializer.Write<idx_t>(delete_pointer.block_pointer);
+	serializer.Write<idx_t>(pointer.deletes_pointer.block_pointer);
 	writer.Finalize();
 }
 
@@ -931,10 +945,8 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager
 		pointer.offset = source.Read<uint32_t>();
 		result.data_pointers.push_back(pointer);
 	}
-	MetaBlockPointer delete_pointer;
-	delete_pointer.block_pointer = source.Read<idx_t>();
-	delete_pointer.offset = 0;
-	result.versions = DeserializeDeletes(delete_pointer, manager);
+	result.deletes_pointer.block_pointer = source.Read<idx_t>();
+	result.deletes_pointer.offset = 0;
 
 	reader.Finalize();
 	return result;
