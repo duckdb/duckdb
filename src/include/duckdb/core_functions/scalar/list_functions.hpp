@@ -219,4 +219,13 @@ struct ListRangeFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListCosineSimilarityFun {
+	static constexpr const char *Name = "list_cosine_similarity";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the cosine similarity between two lists.";
+	static constexpr const char *Example = "list_cosine_similarity([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

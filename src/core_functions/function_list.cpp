@@ -197,6 +197,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListAggrFun),
 	DUCKDB_SCALAR_FUNCTION(ListAggregateFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListApplyFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ListCosineSimilarityFun),
 	DUCKDB_SCALAR_FUNCTION(ListDistinctFun),
 	DUCKDB_SCALAR_FUNCTION(ListFilterFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ListPackFun),
