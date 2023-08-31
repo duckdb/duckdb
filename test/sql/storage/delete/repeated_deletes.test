@@ -1,0 +1,99 @@
+# name: test/sql/storage/delete/repeated_deletes_mix.test
+# description: Test deletes with storage
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/test_repeated_deletes.db
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(0, 999);
+
+statement ok
+DELETE FROM test WHERE i%2=0;
+
+query I
+SELECT COUNT(*) FROM test;
+----
+500
+
+restart
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(1000, 1099);
+
+statement ok
+DELETE FROM test WHERE i%3=0;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+400
+
+statement ok
+INSERT INTO test SELECT * FROM generate_series(1000, 1999);
+
+query I
+SELECT COUNT(*) FROM test;
+----
+1400
+
+statement ok
+DELETE FROM test WHERE i%7=0;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+1200
+
+statement ok
+DELETE FROM test WHERE i%3=0;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+915
+
+statement ok
+INSERT INTO test SELECT 1 FROM generate_series(0, 4000);
+
+statement ok
+INSERT INTO test SELECT 2 FROM generate_series(0, 4000);
+
+statement ok
+DELETE FROM test WHERE i=1;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+4915
+
+statement ok
+DELETE FROM test WHERE i=2;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+914
+
+statement ok
+DELETE FROM test;
+
+restart
+
+query I
+SELECT COUNT(*) FROM test;
+----
+0
