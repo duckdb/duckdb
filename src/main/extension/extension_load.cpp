@@ -58,7 +58,7 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 #endif
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                     ExtensionInitResult &result, string &error) {
+                                     ExtensionInitResult &result, string &error, const ClientConfig *client_config) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -216,17 +216,18 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+                                                 const ClientConfig *client_config) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, fs, extension, result, error)) {
+	if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
 		ExtensionHelper::InstallExtension(config, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, fs, extension, result, error)) {
+		if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
 			throw IOException(error);
 		}
 	}
@@ -254,14 +255,15 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                            const ClientConfig *client_config) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension, client_config);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -279,7 +281,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension,
+	                      &ClientConfig::GetConfig(context));
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
