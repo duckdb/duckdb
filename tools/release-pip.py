@@ -11,7 +11,7 @@ if os.getenv('TWINE_USERNAME') is None or os.getenv('TWINE_PASSWORD') is None:
 release_name = sys.argv[1]
 release_rev = None
 
-request = urllib.request.Request("https://api.github.com/repos/cwida/duckdb/git/refs/tags/")
+request = urllib.request.Request("https://api.github.com/repos/duckdb/duckdb/git/refs/tags/")
 with urllib.request.urlopen(request, context=ssl._create_unverified_context()) as url:
     data = json.loads(url.read().decode())
 

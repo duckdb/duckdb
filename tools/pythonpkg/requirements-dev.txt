@@ -10,3 +10,4 @@ psutil>=5.9.0
 fsspec
 polars
 tensorflow
+adbc_driver_manager==0.6.0

@@ -574,11 +574,17 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::DECIMAL:
 		return "float64";
 	case LogicalTypeId::TIMESTAMP:
+		return "datetime64[us]";
 	case LogicalTypeId::TIMESTAMP_TZ:
+		return "datetime64[us]";
 	case LogicalTypeId::TIMESTAMP_NS:
+		return "datetime64[ns]";
 	case LogicalTypeId::TIMESTAMP_MS:
+		return "datetime64[ms]";
 	case LogicalTypeId::TIMESTAMP_SEC:
+		return "datetime64[s]";
 	case LogicalTypeId::DATE:
+		// FIXME: should this not be 'date64[ns]' ?
 		return "datetime64[ns]";
 	case LogicalTypeId::INTERVAL:
 		return "timedelta64[ns]";
@@ -705,17 +711,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
-		    current_offset, dataptr, maskptr, idata, count);
-		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
-		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertSec>(
-		    current_offset, dataptr, maskptr, idata, count);
-		break;
 	case LogicalTypeId::TIMESTAMP_MS:
-		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertMilli>(
-		    current_offset, dataptr, maskptr, idata, count);
-		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvertNano>(
 		    current_offset, dataptr, maskptr, idata, count);

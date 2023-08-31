@@ -98,15 +98,13 @@ select DATESUB('century', '1904-02-29 13:00:00-08'::TIMESTAMPTZ, '2004-02-28 12:
 ----
 0
 
-# 6 day difference between the proleptic Gregorian calendar (used to parse the strings)
-# and the Julian calendar (used by ICU) at the millenium
 query I
-select DATESUB('millennium', '1004-03-06 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 11:00:00-08'::TIMESTAMPTZ);
+select DATESUB('millennium', '1004-02-29 11:00:00-08'::TIMESTAMPTZ, '2004-02-29 11:00:00-08'::TIMESTAMPTZ);
 ----
 0
 
 # Sub-month
-foreach datepart day doy dow isodow
+foreach datepart day doy dow isodow julian
 
 query I
 select DATESUB('${datepart}', '2004-01-31 12:00:00-08'::TIMESTAMPTZ, '2004-02-29 13:00:00-08'::TIMESTAMPTZ);
@@ -214,7 +212,7 @@ select DATESUB('microsecond', '2004-01-31 12:00:00.000050-08'::TIMESTAMPTZ, '200
 #
 # Infinities
 #
-foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour
+foreach specifier year isoyear month day decade century millennium quarter week microseconds milliseconds second minute hour julian
 
 foreach lspecial infinity -infinity 2004-01-31T12:00:00.000050-08
 

@@ -1154,6 +1154,8 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::JULIAN_DAY:
+		return "JULIAN_DAY";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1229,6 +1231,9 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
+	}
+	if (StringUtil::Equals(value, "JULIAN_DAY")) {
+		return DatePartSpecifier::JULIAN_DAY;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -2340,6 +2345,8 @@ const char* EnumUtil::ToChars<IndexType>(IndexType value) {
 		return "INVALID";
 	case IndexType::ART:
 		return "ART";
+	case IndexType::EXTENSION:
+		return "EXTENSION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2352,6 +2359,9 @@ IndexType EnumUtil::FromString<IndexType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ART")) {
 		return IndexType::ART;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return IndexType::EXTENSION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

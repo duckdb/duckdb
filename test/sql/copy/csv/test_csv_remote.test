@@ -15,9 +15,9 @@ SELECT * FROM read_csv_auto('test/sql/copy/csv/data/lineitem1k.tbl.gz');
 ----
 
 query ITTTIITITTIIII nosort webpagecsv
-SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/master/test/sql/copy/csv/data/real/web_page.csv');
+SELECT * FROM read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/test/sql/copy/csv/data/real/web_page.csv');
 ----
 
 query IIIIIIIIIIIIIII nosort lineitemcsv
-select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/master/test/sql/copy/csv/data/lineitem1k.tbl.gz');
+select * from read_csv_auto('https://raw.githubusercontent.com/duckdb/duckdb/main/test/sql/copy/csv/data/lineitem1k.tbl.gz');
 ----

@@ -490,6 +490,12 @@ int32_t Date::ExtractDayOfTheYear(date_t date) {
 	return date.days - Date::CUMULATIVE_YEAR_DAYS[year_offset] + 1;
 }
 
+int64_t Date::ExtractJulianDay(date_t date) {
+	// Julian Day 0 is (-4713, 11, 24) in the proleptic Gregorian calendar.
+	static const auto JULIAN_EPOCH = -2440588;
+	return date.days - JULIAN_EPOCH;
+}
+
 int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	// date of 0 is 1970-01-01, which was a Thursday (4)
 	// -7 = 4
