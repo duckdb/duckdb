@@ -27,7 +27,7 @@ common/crypto/md5.cpp	2
 common/enum_util.cpp	3526
 common/enums/expression_type.cpp	185
 common/enums/join_type.cpp	3
-common/exception.cpp	97
+common/exception.cpp	106
 common/exception_format_value.cpp	9
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
@@ -668,7 +668,7 @@ planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
 planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
-planner/binder/tableref/bind_basetableref.cpp	14
+planner/binder/tableref/bind_basetableref.cpp	15
 planner/binder/tableref/bind_joinref.cpp	3
 planner/binder/tableref/bind_pivot.cpp	6
 planner/binder/tableref/bind_table_function.cpp	18
@@ -724,7 +724,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	24
+planner/operator/logical_extension_operator.cpp	25
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
