@@ -3,20 +3,23 @@
 
 namespace duckdb {
 
-void JsonDeserializer::OnPropertyBegin(const field_id_t field_id, const char *tag) {
-	throw NotImplementedException("JsonDeserializer::OnPropertyBegin");
+void JsonDeserializer::OnPropertyBegin(const field_id_t, const char *tag) {
+	current_tag = tag;
 }
 
 void JsonDeserializer::OnPropertyEnd() {
-	throw NotImplementedException("JsonDeserializer::OnPropertyEnd");
 }
 
-bool JsonDeserializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) {
-	throw NotImplementedException("JsonDeserializer::OnOptionalPropertyBegin");
+bool JsonDeserializer::OnOptionalPropertyBegin(const field_id_t, const char *tag) {
+	auto parent = Current();
+	auto present = yyjson_obj_get(parent.val, tag) != nullptr;
+	if (present) {
+		current_tag = tag;
+	}
+	return present;
 }
 
-void JsonDeserializer::OnOptionalPropertyEnd(bool present) {
-	throw NotImplementedException("JsonDeserializer::OnOptionalPropertyEnd");
+void JsonDeserializer::OnOptionalPropertyEnd(bool) {
 }
 
 // If inside an object, return the value associated by the current tag (property name)

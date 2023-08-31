@@ -19,20 +19,18 @@ void JsonSerializer::PushValue(yyjson_mut_val *val) {
 	}
 }
 
-void JsonSerializer::OnPropertyBegin(const field_id_t field_id, const char *tag) {
-	throw NotImplementedException("JsonSerializer::OnPropertyBegin");
+void JsonSerializer::OnPropertyBegin(const field_id_t, const char *tag) {
+	current_tag = yyjson_mut_strcpy(doc, tag);
 }
 
 void JsonSerializer::OnPropertyEnd() {
-	throw NotImplementedException("JsonSerializer::OnPropertyEnd");
 }
 
-void JsonSerializer::OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) {
-	throw NotImplementedException("JsonSerializer::OnOptionalPropertyBegin");
+void JsonSerializer::OnOptionalPropertyBegin(const field_id_t, const char *tag, bool) {
+	current_tag = yyjson_mut_strcpy(doc, tag);
 }
 
-void JsonSerializer::OnOptionalPropertyEnd(bool present) {
-	throw NotImplementedException("JsonSerializer::OnOptionalPropertyEnd");
+void JsonSerializer::OnOptionalPropertyEnd(bool) {
 }
 
 //-------------------------------------------------------------------------
