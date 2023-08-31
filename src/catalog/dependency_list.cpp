@@ -92,7 +92,7 @@ LogicalDependency LogicalDependency::FormatDeserialize(FormatDeserializer &deser
 	return dependency;
 }
 
-void LogicalDependencyList::AddDependency(LogicalDependency entry) {
+void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
 	set.insert(entry);
 }
 
