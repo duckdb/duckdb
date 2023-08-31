@@ -3327,7 +3327,7 @@ public class TestDuckDBJDBC {
             try (ResultSet rs = stmt.executeQuery(
                      "SELECT {\"hello\": 'foo', \"world\": 'bar'}::test_type, '\\xAA'::byte_test_type")) {
                 rs.next();
-                assertEquals(rs.getObject(1), "{world=bar, hello=foo}");
+                assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
                 assertEquals(rs.getObject(2), "\\xAA");
             }
         }
