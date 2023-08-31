@@ -6,6 +6,7 @@ from conftest import pandas_supports_arrow_backend
 
 pd = pytest.importorskip("pandas", '2.0.0')
 import numpy as np
+from pandas.api.types import is_integer_dtype
 
 
 @pytest.mark.skipif(not pandas_supports_arrow_backend(), reason="pandas does not support the 'pyarrow' backend")
@@ -56,7 +57,7 @@ class TestPandasArrow(object):
         python_df = pd.DataFrame({'a': pd.Series(['test', [5, 4, 3], {'a': 42}])}).convert_dtypes()
 
         df = pd.concat([numpy_df['a'], arrow_df['a'], python_df['a']], axis=1, keys=['numpy', 'arrow', 'python'])
-        assert isinstance(df.dtypes['numpy'], pd.Int64Dtype)
+        assert is_integer_dtype(df.dtypes['numpy'])
         assert isinstance(df.dtypes['arrow'], pd.ArrowDtype)
         assert isinstance(df.dtypes['python'], np.dtype('O').__class__)
 
