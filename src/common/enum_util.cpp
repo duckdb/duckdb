@@ -2364,6 +2364,8 @@ const char* EnumUtil::ToChars<IndexType>(IndexType value) {
 		return "INVALID";
 	case IndexType::ART:
 		return "ART";
+	case IndexType::EXTENSION:
+		return "EXTENSION";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -2376,6 +2378,9 @@ IndexType EnumUtil::FromString<IndexType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "ART")) {
 		return IndexType::ART;
+	}
+	if (StringUtil::Equals(value, "EXTENSION")) {
+		return IndexType::EXTENSION;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

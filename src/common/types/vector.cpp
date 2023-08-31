@@ -477,7 +477,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(reinterpret_cast<dtime_t *>(data)[index]);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(reinterpret_cast<dtime_t *>(data)[index]);
+		return Value::TIMETZ(reinterpret_cast<dtime_tz_t *>(data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(reinterpret_cast<int64_t *>(data)[index]);
 	case LogicalTypeId::UTINYINT:
@@ -1252,6 +1252,11 @@ void Vector::UTFVerify(idx_t count) {
 void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::MAP);
+	auto &child = ListType::GetChildType(vector_p.GetType());
+	D_ASSERT(StructType::GetChildCount(child) == 2);
+	D_ASSERT(StructType::GetChildName(child, 0) == "key");
+	D_ASSERT(StructType::GetChildName(child, 1) == "value");
+
 	auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
 	D_ASSERT(valid_check == MapInvalidReason::VALID);
 #endif // DEBUG
@@ -1376,9 +1381,6 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				}
 			}
 		}
-		if (vector->GetType().id() == LogicalTypeId::MAP) {
-			VerifyMap(*vector, *sel, count);
-		}
 
 		if (vector->GetType().id() == LogicalTypeId::UNION) {
 			VerifyUnion(*vector, *sel, count);
@@ -1425,6 +1427,10 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				}
 			}
 			Vector::Verify(child, child_sel, child_count);
+		}
+
+		if (vector->GetType().id() == LogicalTypeId::MAP) {
+			VerifyMap(*vector, *sel, count);
 		}
 	}
 #endif

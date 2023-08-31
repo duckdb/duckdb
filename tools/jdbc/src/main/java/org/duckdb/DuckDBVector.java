@@ -9,6 +9,7 @@ import java.sql.Blob;
 import java.sql.Date;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Struct;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -20,6 +21,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Calendar;
 import java.util.UUID;
 
@@ -50,11 +53,11 @@ class DuckDBVector {
         this.nullmask = nullmask;
     }
     private final DuckDBColumnTypeMetaData meta;
-    protected DuckDBColumnType duckdb_type;
-    protected int length;
-    protected boolean[] nullmask;
-    protected ByteBuffer constlen_data = null;
-    protected Object[] varlen_data = null;
+    protected final DuckDBColumnType duckdb_type;
+    final int length;
+    private final boolean[] nullmask;
+    private ByteBuffer constlen_data = null;
+    private Object[] varlen_data = null;
 
     Object getObject(int idx) throws SQLException {
         if (check_and_null(idx)) {
@@ -106,8 +109,14 @@ class DuckDBVector {
             return getBlob(idx);
         case UUID:
             return getUuid(idx);
+        case MAP:
+            return getMap(idx);
         case LIST:
             return getArray(idx);
+        case STRUCT:
+            return getStruct(idx);
+        case UNION:
+            return getUnion(idx);
         default:
             return getLazyString(idx);
         }
@@ -210,7 +219,7 @@ class DuckDBVector {
         if (check_and_null(idx)) {
             return null;
         }
-        return (String) varlen_data[idx];
+        return varlen_data[idx].toString();
     }
 
     Array getArray(int idx) throws SQLException {
@@ -221,6 +230,25 @@ class DuckDBVector {
             return (Array) varlen_data[idx];
         }
         throw new SQLFeatureNotSupportedException("getArray");
+    }
+
+    Map<Object, Object> getMap(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+        if (!isType(DuckDBColumnType.MAP)) {
+            throw new SQLFeatureNotSupportedException("getMap");
+        }
+
+        Object[] entries = (Object[]) (((Array) varlen_data[idx]).getArray());
+        Map<Object, Object> result = new HashMap<>();
+
+        for (Object entry : entries) {
+            Object[] entry_val = ((Struct) entry).getAttributes();
+            result.put(entry_val[0], entry_val[1]);
+        }
+
+        return result;
     }
 
     Blob getBlob(int idx) throws SQLException {
@@ -300,7 +328,7 @@ class DuckDBVector {
         return buf;
     }
 
-    private boolean check_and_null(int idx) {
+    protected boolean check_and_null(int idx) {
         return nullmask[idx];
     }
 
@@ -496,5 +524,22 @@ class DuckDBVector {
         }
         Object o = getObject(idx);
         return LocalDateTime.parse(o.toString());
+    }
+
+    Struct getStruct(int idx) {
+        return check_and_null(idx) ? null : (Struct) varlen_data[idx];
+    }
+
+    Object getUnion(int idx) throws SQLException {
+        if (check_and_null(idx))
+            return null;
+
+        Struct struct = getStruct(idx);
+
+        Object[] attributes = struct.getAttributes();
+
+        short tag = (short) attributes[0];
+
+        return attributes[1 + tag];
     }
 }
