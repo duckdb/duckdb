@@ -27,8 +27,7 @@ struct SnifferResult {
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>());
+	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -42,8 +41,6 @@ public:
 private:
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
-	//! The types requested via the CSV Options (If any)
-	const vector<LogicalType> requested_types;
 	//! Current Candidates being considered
 	vector<unique_ptr<CSVStateMachine>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.

@@ -2,11 +2,11 @@
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       const vector<LogicalType> &requested_types_p)
-    : requested_types(requested_types_p), options(options_p), buffer_manager(std::move(buffer_manager_p)) {
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p)
+    : options(options_p), buffer_manager(std::move(buffer_manager_p)) {
+
 	// Check if any type is BLOB
-	for (auto &type : requested_types) {
+	for (auto &type : options.sql_type_list) {
 		if (type.id() == LogicalTypeId::BLOB) {
 			throw InvalidInputException(
 			    "CSV auto-detect for blobs not supported: there may be invalid UTF-8 in the file");

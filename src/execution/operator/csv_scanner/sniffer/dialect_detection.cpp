@@ -209,11 +209,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
-	// If requested types are not empty,and do not match with the number of columns. If there is
-	// invalid padding, this state machine is not a suitable candidate.
-	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {
-		return;
-	}
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
