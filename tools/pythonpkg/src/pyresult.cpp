@@ -264,8 +264,20 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 }
 
 PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
 
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal());
+	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
+	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
+		// materialized query result: we know exactly how much space we need
+		auto &materialized = result->Cast<MaterializedQueryResult>();
+		initial_capacity = materialized.RowCount();
+	}
+
+	auto conversion =
+	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, true);
+	return FrameFromNumpy(date_as_object, FetchNumpyInternal(false, 1, std::move(conversion)));
 }
 
 PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {

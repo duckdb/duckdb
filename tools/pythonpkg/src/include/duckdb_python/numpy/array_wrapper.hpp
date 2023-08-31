@@ -33,6 +33,7 @@ public:
 	bool *target_mask;
 	idx_t count;
 	PhysicalType physical_type = PhysicalType::INVALID;
+	bool pandas = false;
 };
 
 struct ArrayWrapper {

@@ -21,8 +21,9 @@ struct RegularConvert {
 		return (NUMPY_T)val;
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -33,8 +34,9 @@ struct TimestampConvert {
 		return Timestamp::GetEpochNanoSeconds(val);
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -45,8 +47,9 @@ struct TimestampConvertSec {
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochSeconds(val.value));
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -57,8 +60,9 @@ struct TimestampConvertMilli {
 		return Timestamp::GetEpochNanoSeconds(Timestamp::FromEpochMs(val.value));
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -69,8 +73,9 @@ struct TimestampConvertNano {
 		return val.value;
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -81,8 +86,9 @@ struct DateConvert {
 		return Date::EpochNanoseconds(val);
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -93,8 +99,9 @@ struct IntervalConvert {
 		return Interval::GetNanoseconds(val);
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -106,8 +113,9 @@ struct TimeConvert {
 		return PyUnicode_FromStringAndSize(str.c_str(), str.size());
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return nullptr;
 	}
 };
@@ -204,8 +212,13 @@ struct StringConvert {
 		memcpy(target_data, data, len);
 		return result;
 	}
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		if (PANDAS) {
+			set_mask = false;
+			return Py_None;
+		}
+		set_mask = true;
 		return nullptr;
 	}
 };
@@ -216,8 +229,9 @@ struct BlobConvert {
 		return PyByteArray_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return nullptr;
 	}
 };
@@ -228,8 +242,9 @@ struct BitConvert {
 		return PyBytes_FromStringAndSize(val.GetData(), val.GetSize());
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return nullptr;
 	}
 };
@@ -242,8 +257,9 @@ struct UUIDConvert {
 		return h.ptr();
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return nullptr;
 	}
 };
@@ -315,8 +331,9 @@ struct IntegralConvert {
 		return NUMPY_T(val);
 	}
 
-	template <class NUMPY_T>
-	static NUMPY_T NullValue() {
+	template <class NUMPY_T, bool PANDAS>
+	static NUMPY_T NullValue(bool &set_mask) {
+		set_mask = true;
 		return 0;
 	}
 };
@@ -341,18 +358,23 @@ static bool ConvertColumn(NumpyAppendData &append_data) {
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
+		bool mask_is_set = false;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
-				target_mask[offset] = true;
-				out_ptr[offset] = CONVERT::template NullValue<NUMPY_T>();
+				if (append_data.pandas) {
+					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, true>(target_mask[offset]);
+				} else {
+					out_ptr[offset] = CONVERT::template NullValue<NUMPY_T, false>(target_mask[offset]);
+				}
+				mask_is_set = mask_is_set || target_mask[offset];
 			} else {
 				out_ptr[offset] = CONVERT::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
 				target_mask[offset] = false;
 			}
 		}
-		return true;
+		return mask_is_set;
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -534,6 +556,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	append_data.target_data = dataptr;
 	append_data.count = count;
 	append_data.target_mask = maskptr;
+	append_data.pandas = pandas;
 
 	switch (input.GetType().id()) {
 	case LogicalTypeId::ENUM: {
