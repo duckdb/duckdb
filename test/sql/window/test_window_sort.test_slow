@@ -69,9 +69,7 @@ select * from rownum_window order by l_extendedprice
 ----
 
 query IIIII nosort q3
-select l_extendedprice, list_value(l_shipdate), list_value(l_commitdate), list_value(l_receiptdate), row_number() over (order by l_extendedprice) 
-from lineitem_d
-order by l_extendedprice;
+select l_extendedprice, list_value(l_shipdate), list_value(l_commitdate), list_value(l_receiptdate), row_number() over (order by l_extendedprice) from lineitem_d;
 ----
 
 query IIIII nosort q4

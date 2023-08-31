@@ -11,7 +11,7 @@ namespace duckdb {
 
 PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
-    : count(0) {
+    : count(0), batch_base(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
