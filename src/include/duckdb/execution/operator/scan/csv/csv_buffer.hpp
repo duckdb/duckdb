@@ -65,13 +65,6 @@ public:
 	//! If this buffer is the last buffer of the CSV File
 	bool IsCSVFileLastBuffer();
 
-	//! If this buffer is the first buffer of the CSV File
-	bool IsCSVFileFirstBuffer();
-
-	idx_t GetCSVGlobalStart();
-
-	idx_t GetFileNumber();
-
 	//! Allocates internal buffer, sets 'block' and 'handle' variables.
 	void AllocateBuffer(idx_t buffer_size);
 

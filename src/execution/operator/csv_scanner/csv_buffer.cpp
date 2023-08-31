@@ -77,16 +77,4 @@ bool CSVBuffer::IsCSVFileLastBuffer() {
 	return last_buffer;
 }
 
-bool CSVBuffer::IsCSVFileFirstBuffer() {
-	return first_buffer;
-}
-
-idx_t CSVBuffer::GetCSVGlobalStart() {
-	return global_csv_start;
-}
-
-idx_t CSVBuffer::GetFileNumber() {
-	return file_number;
-}
-
 } // namespace duckdb
