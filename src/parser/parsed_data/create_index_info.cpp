@@ -22,6 +22,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	result->scan_types = scan_types;
 	result->names = names;
 	result->column_ids = column_ids;
+	result->options = options;
 	return std::move(result);
 }
 
@@ -37,6 +38,12 @@ void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {
 	writer.WriteRegularSerializableList(scan_types);
 	writer.WriteList<string>(names);
 	writer.WriteList<column_t>(column_ids);
+	writer.WriteString(index_type_name);
+	writer.WriteField((idx_t)options.size());
+	for (auto &kv : options) {
+		writer.WriteString(kv.first);
+		writer.WriteSerializable(kv.second);
+	}
 	writer.Finalize();
 }
 
@@ -55,6 +62,13 @@ unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deseriali
 	result->scan_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	result->names = reader.ReadRequiredList<string>();
 	result->column_ids = reader.ReadRequiredList<column_t>();
+	result->index_type_name = reader.ReadRequired<string>();
+	auto options_count = reader.ReadRequired<idx_t>();
+	for (idx_t i = 0; i < options_count; i++) {
+		auto key = reader.ReadRequired<string>();
+		auto value = reader.ReadRequiredSerializable<Value, Value>();
+		result->options[key] = value;
+	}
 	reader.Finalize();
 	return result;
 }
