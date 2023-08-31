@@ -109,7 +109,13 @@ private:
 
 private:
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
-	data_ptr_t Get(const IndexPointer ptr, const bool dirty = true);
+	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
+		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
+		D_ASSERT(buffers->find(ptr.GetBufferId()) != buffers->end());
+		auto &buffer = buffers->find(ptr.GetBufferId())->second;
+		auto buffer_ptr = buffer->Get(dirty);
+		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
+	}
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
 	//! Returns an available buffer id

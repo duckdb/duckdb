@@ -270,14 +270,6 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 	}
 }
 
-data_ptr_t FixedSizeAllocator::Get(const IndexPointer ptr, const bool dirty) {
-	D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-	D_ASSERT(buffers->find(ptr.GetBufferId()) != buffers->end());
-	auto &buffer = buffers->find(ptr.GetBufferId())->second;
-	auto buffer_ptr = buffer->Get(dirty);
-	return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
-}
-
 uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t segment_count) {
 
 	auto data = mask.GetData();

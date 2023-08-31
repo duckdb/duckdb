@@ -6,15 +6,18 @@
 namespace duckdb {
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
-    : block_manager(block_manager), segment_count(0), dirty(false), vacuum(false), block_handle(nullptr) {
+    : block_manager(block_manager), segment_count(0), dirty(false), vacuum(false), block_handle(nullptr),
+      in_memory(true) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
 	buffer_handle = make_uniq<BufferHandle>(std::move(new_buffer_handle));
+	buffer_ptr = buffer_handle->Ptr();
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const block_id_t &block_id)
-    : block_manager(block_manager), segment_count(segment_count), dirty(false), vacuum(false), buffer_handle(nullptr) {
+    : block_manager(block_manager), segment_count(segment_count), dirty(false), vacuum(false), buffer_handle(nullptr),
+      in_memory(false) {
 
 	D_ASSERT(block_id < MAXIMUM_BLOCK);
 	block_handle = block_manager.RegisterBlock(block_id);
@@ -24,6 +27,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
 void FixedSizeBuffer::Destroy() {
 	if (InMemory()) {
 		buffer_handle->Destroy();
+		in_memory = false;
 	}
 	if (OnDisk()) {
 		block_manager.MarkBlockAsFree(BlockId());
@@ -56,6 +60,7 @@ void FixedSizeBuffer::Serialize() {
 		D_ASSERT(block_id < MAXIMUM_BLOCK);
 		block_handle = block_manager.ConvertToPersistent(block_id, std::move(block_handle));
 		buffer_handle->Destroy();
+		in_memory = false;
 
 	} else {
 		// already a persistent block - only need to write it
@@ -70,6 +75,8 @@ void FixedSizeBuffer::Pin() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(BlockId() < MAXIMUM_BLOCK);
 	buffer_handle = make_uniq<BufferHandle>(buffer_manager.Pin(block_handle));
+	in_memory = true;
+	buffer_ptr = buffer_handle->Ptr();
 }
 
 } // namespace duckdb
