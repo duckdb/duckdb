@@ -16,6 +16,7 @@ import javax.sql.rowset.RowSetProvider;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -4217,6 +4218,22 @@ public class TestDuckDBJDBC {
                 String msg = assertThrows(() -> { ps.addBatch("DUMMY SQL"); }, SQLException.class);
                 assertTrue(msg.contains("Cannot add batched SQL statement to PreparedStatement"));
             }
+        }
+    }
+
+    public static void test_get_binary_stream() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+             PreparedStatement s = connection.prepareStatement("select ?")) {
+            s.setObject(1, "YWJj".getBytes());
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+            try (ResultSet rs = s.executeQuery()) {
+                while (rs.next()) {
+                    rs.getBlob(1).getBinaryStream().transferTo(out);
+                }
+            }
+
+            assertEquals(out.toString(), "YWJj");
         }
     }
 
