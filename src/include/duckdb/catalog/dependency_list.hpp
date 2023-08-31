@@ -68,7 +68,7 @@ class LogicalDependencyList {
 	using create_info_set_t = unordered_set<LogicalDependency, CreateInfoHashFunction, CreateInfoEquality>;
 
 public:
-	DUCKDB_API void AddDependency(LogicalDependency entry);
+	DUCKDB_API void AddDependency(const LogicalDependency &entry);
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
 	DUCKDB_API bool Contains(LogicalDependency &entry);
 	DUCKDB_API bool Contains(CatalogEntry &entry);
