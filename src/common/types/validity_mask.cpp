@@ -1,4 +1,6 @@
 #include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
