@@ -24,13 +24,9 @@ struct CSVBufferRead {
 	              idx_t local_batch_index_p, optional_ptr<LineInfo> line_info_p)
 	    : buffer(std::move(buffer_p)), line_info(line_info_p), buffer_start(buffer_start_p), buffer_end(buffer_end_p),
 	      batch_index(batch_index), local_batch_index(local_batch_index_p) {
-		if (buffer) {
-			if (buffer_end > buffer->actual_size) {
-				buffer_end = buffer->actual_size;
-			}
-		} else {
-			buffer_start = 0;
-			buffer_end = 0;
+		D_ASSERT(buffer);
+		if (buffer_end > buffer->actual_size) {
+			buffer_end = buffer->actual_size;
 		}
 	}
 
