@@ -278,11 +278,10 @@ public:
 	    : VectorBuffer(VectorBufferType::ARRAY_BUFFER), child(std::move(child_vector)), array_size(array_size),
 	      size(initial_capacity) {
 	}
-	explicit VectorArrayBuffer(const LogicalType &array_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE)
+	explicit VectorArrayBuffer(const LogicalType &array, idx_t initial = STANDARD_VECTOR_SIZE)
 	    : VectorBuffer(VectorBufferType::ARRAY_BUFFER),
-	      child(make_uniq<Vector>(ArrayType::GetChildType(array_type),
-	                              initial_capacity * ArrayType::GetSize(array_type))),
-	      array_size(ArrayType::GetSize(array_type)), size(initial_capacity) {
+	      child(make_uniq<Vector>(ArrayType::GetChildType(array), initial * ArrayType::GetSize(array))),
+	      array_size(ArrayType::GetSize(array)), size(initial) {
 		// initialize the child array with (array_size * size) ^
 	}
 	~VectorArrayBuffer() override {

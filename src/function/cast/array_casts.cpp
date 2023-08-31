@@ -64,7 +64,6 @@ static bool ArrayToArrayCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, true);
-			return true;
 		}
 
 		auto &source_cc = ArrayVector::GetEntry(source);
@@ -188,10 +187,6 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	bool all_ok = cast_data.child_cast_info.function(source_child, result_child, child_count, child_parameters);
 
-	if (!all_ok) {
-		return false;
-	}
-
 	auto list_data = ListVector::GetData(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (FlatVector::IsNull(source, i)) {
@@ -207,7 +202,7 @@ static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastPar
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	return true;
+	return all_ok;
 }
 
 BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalType &source,

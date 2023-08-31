@@ -119,3 +119,35 @@ CREATE OR REPLACE TABLE t2 AS SELECT ['4', '5', '6']::VARCHAR[3];
 
 statement ok
 INSERT INTO t2 SELECT * FROM t1;
+
+
+# Should be able to cast with nulls
+query I
+SELECT ([1, NULL, 3]::INT[3])::VARCHAR[3]
+----
+[1, NULL, 3]
+
+query I
+SELECT (NULL::INT[3])::VARCHAR
+----
+NULL
+
+# Should not be able to cast if the elements are not castable
+statement error
+SELECT (['2', 'abc', '3']::VARCHAR[3])::INT[]
+
+# Should not be able to cast to unrelated type
+statement error
+SELECT ([1,2,3]::INT[3])::INT;
+
+# Should not be able to cast to list if child types fail
+query I
+SELECT TRY_CAST([42, 999, NULL, NULL, -42]::INT[5] AS TIMESTAMP WITH TIME ZONE[]);
+----
+[NULL, NULL, NULL, NULL, NULL]
+
+# Should be able to cast null arrays of different types
+query I
+select (NULL::INT[3])::VARCHAR[3];
+----
+NULL
