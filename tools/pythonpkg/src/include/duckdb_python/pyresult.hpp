@@ -68,6 +68,7 @@ private:
 	void ChangeDateToDatetime(PandasDataFrame &df);
 	unique_ptr<DataChunk> FetchNext(QueryResult &result);
 	unique_ptr<DataChunk> FetchNextRaw(QueryResult &result);
+	unique_ptr<NumpyResultConversion> InitializeNumpyConversion(bool pandas = false);
 
 private:
 	idx_t chunk_offset = 0;
