@@ -20,23 +20,22 @@ namespace duckdb {
 
 static bool TryLoadExtensionForReplacementScan(ClientContext &context, const string &table_name) {
 	auto lower_name = StringUtil::Lower(table_name);
+	auto &dbconfig = DBConfig::GetConfig(context);
 
-	// Parquet
-	if (StringUtil::EndsWith(lower_name, ".parquet") || StringUtil::Contains(lower_name, ".parquet?")) {
-		auto &dbconfig = DBConfig::GetConfig(context);
-		if (dbconfig.options.autoload_known_extensions) {
-			ExtensionHelper::AutoLoadExtension(context, "parquet");
+	if (!dbconfig.options.autoload_known_extensions) {
+		return false;
+	}
+
+	for (const auto &entry : EXTENSION_FILE_POSTFIXES) {
+		if (StringUtil::EndsWith(lower_name, entry.name)) {
+			ExtensionHelper::AutoLoadExtension(context, entry.extension);
 			return true;
 		}
 	}
 
-	// JSON
-	if (StringUtil::EndsWith(lower_name, ".json") || StringUtil::Contains(lower_name, ".json?") ||
-	    StringUtil::EndsWith(lower_name, ".jsonl") || StringUtil::Contains(lower_name, ".jsonl?") ||
-	    StringUtil::EndsWith(lower_name, ".ndjson") || StringUtil::Contains(lower_name, ".ndjson?")) {
-		auto &dbconfig = DBConfig::GetConfig(context);
-		if (dbconfig.options.autoload_known_extensions) {
-			ExtensionHelper::AutoLoadExtension(context, "json");
+	for (const auto &entry : EXTENSION_FILE_CONTAINS) {
+		if (StringUtil::Contains(lower_name, entry.name)) {
+			ExtensionHelper::AutoLoadExtension(context, entry.extension);
 			return true;
 		}
 	}

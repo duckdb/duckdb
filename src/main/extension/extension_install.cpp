@@ -208,11 +208,6 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		endpoint = "http://extensions.duckdb.org";
 	}
 
-	if (StringUtil::Contains(endpoint, "https://")) {
-		// Downgrade https to http
-		endpoint = "http://" + endpoint.substr(8, endpoint.size());
-	}
-
 	string url_template = endpoint + versioned_path;
 
 	if (is_http_url) {

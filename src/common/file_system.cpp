@@ -398,7 +398,7 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 }
 
 static string LookupExtensionForPattern(const string &pattern) {
-	for (const auto &entry : EXTENSION_FS_PREFIXES) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
 		if (StringUtil::StartsWith(pattern, entry.name)) {
 			return entry.extension;
 		}

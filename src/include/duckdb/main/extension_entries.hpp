@@ -213,10 +213,24 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_FS_PREFIXES[] = {
+static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},
     //    {"azure://", "azure"}
-}; // EXTENSION_FS_PROTOCOLS
+}; // END_OF_EXTENSION_FILE_PREFIXES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {{".parquet", "parquet"},
+                                                              {".json", "json"},
+                                                              {".jsonl", "json"},
+                                                              {".ndjson", "json"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parquet"},
+                                                             {".json?", "json"},
+                                                             {".ndjson?", ".jsonl?"},
+                                                             {".jsonl?", ".ndjson?"}}; // EXTENSION_FILE_CONTAINS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",
