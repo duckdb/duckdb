@@ -16,7 +16,7 @@ struct DuckDBAltrepListEntryWrapper {
 	duckdb::unsafe_unique_array<data_t> data;
 };
 
-enum class RType {
+enum class RTypeId {
 	UNKNOWN,
 	LOGICAL,
 	INTEGER,
@@ -39,11 +39,82 @@ enum class RType {
 	INTEGER64,
 	LIST_OF_NULLS,
 	BLOB,
+
+	// No RType equivalent
+	BYTE,
+	LIST,
+	STRUCT,
+};
+
+struct RType {
+	RType();
+	RType(RTypeId id); // NOLINT: Allow implicit conversion from `RTypeId`
+	RType(const RType &other);
+	RType(RType &&other) noexcept;
+
+	RTypeId id() const;
+
+	// copy assignment
+	inline RType &operator=(const RType &other) {
+		id_ = other.id_;
+		aux_ = other.aux_;
+		return *this;
+	}
+	// move assignment
+	inline RType &operator=(RType &&other) noexcept {
+		id_ = other.id_;
+		std::swap(aux_, other.aux_);
+		return *this;
+	}
+
+	bool operator==(const RType &rhs) const;
+	inline bool operator!=(const RType &rhs) const {
+		return !(*this == rhs);
+	}
+
+	static constexpr const RTypeId UNKNOWN = RTypeId::UNKNOWN;
+	static constexpr const RTypeId LOGICAL = RTypeId::LOGICAL;
+	static constexpr const RTypeId INTEGER = RTypeId::INTEGER;
+	static constexpr const RTypeId NUMERIC = RTypeId::NUMERIC;
+	static constexpr const RTypeId STRING = RTypeId::STRING;
+	static constexpr const RTypeId DATE = RTypeId::DATE;
+	static constexpr const RTypeId DATE_INTEGER = RTypeId::DATE_INTEGER;
+	static constexpr const RTypeId TIMESTAMP = RTypeId::TIMESTAMP;
+	static constexpr const RTypeId TIME_SECONDS = RTypeId::TIME_SECONDS;
+	static constexpr const RTypeId TIME_MINUTES = RTypeId::TIME_MINUTES;
+	static constexpr const RTypeId TIME_HOURS = RTypeId::TIME_HOURS;
+	static constexpr const RTypeId TIME_DAYS = RTypeId::TIME_DAYS;
+	static constexpr const RTypeId TIME_WEEKS = RTypeId::TIME_WEEKS;
+	static constexpr const RTypeId TIME_SECONDS_INTEGER = RTypeId::TIME_SECONDS_INTEGER;
+	static constexpr const RTypeId TIME_MINUTES_INTEGER = RTypeId::TIME_MINUTES_INTEGER;
+	static constexpr const RTypeId TIME_HOURS_INTEGER = RTypeId::TIME_HOURS_INTEGER;
+	static constexpr const RTypeId TIME_DAYS_INTEGER = RTypeId::TIME_DAYS_INTEGER;
+	static constexpr const RTypeId TIME_WEEKS_INTEGER = RTypeId::TIME_WEEKS_INTEGER;
+	static constexpr const RTypeId INTEGER64 = RTypeId::INTEGER64;
+	static constexpr const RTypeId LIST_OF_NULLS = RTypeId::LIST_OF_NULLS;
+	static constexpr const RTypeId BLOB = RTypeId::BLOB;
+
+	static RType FACTOR(cpp11::strings levels);
+	Vector GetFactorLevels() const;
+	size_t GetFactorLevelsCount() const;
+	Value GetFactorValue(int r_value) const;
+
+	static RType LIST(const RType &child);
+	RType GetListChildType() const;
+
+	static RType STRUCT(child_list_t<RType> &&children);
+	child_list_t<RType> GetStructChildTypes() const;
+
+private:
+	RTypeId id_;
+	child_list_t<RType> aux_;
 };
 
 struct RApiTypes {
 	static RType DetectRType(SEXP v, bool integer64);
+	static LogicalType LogicalTypeFromRType(const RType &rtype, bool experimental);
 	static string DetectLogicalType(const LogicalType &stype, const char *caller);
+	static R_len_t GetVecSize(RType rtype, SEXP coldata);
 	static Value SexpToValue(SEXP valsexp, R_len_t idx);
 	static SEXP ValueToSexp(Value &val, string &timezone_config);
 };
@@ -125,9 +196,12 @@ struct RStringSexpType {
 	static bool IsNull(SEXP val);
 };
 
-struct RRawSexpType {
-	static string_t Convert(SEXP val);
+struct RSexpType {
 	static bool IsNull(SEXP val);
+};
+
+struct RRawSexpType : public RSexpType {
+	static string_t Convert(SEXP val);
 };
 
 } // namespace duckdb

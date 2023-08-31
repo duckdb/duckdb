@@ -58,15 +58,15 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 		bind_data.mask = make_uniq<RegisteredArray>(column.attr("array").attr("_mask"));
 	}
 
-	if (bind_data.numpy_type == NumpyNullableType::CATEGORY) {
+	if (bind_data.numpy_type.type == NumpyNullableType::CATEGORY) {
 		// for category types, we create an ENUM type for string or use the converted numpy type for the rest
 		D_ASSERT(py::hasattr(column, "cat"));
 		D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
 		auto categories = py::array(column.attr("cat").attr("categories"));
 		auto categories_pd_type = ConvertNumpyType(categories.attr("dtype"));
-		if (categories_pd_type == NumpyNullableType::OBJECT) {
+		if (categories_pd_type.type == NumpyNullableType::OBJECT) {
 			// Let's hope the object type is a string.
-			bind_data.numpy_type = NumpyNullableType::CATEGORY;
+			bind_data.numpy_type.type = NumpyNullableType::CATEGORY;
 			auto enum_name = string(py::str(column_p.name));
 			vector<string> enum_entries = py::cast<vector<string>>(categories);
 			idx_t size = enum_entries.size();
@@ -88,10 +88,10 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 			bind_data.numpy_type = ConvertNumpyType(numpy_type);
 			column_type = NumpyToLogicalType(bind_data.numpy_type);
 		}
-	} else if (bind_data.numpy_type == NumpyNullableType::FLOAT_16) {
+	} else if (bind_data.numpy_type.type == NumpyNullableType::FLOAT_16) {
 		auto pandas_array = column.attr("array");
 		bind_data.pandas_col = make_uniq<PandasNumpyColumn>(py::array(column.attr("to_numpy")("float32")));
-		bind_data.numpy_type = NumpyNullableType::FLOAT_32;
+		bind_data.numpy_type.type = NumpyNullableType::FLOAT_32;
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	} else {
 		auto pandas_array = column.attr("array");
@@ -108,7 +108,7 @@ static LogicalType BindColumn(PandasBindColumn &column_p, PandasColumnBindData &
 		column_type = NumpyToLogicalType(bind_data.numpy_type);
 	}
 	// Analyze the inner data type of the 'object' column
-	if (bind_data.numpy_type == NumpyNullableType::OBJECT) {
+	if (bind_data.numpy_type.type == NumpyNullableType::OBJECT) {
 		PandasAnalyzer analyzer(config);
 		if (analyzer.Analyze(column)) {
 			column_type = analyzer.AnalyzedType();

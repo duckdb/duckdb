@@ -39,23 +39,20 @@ def munge_compare(left_list, right_list):
 def aggregation_generic(aggregation_function, assertion_answers):
     assert len(assertion_answers) >= 2
     # Check single column
-    print(aggregation_function('i').order('all').execute().fetchall())
-    munge_compare(aggregation_function('i').order('all').execute().fetchall(), assertion_answers[0])
+    print(aggregation_function('i').execute().fetchall())
+    munge_compare(aggregation_function('i').execute().fetchall(), assertion_answers[0])
 
     # Check multi column
-    print(aggregation_function('i,j').order('all').execute().fetchall())
-    munge_compare(aggregation_function('i,j').order('all').execute().fetchall(), assertion_answers[1])
+    print(aggregation_function('i,j').execute().fetchall())
+    munge_compare(aggregation_function('i,j').execute().fetchall(), assertion_answers[1])
 
     if len(assertion_answers) < 3:
         # Shouldn't be able to aggregate on string
         with pytest.raises(duckdb.BinderException, match='No function matches the given name'):
             aggregation_function('k').execute().fetchall()
     else:
-        print(aggregation_function('k').order('all').execute().fetchall())
-        munge_compare(aggregation_function('k').order('all').execute().fetchall(), assertion_answers[2])
-        print(aggregation_function('k').order('all').execute().fetchall())
-        munge_compare(aggregation_function('k').order('all').execute().fetchall(), assertion_answers[2])
-
+        print(aggregation_function('k').execute().fetchall())
+        munge_compare(aggregation_function('k').execute().fetchall(), assertion_answers[2])
     # Check empty
     with pytest.raises(TypeError, match='incompatible function arguments'):
         aggregation_function().execute().fetchall()

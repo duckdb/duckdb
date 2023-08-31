@@ -1069,13 +1069,13 @@ void ColumnDataCollection::FormatSerialize(FormatSerializer &serializer) const {
 			}
 		}
 	}
-	serializer.WriteProperty("types", types);
-	serializer.WriteProperty("values", values);
+	serializer.WriteProperty(100, "types", types);
+	serializer.WriteProperty(101, "values", values);
 }
 
 unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto types = deserializer.ReadProperty<vector<LogicalType>>("types");
-	auto values = deserializer.ReadProperty<vector<vector<Value>>>("values");
+	auto types = deserializer.ReadProperty<vector<LogicalType>>(100, "types");
+	auto values = deserializer.ReadProperty<vector<vector<Value>>>(101, "values");
 
 	auto collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	if (values.empty()) {

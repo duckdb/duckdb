@@ -19,7 +19,7 @@ void JsonSerializer::PushValue(yyjson_mut_val *val) {
 	}
 }
 
-void JsonSerializer::SetTag(const char *tag) {
+void JsonSerializer::SetTag(const field_id_t, const char *tag) {
 	current_tag = yyjson_mut_strcpy(doc, tag);
 }
 
@@ -63,11 +63,11 @@ void JsonSerializer::OnMapEntryBegin() {
 }
 
 void JsonSerializer::OnMapKeyBegin() {
-	SetTag("key");
+	SetTag(100, "key");
 }
 
 void JsonSerializer::OnMapValueBegin() {
-	SetTag("value");
+	SetTag(101, "value");
 }
 
 void JsonSerializer::OnMapEntryEnd() {
@@ -127,11 +127,11 @@ void JsonSerializer::OnPairBegin() {
 }
 
 void JsonSerializer::OnPairKeyBegin() {
-	SetTag("key");
+	SetTag(100, "key");
 }
 
 void JsonSerializer::OnPairValueBegin() {
-	SetTag("value");
+	SetTag(101, "value");
 }
 
 void JsonSerializer::OnPairEnd() {
@@ -172,7 +172,7 @@ void JsonSerializer::WriteValue(uint32_t value) {
 }
 
 void JsonSerializer::WriteValue(int32_t value) {
-	auto val = yyjson_mut_int(doc, value);
+	auto val = yyjson_mut_sint(doc, value);
 	PushValue(val);
 }
 
@@ -190,8 +190,8 @@ void JsonSerializer::WriteValue(hugeint_t value) {
 	auto val = yyjson_mut_obj(doc);
 	PushValue(val);
 	stack.push_back(val);
-	WriteProperty("upper", value.upper);
-	WriteProperty("lower", value.lower);
+	WriteProperty(100, "upper", value.upper);
+	WriteProperty(101, "lower", value.lower);
 	stack.pop_back();
 }
 
@@ -209,9 +209,9 @@ void JsonSerializer::WriteValue(interval_t value) {
 	auto val = yyjson_mut_obj(doc);
 	PushValue(val);
 	stack.push_back(val);
-	WriteProperty("months", value.months);
-	WriteProperty("days", value.days);
-	WriteProperty("micros", value.micros);
+	WriteProperty(100, "months", value.months);
+	WriteProperty(101, "days", value.days);
+	WriteProperty(102, "micros", value.micros);
 	stack.pop_back();
 }
 

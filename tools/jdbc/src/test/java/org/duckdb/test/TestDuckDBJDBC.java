@@ -102,8 +102,12 @@ public class TestDuckDBJDBC {
         assertTrue(Objects.equals(actual, expected), message);
     }
 
+    private static void assertNotNull(Object a) throws Exception {
+        assertFalse(a == null);
+    }
+
     private static void assertNull(Object a) throws Exception {
-        assertTrue(a == null);
+        assertEquals(a, null);
     }
 
     private static void assertEquals(double a, double b, double epsilon) throws Exception {
@@ -1958,10 +1962,18 @@ public class TestDuckDBJDBC {
                 assertEquals(rs.getInt("DATA_TYPE"), Types.JAVA_OBJECT);
             }
 
-            s.execute("INSERT INTO t VALUES ('01:01:00');");
+            s.execute("INSERT INTO t VALUES ('01:01:00'), ('01:02:03+12:30:45'), ('04:05:06-03:10'), ('07:08:09+20');");
             try (ResultSet rs = s.executeQuery("SELECT * FROM t")) {
                 rs.next();
                 assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(1, 1), ZoneOffset.UTC));
+                rs.next();
+                assertEquals(rs.getObject(1),
+                             OffsetTime.of(LocalTime.of(1, 2, 3), ZoneOffset.ofHoursMinutesSeconds(12, 30, 45)));
+                rs.next();
+                assertEquals(rs.getObject(1),
+                             OffsetTime.of(LocalTime.of(4, 5, 6), ZoneOffset.ofHoursMinutesSeconds(-3, -10, 0)));
+                rs.next();
+                assertEquals(rs.getObject(1), OffsetTime.of(LocalTime.of(7, 8, 9), ZoneOffset.UTC));
             }
         }
     }
@@ -3336,10 +3348,35 @@ public class TestDuckDBJDBC {
     public static void test_update_count() throws Exception {
         try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
              Statement s = connection.createStatement()) {
-            s.executeUpdate("create table t (i int)");
+            s.execute("create table t (i int)");
+            assertEquals(s.getUpdateCount(), -1);
             assertEquals(s.executeUpdate("insert into t values (1)"), 1);
             assertFalse(s.execute("insert into t values (1)"));
             assertEquals(s.getUpdateCount(), 1);
+
+            // result is invalidated after a call
+            assertEquals(s.getUpdateCount(), -1);
+        }
+    }
+
+    public static void test_get_result_set() throws Exception {
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+            try (PreparedStatement p = conn.prepareStatement("select 1")) {
+                p.executeQuery();
+                try (ResultSet resultSet = p.getResultSet()) {
+                    assertNotNull(resultSet);
+                }
+                assertNull(p.getResultSet()); // returns null after initial call
+            }
+
+            try (Statement s = conn.createStatement()) {
+                s.execute("select 1");
+                try (ResultSet resultSet = s.getResultSet()) {
+                    assertNotNull(resultSet);
+                }
+                assertFalse(s.getMoreResults());
+                assertNull(s.getResultSet()); // returns null after initial call
+            }
         }
     }
 

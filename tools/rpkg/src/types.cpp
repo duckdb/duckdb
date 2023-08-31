@@ -8,6 +8,82 @@
 
 using namespace duckdb;
 
+RType::RType() : id_(RTypeId::UNKNOWN) {
+}
+
+RType::RType(RTypeId id) : id_(id) {
+}
+
+RType::RType(const RType &other) : id_(other.id_), aux_(other.aux_) {
+}
+
+RType::RType(RType &&other) noexcept : id_(other.id_), aux_(std::move(other.aux_)) {
+}
+
+RTypeId RType::id() const {
+	return id_;
+}
+
+bool RType::operator==(const RType &rhs) const {
+	return id_ == rhs.id_ && aux_ == rhs.aux_;
+}
+
+RType RType::FACTOR(cpp11::strings levels) {
+	RType out = RType(RTypeId::FACTOR);
+	for (R_xlen_t level_idx = 0; level_idx < levels.size(); level_idx++) {
+		out.aux_.push_back(std::make_pair(levels[level_idx], RType()));
+	}
+	return out;
+}
+
+Vector RType::GetFactorLevels() const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	Vector duckdb_levels(LogicalType::VARCHAR, aux_.size());
+	auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
+	for (size_t level_idx = 0; level_idx < aux_.size(); level_idx++) {
+		levels_ptr[level_idx] = StringVector::AddString(duckdb_levels, aux_[level_idx].first);
+	}
+	return duckdb_levels;
+}
+
+size_t RType::GetFactorLevelsCount() const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	return aux_.size();
+}
+
+Value RType::GetFactorValue(int r_value) const {
+	D_ASSERT(id_ == RTypeId::FACTOR);
+	bool is_null = RIntegerType::IsNull(r_value);
+	if (!is_null) {
+		auto str_val = aux_[r_value - 1].first;
+		return Value(str_val);
+	} else {
+		return Value(LogicalType::VARCHAR);
+	}
+}
+
+RType RType::LIST(const RType &child) {
+	RType out = RType(RTypeId::LIST);
+	out.aux_.push_back(std::make_pair("", child));
+	return out;
+}
+
+RType RType::GetListChildType() const {
+	D_ASSERT(id_ == RTypeId::LIST);
+	return aux_.front().second;
+}
+
+RType RType::STRUCT(child_list_t<RType> &&children) {
+	RType out = RType(RTypeId::STRUCT);
+	std::swap(out.aux_, children);
+	return out;
+}
+
+child_list_t<RType> RType::GetStructChildTypes() const {
+	D_ASSERT(id_ == RTypeId::STRUCT);
+	return aux_;
+}
+
 RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 	if (TYPEOF(v) == REALSXP && Rf_inherits(v, "POSIXct")) {
 		return RType::TIMESTAMP;
@@ -54,11 +130,13 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 			return RType::UNKNOWN;
 		}
 	} else if (Rf_isFactor(v) && TYPEOF(v) == INTSXP) {
-		return RType::FACTOR;
+		return RType::FACTOR(GET_LEVELS(v));
 	} else if (TYPEOF(v) == LGLSXP) {
 		return RType::LOGICAL;
 	} else if (TYPEOF(v) == INTSXP) {
 		return RType::INTEGER;
+	} else if (TYPEOF(v) == RAWSXP) {
+		return RTypeId::BYTE;
 	} else if (TYPEOF(v) == REALSXP) {
 		if (integer64 && Rf_inherits(v, "integer64")) {
 			return RType::INTEGER64;
@@ -71,32 +149,115 @@ RType RApiTypes::DetectRType(SEXP v, bool integer64) {
 			return RType::BLOB;
 		}
 
-		R_xlen_t len = Rf_length(v);
-		R_xlen_t i = 0;
-		for (; i < len; ++i) {
-			auto elt = VECTOR_ELT(v, i);
-			if (TYPEOF(elt) == RAWSXP) {
-				break;
-			}
-			if (elt != R_NilValue) {
-				return RType::UNKNOWN;
-			}
-		}
+		if (Rf_inherits(v, "data.frame")) {
+			child_list_t<RType> child_types;
+			R_xlen_t ncol = Rf_length(v);
+			SEXP names = GET_NAMES(v);
 
-		if (i == len) {
-			return RType::LIST_OF_NULLS;
-		}
-
-		for (; i < len; ++i) {
-			auto elt = VECTOR_ELT(v, i);
-			if (TYPEOF(elt) != RAWSXP && elt != R_NilValue) {
-				return RType::UNKNOWN;
+			for (R_xlen_t i = 0; i < ncol; ++i) {
+				RType child = DetectRType(VECTOR_ELT(v, i), integer64);
+				if (child == RType::UNKNOWN) {
+					return (RType::UNKNOWN);
+				}
+				child_types.push_back(std::make_pair(CHAR(STRING_ELT(names, i)), child));
 			}
-		}
 
-		return RType::BLOB;
+			return RType::STRUCT(std::move(child_types));
+		} else {
+			R_xlen_t len = Rf_xlength(v);
+			R_xlen_t i = 0;
+			auto type = RType();
+			for (; i < len; ++i) {
+				auto elt = VECTOR_ELT(v, i);
+				if (elt != R_NilValue) {
+					type = DetectRType(elt, integer64);
+					break;
+				}
+			}
+
+			if (i == len) {
+				return RType::LIST_OF_NULLS;
+			}
+
+			for (; i < len; ++i) {
+				auto elt = VECTOR_ELT(v, i);
+				if (elt != R_NilValue) {
+					auto new_type = DetectRType(elt, integer64);
+					if (new_type != type) {
+						return RType::UNKNOWN;
+					}
+				}
+			}
+
+			if (type == RTypeId::BYTE) {
+				return RType::BLOB;
+			}
+
+			return RType::LIST(type);
+		}
 	}
 	return RType::UNKNOWN;
+}
+
+LogicalType RApiTypes::LogicalTypeFromRType(const RType &rtype, bool experimental) {
+	switch (rtype.id()) {
+	case RType::LOGICAL:
+		return LogicalType::BOOLEAN;
+	case RType::INTEGER:
+		return LogicalType::INTEGER;
+	case RType::NUMERIC:
+		return LogicalType::DOUBLE;
+	case RType::INTEGER64:
+		return LogicalType::BIGINT;
+	case RTypeId::FACTOR: {
+		auto duckdb_levels = rtype.GetFactorLevels();
+		return LogicalType::ENUM(duckdb_levels, rtype.GetFactorLevelsCount());
+	}
+	case RType::STRING:
+		if (experimental) {
+			return RStringsType::Get();
+		} else {
+			return LogicalType::VARCHAR;
+		}
+		break;
+	case RType::TIMESTAMP:
+		return LogicalType::TIMESTAMP;
+	case RType::TIME_SECONDS:
+	case RType::TIME_MINUTES:
+	case RType::TIME_HOURS:
+	case RType::TIME_DAYS:
+	case RType::TIME_WEEKS:
+		return LogicalType::TIME;
+	case RType::TIME_SECONDS_INTEGER:
+	case RType::TIME_MINUTES_INTEGER:
+	case RType::TIME_HOURS_INTEGER:
+	case RType::TIME_DAYS_INTEGER:
+	case RType::TIME_WEEKS_INTEGER:
+		return LogicalType::TIME;
+	case RType::DATE:
+		return LogicalType::DATE;
+	case RType::DATE_INTEGER:
+		return LogicalType::DATE;
+	case RType::LIST_OF_NULLS:
+	case RType::BLOB:
+		return LogicalType::BLOB;
+	case RTypeId::LIST:
+		return LogicalType::LIST(RApiTypes::LogicalTypeFromRType(rtype.GetListChildType(), experimental));
+	case RTypeId::STRUCT: {
+		child_list_t<LogicalType> children;
+		for (const auto &child : rtype.GetStructChildTypes()) {
+			children.push_back(
+			    std::make_pair(child.first, RApiTypes::LogicalTypeFromRType(child.second, experimental)));
+		}
+		if (children.size() == 0) {
+			cpp11::stop("rapi_execute: Packed column must have at least one column");
+		}
+		return LogicalType::STRUCT(std::move(children));
+	}
+
+	default:
+		cpp11::stop("rapi_execute: Can't convert R type to logical type");
+	}
 }
 
 string RApiTypes::DetectLogicalType(const LogicalType &stype, const char *caller) {
@@ -166,7 +327,7 @@ date_t RDateType::Convert(double val) {
 }
 
 timestamp_t RTimestampType::Convert(double val) {
-	return Timestamp::FromEpochSeconds(val);
+	return Timestamp::FromEpochMicroSeconds(round(val * Interval::MICROS_PER_SEC));
 }
 
 dtime_t RTimeSecondsType::Convert(double val) {
@@ -226,10 +387,10 @@ bool RStringSexpType::IsNull(SEXP val) {
 	return val == NA_STRING;
 }
 
-string_t RRawSexpType::Convert(SEXP val) {
-	return string_t((char *)RAW(val), Rf_xlength(val));
+bool RSexpType::IsNull(SEXP val) {
+	return val == R_NilValue;
 }
 
-bool RRawSexpType::IsNull(SEXP val) {
-	return val == R_NilValue;
+string_t RRawSexpType::Convert(SEXP val) {
+	return string_t((char *)RAW(val), Rf_xlength(val));
 }
