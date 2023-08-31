@@ -4,7 +4,7 @@
 namespace duckdb {
 
 template <class NUMERIC_TYPE>
-static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &result) {
+static void ListDistance(DataChunk &args, ExpressionState &, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 
 	auto count = args.size();
@@ -22,28 +22,18 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 		    }
 
 		    NUMERIC_TYPE distance = 0;
-		    NUMERIC_TYPE norm_l = 0;
-		    NUMERIC_TYPE norm_r = 0;
 
 		    auto l_ptr = left_data + left.offset;
 		    auto r_ptr = right_data + right.offset;
+
 		    for (idx_t i = 0; i < left.length; i++) {
 			    auto x = *l_ptr++;
 			    auto y = *r_ptr++;
-			    distance += x * y;
-			    norm_l += x * x;
-			    norm_r += y * y;
+			    auto diff = x - y;
+			    distance += diff * diff;
 		    }
 
-		    auto similarity = distance / (std::sqrt(norm_l) * std::sqrt(norm_r));
-
-		    // clamp to [-1, 1] to avoid floating point errors
-		    if (similarity > 1.0) {
-			    similarity = 1.0;
-		    } else if (similarity < -1.0) {
-			    similarity = -1.0;
-		    }
-		    return similarity;
+		    return std::sqrt(distance);
 	    });
 
 	if (args.AllConstant()) {
@@ -51,12 +41,12 @@ static void ListCosineSimilarity(DataChunk &args, ExpressionState &, Vector &res
 	}
 }
 
-ScalarFunctionSet ListCosineSimilarityFun::GetFunctions() {
-	ScalarFunctionSet set("list_cosine_similarity");
+ScalarFunctionSet ListDistanceFun::GetFunctions() {
+	ScalarFunctionSet set("list_distance");
 	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::FLOAT), LogicalType::LIST(LogicalType::FLOAT)},
-	                               LogicalType::FLOAT, ListCosineSimilarity<float>));
+	                               LogicalType::FLOAT, ListDistance<float>));
 	set.AddFunction(ScalarFunction({LogicalType::LIST(LogicalType::DOUBLE), LogicalType::LIST(LogicalType::DOUBLE)},
-	                               LogicalType::DOUBLE, ListCosineSimilarity<double>));
+	                               LogicalType::DOUBLE, ListDistance<double>));
 	return set;
 }
 

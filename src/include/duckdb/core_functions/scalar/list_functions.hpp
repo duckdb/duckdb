@@ -228,4 +228,25 @@ struct ListCosineSimilarityFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListCosineSimilarityFunAlias {
+	using ALIAS = ListCosineSimilarityFun;
+
+	static constexpr const char *Name = "<=>";
+};
+
+struct ListDistanceFun {
+	static constexpr const char *Name = "list_distance";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the distance between two lists.";
+	static constexpr const char *Example = "list_distance([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListDistanceFunAlias {
+	using ALIAS = ListDistanceFun;
+
+	static constexpr const char *Name = "<->";
+};
+
 } // namespace duckdb
