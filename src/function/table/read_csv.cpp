@@ -429,6 +429,8 @@ private:
 	LineInfo line_info;
 	//! Current Buffer index
 	idx_t cur_buffer_idx = 0;
+	//! Have we initialized our reading
+	bool initialized = false;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -536,6 +538,12 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	auto current_buffer = buffer_manager->GetBuffer(cur_buffer_idx);
 	auto next_buffer = buffer_manager->GetBuffer(cur_buffer_idx + 1);
+//	if (!initialized && file_handle) {
+//		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+//		next_buffer = shared_ptr<CSVBuffer>(
+//		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+//		initialized = true;
+//	}
 	if (!current_buffer) {
 		// This means we are done with the current file, we need to go to the next one (if exists).
 		if (file_index < bind_data.files.size()) {
