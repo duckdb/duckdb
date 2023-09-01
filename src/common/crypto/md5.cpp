@@ -240,7 +240,7 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 void MD5Context::FinishHex(char *out_digest) {
 	data_t digest[MD5_HASH_LENGTH_BINARY];
 	Finish(digest);
-	duckdb_mbedtls::MbedTlsWrapper::ToBase16((char *)digest, out_digest, MD5_HASH_LENGTH_BINARY);
+	duckdb_mbedtls::MbedTlsWrapper::ToBase16(reinterpret_cast<char *>(digest), out_digest, MD5_HASH_LENGTH_BINARY);
 }
 
 string MD5Context::FinishHex() {
