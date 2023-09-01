@@ -22,19 +22,17 @@ void ExecuteExpression(idx_t &elem_cnt, SelectionVector &sel, vector<SelectionVe
 
 	// set the list child vector
 	Vector slice(child_vector, sel, elem_cnt);
-	Vector second_slice(child_vector, sel, elem_cnt);
 	slice.Flatten(elem_cnt);
-	second_slice.Flatten(elem_cnt);
 
+	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
 	input_chunk.data[0].Reference(slice);
-	input_chunk.data[1].Reference(second_slice);
 
 	if (has_index) {
-		input_chunk.data[2].Reference(index_vector);
+		input_chunk.data[1].Reference(index_vector);
 	}
 
 	// check if the lambda expression has an index parameter
-	idx_t slice_offset = has_index ? 3 : 2;
+	idx_t slice_offset = has_index ? 2 : 1;
 
 	// set the other vectors
 	vector<Vector> slices;
@@ -215,11 +213,9 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	// the types of the vectors passed to the expression executor
 	vector<LogicalType> types;
 
+	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
 	// the current child vector
 	types.push_back(child_vector.GetType());
-	// we nest the current child vector for inner lambdas
-	types.push_back(child_vector.GetType());
-
 	if (info.has_index) {
 		// binary lambda function with an index
 		types.push_back(LogicalType::BIGINT);

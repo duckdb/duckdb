@@ -7,19 +7,17 @@
 statement ok
 PRAGMA enable_verification
 
-# don't allow BOUND_AGGREGATE inside lambda expressions (binder error)
+# this BOUND_AGGREGATE is a constant, so we can allow it inside lambda functions
 
-statement error
+query I
 SELECT list_transform([10], x -> sum(1) + x)
 ----
-Binder Error: column "x" must appear in the GROUP BY clause or must be part of an aggregate function.
-Either add it to the GROUP BY list, or use "ANY_VALUE(x)" if the exact value of "x" is not important.
+[11]
 
-statement error
+query I
 SELECT list_filter([10], x -> sum(1) > 0)
 ----
-Binder Error: column "x" must appear in the GROUP BY clause or must be part of an aggregate function.
-Either add it to the GROUP BY list, or use "ANY_VALUE(x)" if the exact value of "x" is not important.
+[10]
 
 # BOUND_BETWEEN
 

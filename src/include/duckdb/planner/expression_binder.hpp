@@ -17,6 +17,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
 
 namespace duckdb {
 
@@ -130,6 +131,7 @@ protected:
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
 	BindResult BindExpression(ColumnRefExpression &expr, idx_t depth);
+	BindResult BindExpression(LambdaRefExpression &expr, idx_t depth);
 	BindResult BindExpression(ComparisonExpression &expr, idx_t depth);
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);

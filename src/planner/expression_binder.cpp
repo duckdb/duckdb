@@ -61,6 +61,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<CollateExpression>(), depth);
 	case ExpressionClass::COLUMN_REF:
 		return BindExpression(expr_ref.Cast<ColumnRefExpression>(), depth);
+	case ExpressionClass::LAMBDA_REF:
+		return BindExpression(expr_ref.Cast<LambdaRefExpression>(), depth);
 	case ExpressionClass::COMPARISON:
 		return BindExpression(expr_ref.Cast<ComparisonExpression>(), depth);
 	case ExpressionClass::CONJUNCTION:

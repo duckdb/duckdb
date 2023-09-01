@@ -99,6 +99,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "PLACEHOLDER";
 	case ExpressionType::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionType::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionType::FUNCTION_REF:
 		return "FUNCTION_REF";
 	case ExpressionType::TABLE_REF:
@@ -156,6 +158,8 @@ string ExpressionClassToString(ExpressionClass type) {
 		return "CAST";
 	case ExpressionClass::COLUMN_REF:
 		return "COLUMN_REF";
+	case ExpressionClass::LAMBDA_REF:
+		return "LAMBDA_REF";
 	case ExpressionClass::COMPARISON:
 		return "COMPARISON";
 	case ExpressionClass::CONJUNCTION:

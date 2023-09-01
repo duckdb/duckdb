@@ -14,6 +14,7 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/parser/expression/lambdaref_expression.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -115,8 +116,8 @@ protected:
 	ColumnBinding GetColumnBinding(column_t column_index);
 };
 
-//! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
-//! parameters.
+//! DummyBinding is like the Binding, except the alias and index are set by default.
+//! Used for binding lambdas and macro parameters.
 struct DummyBinding : public Binding {
 public:
 	static constexpr const BindingType TYPE = BindingType::DUMMY;
@@ -124,16 +125,18 @@ public:
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 
 public:
-	DummyBinding(vector<LogicalType> types_p, vector<string> names_p, string dummy_name_p);
+	DummyBinding(vector<LogicalType> types, vector<string> names, string dummy_name);
 
-	//! Arguments
+	//! Arguments (for macros)
 	vector<unique_ptr<ParsedExpression>> *arguments;
 	//! The name of the dummy binding
 	string dummy_name;
 
 public:
+	//! Binding macros
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	BindResult Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth);
+	//! Binding lambdas
+	BindResult Bind(LambdaRefExpression &lambdaref, idx_t depth);
 
 	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);

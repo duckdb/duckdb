@@ -145,10 +145,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 					// now create the replacement
 					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_ref);
-					// FIXME: is this +1 offset really necessary?
 					replacement =
 					    make_uniq<BoundReferenceExpression>(binding.names[column_idx], binding.types[column_idx],
-					                                        index + bound_lambda_expr.parameter_count + 1);
+					                                        index + bound_lambda_expr.parameter_count);
 					return;
 				}
 			}
@@ -158,11 +157,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		}
 
 		// refers to a lambda parameter inside the current lambda function
-		// we always have an offset of 1, as we push back the lambda parameters into nested lambda functions
-		// FIXME: is this + 1 offset really necessary?
 		auto logical_type = (*bind_lambda_function)(bound_lambda_ref.binding.column_index, list_child_type);
-		replacement =
-		    make_uniq<BoundReferenceExpression>(alias, logical_type, bound_lambda_ref.binding.column_index + 1);
+		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, bound_lambda_ref.binding.column_index);
 		return;
 	}
 
@@ -174,8 +170,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	offset += bound_lambda_expr.parameter_count;
 	offset += bound_lambda_expr.captures.size();
 
-	// FIXME: is this + 1 offset really necessary?
-	replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type, offset + 1);
+	replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type, offset);
 	bound_lambda_expr.captures.push_back(std::move(original));
 }
 

@@ -212,17 +212,19 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &bound_lambda = lambda->Cast<BoundLambdaExpression>();
 
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
-	// expression (rhs)
+	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
+	// correctly binding lambdas one level 'out'. Therefore, we need to decrease their index by the amount of
+	// lambda parameters on this level.
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 
-			idx_t lambda_index = lambda_bindings->size() - i + 1;
+			idx_t lambda_index = lambda_bindings->size() - i;
 			auto &binding = (*lambda_bindings)[i - 1];
 
 			D_ASSERT(binding.names.size() == binding.types.size());
 			for (idx_t column_idx = 0; column_idx < binding.names.size(); column_idx++) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(binding.names[column_idx],
-				                                                              binding.types[column_idx], lambda_index);
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(
+				    binding.names[column_idx], binding.types[column_idx], lambda_index + column_idx);
 				bound_function_expr.children.push_back(std::move(bound_lambda_param));
 			}
 		}

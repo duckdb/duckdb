@@ -18,7 +18,7 @@ class FieldWriter;
 
 //! A BoundLambdaRef expression represents a LambdaRef expression that was bound to an lambda parameter
 //! in the lambda bindings vector. When capturing lambdas the BoundLambdaRef becomes a
-//! BoundReferenceExpresssion, indexing the corresponding lambda parameter in the lambda bindings vector,
+//! BoundReferenceExpression, indexing the corresponding lambda parameter in the lambda bindings vector,
 //! which refers to the physical chunk of the lambda parameter during execution.
 class BoundLambdaRefExpression : public Expression {
 public:
