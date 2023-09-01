@@ -8,7 +8,7 @@
 #' @examples
 #' col_ref_expr <- expr_reference("some_column_name")
 #' col_ref_expr2 <- expr_reference("some_column_name", "some_table_name")
-expr_reference <- function(names, table = NA) {
+expr_reference <- function(names, table = NULL) {
   if (inherits(table, "duckdb_relation")) {
     names <- c(rel_alias(table), names)
   }
