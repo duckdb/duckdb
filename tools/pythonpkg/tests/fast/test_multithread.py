@@ -114,7 +114,7 @@ def execute_many_query(duckdb_conn, queue, pandas):
         """,
             purchases,
         )
-        queue.put(False)
+        queue.put(True)
     except:
         queue.put(False)
 
