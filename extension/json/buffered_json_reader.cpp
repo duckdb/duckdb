@@ -3,8 +3,10 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+
+#include <utility>
 
 namespace duckdb {
 
@@ -38,6 +40,7 @@ bool JSONFileHandle::IsOpen() const {
 
 void JSONFileHandle::Close() {
 	if (file_handle) {
+		Reset();
 		file_handle->Close();
 		file_handle = nullptr;
 	}
@@ -168,11 +171,10 @@ idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, string file_name_p)
-    : context(context), options(options_p), file_name(std::move(file_name_p)), buffer_index(0) {
+    : context(context), options(std::move(options_p)), file_name(std::move(file_name_p)), buffer_index(0) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {
-	D_ASSERT(!IsDone());
 	lock_guard<mutex> guard(lock);
 	auto &file_system = FileSystem::GetFileSystem(context);
 	auto regular_file_handle =
@@ -191,7 +193,7 @@ void BufferedJSONReader::CloseJSONFile() {
 }
 
 bool BufferedJSONReader::IsOpen() const {
-	return file_handle != nullptr;
+	return file_handle != nullptr && file_handle->IsOpen();
 }
 
 bool BufferedJSONReader::IsDone() const {
@@ -316,7 +318,7 @@ void BufferedJSONReader::Reset() {
 	buffer_map.clear();
 	buffer_line_or_object_counts.clear();
 
-	if (!file_handle) {
+	if (!IsOpen()) {
 		return;
 	}
 

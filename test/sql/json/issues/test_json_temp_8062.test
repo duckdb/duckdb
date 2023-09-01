@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_temp_8062.test
+# name: test/sql/json/issues/test_json_temp_8062.test
 # description: Test JSON fields in temporary tables for issue 8062
-# group: [json]
+# group: [issues]
 
 # Can't do reload tests with temp tables
 require skip_reload

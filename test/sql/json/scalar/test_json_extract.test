@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_extract.test
+# name: test/sql/json/scalar/test_json_extract.test
 # description: Test JSON extract
-# group: [json]
+# group: [scalar]
 
 require json
 

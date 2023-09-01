@@ -1,6 +1,6 @@
-# name: test/sql/json/json_empty_array.test
+# name: test/sql/json/table/json_empty_array.test
 # description: Read json files with empty arrays
-# group: [json]
+# group: [table]
 
 require json
 

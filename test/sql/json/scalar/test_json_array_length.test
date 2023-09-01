@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_array_length.test
+# name: test/sql/json/scalar/test_json_array_length.test
 # description: Test JSON array length
-# group: [json]
+# group: [scalar]
 
 require json
 
