@@ -63,11 +63,6 @@ struct ClientData {
 	//! The file search path
 	string file_search_path;
 
-	//! The CSVStateMachineCache caches state machines created for sniffing and parsing csv files
-	//! We cache them because when reading very small csv files, the cost of creating all the possible
-	//! State machines for sniffing becomes a major bottleneck.
-	CSVStateMachineCache state_machine_cache;
-
 	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
 	//! FIXME: this should not be done like this
 	bool debug_set_max_line_length = false;

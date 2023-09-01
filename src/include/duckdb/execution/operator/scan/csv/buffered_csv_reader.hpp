@@ -10,6 +10,7 @@
 
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/base_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 struct CopyInfo;
@@ -43,6 +44,8 @@ public:
 	vector<unsafe_unique_array<char>> cached_buffers;
 
 	unique_ptr<CSVFileHandle> file_handle;
+	//! CSV State Machine Cache
+	CSVStateMachineCache state_machine_cache;
 
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk

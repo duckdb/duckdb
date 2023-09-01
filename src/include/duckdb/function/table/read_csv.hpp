@@ -17,6 +17,7 @@
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_state_machine_cache.hpp"
 
 namespace duckdb {
 
@@ -104,6 +105,10 @@ struct ReadCSVData : public BaseCSVData {
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
 	vector<ColumnInfo> column_info;
+	//! The CSVStateMachineCache caches state machines created for sniffing and parsing csv files
+	//! We cache them because when reading very small csv files, the cost of creating all the possible
+	//! State machines for sniffing becomes a major bottleneck.
+	CSVStateMachineCache state_machine_cache;
 
 	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
 		this->initial_reader = std::move(reader);

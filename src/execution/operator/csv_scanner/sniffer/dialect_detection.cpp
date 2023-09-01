@@ -131,9 +131,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
-					csv_state_machines.emplace_back(
-					    make_uniq<CSVStateMachine>(options, state_machine_options, buffer_manager,
-					                               buffer_manager->context.client_data->state_machine_cache));
+					csv_state_machines.emplace_back(make_uniq<CSVStateMachine>(options, state_machine_options,
+					                                                           buffer_manager, state_machine_cache));
 				}
 			}
 		}

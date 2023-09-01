@@ -47,7 +47,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		D_ASSERT(options.file_path == file_handle->GetFilePath());
 		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto csv_buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
-		CSVSniffer sniffer(options, csv_buffer_manager);
+		CSVSniffer sniffer(options, csv_buffer_manager, state_machine_cache);
 		auto sniffer_result = sniffer.SniffCSV();
 		return_types = sniffer_result.return_types;
 		names = sniffer_result.names;

@@ -2,8 +2,9 @@
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p)
-    : options(options_p), buffer_manager(std::move(buffer_manager_p)) {
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
+                       CSVStateMachineCache &state_machine_cache_p)
+    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)) {
 
 	// Check if any type is BLOB
 	for (auto &type : options.sql_type_list) {
