@@ -9,10 +9,7 @@
 #pragma once
 
 #include "duckdb/common/serializer/format_serializer.hpp"
-
-#ifdef DEBUG
 #include "duckdb/common/pair.hpp"
-#endif
 
 namespace duckdb {
 
