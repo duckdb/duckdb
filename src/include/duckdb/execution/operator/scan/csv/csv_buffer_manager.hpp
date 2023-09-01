@@ -70,11 +70,7 @@ public:
 				cur_pos = buffer_manager->GetStartPos();
 			}
 			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++);
-			if (!cur_buffer_handle) {
-				//! Done Processing the File
-				OP::Finalize(machine, result);
-				return true;
-			}
+			D_ASSERT(cur_buffer_handle);
 		}
 		while (cur_buffer_handle) {
 			char *buffer_handle_ptr = cur_buffer_handle->Ptr();
