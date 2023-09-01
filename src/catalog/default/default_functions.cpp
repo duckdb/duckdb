@@ -156,6 +156,9 @@ static DefaultMacro internal_macros[] = {
 	// date functions
 	{DEFAULT_SCHEMA, "date_add", {"date", "interval", nullptr}, "date + interval"},
 
+	// text functions
+	{DEFAULT_SCHEMA, "ends_with", {"string", "search_string", nullptr}, "suffix(string, search_string)"},
+
 	{nullptr, nullptr, {nullptr}, nullptr}
 	};
 
