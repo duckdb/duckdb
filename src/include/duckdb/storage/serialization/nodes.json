@@ -208,9 +208,6 @@
 
   {
     "class": "PivotColumnEntry",
-    "includes": [
-      "duckdb/parser/tableref/pivotref.hpp"
-    ],
     "members": [
       {
         "id": 100,
