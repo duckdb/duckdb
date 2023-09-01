@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/code_cov/csv_state_machine_invalid_utf.test
 # description: Test to reach error of invalidate state machine due to utf8 incompatible data
-# group: [csv]
+# group: [code_cov]
 
 statement ok
 PRAGMA enable_verification

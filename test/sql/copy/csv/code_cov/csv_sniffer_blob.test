@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/code_cov/csv_sniffer_blob.test
 # description: Test Blob error in sniffer
-# group: [csv]
+# group: [code_cov]
 
 statement ok
 PRAGMA enable_verification

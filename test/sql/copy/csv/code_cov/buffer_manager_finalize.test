@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/code_cov/buffer_manager_finalize.test
 # description: Test to reach Finalize call in the csv buffer manager for codecov
-# group: [csv]
+# group: [code_cov]
 
 statement ok
 PRAGMA enable_verification

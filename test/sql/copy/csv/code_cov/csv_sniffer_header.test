@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/code_cov/csv_sniffer_header.test
 # description: Tests to enforce codecov in csv header sniffing
-# group: [csv]
+# group: [code_cov]
 
 statement ok
 PRAGMA enable_verification

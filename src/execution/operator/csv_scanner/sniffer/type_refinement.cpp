@@ -103,15 +103,6 @@ void CSVSniffer::RefineTypes() {
 		// return all types varchar
 		return;
 	}
-//	if (!requested_types.empty()) {
-//		if (requested_types.size() != best_candidate->dialect_options.num_cols) {
-//			throw InvalidInputException(
-//			    "Error while determining column types: found %lld columns but expected %d. (%s)",
-//			    best_candidate->dialect_options.num_cols, requested_types.size(), best_candidate->options.ToString());
-//		}
-//		detected_types = requested_types;
-//	}
-
 	DataChunk parse_chunk;
 	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, options.sample_chunk_size);
 	for (idx_t i = 1; i < best_candidate->options.sample_chunks; i++) {

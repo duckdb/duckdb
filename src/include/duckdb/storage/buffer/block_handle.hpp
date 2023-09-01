@@ -97,7 +97,7 @@ public:
 	inline const idx_t &GetMemoryUsage() const {
 		return memory_usage;
 	}
-	bool IsUnloaded(){
+	bool IsUnloaded() {
 		return state == BlockState::BLOCK_UNLOADED;
 	}
 

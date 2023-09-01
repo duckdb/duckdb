@@ -99,7 +99,7 @@ void CSVSniffer::DetectHeader() {
 	bool first_row_nulls = true;
 	// This case will fail in dialect detection, so we assert here just for sanity
 	D_ASSERT(best_candidate->options.null_padding ||
-	    best_sql_types_candidates_per_column_idx.size() == best_header_row.size());
+	         best_sql_types_candidates_per_column_idx.size() == best_header_row.size());
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {

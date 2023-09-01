@@ -289,7 +289,8 @@ void CSVSniffer::DetectTypes() {
 		idx_t true_start = 0;
 		idx_t values_start = 0;
 		while (true_start < tuples.size()) {
-			if ( tuples[true_start].values.empty() || (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
+			if (tuples[true_start].values.empty() ||
+			    (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
 				true_start = tuples[true_start].line_number;
 				values_start++;
 			} else {

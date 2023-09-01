@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/code_cov/csv_dialect_detection.test
 # description: Test to reach missing Dialect Detection code.
-# group: [csv]
+# group: [code_cov]
 
 statement ok
 PRAGMA enable_verification
