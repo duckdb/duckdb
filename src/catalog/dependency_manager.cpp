@@ -220,7 +220,7 @@ static bool CheckForeignKeyDependencies(CatalogEntry &entry, catalog_entry_vecto
 				continue;
 			}
 			auto &other_table = other.get().Cast<TableCatalogEntry>();
-			if (referenced_table == other_table.name) {
+			if (StringUtil::CIEquals(referenced_table, other_table.name)) {
 				already_exported = true;
 				break;
 			}

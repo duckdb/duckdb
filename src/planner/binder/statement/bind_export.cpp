@@ -46,7 +46,7 @@ string SanitizeExportIdentifier(const string &str) {
 
 bool IsExistMainKeyTable(string &table_name, catalog_entry_vector_t &unordered) {
 	for (idx_t i = 0; i < unordered.size(); i++) {
-		if (unordered[i].get().name == table_name) {
+		if (StringUtil::CIEquals(unordered[i].get().name, table_name)) {
 			return true;
 		}
 	}
