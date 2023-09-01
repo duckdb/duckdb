@@ -22,7 +22,7 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 			// PARQUET) i.e UNION(a BIT) becomes STRUCT(a VARCHAR)
 			return false;
 		}
-		if (member_name != field_name) {
+		if (!StringUtil::CIEquals(member_name, field_name)) {
 			return false;
 		}
 	}
@@ -38,20 +38,12 @@ void ReconstructTagVector(Vector &result, idx_t count) {
 	// Keep track for every row if the tag is (already) set
 	vector<bool> tag_is_set(count, false);
 
-	vector<LogicalType> types;
-	types.push_back(LogicalType::BOOLEAN);
-	DataChunk tag_chunk;
-	auto &allocator = Allocator::DefaultAllocator();
-	tag_chunk.Initialize(allocator, types, count);
-
 	auto &tags = UnionVector::GetTags(result);
 	UnifiedVectorFormat tag_format;
 	tags.ToUnifiedFormat(count, tag_format);
 	auto tag_data = UnifiedVectorFormat::GetDataNoConst<union_tag_t>(tag_format);
-	auto &tag_validity = FlatVector::Validity(tags);
 
 	for (union_tag_t member_idx = 0; member_idx < member_count; member_idx++) {
-		tag_chunk.Reset();
 		auto &result_child_vector = UnionVector::GetMember(result, member_idx);
 		UnifiedVectorFormat format;
 		result_child_vector.ToUnifiedFormat(count, format);
@@ -73,7 +65,8 @@ void ReconstructTagVector(Vector &result, idx_t count) {
 			// Don't return yet, have to verify that no other tags are non-null
 		} else {
 			for (idx_t i = 0; i < count; i++) {
-				if (!format.validity.RowIsValidUnsafe(i)) {
+				auto index = format.sel->get_index(i);
+				if (!format.validity.RowIsValidUnsafe(index)) {
 					continue;
 				}
 				if (tag_is_set[i]) {
@@ -87,6 +80,7 @@ void ReconstructTagVector(Vector &result, idx_t count) {
 	}
 
 	// Set the validity mask for the tag vector
+	auto &tag_validity = FlatVector::Validity(tags);
 	for (idx_t i = 0; i < count; i++) {
 		if (!tag_is_set[i]) {
 			tag_validity.SetInvalid(i);
