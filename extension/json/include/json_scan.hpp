@@ -187,6 +187,8 @@ public:
 
 	//! Current number of threads active
 	idx_t system_threads;
+	//! Whether we assign one file per thread (only if more files than threads)
+	bool file_per_thread;
 };
 
 struct JSONScanLocalState {
@@ -224,8 +226,8 @@ private:
 	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
 	void SkipOverArrayStart();
 
-	bool ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index, const bool already_incremented_file_idx);
-	void ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReconstructFirstObject();
 	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);

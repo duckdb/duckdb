@@ -205,6 +205,9 @@ void BufferedJSONReader::OpenJSONFile() {
 void BufferedJSONReader::CloseJSONFile() {
 	while (true) {
 		lock_guard<mutex> guard(lock);
+		if (!file_handle->IsOpen()) {
+			return; // Already closed
+		}
 		if (file_handle->RequestedReadsComplete()) {
 			file_handle->Close();
 			break;
@@ -216,7 +219,9 @@ void BufferedJSONReader::Reset() {
 	buffer_index = 0;
 	buffer_map.clear();
 	buffer_line_or_object_counts.clear();
-	file_handle->Reset();
+	if (HasFileHandle()) {
+		file_handle->Reset();
+	}
 }
 
 bool BufferedJSONReader::HasFileHandle() const {
