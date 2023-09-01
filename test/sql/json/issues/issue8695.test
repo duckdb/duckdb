@@ -4,14 +4,9 @@
 
 require json
 
-statement ok
-set threads=2
-
-mode skip
-
 # these two succeeded
 statement ok
-SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM  read_json_auto('data/json/filter_keystage.ndjson');
+SELECT MAX(JSON_ARRAY_LENGTH(filter_keystage))::int - 1 FROM read_json_auto('data/json/filter_keystage.ndjson');
 
 statement ok
 WITH RECURSIVE nums AS (
@@ -21,8 +16,6 @@ WITH RECURSIVE nums AS (
     WHERE n < 5
 )
 SELECT * FROM nums;
-
-mode unskip
 
 # but combining them fails
 statement ok

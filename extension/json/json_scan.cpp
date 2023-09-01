@@ -2,11 +2,11 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -275,7 +275,7 @@ idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 		return state.system_threads;
 	}
 
-	if (!state.json_readers.empty() && state.json_readers[0]->IsOpen()) {
+	if (!state.json_readers.empty() && state.json_readers[0]->HasFileHandle()) {
 		auto &reader = *state.json_readers[0];
 		if (reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) { // Auto-detected NDJSON
 			return state.system_threads;
@@ -611,9 +611,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			ReadNextBufferInternal(gstate, buffer_index);
 			if (buffer_size == 0) {
-				if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
-					current_reader->CloseJSONFile();
-				}
 				if (IsParallel(gstate)) {
 					// If this thread's current reader is still the one at gstate.file_index,
 					// this thread can end the parallel scan
@@ -622,6 +619,9 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 					    current_reader == gstate.json_readers[gstate.file_index].get()) {
 						gstate.file_index++; // End parallel scan
 					}
+				}
+				if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
+					current_reader->CloseJSONFile();
 				}
 				current_reader = nullptr;
 			} else {
@@ -638,9 +638,9 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 			// Try the next reader
 			current_reader = gstate.json_readers[gstate.file_index].get();
-			if (current_reader->IsOpen()) {
+			if (current_reader->HasFileHandle()) {
 				// Can only be open from auto detection, so these should be known
-				if (current_reader->IsDone()) {
+				if (!current_reader->IsOpen()) {
 					// Pipeline was reset, re-open JSON file
 					current_reader->OpenJSONFile();
 				}
@@ -784,7 +784,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t
 		lock_guard<mutex> reader_guard(current_reader->lock);
 		buffer_index = current_reader->GetBufferIndex();
 
-		if (current_reader->IsOpen() && !current_reader->IsDone()) {
+		if (current_reader->HasFileHandle() && current_reader->IsOpen()) {
 			read_size = current_reader->GetFileHandle().Read(buffer_ptr + prev_buffer_remainder, request_size,
 			                                                 gstate.bind_data.type == JSONScanType::SAMPLE);
 			is_last = read_size < request_size;
@@ -970,7 +970,7 @@ idx_t JSONScan::GetBatchIndex(ClientContext &context, const FunctionData *bind_d
 unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &context, const FunctionData *bind_data) {
 	auto &data = bind_data->Cast<JSONScanData>();
 	idx_t per_file_cardinality;
-	if (data.initial_reader && data.initial_reader->IsOpen()) {
+	if (data.initial_reader && data.initial_reader->HasFileHandle()) {
 		per_file_cardinality = data.initial_reader->GetFileHandle().FileSize() / data.avg_tuple_size;
 	} else {
 		per_file_cardinality = 42; // The cardinality of an unknown JSON file is the almighty number 42
