@@ -1,0 +1,33 @@
+# name: test/sql/copy/csv/auto/test_auto_cranlogs.test
+# description: Test read_csv_auto from cranlogs gzip
+# group: [auto]
+
+statement ok
+CREATE TABLE cranlogs AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz');
+
+query I
+SELECT COUNT(*) FROM cranlogs;
+----
+37459
+
+query TTITTTTTTI
+SELECT * FROM cranlogs LIMIT 5;
+----
+2013-06-15	00:18:11	46338	NA	NA	NA	date	1.2-33	JP	1
+2013-06-15	00:18:18	740765	NA	NA	NA	plyr	1.8	JP	2
+2013-06-15	00:54:25	1229408	NA	NA	NA	RJSONIO	1.0-3	JP	3
+2013-06-15	00:58:50	501915	2.15.3	x86_64	linux-gnu	animation	2.2	IN	4
+2013-06-15	00:14:52	254933	3.0.1	x86_64	linux-gnu	foreign	0.8-54	HK	5
+
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE cranlogs2 AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz');
+
+query IIIIIIIIII
+(SELECT * FROM cranlogs EXCEPT SELECT * FROM cranlogs2)
+UNION ALL
+(SELECT * FROM cranlogs2 EXCEPT SELECT * FROM cranlogs)
+----
