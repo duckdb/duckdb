@@ -615,7 +615,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 					current_reader->CloseJSONFile();
 				}
 				if (IsParallel(gstate)) {
-					// If this threads' current reader is still the one at gstate.file_index,
+					// If this thread's current reader is still the one at gstate.file_index,
 					// this thread can end the parallel scan
 					lock_guard<mutex> guard(gstate.lock);
 					if (gstate.file_index < gstate.json_readers.size() &&
@@ -640,6 +640,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			current_reader = gstate.json_readers[gstate.file_index].get();
 			if (current_reader->IsOpen()) {
 				// Can only be open from auto detection, so these should be known
+				if (current_reader->IsDone()) {
+					// Pipeline was reset, re-open JSON file
+					current_reader->OpenJSONFile();
+				}
 				if (!IsParallel(gstate)) {
 					batch_index = gstate.batch_index++;
 					gstate.file_index++;
