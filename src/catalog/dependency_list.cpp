@@ -1,6 +1,5 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
