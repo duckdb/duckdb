@@ -1,4 +1,5 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
@@ -16,6 +17,20 @@ unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(Logic
 	}
 
 	throw SerializationException("No serialization method exists for extension: " + extension_name);
+}
+
+void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) {
+	// general case
+	// first visit the children of this operator
+	for (auto &child : children) {
+		res.VisitOperator(*child);
+	}
+	// now visit the expressions of this operator to resolve any bound column references
+	for (auto &expression : expressions) {
+		res.VisitExpression(&expression);
+	}
+	// finally update the current set of bindings to the current set of column bindings
+	bindings = GetColumnBindings();
 }
 
 void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
