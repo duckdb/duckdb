@@ -56,3 +56,6 @@ select * from t1, t2 where t1.a = t2.a order by t1.a;
 2	2
 2	2
 3	3
+
+
+# constant string to enum should do enum comparisons

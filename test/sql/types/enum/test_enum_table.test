@@ -44,10 +44,10 @@ select * from person where current_mood = 'sad'
 Mark	sad
 
 query TT
-select * from person where current_mood > 'sad'
+select * from person where current_mood > 'sa'
 ----
-Moe	happy
-Pedro	ok
+Mark	sad
+
 
 statement ok
 CREATE TABLE pets (

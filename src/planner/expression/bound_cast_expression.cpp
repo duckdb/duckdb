@@ -84,15 +84,6 @@ unique_ptr<Expression> AddCastToTypeInternal(unique_ptr<Expression> expr, const 
 	if (!target_type.IsValid()) {
 		return expr;
 	}
-	// if we cast to enum, we should cast to varchar first, otherwise all casts to the enum will result in NULL
-	// see test_enum_to_numbers.test
-	if (target_type.id() == LogicalTypeId::ENUM && target_type.id() != expr->return_type.id() && expr->return_type.id() != LogicalTypeId::VARCHAR) {
-		auto extra_cast = cast_functions.GetCastFunction(expr->return_type, LogicalTypeId::VARCHAR, get_input);
-		auto to_varchar = AddCastExpressionInternal(std::move(expr), LogicalTypeId::VARCHAR, std::move(extra_cast), try_cast);
-
-		auto cast_function = cast_functions.GetCastFunction(to_varchar->return_type, target_type, get_input);
-		return AddCastExpressionInternal(std::move(to_varchar), target_type, std::move(cast_function), try_cast);
-	}
 
 	auto cast_function = cast_functions.GetCastFunction(expr->return_type, target_type, get_input);
 	return AddCastExpressionInternal(std::move(expr), target_type, std::move(cast_function), try_cast);

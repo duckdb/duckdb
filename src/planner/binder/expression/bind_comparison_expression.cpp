@@ -67,7 +67,7 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, make_uniq<BoundConstantExpression>(Value("")), collation);
 }
 
-LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
+LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type	) {
 	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
 	switch (result_type.id()) {
 	case LogicalTypeId::DECIMAL: {
@@ -133,6 +133,12 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	right = BoundCastExpression::AddCastToType(context, std::move(right), input_type,
 	                                           input_type.id() == LogicalTypeId::ENUM);
 
+	if (input_type.id() == LogicalTypeId::VARCHAR) {
+		// handle collation
+		auto collation = StringType::GetCollation(input_type);
+		left = PushCollation(context, std::move(left), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right = PushCollation(context, std::move(right), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+	}
 	// now create the bound comparison expression
 	return BindResult(make_uniq<BoundComparisonExpression>(expr.type, std::move(left), std::move(right)));
 }
