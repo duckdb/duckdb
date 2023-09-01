@@ -785,7 +785,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optio
 			is_last = read_size < request_size;
 		} else {
 			read_size = 0;
-			is_last = false;
+			is_last = true;
 		}
 
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
