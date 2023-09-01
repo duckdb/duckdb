@@ -51,7 +51,6 @@ struct RowGroupWriteData {
 class RowGroup : public SegmentBase<RowGroup> {
 public:
 	friend class ColumnData;
-	friend class VersionDeleteState;
 
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
@@ -145,6 +144,7 @@ public:
 
 	void NextVector(CollectionScanState &state);
 
+	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 private:
 	shared_ptr<RowVersionManager> &GetVersionInfo();
 	RowVersionManager &GetOrCreateVersionInfo();

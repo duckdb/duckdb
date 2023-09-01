@@ -869,7 +869,6 @@ public:
 };
 
 idx_t RowGroup::Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count) {
-	lock_guard<mutex> lock(row_group_lock);
 	VersionDeleteState del_state(*this, transaction, table, this->start);
 
 	// obtain a write lock
@@ -890,6 +889,10 @@ void RowGroup::Verify() {
 #endif
 }
 
+ChunkVectorInfo &RowGroup::GetVectorInfo(idx_t vector_idx) {
+	return GetOrCreateVersionInfo().GetVectorInfo(start, vector_idx);
+}
+
 void VersionDeleteState::Delete(row_t row_id) {
 	D_ASSERT(row_id >= 0);
 	idx_t vector_idx = row_id / STANDARD_VECTOR_SIZE;
@@ -897,26 +900,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 	if (current_chunk != vector_idx) {
 		Flush();
 
-		if (!info.version_info) {
-			info.version_info = make_shared<RowVersionManager>();
-		}
-
-		if (!info.version_info->vector_info[vector_idx]) {
-			// no info yet: create it
-			info.version_info->vector_info[vector_idx] =
-			    make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
-		} else if (info.version_info->vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-			auto &constant = info.version_info->vector_info[vector_idx]->Cast<ChunkConstantInfo>();
-			// info exists but it's a constant info: convert to a vector info
-			auto new_info = make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
-			new_info->insert_id = constant.insert_id.load();
-			for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-				new_info->inserted[i] = constant.insert_id.load();
-			}
-			info.version_info->vector_info[vector_idx] = std::move(new_info);
-		}
-		D_ASSERT(info.version_info->vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-		current_info = &info.version_info->vector_info[vector_idx]->Cast<ChunkVectorInfo>();
+		current_info = &info.GetVectorInfo(vector_idx);
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}

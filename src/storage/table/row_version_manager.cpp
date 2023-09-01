@@ -112,10 +112,31 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 }
 
 void RowVersionManager::RevertAppend(idx_t start_row) {
+	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = (start_row + (STANDARD_VECTOR_SIZE - 1)) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		vector_info[vector_idx].reset();
 	}
+}
+
+ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t start_row, idx_t vector_idx) {
+	lock_guard<mutex> lock(version_lock);
+	if (!vector_info[vector_idx]) {
+		// no info yet: create it
+		vector_info[vector_idx] =
+			make_uniq<ChunkVectorInfo>(start_row + vector_idx * STANDARD_VECTOR_SIZE);
+	} else if (vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
+		auto &constant = vector_info[vector_idx]->Cast<ChunkConstantInfo>();
+		// info exists but it's a constant info: convert to a vector info
+		auto new_info = make_uniq<ChunkVectorInfo>(start_row + vector_idx * STANDARD_VECTOR_SIZE);
+		new_info->insert_id = constant.insert_id.load();
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			new_info->inserted[i] = constant.insert_id.load();
+		}
+		vector_info[vector_idx] = std::move(new_info);
+	}
+	D_ASSERT(vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+	return vector_info[vector_idx]->Cast<ChunkVectorInfo>();
 }
 
 MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {

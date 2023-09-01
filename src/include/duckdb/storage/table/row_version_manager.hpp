@@ -16,7 +16,6 @@
 namespace duckdb {
 
 class RowVersionManager {
-	friend class VersionDeleteState;
 public:
 	void SetStart(idx_t start);
 	idx_t GetCommittedDeletedCount(idx_t count);
@@ -29,6 +28,8 @@ public:
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end, idx_t start);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
 	void RevertAppend(idx_t start_row);
+
+	ChunkVectorInfo &GetVectorInfo(idx_t start_row, idx_t vector_idx);
 
 	MetaBlockPointer Checkpoint(MetadataManager &manager);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);

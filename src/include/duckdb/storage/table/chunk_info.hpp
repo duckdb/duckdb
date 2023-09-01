@@ -98,6 +98,7 @@ public:
 public:
 	explicit ChunkVectorInfo(idx_t start);
 
+	// FIXME - grab lock of RowVersionManager in commit/rollback state so we no longer need tons of atomics here
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	atomic<transaction_t> inserted[STANDARD_VECTOR_SIZE];
 	atomic<transaction_t> insert_id;
