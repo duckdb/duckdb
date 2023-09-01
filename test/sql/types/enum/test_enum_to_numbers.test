@@ -3,7 +3,7 @@
 # group: [enum]
 
 statement ok
-create type enum1 as enum ('1', '2', '3');
+create type enum1 as enum ('1', '2', '3', '4');
 
 statement ok
 create table t1 as select range as a from range(10);
@@ -58,4 +58,52 @@ select * from t1, t2 where t1.a = t2.a order by t1.a;
 3	3
 
 
-# constant string to enum should do enum comparisons
+# null enum types cast to null varcahr
+statement ok
+delete from t2 where 1=1;
+
+statement ok
+insert into t2 values (NULL), ('1');
+
+query II
+select * from t1, t2 order by t1.a, t2.a NULLS FIRST;
+----
+0	NULL
+0	1
+1	NULL
+1	1
+2	NULL
+2	1
+3	NULL
+3	1
+4	NULL
+4	1
+5	NULL
+5	1
+6	NULL
+6	1
+7	NULL
+7	1
+8	NULL
+8	1
+9	NULL
+9	1
+
+statement ok
+insert into t2 values  ('2'), ('3'), ('4');
+
+# null to Varchar cast results in NULL
+# NULL != '2' results in NULL and is not included
+query II
+select * from t1, t2 where t2.a NOT IN ('2', '3', '4') order by t1.a, t2.a NULLS FIRST;
+----
+0	1
+1	1
+2	1
+3	1
+4	1
+5	1
+6	1
+7	1
+8	1
+9	1

@@ -67,7 +67,7 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 	PushCollation(context, make_uniq<BoundConstantExpression>(Value("")), collation);
 }
 
-LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type	) {
+LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, LogicalType right_type) {
 	auto result_type = LogicalType::MaxLogicalType(left_type, right_type);
 	switch (result_type.id()) {
 	case LogicalTypeId::DECIMAL: {
