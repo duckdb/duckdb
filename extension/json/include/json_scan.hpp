@@ -187,8 +187,8 @@ public:
 
 	//! Current number of threads active
 	idx_t system_threads;
-	//! Whether we assign one file per thread (only if more files than threads)
-	bool file_per_thread;
+	//! Whether we enable parallel scans (only if less files than threads)
+	bool enable_parallel_scans;
 };
 
 struct JSONScanLocalState {
@@ -221,12 +221,12 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
 	void SkipOverArrayStart();
 
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
 	void ReconstructFirstObject();
 	void ParseNextChunk();
 
@@ -234,6 +234,7 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
 private:

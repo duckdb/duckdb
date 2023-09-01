@@ -2,7 +2,6 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 

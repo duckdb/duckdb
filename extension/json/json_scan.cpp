@@ -199,7 +199,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanD
       allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
       buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-      file_per_thread(bind_data.files.size() >= system_threads) {
+      enable_parallel_scans(bind_data.files.size() < system_threads) {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
@@ -483,6 +483,14 @@ void JSONScanLocalState::ThrowInvalidAtEndError() {
 	throw InvalidInputException("Invalid JSON detected at the end of file \"%s\".", current_reader->GetFileName());
 }
 
+void JSONScanLocalState::TryIncrementFileIndex(JSONScanGlobalState &gstate) const {
+	lock_guard<mutex> guard(gstate.lock);
+	if (gstate.file_index < gstate.json_readers.size() &&
+	    current_reader.get() == gstate.json_readers[gstate.file_index].get()) {
+		gstate.file_index++;
+	}
+}
+
 bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
 	if (bind_data.files.size() >= gstate.system_threads) {
 		return false; // More files than threads, just parallelize over the files
@@ -597,13 +605,14 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		memcpy(buffer_ptr, reconstruct_buffer.get(), prev_buffer_remainder);
 	}
 
-	idx_t buffer_index;
+	optional_idx buffer_index;
 	while (true) {
-		// First we finish the current reader
+		// Now we finish the current reader
 		if (current_reader) {
 			// If we performed the final read of this reader in the previous iteration, close it now
 			if (is_last) {
 				if (gstate.bind_data.type != JSONScanType::SAMPLE) {
+					TryIncrementFileIndex(gstate);
 					current_reader->CloseJSONFile();
 				}
 				current_reader = nullptr;
@@ -615,21 +624,18 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 			// If this is the last read, end the parallel scan now so threads can move on
 			if (is_last && IsParallel(gstate)) {
-				lock_guard<mutex> guard(gstate.lock);
-				if (gstate.file_index < gstate.json_readers.size() &&
-				    current_reader == gstate.json_readers[gstate.file_index].get()) {
-					gstate.file_index++;
-				}
+				TryIncrementFileIndex(gstate);
 			}
 
 			if (buffer_size == 0) {
 				continue; // We didn't read anything, re-enter the loop
 			} else {
-				break; // We read something!
+				break;    // We read something!
 			}
 		}
 
 		// If we got here, we don't have a reader (anymore). Try to get one
+		is_last = false;
 		{
 			lock_guard<mutex> guard(gstate.lock);
 			if (gstate.file_index == gstate.json_readers.size()) {
@@ -645,8 +651,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			}
 
 			// Auto-detect format / record type
-			if (!gstate.file_per_thread) {
-				// If less files than threads: Auto-detect within the lock, so threads may join a parallel NDJSON scan
+			if (gstate.enable_parallel_scans) {
+				// Auto-detect within the lock, so threads may join a parallel NDJSON scan
 				if (current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
 					ReadAndAutoDetect(gstate, buffer_index);
 				}
@@ -661,13 +667,13 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		}
 
 		// If we haven't already, increment the file index if non-parallel scan
-		if (!gstate.file_per_thread && !IsParallel(gstate)) {
-			lock_guard<mutex> guard(gstate.lock);
-			gstate.file_index++;
+		if (gstate.enable_parallel_scans && !IsParallel(gstate)) {
+			TryIncrementFileIndex(gstate);
 		}
 
-		if (buffer_size == 0) {
-			continue; // File was empty, re-enter loop
+		if (!buffer_index.IsValid() || buffer_size == 0) {
+			// If we didn't get a buffer index (because not auto-detecting), or the file was empty, just re-enter loop
+			continue;
 		}
 
 		// Assign the next batch index
@@ -683,9 +689,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	}
 
 	// Create an entry and insert it into the map
-	auto json_buffer_handle = make_uniq<JSONBufferHandle>(buffer_index, readers, std::move(buffer), buffer_size);
+	auto json_buffer_handle =
+	    make_uniq<JSONBufferHandle>(buffer_index.GetIndex(), readers, std::move(buffer), buffer_size);
 	current_buffer_handle = json_buffer_handle.get();
-	current_reader->InsertBuffer(buffer_index, std::move(json_buffer_handle));
+	current_reader->InsertBuffer(buffer_index.GetIndex(), std::move(json_buffer_handle));
 
 	prev_buffer_remainder = 0;
 	lines_or_objects_in_buffer = 0;
@@ -696,7 +703,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	return true;
 }
 
-void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index) {
+void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index) {
 	// We have to detect the JSON format - hold the gstate lock while we do this
 	ReadNextBufferInternal(gstate, buffer_index);
 	if (buffer_size == 0) {
@@ -719,7 +726,7 @@ void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &b
 	}
 }
 
-void JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index) {
+void JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index) {
 	if (current_reader->GetFileHandle().CanSeek()) {
 		ReadNextBufferSeek(gstate, buffer_index);
 	} else {
@@ -727,12 +734,12 @@ void JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, idx
 	}
 
 	buffer_offset = 0;
-	if (buffer_index == 0 && current_reader->GetFormat() == JSONFormat::ARRAY) {
+	if (buffer_index.GetIndex() == 0 && current_reader->GetFormat() == JSONFormat::ARRAY) {
 		SkipOverArrayStart();
 	}
 }
 
-void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index) {
+void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index) {
 	auto &file_handle = current_reader->GetFileHandle();
 
 	idx_t request_size = gstate.buffer_capacity - prev_buffer_remainder - YYJSON_PADDING_SIZE;
@@ -750,13 +757,13 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &
 			ThrowInvalidAtEndError();
 		}
 
-		if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+		if (read_size != 0 && current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
 			batch_index = gstate.batch_index++;
 		}
 	}
 	buffer_size = prev_buffer_remainder + read_size;
 	if (buffer_size == 0) {
-		current_reader->SetBufferLineOrObjectCount(buffer_index, 0);
+		current_reader->SetBufferLineOrObjectCount(buffer_index.GetIndex(), 0);
 		return;
 	}
 
@@ -765,7 +772,7 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &
 	                           gstate.bind_data.type == JSONScanType::SAMPLE);
 }
 
-void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index) {
+void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index) {
 	idx_t request_size = gstate.buffer_capacity - prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	idx_t read_size;
 	{
@@ -785,13 +792,13 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t
 			ThrowInvalidAtEndError();
 		}
 
-		if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+		if (read_size != 0 && current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
 			batch_index = gstate.batch_index++;
 		}
 	}
 	buffer_size = prev_buffer_remainder + read_size;
 	if (buffer_size == 0) {
-		current_reader->SetBufferLineOrObjectCount(buffer_index, 0);
+		current_reader->SetBufferLineOrObjectCount(buffer_index.GetIndex(), 0);
 		return;
 	}
 }
