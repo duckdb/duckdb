@@ -12,23 +12,41 @@ statement ok
 create table t2 (a enum1);
 
 statement ok
-insert into t2 values ('1'), ('2'), ('3'), ('1'), ('2');
+insert into t2 values ('1'), ('2'), ('3');
 
 query I
-select distinct(t1.a) from t1, t2 where t1.a != t2.a order by t1.a;
+select t1.a from t1, t2 where t1.a != t2.a order by t1.a;
 ----
+0
+0
+0
+1
 1
 2
+2
+3
 3
 4
+4
+4
+5
+5
 5
 6
+6
+6
+7
+7
 7
 8
+8
+8
 9
-10
+9
+9
 
-mode skip
+statement ok
+insert into t2 values ('1'), ('2');
 
 query II
 select * from t1, t2 where t1.a = t2.a order by t1.a;

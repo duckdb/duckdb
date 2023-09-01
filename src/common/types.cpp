@@ -661,6 +661,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		return right;
 	} else if (right.id() == LogicalTypeId::UNKNOWN) {
 		return left;
+	} else if ((right.id() == LogicalTypeId::ENUM || left.id() == LogicalTypeId::ENUM) && right.id() != left.id()) {
+		// if one is an enum and the other is not, compare strings, not enums
+		// see https://github.com/duckdb/duckdb/issues/8561
+		return LogicalTypeId::VARCHAR;
 	} else if (left.id() < right.id()) {
 		return right;
 	}
