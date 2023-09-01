@@ -71,8 +71,8 @@ public:
 public:
 	explicit ChunkConstantInfo(idx_t start);
 
-	atomic<transaction_t> insert_id;
-	atomic<transaction_t> delete_id;
+	transaction_t insert_id;
+	transaction_t delete_id;
 
 public:
 	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) override;
@@ -98,15 +98,14 @@ public:
 public:
 	explicit ChunkVectorInfo(idx_t start);
 
-	// FIXME - grab lock of RowVersionManager in commit/rollback state so we no longer need tons of atomics here
 	//! The transaction ids of the transactions that inserted the tuples (if any)
-	atomic<transaction_t> inserted[STANDARD_VECTOR_SIZE];
-	atomic<transaction_t> insert_id;
-	atomic<bool> same_inserted_id;
+	transaction_t inserted[STANDARD_VECTOR_SIZE];
+	transaction_t insert_id;
+	bool same_inserted_id;
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
-	atomic<transaction_t> deleted[STANDARD_VECTOR_SIZE];
-	atomic<bool> any_deleted;
+	transaction_t deleted[STANDARD_VECTOR_SIZE];
+	bool any_deleted;
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,

@@ -17,6 +17,11 @@ namespace duckdb {
 
 class RowVersionManager {
 public:
+	explicit RowVersionManager(idx_t start);
+
+	idx_t GetStart() {
+		return start;
+	}
 	void SetStart(idx_t start);
 	idx_t GetCommittedDeletedCount(idx_t count);
 
@@ -25,21 +30,24 @@ public:
 										  SelectionVector &sel_vector, idx_t max_count);
 	bool Fetch(TransactionData transaction, idx_t row);
 
-	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end, idx_t start);
+	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
 	void CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_t count);
 	void RevertAppend(idx_t start_row);
 
-	ChunkVectorInfo &GetVectorInfo(idx_t start_row, idx_t vector_idx);
+	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
+	void CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count);
 
 	MetaBlockPointer Checkpoint(MetadataManager &manager);
-	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager);
+	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start);
 
 private:
 	mutex version_lock;
+	idx_t start;
 	unique_ptr<ChunkInfo> vector_info[Storage::ROW_GROUP_VECTOR_COUNT];
 
 private:
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);
+	ChunkVectorInfo &GetVectorInfo(idx_t vector_idx);
 };
 
 } // namespace duckdb

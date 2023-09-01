@@ -2,8 +2,10 @@
 
 namespace duckdb {
 
+RowVersionManager::RowVersionManager(idx_t start) : start(start) {}
 
-void RowVersionManager::SetStart(idx_t start) {
+void RowVersionManager::SetStart(idx_t new_start) {
+	this->start = new_start;
 	idx_t current_start = start;
 	for (idx_t i = 0; i < Storage::ROW_GROUP_VECTOR_COUNT; i++) {
 		if (vector_info[i]) {
@@ -62,7 +64,7 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
 }
 
-void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end, idx_t start) {
+void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
@@ -102,12 +104,12 @@ void RowVersionManager::CommitAppend(transaction_t commit_id, idx_t row_group_st
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
-		idx_t end =
+		idx_t vstart = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
+		idx_t vend =
 		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 
 		auto info = vector_info[vector_idx].get();
-		info->CommitAppend(commit_id, start, end);
+		info->CommitAppend(commit_id, vstart, vend);
 	}
 }
 
@@ -119,24 +121,33 @@ void RowVersionManager::RevertAppend(idx_t start_row) {
 	}
 }
 
-ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t start_row, idx_t vector_idx) {
-	lock_guard<mutex> lock(version_lock);
+ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 	if (!vector_info[vector_idx]) {
 		// no info yet: create it
 		vector_info[vector_idx] =
-			make_uniq<ChunkVectorInfo>(start_row + vector_idx * STANDARD_VECTOR_SIZE);
+			make_uniq<ChunkVectorInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
 	} else if (vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
 		auto &constant = vector_info[vector_idx]->Cast<ChunkConstantInfo>();
 		// info exists but it's a constant info: convert to a vector info
-		auto new_info = make_uniq<ChunkVectorInfo>(start_row + vector_idx * STANDARD_VECTOR_SIZE);
-		new_info->insert_id = constant.insert_id.load();
+		auto new_info = make_uniq<ChunkVectorInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
+		new_info->insert_id = constant.insert_id;
 		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			new_info->inserted[i] = constant.insert_id.load();
+			new_info->inserted[i] = constant.insert_id;
 		}
 		vector_info[vector_idx] = std::move(new_info);
 	}
 	D_ASSERT(vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 	return vector_info[vector_idx]->Cast<ChunkVectorInfo>();
+}
+
+idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
+	lock_guard<mutex> lock(version_lock);
+	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
+}
+
+void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count) {
+	lock_guard<mutex> lock(version_lock);
+	GetVectorInfo(vector_idx).CommitDelete(commit_id, rows, count);
 }
 
 MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {
@@ -169,12 +180,12 @@ MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {
 	return delete_location;
 }
 
-shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager) {
+shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start) {
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
 	MetadataReader source(manager, delete_pointer);
-	auto version_info = make_shared<RowVersionManager>();
+	auto version_info = make_shared<RowVersionManager>(start);
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);
 	for (idx_t i = 0; i < chunk_count; i++) {

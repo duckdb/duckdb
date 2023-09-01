@@ -546,7 +546,7 @@ shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
 	}
 	lock_guard<mutex> lock(row_group_lock);
 	if (deletes_pointer.IsValid() && !deletes_is_loaded) {
-		version_info = RowVersionManager::Deserialize(deletes_pointer, GetBlockManager().GetMetadataManager());
+		version_info = RowVersionManager::Deserialize(deletes_pointer, GetBlockManager().GetMetadataManager(), start);
 		deletes_is_loaded = true;
 	}
 	return version_info;
@@ -557,7 +557,7 @@ RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
 	if (!vinfo) {
 		lock_guard<mutex> lock(row_group_lock);
 		if (!version_info) {
-			version_info = make_shared<RowVersionManager>();
+			version_info = make_shared<RowVersionManager>(start);
 		}
 	}
 	return *version_info;
@@ -616,7 +616,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 	}
 	// create the version_info if it doesn't exist yet
 	auto &vinfo = GetOrCreateVersionInfo();
-	vinfo.AppendVersionInfo(transaction, count, row_group_start, row_group_end, this->start);
+	vinfo.AppendVersionInfo(transaction, count, row_group_start, row_group_end);
 	this->count = row_group_end;
 }
 
@@ -848,14 +848,13 @@ void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentI
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, TransactionData transaction, DataTable &table, idx_t base_row)
-	    : info(info), transaction(transaction), table(table), current_info(nullptr),
+	    : info(info), transaction(transaction), table(table),
 	      current_chunk(DConstants::INVALID_INDEX), count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;
 	TransactionData transaction;
 	DataTable &table;
-	ChunkVectorInfo *current_info;
 	idx_t current_chunk;
 	row_t rows[STANDARD_VECTOR_SIZE];
 	idx_t count;
@@ -889,8 +888,8 @@ void RowGroup::Verify() {
 #endif
 }
 
-ChunkVectorInfo &RowGroup::GetVectorInfo(idx_t vector_idx) {
-	return GetOrCreateVersionInfo().GetVectorInfo(start, vector_idx);
+idx_t RowGroup::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
+	return GetOrCreateVersionInfo().DeleteRows(vector_idx, transaction_id, rows, count);
 }
 
 void VersionDeleteState::Delete(row_t row_id) {
@@ -900,7 +899,6 @@ void VersionDeleteState::Delete(row_t row_id) {
 	if (current_chunk != vector_idx) {
 		Flush();
 
-		current_info = &info.GetVectorInfo(vector_idx);
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}
@@ -914,11 +912,11 @@ void VersionDeleteState::Flush() {
 	// it is possible for delete statements to delete the same tuple multiple times when combined with a USING clause
 	// in the current_info->Delete, we check which tuples are actually deleted (excluding duplicate deletions)
 	// this is returned in the actual_delete_count
-	auto actual_delete_count = current_info->Delete(transaction.transaction_id, rows, count);
+	auto actual_delete_count = info.DeleteRows(current_chunk, transaction.transaction_id, rows, count);
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
-		transaction.transaction->PushDelete(table, current_info, rows, actual_delete_count, base_row + chunk_row);
+		transaction.transaction->PushDelete(table, info.GetOrCreateVersionInfo(), current_chunk, rows, actual_delete_count, base_row + chunk_row);
 	}
 	count = 0;
 }
