@@ -15,6 +15,7 @@
 #include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
@@ -28,6 +29,7 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -353,6 +355,20 @@ PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &deserializer) {
 	return result;
 }
 
+void PivotColumnEntry::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(100, "values", values);
+	serializer.WritePropertyWithDefault(101, "star_expr", star_expr, unique_ptr<ParsedExpression>());
+	serializer.WriteProperty(102, "alias", alias);
+}
+
+PivotColumnEntry PivotColumnEntry::FormatDeserialize(FormatDeserializer &deserializer) {
+	PivotColumnEntry result;
+	deserializer.ReadProperty(100, "values", result.values);
+	deserializer.ReadPropertyWithDefault(101, "star_expr", result.star_expr, unique_ptr<ParsedExpression>());
+	deserializer.ReadProperty(102, "alias", result.alias);
+	return result;
+}
+
 void ReadCSVData::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "files", files);
 	serializer.WriteProperty(101, "csv_types", csv_types);
@@ -426,6 +442,20 @@ VacuumOptions VacuumOptions::FormatDeserialize(FormatDeserializer &deserializer)
 	VacuumOptions result;
 	deserializer.ReadProperty(100, "vacuum", result.vacuum);
 	deserializer.ReadProperty(101, "analyze", result.analyze);
+	return result;
+}
+
+void interval_t::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(1, "months", months);
+	serializer.WriteProperty(2, "days", days);
+	serializer.WriteProperty(3, "micros", micros);
+}
+
+interval_t interval_t::FormatDeserialize(FormatDeserializer &deserializer) {
+	interval_t result;
+	deserializer.ReadProperty(1, "months", result.months);
+	deserializer.ReadProperty(2, "days", result.days);
+	deserializer.ReadProperty(3, "micros", result.micros);
 	return result;
 }
 

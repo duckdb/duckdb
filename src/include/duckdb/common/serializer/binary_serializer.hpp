@@ -18,15 +18,13 @@ namespace duckdb {
 
 struct BinarySerializer : public FormatSerializer {
 private:
-#ifdef DEBUG
 	struct DebugState {
 		unordered_set<const char *> seen_field_tags;
 		unordered_set<field_id_t> seen_field_ids;
 		vector<pair<const char *, field_id_t>> seen_fields;
 	};
-	vector<DebugState> debug_stack;
-#endif
 
+	vector<DebugState> debug_stack;
 	vector<data_t> data;
 
 	template <class T>

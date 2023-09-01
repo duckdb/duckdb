@@ -474,18 +474,4 @@ timestamp_t Interval::Add(timestamp_t left, interval_t right) {
 	return Timestamp::FromDatetime(new_date, new_time);
 }
 
-void interval_t::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(1, "months", months);
-	serializer.WriteProperty(2, "days", days);
-	serializer.WriteProperty(3, "micros", micros);
-}
-
-interval_t interval_t::FormatDeserialize(FormatDeserializer &source) {
-	interval_t result;
-	source.ReadProperty(1, "months", result.months);
-	source.ReadProperty(2, "days", result.days);
-	source.ReadProperty(3, "micros", result.micros);
-	return result;
-}
-
 } // namespace duckdb

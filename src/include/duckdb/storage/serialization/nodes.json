@@ -205,6 +205,32 @@
     ],
     "pointer_type": "none"
   },
+
+  {
+    "class": "PivotColumnEntry",
+    "includes": [
+      "duckdb/parser/tableref/pivotref.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "values",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 101,
+        "name": "star_expr",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "id": 102,
+        "name": "alias",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
+  },
   {
     "class": "BoundPivotInfo",
     "includes": [
@@ -730,6 +756,30 @@
         "id": 101,
         "name": "types",
         "type": "vector<LogicalType>"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "interval_t",
+    "includes": [
+      "duckdb/common/types/interval.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "months",
+        "type": "int32_t"
+      },
+      {
+          "id": 2,
+          "name": "days",
+          "type": "int32_t"
+      },
+      {
+          "id": 3,
+          "name": "micros",
+          "type": "int64_t"
       }
     ],
     "pointer_type": "none"

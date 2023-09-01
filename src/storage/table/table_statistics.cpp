@@ -115,20 +115,22 @@ void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
 }
 
 void TableStatistics::FormatSerialize(FormatSerializer &serializer) {
-	for (auto &stats : column_stats) {
-		stats->FormatSerialize(serializer);
-	}
+	auto column_count = column_stats.size();
+	serializer.WriteList(100, "column_stats", column_count,
+	                     [&](FormatSerializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
 }
 
 void TableStatistics::FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns) {
-	for (auto &col : columns.Physical()) {
-		// Propagate the logical type
+	auto physical_columns = columns.Physical();
+	auto iter = physical_columns.begin();
+	deserializer.ReadList(100, "column_stats", [&](FormatDeserializer::List &list, idx_t i) {
+		auto &col = *iter.operator++();
 		auto type = col.GetType();
 		deserializer.Set<LogicalType &>(type);
 		auto stats = ColumnStatistics::FormatDeserialize(deserializer);
 		deserializer.Unset<LogicalType>();
 		column_stats.push_back(std::move(stats));
-	}
+	});
 }
 
 unique_ptr<TableStatisticsLock> TableStatistics::GetLock() {

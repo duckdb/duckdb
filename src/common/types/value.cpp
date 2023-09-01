@@ -1781,6 +1781,7 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 	if (!IsNull()) {
 		switch (type_.InternalType()) {
 		case PhysicalType::BIT:
+			throw InternalException("BIT type should not be serialized");
 		case PhysicalType::BOOL:
 			serializer.WriteProperty(102, "value", value_.boolean);
 			break;
@@ -1856,6 +1857,7 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	new_value.is_null = false;
 	switch (type.InternalType()) {
 	case PhysicalType::BIT:
+		throw InternalException("BIT type should not be deserialized");
 	case PhysicalType::BOOL:
 		new_value.value_.boolean = deserializer.ReadProperty<bool>(102, "value");
 		break;

@@ -99,7 +99,7 @@ void Vector::Reference(const Value &value) {
 	}
 }
 
-void Vector::Reference(Vector &other) {
+void Vector::Reference(const Vector &other) {
 	if (other.GetType().id() != GetType().id()) {
 		throw InternalException("Vector::Reference used on vector of different type");
 	}
@@ -107,12 +107,12 @@ void Vector::Reference(Vector &other) {
 	Reinterpret(other);
 }
 
-void Vector::ReferenceAndSetType(Vector &other) {
+void Vector::ReferenceAndSetType(const Vector &other) {
 	type = other.GetType();
 	Reference(other);
 }
 
-void Vector::Reinterpret(Vector &other) {
+void Vector::Reinterpret(const Vector &other) {
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
 	AssignSharedPointer(auxiliary, other.auxiliary);

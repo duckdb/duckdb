@@ -275,8 +275,10 @@ void DataChunk::FormatSerialize(FormatSerializer &serializer) const {
 	// Write the data
 	serializer.WriteList(102, "columns", column_count, [&](FormatSerializer::List &list, idx_t i) {
 		list.WriteObject([&](FormatSerializer &object) {
-			// FIXME: Its not great that serializing a vector mutates it
-			const_cast<Vector &>(data[i]).FormatSerialize(object, row_count);
+			// Reference the vector to avoid potentially mutating it during serialization
+			Vector serialized_vector(data[i].GetType());
+			serialized_vector.Reference(data[i]);
+			serialized_vector.FormatSerialize(object, row_count);
 		});
 	});
 }
