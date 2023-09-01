@@ -3,9 +3,8 @@
 namespace duckdb {
 
 CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
-                             const string &path_p, FileCompressionType compression, bool enable_reset)
-    : fs(fs), allocator(allocator), file_handle(std::move(file_handle_p)), path(path_p), compression(compression),
-      reset_enabled(enable_reset) {
+                             const string &path_p, FileCompressionType compression)
+    : file_handle(std::move(file_handle_p)), path(path_p) {
 	can_seek = file_handle->CanSeek();
 	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
@@ -21,9 +20,9 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 }
 
 unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-                                                  FileCompressionType compression, bool enable_reset) {
+                                                  FileCompressionType compression) {
 	auto file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
-	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression, enable_reset);
+	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression);
 }
 
 bool CSVFileHandle::CanSeek() {
@@ -87,10 +86,6 @@ string CSVFileHandle::ReadLine() {
 			carriage_return = true;
 		}
 	}
-}
-
-void CSVFileHandle::DisableReset() {
-	this->reset_enabled = false;
 }
 
 string CSVFileHandle::GetFilePath() {

@@ -27,7 +27,7 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
                                            ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &allocator = BufferAllocator::Get(context);
-	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression, false);
+	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression);
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {
@@ -813,11 +813,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 
 	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data, idx_t &file_index,
 	                                           idx_t &total_size) {
-		auto reader = GetCSVReaderInternal(context, bind_data, file_index, total_size);
-		if (reader) {
-			reader->file_handle->DisableReset();
-		}
-		return reader;
+		return GetCSVReaderInternal(context, bind_data, file_index, total_size);
 	}
 
 private:

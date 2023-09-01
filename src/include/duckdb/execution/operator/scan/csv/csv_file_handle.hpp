@@ -20,7 +20,7 @@ class FileSystem;
 struct CSVFileHandle {
 public:
 	CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p, const string &path_p,
-	              FileCompressionType compression, bool enable_reset = true);
+	              FileCompressionType compression);
 
 	mutex main_mutex;
 
@@ -36,21 +36,17 @@ public:
 	idx_t Read(void *buffer, idx_t nr_bytes);
 
 	string ReadLine();
-	void DisableReset();
+
 	string GetFilePath();
 
 	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
 	                                             FileCompressionType compression);
 	static unique_ptr<CSVFileHandle> OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
-	                                          FileCompressionType compression, bool enable_reset);
+	                                          FileCompressionType compression);
 
 private:
-	FileSystem &fs;
-	Allocator &allocator;
 	unique_ptr<FileHandle> file_handle;
 	string path;
-	FileCompressionType compression;
-	bool reset_enabled = true;
 	bool can_seek = false;
 	bool on_disk_file = false;
 	idx_t file_size = 0;

@@ -45,7 +45,7 @@ BaseCSVReader::~BaseCSVReader() {
 
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(ClientContext &context, const CSVReaderOptions &options_p) {
 	return CSVFileHandle::OpenFile(FileSystem::GetFileSystem(context), BufferAllocator::Get(context),
-	                               options_p.file_path, options_p.compression, true);
+	                               options_p.file_path, options_p.compression);
 }
 
 void BaseCSVReader::InitParseChunk(idx_t num_cols) {
