@@ -107,3 +107,18 @@ select * from t1, t2 where t2.a NOT IN ('2', '3', '4') order by t1.a, t2.a NULLS
 7	1
 8	1
 9	1
+
+statement ok
+delete from t2 where 1=1;
+
+statement ok
+insert into t2 values ('1'), ('2'), ('3');
+
+# should not do a try cast
+# cast '2' to enum should be used, which is then pushed down
+# into the enum table fileters
+query II
+EXPLAIN select * from t1, t2 where t2.a = '2' order by t1.a;
+----
+physical_plan	<!REGEX>:.*TRY_CAST\(.*
+
