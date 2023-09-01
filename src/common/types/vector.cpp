@@ -477,7 +477,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::TIME:
 		return Value::TIME(reinterpret_cast<dtime_t *>(data)[index]);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(reinterpret_cast<dtime_t *>(data)[index]);
+		return Value::TIMETZ(reinterpret_cast<dtime_tz_t *>(data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(reinterpret_cast<int64_t *>(data)[index]);
 	case LogicalTypeId::UTINYINT:

@@ -71,7 +71,7 @@ struct StringCastTZ {
 template <>
 duckdb::string_t StringCastTZ::Operation(date_t input, Vector &result);
 template <>
-duckdb::string_t StringCastTZ::Operation(dtime_t input, Vector &result);
+duckdb::string_t StringCastTZ::Operation(dtime_tz_t input, Vector &result);
 template <>
 duckdb::string_t StringCastTZ::Operation(timestamp_t input, Vector &result);
 

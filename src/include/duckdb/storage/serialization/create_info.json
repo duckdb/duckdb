@@ -86,6 +86,16 @@
         "id": 206,
         "name": "column_ids",
         "type": "vector<column_t>"
+      },
+      {
+        "id": 207,
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>"
+      },
+      {
+        "id": 208,
+        "name": "index_type_name",
+        "type": "string"
       }
     ]
   },

@@ -1,0 +1,29 @@
+# name: test/sql/export/parquet/export_parquet_bit.test
+# description: Test EXPORT DATABASE with BIT columns
+# group: [parquet]
+
+require parquet
+
+statement ok
+begin transaction;
+
+statement ok
+create table tbl as select "bit" from test_all_types(), range(3);
+
+query I nosort result
+select * from tbl;
+----
+
+# now export the db
+statement ok
+EXPORT DATABASE '__TEST_DIR__/export_test' (FORMAT PARQUET)
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/export_test'
+
+query I nosort result
+select * from tbl;
+----

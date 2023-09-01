@@ -231,7 +231,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(0));
+		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
 		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
@@ -300,7 +300,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		return Value::TIMETZ(
+		    dtime_tz_t(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
@@ -587,9 +588,9 @@ Value Value::TIME(dtime_t value) {
 	return result;
 }
 
-Value Value::TIMETZ(dtime_t value) {
+Value Value::TIMETZ(dtime_tz_t value) {
 	Value result(LogicalType::TIME_TZ);
-	result.value_.time = value;
+	result.value_.timetz = value;
 	result.is_null = false;
 	return result;
 }
@@ -955,8 +956,9 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_t, T>(value_.time);
+	case LogicalTypeId::TIME_TZ:
+		return Cast::Operation<dtime_tz_t, T>(value_.timetz);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_t, T>(value_.timestamp);
@@ -1028,7 +1030,6 @@ int64_t Value::GetValue() const {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return value_.bigint;
 	default:
@@ -1146,8 +1147,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TIMESTAMPMS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMPSEC(timestamp_t(value));
-	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_t(value));
 	case LogicalTypeId::ENUM:
