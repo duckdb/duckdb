@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
+idx_t GetLambdaParamCount(const vector<DummyBinding> &lambda_bindings) {
 	idx_t count = 0;
 	for (auto &binding : lambda_bindings) {
 		count += binding.names.size();
@@ -20,15 +20,35 @@ idx_t GetLambdaParamCount(vector<DummyBinding> &lambda_bindings) {
 	return count;
 }
 
-idx_t GetLambdaParamIndex(vector<DummyBinding> &lambda_bindings, BoundLambdaRefExpression &bound_lambda_ref_expr) {
+idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
+                          const BoundLambdaRefExpression &bound_lambda_ref_expr) {
+	D_ASSERT(bound_lambda_ref_expr.lambda_index < lambda_bindings.size());
 	idx_t offset = 0;
-	// count the remaining lambda parameters AFTER (deeper nested than) the current lambda parameter,
+	// count the remaining lambda parameters BEFORE the current lambda parameter,
 	// as these will be in front of the current lambda parameter in the input chunk
 	for (idx_t i = bound_lambda_ref_expr.lambda_index + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].names.size();
 	}
-	offset += bound_lambda_ref_expr.binding.column_index;
+	offset += lambda_bindings[bound_lambda_ref_expr.lambda_index].names.size() -
+	          bound_lambda_ref_expr.binding.column_index - 1;
+	offset += bound_lambda_expr.parameter_count;
 	return offset;
+}
+
+idx_t GetOuterLambdaIndex(const vector<DummyBinding> &lambda_bindings, const string &alias) {
+	// we assume that lambda parameters can never have the same alias
+	idx_t offset = 0;
+	for (idx_t i = lambda_bindings.size(); i > 0; i--) {
+		auto &binding = lambda_bindings[i - 1];
+		for (idx_t column_idx = binding.names.size(); column_idx > 0; column_idx--) {
+			if (binding.names[column_idx - 1] == alias) {
+				return offset;
+			}
+			offset++;
+		}
+	}
+	// we did not find the alias in the outer lambdas, it must be in the current lambda parameters
+	return DConstants::INVALID_INDEX;
 }
 
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
@@ -134,6 +154,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		auto alias = bound_lambda_ref.alias;
 
 		// refers to a lambda parameter outside the current lambda function
+		// so the lambda parameter will be inside the lambda_bindings
 		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {
 
 			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_index];
@@ -144,10 +165,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 				if (column_idx == bound_lambda_ref.binding.column_index) {
 
 					// now create the replacement
-					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_ref);
-					replacement =
-					    make_uniq<BoundReferenceExpression>(binding.names[column_idx], binding.types[column_idx],
-					                                        index + bound_lambda_expr.parameter_count);
+					auto index = GetLambdaParamIndex(*lambda_bindings, bound_lambda_expr, bound_lambda_ref);
+					replacement = make_uniq<BoundReferenceExpression>(binding.names[column_idx],
+					                                                  binding.types[column_idx], index);
 					return;
 				}
 			}
@@ -158,7 +178,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 		// refers to a lambda parameter inside the current lambda function
 		auto logical_type = (*bind_lambda_function)(bound_lambda_ref.binding.column_index, list_child_type);
-		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, bound_lambda_ref.binding.column_index);
+		auto index = bound_lambda_expr.parameter_count - bound_lambda_ref.binding.column_index - 1;
+		replacement = make_uniq<BoundReferenceExpression>(alias, logical_type, index);
 		return;
 	}
 
@@ -180,6 +201,16 @@ void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
+	}
+
+	if (expr->expression_class == ExpressionClass::BOUND_REF) {
+		//		// we need to determine the index of this outer lambda parameter
+		//		idx_t offset = DConstants::INVALID_INDEX;
+		//		if (lambda_bindings) {
+		//			offset =
+		//		}
+		//		auto &bound_ref_expr = expr->Cast<BoundReferenceExpression>();
+		//		bound_ref_expr.index = bound_ref_expr.index - 1;
 	}
 
 	// these expression classes do not have children, transform them

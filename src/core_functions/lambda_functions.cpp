@@ -25,10 +25,11 @@ void ExecuteExpression(idx_t &elem_cnt, SelectionVector &sel, vector<SelectionVe
 	slice.Flatten(elem_cnt);
 
 	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
-	input_chunk.data[0].Reference(slice);
-
 	if (has_index) {
-		input_chunk.data[1].Reference(index_vector);
+		input_chunk.data[0].Reference(index_vector);
+		input_chunk.data[1].Reference(slice);
+	} else {
+		input_chunk.data[0].Reference(slice);
 	}
 
 	// check if the lambda expression has an index parameter
@@ -56,7 +57,8 @@ void AppendTransformedToResult(Vector &lambda_vector, idx_t &elem_cnt, Vector &r
 
 void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries, idx_t &elem_cnt, Vector &result,
                             idx_t &curr_list_len, idx_t &curr_list_offset, idx_t &appended_lists_cnt,
-                            vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk) {
+                            vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk,
+                            const bool has_index) {
 
 	idx_t true_count = 0;
 	SelectionVector true_sel(elem_cnt);
@@ -101,7 +103,8 @@ void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries,
 	}
 
 	// slice to get the new lists and append them to the result
-	Vector new_lists(input_chunk.data[0], true_sel, true_count);
+	auto new_lists_idx = has_index ? 1 : 0;
+	Vector new_lists(input_chunk.data[new_lists_idx], true_sel, true_count);
 	new_lists.Flatten(true_count);
 	UnifiedVectorFormat new_lists_child_data;
 	new_lists.ToUnifiedFormat(true_count, new_lists_child_data);
@@ -214,12 +217,12 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	vector<LogicalType> types;
 
 	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
-	// the current child vector
-	types.push_back(child_vector.GetType());
 	if (info.has_index) {
 		// binary lambda function with an index
 		types.push_back(LogicalType::BIGINT);
 	}
+	// the current child vector
+	types.push_back(child_vector.GetType());
 
 	// skip the list column
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
@@ -303,7 +306,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 				} else {
 					AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len,
 					                       curr_list_offset, appended_lists_cnt, lists_len, curr_original_list_len,
-					                       input_chunk);
+					                       input_chunk, info.has_index);
 				}
 				elem_cnt = 0;
 			}
@@ -335,7 +338,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		AppendTransformedToResult(lambda_vector, elem_cnt, result);
 	} else {
 		AppendFilteredToResult(lambda_vector, result_entries, elem_cnt, result, curr_list_len, curr_list_offset,
-		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk);
+		                       appended_lists_cnt, lists_len, curr_original_list_len, input_chunk, info.has_index);
 	}
 
 	if (args.AllConstant()) {

@@ -194,7 +194,12 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
+	idx_t parameter_count = bound_lambda_expr.parameter_count;
+	auto str = bound_lambda_expr.lambda_expr->ToString();
+	D_ASSERT(!str.empty());
 	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, list_child_type);
+	str = bound_lambda_expr.lambda_expr->ToString();
+	D_ASSERT(!str.empty());
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
@@ -213,8 +218,8 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// push back (in reverse order) any nested lambda parameters so that we can later use them in the lambda
 	// expression (rhs). This happens after we bound the lambda expression of this depth. So it is relevant for
-	// correctly binding lambdas one level 'out'. Therefore, we need to decrease their index by the amount of
-	// lambda parameters on this level.
+	// correctly binding lambdas one level 'out'. Therefore, the current parameter count does not matter here.
+	idx_t offset = 0;
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 
@@ -222,9 +227,16 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			auto &binding = (*lambda_bindings)[i - 1];
 
 			D_ASSERT(binding.names.size() == binding.types.size());
-			for (idx_t column_idx = 0; column_idx < binding.names.size(); column_idx++) {
-				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(
-				    binding.names[column_idx], binding.types[column_idx], lambda_index + column_idx);
+			for (idx_t column_idx = binding.names.size(); column_idx > 0; column_idx--) {
+				//				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(
+				//				    binding.names[column_idx - 1], binding.types[column_idx - 1], lambda_index + column_idx -
+				//1);
+				idx_t actual_column_index = column_idx - 1;
+				idx_t prev_value = lambda_index + column_idx - 1;
+				D_ASSERT(prev_value < 10000);
+				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(binding.names[column_idx - 1],
+				                                                              binding.types[column_idx - 1], offset);
+				offset++;
 				bound_function_expr.children.push_back(std::move(bound_lambda_param));
 			}
 		}
