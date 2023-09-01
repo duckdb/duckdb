@@ -7,6 +7,8 @@ require skip_reload
 statement ok
 ATTACH ':memory:' AS db1
 
+statement ok
+USE db1;
 
 statement ok
 CREATE TABLE db1.integers(i INTEGER);
@@ -14,21 +16,19 @@ CREATE TABLE db1.integers(i INTEGER);
 statement ok
 INSERT INTO db1.integers VALUES (1), (2), (3), (NULL);
 
-mode skip
+# FIXME: when we don't use 'USE' then we have to refer to 'integers' as 'db1.integers'
+# this breaks when re-imported, because the table will be created as just 'integers', not 'db1.integers'
 
-# FIXME: this seems to be bugged
 # Create a view that references the integers table
 statement ok
-CREATE VIEW db1.integers_view AS SELECT * FROM db1.integers;
-
-mode unskip
+CREATE VIEW db1.integers_view AS SELECT * FROM integers;
 
 statement ok
 BEGIN TRANSACTION;
 
 # Create a table that should not be exported
 statement ok
-CREATE TABLE dont_export_me (i integer);
+CREATE TABLE memory.dont_export_me (i integer);
 
 # now export the db
 statement ok
@@ -52,8 +52,6 @@ query I nosort q1
 SELECT * FROM integers ORDER BY i NULLS LAST
 ----
 
-mode skip
-
 # FIXME: this seems to be bugged
 # the view doesn't seem to get exported/imported correctly:
 
@@ -62,10 +60,8 @@ query I nosort q1
 SELECT * FROM integers_view order by i NULLS LAST;
 ----
 
-mode unskip
-
 statement error
-SELECT * FROM dont_export_me;
+SELECT * FROM memory.dont_export_me;
 ----
 Catalog Error: Table with name dont_export_me does not exist!
 
