@@ -145,6 +145,18 @@ TEST_CASE("Test parallel usage of pending query API", "[api][.]") {
 	}
 }
 
+TEST_CASE("Test CSV usage with pending query API", "[api][.]") {
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+
+	auto pending_query =
+	    conn->PendingQuery("SELECT count(*) FROM read_csv('test/sql/copy/csv/data/test/dateformat.csv', "
+	                       "columns=STRUCT_PACK(d := 'DATE'), header=0, auto_detect=false, dateformat='%d/%m/%Y') ");
+	REQUIRE(!pending_query->HasError());
+	auto result = pending_query->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::BIGINT(1)}));
+}
+
 TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 	DuckDB db;
 	Connection con(db);
