@@ -4,15 +4,6 @@
 #include "duckdb/common/string.hpp"
 
 namespace duckdb {
-struct TryCastDecimalOperator {
-	template <class OP, class T>
-	static bool Operation(string_t input, uint8_t width, uint8_t scale) {
-		T result;
-		string error_message;
-		return OP::Operation(input, result, &error_message, width, scale);
-	}
-};
-
 struct TryCastFloatingOperator {
 	template <class OP, class T>
 	static bool Operation(string_t input) {
@@ -28,34 +19,6 @@ struct TupleSniffing {
 	bool set = false;
 	vector<Value> values;
 };
-
-bool TryCastDecimalValueCommaSeparated(const string_t &value_str, const LogicalType &sql_type) {
-	auto width = DecimalType::GetWidth(sql_type);
-	auto scale = DecimalType::GetScale(sql_type);
-	switch (sql_type.InternalType()) {
-	case PhysicalType::INT16:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int16_t>(value_str, width, scale);
-	case PhysicalType::INT32:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int32_t>(value_str, width, scale);
-	case PhysicalType::INT64:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int64_t>(value_str, width, scale);
-	case PhysicalType::INT128:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, hugeint_t>(value_str, width, scale);
-	default:
-		throw InternalException("Unimplemented physical type for decimal");
-	}
-}
-
-bool TryCastFloatingValueCommaSeparated(const string_t &value_str, const LogicalType &sql_type) {
-	switch (sql_type.InternalType()) {
-	case PhysicalType::DOUBLE:
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value_str);
-	case PhysicalType::FLOAT:
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, float>(value_str);
-	default:
-		throw InternalException("Unimplemented physical type for floating");
-	}
-}
 
 static bool StartsWithNumericDate(string &separator, const string &value) {
 	auto begin = value.c_str();
@@ -113,9 +76,8 @@ static bool StartsWithNumericDate(string &separator, const string &value) {
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
 	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
-	if (!amount_of_dashes) {
-		return format_specifier;
-	}
+	// All our date formats must have at least one -
+	D_ASSERT(amount_of_dashes);
 	string result;
 	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
 	for (auto &character : format_specifier) {
@@ -146,12 +108,8 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 		return candidate.dialect_options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	}
-	if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
-		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	}
-	if (candidate.options.decimal_separator != "." &&
-	    ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
-		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
+	if (candidate.options.decimal_separator != "." && (sql_type.id() == LogicalTypeId::DOUBLE)) {
+		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(StringValue::Get(value));
 	}
 	Value new_value;
 	string error_message;
@@ -311,10 +269,7 @@ void CSVSniffer::DetectTypes() {
 			has_format_candidates[t.first] = false;
 			format_candidates[t.first].clear();
 		}
-
-		if (candidate->dialect_options.num_cols == 0) {
-			continue;
-		}
+		D_ASSERT(candidate->dialect_options.num_cols > 0);
 
 		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
@@ -334,10 +289,7 @@ void CSVSniffer::DetectTypes() {
 		idx_t true_start = 0;
 		idx_t values_start = 0;
 		while (true_start < tuples.size()) {
-			if (tuples[true_start].values.empty()) {
-				true_start = tuples[true_start].line_number;
-				values_start++;
-			} else if (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull()) {
+			if ( tuples[true_start].values.empty() || (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
 				true_start = tuples[true_start].line_number;
 				values_start++;
 			} else {
@@ -432,12 +384,8 @@ void CSVSniffer::DetectTypes() {
 			best_start_with_header = tuples[0].position;
 		}
 	}
-
-	if (!best_candidate || best_format_candidates.empty() || best_header_row.empty()) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    options.file_path);
-	}
+	// Assert that it's all good at this point.
+	D_ASSERT(best_candidate && !best_format_candidates.empty() && !best_header_row.empty());
 
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {
