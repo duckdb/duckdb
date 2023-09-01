@@ -191,7 +191,7 @@ execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
-execution/operator/persistent/base_csv_reader.cpp	35
+execution/operator/persistent/base_csv_reader.cpp	36
 execution/operator/persistent/buffered_csv_reader.cpp	83
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/persistent/csv_file_handle.cpp	10
