@@ -79,3 +79,44 @@ test_that("huge-cardinality factors do not cause strange crashes, issue 3639", {
   df <- data.frame(col1 = factor(sample(5000, 10^6, replace = TRUE)))
   duckdb_register(con, "df", df)
 })
+
+
+test_that("factors behave like strings during comparisons", {
+  con <- dbConnect(duckdb::duckdb())
+  invisible(dbExecute(con, "CREATE MACRO \"==\"(a, b) AS a = b"))
+  df1 <- data.frame(a = c("a", "b"), b = factor(c("1", "2")))
+
+  rel1 <- rel_from_df(con, df1)
+
+  rel2 <- rel_filter(
+    rel1,
+    list(
+      expr_function(
+        "==",
+        list(expr_reference("b"), expr_constant(1))
+      )
+    )
+  )
+
+  result <- data.frame(a = c("a"), b=factor(c("1"), levels=c("1", "2")))
+  duckdb_result <- rel_to_altrep(rel2)
+
+  expect_equal(result, duckdb_result)
+
+
+  rel_factor_string_compare <- rel_filter(
+    rel1,
+    list(
+      expr_function(
+        "==",
+        list(expr_reference("b"),  expr_constant("1"))
+      )
+    )
+  )
+
+  result <- data.frame(a = c("a"), b=factor(c("1"), levels=c("1", "2")))
+  duckdb_result <- rel_to_altrep(rel_factor_string_compare)
+
+  expect_equal(result, duckdb_result)
+})
+
