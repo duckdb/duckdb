@@ -17,7 +17,9 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 		auto &member_name = UnionType::GetMemberName(target, i);
 		auto &field = fields[i].second;
 		auto &field_name = fields[i].first;
-		if (member != field) {
+		if (member != field && field != LogicalType::VARCHAR) {
+			// We allow the field to be VARCHAR, since unsupported types get cast to VARCHAR by EXPORT DATABASE (format
+			// PARQUET) i.e UNION(a BIT) becomes STRUCT(a VARCHAR)
 			return false;
 		}
 		if (member_name != field_name) {
@@ -137,6 +139,7 @@ unique_ptr<BoundCastData> StructToUnionCast::BindData(BindCastInput &input, cons
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
 	auto source_child_count = StructType::GetChildCount(source);
+	(void)source_child_count;
 	auto result_child_count = UnionType::GetMemberCount(target);
 	D_ASSERT(source_child_count == result_child_count);
 
