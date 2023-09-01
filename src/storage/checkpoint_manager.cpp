@@ -35,12 +35,10 @@
 
 namespace duckdb {
 
-catalog_entry_vector_t GetNaiveExportOrder(ClientContext &context, const string &catalog);
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(ClientContext &context, AttachedDatabase &db,
-                                                       BlockManager &block_manager)
-    : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT), context(context) {
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
+    : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -84,13 +82,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 
 	catalog_entry_vector_t catalog_entries;
-	if (catalog.IsDuckCatalog()) {
-		auto &duck_catalog = catalog.Cast<DuckCatalog>();
-		auto &dependency_manager = duck_catalog.GetDependencyManager();
-		catalog_entries = dependency_manager.GetExportOrder();
-	} else {
-		catalog_entries = GetNaiveExportOrder(context, catalog.GetName());
-	}
+	D_ASSERT(catalog.IsDuckCatalog());
+
+	auto &duck_catalog = catalog.Cast<DuckCatalog>();
+	auto &dependency_manager = duck_catalog.GetDependencyManager();
+	catalog_entries = dependency_manager.GetExportOrder();
 
 	// write the actual data into the database
 	// write the amount of entries (including schemas)

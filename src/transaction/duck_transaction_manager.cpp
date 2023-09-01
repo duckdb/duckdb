@@ -161,7 +161,7 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 			D_ASSERT(CanCheckpoint(nullptr));
 		}
 	}
-	storage_manager.CreateCheckpoint(context);
+	storage_manager.CreateCheckpoint();
 }
 
 bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current) {
@@ -233,7 +233,7 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 	if (checkpoint) {
 		// checkpoint the database to disk
 		auto &storage_manager = db.GetStorageManager();
-		storage_manager.CreateCheckpoint(context, false, true);
+		storage_manager.CreateCheckpoint(false, true);
 	}
 	return error;
 }

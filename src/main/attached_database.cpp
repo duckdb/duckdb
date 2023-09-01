@@ -70,9 +70,7 @@ AttachedDatabase::~AttachedDatabase() {
 			if (!config.options.checkpoint_on_shutdown) {
 				return;
 			}
-			// FIXME: is this super ugly???
-			ClientContext context(db.shared_from_this());
-			storage->CreateCheckpoint(context, true);
+			storage->CreateCheckpoint(true);
 		}
 	} catch (...) {
 	}
