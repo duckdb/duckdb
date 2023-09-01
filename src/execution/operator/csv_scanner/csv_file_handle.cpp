@@ -37,21 +37,6 @@ void CSVFileHandle::Seek(idx_t position) {
 	file_handle->Seek(position);
 }
 
-void CSVFileHandle::Reset() {
-	requested_bytes = 0;
-	finished = false;
-	if (can_seek) {
-		// we can seek - reset the file handle
-		file_handle->Reset();
-	} else if (on_disk_file) {
-		// we cannot seek but it is an on-disk file - re-open the file
-		file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
-	} else {
-		if (!reset_enabled) {
-			throw InternalException("Reset called but reset is not enabled for this CSV Handle");
-		}
-	}
-}
 bool CSVFileHandle::OnDiskFile() {
 	return on_disk_file;
 }

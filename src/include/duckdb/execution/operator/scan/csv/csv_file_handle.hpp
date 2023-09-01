@@ -27,7 +27,6 @@ public:
 public:
 	bool CanSeek();
 	void Seek(idx_t position);
-	void Reset();
 	bool OnDiskFile();
 
 	idx_t FileSize();
