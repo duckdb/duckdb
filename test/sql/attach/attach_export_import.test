@@ -8,6 +8,9 @@ statement ok
 ATTACH ':memory:' AS db1
 
 statement ok
+ATTACH ':memory:' as other
+
+statement ok
 USE db1;
 
 statement ok
@@ -28,7 +31,7 @@ BEGIN TRANSACTION;
 
 # Create a table that should not be exported
 statement ok
-CREATE TABLE memory.dont_export_me (i integer);
+CREATE TABLE other.dont_export_me (i integer);
 
 # now export the db
 statement ok
@@ -61,7 +64,7 @@ SELECT * FROM integers_view order by i NULLS LAST;
 ----
 
 statement error
-SELECT * FROM memory.dont_export_me;
+SELECT * FROM other.dont_export_me;
 ----
 Catalog Error: Table with name dont_export_me does not exist!
 
