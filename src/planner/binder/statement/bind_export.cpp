@@ -105,7 +105,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 	switch (id) {
 	case LogicalTypeId::LIST: {
 		auto child = AlterLogicalType(ListType::GetChildType(original), type_check);
-		return LogicalType::LIST(std::move(child));
+		return LogicalType::LIST(child);
 	}
 	case LogicalTypeId::STRUCT: {
 		auto &original_children = StructType::GetChildTypes(original);
