@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/schema/physical_create_index.hpp
+// duckdb/execution/operator/schema/physical_create_art_index.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -20,14 +20,14 @@ namespace duckdb {
 class DuckTableEntry;
 
 //! Physical CREATE (UNIQUE) INDEX statement
-class PhysicalCreateIndex : public PhysicalOperator {
+class PhysicalCreateARTIndex : public PhysicalOperator {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_INDEX;
 
 public:
-	PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
-	                    unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
-	                    idx_t estimated_cardinality, const bool sorted);
+	PhysicalCreateARTIndex(LogicalOperator &op, TableCatalogEntry &table, const vector<column_t> &column_ids,
+	                       unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
+	                       idx_t estimated_cardinality, const bool sorted);
 
 	//! The table to create the index for
 	DuckTableEntry &table;

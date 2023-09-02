@@ -1,14 +1,14 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/parameter_expression.hpp"
-#include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -42,6 +42,7 @@ unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpres
 	if (!extra_list) {
 		throw InternalException("CreateExtraReference called without extra_list");
 	}
+	projection_map[*expr] = extra_list->size();
 	auto result = CreateProjectionReference(*expr, extra_list->size());
 	extra_list->push_back(std::move(expr));
 	return result;

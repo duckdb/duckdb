@@ -507,13 +507,13 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
 
-			switch (type.InternalType()) {
-			case PhysicalType::INT32:
+			switch (schema.type) {
+			case duckdb_parquet::format::Type::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case PhysicalType::INT64:
+			case duckdb_parquet::format::Type::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;

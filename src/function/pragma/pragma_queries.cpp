@@ -123,7 +123,8 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 	LEFT JOIN duckdb_columns cols 
 	ON cols.column_name = pragma_table_info.name 
 	AND cols.table_name='%table_name%'
-	AND cols.schema_name='%table_schema%';)";
+	AND cols.schema_name='%table_schema%'
+	ORDER BY column_index;)";
 	// clang-format on
 
 	sql = StringUtil::Replace(sql, "%func_param_table%", parameters.values[0].ToString());
