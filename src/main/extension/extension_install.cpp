@@ -157,7 +157,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-string ExtensionHelper::ExtensionUrlTemplate(ClientConfig *client_config, string repository) {
+string ExtensionHelper::ExtensionUrlTemplate(ClientConfig *client_config, const string &repository) {
 	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
 #ifdef WASM_LOADABLE_EXTENSIONS
@@ -174,6 +174,13 @@ string ExtensionHelper::ExtensionUrlTemplate(ClientConfig *client_config, string
 	}
 	string url_template = endpoint + versioned_path;
 	return url_template;
+}
+
+string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const string &extension_name) {
+	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
+	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
+	url = StringUtil::Replace(url, "${NAME}", extension_name);
+	return url;
 }
 
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
@@ -223,9 +230,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		extension_name = "";
 	}
 
-	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
-	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
-	url = StringUtil::Replace(url, "${NAME}", extension_name);
+	string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	string no_http = StringUtil::Replace(url, "http://", "");
 
