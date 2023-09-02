@@ -630,6 +630,9 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	// when using explicit groups, we cannot have non-explicit groups
 	REQUIRE_THROWS(tbl->Aggregate("j, i+SUM(j)", "i")->Order("1")->Execute());
 
+	// Coverage: Groups expressions can not create multiple statements
+	REQUIRE_THROWS(tbl->Aggregate("i", "i; select 42")->Execute());
+
 	// project -> aggregate -> project -> aggregate
 	// SUM(j) = 18 -> 18 + 1 = 19 -> 19 * 2 = 38
 	result = tbl->Aggregate("SUM(j) AS k")->Project("k+1 AS l")->Aggregate("SUM(l) AS m")->Project("m*2")->Execute();
