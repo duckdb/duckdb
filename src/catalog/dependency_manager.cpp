@@ -257,12 +257,21 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 	catalog_entry_vector_t export_order;
 
 	queue<reference<CatalogEntry>> backlog;
-	// Populate the backlog with every entry in the dependencies map
+
 	for (auto &entry_p : dependencies_map) {
 		auto &entry = entry_p.first;
+		if (entry.get().type == CatalogType::SCHEMA_ENTRY) {
+			continue;
+		}
 		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
-			// Always push sequences first, they can't have dependencies
-			// but other entries might depend on them
+			auto dependencies = GetEntriesThatObjectDependsOn(entry.get());
+			if (dependencies) {
+				for (auto &dependency : *dependencies) {
+					// Sequences can only depend on schemas, which can't have dependencies
+					entries.insert(dependency);
+					export_order.push_back(dependency);
+				}
+			}
 			entries.insert(entry);
 			export_order.push_back(entry);
 		} else {
