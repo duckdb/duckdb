@@ -70,7 +70,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
 #ifdef WASM_LOADABLE_EXTENSIONS
-		string url_template = ExtensionUrlTemplate(client_config);
+		string url_template = ExtensionUrlTemplate(client_config, "");
 		string url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
 		url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
 		url = StringUtil::Replace(url, "${NAME}", filename);
