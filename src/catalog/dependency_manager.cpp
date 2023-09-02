@@ -260,9 +260,6 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 
 	for (auto &entry_p : dependencies_map) {
 		auto &entry = entry_p.first;
-		if (entry.get().type == CatalogType::SCHEMA_ENTRY) {
-			continue;
-		}
 		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
 			auto dependencies = GetEntriesThatObjectDependsOn(entry.get());
 			if (dependencies) {
