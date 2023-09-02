@@ -231,7 +231,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TIMESTAMPNS(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(0));
+		return Value::TIMETZ(dtime_tz_t(dtime_t(0), dtime_tz_t::MIN_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(Timestamp::FromDatetime(
 		    Date::FromDate(Timestamp::MIN_YEAR, Timestamp::MIN_MONTH, Timestamp::MIN_DAY), dtime_t(0)));
@@ -300,7 +300,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return MaximumValue(LogicalType::TIMESTAMP).DefaultCastAs(LogicalType::TIMESTAMP_S);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1));
+		return Value::TIMETZ(
+		    dtime_tz_t(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC - 1), dtime_tz_t::MAX_OFFSET));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return MaximumValue(LogicalType::TIMESTAMP);
 	case LogicalTypeId::FLOAT:
@@ -587,9 +588,9 @@ Value Value::TIME(dtime_t value) {
 	return result;
 }
 
-Value Value::TIMETZ(dtime_t value) {
+Value Value::TIMETZ(dtime_tz_t value) {
 	Value result(LogicalType::TIME_TZ);
-	result.value_.time = value;
+	result.value_.timetz = value;
 	result.is_null = false;
 	return result;
 }
@@ -667,6 +668,20 @@ Value Value::MAP(const LogicalType &child_type, vector<Value> values) {
 
 	result.type_ = LogicalType::MAP(child_type);
 	result.is_null = false;
+	for (auto &val : values) {
+		D_ASSERT(val.type().InternalType() == PhysicalType::STRUCT);
+		auto &children = StructValue::GetChildren(val);
+
+		// Ensure that the field containing the keys is called 'key'
+		// and that the field containing the values is called 'value'
+		// this is required to make equality checks work
+		D_ASSERT(children.size() == 2);
+		child_list_t<Value> new_children;
+		new_children.reserve(2);
+		new_children.push_back(std::make_pair("key", children[0]));
+		new_children.push_back(std::make_pair("value", children[1]));
+		val = Value::STRUCT(std::move(new_children));
+	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
 	return result;
 }
@@ -945,8 +960,9 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_t, T>(value_.time);
+	case LogicalTypeId::TIME_TZ:
+		return Cast::Operation<dtime_tz_t, T>(value_.timetz);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_t, T>(value_.timestamp);
@@ -1018,7 +1034,6 @@ int64_t Value::GetValue() const {
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return value_.bigint;
 	default:
@@ -1136,8 +1151,6 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TIMESTAMPMS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMPSEC(timestamp_t(value));
-	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(dtime_t(value));
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_t(value));
 	case LogicalTypeId::ENUM:
@@ -1767,55 +1780,55 @@ Value Value::Deserialize(Deserializer &main_source) {
 }
 
 void Value::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type_);
-	serializer.WriteProperty("is_null", is_null);
+	serializer.WriteProperty(100, "type", type_);
+	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
 		switch (type_.InternalType()) {
 		case PhysicalType::BOOL:
-			serializer.WriteProperty("value", value_.boolean);
+			serializer.WriteProperty(100, "value", value_.boolean);
 			break;
 		case PhysicalType::INT8:
-			serializer.WriteProperty("value", value_.tinyint);
+			serializer.WriteProperty(100, "value", value_.tinyint);
 			break;
 		case PhysicalType::INT16:
-			serializer.WriteProperty("value", value_.smallint);
+			serializer.WriteProperty(100, "value", value_.smallint);
 			break;
 		case PhysicalType::INT32:
-			serializer.WriteProperty("value", value_.integer);
+			serializer.WriteProperty(100, "value", value_.integer);
 			break;
 		case PhysicalType::INT64:
-			serializer.WriteProperty("value", value_.bigint);
+			serializer.WriteProperty(100, "value", value_.bigint);
 			break;
 		case PhysicalType::UINT8:
-			serializer.WriteProperty("value", value_.utinyint);
+			serializer.WriteProperty(100, "value", value_.utinyint);
 			break;
 		case PhysicalType::UINT16:
-			serializer.WriteProperty("value", value_.usmallint);
+			serializer.WriteProperty(100, "value", value_.usmallint);
 			break;
 		case PhysicalType::UINT32:
-			serializer.WriteProperty("value", value_.uinteger);
+			serializer.WriteProperty(100, "value", value_.uinteger);
 			break;
 		case PhysicalType::UINT64:
-			serializer.WriteProperty("value", value_.ubigint);
+			serializer.WriteProperty(100, "value", value_.ubigint);
 			break;
 		case PhysicalType::INT128:
-			serializer.WriteProperty("value", value_.hugeint);
+			serializer.WriteProperty(100, "value", value_.hugeint);
 			break;
 		case PhysicalType::FLOAT:
-			serializer.WriteProperty("value", value_.float_);
+			serializer.WriteProperty(100, "value", value_.float_);
 			break;
 		case PhysicalType::DOUBLE:
-			serializer.WriteProperty("value", value_.double_);
+			serializer.WriteProperty(100, "value", value_.double_);
 			break;
 		case PhysicalType::INTERVAL:
-			serializer.WriteProperty("value", value_.interval);
+			serializer.WriteProperty(100, "value", value_.interval);
 			break;
 		case PhysicalType::VARCHAR:
 			if (type_.id() == LogicalTypeId::BLOB) {
 				auto blob_str = Blob::ToString(StringValue::Get(*this));
-				serializer.WriteProperty("value", blob_str);
+				serializer.WriteProperty(100, "value", blob_str);
 			} else {
-				serializer.WriteProperty("value", StringValue::Get(*this));
+				serializer.WriteProperty(100, "value", StringValue::Get(*this));
 			}
 			break;
 		default: {
@@ -1828,8 +1841,8 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<LogicalType>("type");
-	auto is_null = deserializer.ReadProperty<bool>("is_null");
+	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
+	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
 	if (is_null) {
 		return new_value;
@@ -1837,46 +1850,46 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	new_value.is_null = false;
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
-		new_value.value_.boolean = deserializer.ReadProperty<bool>("value");
+		new_value.value_.boolean = deserializer.ReadProperty<bool>(100, "value");
 		break;
 	case PhysicalType::UINT8:
-		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>("value");
+		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>(100, "value");
 		break;
 	case PhysicalType::INT8:
-		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>("value");
+		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>(100, "value");
 		break;
 	case PhysicalType::UINT16:
-		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>("value");
+		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>(100, "value");
 		break;
 	case PhysicalType::INT16:
-		new_value.value_.smallint = deserializer.ReadProperty<int16_t>("value");
+		new_value.value_.smallint = deserializer.ReadProperty<int16_t>(100, "value");
 		break;
 	case PhysicalType::UINT32:
-		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>("value");
+		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>(100, "value");
 		break;
 	case PhysicalType::INT32:
-		new_value.value_.integer = deserializer.ReadProperty<int32_t>("value");
+		new_value.value_.integer = deserializer.ReadProperty<int32_t>(100, "value");
 		break;
 	case PhysicalType::UINT64:
-		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>("value");
+		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>(100, "value");
 		break;
 	case PhysicalType::INT64:
-		new_value.value_.bigint = deserializer.ReadProperty<int64_t>("value");
+		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(100, "value");
 		break;
 	case PhysicalType::INT128:
-		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>("value");
+		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(100, "value");
 		break;
 	case PhysicalType::FLOAT:
-		new_value.value_.float_ = deserializer.ReadProperty<float>("value");
+		new_value.value_.float_ = deserializer.ReadProperty<float>(100, "value");
 		break;
 	case PhysicalType::DOUBLE:
-		new_value.value_.double_ = deserializer.ReadProperty<double>("value");
+		new_value.value_.double_ = deserializer.ReadProperty<double>(100, "value");
 		break;
 	case PhysicalType::INTERVAL:
-		new_value.value_.interval = deserializer.ReadProperty<interval_t>("value");
+		new_value.value_.interval = deserializer.ReadProperty<interval_t>(100, "value");
 		break;
 	case PhysicalType::VARCHAR: {
-		auto str = deserializer.ReadProperty<string>("value");
+		auto str = deserializer.ReadProperty<string>(100, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(str));
 		} else {

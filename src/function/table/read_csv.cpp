@@ -325,9 +325,6 @@ public:
 			file_handle->ReadLine();
 		}
 		first_position = current_csv_position;
-		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
-		next_buffer = shared_ptr<CSVBuffer>(
-		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		running_threads = MaxThreads();
 
 		// Initialize all the book-keeping variables
@@ -441,6 +438,8 @@ private:
 	vector<column_t> column_ids;
 	//! Line Info used in error messages
 	LineInfo line_info;
+	//! Have we initialized our reading
+	bool initialized = false;
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
@@ -543,6 +542,12 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bind_data,
                                   unique_ptr<ParallelCSVReader> &reader) {
 	lock_guard<mutex> parallel_lock(main_mutex);
+	if (!initialized && file_handle) {
+		current_buffer = make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
+		next_buffer = shared_ptr<CSVBuffer>(
+		    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+		initialized = true;
+	}
 	if (!current_buffer) {
 		// This means we are done with the current file, we need to go to the next one (if exists).
 		if (file_index < bind_data.files.size()) {
@@ -1240,14 +1245,14 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &s
 static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	serializer.WriteProperty("extra_info", function.extra_info);
-	serializer.WriteProperty("csv_data", bind_data);
+	serializer.WriteProperty(100, "extra_info", function.extra_info);
+	serializer.WriteProperty(101, "csv_data", bind_data);
 }
 
 static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 	unique_ptr<ReadCSVData> result;
-	deserializer.ReadProperty("extra_info", function.extra_info);
-	deserializer.ReadProperty("csv_data", result);
+	deserializer.ReadProperty(100, "extra_info", function.extra_info);
+	deserializer.ReadProperty(101, "csv_data", result);
 	return std::move(result);
 }
 

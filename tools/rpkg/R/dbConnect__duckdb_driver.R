@@ -53,7 +53,6 @@ dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
 
   # aha, a late comer. let's make a new instance.
   if (!missing_dbdir && dbdir != drv@dbdir) {
-    duckdb_shutdown(drv)
     drv <- duckdb(dbdir, read_only, bigint, config)
   }
 

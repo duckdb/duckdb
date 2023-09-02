@@ -220,7 +220,7 @@ public:
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
 		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
-			buffer[i] -= frame_of_reference;
+			buffer[i] -= static_cast<typename MakeUnsigned<T_INNER>::type>(frame_of_reference);
 		}
 	}
 

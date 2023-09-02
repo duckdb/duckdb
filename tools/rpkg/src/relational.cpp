@@ -172,7 +172,7 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 
 	for (expr_extptr_t expr : exprs) {
 		auto dexpr = expr->Copy();
-		aliases.push_back(dexpr->alias.empty() ? dexpr->ToString() : dexpr->alias);
+		aliases.push_back(dexpr->GetName());
 		projections.push_back(std::move(dexpr));
 	}
 
@@ -360,7 +360,7 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 
 static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	if (res->HasError()) {
-		stop(res->GetError());
+		stop("%s", res->GetError().c_str());
 	}
 	if (res->type == QueryResultType::STREAM_RESULT) {
 		res = ((StreamQueryResult &)*res).Materialize();
@@ -442,7 +442,7 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 [[cpp11::register]] SEXP rapi_rel_sql(duckdb::rel_extptr_t rel, std::string sql) {
 	auto res = rel->rel->Query("_", sql);
 	if (res->HasError()) {
-		stop(res->GetError());
+		stop("%s", res->GetError().c_str());
 	}
 	return result_to_df(std::move(res));
 }

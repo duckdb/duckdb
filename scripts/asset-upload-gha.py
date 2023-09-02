@@ -19,8 +19,8 @@ if repo != "duckdb/duckdb":
     exit(0)
 
 ref = os.getenv("GITHUB_REF", '')  # this env var is always present just not always used
-if ref == 'refs/heads/master':
-    print("Not running on master. Exiting.")
+if ref == 'refs/heads/main':
+    print("Not running on main branch. Exiting.")
     exit(0)
 elif ref.startswith('refs/tags/'):
     tag = ref.replace('refs/tags/', '')

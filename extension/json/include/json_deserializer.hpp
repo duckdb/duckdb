@@ -48,7 +48,7 @@ private:
 	void ThrowTypeError(yyjson_val *val, const char *expected);
 
 	// Set the 'tag' of the property to read
-	void SetTag(const char *tag) final;
+	void SetTag(const field_id_t, const char *tag) final;
 
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks

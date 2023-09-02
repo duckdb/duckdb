@@ -175,6 +175,7 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return ICUDateTrunc::TruncDay;
 	case DatePartSpecifier::HOUR:
 		return ICUDateTrunc::TruncHour;

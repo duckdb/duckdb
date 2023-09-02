@@ -92,8 +92,14 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		REQUIRE(duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt) == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
 		REQUIRE(duckdb_bind_int64(stmt, 1, 42) == DuckDBSuccess);
+		ArrowSchema prepared_schema;
+		prepared_schema.release = nullptr;
+		auto prep_schema_p = &prepared_schema;
+		REQUIRE(duckdb_prepared_arrow_schema(stmt, (duckdb_arrow_schema *)&prep_schema_p) == DuckDBSuccess);
+		REQUIRE(string(prepared_schema.format) == "+s");
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, nullptr) == DuckDBError);
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
+		prepared_schema.release(&prepared_schema);
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, (duckdb_arrow_schema *)&arrow_schema) == DuckDBSuccess);

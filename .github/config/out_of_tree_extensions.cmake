@@ -8,8 +8,7 @@
 ################# ARROW
 if (NOT WIN32)
     duckdb_extension_load(arrow
-            LOAD_TESTS
-            DONT_LINK
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/arrow
             GIT_TAG 56d24d4224df43cac0e071d71371385de5831129
             APPLY_PATCHES
@@ -20,7 +19,8 @@ endif()
 duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
-        GIT_TAG b769c8aab638bdbdc46c77fcb3c70412dd715d45
+        GIT_TAG 428e7fba74a9833f9e2e771b3eb82ee0ab0bf7b5
+        APPLY_PATCHES
         )
 
 ################# AZURE
@@ -56,8 +56,7 @@ duckdb_extension_load(postgres_scanner
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-        DONT_LINK
-        LOAD_TESTS
+        DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
         GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
         APPLY_PATCHES
@@ -74,8 +73,7 @@ else ()
 endif()
 
 duckdb_extension_load(sqlite_scanner
-        ${STATIC_LINK_SQLITE}
-        LOAD_TESTS
+        ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/sqlite_scanner
         GIT_TAG 9c38a30be2237456cdcd423d527b96c944158c77
         )
@@ -83,9 +81,9 @@ duckdb_extension_load(sqlite_scanner
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
-            LOAD_TESTS
-            DONT_LINK
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/substrait
             GIT_TAG 0cd88fa8b240babe5316924e32fb68aaba408780
+            APPLY_PATCHES
             )
 endif()

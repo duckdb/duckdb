@@ -6,6 +6,7 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "node",
         "type": "QueryNode*"
       }
