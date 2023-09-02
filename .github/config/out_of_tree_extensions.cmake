@@ -10,8 +10,7 @@ if (NOT WIN32)
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/arrow
-            GIT_TAG 56d24d4224df43cac0e071d71371385de5831129
-            APPLY_PATCHES
+            GIT_TAG 1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5
             )
 endif()
 
