@@ -1,0 +1,20 @@
+diff --git a/test/sql/iceberg_scan.test b/test/sql/iceberg_scan.test
+index 36898e9..1b2450f 100644
+--- a/test/sql/iceberg_scan.test
++++ b/test/sql/iceberg_scan.test
+@@ -14,7 +14,7 @@ require iceberg
+ statement error
+ SELECT count(*) FROM ICEBERG_SCAN('data/iceberg/lineitem_iceberg', ALLOW_MOVED_PATHS=TRUE);
+ ----
+-Catalog Error: Function with name "parquet_scan" is not in the catalog
++Catalog Error: Table Function with name "parquet_scan" is not in the catalog
+ 
+ require parquet
+ 
+@@ -58,4 +58,4 @@ SELECT count(*) FROM ICEBERG_SCAN('data/iceberg/lineitem_iceberg', '2023-02-15 1
+ statement error
+ FROM ICEBERG_SCAN('data/iceberg/lineitem_iceberg', '2023-02-15 15:07:54.503'::TIMESTAMP, ALLOW_MOVED_PATHS=TRUE);
+ ----
+-IO Error: Could not find latest snapshots for timestamp 2023-02-15 15:07:54.503
+\ No newline at end of file
++IO Error: Could not find latest snapshots for timestamp 2023-02-15 15:07:54.503

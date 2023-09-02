@@ -66,6 +66,9 @@ static jfieldID J_DuckVector_varlen;
 static jclass J_DuckArray;
 static jmethodID J_DuckArray_init;
 
+static jclass J_DuckStruct;
+static jmethodID J_DuckStruct_init;
+
 static jclass J_ByteBuffer;
 
 static jmethodID J_Map_entrySet;
@@ -155,6 +158,14 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	J_DuckArray = (jclass)env->NewGlobalRef(tmpLocalRef);
 	J_DuckArray_init = env->GetMethodID(J_DuckArray, "<init>", "(Lorg/duckdb/DuckDBVector;II)V");
 	D_ASSERT(J_DuckArray_init);
+	env->DeleteLocalRef(tmpLocalRef);
+
+	tmpLocalRef = env->FindClass("org/duckdb/DuckDBStruct");
+	D_ASSERT(tmpLocalRef);
+	J_DuckStruct = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_DuckStruct_init =
+	    env->GetMethodID(J_DuckStruct, "<init>", "([Ljava/lang/String;[Lorg/duckdb/DuckDBVector;ILjava/lang/String;)V");
+	D_ASSERT(J_DuckStruct_init);
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Map$Entry");
@@ -761,7 +772,11 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	jobject constlen_data = nullptr;
 	jobjectArray varlen_data = nullptr;
 
-	switch (vec.GetType().id()) {
+	// this allows us to treat aliased (usually extension) types as strings
+	auto type = vec.GetType();
+	auto type_id = type.HasAlias() ? LogicalTypeId::UNKNOWN : type.id();
+
+	switch (type_id) {
 	case LogicalTypeId::BOOLEAN:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
 		break;
@@ -838,6 +853,28 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 		}
 		break;
+	case LogicalTypeId::UNION:
+	case LogicalTypeId::STRUCT: {
+		varlen_data = env->NewObjectArray(row_count, J_DuckStruct, nullptr);
+
+		auto &entries = StructVector::GetEntries(vec);
+		auto columns = env->NewObjectArray(entries.size(), J_DuckVector, nullptr);
+		auto names = env->NewObjectArray(entries.size(), J_String, nullptr);
+
+		for (idx_t entry_i = 0; entry_i < entries.size(); entry_i++) {
+			auto j_vec = ProcessVector(env, conn_ref, *entries[entry_i], row_count);
+			env->SetObjectArrayElement(columns, entry_i, j_vec);
+			env->SetObjectArrayElement(names, entry_i,
+			                           env->NewStringUTF(StructType::GetChildName(vec.GetType(), entry_i).c_str()));
+		}
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			env->SetObjectArrayElement(varlen_data, row_idx,
+			                           env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx,
+			                                          env->NewStringUTF(vec.GetType().ToString().c_str())));
+		}
+
+		break;
+	}
 	case LogicalTypeId::BLOB:
 		varlen_data = env->NewObjectArray(row_count, J_ByteBuffer, nullptr);
 
@@ -853,6 +890,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	case LogicalTypeId::UUID:
 		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 		break;
+	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
 
@@ -1179,6 +1217,11 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extens
 	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
 	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
 	catalog.CreateType(*connection->context, info);
+
+	LogicalType byte_test_type_type = LogicalTypeId::BLOB;
+	byte_test_type_type.SetAlias("byte_test_type");
+	CreateTypeInfo byte_test_type("byte_test_type", byte_test_type_type);
+	catalog.CreateType(*connection->context, byte_test_type);
 
 	connection->Commit();
 }
