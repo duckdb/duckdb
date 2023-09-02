@@ -1,0 +1,38 @@
+# name: test/extension/autoloading_types.test
+# description: Tests for autoloading with types
+# group: [extension]
+
+# This test assumes icu and json to be available in the LOCAL_EXTENSION_REPO and NOT linked into duckdb statically
+# -> this should be the case for our autoloading tests where we have the local_extension_repo variable set
+require-env LOCAL_EXTENSION_REPO
+
+# Ensure we have a clean extension directory without any preinstalled extensions
+statement ok
+set extension_directory='__TEST_DIR__/autoloading_types'
+
+### No autoloading nor installing: throw error with installation hint
+statement ok
+set autoload_known_extensions=false
+
+statement ok
+set autoinstall_known_extensions=false
+
+statement error
+SELECT '{}'::JSON;
+----
+Catalog Error: Type with name "JSON" is not in the catalog, but it exists in the json extension.
+
+### With autoloading, install and correct repo
+statement ok
+set autoload_known_extensions=true
+
+statement ok
+set autoinstall_known_extensions=true
+
+statement ok
+set autoinstall_extension_repository='${LOCAL_EXTENSION_REPO}';
+
+query I
+SELECT '{}'::JSON;
+----
+{}
