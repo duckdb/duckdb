@@ -39,7 +39,7 @@ unique_ptr<PathElement> Transformer::TransformPathElement(duckdb_libpgquery::PGP
 	return result;
 }
 
-unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root) {
+unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSubPath *root, unique_ptr<PathPattern> &path_pattern) {
 	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
 
 	result->where_clause = TransformExpression(root->where_clause);
@@ -72,6 +72,11 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 	if (result->path_mode > PGQPathMode::WALK) {
 		throw NotImplementedException("Path modes other than WALK have not been implemented yet.");
 	}
+	if (result->upper == 1<<30 && path_pattern->all && result->path_mode <= PGQPathMode::WALK) {
+		throw ConstraintException("ALL unbounded with path mode WALK is not possible as this "
+															"could lead to infinite results. Consider specifying an upper bound or"
+															" path mode other than WALK");
+	}
 
 	//! Path sequence
 	for (auto node = root->path->head; node != nullptr; node = lnext(node)) {
@@ -83,7 +88,7 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 			result->path_list.push_back(std::move(path_element));
 		} else if (path_node->type == duckdb_libpgquery::T_PGSubPath) {
 			auto subpath = reinterpret_cast<duckdb_libpgquery::PGSubPath *>(path_node);
-			auto subpath_element = TransformSubPathElement(subpath);
+			auto subpath_element = TransformSubPathElement(subpath, path_pattern);
 			result->path_list.push_back(std::move(subpath_element));
 		}
 	}
@@ -96,6 +101,9 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 	result->shortest = root->shortest;
 	result->group = root->group;
 	result->topk = root->topk;
+//	if (result->all) {
+//		throw NotImplementedException("ALL has not been implemented yet.");
+//	}
 	if (result->all && result->shortest) {
 		throw NotImplementedException("ALL SHORTEST has not been implemented yet.");
 	}
@@ -115,7 +123,7 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 			result->path_elements.push_back(std::move(path_element));
 		} else if (path_node->type == duckdb_libpgquery::T_PGSubPath) {
 			auto subpath = reinterpret_cast<duckdb_libpgquery::PGSubPath *>(path_node);
-			auto subpath_element = TransformSubPathElement(subpath);
+			auto subpath_element = TransformSubPathElement(subpath, result);
 			result->path_elements.push_back(std::move(subpath_element));
 		}
 	}

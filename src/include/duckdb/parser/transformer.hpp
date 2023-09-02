@@ -316,7 +316,7 @@ private:
 	//! Transform a path element (SQL/PGQ)
 	static unique_ptr<PathElement> TransformPathElement(duckdb_libpgquery::PGPathElement *element);
 	//! Transform a subpath (SQL/PGQ)
-	unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element);
+	unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element, unique_ptr<PathPattern> &path_pattern);
 
 	//! Transform a Postgres duckdb_libpgquery::T_PGDropPropertyGraphStmt node into a Drop[Table,Schema]Statement
 	unique_ptr<SQLStatement> TransformDropPropertyGraph(duckdb_libpgquery::PGDropPropertyGraphStmt &node);
