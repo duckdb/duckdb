@@ -162,9 +162,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 		return LogicalType::MAP(new_key_type, new_value_type);
 	}
 	default: {
-		if (type_check(original)) {
-			return original;
-		}
+		D_ASSERT(!type_check(original));
 		return LogicalType::VARCHAR;
 	}
 	}

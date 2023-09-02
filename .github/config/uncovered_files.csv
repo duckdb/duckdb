@@ -242,6 +242,7 @@ function/cast/string_cast.cpp	2
 function/cast/time_casts.cpp	8
 function/cast/union_casts.cpp	4
 function/cast/uuid_casts.cpp	2
+function/cast/union/from_struct.cpp 3
 function/cast/vector_cast_helpers.cpp	9
 function/cast_rules.cpp	18
 function/function.cpp	8
