@@ -103,6 +103,7 @@ common/vector_operations/null_operations.cpp	15
 common/vector_operations/numeric_inplace_operators.cpp	6
 common/vector_operations/vector_copy.cpp	2
 common/vector_operations/vector_hash.cpp	7
+core_functions/aggregate/distributive/approx_count.cpp	1
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
 core_functions/aggregate/distributive/bitstring_agg.cpp	6
@@ -194,7 +195,7 @@ execution/operator/order/physical_top_n.cpp	5
 execution/operator/csv_scanner/base_csv_reader.cpp	31
 execution/operator/csv_scanner/buffered_csv_reader.cpp	47
 execution/operator/persistent/csv_buffer.cpp	2
-execution/operator/persistent/csv_file_handle.cpp	10
+file execution/operator/csv_scanner/csv_file_handle.cpp	7
 execution/operator/csv_scanner/csv_reader_options.cpp	12
 execution/operator/csv_scanner/parallel_csv_reader.cpp	51
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
