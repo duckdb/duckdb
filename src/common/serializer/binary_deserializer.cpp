@@ -40,16 +40,14 @@ void BinaryDeserializer::OnObjectEnd() {
 }
 
 idx_t BinaryDeserializer::OnListBegin() {
-	auto count = ReadPrimitive<idx_t>();
-	return count;
+	return VarIntDecode<idx_t>();
 }
 
 void BinaryDeserializer::OnListEnd() {
 }
 
 bool BinaryDeserializer::OnNullableBegin() {
-	auto present = ReadPrimitive<bool>();
-	return present;
+	return ReadBool();
 }
 
 void BinaryDeserializer::OnNullableEnd() {
@@ -59,48 +57,39 @@ void BinaryDeserializer::OnNullableEnd() {
 // Primitive Types
 //-------------------------------------------------------------------------
 bool BinaryDeserializer::ReadBool() {
-	auto value = ReadPrimitive<uint8_t>();
-	return value;
+	return static_cast<bool>(ReadPrimitive<uint8_t>());
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
-	auto value = ReadPrimitive<int8_t>();
-	return value;
+	return VarIntDecode<int8_t>();
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
-	auto value = ReadPrimitive<uint8_t>();
-	return value;
+	return VarIntDecode<uint8_t>();
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
-	auto value = ReadPrimitive<int16_t>();
-	return value;
+	return VarIntDecode<int16_t>();
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
-	auto value = ReadPrimitive<uint16_t>();
-	return value;
+	return VarIntDecode<uint16_t>();
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
-	auto value = ReadPrimitive<int32_t>();
-	return value;
+	return VarIntDecode<int32_t>();
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
-	auto value = ReadPrimitive<uint32_t>();
-	return value;
+	return VarIntDecode<uint32_t>();
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
-	auto value = ReadPrimitive<int64_t>();
-	return value;
+	return VarIntDecode<int64_t>();
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
-	auto value = ReadPrimitive<uint64_t>();
-	return value;
+	return VarIntDecode<uint64_t>();
 }
 
 float BinaryDeserializer::ReadFloat() {
@@ -114,7 +103,7 @@ double BinaryDeserializer::ReadDouble() {
 }
 
 string BinaryDeserializer::ReadString() {
-	auto len = ReadPrimitive<uint32_t>();
+	auto len = VarIntDecode<uint32_t>();
 	if (len == 0) {
 		return string();
 	}
@@ -124,13 +113,13 @@ string BinaryDeserializer::ReadString() {
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
-	auto upper = ReadPrimitive<int64_t>();
-	auto lower = ReadPrimitive<uint64_t>();
+	auto upper = VarIntDecode<int64_t>();
+	auto lower = VarIntDecode<uint64_t>();
 	return hugeint_t(upper, lower);
 }
 
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr_p, idx_t count) {
-	auto len = ReadPrimitive<uint64_t>();
+	auto len = VarIntDecode<uint64_t>();
 	if (len != count) {
 		throw SerializationException("Tried to read blob of %d size, but only %d elements are available", count, len);
 	}

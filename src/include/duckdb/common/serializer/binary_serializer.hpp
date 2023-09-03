@@ -10,6 +10,7 @@
 
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/serializer/encoding_util.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,14 @@ private:
 	}
 	void WriteDataInternal(const char *ptr, idx_t write_size) {
 		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
+	}
+
+	template <class T>
+	void VarIntEncode(T value) {
+		uint8_t buffer[16];
+		auto write_size = EncodingUtil::EncodeLEB128<T>(buffer, value);
+		D_ASSERT(write_size <= sizeof(buffer));
+		WriteDataInternal(buffer, write_size);
 	}
 
 	explicit BinarySerializer(bool serialize_default_values_p) {

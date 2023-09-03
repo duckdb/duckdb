@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/encoding_util.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -86,6 +87,14 @@ private:
 		}
 		memcpy(buffer, ptr, read_size);
 		ptr += read_size;
+	}
+
+	template <class T>
+	T VarIntDecode() {
+		T value;
+		auto read_size = EncodingUtil::DecodeLEB128<T>(ptr, value);
+		ptr += read_size;
+		return value;
 	}
 
 	//===--------------------------------------------------------------------===//
