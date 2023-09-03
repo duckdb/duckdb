@@ -188,6 +188,36 @@ struct CustomExtensionRepository {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct AutoloadExtensionRepository {
+	static constexpr const char *Name = "autoinstall_extension_repository";
+	static constexpr const char *Description =
+	    "Overrides the custom endpoint for extension installation on autoloading";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AutoinstallKnownExtensions {
+	static constexpr const char *Name = "autoinstall_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically installed when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct AutoloadKnownExtensions {
+	static constexpr const char *Name = "autoload_known_extensions";
+	static constexpr const char *Description =
+	    "Whether known extensions are allowed to be automatically loaded when a query depends on them";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct EnableObjectCacheSetting {
 	static constexpr const char *Name = "enable_object_cache";
 	static constexpr const char *Description = "Whether or not object cache is used to cache e.g. Parquet metadata";
