@@ -39,21 +39,11 @@ jobs:
  linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
-
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       BUILD_VISUALIZER: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_ICU: 1
-      BUILD_JSON: 1
-      BUILD_EXCEL: 1
-      BUILD_PARQUET: 1
-      BUILD_JEMALLOC: 1
       GEN: ninja
 
     steps:

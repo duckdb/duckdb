@@ -1,0 +1,20 @@
+diff --git a/test/sql/aws_errors.test b/test/sql/aws_errors.test
+index 733bbf7..709cd8e 100644
+--- a/test/sql/aws_errors.test
++++ b/test/sql/aws_errors.test
+@@ -6,7 +6,7 @@
+ statement error
+ CALL load_aws_credentials();
+ ----
+-Catalog Error: Function with name "load_aws_credentials" is not in the catalog, but it exists in the aws extension.
++Catalog Error: Table Function with name "load_aws_credentials" is not in the catalog, but it exists in the aws extension.
+ 
+ # Require statement will ensure this test is run with this extension loaded
+ require aws
+@@ -26,4 +26,4 @@ require-env AWS_SECRET_ACCESS_KEY
+ query I
+ CALL load_aws_credentials();
+ ----
+-minio_duckdb_user
+\ No newline at end of file
++minio_duckdb_user
