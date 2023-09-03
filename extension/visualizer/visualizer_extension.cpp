@@ -4,6 +4,7 @@
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/fstream.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -112,28 +113,16 @@ static void PragmaVisualizeDiffProfilingOutput(ClientContext &context, const Fun
 }
 
 void VisualizerExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	ExtensionUtil::RegisterFunction(*db.instance, PragmaFunction::PragmaCall("visualize_last_profiling_output",
+	                                                                         PragmaVisualizeLastProfilingOutput,
+	                                                                         {LogicalType::VARCHAR}));
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, PragmaFunction::PragmaCall("visualize_json_profiling_output", PragmaVisualizeJsonProfilingOutput,
+	                                             {LogicalType::VARCHAR, LogicalType::VARCHAR}));
 
-	auto vis_last_profiler_out_func = PragmaFunction::PragmaCall(
-	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR});
-	CreatePragmaFunctionInfo vis_last_profiler_out_info(vis_last_profiler_out_func);
-	catalog.CreatePragmaFunction(*con.context, vis_last_profiler_out_info);
-
-	auto vis_json_func =
-	    PragmaFunction::PragmaCall("visualize_json_profiling_output", PragmaVisualizeJsonProfilingOutput,
-	                               {LogicalType::VARCHAR, LogicalType::VARCHAR});
-	CreatePragmaFunctionInfo vis_json_func_info(vis_json_func);
-	catalog.CreatePragmaFunction(*con.context, vis_json_func_info);
-
-	auto vis_json_diff_func =
-	    PragmaFunction::PragmaCall("visualize_diff_profiling_output", PragmaVisualizeDiffProfilingOutput,
-	                               {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR});
-	CreatePragmaFunctionInfo vis_json_diff_func_info(vis_json_diff_func);
-	catalog.CreatePragmaFunction(*con.context, vis_json_diff_func_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(
+	    *db.instance, PragmaFunction::PragmaCall("visualize_diff_profiling_output", PragmaVisualizeDiffProfilingOutput,
+	                                             {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR}));
 }
 
 std::string VisualizerExtension::Name() {
