@@ -18,8 +18,8 @@
   "scripts": {
     "install": "node-pre-gyp install --fallback-to-build",
     "pretest": "node test/support/createdb.js",
-    "test": "mocha -R spec --timeout 480000 --expose-gc",
-    "test-path": "mocha -R spec --timeout 480000 --expose-gc --exclude 'test/*.ts'",
+    "test": "cross-env TZ='Etc/UTC' mocha -R spec --timeout 480000 --expose-gc",
+    "test-path": "cross-env TZ='Etc/UTC' mocha -R spec --timeout 480000 --expose-gc --exclude 'test/*.ts'",
     "pack": "node-pre-gyp package"
   },
   "directories": {
@@ -35,6 +35,7 @@
     "aws-sdk": "^2.790.0",
     "chai": "^4.3.6",
     "chai-as-promised": "^7.1.1",
+    "cross-env": "^7.0.3",
     "jsdoc3-parser": "^2.0.0",
     "mocha": "^8.3.0",
     "ts-node": "^10.9.1",
