@@ -19,7 +19,7 @@ public:
 	}
 
 	mutex delete_lock;
-	atomic<idx_t> deleted_count;
+	idx_t deleted_count;
 	ColumnDataCollection return_collection;
 };
 
@@ -45,11 +45,10 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	};
 	auto cfs = ColumnFetchState();
 
+	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	if (return_chunk) {
 		row_identifiers.Flatten(chunk.size());
 		table.Fetch(transaction, ustate.delete_chunk, column_ids, row_identifiers, chunk.size(), cfs);
-
-		lock_guard<mutex> delete_guard(gstate.delete_lock);
 		gstate.return_collection.Append(ustate.delete_chunk);
 	}
 	gstate.deleted_count += table.Delete(tableref, context.client, row_identifiers, chunk.size());
