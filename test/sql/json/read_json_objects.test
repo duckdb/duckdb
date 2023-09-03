@@ -2,6 +2,8 @@
 # description: Read ndjson files
 # group: [json]
 
+require no_extension_autoloading
+
 # this was the previous implementation, doesn't work without JSON extension (no JSON type in catalog)
 statement error
 SELECT * FROM read_csv('data/json/example_n.ndjson', columns={'json': 'JSON'}, delim=NULL, header=0, quote=NULL, escape=NULL)
