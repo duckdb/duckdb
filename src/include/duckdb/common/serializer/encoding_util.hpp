@@ -110,23 +110,23 @@ struct EncodingUtil {
 	static typename std::enable_if<std::is_signed<T>::value, idx_t>::type DecodeLEB128(const_data_ptr_t source,
 	                                                                                   T &result) {
 		return DecodeSignedLEB128(source, result);
-	};
+	}
 
 	template <class T>
 	static typename std::enable_if<std::is_unsigned<T>::value, idx_t>::type DecodeLEB128(const_data_ptr_t source,
 	                                                                                     T &result) {
 		return DecodeUnsignedLEB128(source, result);
-	};
+	}
 
 	template <class T>
 	static typename std::enable_if<std::is_signed<T>::value, idx_t>::type EncodeLEB128(data_ptr_t target, T value) {
 		return EncodeSignedLEB128(target, value);
-	};
+	}
 
 	template <class T>
 	static typename std::enable_if<std::is_unsigned<T>::value, idx_t>::type EncodeLEB128(data_ptr_t target, T value) {
 		return EncodeUnsignedLEB128(target, value);
-	};
+	}
 };
 
 } // namespace duckdb
