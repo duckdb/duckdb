@@ -74,7 +74,7 @@ common/types/column/column_data_collection.cpp	55
 common/types/column/partitioned_column_data.cpp	8
 common/types/conflict_info.cpp	2
 common/types/conflict_manager.cpp	3
-common/types/data_chunk.cpp	43
+common/types/data_chunk.cpp	45
 common/types/date.cpp	24
 common/types/hash.cpp	5
 common/types/hugeint.cpp	35
@@ -800,7 +800,7 @@ storage/table/row_group_collection.cpp	7
 storage/table/scan_state.cpp	7
 storage/table/standard_column_data.cpp	2
 storage/table/struct_column_data.cpp	24
-storage/table/table_statistics.cpp	22
+storage/table/table_statistics.cpp	27
 storage/table/update_segment.cpp	27
 storage/table/validity_column_data.cpp	3
 storage/table_index_list.cpp	4
