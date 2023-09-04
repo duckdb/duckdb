@@ -80,7 +80,7 @@ common/types/hash.cpp	5
 common/types/hugeint.cpp	35
 common/types/hyperloglog.cpp	11
 common/types/interval.cpp	31
-common/types/row/partitioned_tuple_data.cpp	10
+common/types/row/partitioned_tuple_data.cpp	15
 common/types/row/row_data_collection.cpp	8
 common/types/row/row_data_collection_scanner.cpp	61
 common/types/row/row_layout.cpp	4
@@ -93,7 +93,7 @@ common/types/string_heap.cpp	11
 common/types/time.cpp	25
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
-common/types/validity_mask.cpp	10
+common/types/validity_mask.cpp	12
 common/types/value.cpp	180
 common/types/vector.cpp	132
 common/value_operations/comparison_operations.cpp	32
@@ -116,6 +116,7 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
+core_functions/aggregate/nested/histogram.cpp	1
 core_functions/aggregate/nested/list.cpp	4
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
@@ -229,7 +230,7 @@ execution/physical_plan/plan_sample.cpp	2
 execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
-execution/radix_partitioned_hashtable.cpp	3
+execution/radix_partitioned_hashtable.cpp	11
 execution/reservoir_sample.cpp	60
 execution/window_executor.cpp	29
 execution/window_segment_tree.cpp	12
@@ -355,6 +356,7 @@ include/duckdb/common/operator/multiply.hpp	2
 include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
 include/duckdb/common/pipe_file_system.hpp	3
+include/duckdb/common/printer.hpp	2
 include/duckdb/common/radix.hpp	2
 include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
