@@ -171,6 +171,7 @@ ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
+	case DatePartSpecifier::JULIAN_DAY:
 		return ICUCalendarSub::SubtractDay;
 	case DatePartSpecifier::HOUR:
 		return ICUCalendarSub::SubtractHour;

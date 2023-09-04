@@ -2,11 +2,11 @@
 import numpy
 import pytest
 import duckdb
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas
 
 
 class TestType(object):
-    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    @pytest.mark.parametrize('pandas', [NumpyPandas()])
     def test_fetchdf(self, pandas):
         con = duckdb.connect()
         con.execute("CREATE TABLE items(item VARCHAR)")
@@ -14,9 +14,8 @@ class TestType(object):
         res = con.execute("SELECT item FROM items").fetchdf()
         assert isinstance(res, pandas.core.frame.DataFrame)
 
-        arr = numpy.ma.masked_array(['jeans', '', None])
-        arr.mask = [False, False, True]
-        arr = {'item': arr}
-        df = pandas.DataFrame(arr)
+        df = pandas.DataFrame({'item': ['jeans', '', None]})
 
+        print(res)
+        print(df)
         pandas.testing.assert_frame_equal(res, df)

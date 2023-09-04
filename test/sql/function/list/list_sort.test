@@ -427,7 +427,7 @@ order by id;
 2	[10]
 
 query II
-select id, list(distinct foo) from (
+select id, list(distinct foo order by foo) from (
   values (1, '10'), (1, '10'), (1, '15'), (2, '10')
 ) v (id, foo)
 group by id

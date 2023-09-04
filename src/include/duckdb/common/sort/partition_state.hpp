@@ -31,6 +31,7 @@ public:
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
+	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
@@ -58,9 +59,6 @@ public:
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
-
-	void BuildSortState(TupleDataCollection &group_data, GlobalSortState &global_sort) const;
-	void BuildSortState(TupleDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
 
 	ClientContext &context;
 	BufferManager &buffer_manager;
@@ -128,7 +126,7 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
 
 class PartitionLocalMergeState;
 
@@ -150,7 +148,11 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	vector<column_t> column_ids;
+	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
+	const idx_t memory_per_thread;
+	const idx_t num_threads;
 
 private:
 	mutable mutex lock;
@@ -162,15 +164,14 @@ private:
 
 class PartitionLocalMergeState {
 public:
-	PartitionLocalMergeState() : merge_state(nullptr), stage(PartitionSortStage::INIT) {
-		finished = true;
-	}
+	explicit PartitionLocalMergeState(PartitionGlobalSinkState &gstate);
 
 	bool TaskFinished() {
 		return finished;
 	}
 
 	void Prepare();
+	void Scan();
 	void Merge();
 
 	void ExecuteTask();
@@ -178,6 +179,11 @@ public:
 	PartitionGlobalMergeState *merge_state;
 	PartitionSortStage stage;
 	atomic<bool> finished;
+
+	//	Sorting buffers
+	ExpressionExecutor executor;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
 };
 
 class PartitionGlobalMergeStates {

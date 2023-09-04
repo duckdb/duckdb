@@ -12,7 +12,8 @@ namespace duckdb {
 class FormatSerializer;   // Forward declare
 class FormatDeserializer; // Forward declare
 
-typedef uint32_t field_id_t;
+typedef uint16_t field_id_t;
+const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
 
 // Backport to c++11
 template <class...>

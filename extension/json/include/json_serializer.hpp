@@ -27,6 +27,7 @@ private:
 	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
 	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
 		serialize_enum_as_string = true;
+		serialize_default_values = true;
 	}
 
 public:
@@ -42,26 +43,20 @@ public:
 		return stack.front();
 	};
 
-	void SetTag(const field_id_t, const char *tag) final;
-
 	//===--------------------------------------------------------------------===//
 	// Nested Types Hooks
 	//===--------------------------------------------------------------------===//
-	void OnOptionalBegin(bool present) final;
+	void OnPropertyBegin(const field_id_t field_id, const char *tag) final;
+	void OnPropertyEnd() final;
+	void OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) final;
+	void OnOptionalPropertyEnd(bool present) final;
+
 	void OnListBegin(idx_t count) final;
-	void OnListEnd(idx_t count) final;
-	void OnMapBegin(idx_t count) final;
-	void OnMapEntryBegin() final;
-	void OnMapEntryEnd() final;
-	void OnMapKeyBegin() final;
-	void OnMapValueBegin() final;
-	void OnMapEnd(idx_t count) final;
+	void OnListEnd() final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
-	void OnPairBegin() final;
-	void OnPairKeyBegin() final;
-	void OnPairValueBegin() final;
-	void OnPairEnd() final;
+	void OnNullableBegin(bool present) final;
+	void OnNullableEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types
@@ -78,7 +73,6 @@ public:
 	void WriteValue(hugeint_t value) final;
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
-	void WriteValue(interval_t value) final;
 	void WriteValue(const string_t value) final;
 	void WriteValue(const string &value) final;
 	void WriteValue(const char *value) final;
