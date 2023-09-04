@@ -893,19 +893,10 @@ public class DuckDBPreparedStatement implements PreparedStatement {
         throw new SQLFeatureNotSupportedException("setAsciiStream");
     }
 
-    static byte[] readAllBytes(InputStream x) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        byte[] thing = new byte[256];
-        while (x.read(thing) != 0) {
-            out.write(thing);
-        }
-        return out.toByteArray();
-    }
-
     @Override
     public void setBinaryStream(int parameterIndex, InputStream x) throws SQLException {
         try {
-            setBytes(parameterIndex, readAllBytes(x));
+            setBytes(parameterIndex, JdbcUtils.readAllBytes(x));
         } catch (IOException ioe) {
             throw new SQLException("Failed to read from InputStream", ioe);
         }
