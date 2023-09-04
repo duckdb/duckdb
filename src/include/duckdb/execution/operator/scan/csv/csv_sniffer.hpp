@@ -11,6 +11,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 
 namespace duckdb {
 //! Struct to store the result of the Sniffer
@@ -45,7 +46,7 @@ private:
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
 	//! Current Candidates being considered
-	vector<unique_ptr<CSVStateMachine>> candidates;
+	vector<unique_ptr<CSVScanner>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
 	//! Buffer being used on sniffer
@@ -62,18 +63,18 @@ private:
 	                                           unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                           unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 2. Generates the search space candidates for the state machines
-	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
+	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVScanner>> &csv_state_machines,
 	                                     const vector<char> &delimiter_candidates,
 	                                     const vector<QuoteRule> &quoterule_candidates,
 	                                     const unordered_map<uint8_t, vector<char>> &quote_candidates_map,
 	                                     const unordered_map<uint8_t, vector<char>> &escape_candidates_map);
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(unique_ptr<CSVStateMachine>, idx_t &rows_read, idx_t &best_consistent_rows,
+	void AnalyzeDialectCandidate(unique_ptr<CSVScanner>, idx_t &rows_read, idx_t &best_consistent_rows,
 	                             idx_t &prev_padding_count);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 	//! Checks if candidate still produces good values for the next chunk
-	bool RefineCandidateNextChunk(CSVStateMachine &candidate);
+	bool RefineCandidateNextChunk(CSVScanner &candidate);
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
@@ -100,7 +101,7 @@ private:
 	};
 	unordered_map<idx_t, vector<LogicalType>> best_sql_types_candidates_per_column_idx;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
-	unique_ptr<CSVStateMachine> best_candidate;
+	unique_ptr<CSVScanner> best_candidate;
 	idx_t best_start_with_header = 0;
 	idx_t best_start_without_header = 0;
 	vector<Value> best_header_row;

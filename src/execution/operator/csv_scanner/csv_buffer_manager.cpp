@@ -71,20 +71,5 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	return cached_buffers[pos]->Pin(*file_handle);
 }
 
-bool CSVBufferIterator::Finished() {
-	return !cur_buffer_handle;
-}
-
-void CSVBufferIterator::Reset() {
-	if (cur_buffer_handle) {
-		cur_buffer_handle.reset();
-	}
-	if (cur_buffer_idx > 0) {
-		buffer_manager->UnpinBuffer(cur_buffer_idx - 1);
-	}
-	cur_buffer_idx = 0;
-	buffer_manager->Initialize();
-	cur_pos = buffer_manager->GetStartPos();
-}
 
 } // namespace duckdb

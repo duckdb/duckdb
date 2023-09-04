@@ -160,7 +160,7 @@ bool ParallelCSVReader::SetPosition() {
 		auto column_mapping = std::move(reader_data.column_mapping);
 		InitializeProjection();
 		try {
-			successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
+			successfully_read_first_line = Parse(first_line_chunk, error_message, true);
 		} catch (...) {
 			successfully_read_first_line = false;
 		}
@@ -246,7 +246,7 @@ bool AllNewLine(string_t value, idx_t column_amount) {
 	return true;
 }
 
-bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
+bool ParallelCSVReader::Parse(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// If line is not set, we have to figure it out, we assume whatever is in the first line
 	if (options.dialect_options.new_line == NewLineIdentifier::NOT_SET) {
 		idx_t cur_pos = position_buffer;
@@ -644,23 +644,10 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 	}
 }
 
-bool ParallelCSVReader::TryParseCSV(ParserMode mode) {
-	DataChunk dummy_chunk;
-	string error_message;
-	return TryParseCSV(mode, dummy_chunk, error_message);
-}
-
-void ParallelCSVReader::ParseCSV(ParserMode mode) {
-	DataChunk dummy_chunk;
-	string error_message;
-	if (!TryParseCSV(mode, dummy_chunk, error_message)) {
-		throw InvalidInputException(error_message);
-	}
-}
 
 bool ParallelCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
 	mode = parser_mode;
-	return TryParseSimpleCSV(insert_chunk, error_message);
+	return Parse(insert_chunk, error_message);
 }
 
 } // namespace duckdb

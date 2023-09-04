@@ -9,6 +9,7 @@ add_library_unity(
   csv_buffer_manager.cpp
   csv_file_handle.cpp
   csv_reader_options.cpp
+        csv_scanner.cpp
   csv_state_machine.cpp
   csv_state_machine_cache.cpp
   parallel_csv_reader.cpp)

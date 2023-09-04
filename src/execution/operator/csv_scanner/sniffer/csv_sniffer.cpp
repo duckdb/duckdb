@@ -36,8 +36,9 @@ SnifferResult CSVSniffer::SniffCSV() {
 	// We are done, construct and return the result.
 
 	// Set the CSV Options in the reference
-	options.dialect_options = best_candidate->dialect_options;
-	options.has_header = best_candidate->dialect_options.header;
+	auto &sniffing_state_machine = best_candidate->GetStateMachine();
+	options.dialect_options = sniffing_state_machine.dialect_options;
+	options.has_header = sniffing_state_machine.dialect_options.header;
 	options.skip_rows_set = options.dialect_options.skip_rows > 0;
 	if (options.has_header) {
 		options.dialect_options.true_start = best_start_with_header;

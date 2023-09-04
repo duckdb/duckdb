@@ -101,7 +101,7 @@ class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, CSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
 	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, idx_t file_idx_p);
-	virtual ~ParallelCSVReader() {
+	~ParallelCSVReader() override {
 	}
 
 	//! Current Position (Relative to the Buffer)
@@ -138,10 +138,6 @@ public:
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);
-	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
-	void ParseCSV(ParserMode mode);
-	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
-	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sets Position depending on the byte_start of this thread
@@ -157,7 +153,7 @@ private:
 	bool NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char);
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
+	bool Parse(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 
 	//! First Position of First Buffer
 	idx_t first_pos_first_buffer = 0;

@@ -35,39 +35,29 @@ enum class CSVState : uint8_t {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
-	                         shared_ptr<CSVBufferManager> buffer_manager_p,
+	explicit CSVStateMachine(const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
-	//! Resets the state machine, so it can be used again
-	void Reset();
 
-	//! Aux Function for string UTF8 Verification
-	void VerifyUTF8();
-
-	CSVStateMachineCache &csv_state_machine_cache;
-
-	const CSVReaderOptions &options;
-	CSVBufferIterator csv_buffer_iterator;
-	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
-	idx_t start_row = 0;
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	const state_machine_t &transition_array;
+	//! Options of this state machine
+	const CSVStateMachineOptions state_machine_options;
+};
+
+//! State Machine holding options that are detected during sniffing
+class CSVStateMachineSniffing: public CSVStateMachine {
+public:
+	explicit CSVStateMachineSniffing(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
+	                         CSVStateMachineCache &csv_state_machine_cache_p);
+
+	const CSVReaderOptions &options;
+	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
+	idx_t start_row = 0;
 
 	//! Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
-
-	//! Variables Used for Sniffing
-	CSVState state;
-	CSVState previous_state;
-	CSVState pre_previous_state;
-	idx_t cur_rows;
-	idx_t column_count;
-	string value;
-	idx_t rows_read;
-	idx_t line_start_pos = 0;
-
 	//! Dialect options resulting from sniffing
 	DialectOptions dialect_options;
 };
