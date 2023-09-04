@@ -37,7 +37,6 @@ public:
 		return make_uniq<BoundDefaultExpression>(return_type);
 	}
 
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
 };

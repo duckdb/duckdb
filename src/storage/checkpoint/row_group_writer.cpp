@@ -33,7 +33,7 @@ void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &co
 		meta_writer.Write<uint32_t>(data_pointer.block_pointer.offset);
 		meta_writer.Write<CompressionType>(data_pointer.compression_type);
 		throw InternalException("FIXME: serialize statistics");
-//		data_pointer.statistics.Serialize(meta_writer);
+		//		data_pointer.statistics.Serialize(meta_writer);
 	}
 }
 

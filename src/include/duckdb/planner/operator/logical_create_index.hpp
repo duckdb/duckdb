@@ -32,7 +32,6 @@ public:
 	vector<unique_ptr<Expression>> unbound_expressions;
 
 public:
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 

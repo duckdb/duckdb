@@ -1,6 +1,5 @@
 #include "duckdb/planner/operator/logical_order.hpp"
 
-
 namespace duckdb {
 
 LogicalOrder::LogicalOrder(vector<BoundOrderByNode> orders)

@@ -167,48 +167,48 @@ optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
 }
 
 BlockPointer Node4::Serialize(ART &art, MetadataWriter &writer) {
-throw InternalException("TODO");
-//	// recurse into children and retrieve child block pointers
-//	vector<BlockPointer> child_block_pointers;
-//	for (idx_t i = 0; i < count; i++) {
-//		child_block_pointers.push_back(children[i].Serialize(art, writer));
-//	}
-//	for (idx_t i = count; i < Node::NODE_4_CAPACITY; i++) {
-//		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
-//	}
-//
-//	// get pointer and write fields
-//	auto block_pointer = writer.GetBlockPointer();
-//	writer.Write(NType::NODE_4);
-//	writer.Write<uint8_t>(count);
-//
-//	// write key values
-//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-//		writer.Write(key[i]);
-//	}
-//
-//	// write child block pointers
-//	for (auto &child_block_pointer : child_block_pointers) {
-//		writer.Write(child_block_pointer.block_id);
-//		writer.Write(child_block_pointer.offset);
-//	}
-//
-//	return block_pointer;
+	throw InternalException("TODO");
+	//	// recurse into children and retrieve child block pointers
+	//	vector<BlockPointer> child_block_pointers;
+	//	for (idx_t i = 0; i < count; i++) {
+	//		child_block_pointers.push_back(children[i].Serialize(art, writer));
+	//	}
+	//	for (idx_t i = count; i < Node::NODE_4_CAPACITY; i++) {
+	//		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
+	//	}
+	//
+	//	// get pointer and write fields
+	//	auto block_pointer = writer.GetBlockPointer();
+	//	writer.Write(NType::NODE_4);
+	//	writer.Write<uint8_t>(count);
+	//
+	//	// write key values
+	//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+	//		writer.Write(key[i]);
+	//	}
+	//
+	//	// write child block pointers
+	//	for (auto &child_block_pointer : child_block_pointers) {
+	//		writer.Write(child_block_pointer.block_id);
+	//		writer.Write(child_block_pointer.offset);
+	//	}
+	//
+	//	return block_pointer;
 }
 
 void Node4::Deserialize(MetadataReader &reader) {
 	throw InternalException("TODO");
-//	count = reader.Read<uint8_t>();
-//
-//	// read key values
-//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-//		key[i] = reader.Read<uint8_t>();
-//	}
-//
-//	// read child block pointers
-//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
-//		children[i] = Node(reader);
-//	}
+	//	count = reader.Read<uint8_t>();
+	//
+	//	// read key values
+	//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+	//		key[i] = reader.Read<uint8_t>();
+	//	}
+	//
+	//	// read child block pointers
+	//	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+	//		children[i] = Node(reader);
+	//	}
 }
 
 void Node4::Vacuum(ART &art, const ARTFlags &flags) {

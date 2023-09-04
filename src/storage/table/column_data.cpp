@@ -453,32 +453,32 @@ void ColumnData::DeserializeColumn(ReadStream &source) {
 	idx_t data_pointer_count = source.Read<idx_t>();
 	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
 		throw InternalException("FIXME deserialize column data");
-//		// read the data pointer
-//		auto row_start = source.Read<idx_t>();
-//		auto tuple_count = source.Read<idx_t>();
-//		auto block_pointer_block_id = source.Read<block_id_t>();
-//		auto block_pointer_offset = source.Read<uint32_t>();
-//		auto compression_type = source.Read<CompressionType>();
-////		auto segment_stats = BaseStatistics::Deserialize(source, type);
-//		if (stats) {
-//			stats->statistics.Merge(segment_stats);
-//		}
-//
-//		DataPointer data_pointer(std::move(segment_stats));
-//		data_pointer.row_start = row_start;
-//		data_pointer.tuple_count = tuple_count;
-//		data_pointer.block_pointer.block_id = block_pointer_block_id;
-//		data_pointer.block_pointer.offset = block_pointer_offset;
-//		data_pointer.compression_type = compression_type;
-//
-//		this->count += tuple_count;
-//
-//		// create a persistent segment
-//		auto segment = ColumnSegment::CreatePersistentSegment(
-//		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
-//		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-//		    std::move(data_pointer.statistics));
-//		data.AppendSegment(std::move(segment));
+		//		// read the data pointer
+		//		auto row_start = source.Read<idx_t>();
+		//		auto tuple_count = source.Read<idx_t>();
+		//		auto block_pointer_block_id = source.Read<block_id_t>();
+		//		auto block_pointer_offset = source.Read<uint32_t>();
+		//		auto compression_type = source.Read<CompressionType>();
+		////		auto segment_stats = BaseStatistics::Deserialize(source, type);
+		//		if (stats) {
+		//			stats->statistics.Merge(segment_stats);
+		//		}
+		//
+		//		DataPointer data_pointer(std::move(segment_stats));
+		//		data_pointer.row_start = row_start;
+		//		data_pointer.tuple_count = tuple_count;
+		//		data_pointer.block_pointer.block_id = block_pointer_block_id;
+		//		data_pointer.block_pointer.offset = block_pointer_offset;
+		//		data_pointer.compression_type = compression_type;
+		//
+		//		this->count += tuple_count;
+		//
+		//		// create a persistent segment
+		//		auto segment = ColumnSegment::CreatePersistentSegment(
+		//		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
+		//type, 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
+		//		    std::move(data_pointer.statistics));
+		//		data.AppendSegment(std::move(segment));
 	}
 }
 

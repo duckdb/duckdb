@@ -243,21 +243,21 @@ void SingleFileBlockManager::LoadFreeList() {
 	}
 
 	throw InternalException("TODO");
-//	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
-//	auto free_list_count = reader.Read<uint64_t>();
-//	free_list.clear();
-//	for (idx_t i = 0; i < free_list_count; i++) {
-//		free_list.insert(reader.Read<block_id_t>());
-//	}
-//	auto multi_use_blocks_count = reader.Read<uint64_t>();
-//	multi_use_blocks.clear();
-//	for (idx_t i = 0; i < multi_use_blocks_count; i++) {
-//		auto block_id = reader.Read<block_id_t>();
-//		auto usage_count = reader.Read<uint32_t>();
-//		multi_use_blocks[block_id] = usage_count;
-//	}
-//	GetMetadataManager().Deserialize(reader);
-//	GetMetadataManager().MarkBlocksAsModified();
+	//	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
+	//	auto free_list_count = reader.Read<uint64_t>();
+	//	free_list.clear();
+	//	for (idx_t i = 0; i < free_list_count; i++) {
+	//		free_list.insert(reader.Read<block_id_t>());
+	//	}
+	//	auto multi_use_blocks_count = reader.Read<uint64_t>();
+	//	multi_use_blocks.clear();
+	//	for (idx_t i = 0; i < multi_use_blocks_count; i++) {
+	//		auto block_id = reader.Read<block_id_t>();
+	//		auto usage_count = reader.Read<uint32_t>();
+	//		multi_use_blocks[block_id] = usage_count;
+	//	}
+	//	GetMetadataManager().Deserialize(reader);
+	//	GetMetadataManager().MarkBlocksAsModified();
 }
 
 bool SingleFileBlockManager::IsRootBlock(MetaBlockPointer root) {

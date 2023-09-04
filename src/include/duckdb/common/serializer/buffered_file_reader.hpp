@@ -15,8 +15,8 @@ namespace duckdb {
 
 class BufferedFileReader : public ReadStream {
 public:
-	BufferedFileReader(FileSystem &fs, const char *path,
-	                   FileLockType lock_type = FileLockType::READ_LOCK, optional_ptr<FileOpener> opener = nullptr);
+	BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type = FileLockType::READ_LOCK,
+	                   optional_ptr<FileOpener> opener = nullptr);
 
 	FileSystem &fs;
 	unsafe_unique_array<data_t> data;

@@ -29,7 +29,6 @@ public:
 	BoundExportData exported_tables;
 
 public:
-
 protected:
 	void ResolveTypes() override {
 		types.emplace_back(LogicalType::BOOLEAN);

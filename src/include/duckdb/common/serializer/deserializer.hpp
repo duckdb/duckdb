@@ -23,7 +23,8 @@ protected:
 	DeserializationData data;
 
 public:
-	virtual ~FormatDeserializer() {}
+	virtual ~FormatDeserializer() {
+	}
 
 	class List {
 		friend FormatDeserializer;

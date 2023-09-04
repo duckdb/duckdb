@@ -189,16 +189,15 @@ static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &in
 static void CMStringCompressSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const ScalarFunction &function) {
 	throw InternalException("CMStringCompressSerialize");
-//	writer.WriteRegularSerializableList(function.arguments);
-//	writer.WriteSerializable(function.return_type);
+	//	writer.WriteRegularSerializableList(function.arguments);
+	//	writer.WriteSerializable(function.return_type);
 }
 
-unique_ptr<FunctionData> CMStringCompressDeserialize(FormatDeserializer &deserializer,
-                                                     ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringCompressDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
 	throw InternalException("CMStringCompressDeserialize");
-//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-//	function.function = GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType, LogicalType>());
-//	return nullptr;
+	//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	//	function.function = GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType,
+	//LogicalType>()); 	return nullptr;
 }
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
@@ -217,16 +216,15 @@ void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
 
 static void CMStringDecompressSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
                                         const ScalarFunction &function) {
-//	writer.WriteRegularSerializableList(function.arguments);
+	//	writer.WriteRegularSerializableList(function.arguments);
 	throw InternalException("CMStringDecompressSerialize");
 }
 
-unique_ptr<FunctionData> CMStringDecompressDeserialize(FormatDeserializer &deserializer,
-                                                       ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringDecompressDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
 	throw InternalException("CMStringDecompressDeserialize");
-//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-//	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
-//	return nullptr;
+	//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	//	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
+	//	return nullptr;
 }
 
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {

@@ -308,59 +308,59 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 
 BlockPointer Prefix::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 	throw InternalException("TODO");
-//	reference<Node> first_non_prefix(node);
-//	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
-//	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
-//
-//	// get pointer and write fields
-//	auto block_pointer = writer.GetBlockPointer();
-//	writer.Write(NType::PREFIX);
-//	writer.Write<idx_t>(total_count);
-//
-//	reference<Node> current_node(node);
-//	while (current_node.get().GetType() == NType::PREFIX) {
-//
-//		// write prefix bytes
-//		D_ASSERT(!current_node.get().IsSerialized());
-//		auto &prefix = Prefix::Get(art, current_node);
-//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-//			writer.Write(prefix.data[i]);
-//		}
-//
-//		current_node = prefix.ptr;
-//	}
-//
-//	// write child block pointer
-//	writer.Write(child_block_pointer.block_id);
-//	writer.Write(child_block_pointer.offset);
-//
-//	return block_pointer;
+	//	reference<Node> first_non_prefix(node);
+	//	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
+	//	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
+	//
+	//	// get pointer and write fields
+	//	auto block_pointer = writer.GetBlockPointer();
+	//	writer.Write(NType::PREFIX);
+	//	writer.Write<idx_t>(total_count);
+	//
+	//	reference<Node> current_node(node);
+	//	while (current_node.get().GetType() == NType::PREFIX) {
+	//
+	//		// write prefix bytes
+	//		D_ASSERT(!current_node.get().IsSerialized());
+	//		auto &prefix = Prefix::Get(art, current_node);
+	//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+	//			writer.Write(prefix.data[i]);
+	//		}
+	//
+	//		current_node = prefix.ptr;
+	//	}
+	//
+	//	// write child block pointer
+	//	writer.Write(child_block_pointer.block_id);
+	//	writer.Write(child_block_pointer.offset);
+	//
+	//	return block_pointer;
 }
 
 void Prefix::Deserialize(ART &art, Node &node, MetadataReader &reader) {
 	throw InternalException("TODO");
-//	auto total_count = reader.Read<idx_t>();
-//	reference<Node> current_node(node);
-//
-//	while (total_count) {
-//		current_node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-//		current_node.get().SetType((uint8_t)NType::PREFIX);
-//
-//		auto &prefix = Prefix::Get(art, current_node);
-//		prefix.data[Node::PREFIX_SIZE] = MinValue((idx_t)Node::PREFIX_SIZE, total_count);
-//
-//		// read bytes
-//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-//			prefix.data[i] = reader.Read<uint8_t>();
-//		}
-//
-//		total_count -= prefix.data[Node::PREFIX_SIZE];
-//		current_node = prefix.ptr;
-//		prefix.ptr.Reset();
-//	}
-//
-//	// read child block pointer
-//	current_node.get() = Node(reader);
+	//	auto total_count = reader.Read<idx_t>();
+	//	reference<Node> current_node(node);
+	//
+	//	while (total_count) {
+	//		current_node.get() = Node::GetAllocator(art, NType::PREFIX).New();
+	//		current_node.get().SetType((uint8_t)NType::PREFIX);
+	//
+	//		auto &prefix = Prefix::Get(art, current_node);
+	//		prefix.data[Node::PREFIX_SIZE] = MinValue((idx_t)Node::PREFIX_SIZE, total_count);
+	//
+	//		// read bytes
+	//		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+	//			prefix.data[i] = reader.Read<uint8_t>();
+	//		}
+	//
+	//		total_count -= prefix.data[Node::PREFIX_SIZE];
+	//		current_node = prefix.ptr;
+	//		prefix.ptr.Reset();
+	//	}
+	//
+	//	// read child block pointer
+	//	current_node.get() = Node(reader);
 }
 
 void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {

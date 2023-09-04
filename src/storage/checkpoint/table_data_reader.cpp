@@ -19,12 +19,12 @@ void TableDataReader::ReadTableData() {
 	D_ASSERT(!columns.empty());
 
 	throw InternalException("TODO");
-//	// deserialize the total table statistics
-//	info.data->table_stats.Deserialize(reader, columns);
-//
-//	// deserialize each of the individual row groups
-//	info.data->row_group_count = reader.Read<uint64_t>();
-//	info.data->block_pointer = reader.GetMetaBlockPointer();
+	//	// deserialize the total table statistics
+	//	info.data->table_stats.Deserialize(reader, columns);
+	//
+	//	// deserialize each of the individual row groups
+	//	info.data->row_group_count = reader.Read<uint64_t>();
+	//	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

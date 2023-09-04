@@ -47,9 +47,10 @@ struct ListAggregatesBindData : public FunctionData {
 		return result;
 	}
 
-	static void Serialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p, const ScalarFunction &function) {
+	static void Serialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const ScalarFunction &function) {
 		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
-		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *) nullptr);
+		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
 	static unique_ptr<FunctionData> Deserialize(FormatDeserializer &deserializer, ScalarFunction &bound_function) {
@@ -59,7 +60,6 @@ struct ListAggregatesBindData : public FunctionData {
 		}
 		return std::move(result);
 	}
-
 };
 
 ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p)

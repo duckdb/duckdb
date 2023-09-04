@@ -60,6 +60,5 @@ public:
 	unique_ptr<Expression> Copy() override;
 
 	bool PropagatesNullValues() const override;
-
 };
 } // namespace duckdb

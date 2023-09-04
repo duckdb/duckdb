@@ -202,11 +202,10 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
-typedef void (*table_function_serialize_t)(FormatSerializer &serializer,
-                                                  const optional_ptr<FunctionData> bind_data,
-                                                  const TableFunction &function);
+typedef void (*table_function_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                           const TableFunction &function);
 typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(FormatDeserializer &deserializer,
-                                                                        TableFunction &function);
+                                                                 TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:

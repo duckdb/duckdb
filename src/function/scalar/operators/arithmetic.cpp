@@ -252,10 +252,10 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 static void SerializeDecimalArithmetic(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
                                        const ScalarFunction &function) {
 	throw InternalException("Decimal");
-//	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
-//	writer.WriteField(bind_data.check_overflow);
-//	writer.WriteSerializable(function.return_type);
-//	writer.WriteRegularSerializableList(function.arguments);
+	//	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
+	//	writer.WriteField(bind_data.check_overflow);
+	//	writer.WriteSerializable(function.return_type);
+	//	writer.WriteRegularSerializableList(function.arguments);
 }
 
 // TODO this is partially duplicated from the bind
@@ -263,23 +263,23 @@ template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
 unique_ptr<FunctionData> DeserializeDecimalArithmetic(FormatDeserializer &deserializer,
                                                       ScalarFunction &bound_function) {
 	throw InternalException("Decimal");
-//	// re-change the function pointers
-//	auto check_overflow = reader.ReadRequired<bool>();
-//	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-//	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-//
-//	if (check_overflow) {
-//		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
-//	} else {
-//		bound_function.function = GetScalarBinaryFunction<OP>(return_type.InternalType());
-//	}
-//	bound_function.statistics = nullptr; // TODO we likely dont want to do stats prop again
-//	bound_function.return_type = return_type;
-//	bound_function.arguments = arguments;
-//
-//	auto bind_data = make_uniq<DecimalArithmeticBindData>();
-//	bind_data->check_overflow = check_overflow;
-//	return std::move(bind_data);
+	//	// re-change the function pointers
+	//	auto check_overflow = reader.ReadRequired<bool>();
+	//	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+	//	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+	//
+	//	if (check_overflow) {
+	//		bound_function.function = GetScalarBinaryFunction<OPOVERFLOWCHECK>(return_type.InternalType());
+	//	} else {
+	//		bound_function.function = GetScalarBinaryFunction<OP>(return_type.InternalType());
+	//	}
+	//	bound_function.statistics = nullptr; // TODO we likely dont want to do stats prop again
+	//	bound_function.return_type = return_type;
+	//	bound_function.arguments = arguments;
+	//
+	//	auto bind_data = make_uniq<DecimalArithmeticBindData>();
+	//	bind_data->check_overflow = check_overflow;
+	//	return std::move(bind_data);
 }
 
 unique_ptr<FunctionData> NopDecimalBind(ClientContext &context, ScalarFunction &bound_function,

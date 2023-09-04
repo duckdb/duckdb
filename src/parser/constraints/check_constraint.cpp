@@ -1,6 +1,5 @@
 #include "duckdb/parser/constraints/check_constraint.hpp"
 
-
 namespace duckdb {
 
 CheckConstraint::CheckConstraint(unique_ptr<ParsedExpression> expression)

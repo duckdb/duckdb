@@ -1,6 +1,5 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {

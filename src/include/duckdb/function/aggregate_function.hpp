@@ -47,9 +47,9 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
                                    idx_t bias);
 
 typedef void (*aggregate_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                             const AggregateFunction &function);
+                                      const AggregateFunction &function);
 typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(FormatDeserializer &deserializer,
-                                                                   AggregateFunction &function);
+                                                            AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -65,8 +65,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -80,8 +79,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize),
-	      order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,

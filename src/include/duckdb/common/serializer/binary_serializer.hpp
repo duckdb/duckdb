@@ -17,8 +17,7 @@ namespace duckdb {
 
 class BinarySerializer : public FormatSerializer {
 protected:
-	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) :
-		stream(stream) {
+	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) : stream(stream) {
 		serialize_default_values = serialize_default_values_p;
 		serialize_enum_as_string = false;
 	}

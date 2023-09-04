@@ -10,8 +10,8 @@ using namespace std;
 
 ////! Simulates an operator that used to work based on an integer but was was enhanced to work with floating point
 ////! at some point
-//class NewOperator : public LogicalOperator {
-//public:
+// class NewOperator : public LogicalOperator {
+// public:
 //	explicit NewOperator(double_t value)
 //	    : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN, duckdb::vector<duckdb::unique_ptr<Expression>>()),
 //	      value(value) {
@@ -22,7 +22,7 @@ using namespace std;
 //	// older versions used to use an integer
 //	static const uint64_t MINIMUM_VERSION_FOR_FLOAT = 2;
 //
-//public:
+// public:
 //	void Serialize(FieldWriter &writer) const override {
 //		if (writer.GetSerializer().GetVersion() >= MINIMUM_VERSION_FOR_FLOAT) {
 //			writer.WriteField(value);
@@ -44,19 +44,19 @@ using namespace std;
 //		return make_uniq_base<LogicalOperator, NewOperator>(value);
 //	}
 //
-//private:
+// private:
 //	void ResolveTypes() override {
 //	}
 //};
 //
-//class OldOperator : public LogicalOperator {
-//public:
+// class OldOperator : public LogicalOperator {
+// public:
 //	explicit OldOperator(int32_t value) : LogicalOperator(LogicalOperatorType::LOGICAL_DUMMY_SCAN), value(value) {
 //	}
 //
 //	int32_t value;
 //
-//public:
+// public:
 //	void Serialize(FieldWriter &writer) const override {
 //		writer.WriteField(value);
 //	}
@@ -66,13 +66,13 @@ using namespace std;
 //		return make_uniq_base<LogicalOperator, OldOperator>(value);
 //	}
 //
-//private:
+// private:
 //	void ResolveTypes() override {
 //	}
 //};
 //
-//template <typename S, typename T, typename V>
-//static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(V),
+// template <typename S, typename T, typename V>
+// static void test_helper(const V version_compatible_value, const uint64_t sourceVersion, S *source_factory(V),
 //                        const uint64_t targetVersion,
 //                        duckdb::unique_ptr<LogicalOperator> target_deserialize(ClientContext &, LogicalOperatorType,
 //                                                                               FieldReader &)) {
@@ -100,20 +100,20 @@ using namespace std;
 TEST_CASE("Test serializing / deserializing on the same version", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	throw InternalException("FIXME");
-//	test_helper<NewOperator, NewOperator, double_t>(
-//	    1.1, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
+	//	test_helper<NewOperator, NewOperator, double_t>(
+	//	    1.1, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from new to old", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-//	test_helper<NewOperator, OldOperator, double_t>(
-//	    1.0, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, OLD_VERSION, OldOperator::Deserialize);
+	//	test_helper<NewOperator, OldOperator, double_t>(
+	//	    1.0, NEW_VERSION, [](double_t d) { return new NewOperator(d); }, OLD_VERSION, OldOperator::Deserialize);
 }
 
 TEST_CASE("Test serializing / deserializing from old to new", "[serialization]") {
 	const uint64_t NEW_VERSION = 3;
 	const uint64_t OLD_VERSION = 1;
-//	test_helper<OldOperator, NewOperator, int32_t>(
-//	    1, OLD_VERSION, [](int32_t d) { return new OldOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
+	//	test_helper<OldOperator, NewOperator, int32_t>(
+	//	    1, OLD_VERSION, [](int32_t d) { return new OldOperator(d); }, NEW_VERSION, NewOperator::Deserialize);
 }

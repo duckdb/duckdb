@@ -147,8 +147,7 @@ static void StringAggSerialize(FormatSerializer &serializer, const optional_ptr<
 	serializer.WriteProperty(100, "separator", bind_data.sep);
 }
 
-unique_ptr<FunctionData> StringAggDeserialize(FormatDeserializer &deserializer,
-                                              AggregateFunction &bound_function) {
+unique_ptr<FunctionData> StringAggDeserialize(FormatDeserializer &deserializer, AggregateFunction &bound_function) {
 	auto sep = deserializer.ReadProperty<string>(100, "separator");
 	return make_uniq<StringAggBindData>(std::move(sep));
 }

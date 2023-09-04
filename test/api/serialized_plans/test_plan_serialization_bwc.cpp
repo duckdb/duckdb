@@ -32,43 +32,43 @@ const char *PERSISTENT_FILE_NAME = "serialized_plans.binary";
 
 TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 	throw InternalException("FIXME Generate serialized plans file");
-//	string file_location;
-//	if (std::getenv("GEN_PLAN_STORAGE") != nullptr) {
-//		// there is no way in catch2 to only run a test if explicitly requested. Hidden tests will
-//		// run when "*" is used - which we do to run slow tests. To avoid re-generating the bin file
-//		// we require an env variable to be explicitly set.
-//		//
-//		// set `GEN_PLAN_STORAGE` as an environment variable to generate the serialized file
-//		file_location = get_full_file_name(PERSISTENT_FILE_NAME);
-//	} else {
-//		file_location = TestCreatePath("serialized_plans.new.binary");
-//	}
-//
-//	DuckDB db;
-//	Connection con(db);
-//	load_db(con);
-//	BufferedFileWriter serializer(db.GetFileSystem(), file_location);
-//	serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
-//	serializer.Write(serializer.GetVersion());
-//	std::ifstream queries(get_full_file_name("queries.sql"));
-//	string query;
-//	while (std::getline(queries, query)) {
-//		con.BeginTransaction();
-//		Parser p;
-//		p.ParseQuery(query);
-//
-//		Planner planner(*con.context);
-//
-//		planner.CreatePlan(std::move(p.statements[0]));
-//		auto plan = std::move(planner.plan);
-//		plan->Serialize(serializer);
-//
-//		con.Rollback();
-//	}
-//
-//	serializer.Sync();
-//
-//	test_deserialization(file_location);
+	//	string file_location;
+	//	if (std::getenv("GEN_PLAN_STORAGE") != nullptr) {
+	//		// there is no way in catch2 to only run a test if explicitly requested. Hidden tests will
+	//		// run when "*" is used - which we do to run slow tests. To avoid re-generating the bin file
+	//		// we require an env variable to be explicitly set.
+	//		//
+	//		// set `GEN_PLAN_STORAGE` as an environment variable to generate the serialized file
+	//		file_location = get_full_file_name(PERSISTENT_FILE_NAME);
+	//	} else {
+	//		file_location = TestCreatePath("serialized_plans.new.binary");
+	//	}
+	//
+	//	DuckDB db;
+	//	Connection con(db);
+	//	load_db(con);
+	//	BufferedFileWriter serializer(db.GetFileSystem(), file_location);
+	//	serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
+	//	serializer.Write(serializer.GetVersion());
+	//	std::ifstream queries(get_full_file_name("queries.sql"));
+	//	string query;
+	//	while (std::getline(queries, query)) {
+	//		con.BeginTransaction();
+	//		Parser p;
+	//		p.ParseQuery(query);
+	//
+	//		Planner planner(*con.context);
+	//
+	//		planner.CreatePlan(std::move(p.statements[0]));
+	//		auto plan = std::move(planner.plan);
+	//		plan->Serialize(serializer);
+	//
+	//		con.Rollback();
+	//	}
+	//
+	//	serializer.Sync();
+	//
+	//	test_deserialization(file_location);
 }
 
 TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
@@ -77,35 +77,35 @@ TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
 
 void test_deserialization(const string &file_location) {
 	throw InternalException("FIXME Generate serialized plans file");
-//	DuckDB db;
-//	Connection con(db);
-//	load_db(con);
-//	BufferedFileReader deserializer(db.GetFileSystem(), file_location.c_str(), con.context.get());
-//	deserializer.SetVersion(deserializer.Read<uint64_t>());
-//
-//	std::ifstream queries(get_full_file_name("queries.sql"));
-//	string query;
-//	while (std::getline(queries, query)) {
-//		INFO("evaluating " << query)
-//		con.BeginTransaction();
-//		Parser p;
-//		p.ParseQuery(query);
-//		Planner planner(*con.context);
-//		planner.CreatePlan(std::move(p.statements[0]));
-//		auto expected_plan = std::move(planner.plan);
-//		expected_plan->ResolveOperatorTypes();
-//		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)), false);
-//		REQUIRE_NO_FAIL(*expected_results);
-//
-//		PlanDeserializationState state(*con.context);
-//		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
-//		deserialized_plan->ResolveOperatorTypes();
-//		auto deserialized_results =
-//		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
-//		REQUIRE_NO_FAIL(*deserialized_results);
-//
-//		REQUIRE(deserialized_results->Equals(*expected_results));
-//
-//		con.Rollback();
-//	}
+	//	DuckDB db;
+	//	Connection con(db);
+	//	load_db(con);
+	//	BufferedFileReader deserializer(db.GetFileSystem(), file_location.c_str(), con.context.get());
+	//	deserializer.SetVersion(deserializer.Read<uint64_t>());
+	//
+	//	std::ifstream queries(get_full_file_name("queries.sql"));
+	//	string query;
+	//	while (std::getline(queries, query)) {
+	//		INFO("evaluating " << query)
+	//		con.BeginTransaction();
+	//		Parser p;
+	//		p.ParseQuery(query);
+	//		Planner planner(*con.context);
+	//		planner.CreatePlan(std::move(p.statements[0]));
+	//		auto expected_plan = std::move(planner.plan);
+	//		expected_plan->ResolveOperatorTypes();
+	//		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)),
+	//false); 		REQUIRE_NO_FAIL(*expected_results);
+	//
+	//		PlanDeserializationState state(*con.context);
+	//		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);
+	//		deserialized_plan->ResolveOperatorTypes();
+	//		auto deserialized_results =
+	//		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+	//		REQUIRE_NO_FAIL(*deserialized_results);
+	//
+	//		REQUIRE(deserialized_results->Equals(*expected_results));
+	//
+	//		con.Rollback();
+	//	}
 }

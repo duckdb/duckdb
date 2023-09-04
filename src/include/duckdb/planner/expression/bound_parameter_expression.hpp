@@ -40,7 +40,6 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
 

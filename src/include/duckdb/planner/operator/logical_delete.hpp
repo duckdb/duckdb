@@ -25,7 +25,6 @@ public:
 	bool return_chunk;
 
 public:
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 

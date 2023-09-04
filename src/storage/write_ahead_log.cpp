@@ -50,9 +50,9 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	throw InternalException("FIXME: WAL");
-//	writer->Write<WALType>(WALType::CHECKPOINT);
-//	writer->Write<idx_t>(meta_block.block_pointer);
-//	writer->Write<uint32_t>(meta_block.offset);
+	//	writer->Write<WALType>(WALType::CHECKPOINT);
+	//	writer->Write<idx_t>(meta_block.block_pointer);
+	//	writer->Write<uint32_t>(meta_block.offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -60,11 +60,11 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateTable(const TableCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_TABLE);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_TABLE);
+	//	entry.Serialize(*writer);
 }
 
 //===--------------------------------------------------------------------===//
@@ -72,12 +72,12 @@ void WriteAheadLog::WriteCreateTable(const TableCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_TABLE);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_TABLE);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -85,11 +85,11 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_SCHEMA);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_SCHEMA);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -97,33 +97,33 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSequence(const SequenceCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_SEQUENCE);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_SEQUENCE);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_SEQUENCE);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_SEQUENCE);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::SEQUENCE_VALUE);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
-//	writer->Write<uint64_t>(val.usage_count);
-//	writer->Write<int64_t>(val.counter);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::SEQUENCE_VALUE);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
+	//	writer->Write<uint64_t>(val.usage_count);
+	//	writer->Write<int64_t>(val.counter);
 }
 
 //===--------------------------------------------------------------------===//
@@ -131,40 +131,40 @@ void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, Sequen
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(const ScalarMacroCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_MACRO);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_MACRO);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropMacro(const ScalarMacroCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_MACRO);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_MACRO);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 void WriteAheadLog::WriteCreateTableMacro(const TableMacroCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_TABLE_MACRO);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_TABLE_MACRO);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -172,21 +172,21 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_INDEX);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_INDEX);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropIndex(const IndexCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_INDEX);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_INDEX);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -194,21 +194,21 @@ void WriteAheadLog::WriteDropIndex(const IndexCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateType(const TypeCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_TYPE);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_TYPE);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_TYPE);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_TYPE);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -216,21 +216,21 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::CREATE_VIEW);
-//	entry.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::CREATE_VIEW);
+	//	entry.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_VIEW);
-//	writer->WriteString(entry.schema.name);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_VIEW);
+	//	writer->WriteString(entry.schema.name);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -238,11 +238,11 @@ void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::DROP_SCHEMA);
-//	writer->WriteString(entry.name);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::DROP_SCHEMA);
+	//	writer->WriteString(entry.name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -250,55 +250,55 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::USE_TABLE);
-//	writer->WriteString(schema);
-//	writer->WriteString(table);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::USE_TABLE);
+	//	writer->WriteString(schema);
+	//	writer->WriteString(table);
 }
 
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	D_ASSERT(chunk.size() > 0);
-//	chunk.Verify();
-//
-//	writer->Write<WALType>(WALType::INSERT_TUPLE);
-//	chunk.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	D_ASSERT(chunk.size() > 0);
+	//	chunk.Verify();
+	//
+	//	writer->Write<WALType>(WALType::INSERT_TUPLE);
+	//	chunk.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	D_ASSERT(chunk.size() > 0);
-//	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
-//	chunk.Verify();
-//
-//	writer->Write<WALType>(WALType::DELETE_TUPLE);
-//	chunk.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	D_ASSERT(chunk.size() > 0);
+	//	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
+	//	chunk.Verify();
+	//
+	//	writer->Write<WALType>(WALType::DELETE_TUPLE);
+	//	chunk.Serialize(*writer);
 }
 
 void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column_indexes) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	D_ASSERT(chunk.size() > 0);
-//	D_ASSERT(chunk.ColumnCount() == 2);
-//	D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
-//	chunk.Verify();
-//
-//	writer->Write<WALType>(WALType::UPDATE_TUPLE);
-//	writer->Write<idx_t>(column_indexes.size());
-//	for (auto &col_idx : column_indexes) {
-//		writer->Write<column_t>(col_idx);
-//	}
-//	chunk.Serialize(*writer);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	D_ASSERT(chunk.size() > 0);
+	//	D_ASSERT(chunk.ColumnCount() == 2);
+	//	D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
+	//	chunk.Verify();
+	//
+	//	writer->Write<WALType>(WALType::UPDATE_TUPLE);
+	//	writer->Write<idx_t>(column_indexes.size());
+	//	for (auto &col_idx : column_indexes) {
+	//		writer->Write<column_t>(col_idx);
+	//	}
+	//	chunk.Serialize(*writer);
 }
 
 //===--------------------------------------------------------------------===//
@@ -306,11 +306,11 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteAlter(data_ptr_t ptr, idx_t data_size) {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	writer->Write<WALType>(WALType::ALTER_INFO);
-//	writer->WriteData(ptr, data_size);
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	writer->Write<WALType>(WALType::ALTER_INFO);
+	//	writer->WriteData(ptr, data_size);
 }
 
 //===--------------------------------------------------------------------===//
@@ -318,13 +318,13 @@ void WriteAheadLog::WriteAlter(data_ptr_t ptr, idx_t data_size) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
 	throw InternalException("FIXME: WAL");
-//	if (skip_writing) {
-//		return;
-//	}
-//	// write an empty entry
-//	writer->Write<WALType>(WALType::WAL_FLUSH);
-//	// flushes all changes made to the WAL to disk
-//	writer->Sync();
+	//	if (skip_writing) {
+	//		return;
+	//	}
+	//	// write an empty entry
+	//	writer->Write<WALType>(WALType::WAL_FLUSH);
+	//	// flushes all changes made to the WAL to disk
+	//	writer->Sync();
 }
 
 } // namespace duckdb

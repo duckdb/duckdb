@@ -1,6 +1,5 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 
-
 namespace duckdb {
 
 NotNullConstraint::NotNullConstraint(LogicalIndex index) : Constraint(ConstraintType::NOT_NULL), index(index) {

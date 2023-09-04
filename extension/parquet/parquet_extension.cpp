@@ -401,7 +401,7 @@ public:
 	}
 
 	static void ParquetScanSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                       const TableFunction &function) {
+	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		serializer.WriteProperty(100, "files", bind_data.files);
 		serializer.WriteProperty(101, "types", bind_data.types);
@@ -409,8 +409,7 @@ public:
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanDeserialize(FormatDeserializer &deserializer,
-	                                                             TableFunction &function) {
+	static unique_ptr<FunctionData> ParquetScanDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
 		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
@@ -846,25 +845,26 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 }
 
 // LCOV_EXCL_START
-static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionData &bind_data_p, const CopyFunction &function) {
+static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionData &bind_data_p,
+                                 const CopyFunction &function) {
 	throw InternalException("FIXME ParquetCopySerialize");
-//	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-//	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
-//	writer.WriteList<string>(bind_data.column_names);
-//	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
-//	writer.WriteField<idx_t>(bind_data.row_group_size);
+	//	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	//	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+	//	writer.WriteList<string>(bind_data.column_names);
+	//	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
+	//	writer.WriteField<idx_t>(bind_data.row_group_size);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(FormatDeserializer &deserializer, CopyFunction &function) {
 	throw InternalException("FIXME ParquetCopySerialize");
-//	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
-//
-//	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-//	data->column_names = reader.ReadRequiredList<string>();
-//	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
-//	data->row_group_size = reader.ReadRequired<idx_t>();
-//
-//	return std::move(data);
+	//	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+	//
+	//	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	//	data->column_names = reader.ReadRequiredList<string>();
+	//	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
+	//	data->row_group_size = reader.ReadRequired<idx_t>();
+	//
+	//	return std::move(data);
 }
 // LCOV_EXCL_STOP
 

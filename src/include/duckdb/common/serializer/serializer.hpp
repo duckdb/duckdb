@@ -23,7 +23,8 @@ protected:
 	bool serialize_default_values = false;
 
 public:
-	virtual ~FormatSerializer(){}
+	virtual ~FormatSerializer() {
+	}
 
 	class List {
 		friend FormatSerializer;

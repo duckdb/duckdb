@@ -1,6 +1,5 @@
 #include "duckdb/parser/tableref/emptytableref.hpp"
 
-
 namespace duckdb {
 
 string EmptyTableRef::ToString() const {

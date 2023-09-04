@@ -202,7 +202,7 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 //
-//void StandardColumnData::DeserializeColumn(Deserializer &source) {
+// void StandardColumnData::DeserializeColumn(Deserializer &source) {
 //	ColumnData::DeserializeColumn(source);
 //	validity.DeserializeColumn(source);
 //}

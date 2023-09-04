@@ -13,7 +13,6 @@
 
 namespace duckdb {
 
-
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,

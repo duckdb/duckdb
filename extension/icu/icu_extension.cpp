@@ -137,12 +137,12 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 }
 
 static void ICUCollateSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
-                                            const ScalarFunction &function) {
+                                const ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
 static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(FormatDeserializer &deserializer,
-                                                                  ScalarFunction &function) {
+                                                              ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 

@@ -29,7 +29,6 @@ public:
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 

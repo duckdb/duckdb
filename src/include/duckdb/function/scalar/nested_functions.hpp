@@ -62,17 +62,16 @@ struct VariableReturnBindData : public FunctionData {
 		auto &other = other_p.Cast<VariableReturnBindData>();
 		return stype == other.stype;
 	}
-    static void Serialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &function) {
-            auto &info = bind_data->Cast<VariableReturnBindData>();
-			serializer.WriteProperty(100, "variable_return_type", info.stype);
-    }
+	static void Serialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const ScalarFunction &function) {
+		auto &info = bind_data->Cast<VariableReturnBindData>();
+		serializer.WriteProperty(100, "variable_return_type", info.stype);
+	}
 
-    static unique_ptr<FunctionData> Deserialize(FormatDeserializer &deserializer,
-                                                ScalarFunction &bound_function) {
-            auto stype = deserializer.ReadProperty<LogicalType>(100, "variable_return_type");
-            return make_uniq<VariableReturnBindData>(std::move(stype));
-    }
-
+	static unique_ptr<FunctionData> Deserialize(FormatDeserializer &deserializer, ScalarFunction &bound_function) {
+		auto stype = deserializer.ReadProperty<LogicalType>(100, "variable_return_type");
+		return make_uniq<VariableReturnBindData>(std::move(stype));
+	}
 };
 
 template <class T, class MAP_TYPE = map<T, idx_t>>

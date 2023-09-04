@@ -1,6 +1,5 @@
 #include "duckdb/planner/operator/logical_materialized_cte.hpp"
 
-
 namespace duckdb {
 
 vector<idx_t> LogicalMaterializedCTE::GetTableIndex() const {

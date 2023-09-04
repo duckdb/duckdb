@@ -11,10 +11,10 @@ DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLState
 unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
 	throw InternalException("TODO");
-//	BufferedSerializer serializer;
-//	select_stmt.Serialize(serializer);
-//	BufferedDeserializer source(serializer);
-//	return make_uniq<DeserializedStatementVerifier>(SelectStatement::Deserialize(source));
+	//	BufferedSerializer serializer;
+	//	select_stmt.Serialize(serializer);
+	//	BufferedDeserializer source(serializer);
+	//	return make_uniq<DeserializedStatementVerifier>(SelectStatement::Deserialize(source));
 }
 
 } // namespace duckdb

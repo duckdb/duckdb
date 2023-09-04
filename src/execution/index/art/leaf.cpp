@@ -326,54 +326,54 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 BlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 
 	throw InternalException("TODO");
-//	if (node.GetType() == NType::LEAF_INLINED) {
-//		auto block_pointer = writer.GetBlockPointer();
-//		writer.Write(NType::LEAF_INLINED);
-//		writer.Write(node.GetRowId());
-//		return block_pointer;
-//	}
-//
-//	auto block_pointer = writer.GetBlockPointer();
-//	writer.Write(NType::LEAF);
-//	idx_t total_count = Leaf::TotalCount(art, node);
-//	writer.Write<idx_t>(total_count);
-//
-//	// iterate all leaves and write their row IDs
-//	reference<Node> ref_node(node);
-//	while (ref_node.get().IsSet()) {
-//		D_ASSERT(!ref_node.get().IsSerialized());
-//		auto &leaf = Leaf::Get(art, ref_node);
-//
-//		// write row IDs
-//		for (idx_t i = 0; i < leaf.count; i++) {
-//			writer.Write(leaf.row_ids[i]);
-//		}
-//		ref_node = leaf.ptr;
-//	}
-//
-//	return block_pointer;
+	//	if (node.GetType() == NType::LEAF_INLINED) {
+	//		auto block_pointer = writer.GetBlockPointer();
+	//		writer.Write(NType::LEAF_INLINED);
+	//		writer.Write(node.GetRowId());
+	//		return block_pointer;
+	//	}
+	//
+	//	auto block_pointer = writer.GetBlockPointer();
+	//	writer.Write(NType::LEAF);
+	//	idx_t total_count = Leaf::TotalCount(art, node);
+	//	writer.Write<idx_t>(total_count);
+	//
+	//	// iterate all leaves and write their row IDs
+	//	reference<Node> ref_node(node);
+	//	while (ref_node.get().IsSet()) {
+	//		D_ASSERT(!ref_node.get().IsSerialized());
+	//		auto &leaf = Leaf::Get(art, ref_node);
+	//
+	//		// write row IDs
+	//		for (idx_t i = 0; i < leaf.count; i++) {
+	//			writer.Write(leaf.row_ids[i]);
+	//		}
+	//		ref_node = leaf.ptr;
+	//	}
+	//
+	//	return block_pointer;
 }
 
 void Leaf::Deserialize(ART &art, Node &node, MetadataReader &reader) {
-throw InternalException("TODO");
-//	auto total_count = reader.Read<idx_t>();
-//	reference<Node> ref_node(node);
-//
-//	while (total_count) {
-//		ref_node.get() = Node::GetAllocator(art, NType::LEAF).New();
-//		ref_node.get().SetType((uint8_t)NType::LEAF);
-//
-//		auto &leaf = Leaf::Get(art, ref_node);
-//
-//		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, total_count);
-//		for (idx_t i = 0; i < leaf.count; i++) {
-//			leaf.row_ids[i] = reader.Read<row_t>();
-//		}
-//
-//		total_count -= leaf.count;
-//		ref_node = leaf.ptr;
-//		leaf.ptr.Reset();
-//	}
+	throw InternalException("TODO");
+	//	auto total_count = reader.Read<idx_t>();
+	//	reference<Node> ref_node(node);
+	//
+	//	while (total_count) {
+	//		ref_node.get() = Node::GetAllocator(art, NType::LEAF).New();
+	//		ref_node.get().SetType((uint8_t)NType::LEAF);
+	//
+	//		auto &leaf = Leaf::Get(art, ref_node);
+	//
+	//		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, total_count);
+	//		for (idx_t i = 0; i < leaf.count; i++) {
+	//			leaf.row_ids[i] = reader.Read<row_t>();
+	//		}
+	//
+	//		total_count -= leaf.count;
+	//		ref_node = leaf.ptr;
+	//		leaf.ptr.Reset();
+	//	}
 }
 
 void Leaf::Vacuum(ART &art, Node &node) {

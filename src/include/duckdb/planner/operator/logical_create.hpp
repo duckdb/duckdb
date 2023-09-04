@@ -26,7 +26,6 @@ public:
 	unique_ptr<CreateInfo> info;
 
 public:
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 

@@ -27,7 +27,6 @@ public:
 	vector<string> aliases;
 
 public:
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
 

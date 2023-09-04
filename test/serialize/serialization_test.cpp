@@ -48,28 +48,28 @@ TEST_CASE("Test default values", "[serialization]") {
 
 	throw InternalException("FIXME test default values");
 
-//	auto data = BinarySerializer::Serialize(foo_in, false);
-//	auto data_size = data.size();
-//	auto foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
-//	auto &foo_out = *foo_out_ptr.get();
-//
-//	REQUIRE(foo_in.a == foo_out.a);
-//	REQUIRE(foo_in.bar->b == foo_out.bar->b);
-//	REQUIRE(foo_in.c == foo_out.c);
-//
-//	// Now try with a default value
-//	foo_in.bar = nullptr;
-//
-//	data = BinarySerializer::Serialize(foo_in, false);
-//	foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
-//	auto &foo_out2 = *foo_out_ptr.get();
-//
-//	REQUIRE(foo_in.a == foo_out2.a);
-//	REQUIRE(foo_out2.bar == nullptr);
-//	REQUIRE(foo_in.c == foo_out2.c);
-//
-//	// We should not have written the default value
-//	REQUIRE(data_size > data.size());
+	//	auto data = BinarySerializer::Serialize(foo_in, false);
+	//	auto data_size = data.size();
+	//	auto foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
+	//	auto &foo_out = *foo_out_ptr.get();
+	//
+	//	REQUIRE(foo_in.a == foo_out.a);
+	//	REQUIRE(foo_in.bar->b == foo_out.bar->b);
+	//	REQUIRE(foo_in.c == foo_out.c);
+	//
+	//	// Now try with a default value
+	//	foo_in.bar = nullptr;
+	//
+	//	data = BinarySerializer::Serialize(foo_in, false);
+	//	foo_out_ptr = BinaryDeserializer::Deserialize<Foo>(data.data(), data.size());
+	//	auto &foo_out2 = *foo_out_ptr.get();
+	//
+	//	REQUIRE(foo_in.a == foo_out2.a);
+	//	REQUIRE(foo_out2.bar == nullptr);
+	//	REQUIRE(foo_in.c == foo_out2.c);
+	//
+	//	// We should not have written the default value
+	//	REQUIRE(data_size > data.size());
 }
 
 } // namespace duckdb
