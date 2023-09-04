@@ -12,6 +12,6 @@ CP="$(JAR)$(SEP)$(TEST_JAR)"
 test_debug: $(JAR) $(TEST_JAR)
 	java -cp $(CP) org.duckdb.test.TestDuckDBJDBC
 
-test_release: $(JAR) $(TEST_JAR)
+test_release: $(subst debug,release,$(JAR)) $(subst debug,release,$(TEST_JAR))
 	java -cp $(subst debug,release,$(CP)) org.duckdb.test.TestDuckDBJDBC
 
