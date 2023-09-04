@@ -18,7 +18,7 @@ class MetadataReader : public Deserializer {
 public:
 	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
 	               optional_ptr<vector<MetaBlockPointer>> read_pointers = nullptr,
-				   BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
+	               BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
 	MetadataReader(MetadataManager &manager, BlockPointer pointer);
 	~MetadataReader() override;
 

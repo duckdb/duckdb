@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {}
+RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {
+}
 
 void RowVersionManager::SetStart(idx_t new_start) {
 	lock_guard<mutex> l(version_lock);
@@ -33,10 +34,11 @@ idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 }
 
 optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
-       return vector_info[vector_idx].get();
+	return vector_info[vector_idx].get();
 }
 
-idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
+                                      idx_t max_count) {
 	lock_guard<mutex> l(version_lock);
 	auto chunk_info = GetChunkInfo(vector_idx);
 	if (!chunk_info) {
@@ -46,7 +48,7 @@ idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_
 }
 
 idx_t RowVersionManager::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-                                      SelectionVector &sel_vector, idx_t max_count) {
+                                               SelectionVector &sel_vector, idx_t max_count) {
 	lock_guard<mutex> l(version_lock);
 	auto info = GetChunkInfo(vector_idx);
 	if (!info) {
@@ -54,7 +56,6 @@ idx_t RowVersionManager::GetCommittedSelVector(transaction_t start_time, transac
 	}
 	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
 }
-
 
 bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	lock_guard<mutex> lock(version_lock);
@@ -66,16 +67,17 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
 }
 
-void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end) {
+void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start,
+                                          idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
 	has_changes = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
-		idx_t vector_start = vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
+		idx_t vector_start =
+		    vector_idx == start_vector_idx ? row_group_start - start_vector_idx * STANDARD_VECTOR_SIZE : 0;
 		idx_t vector_end =
-				vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE
-											 : STANDARD_VECTOR_SIZE;
+		    vector_idx == end_vector_idx ? row_group_end - end_vector_idx * STANDARD_VECTOR_SIZE : STANDARD_VECTOR_SIZE;
 		if (vector_start == 0 && vector_end == STANDARD_VECTOR_SIZE) {
 			// entire vector is encapsulated by append: append a single constant
 			auto constant_info = make_uniq<ChunkConstantInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
@@ -127,8 +129,7 @@ void RowVersionManager::RevertAppend(idx_t start_row) {
 ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 	if (!vector_info[vector_idx]) {
 		// no info yet: create it
-		vector_info[vector_idx] =
-			make_uniq<ChunkVectorInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
+		vector_info[vector_idx] = make_uniq<ChunkVectorInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
 	} else if (vector_info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
 		auto &constant = vector_info[vector_idx]->Cast<ChunkConstantInfo>();
 		// info exists but it's a constant info: convert to a vector info
@@ -196,7 +197,8 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 	return storage_pointers;
 }
 
-shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start) {
+shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,
+                                                             idx_t start) {
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
@@ -215,4 +217,4 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 	return version_info;
 }
 
-}
+} // namespace duckdb

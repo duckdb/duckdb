@@ -14,7 +14,8 @@ namespace duckdb {
 
 class MetadataWriter : public Serializer {
 public:
-	explicit MetadataWriter(MetadataManager &manager, optional_ptr<vector<MetaBlockPointer>> written_pointers = nullptr);
+	explicit MetadataWriter(MetadataManager &manager,
+	                        optional_ptr<vector<MetaBlockPointer>> written_pointers = nullptr);
 	~MetadataWriter() override;
 
 public:
@@ -24,7 +25,7 @@ public:
 
 	BlockPointer GetBlockPointer();
 	MetaBlockPointer GetMetaBlockPointer();
-	MetadataManager &GetManager () {
+	MetadataManager &GetManager() {
 		return manager;
 	}
 

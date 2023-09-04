@@ -1,4 +1,4 @@
-# name: test/sql/storage/delete/repeated_deletes_mix.test
+# name: test/sql/storage/delete/repeated_deletes.test
 # description: Test deletes with storage
 # group: [delete]
 

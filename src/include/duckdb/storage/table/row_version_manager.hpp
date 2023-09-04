@@ -27,7 +27,7 @@ public:
 
 	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-										  SelectionVector &sel_vector, idx_t max_count);
+	                            SelectionVector &sel_vector, idx_t max_count);
 	bool Fetch(TransactionData transaction, idx_t row);
 
 	void AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end);
@@ -38,7 +38,8 @@ public:
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count);
 
 	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
-	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start);
+	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager,
+	                                                 idx_t start);
 
 private:
 	mutex version_lock;

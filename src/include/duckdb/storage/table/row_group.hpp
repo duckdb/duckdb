@@ -156,7 +156,7 @@ private:
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
 
-	vector<MetaBlockPointer> CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager);
+	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 
@@ -167,7 +167,6 @@ private:
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
 	atomic<bool> deletes_is_loaded;
-
 };
 
 } // namespace duckdb

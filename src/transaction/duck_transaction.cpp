@@ -70,7 +70,8 @@ void DuckTransaction::PushCatalogEntry(CatalogEntry &entry, data_ptr_t extra_dat
 	}
 }
 
-void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count, idx_t base_row) {
+void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_t vector_idx, row_t rows[], idx_t count,
+                                 idx_t base_row) {
 	auto delete_info = reinterpret_cast<DeleteInfo *>(
 	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count));
 	delete_info->vinfo = &info;

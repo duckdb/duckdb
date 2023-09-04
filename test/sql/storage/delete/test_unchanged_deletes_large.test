@@ -50,12 +50,26 @@ SELECT COUNT(*) FROM integers
 ----
 200000
 
+loop i 0 5
+
+restart
+
 statement ok
 INSERT INTO integers VALUES (84)
+
+statement ok
+checkpoint
+
+query I
+SELECT COUNT(*) - ${i} FROM integers
+----
+200001
 
 restart
 
 query I
-SELECT COUNT(*) FROM integers
+SELECT COUNT(*) - ${i} FROM integers
 ----
 200001
+
+endloop

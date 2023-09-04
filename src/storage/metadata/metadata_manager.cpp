@@ -261,7 +261,7 @@ void MetadataManager::MarkBlocksAsModified() {
 }
 
 void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers) {
-	for(auto &pointer : pointers) {
+	for (auto &pointer : pointers) {
 		auto block_id = pointer.GetBlockId();
 		auto block_index = pointer.GetBlockIndex();
 		auto entry = modified_blocks.find(block_id);

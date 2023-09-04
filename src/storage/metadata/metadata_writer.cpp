@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-MetadataWriter::MetadataWriter(MetadataManager &manager, optional_ptr<vector<MetaBlockPointer>> written_pointers_p) :
-    manager(manager), written_pointers(written_pointers_p), capacity(0), offset(0) {
+MetadataWriter::MetadataWriter(MetadataManager &manager, optional_ptr<vector<MetaBlockPointer>> written_pointers_p)
+    : manager(manager), written_pointers(written_pointers_p), capacity(0), offset(0) {
 	D_ASSERT(!written_pointers || written_pointers->empty());
 }
 

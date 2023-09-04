@@ -51,9 +51,11 @@ void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start)
 	for (auto &column : GetColumns()) {
 		column->SetStart(new_start);
 	}
-	auto &vinfo = GetVersionInfo();
-	if (vinfo) {
-		vinfo->SetStart(new_start);
+	if (!HasUnloadedDeletes()) {
+		auto &vinfo = GetVersionInfo();
+		if (vinfo) {
+			vinfo->SetStart(new_start);
+		}
 	}
 }
 
@@ -798,23 +800,23 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		// can cascade recursively into more pointer writes.
 		state->WriteDataPointers(writer);
 	}
-	row_group_pointer.deletes_pointers = CheckpointDeletes(version_info.get(), writer.GetPayloadWriter().GetManager());
+	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
 	Verify();
 	return row_group_pointer;
 }
 
-vector<MetaBlockPointer> RowGroup::CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager) {
-	if (!versions) {
-		// no version information: write nothing
-		return vector<MetaBlockPointer>();
-	}
+vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 	if (HasUnloadedDeletes()) {
 		// deletes were not loaded so they cannot be changed
 		// re-use them as-is
 		manager.ClearModifiedBlocks(deletes_pointers);
 		return deletes_pointers;
 	}
-	return versions->Checkpoint(manager);
+	if (!version_info) {
+		// no version information: write nothing
+		return vector<MetaBlockPointer>();
+	}
+	return version_info->Checkpoint(manager);
 }
 
 void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, MetadataManager &manager) {
@@ -827,7 +829,7 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, 
 		serializer.Write<uint32_t>(data_pointer.offset);
 	}
 	serializer.Write<idx_t>(pointer.deletes_pointers.size());
-	for(auto &delete_pointer : pointer.deletes_pointers) {
+	for (auto &delete_pointer : pointer.deletes_pointers) {
 		serializer.Write<idx_t>(delete_pointer.block_pointer);
 		serializer.Write<uint32_t>(delete_pointer.offset);
 	}
@@ -853,7 +855,7 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager
 		result.data_pointers.push_back(pointer);
 	}
 	auto delete_count = source.Read<idx_t>();
-	for(idx_t i = 0; i < delete_count; i++) {
+	for (idx_t i = 0; i < delete_count; i++) {
 		MetaBlockPointer pointer;
 		pointer.block_pointer = source.Read<idx_t>();
 		pointer.offset = source.Read<uint32_t>();
@@ -880,8 +882,8 @@ void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentI
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, TransactionData transaction, DataTable &table, idx_t base_row)
-	    : info(info), transaction(transaction), table(table),
-	      current_chunk(DConstants::INVALID_INDEX), count(0), base_row(base_row), delete_count(0) {
+	    : info(info), transaction(transaction), table(table), current_chunk(DConstants::INVALID_INDEX), count(0),
+	      base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;
@@ -948,7 +950,8 @@ void VersionDeleteState::Flush() {
 	delete_count += actual_delete_count;
 	if (transaction.transaction && actual_delete_count > 0) {
 		// now push the delete into the undo buffer, but only if any deletes were actually performed
-		transaction.transaction->PushDelete(table, info.GetOrCreateVersionInfo(), current_chunk, rows, actual_delete_count, base_row + chunk_row);
+		transaction.transaction->PushDelete(table, info.GetOrCreateVersionInfo(), current_chunk, rows,
+		                                    actual_delete_count, base_row + chunk_row);
 	}
 	count = 0;
 }
