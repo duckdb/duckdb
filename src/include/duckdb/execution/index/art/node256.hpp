@@ -48,25 +48,14 @@ public:
 		children[byte] = child;
 	}
 
+	//! Get the (immutable) child for the respective byte in the node
+	optional_ptr<const Node> GetChild(const uint8_t byte) const;
 	//! Get the child for the respective byte in the node
-	template <class NODE>
-	inline optional_ptr<NODE> GetChild(const uint8_t byte) {
-		if (children[byte].HasMetadata()) {
-			return &children[byte];
-		}
-		return nullptr;
-	}
+	optional_ptr<Node> GetChildMutable(const uint8_t byte);
+	//! Get the first (immutable) child that is greater or equal to the specific byte
+	optional_ptr<const Node> GetNextChild(uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	template <class NODE>
-	inline optional_ptr<NODE> GetNextChild(uint8_t &byte) {
-		for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
-			if (children[i].HasMetadata()) {
-				byte = i;
-				return &children[i];
-			}
-		}
-		return nullptr;
-	}
+	optional_ptr<Node> GetNextChildMutable(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

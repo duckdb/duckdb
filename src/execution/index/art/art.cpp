@@ -477,7 +477,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	if (node_type != NType::PREFIX) {
 		D_ASSERT(depth < key.len);
-		auto child = node.GetChild<Node>(*this, key[depth]);
+		auto child = node.GetChildMutable(*this, key[depth]);
 
 		// recurse, if a child exists at key[depth]
 		if (child) {
@@ -499,7 +499,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	// this is a prefix node, traverse
 	reference<Node> next_node(node);
-	auto mismatch_position = Prefix::Traverse<Node>(*this, next_node, key, depth);
+	auto mismatch_position = Prefix::TraverseMutable(*this, next_node, key, depth);
 
 	// prefix matches key
 	if (next_node.get().GetType() != NType::PREFIX) {
@@ -579,7 +579,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	// handle prefix
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse(*this, next_node, key, depth);
+		Prefix::TraverseMutable(*this, next_node, key, depth);
 		if (next_node.get().GetType() == NType::PREFIX) {
 			return;
 		}
@@ -594,14 +594,14 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	}
 
 	D_ASSERT(depth < key.len);
-	auto child = next_node.get().GetChild<Node>(*this, key[depth]);
+	auto child = next_node.get().GetChildMutable(*this, key[depth]);
 	if (child) {
 		D_ASSERT(child->HasMetadata());
 
 		auto temp_depth = depth + 1;
 		reference<Node> child_node(*child);
 		if (child_node.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, child_node, key, temp_depth);
+			Prefix::TraverseMutable(*this, child_node, key, temp_depth);
 			if (child_node.get().GetType() == NType::PREFIX) {
 				return;
 			}
@@ -695,7 +695,7 @@ optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t 
 		// traverse prefix, if exists
 		reference<const Node> next_node(node_ref.get());
 		if (next_node.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse<const Node>(*this, next_node, key, depth, false);
+			Prefix::Traverse(*this, next_node, key, depth);
 			if (next_node.get().GetType() == NType::PREFIX) {
 				return nullptr;
 			}
@@ -706,7 +706,7 @@ optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t 
 		}
 
 		D_ASSERT(depth < key.len);
-		auto child = next_node.get().GetChild<const Node>(*this, key[depth], false);
+		auto child = next_node.get().GetChild(*this, key[depth]);
 		if (!child) {
 			// prefix matches key, but no child at byte, ART/subtree does not contain key
 			return nullptr;
@@ -998,7 +998,7 @@ void ART::Deserialize(const BlockPointer &pointer) {
 	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
 	tree = reader.Read<Node>();
 
-	for (idx_t i = 0; i < static_cast<uint8_t>(NType::NODE_256); i++) {
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
 		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
 	}
 }

@@ -9,7 +9,7 @@ Node48 &Node48::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_48).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::NODE_48));
-	auto &n48 = Node::Ref<Node48>(art, node, NType::NODE_48);
+	auto &n48 = Node::RefMutable<Node48>(art, node, NType::NODE_48);
 
 	n48.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -27,7 +27,7 @@ Node48 &Node48::New(ART &art, Node &node) {
 void Node48::Free(ART &art, Node &node) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n48 = Node::Ref<Node48>(art, node, NType::NODE_48);
+	auto &n48 = Node::RefMutable<Node48>(art, node, NType::NODE_48);
 
 	if (!n48.count) {
 		return;
@@ -43,7 +43,7 @@ void Node48::Free(ART &art, Node &node) {
 
 Node48 &Node48::GrowNode16(ART &art, Node &node48, Node &node16) {
 
-	auto &n16 = Node::Ref<Node16>(art, node16, NType::NODE_16);
+	auto &n16 = Node::RefMutable<Node16>(art, node16, NType::NODE_16);
 	auto &n48 = New(art, node48);
 
 	n48.count = n16.count;
@@ -69,7 +69,7 @@ Node48 &Node48::GrowNode16(ART &art, Node &node48, Node &node16) {
 Node48 &Node48::ShrinkNode256(ART &art, Node &node48, Node &node256) {
 
 	auto &n48 = New(art, node48);
-	auto &n256 = Node::Ref<Node256>(art, node256, NType::NODE_256);
+	auto &n256 = Node::RefMutable<Node256>(art, node256, NType::NODE_256);
 
 	n48.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -105,7 +105,7 @@ void Node48::InitializeMerge(ART &art, const ARTFlags &flags) {
 void Node48::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n48 = Node::Ref<Node48>(art, node, NType::NODE_48);
+	auto &n48 = Node::RefMutable<Node48>(art, node, NType::NODE_48);
 
 	// ensure that there is no other child at the same byte
 	D_ASSERT(n48.child_index[byte] == Node::EMPTY_MARKER);
@@ -136,7 +136,7 @@ void Node48::InsertChild(ART &art, Node &node, const uint8_t byte, const Node ch
 void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 	D_ASSERT(node.HasMetadata());
-	auto &n48 = Node::Ref<Node48>(art, node, NType::NODE_48);
+	auto &n48 = Node::RefMutable<Node48>(art, node, NType::NODE_48);
 
 	// free the child and decrease the count
 	Node::Free(art, n48.children[n48.child_index[byte]]);
@@ -148,6 +148,44 @@ void Node48::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 		auto node48 = node;
 		Node16::ShrinkNode48(art, node, node48);
 	}
+}
+
+optional_ptr<const Node> Node48::GetChild(const uint8_t byte) const {
+	if (child_index[byte] != Node::EMPTY_MARKER) {
+		D_ASSERT(children[child_index[byte]].HasMetadata());
+		return &children[child_index[byte]];
+	}
+	return nullptr;
+}
+
+optional_ptr<Node> Node48::GetChildMutable(const uint8_t byte) {
+	if (child_index[byte] != Node::EMPTY_MARKER) {
+		D_ASSERT(children[child_index[byte]].HasMetadata());
+		return &children[child_index[byte]];
+	}
+	return nullptr;
+}
+
+optional_ptr<const Node> Node48::GetNextChild(uint8_t &byte) const {
+	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != Node::EMPTY_MARKER) {
+			byte = i;
+			D_ASSERT(children[child_index[i]].HasMetadata());
+			return &children[child_index[i]];
+		}
+	}
+	return nullptr;
+}
+
+optional_ptr<Node> Node48::GetNextChildMutable(uint8_t &byte) {
+	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
+		if (child_index[i] != Node::EMPTY_MARKER) {
+			byte = i;
+			D_ASSERT(children[child_index[i]].HasMetadata());
+			return &children[child_index[i]];
+		}
+	}
+	return nullptr;
 }
 
 void Node48::Vacuum(ART &art, const ARTFlags &flags) {

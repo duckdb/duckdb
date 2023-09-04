@@ -48,29 +48,14 @@ public:
 	//! Replace the child node at byte
 	void ReplaceChild(const uint8_t byte, const Node child);
 
-	//! Get the (const) child for the respective byte in the node
-	template <class NODE>
-	inline optional_ptr<NODE> GetChild(const uint8_t byte) {
-		for (idx_t i = 0; i < count; i++) {
-			if (key[i] == byte) {
-				D_ASSERT(children[i].HasMetadata());
-				return &children[i];
-			}
-		}
-		return nullptr;
-	}
+	//! Get the (immutable) child for the respective byte in the node
+	optional_ptr<const Node> GetChild(const uint8_t byte) const;
+	//! Get the child for the respective byte in the node
+	optional_ptr<Node> GetChildMutable(const uint8_t byte);
+	//! Get the first (immutable) child that is greater or equal to the specific byte
+	optional_ptr<const Node> GetNextChild(uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	template <class NODE>
-	inline optional_ptr<NODE> GetNextChild(uint8_t &byte) {
-		for (idx_t i = 0; i < count; i++) {
-			if (key[i] >= byte) {
-				byte = key[i];
-				D_ASSERT(children[i].HasMetadata());
-				return &children[i];
-			}
-		}
-		return nullptr;
-	}
+	optional_ptr<Node> GetNextChildMutable(uint8_t &byte);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

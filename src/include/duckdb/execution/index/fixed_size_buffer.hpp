@@ -41,7 +41,7 @@ public:
 public:
 	//! Returns true, if the buffer is in-memory
 	inline bool InMemory() const {
-		return in_memory;
+		return buffer_handle.IsValid();
 	}
 	//! Returns true, if the block is on-disk
 	inline bool OnDisk() const {
@@ -60,7 +60,7 @@ public:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_ptr;
+		return buffer_handle.Ptr();
 	}
 	//! Destroys the in-memory buffer and the on-disk block
 	void Destroy();
@@ -71,13 +71,9 @@ public:
 
 private:
 	//! The buffer handle of the in-memory buffer
-	unique_ptr<BufferHandle> buffer_handle;
+	BufferHandle buffer_handle;
 	//! The block handle of the on-disk buffer
 	shared_ptr<BlockHandle> block_handle;
-
-	//! Helper fields to speed up the pointer dereference of the buffer handle
-	bool in_memory;
-	data_ptr_t buffer_ptr;
 };
 
 } // namespace duckdb

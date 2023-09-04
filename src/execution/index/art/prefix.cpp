@@ -12,7 +12,7 @@ Prefix &Prefix::New(ART &art, Node &node) {
 	node = Node::GetAllocator(art, NType::PREFIX).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
-	auto &prefix = Node::Ref<Prefix>(art, node, NType::PREFIX);
+	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
 	prefix.data[Node::PREFIX_SIZE] = 0;
 	return prefix;
 }
@@ -22,7 +22,7 @@ Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, const Node &next) {
 	node = Node::GetAllocator(art, NType::PREFIX).New();
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
-	auto &prefix = Node::Ref<Prefix>(art, node, NType::PREFIX);
+	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
 	prefix.data[Node::PREFIX_SIZE] = 1;
 	prefix.data[0] = byte;
 	prefix.ptr = next;
@@ -39,7 +39,7 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::PREFIX));
-		auto &prefix = Node::Ref<Prefix>(art, node, NType::PREFIX);
+		auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
 
 		auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
 		prefix.data[Node::PREFIX_SIZE] = (uint8_t)this_count;
@@ -56,7 +56,7 @@ void Prefix::Free(ART &art, Node &node) {
 	Node current_node = node;
 	Node next_node;
 	while (current_node.HasMetadata() && current_node.GetType() == NType::PREFIX) {
-		next_node = Node::Ref<Prefix>(art, current_node, NType::PREFIX).ptr;
+		next_node = Node::RefMutable<Prefix>(art, current_node, NType::PREFIX).ptr;
 		Node::GetAllocator(art, NType::PREFIX).Free(current_node);
 		current_node = next_node;
 	}
@@ -70,13 +70,13 @@ void Prefix::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 	auto merge_buffer_count = flags.merge_buffer_counts[static_cast<uint8_t>(NType::PREFIX) - 1];
 
 	Node next_node = node;
-	reference<Prefix> prefix = Node::Ref<Prefix>(art, next_node, NType::PREFIX);
+	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, next_node, NType::PREFIX);
 
 	while (next_node.GetType() == NType::PREFIX) {
 		next_node = prefix.get().ptr;
 		if (prefix.get().ptr.GetType() == NType::PREFIX) {
 			prefix.get().ptr.IncreaseBufferId(merge_buffer_count);
-			prefix = Node::Ref<Prefix>(art, next_node, NType::PREFIX);
+			prefix = Node::RefMutable<Prefix>(art, next_node, NType::PREFIX);
 		}
 	}
 
@@ -92,11 +92,11 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 	if (prefix_node.GetType() == NType::PREFIX) {
 
 		// get the tail
-		reference<Prefix> prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX);
+		reference<Prefix> prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
 		D_ASSERT(prefix.get().ptr.HasMetadata());
 
 		while (prefix.get().ptr.GetType() == NType::PREFIX) {
-			prefix = Node::Ref<Prefix>(art, prefix.get().ptr, NType::PREFIX);
+			prefix = Node::RefMutable<Prefix>(art, prefix.get().ptr, NType::PREFIX);
 			D_ASSERT(prefix.get().ptr.HasMetadata());
 		}
 
@@ -127,16 +127,14 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 	New(art, prefix_node, byte, child_prefix_node);
 }
 
-template <>
-idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth,
-                       const bool dirty) {
+idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth) {
 
 	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
 
 	// compare prefix nodes to key bytes
 	while (prefix_node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX, dirty);
+		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			if (prefix.data[i] != key[depth]) {
 				return i;
@@ -150,15 +148,14 @@ idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKe
 	return DConstants::INVALID_INDEX;
 }
 
-template <>
-idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty) {
+idx_t Prefix::TraverseMutable(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth) {
 
 	D_ASSERT(prefix_node.get().HasMetadata());
 	D_ASSERT(prefix_node.get().GetType() == NType::PREFIX);
 
 	// compare prefix nodes to key bytes
 	while (prefix_node.get().GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX, dirty);
+		auto &prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			if (prefix.data[i] != key[depth]) {
 				return i;
@@ -174,8 +171,8 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key
 
 bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position) {
 
-	auto &l_prefix = Node::Ref<Prefix>(art, l_node.get(), NType::PREFIX);
-	auto &r_prefix = Node::Ref<Prefix>(art, r_node.get(), NType::PREFIX);
+	auto &l_prefix = Node::RefMutable<Prefix>(art, l_node.get(), NType::PREFIX);
+	auto &r_prefix = Node::RefMutable<Prefix>(art, r_node.get(), NType::PREFIX);
 
 	// compare prefix bytes
 	idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
@@ -214,7 +211,7 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 	D_ASSERT(prefix_node.HasMetadata());
 	D_ASSERT(n < Node::PREFIX_SIZE);
 
-	reference<Prefix> prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX);
+	reference<Prefix> prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
 
 	// free this prefix node
 	if (n == (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1)) {
@@ -241,7 +238,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 
 	D_ASSERT(prefix_node.get().HasMetadata());
 
-	auto &prefix = Node::Ref<Prefix>(art, prefix_node, NType::PREFIX);
+	auto &prefix = Node::RefMutable<Prefix>(art, prefix_node, NType::PREFIX);
 
 	// the split is at the last byte of this prefix, so the child_node contains all subsequent
 	// prefix nodes (prefix.ptr) (if any), and the count of this prefix decreases by one,
@@ -298,7 +295,7 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 	reference<const Node> node_ref(node);
 	while (node_ref.get().GetType() == NType::PREFIX) {
 
-		auto &prefix = Node::Ref<const Prefix>(art, node_ref, NType::PREFIX, false);
+		auto &prefix = Node::Ref<const Prefix>(art, node_ref, NType::PREFIX);
 		D_ASSERT(prefix.data[Node::PREFIX_SIZE] != 0);
 		D_ASSERT(prefix.data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
 
@@ -326,7 +323,7 @@ void Prefix::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 			node_ref.get() = allocator.VacuumPointer(node_ref);
 			node_ref.get().SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 		}
-		auto &prefix = Node::Ref<Prefix>(art, node_ref, NType::PREFIX);
+		auto &prefix = Node::RefMutable<Prefix>(art, node_ref, NType::PREFIX);
 		node_ref = prefix.ptr;
 	}
 
@@ -355,7 +352,7 @@ void Prefix::Append(ART &art, Node other_prefix) {
 	while (other_prefix.GetType() == NType::PREFIX) {
 
 		// copy prefix bytes
-		auto &other = Node::Ref<Prefix>(art, other_prefix, NType::PREFIX);
+		auto &other = Node::RefMutable<Prefix>(art, other_prefix, NType::PREFIX);
 		for (idx_t i = 0; i < other.data[Node::PREFIX_SIZE]; i++) {
 			prefix = prefix.get().Append(art, other.data[i]);
 		}

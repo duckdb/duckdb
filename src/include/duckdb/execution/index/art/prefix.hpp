@@ -49,16 +49,17 @@ public:
 	static void Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node);
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
-	template <class NODE>
-	static idx_t Traverse(ART &art, reference<NODE> &prefix_node, const ARTKey &key, idx_t &depth,
-	                      const bool dirty = true);
+	static idx_t Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth);
+	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
+	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
+	static idx_t TraverseMutable(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
 	//! Traverse two prefixes to find (1) that they match (so far), or (2) that they have a mismatching position,
 	//! or (3) that one prefix contains the other prefix. This function aids in merging Nodes, and, therefore,
 	//! the nodes are not const
 	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position);
 	//! Returns the byte at position
 	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
-		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX, false);
+		auto &prefix = Node::Ref<const Prefix>(art, prefix_node, NType::PREFIX);
 		D_ASSERT(position < Node::PREFIX_SIZE);
 		D_ASSERT(position < prefix.data[Node::PREFIX_SIZE]);
 		return prefix.data[position];
@@ -85,9 +86,4 @@ private:
 	//! Also frees all copied/appended nodes
 	void Append(ART &art, Node other_prefix);
 };
-
-template <>
-idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty);
-template <>
-idx_t Prefix::Traverse(ART &art, reference<const Node> &prefix_node, const ARTKey &key, idx_t &depth, const bool dirty);
 } // namespace duckdb

@@ -83,7 +83,7 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// traverse the prefix
 	if (node.GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX, false);
+		auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -93,7 +93,7 @@ void Iterator::FindMinimum(const Node &node) {
 
 	// go to the leftmost entry in the current node and recurse
 	uint8_t byte = 0;
-	auto next = node.GetNextChild<const Node>(*art, byte, false);
+	auto next = node.GetNextChild(*art, byte);
 	D_ASSERT(next);
 	current_key.Push(byte);
 	nodes.emplace(node, byte);
@@ -117,7 +117,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 
 	if (node.GetType() != NType::PREFIX) {
 		auto next_byte = key[depth];
-		auto child = node.GetNextChild<const Node>(*art, next_byte, false);
+		auto child = node.GetNextChild(*art, next_byte);
 		if (!child) {
 			// the key is greater than any key in this subtree
 			return Next();
@@ -138,7 +138,7 @@ bool Iterator::LowerBound(const Node &node, const ARTKey &key, const bool equal,
 	}
 
 	// resolve the prefix
-	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX, false);
+	auto &prefix = Node::Ref<const Prefix>(*art, node, NType::PREFIX);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}
@@ -182,7 +182,7 @@ bool Iterator::Next() {
 		}
 
 		top.byte++;
-		auto next_node = top.node.GetNextChild<const Node>(*art, top.byte, false);
+		auto next_node = top.node.GetNextChild(*art, top.byte);
 		if (!next_node) {
 			PopNode();
 			continue;
@@ -199,7 +199,7 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	if (nodes.top().node.GetType() == NType::PREFIX) {
-		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX, false);
+		auto &prefix = Node::Ref<const Prefix>(*art, nodes.top().node, NType::PREFIX);
 		auto prefix_byte_count = prefix.data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {

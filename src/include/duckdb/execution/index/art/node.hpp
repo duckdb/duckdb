@@ -65,10 +65,15 @@ public:
 
 	//! Get references to the allocator
 	static FixedSizeAllocator &GetAllocator(const ART &art, const NType type);
+	//! Get a (immutable) reference to the node. If dirty is false, then T should be a const class
+	template <class NODE>
+	static inline const NODE &Ref(const ART &art, const Node ptr, const NType type) {
+		return *(GetAllocator(art, type).Get<const NODE>(ptr, false));
+	}
 	//! Get a (const) reference to the node. If dirty is false, then T should be a const class
 	template <class NODE>
-	static inline NODE &Ref(const ART &art, const Node ptr, const NType type, const bool dirty = true) {
-		return *(GetAllocator(art, type).Get<NODE>(ptr, dirty));
+	static inline NODE &RefMutable(const ART &art, const Node ptr, const NType type) {
+		return *(GetAllocator(art, type).Get<NODE>(ptr));
 	}
 
 	//! Replace the child node at byte
@@ -78,12 +83,14 @@ public:
 	//! Delete the child node at byte
 	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
+	//! Get the child (immutable) for the respective byte in the node
+	optional_ptr<const Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the child for the respective byte in the node
-	template <class NODE>
-	optional_ptr<NODE> GetChild(ART &art, const uint8_t byte, const bool dirty = true) const;
+	optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
+	//! Get the first child (immutable) that is greater or equal to the specific byte
+	optional_ptr<const Node> GetNextChild(ART &art, uint8_t &byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	template <class NODE>
-	optional_ptr<NODE> GetNextChild(ART &art, uint8_t &byte, const bool dirty = true) const;
+	optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	string VerifyAndToString(ART &art, const bool only_verify) const;
@@ -123,13 +130,4 @@ public:
 		Set(ptr.Get());
 	}
 };
-
-template <>
-optional_ptr<const Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const;
-template <>
-optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte, const bool dirty) const;
-template <>
-optional_ptr<const Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const;
-template <>
-optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool dirty) const;
 } // namespace duckdb
