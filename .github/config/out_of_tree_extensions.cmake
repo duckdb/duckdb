@@ -39,8 +39,7 @@ endif()
 duckdb_extension_load(iceberg
         ${LOAD_ICEBERG_TESTS}
         GIT_URL https://github.com/duckdblabs/duckdb_iceberg
-        GIT_TAG 90de66a56b9971c08634f48819c099d9c2744720
-        APPLY_PATCHES
+        GIT_TAG 51ba9564859698c29db4165f17143a2f6af2bb18
         )
 
 ################# POSTGRES_SCANNER
