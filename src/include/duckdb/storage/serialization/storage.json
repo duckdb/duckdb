@@ -1,0 +1,47 @@
+[
+  {
+    "class": "MetaBlockPointer",
+    "includes": [
+      "duckdb/storage/block.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "block_pointer",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_pointer", "offset"]
+  },
+  {
+    "class": "DistinctStatistics",
+    "includes": [
+      "duckdb/storage/statistics/distinct_statistics.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "total_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "log",
+        "type": "unique_ptr<HyperLogLog>"
+      }
+    ],
+    "pointer_type": "unique_ptr",
+    "constructor": ["log", "sample_count", "total_count"]
+  }
+]

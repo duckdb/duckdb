@@ -18,10 +18,13 @@ struct robj;
 
 namespace duckdb {
 
-enum class HLLStorageType { UNCOMPRESSED = 1 };
+enum class HLLStorageType : uint8_t { UNCOMPRESSED = 1 };
 
 class FieldWriter;
 class FieldReader;
+
+class FormatSerializer;
+class FormatDeserializer;
 
 //! The HyperLogLog class holds a HyperLogLog counter for approximate cardinality counting
 class HyperLogLog {
@@ -49,6 +52,9 @@ public:
 	//! (De)Serialize the HLL
 	void Serialize(FieldWriter &writer) const;
 	static unique_ptr<HyperLogLog> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<HyperLogLog> FormatDeserialize(FormatDeserializer &deserializer);
 
 public:
 	//! Compute HLL hashes over vdata, and store them in 'hashes'

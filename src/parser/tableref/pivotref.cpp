@@ -2,8 +2,6 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -160,12 +158,6 @@ void PivotColumnEntry::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-void PivotColumnEntry::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty(100, "values", values);
-	serializer.WriteOptionalProperty(101, "star_expr", star_expr);
-	serializer.WriteProperty(102, "alias", alias);
-}
-
 PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 	PivotColumnEntry result;
 	FieldReader reader(source);
@@ -173,14 +165,6 @@ PivotColumnEntry PivotColumnEntry::Deserialize(Deserializer &source) {
 	result.star_expr = reader.ReadOptional<ParsedExpression>(nullptr);
 	result.alias = reader.ReadRequired<string>();
 	reader.Finalize();
-	return result;
-}
-
-PivotColumnEntry PivotColumnEntry::FormatDeserialize(FormatDeserializer &source) {
-	PivotColumnEntry result;
-	source.ReadProperty(100, "values", result.values);
-	source.ReadOptionalProperty(101, "star_expr", result.star_expr);
-	source.ReadProperty(102, "alias", result.alias);
 	return result;
 }
 
