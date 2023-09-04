@@ -8,7 +8,7 @@ import duckdb
 try:
     import pandas
 
-    pyarrow_dtype = pandas.core.arrays.arrow.dtype.ArrowDtype
+    pyarrow_dtype = pandas.ArrowDtype
 except:
     pyarrow_dtype = None
 

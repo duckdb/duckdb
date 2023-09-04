@@ -119,6 +119,7 @@ static string IndexingScript(ClientContext &context, QualifiedName &qname, const
         WITH distinct_terms AS (
             SELECT DISTINCT term
             FROM %fts_schema%.terms
+            ORDER BY docid, term
         )
         SELECT row_number() OVER (PARTITION BY (SELECT NULL)) - 1 AS termid,
                dt.term

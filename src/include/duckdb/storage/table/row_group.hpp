@@ -147,6 +147,10 @@ public:
 
 	void NextVector(CollectionScanState &state);
 
+	// Serialization
+	static void FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer);
+	static RowGroupPointer FormatDeserialize(FormatDeserializer &deserializer);
+
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 	ColumnData &GetColumn(storage_t c);

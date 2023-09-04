@@ -172,14 +172,14 @@ void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const 
 	}
 	serializer.WriteProperty(202, "partitions", partitions);
 	serializer.WriteProperty(203, "orders", orders);
-	serializer.WriteOptionalProperty(204, "filters", filter_expr);
+	serializer.WritePropertyWithDefault(204, "filters", filter_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(205, "ignore_nulls", ignore_nulls);
 	serializer.WriteProperty(206, "start", start);
 	serializer.WriteProperty(207, "end", end);
-	serializer.WriteOptionalProperty(208, "start_expr", start_expr);
-	serializer.WriteOptionalProperty(209, "end_expr", end_expr);
-	serializer.WriteOptionalProperty(210, "offset_expr", offset_expr);
-	serializer.WriteOptionalProperty(211, "default_expr", default_expr);
+	serializer.WritePropertyWithDefault(208, "start_expr", start_expr, unique_ptr<Expression>());
+	serializer.WritePropertyWithDefault(209, "end_expr", end_expr, unique_ptr<Expression>());
+	serializer.WritePropertyWithDefault(210, "offset_expr", offset_expr, unique_ptr<Expression>());
+	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
 }
 
 unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -198,14 +198,14 @@ unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializ
 	    make_uniq<BoundWindowExpression>(expression_type, return_type, std::move(aggregate), std::move(bind_info));
 	deserializer.ReadProperty(202, "partitions", result->partitions);
 	deserializer.ReadProperty(203, "orders", result->orders);
-	deserializer.ReadOptionalProperty(204, "filters", result->filter_expr);
+	deserializer.ReadPropertyWithDefault(204, "filters", result->filter_expr, unique_ptr<Expression>());
 	deserializer.ReadProperty(205, "ignore_nulls", result->ignore_nulls);
 	deserializer.ReadProperty(206, "start", result->start);
 	deserializer.ReadProperty(207, "end", result->end);
-	deserializer.ReadOptionalProperty(208, "start_expr", result->start_expr);
-	deserializer.ReadOptionalProperty(209, "end_expr", result->end_expr);
-	deserializer.ReadOptionalProperty(210, "offset_expr", result->offset_expr);
-	deserializer.ReadOptionalProperty(211, "default_expr", result->default_expr);
+	deserializer.ReadPropertyWithDefault(208, "start_expr", result->start_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithDefault(209, "end_expr", result->end_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithDefault(210, "offset_expr", result->offset_expr, unique_ptr<Expression>());
+	deserializer.ReadPropertyWithDefault(211, "default_expr", result->default_expr, unique_ptr<Expression>());
 	return std::move(result);
 }
 

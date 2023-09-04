@@ -116,6 +116,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
+        ninja: 1
 
     - uses: actions/upload-artifact@v3
       with:
