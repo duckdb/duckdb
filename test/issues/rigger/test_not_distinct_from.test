@@ -1,0 +1,20 @@
+# name: test/issues/rigger/test_not_distinct_from.test
+# description: Test = and not distinct from
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table foo as select * from values (4, null), (5, null) t(a, b);
+
+statement ok
+create table bar as select * from values (4, 'hi'), (6, null) t(c, d);
+
+statement ok
+select * from bar left join foo on bar.d = foo.b;
+
+statement ok
+select * from bar left join foo on bar.d is not distinct from foo.b;
+
+
