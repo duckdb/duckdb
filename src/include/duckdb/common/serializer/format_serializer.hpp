@@ -8,9 +8,9 @@
 
 #pragma once
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -20,47 +20,79 @@
 namespace duckdb {
 
 class FormatSerializer {
-	friend Vector;
-
 protected:
 	bool serialize_enum_as_string = false;
+	bool serialize_default_values = false;
+
+public:
+	class List {
+		friend FormatSerializer;
+
+	private:
+		FormatSerializer &serializer;
+		explicit List(FormatSerializer &serializer) : serializer(serializer) {
+		}
+
+	public:
+		// Serialize an element
+		template <class T>
+		void WriteElement(const T &value);
+
+		// Serialize an object
+		template <class FUNC>
+		void WriteObject(FUNC f);
+	};
 
 public:
 	// Serialize a value
 	template <class T>
 	void WriteProperty(const field_id_t field_id, const char *tag, const T &value) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		WriteValue(value);
+		OnPropertyEnd();
 	}
 
-	// Optional pointer
-	template <class POINTER>
-	void WriteOptionalProperty(const field_id_t field_id, const char *tag, POINTER &&ptr) {
-		SetTag(field_id, tag);
-		if (ptr == nullptr) {
-			OnOptionalBegin(false);
-			OnOptionalEnd(false);
-		} else {
-			OnOptionalBegin(true);
-			WriteValue(*ptr);
-			OnOptionalEnd(true);
+	// Default value
+	template <class T>
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
+		// If current value is default, don't write it
+		if (!serialize_default_values && (value == default_value)) {
+			OnOptionalPropertyBegin(field_id, tag, false);
+			OnOptionalPropertyEnd(false);
+			return;
 		}
+		OnOptionalPropertyBegin(field_id, tag, true);
+		WriteValue(value);
+		OnOptionalPropertyEnd(true);
 	}
 
 	// Special case: data_ptr_T
 	void WriteProperty(const field_id_t field_id, const char *tag, const_data_ptr_t ptr, idx_t count) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		WriteDataPtr(ptr, count);
+		OnPropertyEnd();
 	}
 
-	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
+	// Manually begin an object
+	template <class FUNC>
+	void WriteObject(const field_id_t field_id, const char *tag, FUNC f) {
+		OnPropertyBegin(field_id, tag);
 		OnObjectBegin();
+		f(*this);
+		OnObjectEnd();
+		OnPropertyEnd();
 	}
 
-	void EndObject() {
-		OnObjectEnd();
+	template <class FUNC>
+	void WriteList(const field_id_t field_id, const char *tag, idx_t count, FUNC func) {
+		OnPropertyBegin(field_id, tag);
+		OnListBegin(count);
+		List list {*this};
+		for (idx_t i = 0; i < count; i++) {
+			func(list, i);
+		}
+		OnListEnd();
+		OnPropertyEnd();
 	}
 
 protected:
@@ -82,27 +114,38 @@ protected:
 		WriteValue(ptr.get());
 	}
 
+	// Shared Pointer Ref
+	template <typename T>
+	void WriteValue(const shared_ptr<T> &ptr) {
+		WriteValue(ptr.get());
+	}
+
 	// Pointer
 	template <typename T>
-	typename std::enable_if<std::is_pointer<T>::value, void>::type WriteValue(const T ptr) {
+	void WriteValue(const T *ptr) {
 		if (ptr == nullptr) {
-			WriteNull();
+			OnNullableBegin(false);
+			OnNullableEnd();
 		} else {
+			OnNullableBegin(true);
 			WriteValue(*ptr);
+			OnNullableEnd();
 		}
 	}
 
 	// Pair
 	template <class K, class V>
 	void WriteValue(const std::pair<K, V> &pair) {
-		OnPairBegin();
-		OnPairKeyBegin();
-		WriteValue(pair.first);
-		OnPairKeyEnd();
-		OnPairValueBegin();
-		WriteValue(pair.second);
-		OnPairValueEnd();
-		OnPairEnd();
+		OnObjectBegin();
+		WriteProperty(0, "first", pair.first);
+		WriteProperty(1, "second", pair.second);
+		OnObjectEnd();
+	}
+
+	// Reference Wrapper
+	template <class T>
+	void WriteValue(const reference<T> ref) {
+		WriteValue(ref.get());
 	}
 
 	// Vector
@@ -113,7 +156,7 @@ protected:
 		for (auto &item : vec) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	template <class T>
@@ -123,7 +166,7 @@ protected:
 		for (auto &item : vec) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// UnorderedSet
@@ -135,7 +178,7 @@ protected:
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// Set
@@ -147,105 +190,59 @@ protected:
 		for (auto &item : set) {
 			WriteValue(item);
 		}
-		OnListEnd(count);
+		OnListEnd();
 	}
 
 	// Map
+	// serialized as a list of pairs
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const duckdb::unordered_map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
-		OnMapBegin(count);
+		OnListBegin(count);
 		for (auto &item : map) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			WriteValue(item.first);
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			WriteValue(item.second);
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			WriteProperty(0, "key", item.first);
+			WriteProperty(1, "value", item.second);
+			OnObjectEnd();
 		}
-		OnMapEnd(count);
+		OnListEnd();
 	}
 
 	// Map
+	// serialized as a list of pairs
 	template <class K, class V, class HASH, class CMP>
 	void WriteValue(const duckdb::map<K, V, HASH, CMP> &map) {
 		auto count = map.size();
-		OnMapBegin(count);
+		OnListBegin(count);
 		for (auto &item : map) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			WriteValue(item.first);
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			WriteValue(item.second);
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			WriteProperty(0, "key", item.first);
+			WriteProperty(1, "value", item.second);
+			OnObjectEnd();
 		}
-		OnMapEnd(count);
+		OnListEnd();
 	}
 
 	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
-		// Else, we defer to the .FormatSerialize method
 		OnObjectBegin();
 		value.FormatSerialize(*this);
 		OnObjectEnd();
 	}
 
-	// Handle setting a "tag" (optional)
-	virtual void SetTag(const field_id_t field_id, const char *tag) {
-		(void)field_id;
-		(void)tag;
-	}
-
+protected:
 	// Hooks for subclasses to override to implement custom behavior
-	virtual void OnListBegin(idx_t count) {
-		(void)count;
-	}
-	virtual void OnListEnd(idx_t count) {
-		(void)count;
-	}
-	virtual void OnMapBegin(idx_t count) {
-		(void)count;
-	}
-	virtual void OnMapEnd(idx_t count) {
-		(void)count;
-	}
-	virtual void OnMapEntryBegin() {
-	}
-	virtual void OnMapEntryEnd() {
-	}
-	virtual void OnMapKeyBegin() {
-	}
-	virtual void OnMapKeyEnd() {
-	}
-	virtual void OnMapValueBegin() {
-	}
-	virtual void OnMapValueEnd() {
-	}
-	virtual void OnOptionalBegin(bool present) {
-	}
-	virtual void OnOptionalEnd(bool present) {
-	}
-	virtual void OnObjectBegin() {
-	}
-	virtual void OnObjectEnd() {
-	}
-	virtual void OnPairBegin() {
-	}
-	virtual void OnPairKeyBegin() {
-	}
-	virtual void OnPairKeyEnd() {
-	}
-	virtual void OnPairValueBegin() {
-	}
-	virtual void OnPairValueEnd() {
-	}
-	virtual void OnPairEnd() {
-	}
+	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnPropertyEnd() = 0;
+	virtual void OnOptionalPropertyBegin(const field_id_t field_id, const char *tag, bool present) = 0;
+	virtual void OnOptionalPropertyEnd(bool present) = 0;
+	virtual void OnObjectBegin() = 0;
+	virtual void OnObjectEnd() = 0;
+	virtual void OnListBegin(idx_t count) = 0;
+	virtual void OnListEnd() = 0;
+	virtual void OnNullableBegin(bool present) = 0;
+	virtual void OnNullableEnd() = 0;
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;
@@ -267,7 +264,6 @@ protected:
 	virtual void WriteValue(const string_t value) = 0;
 	virtual void WriteValue(const string &value) = 0;
 	virtual void WriteValue(const char *str) = 0;
-	virtual void WriteValue(interval_t value) = 0;
 	virtual void WriteDataPtr(const_data_ptr_t ptr, idx_t count) = 0;
 	void WriteValue(LogicalIndex value) {
 		WriteValue(value.index);
@@ -280,5 +276,18 @@ protected:
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
 void FormatSerializer::WriteValue(const vector<bool> &vec);
+
+// List Impl
+template <class FUNC>
+void FormatSerializer::List::WriteObject(FUNC f) {
+	serializer.OnObjectBegin();
+	f(serializer);
+	serializer.OnObjectEnd();
+}
+
+template <class T>
+void FormatSerializer::List::WriteElement(const T &value) {
+	serializer.WriteValue(value);
+}
 
 } // namespace duckdb

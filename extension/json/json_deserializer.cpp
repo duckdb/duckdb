@@ -3,8 +3,23 @@
 
 namespace duckdb {
 
-void JsonDeserializer::SetTag(const field_id_t, const char *tag) {
+void JsonDeserializer::OnPropertyBegin(const field_id_t, const char *tag) {
 	current_tag = tag;
+}
+
+void JsonDeserializer::OnPropertyEnd() {
+}
+
+bool JsonDeserializer::OnOptionalPropertyBegin(const field_id_t, const char *tag) {
+	auto parent = Current();
+	auto present = yyjson_obj_get(parent.val, tag) != nullptr;
+	if (present) {
+		current_tag = tag;
+	}
+	return present;
+}
+
+void JsonDeserializer::OnOptionalPropertyEnd(bool) {
 }
 
 // If inside an object, return the value associated by the current tag (property name)
@@ -105,66 +120,27 @@ void JsonDeserializer::OnListEnd() {
 	Pop();
 }
 
-// Deserialize maps as [ { key: ..., value: ... } ]
-idx_t JsonDeserializer::OnMapBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_arr(val)) {
-		ThrowTypeError(val, "array");
+bool JsonDeserializer::OnNullableBegin() {
+	auto &parent_val = Current();
+	yyjson_arr_iter iter;
+	if (yyjson_is_arr(parent_val.val)) {
+		iter = parent_val.arr_iter;
 	}
-	Push(val);
-	return yyjson_arr_size(val);
-}
-
-void JsonDeserializer::OnMapEntryBegin() {
 	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
+
+	// Recover the iterator if we are inside an array
+	if (yyjson_is_arr(parent_val.val)) {
+		parent_val.arr_iter = iter;
 	}
-	Push(val);
-}
 
-void JsonDeserializer::OnMapKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonDeserializer::OnMapValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonDeserializer::OnMapEntryEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnMapEnd() {
-	stack.pop_back();
-}
-
-void JsonDeserializer::OnPairBegin() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-}
-
-void JsonDeserializer::OnPairKeyBegin() {
-	SetTag(100, "key");
-}
-
-void JsonDeserializer::OnPairValueBegin() {
-	SetTag(101, "value");
-}
-
-void JsonDeserializer::OnPairEnd() {
-	stack.pop_back();
-}
-
-bool JsonDeserializer::OnOptionalBegin() {
-	auto val = GetNextValue();
 	if (yyjson_is_null(val)) {
 		return false;
 	}
+
 	return true;
+}
+
+void JsonDeserializer::OnNullableEnd() {
 }
 
 //===--------------------------------------------------------------------===//
@@ -266,20 +242,6 @@ string JsonDeserializer::ReadString() {
 	return yyjson_get_str(val);
 }
 
-interval_t JsonDeserializer::ReadInterval() {
-	auto val = GetNextValue();
-	if (!yyjson_is_obj(val)) {
-		ThrowTypeError(val, "object");
-	}
-	Push(val);
-	interval_t result;
-	ReadProperty(100, "months", result.months);
-	ReadProperty(101, "days", result.days);
-	ReadProperty(102, "micros", result.micros);
-	Pop();
-	return result;
-}
-
 hugeint_t JsonDeserializer::ReadHugeInt() {
 	auto val = GetNextValue();
 	if (!yyjson_is_obj(val)) {
@@ -302,7 +264,7 @@ void JsonDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
 	auto len = yyjson_get_len(val);
 	D_ASSERT(len == count);
 	auto blob = string_t(str, len);
-	Blob::ToString(blob, (char *&)ptr);
+	Blob::ToString(blob, char_ptr_cast(ptr));
 }
 
 } // namespace duckdb

@@ -1260,7 +1260,7 @@ static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optiona
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	serializer.WriteProperty(100, "extra_info", function.extra_info);
-	serializer.WriteProperty(101, "csv_data", bind_data);
+	serializer.WriteProperty(101, "csv_data", &bind_data);
 }
 
 static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {

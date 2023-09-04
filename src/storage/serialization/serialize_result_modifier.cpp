@@ -59,27 +59,27 @@ unique_ptr<ResultModifier> DistinctModifier::FormatDeserialize(FormatDeserialize
 
 void LimitModifier::FormatSerialize(FormatSerializer &serializer) const {
 	ResultModifier::FormatSerialize(serializer);
-	serializer.WriteOptionalProperty(200, "limit", limit);
-	serializer.WriteOptionalProperty(201, "offset", offset);
+	serializer.WritePropertyWithDefault(200, "limit", limit, unique_ptr<ParsedExpression>());
+	serializer.WritePropertyWithDefault(201, "offset", offset, unique_ptr<ParsedExpression>());
 }
 
 unique_ptr<ResultModifier> LimitModifier::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LimitModifier>(new LimitModifier());
-	deserializer.ReadOptionalProperty(200, "limit", result->limit);
-	deserializer.ReadOptionalProperty(201, "offset", result->offset);
+	deserializer.ReadPropertyWithDefault(200, "limit", result->limit, unique_ptr<ParsedExpression>());
+	deserializer.ReadPropertyWithDefault(201, "offset", result->offset, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 
 void LimitPercentModifier::FormatSerialize(FormatSerializer &serializer) const {
 	ResultModifier::FormatSerialize(serializer);
-	serializer.WriteOptionalProperty(200, "limit", limit);
-	serializer.WriteOptionalProperty(201, "offset", offset);
+	serializer.WritePropertyWithDefault(200, "limit", limit, unique_ptr<ParsedExpression>());
+	serializer.WritePropertyWithDefault(201, "offset", offset, unique_ptr<ParsedExpression>());
 }
 
 unique_ptr<ResultModifier> LimitPercentModifier::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LimitPercentModifier>(new LimitPercentModifier());
-	deserializer.ReadOptionalProperty(200, "limit", result->limit);
-	deserializer.ReadOptionalProperty(201, "offset", result->offset);
+	deserializer.ReadPropertyWithDefault(200, "limit", result->limit, unique_ptr<ParsedExpression>());
+	deserializer.ReadPropertyWithDefault(201, "offset", result->offset, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 

@@ -1,12 +1,24 @@
 import os
 import json
 import re
+import argparse
 
-targets = [
-    {'source': 'src/include/duckdb/storage/serialization', 'target': 'src/storage/serialization'},
-    {'source': 'extension/parquet/include/', 'target': 'extension/parquet'},
-    {'source': 'extension/json/include/', 'target': 'extension/json'},
-]
+parser = argparse.ArgumentParser(description='Generate serialization code')
+parser.add_argument('--source', type=str, help='Source directory')
+parser.add_argument('--target', type=str, help='Target directory')
+args = parser.parse_args()
+
+if args.source is None:
+    targets = [
+        {'source': 'src/include/duckdb/storage/serialization', 'target': 'src/storage/serialization'},
+        {'source': 'extension/parquet/include/', 'target': 'extension/parquet'},
+        {'source': 'extension/json/include/', 'target': 'extension/json'},
+    ]
+else:
+    targets = [
+        {'source': args.source, 'target': args.target},
+    ]
+
 
 file_list = []
 for target in targets:
@@ -45,7 +57,9 @@ void ${CLASS_NAME}::FormatSerialize(FormatSerializer &serializer) const {
 ${MEMBERS}}
 '''
 
-serialize_element = '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME});\n'
+serialize_element = (
+    '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+)
 
 base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
 
@@ -76,13 +90,9 @@ switch_statement = (
 '''
 )
 
-deserialize_element = (
-    '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n'
-)
-deserialize_element_class = (
-    '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME});\n'
-)
-deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
+deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
+deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
 
@@ -108,12 +118,15 @@ def replace_pointer(type):
 def get_serialize_element(property_name, property_id, property_key, property_type, is_optional, pointer_type):
     write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
+    default_argument = ''
     if is_optional:
-        write_method = 'WriteOptionalProperty'
+        write_method = 'WritePropertyWithDefault'
+        default_argument = f', {property_type}()'  # TODO: allow this to be passed
     return (
         serialize_element.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_KEY}', property_key)
+        .replace('${PROPERTY_DEFAULT}', default_argument)
         .replace('WriteProperty', write_method)
         .replace('${ASSIGNMENT}', assignment)
     )
@@ -124,12 +137,15 @@ def get_deserialize_element_template(
 ):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
+    default_argument = ''
     if is_optional:
-        read_method = 'ReadOptionalProperty'
+        read_method = 'ReadPropertyWithDefault'
+        default_argument = f', {property_type}()'  # TODO: allow this to be passed
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_ID}', str(property_id))
+        .replace('${PROPERTY_DEFAULT}', default_argument)
         .replace('ReadProperty', read_method)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${ASSIGNMENT}', assignment)
@@ -461,14 +477,16 @@ def generate_class_code(class_entry):
         is_optional = entry.optional
         if is_pointer(entry.type):
             if not is_optional:
-                write_property_name = '*' + entry.serialize_property
+                # TODO: At ome point we should maybe add checks for non-optional pointers
+                # for now nullable pointers are implicitly handled by providing default values
+                pass
         elif is_optional:
             raise Exception(
                 f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})"
             )
         deserialize_template_str = deserialize_element_class
         if entry.base:
-            write_property_name = f"({entry.base} &)" + write_property_name
+            write_property_name = f"({entry.base} *)" + write_property_name + ".get()"
             deserialize_template_str = deserialize_element_class_base.replace(
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
