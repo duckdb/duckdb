@@ -182,7 +182,7 @@ public:
 	//! One JSON reader per file
 	vector<optional_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	atomic<idx_t> batch_index;
 
 	//! Current number of threads active

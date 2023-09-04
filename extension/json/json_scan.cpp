@@ -318,20 +318,25 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 }
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
-	allocator.Reset();
-
 	scan_count = 0;
-	if (buffer_offset == buffer_size) {
-		if (!ReadNextBuffer(gstate)) {
-			return scan_count;
+
+	// We have to wrap this in a loop otherwise we stop scanning too early when there's an empty JSON file
+	while (scan_count == 0 && gstate.file_index < gstate.json_readers.size()) {
+		if (buffer_offset == buffer_size) {
+			if (!ReadNextBuffer(gstate)) {
+				return scan_count;
+			}
+			D_ASSERT(buffer_size != 0);
+			if (current_buffer_handle->buffer_index != 0 &&
+			    current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+				ReconstructFirstObject();
+				scan_count++;
+			}
 		}
-		D_ASSERT(buffer_size != 0);
-		if (current_buffer_handle->buffer_index != 0 && current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-			ReconstructFirstObject();
-			scan_count++;
-		}
+
+		allocator.Reset();
+		ParseNextChunk();
 	}
-	ParseNextChunk();
 
 	return scan_count;
 }
@@ -628,9 +633,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			}
 
 			if (buffer_size == 0) {
-				continue; // We didn't read anything, re-enter the loop
+				// We didn't read anything, re-enter the loop
+				continue;
 			} else {
-				break; // We read something!
+				// We read something!
+				break;
 			}
 		}
 
