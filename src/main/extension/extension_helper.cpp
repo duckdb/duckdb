@@ -12,6 +12,10 @@
 #define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
 
+#ifndef DUCKDB_EXTENSION_EXCEL_LINKED
+#define DUCKDB_EXTENSION_EXCEL_LINKED false
+#endif
+
 #ifndef DUCKDB_EXTENSION_PARQUET_LINKED
 #define DUCKDB_EXTENSION_PARQUET_LINKED false
 #endif
@@ -52,6 +56,10 @@
 //		 these can be removed
 #if DUCKDB_EXTENSION_ICU_LINKED
 #include "icu_extension.hpp"
+#endif
+
+#if DUCKDB_EXTENSION_EXCEL_LINKED
+#include "excel_extension.hpp"
 #endif
 
 #if DUCKDB_EXTENSION_PARQUET_LINKED
@@ -101,7 +109,7 @@ static DefaultExtension internal_extensions[] = {
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
-    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
+    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
