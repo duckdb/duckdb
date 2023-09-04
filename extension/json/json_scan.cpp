@@ -203,9 +203,9 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanD
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : scan_count(0), batch_index(DConstants::INVALID_INDEX), total_read_size(0), total_tuple_count(0),
-      bind_data(gstate.bind_data), allocator(BufferAllocator::Get(context)), current_reader(nullptr),
-      current_buffer_handle(nullptr), is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+    : scan_count(0), total_read_size(0), total_tuple_count(0), bind_data(gstate.bind_data),
+      allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr), is_last(false),
+      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON values when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
@@ -306,7 +306,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 }
 
 idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
-	return state.batch_index;
+	return state.batch_index.GetIndex();
 }
 
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, const idx_t &buffer_size) {
@@ -318,13 +318,14 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 }
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
+	allocator.Reset();
 	scan_count = 0;
 
 	// We have to wrap this in a loop otherwise we stop scanning too early when there's an empty JSON file
-	while (scan_count == 0 && gstate.file_index < gstate.json_readers.size()) {
+	while (scan_count == 0) {
 		if (buffer_offset == buffer_size) {
 			if (!ReadNextBuffer(gstate)) {
-				return scan_count;
+				break;
 			}
 			D_ASSERT(buffer_size != 0);
 			if (current_buffer_handle->buffer_index != 0 &&
@@ -334,7 +335,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 			}
 		}
 
-		allocator.Reset();
 		ParseNextChunk();
 	}
 
@@ -682,9 +682,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			// If we didn't get a buffer index (because not auto-detecting), or the file was empty, just re-enter loop
 			continue;
 		}
-
-		// Assign the next batch index
-		batch_index = gstate.batch_index++;
 
 		break;
 	}
