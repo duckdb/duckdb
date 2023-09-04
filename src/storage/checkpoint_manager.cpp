@@ -34,7 +34,7 @@
 
 namespace duckdb {
 
-void ReorderTableEntries(vector<reference<TableCatalogEntry>> &tables);
+void ReorderTableEntries(catalog_entry_vector_t &tables);
 
 SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager)
     : CheckpointWriter(db), partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT) {
@@ -157,7 +157,7 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 	// write the schema data
 	schema.Serialize(GetMetadataWriter());
 	// then, we fetch the tables/views/sequences information
-	vector<reference<TableCatalogEntry>> tables;
+	catalog_entry_vector_t tables;
 	vector<reference<ViewCatalogEntry>> views;
 	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
 		if (entry.internal) {
@@ -235,7 +235,8 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 	// reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 	// Write the tables
-	for (auto &table : tables) {
+	for (auto &entry : tables) {
+		auto &table = entry.get().Cast<TableCatalogEntry>();
 		WriteTable(table);
 	}
 	// Write the views

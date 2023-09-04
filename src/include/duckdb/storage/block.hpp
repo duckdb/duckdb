@@ -14,6 +14,9 @@
 
 namespace duckdb {
 
+class FormatSerializer;
+class FormatDeserializer;
+
 class Block : public FileBuffer {
 public:
 	Block(Allocator &allocator, block_id_t id);
@@ -51,6 +54,9 @@ struct MetaBlockPointer {
 	}
 	block_id_t GetBlockId();
 	uint32_t GetBlockIndex();
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static MetaBlockPointer FormatDeserialize(FormatDeserializer &source);
 };
 
 } // namespace duckdb
