@@ -120,6 +120,7 @@ static DefaultExtension internal_extensions[] = {
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
+    {"visualizer", "Creates an HTML-based visualization of the query plan", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
