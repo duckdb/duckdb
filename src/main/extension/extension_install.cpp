@@ -157,7 +157,7 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
-string ExtensionHelper::ExtensionUrlTemplate(ClientConfig *client_config, const string &repository) {
+string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> client_config, const string &repository) {
 	string default_endpoint = "http://extensions.duckdb.org";
 	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
 #ifdef WASM_LOADABLE_EXTENSIONS

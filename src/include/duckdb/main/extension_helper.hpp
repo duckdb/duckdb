@@ -54,7 +54,7 @@ public:
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
-	static string ExtensionUrlTemplate(ClientConfig *config, const string &repository);
+	static string ExtensionUrlTemplate(optional_ptr<const ClientConfig> config, const string &repository);
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
 
 	static idx_t DefaultExtensionCount();
