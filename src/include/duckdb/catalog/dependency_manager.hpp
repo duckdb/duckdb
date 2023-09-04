@@ -13,7 +13,7 @@
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
-#include "duckdb/common/queue.hpp"
+#include "duckdb/common/stack.hpp"
 
 #include <functional>
 
@@ -21,6 +21,35 @@ namespace duckdb {
 class DuckCatalog;
 class ClientContext;
 class PhysicalDependencyList;
+
+struct ExportDependencies {
+public:
+	ExportDependencies(catalog_entry_map_t<dependency_set_t> &dependents,
+	                   catalog_entry_map_t<catalog_entry_set_t> &dependencies)
+	    : dependents(dependents), dependencies(dependencies) {
+	}
+
+public:
+	catalog_entry_map_t<dependency_set_t> &dependents;
+	catalog_entry_map_t<catalog_entry_set_t> &dependencies;
+
+public:
+	optional_ptr<dependency_set_t> GetEntriesThatDependOnObject(CatalogEntry &object) {
+		auto entry = dependents.find(object);
+		if (entry == dependents.end()) {
+			return nullptr;
+		}
+		return &entry->second;
+	}
+	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object) {
+		auto entry = dependencies.find(object);
+		if (entry == dependencies.end()) {
+			return nullptr;
+		}
+		return &entry->second;
+	}
+	void AddForeignKeyConnection(CatalogEntry &entry, const string &fk_table);
+};
 
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
@@ -57,9 +86,6 @@ private:
 
 	optional_ptr<dependency_set_t> GetEntriesThatDependOnObject(CatalogEntry &object);
 	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object);
-	bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies,
-	                                  catalog_entry_set_t &exported);
-	void OrderEntries(CatalogEntryOrdering &ordering, queue<reference<CatalogEntry>> &backlog);
 
 	void PrintDependencyMap();
 	void PrintDependentsMap();

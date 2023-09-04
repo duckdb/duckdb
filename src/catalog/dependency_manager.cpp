@@ -195,46 +195,8 @@ void DependencyManager::PrintDependentsMap() {
 	}
 }
 
-static bool CheckForeignKeyDependencies(CatalogEntry &entry, catalog_entry_vector_t &exported) {
-	if (entry.type != CatalogType::TABLE_ENTRY) {
-		return true;
-	}
-	// Check foreign key dependencies
-	auto &table_entry = entry.Cast<TableCatalogEntry>();
-	auto &constraints = table_entry.GetConstraints();
-	for (auto &constraint_p : constraints) {
-		auto &con = *constraint_p;
-		if (con.type != ConstraintType::FOREIGN_KEY) {
-			continue;
-		}
-		auto &fk = con.Cast<ForeignKeyConstraint>();
-		if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
-			continue;
-		}
-		auto referenced_table = fk.info.table;
-		// Check if the referenced table is already exported
-		bool already_exported = false;
-		for (auto &other : exported) {
-			if (other.get().type != CatalogType::TABLE_ENTRY) {
-				continue;
-			}
-			auto &other_table = other.get().Cast<TableCatalogEntry>();
-			if (StringUtil::CIEquals(referenced_table, other_table.name)) {
-				already_exported = true;
-				break;
-			}
-		}
-		if (!already_exported) {
-			// The referenced table is not exported yet
-			return false;
-		}
-	}
-	return true;
-}
-
-bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object,
-                                                     optional_ptr<catalog_entry_set_t> dependencies_p,
-                                                     catalog_entry_set_t &exported) {
+bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies_p,
+                                  catalog_entry_set_t &exported) {
 	if (!dependencies_p) {
 		// This object has no dependencies at all
 		return true;
@@ -252,46 +214,71 @@ bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object,
 	return true;
 }
 
-void DependencyManager::OrderEntries(CatalogEntryOrdering &ordering, queue<reference<CatalogEntry>> &backlog) {
+void AddDependentsToBacklog(stack<reference<CatalogEntry>> &backlog, optional_ptr<dependency_set_t> dependents) {
+	catalog_entry_vector_t tables;
+	D_ASSERT(dependents);
+	for (auto &dependent : *dependents) {
+		auto &entry = dependent.entry.get();
+		if (entry.type == CatalogType::TABLE_ENTRY) {
+			tables.push_back(entry);
+		}
+		// This could be a foreign key reference, in which case we have to write it before other dependents
+		backlog.push(entry);
+	}
+	for (auto &entry : tables) {
+		backlog.push(entry.get());
+	}
+}
+
+void OrderEntries(ExportDependencies &map, CatalogEntryOrdering &ordering, stack<reference<CatalogEntry>> &backlog) {
 	auto &export_order = ordering.ordered_vector;
 	auto &entries = ordering.ordered_set;
 
 	while (!backlog.empty()) {
-		auto &object = backlog.front();
+		auto &object = backlog.top();
 		backlog.pop();
 		if (entries.count(object)) {
 			// This entry has already been written
 			continue;
 		}
-		auto dependents = GetEntriesThatObjectDependsOn(object);
-		bool is_ordered = true;
-		// FIXME: once we register actual dependencies for ForeignKey constraints
-		// this can be deleted
-		is_ordered = CheckForeignKeyDependencies(object, export_order);
-		if (is_ordered) {
-			is_ordered = AllExportDependenciesWritten(object, dependents, entries);
-		}
-		if (is_ordered) {
-			// All dependencies written, we can write this now
-			auto insert_result = entries.insert(object);
-			(void)insert_result;
-			D_ASSERT(insert_result.second);
-			export_order.push_back(object);
-		} else {
-			if (dependents) {
-				for (auto &dependency : *dependents) {
+		auto dependencies = map.GetEntriesThatObjectDependsOn(object);
+		auto is_ordered = AllExportDependenciesWritten(object, dependencies, entries);
+		if (!is_ordered) {
+			if (dependencies) {
+				for (auto &dependency : *dependencies) {
 					backlog.emplace(dependency);
 				}
 			}
-			backlog.emplace(object);
+			continue;
 		}
+		// All dependencies written, we can write this now
+		auto insert_result = entries.insert(object);
+		(void)insert_result;
+		D_ASSERT(insert_result.second);
+		export_order.push_back(object);
+		auto dependents = map.GetEntriesThatDependOnObject(object);
+		AddDependentsToBacklog(backlog, dependents);
 	}
 }
 
-static void PrintExportOrder(catalog_entry_vector_t &entries) {
-	Printer::Print("EXPORT_ORDER");
-	for (auto &entry : entries) {
-		Printer::Print(entry.get().ToSQL());
+void ExportDependencies::AddForeignKeyConnection(CatalogEntry &entry, const string &fk_table) {
+	for (auto &object : dependencies) {
+		auto &other = object.first.get();
+		if (other.type != CatalogType::TABLE_ENTRY) {
+			continue;
+		}
+		if (!StringUtil::CIEquals(fk_table, other.name)) {
+			continue;
+		}
+		// Register that 'object' depends on 'entry'
+		D_ASSERT(dependents.count(entry));
+		auto &other_deps = dependents[entry];
+		other_deps.insert(Dependency(other));
+
+		// Register that 'entry' is a dependency of 'object'
+		D_ASSERT(dependencies.count(other));
+		auto &entry_deps = dependencies[other];
+		entry_deps.insert(entry);
 	}
 }
 
@@ -300,14 +287,37 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 	auto &entries = ordering.ordered_set;
 	auto &export_order = ordering.ordered_vector;
 
-	queue<reference<CatalogEntry>> backlog;
+	stack<reference<CatalogEntry>> backlog;
 
-	for (auto &entry_p : dependencies_map) {
+	catalog_entry_map_t<dependency_set_t> dependents = dependents_map;
+	catalog_entry_map_t<catalog_entry_set_t> dependencies = dependencies_map;
+	ExportDependencies map(dependents, dependencies);
+
+	for (auto &entry_p : dependencies) {
+		auto &entry = entry_p.first.get();
+		if (entry.type != CatalogType::TABLE_ENTRY) {
+			continue;
+		}
+		auto &table_entry = entry.Cast<TableCatalogEntry>();
+		auto &constraints = table_entry.GetConstraints();
+		for (auto &con : constraints) {
+			if (con->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk_con = con->Cast<ForeignKeyConstraint>();
+			if (fk_con.info.type != ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE) {
+				continue;
+			}
+			map.AddForeignKeyConnection(entry, fk_con.info.table);
+		}
+	}
+
+	for (auto &entry_p : dependencies) {
 		auto &entry = entry_p.first;
 		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
-			auto dependencies = GetEntriesThatObjectDependsOn(entry.get());
-			if (dependencies) {
-				for (auto &dependency : *dependencies) {
+			auto result = GetEntriesThatObjectDependsOn(entry.get());
+			if (result) {
+				for (auto &dependency : *result) {
 					// Sequences can only depend on schemas, which can't have dependencies
 					entries.insert(dependency);
 					export_order.push_back(dependency);
@@ -320,8 +330,7 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 		}
 	}
 
-	OrderEntries(ordering, backlog);
-	PrintExportOrder(ordering.ordered_vector);
+	OrderEntries(map, ordering, backlog);
 	return std::move(ordering.ordered_vector);
 }
 
