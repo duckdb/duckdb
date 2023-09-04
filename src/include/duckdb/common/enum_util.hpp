@@ -66,6 +66,8 @@ enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
+enum class CSVState : uint8_t;
+
 enum class CTEMaterialize : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -208,6 +210,8 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
+enum class QuoteRule : uint8_t;
+
 enum class RelationType : uint8_t;
 
 enum class ResultModifierType : uint8_t;
@@ -333,6 +337,9 @@ const char* EnumUtil::ToChars<BlockState>(BlockState value);
 
 template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
+
+template<>
+const char* EnumUtil::ToChars<CSVState>(CSVState value);
 
 template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
@@ -548,6 +555,9 @@ template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
+const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
+
+template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
 
 template<>
@@ -709,6 +719,9 @@ BlockState EnumUtil::FromString<BlockState>(const char *value);
 
 template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
+
+template<>
+CSVState EnumUtil::FromString<CSVState>(const char *value);
 
 template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
@@ -922,6 +935,9 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value);
 
 template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
+
+template<>
+QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
 
 template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);

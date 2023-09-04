@@ -81,6 +81,7 @@ public:
 	// Primitive Types
 	//===--------------------------------------------------------------------===//
 	void WriteNull() final;
+	void WriteValue(char value) final;
 	void WriteValue(uint8_t value) final;
 	void WriteValue(int8_t value) final;
 	void WriteValue(uint16_t value) final;
