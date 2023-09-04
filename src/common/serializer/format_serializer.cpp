@@ -9,7 +9,7 @@ void FormatSerializer::WriteValue(const vector<bool> &vec) {
 	for (auto item : vec) {
 		WriteValue(item);
 	}
-	OnListEnd(count);
+	OnListEnd();
 }
 
 } // namespace duckdb

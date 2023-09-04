@@ -57,6 +57,7 @@
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -2361,6 +2362,24 @@ FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value)
 	}
 	if (StringUtil::Equals(value, "HAS_SIDE_EFFECTS")) {
 		return FunctionSideEffects::HAS_SIDE_EFFECTS;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value) {
+	switch(value) {
+	case HLLStorageType::UNCOMPRESSED:
+		return "UNCOMPRESSED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value) {
+	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
+		return HLLStorageType::UNCOMPRESSED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -6097,6 +6116,8 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "DESERIALIZED";
 	case VerificationType::DESERIALIZED_V2:
 		return "DESERIALIZED_V2";
+	case VerificationType::DESERIALIZED_V2_NO_DEFAULT:
+		return "DESERIALIZED_V2_NO_DEFAULT";
 	case VerificationType::PARSED:
 		return "PARSED";
 	case VerificationType::UNOPTIMIZED:
@@ -6127,6 +6148,9 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DESERIALIZED_V2")) {
 		return VerificationType::DESERIALIZED_V2;
+	}
+	if (StringUtil::Equals(value, "DESERIALIZED_V2_NO_DEFAULT")) {
+		return VerificationType::DESERIALIZED_V2_NO_DEFAULT;
 	}
 	if (StringUtil::Equals(value, "PARSED")) {
 		return VerificationType::PARSED;

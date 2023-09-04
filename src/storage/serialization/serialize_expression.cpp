@@ -83,9 +83,9 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 
 void BoundBetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "input", *input);
-	serializer.WriteProperty(201, "lower", *lower);
-	serializer.WriteProperty(202, "upper", *upper);
+	serializer.WriteProperty(200, "input", input);
+	serializer.WriteProperty(201, "lower", lower);
+	serializer.WriteProperty(202, "upper", upper);
 	serializer.WriteProperty(203, "lower_inclusive", lower_inclusive);
 	serializer.WriteProperty(204, "upper_inclusive", upper_inclusive);
 }
@@ -104,7 +104,7 @@ void BoundCaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "case_checks", case_checks);
-	serializer.WriteProperty(202, "else_expr", *else_expr);
+	serializer.WriteProperty(202, "else_expr", else_expr);
 }
 
 unique_ptr<Expression> BoundCaseExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -117,7 +117,7 @@ unique_ptr<Expression> BoundCaseExpression::FormatDeserialize(FormatDeserializer
 
 void BoundCastExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "child", *child);
+	serializer.WriteProperty(200, "child", child);
 	serializer.WriteProperty(201, "return_type", return_type);
 	serializer.WriteProperty(202, "try_cast", try_cast);
 }
@@ -147,8 +147,8 @@ unique_ptr<Expression> BoundColumnRefExpression::FormatDeserialize(FormatDeseria
 
 void BoundComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "left", *left);
-	serializer.WriteProperty(201, "right", *right);
+	serializer.WriteProperty(200, "left", left);
+	serializer.WriteProperty(201, "right", right);
 }
 
 unique_ptr<Expression> BoundComparisonExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -194,7 +194,7 @@ unique_ptr<Expression> BoundDefaultExpression::FormatDeserialize(FormatDeseriali
 void BoundLambdaExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
-	serializer.WriteProperty(201, "lambda_expr", *lambda_expr);
+	serializer.WriteProperty(201, "lambda_expr", lambda_expr);
 	serializer.WriteProperty(202, "captures", captures);
 	serializer.WriteProperty(203, "parameter_count", parameter_count);
 }
@@ -243,7 +243,7 @@ void BoundParameterExpression::FormatSerialize(FormatSerializer &serializer) con
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "identifier", identifier);
 	serializer.WriteProperty(201, "return_type", return_type);
-	serializer.WriteProperty(202, "parameter_data", *parameter_data);
+	serializer.WriteProperty(202, "parameter_data", parameter_data);
 }
 
 unique_ptr<Expression> BoundParameterExpression::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -270,7 +270,7 @@ unique_ptr<Expression> BoundReferenceExpression::FormatDeserialize(FormatDeseria
 void BoundUnnestExpression::FormatSerialize(FormatSerializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
-	serializer.WriteProperty(201, "child", *child);
+	serializer.WriteProperty(201, "child", child);
 }
 
 unique_ptr<Expression> BoundUnnestExpression::FormatDeserialize(FormatDeserializer &deserializer) {

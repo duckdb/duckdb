@@ -132,6 +132,8 @@ enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
 
+enum class HLLStorageType : uint8_t;
+
 enum class IndexConstraintType : uint8_t;
 
 enum class IndexType : uint8_t;
@@ -436,6 +438,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
+
+template<>
+const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -818,6 +823,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
+
+template<>
+HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);

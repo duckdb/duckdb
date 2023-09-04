@@ -13,7 +13,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/deserialization_data.hpp"
-#include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -21,92 +20,78 @@
 namespace duckdb {
 
 class FormatDeserializer {
-	friend Vector;
-
 protected:
 	bool deserialize_enum_from_string = false;
 	DeserializationData data;
 
 public:
+	class List {
+		friend FormatDeserializer;
+
+	private:
+		FormatDeserializer &deserializer;
+		explicit List(FormatDeserializer &deserializer) : deserializer(deserializer) {
+		}
+
+	public:
+		// Deserialize an element
+		template <class T>
+		T ReadElement();
+
+		// Deserialize an object
+		template <class FUNC>
+		void ReadObject(FUNC f);
+	};
+
+public:
 	// Read into an existing value
 	template <typename T>
 	inline void ReadProperty(const field_id_t field_id, const char *tag, T &ret) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		ret = Read<T>();
+		OnPropertyEnd();
 	}
 
 	// Read and return a value
 	template <typename T>
 	inline T ReadProperty(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		return Read<T>();
+		OnPropertyBegin(field_id, tag);
+		auto ret = Read<T>();
+		OnPropertyEnd();
+		;
+		return ret;
 	}
 
-	// Read optional property and return a value, or forward a default value
+	// Default Value return
 	template <typename T>
-	inline T ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &&default_value) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			auto item = Read<T>();
-			OnOptionalEnd();
-			return item;
-		} else {
-			OnOptionalEnd();
+	inline T ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
+			OnOptionalPropertyEnd(false);
 			return std::forward<T>(default_value);
 		}
+		auto ret = Read<T>();
+		OnOptionalPropertyEnd(true);
+		return ret;
 	}
 
-	// Read optional property into an existing value, or use a default value
+	// Default value in place
 	template <typename T>
-	inline void ReadOptionalPropertyOrDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			ret = Read<T>();
-			OnOptionalEnd();
-		} else {
+	inline void ReadPropertyWithDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
-			OnOptionalEnd();
+			OnOptionalPropertyEnd(false);
+			return;
 		}
-	}
-
-	// Read optional property and return a value, or default construct it
-	template <typename T>
-	inline typename std::enable_if<std::is_default_constructible<T>::value, T>::type
-	ReadOptionalProperty(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			auto item = Read<T>();
-			OnOptionalEnd();
-			return item;
-		} else {
-			OnOptionalEnd();
-			return T();
-		}
-	}
-
-	// Read optional property into an existing value, or default construct it
-	template <typename T>
-	inline typename std::enable_if<std::is_default_constructible<T>::value, void>::type
-	ReadOptionalProperty(const field_id_t field_id, const char *tag, T &ret) {
-		SetTag(field_id, tag);
-		auto present = OnOptionalBegin();
-		if (present) {
-			ret = Read<T>();
-			OnOptionalEnd();
-		} else {
-			ret = T();
-			OnOptionalEnd();
-		}
+		ret = Read<T>();
+		OnOptionalPropertyEnd(true);
 	}
 
 	// Special case:
 	// Read into an existing data_ptr_t
 	inline void ReadProperty(const field_id_t field_id, const char *tag, data_ptr_t ret, idx_t count) {
-		SetTag(field_id, tag);
+		OnPropertyBegin(field_id, tag);
 		ReadDataPtr(ret, count);
+		OnPropertyEnd();
 	}
 
 	//! Set a serialization property
@@ -127,14 +112,25 @@ public:
 		return data.Unset<T>();
 	}
 
-	// Manually begin an object - should be followed by EndObject
-	void BeginObject(const field_id_t field_id, const char *tag) {
-		SetTag(field_id, tag);
-		OnObjectBegin();
+	template <class FUNC>
+	void ReadList(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
+		auto size = OnListBegin();
+		List list {*this};
+		for (idx_t i = 0; i < size; i++) {
+			func(list, i);
+		}
+		OnListEnd();
+		OnPropertyEnd();
 	}
 
-	void EndObject() {
+	template <class FUNC>
+	void ReadObject(const field_id_t field_id, const char *tag, FUNC func) {
+		OnPropertyBegin(field_id, tag);
+		OnObjectBegin();
+		func(*this);
 		OnObjectEnd();
+		OnPropertyEnd();
 	}
 
 private:
@@ -147,25 +143,33 @@ private:
 		return val;
 	}
 
-	// Structural Types
-	// Deserialize a unique_ptr
 	template <class T = void>
 	inline typename std::enable_if<is_unique_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_unique_ptr<T>::ELEMENT_TYPE;
-		OnObjectBegin();
-		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
-		OnObjectEnd();
-		return val;
+		unique_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnNullableBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			OnObjectEnd();
+		}
+		OnNullableEnd();
+		return ptr;
 	}
 
 	// Deserialize shared_ptr
 	template <typename T = void>
 	inline typename std::enable_if<is_shared_ptr<T>::value, T>::type Read() {
 		using ELEMENT_TYPE = typename is_shared_ptr<T>::ELEMENT_TYPE;
-		OnObjectBegin();
-		auto val = ELEMENT_TYPE::FormatDeserialize(*this);
-		OnObjectEnd();
-		return val;
+		shared_ptr<ELEMENT_TYPE> ptr = nullptr;
+		auto is_present = OnNullableBegin();
+		if (is_present) {
+			OnObjectBegin();
+			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			OnObjectEnd();
+		}
+		OnNullableEnd();
+		return ptr;
 	}
 
 	// Deserialize a vector
@@ -178,7 +182,6 @@ private:
 			vec.push_back(Read<ELEMENT_TYPE>());
 		}
 		OnListEnd();
-
 		return vec;
 	}
 
@@ -202,19 +205,15 @@ private:
 		using VALUE_TYPE = typename is_unordered_map<T>::VALUE_TYPE;
 
 		T map;
-		auto size = OnMapBegin();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			auto key = Read<KEY_TYPE>();
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			auto value = Read<VALUE_TYPE>();
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
 			map[std::move(key)] = std::move(value);
 		}
-		OnMapEnd();
+		OnListEnd();
 		return map;
 	}
 
@@ -224,19 +223,15 @@ private:
 		using VALUE_TYPE = typename is_map<T>::VALUE_TYPE;
 
 		T map;
-		auto size = OnMapBegin();
+		auto size = OnListBegin();
 		for (idx_t i = 0; i < size; i++) {
-			OnMapEntryBegin();
-			OnMapKeyBegin();
-			auto key = Read<KEY_TYPE>();
-			OnMapKeyEnd();
-			OnMapValueBegin();
-			auto value = Read<VALUE_TYPE>();
-			OnMapValueEnd();
-			OnMapEntryEnd();
+			OnObjectBegin();
+			auto key = ReadProperty<KEY_TYPE>(0, "key");
+			auto value = ReadProperty<VALUE_TYPE>(1, "value");
+			OnObjectEnd();
 			map[std::move(key)] = std::move(value);
 		}
-		OnMapEnd();
+		OnListEnd();
 		return map;
 	}
 
@@ -271,15 +266,10 @@ private:
 	inline typename std::enable_if<is_pair<T>::value, T>::type Read() {
 		using FIRST_TYPE = typename is_pair<T>::FIRST_TYPE;
 		using SECOND_TYPE = typename is_pair<T>::SECOND_TYPE;
-
-		OnPairBegin();
-		OnPairKeyBegin();
-		FIRST_TYPE first = Read<FIRST_TYPE>();
-		OnPairKeyEnd();
-		OnPairValueBegin();
-		SECOND_TYPE second = Read<SECOND_TYPE>();
-		OnPairValueEnd();
-		OnPairEnd();
+		OnObjectBegin();
+		auto first = ReadProperty<FIRST_TYPE>(0, "first");
+		auto second = ReadProperty<SECOND_TYPE>(1, "second");
+		OnObjectEnd();
 		return std::make_pair(first, second);
 	}
 
@@ -373,12 +363,6 @@ private:
 		}
 	}
 
-	// Deserialize a interval_t
-	template <typename T = void>
-	inline typename std::enable_if<std::is_same<T, interval_t>::value, T>::type Read() {
-		return ReadInterval();
-	}
-
 	// Deserialize a hugeint_t
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
@@ -398,49 +382,20 @@ private:
 	}
 
 protected:
-	virtual void SetTag(const field_id_t field_id, const char *tag) {
-		(void)field_id;
-		(void)tag;
-	}
+	// Hooks for subclasses to override to implement custom behavior
+	virtual void OnPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnPropertyEnd() = 0;
+	virtual bool OnOptionalPropertyBegin(const field_id_t field_id, const char *tag) = 0;
+	virtual void OnOptionalPropertyEnd(bool present) = 0;
 
+	virtual void OnObjectBegin() = 0;
+	virtual void OnObjectEnd() = 0;
 	virtual idx_t OnListBegin() = 0;
-	virtual void OnListEnd() {
-	}
-	virtual idx_t OnMapBegin() = 0;
-	virtual void OnMapEnd() {
-	}
-	virtual void OnMapEntryBegin() {
-	}
-	virtual void OnMapEntryEnd() {
-	}
-	virtual void OnMapKeyBegin() {
-	}
-	virtual void OnMapKeyEnd() {
-	}
-	virtual void OnMapValueBegin() {
-	}
-	virtual void OnMapValueEnd() {
-	}
-	virtual bool OnOptionalBegin() = 0;
-	virtual void OnOptionalEnd() {
-	}
-	virtual void OnObjectBegin() {
-	}
-	virtual void OnObjectEnd() {
-	}
-	virtual void OnPairBegin() {
-	}
-	virtual void OnPairKeyBegin() {
-	}
-	virtual void OnPairKeyEnd() {
-	}
-	virtual void OnPairValueBegin() {
-	}
-	virtual void OnPairValueEnd() {
-	}
-	virtual void OnPairEnd() {
-	}
+	virtual void OnListEnd() = 0;
+	virtual bool OnNullableBegin() = 0;
+	virtual void OnNullableEnd() = 0;
 
+	// Handle primitive types, a serializer needs to implement these.
 	virtual bool ReadBool() = 0;
 	virtual char ReadChar() {
 		throw NotImplementedException("ReadChar not implemented");
@@ -457,8 +412,19 @@ protected:
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
-	virtual interval_t ReadInterval() = 0;
 	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
+
+template <class FUNC>
+void FormatDeserializer::List::ReadObject(FUNC f) {
+	deserializer.OnObjectBegin();
+	f(deserializer);
+	deserializer.OnObjectEnd();
+}
+
+template <class T>
+T FormatDeserializer::List::ReadElement() {
+	return deserializer.Read<T>();
+}
 
 } // namespace duckdb
