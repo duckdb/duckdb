@@ -39,7 +39,7 @@ unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(FormatDeserializer &d
 
 void ScalarMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "expression", *expression);
+	serializer.WriteProperty(200, "expression", expression);
 }
 
 unique_ptr<MacroFunction> ScalarMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -50,7 +50,7 @@ unique_ptr<MacroFunction> ScalarMacroFunction::FormatDeserialize(FormatDeseriali
 
 void TableMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "query_node", *query_node);
+	serializer.WriteProperty(200, "query_node", query_node);
 }
 
 unique_ptr<MacroFunction> TableMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {

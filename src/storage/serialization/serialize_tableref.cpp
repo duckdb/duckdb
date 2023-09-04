@@ -12,13 +12,13 @@ namespace duckdb {
 void TableRef::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WriteProperty(101, "alias", alias);
-	serializer.WriteOptionalProperty(102, "sample", sample);
+	serializer.WritePropertyWithDefault(102, "sample", sample, unique_ptr<SampleOptions>());
 }
 
 unique_ptr<TableRef> TableRef::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<TableReferenceType>(100, "type");
 	auto alias = deserializer.ReadProperty<string>(101, "alias");
-	auto sample = deserializer.ReadOptionalProperty<unique_ptr<SampleOptions>>(102, "sample");
+	auto sample = deserializer.ReadPropertyWithDefault<unique_ptr<SampleOptions>>(102, "sample", unique_ptr<SampleOptions>());
 	unique_ptr<TableRef> result;
 	switch (type) {
 	case TableReferenceType::BASE_TABLE:
@@ -93,9 +93,9 @@ unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &de
 
 void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "left", *left);
-	serializer.WriteProperty(201, "right", *right);
-	serializer.WriteOptionalProperty(202, "condition", condition);
+	serializer.WriteProperty(200, "left", left);
+	serializer.WriteProperty(201, "right", right);
+	serializer.WritePropertyWithDefault(202, "condition", condition, unique_ptr<ParsedExpression>());
 	serializer.WriteProperty(203, "join_type", type);
 	serializer.WriteProperty(204, "ref_type", ref_type);
 	serializer.WriteProperty(205, "using_columns", using_columns);
@@ -105,7 +105,7 @@ unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer
 	auto result = duckdb::unique_ptr<JoinRef>(new JoinRef());
 	deserializer.ReadProperty(200, "left", result->left);
 	deserializer.ReadProperty(201, "right", result->right);
-	deserializer.ReadOptionalProperty(202, "condition", result->condition);
+	deserializer.ReadPropertyWithDefault(202, "condition", result->condition, unique_ptr<ParsedExpression>());
 	deserializer.ReadProperty(203, "join_type", result->type);
 	deserializer.ReadProperty(204, "ref_type", result->ref_type);
 	deserializer.ReadProperty(205, "using_columns", result->using_columns);
@@ -114,7 +114,7 @@ unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &deserializer
 
 void PivotRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "source", *source);
+	serializer.WriteProperty(200, "source", source);
 	serializer.WriteProperty(201, "aggregates", aggregates);
 	serializer.WriteProperty(202, "unpivot_names", unpivot_names);
 	serializer.WriteProperty(203, "pivots", pivots);
@@ -137,7 +137,7 @@ unique_ptr<TableRef> PivotRef::FormatDeserialize(FormatDeserializer &deserialize
 
 void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "subquery", *subquery);
+	serializer.WriteProperty(200, "subquery", subquery);
 	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 
@@ -150,7 +150,7 @@ unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserial
 
 void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
 	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "function", *function);
+	serializer.WriteProperty(200, "function", function);
 	serializer.WriteProperty(201, "column_name_alias", column_name_alias);
 }
 
