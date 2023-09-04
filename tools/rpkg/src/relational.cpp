@@ -52,6 +52,9 @@ external_pointer<T> make_external_prot(const string &rclass, SEXP prot, ARGS &&.
 	}
 	duckdb::vector<std::string> names;
 	for (auto name : rnames) {
+		if (name.size() == 0) {
+			stop("expr_reference: Zero length name");
+		}
 		names.push_back(name);
 	}
 	return make_external<ColumnRefExpression>("duckdb_expr", names);;
