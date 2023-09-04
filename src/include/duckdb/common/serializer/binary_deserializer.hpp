@@ -102,6 +102,7 @@ private:
 	// Primitive Types
 	//===--------------------------------------------------------------------===//
 	bool ReadBool() final;
+	char ReadChar() final;
 	int8_t ReadSignedInt8() final;
 	uint8_t ReadUnsignedInt8() final;
 	int16_t ReadSignedInt16() final;

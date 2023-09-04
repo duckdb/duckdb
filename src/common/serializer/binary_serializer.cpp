@@ -86,6 +86,10 @@ void BinarySerializer::WriteValue(uint8_t value) {
 	Write(value);
 }
 
+void BinarySerializer::WriteValue(char value) {
+	Write(value);
+}
+
 void BinarySerializer::WriteValue(int8_t value) {
 	Write(value);
 }
