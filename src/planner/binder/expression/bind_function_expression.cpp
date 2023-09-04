@@ -194,12 +194,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// capture the (lambda) columns
 	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
-	idx_t parameter_count = bound_lambda_expr.parameter_count;
-	auto str = bound_lambda_expr.lambda_expr->ToString();
-	D_ASSERT(!str.empty());
 	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, list_child_type);
-	str = bound_lambda_expr.lambda_expr->ToString();
-	D_ASSERT(!str.empty());
 
 	FunctionBinder function_binder(context);
 	unique_ptr<Expression> result =
@@ -223,17 +218,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	if (lambda_bindings) {
 		for (idx_t i = lambda_bindings->size(); i > 0; i--) {
 
-			idx_t lambda_index = lambda_bindings->size() - i;
 			auto &binding = (*lambda_bindings)[i - 1];
-
 			D_ASSERT(binding.names.size() == binding.types.size());
+
 			for (idx_t column_idx = binding.names.size(); column_idx > 0; column_idx--) {
-				//				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(
-				//				    binding.names[column_idx - 1], binding.types[column_idx - 1], lambda_index + column_idx -
-				//1);
-				idx_t actual_column_index = column_idx - 1;
-				idx_t prev_value = lambda_index + column_idx - 1;
-				D_ASSERT(prev_value < 10000);
 				auto bound_lambda_param = make_uniq<BoundReferenceExpression>(binding.names[column_idx - 1],
 				                                                              binding.types[column_idx - 1], offset);
 				offset++;
