@@ -7,7 +7,8 @@ require vector_size 512
 statement ok
 PRAGMA enable_verification
 
-statement error
+# CSV reader skips malformed lines
+query II
 select * from 'data/csv/csv_quoted_newline_odd.csv';
 ----
-csv_quoted_newline_odd.csv": CSV options could not be auto-detected
+84	hello world

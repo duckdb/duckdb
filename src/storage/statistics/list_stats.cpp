@@ -4,6 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 void ListStats::Construct(BaseStatistics &stats) {
@@ -76,6 +79,24 @@ BaseStatistics ListStats::Deserialize(FieldReader &reader, LogicalType type) {
 	auto &child_type = ListType::GetChildType(type);
 	BaseStatistics result(std::move(type));
 	result.child_stats[0].Copy(reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_type));
+	return result;
+}
+
+void ListStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+	auto &child_stats = ListStats::GetChildStats(stats);
+	serializer.WriteProperty(200, "child_stats", child_stats);
+}
+
+BaseStatistics ListStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
+	D_ASSERT(type.InternalType() == PhysicalType::LIST);
+	auto &child_type = ListType::GetChildType(type);
+	BaseStatistics result(std::move(type));
+
+	// Push the logical type of the child type to the deserialization context
+	deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type));
+	result.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
+	deserializer.Unset<LogicalType>();
+
 	return result;
 }
 

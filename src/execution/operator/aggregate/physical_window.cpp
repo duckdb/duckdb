@@ -14,7 +14,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/partitionable_hashtable.hpp"
 #include "duckdb/execution/window_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
 #include "duckdb/main/client_config.hpp"

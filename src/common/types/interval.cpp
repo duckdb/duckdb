@@ -11,6 +11,9 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {

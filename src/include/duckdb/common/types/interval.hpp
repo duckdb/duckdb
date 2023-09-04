@@ -16,6 +16,9 @@ struct dtime_t;
 struct date_t;
 struct timestamp_t;
 
+class FormatSerializer;
+class FormatDeserializer;
+
 struct interval_t {
 	int32_t months;
 	int32_t days;
@@ -24,6 +27,10 @@ struct interval_t {
 	inline bool operator==(const interval_t &rhs) const {
 		return this->days == rhs.days && this->months == rhs.months && this->micros == rhs.micros;
 	}
+
+	// Serialization
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static interval_t FormatDeserialize(FormatDeserializer &source);
 };
 
 //! The Interval class is a static class that holds helper functions for the Interval
