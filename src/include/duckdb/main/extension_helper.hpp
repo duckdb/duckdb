@@ -105,9 +105,9 @@ private:
 	static const vector<string> PathComponents();
 	static bool AllowAutoInstall(const string &extension);
 	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-	                                       const ClientConfig *client_config);
+	                                       optional_ptr<const ClientConfig> client_config);
 	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
-	                           string &error, const ClientConfig *client_config);
+	                           string &error, optional_ptr<const ClientConfig> client_config);
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'

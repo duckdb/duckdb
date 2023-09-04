@@ -58,7 +58,8 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 #endif
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                     ExtensionInitResult &result, string &error, const ClientConfig *client_config) {
+                                     ExtensionInitResult &result, string &error,
+                                     optional_ptr<const ClientConfig> client_config) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -242,7 +243,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 }
 
 ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                                 const ClientConfig *client_config) {
+                                                 optional_ptr<const ClientConfig> client_config) {
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
