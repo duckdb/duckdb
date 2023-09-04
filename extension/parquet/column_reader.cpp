@@ -507,13 +507,13 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
 
-			switch (type.InternalType()) {
-			case PhysicalType::INT32:
+			switch (schema.type) {
+			case duckdb_parquet::format::Type::INT32:
 				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
-			case PhysicalType::INT64:
+			case duckdb_parquet::format::Type::INT64:
 				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
@@ -1389,7 +1389,6 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
 		                                                                          max_define, max_repeat);
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
 			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
@@ -1408,6 +1407,21 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIME_MILLIS:
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			default:
+				break;
+			}
+		}
+	case LogicalTypeId::TIME_TZ:
+		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
+			if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
+				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
+				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			}
+		} else if (schema_p.__isset.converted_type) {
+			switch (schema_p.converted_type) {
+			case ConvertedType::TIME_MICROS:
+				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
 				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;

@@ -1,8 +1,16 @@
+#include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
+
+typedef uint8_t AdbcStatusCode;
+struct AdbcError;
+extern "C" AdbcStatusCode duckdb_adbc_init(int version, void *raw_driver, struct AdbcError *error);
+
+[[cpp11::register]] SEXP rapi_adbc_init_func() {
+	return R_MakeExternalPtrFn((DL_FUNC)duckdb_adbc_init, R_NilValue, R_NilValue);
+}
 
 SEXP duckdb::ToUtf8(SEXP string_sexp) {
 	cpp11::function enc2utf8 = RStrings::get().enc2utf8_sym;

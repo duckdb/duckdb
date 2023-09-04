@@ -163,6 +163,8 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
 
+toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
+
 
 class get_pybind_include(object):
     def __init__(self, user=False):
@@ -354,7 +356,7 @@ setup(
     cmdclass={"build_ext": build_ext},
     project_urls={
         "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/master/tools/pythonpkg",
+        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
         "Issues": "https://github.com/duckdb/duckdb/issues",
         "Changelog": "https://github.com/duckdb/duckdb/releases",
     },

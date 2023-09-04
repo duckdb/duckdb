@@ -364,6 +364,13 @@ extern "C" SEXP _duckdb_rapi_execute(SEXP stmt, SEXP arrow, SEXP integer64) {
   END_CPP11
 }
 // utils.cpp
+SEXP rapi_adbc_init_func();
+extern "C" SEXP _duckdb_rapi_adbc_init_func() {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_adbc_init_func());
+  END_CPP11
+}
+// utils.cpp
 cpp11::r_string rapi_ptr_to_str(SEXP extptr);
 extern "C" SEXP _duckdb_rapi_ptr_to_str(SEXP extptr) {
   BEGIN_CPP11
@@ -373,6 +380,7 @@ extern "C" SEXP _duckdb_rapi_ptr_to_str(SEXP extptr) {
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
+    {"_duckdb_rapi_adbc_init_func",          (DL_FUNC) &_duckdb_rapi_adbc_init_func,          0},
     {"_duckdb_rapi_bind",                    (DL_FUNC) &_duckdb_rapi_bind,                    4},
     {"_duckdb_rapi_connect",                 (DL_FUNC) &_duckdb_rapi_connect,                 1},
     {"_duckdb_rapi_df_is_materialized",      (DL_FUNC) &_duckdb_rapi_df_is_materialized,      1},

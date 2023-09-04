@@ -1,4 +1,4 @@
-catalog/catalog.cpp	16
+catalog/catalog.cpp	29
 catalog/catalog_entry.cpp	11
 catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
@@ -27,7 +27,7 @@ common/crypto/md5.cpp	2
 common/enum_util.cpp	3526
 common/enums/expression_type.cpp	185
 common/enums/join_type.cpp	3
-common/exception.cpp	96
+common/exception.cpp	106
 common/exception_format_value.cpp	9
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
@@ -38,7 +38,7 @@ common/hive_partitioning.cpp	54
 common/http_state.cpp	36
 common/local_file_system.cpp	16
 common/multi_file_reader.cpp	15
-common/operator/cast_operators.cpp	72
+common/operator/cast_operators.cpp	81
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
 common/preserved_error.cpp	13
@@ -77,7 +77,7 @@ common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
 common/types/date.cpp	24
 common/types/hash.cpp	5
-common/types/hugeint.cpp	34
+common/types/hugeint.cpp	35
 common/types/hyperloglog.cpp	11
 common/types/interval.cpp	31
 common/types/row/partitioned_tuple_data.cpp	10
@@ -90,7 +90,7 @@ common/types/row/tuple_data_iterator.cpp	5
 common/types/row/tuple_data_scatter_gather.cpp	17
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
-common/types/time.cpp	21
+common/types/time.cpp	25
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	10
@@ -123,6 +123,7 @@ core_functions/scalar/date/date_sub.cpp	209
 core_functions/scalar/date/date_trunc.cpp	23
 core_functions/scalar/date/strftime.cpp	10
 core_functions/scalar/enum/enum_functions.cpp	10
+core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
 core_functions/scalar/list/array_slice.cpp	2
@@ -147,6 +148,7 @@ core_functions/scalar/union/union_extract.cpp	11
 core_functions/scalar/union/union_tag.cpp	4
 core_functions/scalar/union/union_value.cpp	2
 execution/aggregate_hashtable.cpp	14
+execution/column_binding_resolver.cpp	4
 execution/expression_executor.cpp	12
 execution/expression_executor/execute_between.cpp	30
 execution/expression_executor/execute_case.cpp	17
@@ -160,7 +162,7 @@ execution/index/art/iterator.cpp	2
 execution/index/art/leaf.cpp	3
 execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	1
-execution/index/art/node48.cpp	5
+execution/index/art/node48.cpp	10
 execution/index/art/prefix.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
@@ -177,7 +179,7 @@ execution/operator/helper/physical_limit_percent.cpp	4
 execution/operator/helper/physical_load.cpp	2
 execution/operator/helper/physical_reservoir_sample.cpp	8
 execution/operator/helper/physical_reset.cpp	25
-execution/operator/helper/physical_set.cpp	2
+execution/operator/helper/physical_set.cpp	3
 execution/operator/helper/physical_streaming_sample.cpp	16
 execution/operator/join/outer_join_marker.cpp	3
 execution/operator/join/perfect_hash_join_executor.cpp	2
@@ -190,7 +192,7 @@ execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
-execution/operator/persistent/base_csv_reader.cpp	35
+execution/operator/persistent/base_csv_reader.cpp	36
 execution/operator/persistent/buffered_csv_reader.cpp	83
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/persistent/csv_file_handle.cpp	10
@@ -207,7 +209,7 @@ execution/operator/projection/physical_tableinout_function.cpp	8
 execution/operator/scan/physical_expression_scan.cpp	2
 execution/operator/scan/physical_positional_scan.cpp	20
 execution/operator/schema/physical_attach.cpp	6
-execution/operator/schema/physical_create_index.cpp	3
+execution/operator/schema/physical_create_art_index.cpp	1
 execution/operator/schema/physical_create_type.cpp	2
 execution/operator/set/physical_cte.cpp	1
 execution/partitionable_hashtable.cpp	5
@@ -304,7 +306,7 @@ extension/json/json_functions/read_json.cpp	18
 extension/json/json_functions/read_json_objects.cpp	3
 extension/json/json_scan.cpp	100
 extension/json/json_serializer.cpp	96
-extension/parquet/column_reader.cpp	103
+extension/parquet/column_reader.cpp	108
 extension/parquet/column_writer.cpp	28
 extension/parquet/include/boolean_column_reader.hpp	6
 extension/parquet/include/cast_column_reader.hpp	6
@@ -323,7 +325,7 @@ extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
 extension/parquet/parquet_timestamp.cpp	12
-extension/parquet/parquet_writer.cpp	7
+extension/parquet/parquet_writer.cpp	9
 extension/parquet/zstd_file_system.cpp	6
 include/duckdb/catalog/catalog.hpp	3
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
@@ -347,6 +349,7 @@ include/duckdb/common/arrow/appender/varchar_data.hpp	2
 include/duckdb/common/operator/abs.hpp	1
 include/duckdb/common/operator/add.hpp	2
 include/duckdb/common/operator/decimal_cast_operators.hpp	3
+include/duckdb/common/operator/convert_to_string.hpp	1
 include/duckdb/common/operator/multiply.hpp	2
 include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
@@ -471,7 +474,7 @@ main/capi/logical_types-c.cpp	44
 main/capi/pending-c.cpp	32
 main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
-main/capi/result-c.cpp	34
+main/capi/result-c.cpp	36
 main/capi/stream-c.cpp	5
 main/capi/table_function-c.cpp	85
 main/capi/threading-c.cpp	52
@@ -488,8 +491,8 @@ main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
-main/extension/extension_install.cpp	97
-main/extension/extension_load.cpp	59
+main/extension/extension_install.cpp	119
+main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
 main/pending_query_result.cpp	5
@@ -571,6 +574,7 @@ parser/parsed_data/create_aggregate_function_info.cpp	11
 parser/parsed_data/create_collation_info.cpp	6
 parser/parsed_data/create_copy_function_info.cpp	6
 parser/parsed_data/create_info.cpp	6
+parser/parsed_data/create_index_info.cpp	7
 parser/parsed_data/create_pragma_function_info.cpp	5
 parser/parsed_data/create_scalar_function_info.cpp	7
 parser/parsed_data/create_table_function_info.cpp	7
@@ -664,7 +668,7 @@ planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
 planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
-planner/binder/tableref/bind_basetableref.cpp	4
+planner/binder/tableref/bind_basetableref.cpp	15
 planner/binder/tableref/bind_joinref.cpp	3
 planner/binder/tableref/bind_pivot.cpp	6
 planner/binder/tableref/bind_table_function.cpp	18
@@ -720,7 +724,7 @@ planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3
 planner/operator/logical_export.cpp	3
 planner/operator/logical_expression_get.cpp	2
-planner/operator/logical_extension_operator.cpp	18
+planner/operator/logical_extension_operator.cpp	25
 planner/operator/logical_get.cpp	10
 planner/operator/logical_insert.cpp	4
 planner/operator/logical_pivot.cpp	3
