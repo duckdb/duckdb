@@ -630,7 +630,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (buffer_size == 0) {
 				continue; // We didn't read anything, re-enter the loop
 			} else {
-				break;    // We read something!
+				break; // We read something!
 			}
 		}
 

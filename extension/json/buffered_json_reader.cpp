@@ -188,7 +188,8 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, idx_t &position
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, string file_name_p)
-    : context(context), options(std::move(options_p)), file_name(std::move(file_name_p)), buffer_index(0) {
+    : context(context), options(std::move(options_p)), file_name(std::move(file_name_p)), buffer_index(0),
+      thrown(false) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {
@@ -302,22 +303,28 @@ void BufferedJSONReader::SetBufferLineOrObjectCount(idx_t index, idx_t count) {
 idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
 	D_ASSERT(options.format != JSONFormat::AUTO_DETECT);
 	while (true) {
-		lock_guard<mutex> guard(lock);
 		idx_t line = line_or_object_in_buf;
 		bool can_throw = true;
-		for (idx_t b_idx = 0; b_idx < buf_index; b_idx++) {
-			if (buffer_line_or_object_counts[b_idx] == -1) {
-				can_throw = false;
-				break;
-			} else {
-				line += buffer_line_or_object_counts[b_idx];
+		{
+			lock_guard<mutex> guard(lock);
+			if (thrown) {
+				return DConstants::INVALID_INDEX;
+			}
+			for (idx_t b_idx = 0; b_idx < buf_index; b_idx++) {
+				if (buffer_line_or_object_counts[b_idx] == -1) {
+					can_throw = false;
+					break;
+				} else {
+					line += buffer_line_or_object_counts[b_idx];
+					thrown = true;
+				}
 			}
 		}
-		if (!can_throw) {
-			continue;
+		if (can_throw) {
+			// SQL uses 1-based indexing so I guess we will do that in our exception here as well
+			return line + 1;
 		}
-		// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-		return line + 1;
+		TaskScheduler::YieldThread();
 	}
 }
 

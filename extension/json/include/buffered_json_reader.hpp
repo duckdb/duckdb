@@ -158,6 +158,8 @@ private:
 
 	//! Line count per buffer
 	vector<int64_t> buffer_line_or_object_counts;
+	//! Whether any of the reading threads has thrown an error
+	bool thrown;
 
 public:
 	mutex lock;
