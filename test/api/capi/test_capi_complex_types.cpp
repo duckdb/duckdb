@@ -200,3 +200,19 @@ TEST_CASE("Test struct types creation C API", "[capi]") {
 	}
 	duckdb_destroy_logical_type(&logical_type);
 }
+
+TEST_CASE("Test enum types creation C API", "[capi]") {
+	duckdb::vector<const char *> names = {"a", "b"};
+
+	auto logical_type = duckdb_create_enum_type("name", names.data(), names.size());
+	REQUIRE(duckdb_get_type_id(logical_type) == duckdb_type::DUCKDB_TYPE_ENUM);
+	REQUIRE(duckdb_enum_dictionary_size(logical_type) == 2);
+
+	for (idx_t i = 0; i < names.size(); i++) {
+		auto name = duckdb_enum_dictionary_value(logical_type, i);
+		string str_name(name);
+		duckdb_free(name);
+		REQUIRE(str_name == names[i]);
+	}
+	duckdb_destroy_logical_type(&logical_type);
+}
