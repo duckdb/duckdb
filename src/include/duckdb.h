@@ -1373,6 +1373,18 @@ DUCKDB_API duckdb_logical_type duckdb_create_union_type(duckdb_logical_type memb
                                                         idx_t member_count);
 
 /*!
+Creates a STRUCT type from the passed member name and type arrays.
+The resulting type should be destroyed with `duckdb_destroy_logical_type`.
+
+* member_types: The array of types that the struct should consist of.
+* member_names: The array of names that the struct should consist of.
+* member_count: The number of members that were specified for both arrays.
+* returns: The logical type.
+*/
+DUCKDB_API duckdb_logical_type duckdb_create_struct_type(duckdb_logical_type *member_types, const char **member_names,
+                                                         idx_t member_count);
+
+/*!
 Creates a `duckdb_logical_type` of type decimal with the specified width and scale
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 

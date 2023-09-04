@@ -1780,58 +1780,69 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
 		switch (type_.InternalType()) {
+		case PhysicalType::BIT:
+			throw InternalException("BIT type should not be serialized");
 		case PhysicalType::BOOL:
-			serializer.WriteProperty(100, "value", value_.boolean);
+			serializer.WriteProperty(102, "value", value_.boolean);
 			break;
 		case PhysicalType::INT8:
-			serializer.WriteProperty(100, "value", value_.tinyint);
+			serializer.WriteProperty(102, "value", value_.tinyint);
 			break;
 		case PhysicalType::INT16:
-			serializer.WriteProperty(100, "value", value_.smallint);
+			serializer.WriteProperty(102, "value", value_.smallint);
 			break;
 		case PhysicalType::INT32:
-			serializer.WriteProperty(100, "value", value_.integer);
+			serializer.WriteProperty(102, "value", value_.integer);
 			break;
 		case PhysicalType::INT64:
-			serializer.WriteProperty(100, "value", value_.bigint);
+			serializer.WriteProperty(102, "value", value_.bigint);
 			break;
 		case PhysicalType::UINT8:
-			serializer.WriteProperty(100, "value", value_.utinyint);
+			serializer.WriteProperty(102, "value", value_.utinyint);
 			break;
 		case PhysicalType::UINT16:
-			serializer.WriteProperty(100, "value", value_.usmallint);
+			serializer.WriteProperty(102, "value", value_.usmallint);
 			break;
 		case PhysicalType::UINT32:
-			serializer.WriteProperty(100, "value", value_.uinteger);
+			serializer.WriteProperty(102, "value", value_.uinteger);
 			break;
 		case PhysicalType::UINT64:
-			serializer.WriteProperty(100, "value", value_.ubigint);
+			serializer.WriteProperty(102, "value", value_.ubigint);
 			break;
 		case PhysicalType::INT128:
-			serializer.WriteProperty(100, "value", value_.hugeint);
+			serializer.WriteProperty(102, "value", value_.hugeint);
 			break;
 		case PhysicalType::FLOAT:
-			serializer.WriteProperty(100, "value", value_.float_);
+			serializer.WriteProperty(102, "value", value_.float_);
 			break;
 		case PhysicalType::DOUBLE:
-			serializer.WriteProperty(100, "value", value_.double_);
+			serializer.WriteProperty(102, "value", value_.double_);
 			break;
 		case PhysicalType::INTERVAL:
-			serializer.WriteProperty(100, "value", value_.interval);
+			serializer.WriteProperty(102, "value", value_.interval);
 			break;
-		case PhysicalType::VARCHAR:
+		case PhysicalType::VARCHAR: {
 			if (type_.id() == LogicalTypeId::BLOB) {
 				auto blob_str = Blob::ToString(StringValue::Get(*this));
-				serializer.WriteProperty(100, "value", blob_str);
+				serializer.WriteProperty(102, "value", blob_str);
 			} else {
-				serializer.WriteProperty(100, "value", StringValue::Get(*this));
+				serializer.WriteProperty(102, "value", StringValue::Get(*this));
 			}
-			break;
-		default: {
-			Vector v(*this);
-			v.FormatSerialize(serializer, 1);
-			break;
-		}
+		} break;
+		case PhysicalType::LIST: {
+			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+				auto &children = ListValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
+		} break;
+		case PhysicalType::STRUCT: {
+			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+				auto &children = StructValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
+		} break;
+		default:
+			throw NotImplementedException("Unimplemented type for FormatSerialize");
 		}
 	}
 }
@@ -1845,59 +1856,69 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	}
 	new_value.is_null = false;
 	switch (type.InternalType()) {
+	case PhysicalType::BIT:
+		throw InternalException("BIT type should not be deserialized");
 	case PhysicalType::BOOL:
-		new_value.value_.boolean = deserializer.ReadProperty<bool>(100, "value");
+		new_value.value_.boolean = deserializer.ReadProperty<bool>(102, "value");
 		break;
 	case PhysicalType::UINT8:
-		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>(100, "value");
+		new_value.value_.utinyint = deserializer.ReadProperty<uint8_t>(102, "value");
 		break;
 	case PhysicalType::INT8:
-		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>(100, "value");
+		new_value.value_.tinyint = deserializer.ReadProperty<int8_t>(102, "value");
 		break;
 	case PhysicalType::UINT16:
-		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>(100, "value");
+		new_value.value_.usmallint = deserializer.ReadProperty<uint16_t>(102, "value");
 		break;
 	case PhysicalType::INT16:
-		new_value.value_.smallint = deserializer.ReadProperty<int16_t>(100, "value");
+		new_value.value_.smallint = deserializer.ReadProperty<int16_t>(102, "value");
 		break;
 	case PhysicalType::UINT32:
-		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>(100, "value");
+		new_value.value_.uinteger = deserializer.ReadProperty<uint32_t>(102, "value");
 		break;
 	case PhysicalType::INT32:
-		new_value.value_.integer = deserializer.ReadProperty<int32_t>(100, "value");
+		new_value.value_.integer = deserializer.ReadProperty<int32_t>(102, "value");
 		break;
 	case PhysicalType::UINT64:
-		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>(100, "value");
+		new_value.value_.ubigint = deserializer.ReadProperty<uint64_t>(102, "value");
 		break;
 	case PhysicalType::INT64:
-		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(100, "value");
+		new_value.value_.bigint = deserializer.ReadProperty<int64_t>(102, "value");
 		break;
 	case PhysicalType::INT128:
-		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(100, "value");
+		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>(102, "value");
 		break;
 	case PhysicalType::FLOAT:
-		new_value.value_.float_ = deserializer.ReadProperty<float>(100, "value");
+		new_value.value_.float_ = deserializer.ReadProperty<float>(102, "value");
 		break;
 	case PhysicalType::DOUBLE:
-		new_value.value_.double_ = deserializer.ReadProperty<double>(100, "value");
+		new_value.value_.double_ = deserializer.ReadProperty<double>(102, "value");
 		break;
 	case PhysicalType::INTERVAL:
-		new_value.value_.interval = deserializer.ReadProperty<interval_t>(100, "value");
+		new_value.value_.interval = deserializer.ReadProperty<interval_t>(102, "value");
 		break;
 	case PhysicalType::VARCHAR: {
-		auto str = deserializer.ReadProperty<string>(100, "value");
+		auto str = deserializer.ReadProperty<string>(102, "value");
 		if (type.id() == LogicalTypeId::BLOB) {
 			new_value.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(str));
 		} else {
 			new_value.value_info_ = make_shared<StringValueInfo>(str);
 		}
 	} break;
-	default: {
-		Vector v(type);
-		v.FormatDeserialize(deserializer, 1);
-		new_value = v.GetValue(0);
-		break;
-	}
+	case PhysicalType::LIST: {
+		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
+	} break;
+	case PhysicalType::STRUCT: {
+		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
+	} break;
+	default:
+		throw NotImplementedException("Unimplemented type for FormatDeserialize");
 	}
 	return new_value;
 }

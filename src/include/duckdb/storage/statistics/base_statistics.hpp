@@ -19,6 +19,9 @@
 namespace duckdb {
 struct SelectionVector;
 
+class FormatSerializer;
+class FormatDeserializer;
+
 class Serializer;
 class Deserializer;
 class FieldWriter;
@@ -94,10 +97,10 @@ public:
 
 	void Serialize(Serializer &serializer) const;
 	void Serialize(FieldWriter &writer) const;
-
-	idx_t GetDistinctCount();
-
 	static BaseStatistics Deserialize(Deserializer &source, LogicalType type);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
@@ -105,6 +108,7 @@ public:
 
 	string ToString() const;
 
+	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
 
 private:

@@ -74,6 +74,11 @@ public:
 		return total_count - total_scanned;
 	}
 
+	//! The number of remaining rows
+	inline idx_t BlockIndex() const {
+		return read_state.block_idx;
+	}
+
 	//! Swizzle the blocks for external scanning
 	//! Swizzling is all or nothing, so if we have scanned previously,
 	//! we need to re-swizzle.

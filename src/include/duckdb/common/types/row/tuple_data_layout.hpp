@@ -83,8 +83,13 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
+	//! Gets offset to where heap size is stored
 	inline idx_t GetHeapSizeOffset() const {
 		return heap_size_offset;
+	}
+	//! Returns whether any of the aggregates have a destructor
+	inline bool HasDestructor() const {
+		return has_destructor;
 	}
 
 private:
@@ -108,6 +113,8 @@ private:
 	bool all_constant;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
+	//! Whether any of the aggregates have a destructor
+	bool has_destructor;
 };
 
 } // namespace duckdb

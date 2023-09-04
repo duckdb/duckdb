@@ -200,21 +200,6 @@ runs:
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
 
-    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
-    - name: Test deployed extensions
-      if: ${{ inputs.run_tests == 1 }}
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-        AWS_DEFAULT_REGION: us-east-1
-      run: |
-        rm -rf ~/.duckdb
-        cd  ${{ inputs.build_dir}}
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload-test.sh
-        fi
-
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
@@ -233,4 +218,19 @@ runs:
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
+        fi
+
+    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
+    - name: Test deployed extensions
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        rm -rf ~/.duckdb
+        cd  ${{ inputs.build_dir}}
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload-test.sh
         fi

@@ -44,46 +44,63 @@ string SanitizeExportIdentifier(const string &str) {
 	return result;
 }
 
-bool IsExistMainKeyTable(string &table_name, catalog_entry_vector_t &unordered) {
-	for (idx_t i = 0; i < unordered.size(); i++) {
-		if (StringUtil::CIEquals(unordered[i].get().name, table_name)) {
+bool ReferencedTableIsOrdered(string &referenced_table, catalog_entry_vector_t &ordered) {
+	for (auto &entry : ordered) {
+		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
+		if (StringUtil::CIEquals(table_entry.name, referenced_table)) {
+			// The referenced table is already ordered
 			return true;
 		}
 	}
 	return false;
 }
 
-void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t &unordered, bool move_only_pk_table) {
-	for (auto i = unordered.begin(); i != unordered.end();) {
-		auto &table_entry = i->get().Cast<TableCatalogEntry>();
+void ScanForeignKeyTable(catalog_entry_vector_t &ordered, catalog_entry_vector_t &unordered,
+                         bool move_primary_keys_only) {
+	catalog_entry_vector_t remaining;
+
+	for (auto &entry : unordered) {
+		auto &table_entry = entry.get().Cast<TableCatalogEntry>();
 		bool move_to_ordered = true;
 		auto &constraints = table_entry.GetConstraints();
-		for (idx_t j = 0; j < constraints.size(); j++) {
-			auto &cond = constraints[j];
-			if (cond->type == ConstraintType::FOREIGN_KEY) {
-				auto &fk = cond->Cast<ForeignKeyConstraint>();
-				if ((move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) ||
-				    (!move_only_pk_table && fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE &&
-				     IsExistMainKeyTable(fk.info.table, unordered))) {
-					move_to_ordered = false;
-					break;
-				}
+
+		for (auto &cond : constraints) {
+			if (cond->type != ConstraintType::FOREIGN_KEY) {
+				continue;
+			}
+			auto &fk = cond->Cast<ForeignKeyConstraint>();
+			if (fk.info.type != ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE) {
+				continue;
+			}
+
+			if (move_primary_keys_only) {
+				// This table references a table, don't move it yet
+				move_to_ordered = false;
+				break;
+			} else if (!ReferencedTableIsOrdered(fk.info.table, ordered)) {
+				// The table that it references isn't ordered yet
+				move_to_ordered = false;
+				break;
 			}
 		}
+
 		if (move_to_ordered) {
 			ordered.push_back(table_entry);
-			i = unordered.erase(i);
 		} else {
-			i++;
+			remaining.push_back(table_entry);
 		}
 	}
+	unordered = remaining;
 }
 
 void ReorderTableEntries(catalog_entry_vector_t &tables) {
 	catalog_entry_vector_t ordered;
 	catalog_entry_vector_t unordered = tables;
+	// First only move the tables that don't have any dependencies
 	ScanForeignKeyTable(ordered, unordered, true);
 	while (!unordered.empty()) {
+		// Now we will start moving tables that have foreign key constraints
+		// if the tables they reference are already moved
 		ScanForeignKeyTable(ordered, unordered, false);
 	}
 	tables = ordered;

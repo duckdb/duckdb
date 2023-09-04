@@ -35,12 +35,13 @@ public:
 	                            const ScalarFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 		serializer.WriteProperty(100, "stype", bind_data.stype);
-		serializer.WriteOptionalProperty(101, "lambda_expr", bind_data.lambda_expr);
+		serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	}
 
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
 		auto stype = deserializer.ReadProperty<LogicalType>(100, "stype");
-		auto lambda_expr = deserializer.ReadOptionalProperty<unique_ptr<Expression>>(101, "lambda_expr");
+		auto lambda_expr =
+		    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
 		return make_uniq<ListLambdaBindData>(stype, std::move(lambda_expr));
 	}
 };
