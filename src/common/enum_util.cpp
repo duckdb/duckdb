@@ -3849,6 +3849,8 @@ const char* EnumUtil::ToChars<PartitionSortStage>(PartitionSortStage value) {
 	switch(value) {
 	case PartitionSortStage::INIT:
 		return "INIT";
+	case PartitionSortStage::SCAN:
+		return "SCAN";
 	case PartitionSortStage::PREPARE:
 		return "PREPARE";
 	case PartitionSortStage::MERGE:
@@ -3864,6 +3866,9 @@ template<>
 PartitionSortStage EnumUtil::FromString<PartitionSortStage>(const char *value) {
 	if (StringUtil::Equals(value, "INIT")) {
 		return PartitionSortStage::INIT;
+	}
+	if (StringUtil::Equals(value, "SCAN")) {
+		return PartitionSortStage::SCAN;
 	}
 	if (StringUtil::Equals(value, "PREPARE")) {
 		return PartitionSortStage::PREPARE;

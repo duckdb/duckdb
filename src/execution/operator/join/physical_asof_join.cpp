@@ -722,7 +722,7 @@ void AsOfLocalSourceState::CombineLeftPartitions() {
 
 void AsOfLocalSourceState::MergeLeftPartitions() {
 	PartitionGlobalMergeStates::Callback local_callback;
-	PartitionLocalMergeState local_merge;
+	PartitionLocalMergeState local_merge(*gsource.gsink.lhs_sink);
 	gsource.GetMergeStates().ExecuteTask(local_merge, local_callback);
 	gsource.merged++;
 	while (gsource.merged < gsource.mergers) {
