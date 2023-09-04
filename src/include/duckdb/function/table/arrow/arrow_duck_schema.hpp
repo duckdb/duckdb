@@ -67,10 +67,11 @@ public:
 
 	ArrowDateTimeType GetDateTimeType() const;
 
+	void SetRunEndEncoded();
+
 	const ArrowType &GetDictionary() const;
 
 	const ArrowType &operator[](idx_t index) const;
-
 private:
 	LogicalType type;
 	//! If we have a nested type, their children's type.

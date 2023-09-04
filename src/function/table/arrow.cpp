@@ -137,6 +137,27 @@ unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schem
 		auto union_type = make_uniq<ArrowType>(LogicalType::UNION(members));
 		union_type->AssignChildren(std::move(children));
 		return union_type;
+	} else if (format == "+r") {
+		child_list_t<LogicalType> members;
+		vector<unique_ptr<ArrowType>> children;
+		auto n_children = schema.n_children;
+		D_ASSERT(n_children == 2);
+		for (idx_t type_idx = 0; type_idx < (idx_t)n_children; type_idx++) {
+			auto type = schema.children[type_idx];
+
+			children.emplace_back(GetArrowLogicalType(*type));
+			if (type_idx == 0) {
+				D_ASSERT(type->name == "run_ends");
+			} else {
+				D_ASSERT(type->name == "values");
+			}
+			members.emplace_back(type->name, children.back()->GetDuckType());
+		}
+
+		auto struct_type = make_uniq<ArrowType>(LogicalType::STRUCT(members));
+		struct_type->AssignChildren(std::move(children));
+		struct_type->SetRunEndEncoded();
+		return struct_type;
 	} else if (format == "+m") {
 		auto &arrow_struct_type = *schema.children[0];
 		D_ASSERT(arrow_struct_type.n_children == 2);
