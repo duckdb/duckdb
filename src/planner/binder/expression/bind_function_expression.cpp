@@ -161,7 +161,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &scalar_function = func.functions.functions.front();
 	auto &bind_lambda_function = scalar_function.bind_lambda;
 	if (!bind_lambda_function) {
-		throw BinderException("Scalar function " + function.function_name + " does not support lambdas!");
+		throw BinderException("This scalar function does not support lambdas as direct parameters!");
 	}
 
 	// bind the lambda parameter

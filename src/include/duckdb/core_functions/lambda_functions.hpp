@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "duckdb/function/function.hpp"
+
 namespace duckdb {
 
 enum class LambdaType : uint8_t {

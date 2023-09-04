@@ -75,6 +75,11 @@ SELECT list_transform(1, x -> x + 1);
 ----
 Binder Error: Invalid LIST argument to list_transform!
 
+statement error
+SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
+----
+This scalar function does not support lambdas as direct parameters!
+
 # list_filter specific test
 
 statement error
@@ -150,7 +155,7 @@ Binder Error: Invalid function arguments!
 statement error
 SELECT cos([1], x -> x + 1);
 ----
-Binder Error: Scalar function cos does not support lambdas!
+This scalar function does not support lambdas as direct parameters!
 
 # FIXME: support lambdas in CHECK constraints
 
