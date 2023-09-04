@@ -100,6 +100,7 @@ void CSVSniffer::DetectHeader() {
 	// This case will fail in dialect detection, so we assert here just for sanity
 	D_ASSERT(best_candidate->options.null_padding ||
 	         best_sql_types_candidates_per_column_idx.size() == best_header_row.size());
+	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	for (idx_t col = 0; col < best_header_row.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {
@@ -108,19 +109,19 @@ void CSVSniffer::DetectHeader() {
 
 		// try cast to sql_type of column
 		const auto &sql_type = best_sql_types_candidates_per_column_idx[col].back();
-		if (!TryCastValue(*best_candidate, dummy_val, sql_type)) {
+		if (!TryCastValue(sniffer_state_machine, dummy_val, sql_type)) {
 			first_row_consistent = false;
 		}
 	}
 	bool has_header;
-	if (!best_candidate->options.has_header) {
+	if (!sniffer_state_machine.options.has_header) {
 		has_header = !first_row_consistent || first_row_nulls;
 	} else {
-		has_header = best_candidate->options.dialect_options.header;
+		has_header = sniffer_state_machine.options.dialect_options.header;
 	}
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (has_header) {
-		best_candidate->dialect_options.header = true;
+		sniffer_state_machine.dialect_options.header = true;
 		case_insensitive_map_t<idx_t> name_collision_count;
 
 		// get header names from CSV
@@ -130,11 +131,11 @@ void CSVSniffer::DetectHeader() {
 
 			// generate name if field is empty
 			if (col_name.empty() || val.IsNull()) {
-				col_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
+				col_name = GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col);
 			}
 
 			// normalize names or at least trim whitespace
-			if (best_candidate->options.normalize_names) {
+			if (sniffer_state_machine.options.normalize_names) {
 				col_name = NormalizeColumnName(col_name);
 			} else {
 				col_name = TrimWhitespace(col_name);
@@ -150,16 +151,16 @@ void CSVSniffer::DetectHeader() {
 		}
 
 	} else {
-		best_candidate->dialect_options.header = false;
-		for (idx_t col = 0; col < best_candidate->dialect_options.num_cols; col++) {
-			string column_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
+		sniffer_state_machine.dialect_options.header = false;
+		for (idx_t col = 0; col < sniffer_state_machine.dialect_options.num_cols; col++) {
+			string column_name = GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col);
 			names.push_back(column_name);
 		}
 	}
 
 	// If the user provided names, we must replace our header with the user provided names
-	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), best_candidate->options.name_list.size()); i++) {
-		names[i] = best_candidate->options.name_list[i];
+	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), sniffer_state_machine.options.name_list.size()); i++) {
+		names[i] = sniffer_state_machine.options.name_list[i];
 	}
 }
 } // namespace duckdb
