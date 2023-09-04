@@ -53,7 +53,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 			}
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
-		Printer::Print(StringUtil::Format("Exception in WAL playback during initial read: %s\n", ex.what()));
+		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
 		return false;
 	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
@@ -99,7 +99,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 		}
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		// FIXME: this should report a proper warning in the connection
-		Printer::Print(StringUtil::Format("Exception in WAL playback: %s\n", ex.what()));
+		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
 		// exception thrown in WAL replay: rollback
 		con.Rollback();
 	} catch (...) {

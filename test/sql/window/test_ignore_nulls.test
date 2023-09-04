@@ -287,6 +287,7 @@ SELECT *,
         ORDER BY id
     ) AS grade
 FROM lvl
+ORDER BY id
 ----
 40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 

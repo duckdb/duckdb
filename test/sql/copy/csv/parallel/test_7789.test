@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/parallel/test_7789.test
+# description: Test Read CSV Auto function on sample file from #7789
+# group: [parallel]
+
+# force parallelism of the queries
+
+query I
+select count(*)
+from  read_csv_auto('data/csv/CrashStatistics.csv')
+----
+4980
