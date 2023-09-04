@@ -252,31 +252,10 @@ bool DependencyManager::AllExportDependenciesWritten(CatalogEntry &object,
 	return true;
 }
 
-catalog_entry_vector_t DependencyManager::GetExportOrder() {
-	catalog_entry_set_t entries;
-	catalog_entry_vector_t export_order;
+void DependencyManager::OrderEntries(CatalogEntryOrdering &ordering, queue<reference<CatalogEntry>> &backlog) {
+	auto &export_order = ordering.ordered_vector;
+	auto &entries = ordering.ordered_set;
 
-	queue<reference<CatalogEntry>> backlog;
-
-	for (auto &entry_p : dependencies_map) {
-		auto &entry = entry_p.first;
-		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
-			auto dependencies = GetEntriesThatObjectDependsOn(entry.get());
-			if (dependencies) {
-				for (auto &dependency : *dependencies) {
-					// Sequences can only depend on schemas, which can't have dependencies
-					entries.insert(dependency);
-					export_order.push_back(dependency);
-				}
-			}
-			entries.insert(entry);
-			export_order.push_back(entry);
-		} else {
-			backlog.push(entry);
-		}
-	}
-
-	// First populate our backlog with every entry in dependencies_map
 	while (!backlog.empty()) {
 		auto &object = backlog.front();
 		backlog.pop();
@@ -307,7 +286,43 @@ catalog_entry_vector_t DependencyManager::GetExportOrder() {
 			backlog.emplace(object);
 		}
 	}
-	return export_order;
+}
+
+static void PrintExportOrder(catalog_entry_vector_t &entries) {
+	Printer::Print("EXPORT_ORDER");
+	for (auto &entry : entries) {
+		Printer::Print(entry.get().ToSQL());
+	}
+}
+
+catalog_entry_vector_t DependencyManager::GetExportOrder() {
+	CatalogEntryOrdering ordering;
+	auto &entries = ordering.ordered_set;
+	auto &export_order = ordering.ordered_vector;
+
+	queue<reference<CatalogEntry>> backlog;
+
+	for (auto &entry_p : dependencies_map) {
+		auto &entry = entry_p.first;
+		if (entry.get().type == CatalogType::SEQUENCE_ENTRY) {
+			auto dependencies = GetEntriesThatObjectDependsOn(entry.get());
+			if (dependencies) {
+				for (auto &dependency : *dependencies) {
+					// Sequences can only depend on schemas, which can't have dependencies
+					entries.insert(dependency);
+					export_order.push_back(dependency);
+				}
+			}
+			entries.insert(entry);
+			export_order.push_back(entry);
+		} else {
+			backlog.push(entry);
+		}
+	}
+
+	OrderEntries(ordering, backlog);
+	PrintExportOrder(ordering.ordered_vector);
+	return std::move(ordering.ordered_vector);
 }
 
 void DependencyManager::Scan(const std::function<void(CatalogEntry &, CatalogEntry &, DependencyType)> &callback) {

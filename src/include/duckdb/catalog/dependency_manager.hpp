@@ -13,6 +13,7 @@
 #include "duckdb/catalog/dependency.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/catalog/catalog_transaction.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <functional>
 
@@ -58,6 +59,7 @@ private:
 	optional_ptr<catalog_entry_set_t> GetEntriesThatObjectDependsOn(CatalogEntry &object);
 	bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies,
 	                                  catalog_entry_set_t &exported);
+	void OrderEntries(CatalogEntryOrdering &ordering, queue<reference<CatalogEntry>> &backlog);
 
 	void PrintDependencyMap();
 	void PrintDependentsMap();
