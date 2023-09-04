@@ -197,7 +197,7 @@ unique_ptr<FunctionData> CMStringCompressDeserialize(FormatDeserializer &deseria
 	throw InternalException("CMStringCompressDeserialize");
 	//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	//	function.function = GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType,
-	//LogicalType>()); 	return nullptr;
+	// LogicalType>()); 	return nullptr;
 }
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {

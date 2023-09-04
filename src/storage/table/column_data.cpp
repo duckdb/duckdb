@@ -475,10 +475,10 @@ void ColumnData::DeserializeColumn(ReadStream &source) {
 		//
 		//		// create a persistent segment
 		//		auto segment = ColumnSegment::CreatePersistentSegment(
-		//		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset,
-		//type, 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-		//		    std::move(data_pointer.statistics));
-		//		data.AppendSegment(std::move(segment));
+		//		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id,
+		// data_pointer.block_pointer.offset, type, 		    data_pointer.row_start, data_pointer.tuple_count,
+		// data_pointer.compression_type, 		    std::move(data_pointer.statistics));
+		// data.AppendSegment(std::move(segment));
 	}
 }
 

@@ -151,7 +151,8 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
 	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
 	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
-	auto &function = entry.first;
+	result->function = entry.first;
+	auto &function = result->function;
 	auto has_serialize = entry.second;
 
 	unique_ptr<FunctionData> bind_data;
@@ -181,6 +182,7 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &de
 	} else {
 		bind_data = FunctionSerializer::FunctionDeserialize(deserializer, function);
 	}
+	result->bind_data = std::move(bind_data);
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	return std::move(result);
 }

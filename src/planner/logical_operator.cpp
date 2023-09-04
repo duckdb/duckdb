@@ -128,34 +128,24 @@ void LogicalOperator::Verify(ClientContext &context) {
 		if (expressions[expr_idx]->HasParameter()) {
 			continue;
 		}
-		throw InternalException("TODO verification");
-		//		BufferedSerializer serializer;
-		//		// We are serializing a query plan
-		//		try {
-		//			expressions[expr_idx]->Serialize(serializer);
-		//		} catch (NotImplementedException &ex) {
-		//			// ignore for now (FIXME)
-		//			continue;
-		//		}
-		//
-		//		auto data = serializer.GetData();
-		//		auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-		//
-		//		PlanDeserializationState state(context);
-		//		auto deserialized_expression = Expression::Deserialize(deserializer, state);
-		//
-		//		// format (de)serialization of expressions
-		//		try {
-		//			auto blob = BinarySerializer::Serialize(*expressions[expr_idx], true);
-		//			bound_parameter_map_t parameters;
-		//			auto result = BinaryDeserializer::Deserialize<Expression>(context, parameters, blob.data(),
-		//blob.size()); 			result->Hash(); 		} catch (SerializationException &ex) {
-		//			// pass
-		//		}
+		BufferedSerializer sink;
+		// We are serializing a query plan
+		try {
+			BinarySerializer::Serialize(*expressions[expr_idx], sink);
+		} catch (NotImplementedException &ex) {
+			// ignore for now (FIXME)
+			continue;
+		}
+
+		auto data = sink.GetData();
+		BufferedDeserializer source(data.data.get(), data.size);
+		bound_parameter_map_t parameters;
+		auto deserialized_expression = BinaryDeserializer::Deserialize<Expression>(source, context, parameters);
+
 		// FIXME: expressions might not be equal yet because of statistics propagation
 		continue;
-		//		D_ASSERT(Expression::Equals(expressions[expr_idx], deserialized_expression));
-		//		D_ASSERT(expressions[expr_idx]->Hash() == deserialized_expression->Hash());
+		D_ASSERT(Expression::Equals(expressions[expr_idx], deserialized_expression));
+		D_ASSERT(expressions[expr_idx]->Hash() == deserialized_expression->Hash());
 	}
 	D_ASSERT(!ToString().empty());
 	for (auto &child : children) {
@@ -197,8 +187,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 	//	try {
 	//		this->Serialize(logical_op_serializer);
 	//	} catch (NotImplementedException &ex) {
-	//		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to
-	//" 		                              "be serializable: " + 		                              std::string(ex.what()));
+	//		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children
+	// to " 		                              "be serializable: " + std::string(ex.what()));
 	//	}
 	//	auto data = logical_op_serializer.GetData();
 	//	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);

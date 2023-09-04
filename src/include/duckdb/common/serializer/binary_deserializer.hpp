@@ -16,16 +16,11 @@ namespace duckdb {
 class ClientContext;
 
 class BinaryDeserializer : public FormatDeserializer {
-protected:
+public:
 	explicit BinaryDeserializer(ReadStream &stream) : stream(stream) {
 		deserialize_enum_from_string = false;
 	}
 
-	void ReadData(data_ptr_t buffer, idx_t read_size) {
-		stream.ReadData(buffer, read_size);
-	}
-
-public:
 	template <class T>
 	unique_ptr<T> Deserialize() {
 		OnObjectBegin();
@@ -33,6 +28,20 @@ public:
 		OnObjectEnd();
 		D_ASSERT(nesting_level == 0); // make sure we are at the root level
 		return result;
+	}
+
+	template <class T>
+	static unique_ptr<T> Deserialize(ReadStream &stream) {
+		BinaryDeserializer deserializer(stream);
+		return deserializer.template Deserialize<T>();
+	}
+
+	template <class T>
+	static unique_ptr<T> Deserialize(ReadStream &stream, ClientContext &context, bound_parameter_map_t &parameters) {
+		BinaryDeserializer deserializer(stream);
+		deserializer.Set<ClientContext &>(context);
+		deserializer.Set<bound_parameter_map_t &>(parameters);
+		return deserializer.template Deserialize<T>();
 	}
 
 private:
@@ -66,6 +75,10 @@ private:
 		return ReadPrimitive<field_id_t>();
 	}
 
+	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		stream.ReadData(buffer, read_size);
+	}
+
 	template <class T>
 	T ReadPrimitive() {
 		T value;
@@ -81,6 +94,7 @@ private:
 		for (varint_size = 0; varint_size < 16; varint_size++) {
 			ReadData(buffer + varint_size, 1);
 			if (!(buffer[varint_size] & 0x80)) {
+				varint_size++;
 				break;
 			}
 		}

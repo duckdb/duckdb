@@ -167,32 +167,25 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	}
 
 	// format (de)serialization of this operator
+	try {
+		BufferedSerializer sink;
+		BinarySerializer::Serialize(*op, sink, true);
+		auto blob = sink.GetData();
 
-	throw InternalException("TODO verification");
-	//	try {
-	//		auto blob = BinarySerializer::Serialize(*op, true);
-	//		bound_parameter_map_t parameters;
-	//		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(),
-	//blob.size()); 	} catch (SerializationException &ex) {
-	//		// pass
-	//	}
-	//
-	//	BufferedSerializer serializer;
-	//	try {
-	//		op->Serialize(serializer);
-	//	} catch (NotImplementedException &ex) {
-	//		// ignore for now (FIXME)
-	//		return;
-	//	}
-	//	auto data = serializer.GetData();
-	//	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-	//
-	//	PlanDeserializationState state(context);
-	//	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-	//	if (map) {
-	//		*map = std::move(state.parameter_data);
-	//	}
-	//	op = std::move(new_plan);
+		BufferedDeserializer source(blob.data.get(), blob.size);
+
+		bound_parameter_map_t parameters;
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(source, context, parameters);
+
+		if (map) {
+			*map = std::move(parameters);
+		}
+		op = std::move(new_plan);
+	} catch (SerializationException &ex) {
+		// pass
+	} catch (NotImplementedException &ex) {
+		// pass
+	}
 }
 
 } // namespace duckdb

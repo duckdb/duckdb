@@ -420,7 +420,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 	//		auto art =
 	//		    make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
 	//		                   index_info.constraint_type, storage.db, nullptr, BlockPointer(root_block_id,
-	//root_offset)); 		index_catalog.index = art.get(); 		storage.info->indexes.AddIndex(std::move(art)); 		break;
+	// root_offset)); 		index_catalog.index = art.get(); 		storage.info->indexes.AddIndex(std::move(art));
+	// break;
 	//	}
 	//	default:
 	//		throw InternalException("Unknown index type for ReadIndex");

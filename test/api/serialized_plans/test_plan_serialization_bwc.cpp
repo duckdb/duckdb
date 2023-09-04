@@ -95,7 +95,7 @@ void test_deserialization(const string &file_location) {
 	//		auto expected_plan = std::move(planner.plan);
 	//		expected_plan->ResolveOperatorTypes();
 	//		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)),
-	//false); 		REQUIRE_NO_FAIL(*expected_results);
+	// false); 		REQUIRE_NO_FAIL(*expected_results);
 	//
 	//		PlanDeserializationState state(*con.context);
 	//		auto deserialized_plan = LogicalOperator::Deserialize(deserializer, state);

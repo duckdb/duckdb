@@ -59,7 +59,6 @@ public:
 		OnPropertyBegin(field_id, tag);
 		auto ret = Read<T>();
 		OnPropertyEnd();
-		;
 		return ret;
 	}
 

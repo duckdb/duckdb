@@ -16,14 +16,10 @@
 namespace duckdb {
 
 class BinarySerializer : public FormatSerializer {
-protected:
+public:
 	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) : stream(stream) {
 		serialize_default_values = serialize_default_values_p;
 		serialize_enum_as_string = false;
-	}
-
-	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
-		stream.WriteData(buffer, write_size);
 	}
 
 private:
@@ -32,6 +28,10 @@ private:
 		unordered_set<field_id_t> seen_field_ids;
 		vector<pair<const char *, field_id_t>> seen_fields;
 	};
+
+	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
+		stream.WriteData(buffer, write_size);
+	}
 
 	template <class T>
 	void Write(T element) {
@@ -51,6 +51,14 @@ private:
 	}
 
 public:
+	template <class T>
+	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
+		BinarySerializer serializer(stream, serialize_default_values);
+		serializer.OnObjectBegin();
+		value.FormatSerialize(serializer);
+		serializer.OnObjectEnd();
+	}
+
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks
 	//-------------------------------------------------------------------------
