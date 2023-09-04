@@ -120,7 +120,7 @@ public:
 	void LoadExtension(const string &extension);
 
 	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, string alias = "");
-	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, string alias = "");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, string alias = "", const py::object &params = py::none());
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
