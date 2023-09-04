@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/deserialization_data.hpp"
@@ -25,6 +23,8 @@ protected:
 	DeserializationData data;
 
 public:
+	virtual ~FormatDeserializer() {}
+
 	class List {
 		friend FormatDeserializer;
 

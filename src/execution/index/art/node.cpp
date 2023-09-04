@@ -20,16 +20,17 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 Node::Node(MetadataReader &reader) {
-	block_id_t block_id = reader.Read<block_id_t>();
-	auto offset = reader.Read<uint32_t>();
-	Reset();
-
-	if (block_id == INVALID_BLOCK) {
-		return;
-	}
-
-	SetSerialized();
-	SetPtr(block_id, offset);
+	throw InternalException("FIXME index");
+//	block_id_t block_id = reader.Read<block_id_t>();
+//	auto offset = reader.Read<uint32_t>();
+//	Reset();
+//
+//	if (block_id == INVALID_BLOCK) {
+//		return;
+//	}
+//
+//	SetSerialized();
+//	SetPtr(block_id, offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -252,42 +253,43 @@ BlockPointer Node::Serialize(ART &art, MetadataWriter &writer) {
 }
 
 void Node::Deserialize(ART &art) {
-	D_ASSERT(IsSet() && IsSerialized());
-
-	BlockPointer pointer(GetBufferId(), GetOffset());
-	MetadataReader reader(art.table_io_manager.GetMetadataManager(), pointer);
-	Reset();
-	SetType(reader.Read<uint8_t>());
-
-	auto decoded_type = GetType();
-
-	// iterative functions
-	if (decoded_type == NType::PREFIX) {
-		return Prefix::Deserialize(art, *this, reader);
-	}
-	if (decoded_type == NType::LEAF_INLINED) {
-		return SetRowId(reader.Read<row_t>());
-	}
-	if (decoded_type == NType::LEAF) {
-		return Leaf::Deserialize(art, *this, reader);
-	}
-
-	*this = Node::GetAllocator(art, decoded_type).New();
-	SetType((uint8_t)decoded_type);
-
-	// recursive functions
-	switch (decoded_type) {
-	case NType::NODE_4:
-		return Node4::Get(art, *this).Deserialize(reader);
-	case NType::NODE_16:
-		return Node16::Get(art, *this).Deserialize(reader);
-	case NType::NODE_48:
-		return Node48::Get(art, *this).Deserialize(reader);
-	case NType::NODE_256:
-		return Node256::Get(art, *this).Deserialize(reader);
-	default:
-		throw InternalException("Invalid node type for Deserialize.");
-	}
+	throw InternalException("FIXME index");
+//	D_ASSERT(IsSet() && IsSerialized());
+//
+//	BlockPointer pointer(GetBufferId(), GetOffset());
+//	MetadataReader reader(art.table_io_manager.GetMetadataManager(), pointer);
+//	Reset();
+//	SetType(reader.Read<uint8_t>());
+//
+//	auto decoded_type = GetType();
+//
+//	// iterative functions
+//	if (decoded_type == NType::PREFIX) {
+//		return Prefix::Deserialize(art, *this, reader);
+//	}
+//	if (decoded_type == NType::LEAF_INLINED) {
+//		return SetRowId(reader.Read<row_t>());
+//	}
+//	if (decoded_type == NType::LEAF) {
+//		return Leaf::Deserialize(art, *this, reader);
+//	}
+//
+//	*this = Node::GetAllocator(art, decoded_type).New();
+//	SetType((uint8_t)decoded_type);
+//
+//	// recursive functions
+//	switch (decoded_type) {
+//	case NType::NODE_4:
+//		return Node4::Get(art, *this).Deserialize(reader);
+//	case NType::NODE_16:
+//		return Node16::Get(art, *this).Deserialize(reader);
+//	case NType::NODE_48:
+//		return Node48::Get(art, *this).Deserialize(reader);
+//	case NType::NODE_256:
+//		return Node256::Get(art, *this).Deserialize(reader);
+//	default:
+//		throw InternalException("Invalid node type for Deserialize.");
+//	}
 }
 
 //===--------------------------------------------------------------------===//

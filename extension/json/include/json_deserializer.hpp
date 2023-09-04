@@ -1,6 +1,6 @@
 #pragma once
 #include "json_common.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 

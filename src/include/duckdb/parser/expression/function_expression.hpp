@@ -56,8 +56,6 @@ public:
 	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
 	hash_t Hash() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 

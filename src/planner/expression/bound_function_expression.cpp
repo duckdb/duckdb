@@ -3,8 +3,8 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/function/function_serialization.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -73,26 +73,6 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 
 void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.name.empty());
-}
-
-void BoundFunctionExpression::Serialize(FieldWriter &writer) const {
-	D_ASSERT(!function.name.empty());
-	D_ASSERT(return_type == function.return_type);
-	writer.WriteField(is_operator);
-	FunctionSerializer::Serialize<ScalarFunction>(writer, function, return_type, children, bind_info.get());
-}
-
-unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializationState &state,
-                                                            FieldReader &reader) {
-	auto is_operator = reader.ReadRequired<bool>();
-	vector<unique_ptr<Expression>> children;
-	unique_ptr<FunctionData> bind_info;
-	auto function = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
-	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
-
-	auto return_type = function.return_type;
-	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
-	                                          std::move(bind_info), is_operator);
 }
 
 void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) const {

@@ -13,8 +13,6 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
-class Deserializer;
-class Serializer;
 
 //! Represents a generic expression that returns a table.
 class TableRef {
@@ -46,12 +44,6 @@ public:
 
 	virtual unique_ptr<TableRef> Copy() = 0;
 
-	//! Serializes a TableRef to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	//! Serializes a TableRef to a stand-alone binary blob
-	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a TableRef
-	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source);
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;
 

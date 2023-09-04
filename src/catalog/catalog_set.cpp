@@ -252,16 +252,18 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	PutEntry(std::move(entry_index), std::move(value));
 
 	// serialize the AlterInfo into a temporary buffer
-	BufferedSerializer serializer;
-	serializer.WriteString(alter_info.GetColumnName());
-	alter_info.Serialize(serializer);
-	BinaryData serialized_alter = serializer.GetData();
+	throw InternalException("FIXME todo");
+//	BufferedSerializer serializer;
+//	serializer.WriteString(alter_info.GetColumnName());
+//	alter_info.Serialize(serializer);
+//	BinaryData serialized_alter = serializer.GetData();
 
-	// push the old entry in the undo buffer for this transaction
-	if (transaction.transaction) {
-		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
-	}
+//	// push the old entry in the undo buffer for this transaction
+//	if (transaction.transaction) {
+//		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
+//		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
+//	}
+	// END FIXME
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter
 	// Note that we do this AFTER the new entry has been entirely set up in the catalog set

@@ -3,7 +3,6 @@
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/function_serialization.hpp"
 
@@ -79,29 +78,6 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	copy->CopyProperties(*this);
 	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
 	return std::move(copy);
-}
-
-void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField(IsDistinct());
-	writer.WriteOptional(filter);
-	writer.WriteOptional(order_bys);
-	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
-}
-
-unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto distinct = reader.ReadRequired<bool>();
-	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto order_bys = reader.ReadOptional<BoundOrderModifier>(nullptr, state.gstate);
-	vector<unique_ptr<Expression>> children;
-	unique_ptr<FunctionData> bind_info;
-	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
-	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
-
-	auto x = make_uniq<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
-	                                             distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
-	x->order_bys = std::move(order_bys);
-	return std::move(x);
 }
 
 void BoundAggregateExpression::FormatSerialize(FormatSerializer &serializer) const {

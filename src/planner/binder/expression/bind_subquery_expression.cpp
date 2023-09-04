@@ -32,9 +32,6 @@ public:
 	unique_ptr<QueryNode> Copy() const override {
 		throw InternalException("Cannot copy bound subquery node");
 	}
-	void Serialize(FieldWriter &writer) const override {
-		throw InternalException("Cannot serialize bound subquery node");
-	}
 
 	void FormatSerialize(FormatSerializer &serializer) const override {
 		throw InternalException("Cannot serialize bound subquery node");

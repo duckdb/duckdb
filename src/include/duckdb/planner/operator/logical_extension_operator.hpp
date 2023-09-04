@@ -26,7 +26,6 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, std::move(expressions)) {
 	}
 
-	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);

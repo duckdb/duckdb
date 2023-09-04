@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -51,9 +50,6 @@ public:
 	}
 
 	ColumnList Copy() const;
-	void Serialize(FieldWriter &writer) const;
-	static ColumnList Deserialize(FieldReader &reader);
-
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static ColumnList FormatDeserialize(FormatDeserializer &deserializer);
 

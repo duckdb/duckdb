@@ -15,10 +15,6 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
-class FieldWriter;
-class FieldReader;
 class FormatDeserializer;
 class FormatSerializer;
 
@@ -52,15 +48,6 @@ public:
 
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-
-	//! Deserializes a blob back into an Expression [CAN THROW:
-	//! SerializationException]
-	static unique_ptr<ParsedExpression> Deserialize(Deserializer &source);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);

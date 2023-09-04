@@ -20,9 +20,6 @@ namespace duckdb {
 
 enum class HLLStorageType : uint8_t { UNCOMPRESSED = 1 };
 
-class FieldWriter;
-class FieldReader;
-
 class FormatSerializer;
 class FormatDeserializer;
 
@@ -49,9 +46,6 @@ public:
 	data_ptr_t GetPtr() const;
 	//! Get copy of the HLL
 	unique_ptr<HyperLogLog> Copy();
-	//! (De)Serialize the HLL
-	void Serialize(FieldWriter &writer) const;
-	static unique_ptr<HyperLogLog> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<HyperLogLog> FormatDeserialize(FormatDeserializer &deserializer);

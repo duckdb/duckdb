@@ -1,6 +1,8 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 
@@ -170,17 +172,17 @@ void MetadataManager::Flush() {
 	}
 }
 
-void MetadataManager::Serialize(Serializer &serializer) {
-	serializer.Write<uint64_t>(blocks.size());
+void MetadataManager::Write(WriteStream &sink) {
+	sink.Write<uint64_t>(blocks.size());
 	for (auto &kv : blocks) {
-		kv.second.Serialize(serializer);
+		kv.second.Write(sink);
 	}
 }
 
-void MetadataManager::Deserialize(Deserializer &source) {
+void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
-		auto block = MetadataBlock::Deserialize(source);
+		auto block = MetadataBlock::Read(source);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
 			// block does not exist yet
@@ -192,12 +194,12 @@ void MetadataManager::Deserialize(Deserializer &source) {
 	}
 }
 
-void MetadataBlock::Serialize(Serializer &serializer) {
-	serializer.Write<block_id_t>(block_id);
-	serializer.Write<idx_t>(FreeBlocksToInteger());
+void MetadataBlock::Write(WriteStream &sink) {
+	sink.Write<block_id_t>(block_id);
+	sink.Write<idx_t>(FreeBlocksToInteger());
 }
 
-MetadataBlock MetadataBlock::Deserialize(Deserializer &source) {
+MetadataBlock MetadataBlock::Read(ReadStream &source) {
 	MetadataBlock result;
 	result.block_id = source.Read<block_id_t>();
 	auto free_list = source.Read<idx_t>();

@@ -64,14 +64,9 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyList &dependencies);
 
-typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
-                                     const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_deserialize_t)(PlanDeserializationState &state, FieldReader &reader,
-                                                           ScalarFunction &function);
-
-typedef void (*function_format_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*function_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
                                             const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_format_deserialize_t)(FormatDeserializer &deserializer,
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(FormatDeserializer &deserializer,
                                                                   ScalarFunction &function);
 
 class ScalarFunction : public BaseScalarFunction {
@@ -104,9 +99,6 @@ public:
 
 	function_serialize_t serialize;
 	function_deserialize_t deserialize;
-
-	function_format_serialize_t format_serialize;
-	function_format_deserialize_t format_deserialize;
 
 	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
 	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;

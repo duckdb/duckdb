@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/format_serializer.hpp
+// duckdb/common/serializer/serializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -25,6 +23,8 @@ protected:
 	bool serialize_default_values = false;
 
 public:
+	virtual ~FormatSerializer(){}
+
 	class List {
 		friend FormatSerializer;
 

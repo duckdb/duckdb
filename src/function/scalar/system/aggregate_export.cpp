@@ -277,15 +277,6 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-static void ExportStateAggregateSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                                          const AggregateFunction &function) {
-	throw NotImplementedException("FIXME: export state serialize");
-}
-static unique_ptr<FunctionData> ExportStateAggregateDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                                AggregateFunction &bound_function) {
-	throw NotImplementedException("FIXME: export state deserialize");
-}
-
 static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer,
                                                 const optional_ptr<FunctionData> bind_data_p,
                                                 const AggregateFunction &function) {
@@ -295,15 +286,6 @@ static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer,
 static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(FormatDeserializer &deserializer,
                                                                       AggregateFunction &function) {
 	throw SerializationException("FIXME: export state deserialize");
-}
-
-static void ExportStateScalarSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                                       const ScalarFunction &function) {
-	throw NotImplementedException("FIXME: export state serialize");
-}
-static unique_ptr<FunctionData> ExportStateScalarDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                             ScalarFunction &bound_function) {
-	throw NotImplementedException("FIXME: export state deserialize");
 }
 
 static void ExportStateScalarFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -350,10 +332,8 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                      /* can't bind this again */ nullptr, /* no dynamic state yet */ nullptr,
 	                      /* can't propagate statistics */ nullptr, nullptr);
 	export_function.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	export_function.serialize = ExportStateAggregateSerialize;
-	export_function.deserialize = ExportStateAggregateDeserialize;
-	export_function.format_serialize = ExportStateAggregateFormatSerialize;
-	export_function.format_deserialize = ExportStateAggregateFormatDeserialize;
+	export_function.serialize = ExportStateAggregateFormatSerialize;
+	export_function.deserialize = ExportStateAggregateFormatDeserialize;
 
 	return make_uniq<BoundAggregateExpression>(export_function, std::move(child_aggregate->children),
 	                                           std::move(child_aggregate->filter), std::move(export_bind_data),
@@ -364,10 +344,8 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
-	result.format_serialize = ExportStateScalarFormatSerialize;
-	result.format_deserialize = ExportStateScalarFormatDeserialize;
+	result.serialize = ExportStateScalarFormatSerialize;
+	result.deserialize = ExportStateScalarFormatDeserialize;
 	return result;
 }
 
@@ -376,10 +354,8 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	result.serialize = ExportStateScalarSerialize;
-	result.deserialize = ExportStateScalarDeserialize;
-	result.format_serialize = ExportStateScalarFormatSerialize;
-	result.format_deserialize = ExportStateScalarFormatDeserialize;
+	result.serialize = ExportStateScalarFormatSerialize;
+	result.deserialize = ExportStateScalarFormatDeserialize;
 	return result;
 }
 

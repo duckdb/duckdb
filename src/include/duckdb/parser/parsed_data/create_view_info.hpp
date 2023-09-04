@@ -31,8 +31,6 @@ struct CreateViewInfo : public CreateInfo {
 public:
 	unique_ptr<CreateInfo> Copy() const override;
 
-	static unique_ptr<CreateViewInfo> Deserialize(Deserializer &deserializer);
-
 	//! Gets a bound CreateViewInfo object from a SELECT statement and a view name, schema name, etc
 	DUCKDB_API static unique_ptr<CreateViewInfo> FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info);
 	//! Gets a bound CreateViewInfo object from a CREATE VIEW statement
@@ -40,9 +38,6 @@ public:
 
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
 	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
-
-protected:
-	void SerializeInternal(Serializer &serializer) const override;
 };
 
 } // namespace duckdb

@@ -142,24 +142,24 @@ void BinarySerializer::WriteValue(double value) {
 void BinarySerializer::WriteValue(const string &value) {
 	uint32_t len = value.length();
 	VarIntEncode(len);
-	WriteDataInternal(value.c_str(), len);
+	WriteData(value.c_str(), len);
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
 	uint32_t len = value.GetSize();
 	VarIntEncode(len);
-	WriteDataInternal(value.GetDataUnsafe(), len);
+	WriteData(value.GetDataUnsafe(), len);
 }
 
 void BinarySerializer::WriteValue(const char *value) {
 	uint32_t len = strlen(value);
 	VarIntEncode(len);
-	WriteDataInternal(value, len);
+	WriteData(value, len);
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
 	VarIntEncode(static_cast<uint64_t>(count));
-	WriteDataInternal(ptr, count);
+	WriteData(ptr, count);
 }
 
 } // namespace duckdb

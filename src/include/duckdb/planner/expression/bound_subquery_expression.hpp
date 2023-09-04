@@ -61,7 +61,5 @@ public:
 
 	bool PropagatesNullValues() const override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 };
 } // namespace duckdb

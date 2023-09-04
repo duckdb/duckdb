@@ -22,9 +22,6 @@
 
 namespace duckdb {
 
-class FieldWriter;
-class FieldReader;
-
 //! The current version of the plan serialization format. Exposed via by @Serializer & @Deserializer
 //! to be used by various Operator to know what format to read and write.
 extern const uint64_t PLAN_SERIALIZATION_VERSION;
@@ -67,13 +64,6 @@ public:
 
 	void AddChild(unique_ptr<LogicalOperator> child);
 	virtual idx_t EstimateCardinality(ClientContext &context);
-
-	//! Serializes a LogicalOperator to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes an LogicalOperator to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-
-	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);

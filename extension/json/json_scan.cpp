@@ -5,8 +5,8 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -114,64 +114,6 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 
 void JSONScanData::SetCompression(const string &compression) {
 	options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(compression));
-}
-
-void JSONScanData::Serialize(FieldWriter &writer) const {
-	writer.WriteField<JSONScanType>(type);
-
-	options.Serialize(writer);
-
-	writer.WriteSerializable(reader_bind);
-
-	writer.WriteList<string>(files);
-
-	writer.WriteField<bool>(ignore_errors);
-	writer.WriteField<idx_t>(maximum_object_size);
-	writer.WriteField<bool>(auto_detect);
-	writer.WriteField<idx_t>(sample_size);
-	writer.WriteField<idx_t>(max_depth);
-
-	transform_options.Serialize(writer);
-	writer.WriteList<string>(names);
-	if (!date_format.empty()) {
-		writer.WriteString(date_format);
-	} else if (date_format_map.HasFormats(LogicalTypeId::DATE)) {
-		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier);
-	} else {
-		writer.WriteString("");
-	}
-	if (!timestamp_format.empty()) {
-		writer.WriteString(timestamp_format);
-	} else if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
-		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier);
-	} else {
-		writer.WriteString("");
-	}
-}
-
-void JSONScanData::Deserialize(ClientContext &context, FieldReader &reader) {
-	type = reader.ReadRequired<JSONScanType>();
-
-	options.Deserialize(reader);
-
-	reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
-
-	files = reader.ReadRequiredList<string>();
-	InitializeReaders(context);
-
-	ignore_errors = reader.ReadRequired<bool>();
-	maximum_object_size = reader.ReadRequired<idx_t>();
-	auto_detect = reader.ReadRequired<bool>();
-	sample_size = reader.ReadRequired<idx_t>();
-	max_depth = reader.ReadRequired<idx_t>();
-
-	transform_options.Deserialize(reader);
-	names = reader.ReadRequiredList<string>();
-	date_format = reader.ReadRequired<string>();
-	timestamp_format = reader.ReadRequired<string>();
-
-	InitializeFormats();
-	transform_options.date_format_map = &date_format_map;
 }
 
 string JSONScanData::GetDateFormat() const {
@@ -984,18 +926,6 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 	}
 }
 
-void JSONScan::Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-	auto &bind_data = bind_data_p->Cast<JSONScanData>();
-	bind_data.Serialize(writer);
-}
-
-unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, FieldReader &reader,
-                                               TableFunction &function) {
-	auto result = make_uniq<JSONScanData>();
-	result->Deserialize(state.context, reader);
-	return std::move(result);
-}
-
 void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
@@ -1020,10 +950,8 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.get_batch_index = GetBatchIndex;
 	table_function.cardinality = Cardinality;
 
-	table_function.serialize = Serialize;
-	table_function.deserialize = Deserialize;
-	table_function.format_serialize = FormatSerialize;
-	table_function.format_deserialize = FormatDeserialize;
+	table_function.serialize = FormatSerialize;
+	table_function.deserialize = FormatDeserialize;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

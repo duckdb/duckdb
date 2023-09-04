@@ -14,8 +14,6 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 struct BindInfo;
 
 struct MultiFileReaderOptions {
@@ -26,8 +24,6 @@ struct MultiFileReaderOptions {
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions FormatDeserialize(FormatDeserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;

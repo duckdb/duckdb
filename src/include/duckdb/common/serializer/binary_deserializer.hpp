@@ -8,13 +8,23 @@
 
 #pragma once
 
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 class ClientContext;
 
 class BinaryDeserializer : public FormatDeserializer {
+protected:
+	explicit BinaryDeserializer(ReadStream &stream) : stream(stream) {
+		deserialize_enum_from_string = false;
+	}
+
+	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		stream.ReadData(buffer, read_size);
+	}
+
 public:
 	template <class T>
 	unique_ptr<T> Deserialize() {
@@ -25,33 +35,15 @@ public:
 		return result;
 	}
 
-	template <class T>
-	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
-		BinaryDeserializer deserializer(ptr, length);
-		return deserializer.template Deserialize<T>();
-	}
-
-	template <class T>
-	static unique_ptr<T> Deserialize(ClientContext &context, bound_parameter_map_t &parameters, data_ptr_t ptr,
-	                                 idx_t length) {
-		BinaryDeserializer deserializer(ptr, length);
-		deserializer.Set<ClientContext &>(context);
-		deserializer.Set<bound_parameter_map_t &>(parameters);
-		return deserializer.template Deserialize<T>();
-	}
-
 private:
-	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
-		deserialize_enum_from_string = false;
-	}
-
-	data_ptr_t ptr;
-	data_ptr_t end_ptr;
+	ReadStream &stream;
 	idx_t nesting_level = 0;
 
 	// Allow peeking 1 field ahead
 	bool has_buffered_field = false;
 	field_id_t buffered_field = 0;
+
+private:
 	field_id_t PeekField() {
 		if (!has_buffered_field) {
 			buffered_field = ReadPrimitive<field_id_t>();
@@ -81,19 +73,20 @@ private:
 		return value;
 	}
 
-	void ReadData(data_ptr_t buffer, idx_t read_size) {
-		if (ptr + read_size > end_ptr) {
-			throw InternalException("Failed to deserialize: not enough data in buffer to fulfill read request");
-		}
-		memcpy(buffer, ptr, read_size);
-		ptr += read_size;
-	}
-
 	template <class T>
 	T VarIntDecode() {
+		// FIXME: maybe we should pass a source to EncodingUtil instead
+		uint8_t buffer[16];
+		idx_t varint_size;
+		for(varint_size = 0; varint_size < 16; varint_size++) {
+			ReadData(buffer + varint_size, 1);
+			if (!(buffer[varint_size] & 0x80)) {
+				break;
+			}
+		}
 		T value;
-		auto read_size = EncodingUtil::DecodeLEB128<T>(ptr, value);
-		ptr += read_size;
+		auto read_size = EncodingUtil::DecodeLEB128<T>(buffer, value);
+		D_ASSERT(read_size == varint_size);
 		return value;
 	}
 

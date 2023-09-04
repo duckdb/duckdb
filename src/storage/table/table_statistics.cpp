@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -98,19 +98,6 @@ unique_ptr<BaseStatistics> TableStatistics::CopyStats(idx_t i) {
 void TableStatistics::CopyStats(TableStatistics &other) {
 	for (auto &stats : column_stats) {
 		other.column_stats.push_back(stats->Copy());
-	}
-}
-
-void TableStatistics::Serialize(Serializer &serializer) {
-	for (auto &stats : column_stats) {
-		stats->Serialize(serializer);
-	}
-}
-
-void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
-	for (auto &col : columns.Physical()) {
-		auto stats = ColumnStatistics::Deserialize(source, col.GetType());
-		column_stats.push_back(std::move(stats));
 	}
 }
 

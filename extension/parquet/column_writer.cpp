@@ -18,6 +18,7 @@
 #include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #endif
 
 #include "miniz_wrapper.hpp"
@@ -41,7 +42,7 @@ using duckdb_parquet::format::Type;
 
 #define PARQUET_DEFINE_VALID 65535
 
-static void VarintEncode(uint32_t val, Serializer &ser) {
+static void VarintEncode(uint32_t val, WriteStream &ser) {
 	do {
 		uint8_t byte = val & 127;
 		val >>= 7;
@@ -124,13 +125,13 @@ idx_t RleBpEncoder::GetByteCount() {
 	return byte_count;
 }
 
-void RleBpEncoder::BeginWrite(Serializer &writer, uint32_t first_value) {
+void RleBpEncoder::BeginWrite(WriteStream &writer, uint32_t first_value) {
 	// start the RLE runs
 	last_value = first_value;
 	current_run_count = 1;
 }
 
-void RleBpEncoder::WriteRun(Serializer &writer) {
+void RleBpEncoder::WriteRun(WriteStream &writer) {
 	// write the header of the run
 	VarintEncode(current_run_count << 1, writer);
 	// now write the value
@@ -156,7 +157,7 @@ void RleBpEncoder::WriteRun(Serializer &writer) {
 	current_run_count = 1;
 }
 
-void RleBpEncoder::WriteValue(Serializer &writer, uint32_t value) {
+void RleBpEncoder::WriteValue(WriteStream &writer, uint32_t value) {
 	if (value != last_value) {
 		WriteRun(writer);
 		last_value = value;
@@ -165,7 +166,7 @@ void RleBpEncoder::WriteValue(Serializer &writer, uint32_t value) {
 	}
 }
 
-void RleBpEncoder::FinishWrite(Serializer &writer) {
+void RleBpEncoder::FinishWrite(WriteStream &writer) {
 	WriteRun(writer);
 }
 
@@ -362,7 +363,7 @@ public:
 	void FinalizeWrite(ColumnWriterState &state) override;
 
 protected:
-	void WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
+	void WriteLevels(WriteStream &temp_writer, const vector<uint16_t> &levels, idx_t max_value, idx_t start_offset,
 	                 idx_t count);
 
 	virtual duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state);
@@ -377,12 +378,12 @@ protected:
 	virtual unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state);
 
 	//! Flushes the writer for a specific page. Only used for scalar types.
-	virtual void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state);
+	virtual void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state);
 
 	//! Retrieves the row size of a vector at the specified location. Only used for scalar types.
 	virtual idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state);
 	//! Writes a (subset of a) vector to the specified serializer. Only used for scalar types.
-	virtual void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	virtual void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
 	                         Vector &vector, idx_t chunk_start, idx_t chunk_end) = 0;
 
 	virtual bool HasDictionary(BasicColumnWriterState &state_p) {
@@ -417,7 +418,7 @@ unique_ptr<ColumnWriterPageState> BasicColumnWriter::InitializePageState(BasicCo
 	return nullptr;
 }
 
-void BasicColumnWriter::FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state) {
+void BasicColumnWriter::FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state) {
 }
 
 void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
@@ -496,7 +497,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	NextPage(state);
 }
 
-void BasicColumnWriter::WriteLevels(Serializer &temp_writer, const vector<uint16_t> &levels, idx_t max_value,
+void BasicColumnWriter::WriteLevels(WriteStream &temp_writer, const vector<uint16_t> &levels, idx_t max_value,
                                     idx_t offset, idx_t count) {
 	if (levels.empty() || count == 0) {
 		return;
@@ -813,7 +814,7 @@ struct ParquetHugeintOperator {
 
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, idx_t chunk_start, idx_t chunk_end,
-                                ValidityMask &mask, Serializer &ser) {
+                                ValidityMask &mask, WriteStream &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {
@@ -838,7 +839,7 @@ public:
 		return OP::template InitializeStats<SRC, TGT>();
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		TemplatedWritePlain<SRC, TGT, OP>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
@@ -898,7 +899,7 @@ public:
 		return make_uniq<BooleanStatisticsState>();
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &stats = stats_p->Cast<BooleanStatisticsState>();
 		auto &state = state_p->Cast<BooleanWriterPageState>();
@@ -929,7 +930,7 @@ public:
 		return make_uniq<BooleanWriterPageState>();
 	}
 
-	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
 		auto &state = state_p->Cast<BooleanWriterPageState>();
 		if (state.byte_pos > 0) {
 			temp_writer.Write<uint8_t>(state.byte);
@@ -1023,7 +1024,7 @@ public:
 		return make_uniq<FixedDecimalStatistics>();
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
@@ -1072,7 +1073,7 @@ public:
 		}
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
@@ -1114,7 +1115,7 @@ public:
 		Store<uint32_t>(input.micros / 1000, result + sizeof(uint32_t) * 2);
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<interval_t>(input_column);
@@ -1313,7 +1314,7 @@ public:
 		}
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &page_state = page_state_p->Cast<StringWriterPageState>();
 		auto &mask = FlatVector::Validity(input_column);
@@ -1356,7 +1357,7 @@ public:
 		return make_uniq<StringWriterPageState>(state.key_bit_width, state.dictionary);
 	}
 
-	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
 		auto &page_state = state_p->Cast<StringWriterPageState>();
 		if (page_state.bit_width != 0) {
 			if (!page_state.written_value) {
@@ -1453,7 +1454,7 @@ public:
 	}
 
 	template <class T>
-	void WriteEnumInternal(Serializer &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
+	void WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
 	                       EnumWriterPageState &page_state) {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<T>(input_column);
@@ -1473,7 +1474,7 @@ public:
 		}
 	}
 
-	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
+	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &page_state = page_state_p->Cast<EnumWriterPageState>();
 		switch (enum_type.InternalType()) {
@@ -1495,7 +1496,7 @@ public:
 		return make_uniq<EnumWriterPageState>(bit_width);
 	}
 
-	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
+	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
 		auto &page_state = state_p->Cast<EnumWriterPageState>();
 		if (!page_state.written_value) {
 			// all values are null

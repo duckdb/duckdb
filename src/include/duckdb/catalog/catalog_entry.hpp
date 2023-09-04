@@ -74,11 +74,6 @@ public:
 
 	virtual void Verify(Catalog &catalog);
 
-	//! Serialize the meta information of the CatalogEntry a serializer
-	void Serialize(Serializer &serializer) const;
-	//! Deserializes to a CreateInfo
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &source);
-
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
 

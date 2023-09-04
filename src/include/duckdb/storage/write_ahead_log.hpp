@@ -38,14 +38,14 @@ class TransactionManager;
 
 class ReplayState {
 public:
-	ReplayState(AttachedDatabase &db, ClientContext &context, Deserializer &source)
+	ReplayState(AttachedDatabase &db, ClientContext &context, ReadStream &source)
 	    : db(db), context(context), catalog(db.GetCatalog()), source(source), deserialize_only(false) {
 	}
 
 	AttachedDatabase &db;
 	ClientContext &context;
 	Catalog &catalog;
-	Deserializer &source;
+	ReadStream &source;
 	optional_ptr<TableCatalogEntry> current_table;
 	bool deserialize_only;
 	MetaBlockPointer checkpoint_id;

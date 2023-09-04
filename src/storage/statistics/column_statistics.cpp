@@ -1,7 +1,6 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -54,16 +53,6 @@ void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 
 shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
 	return make_shared<ColumnStatistics>(stats.Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
-}
-void ColumnStatistics::Serialize(Serializer &serializer) const {
-	stats.Serialize(serializer);
-	serializer.WriteOptional(distinct_stats);
-}
-
-shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &source, const LogicalType &type) {
-	auto stats = BaseStatistics::Deserialize(source, type);
-	auto distinct_stats = source.ReadOptional<DistinctStatistics>();
-	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
 }
 
 void ColumnStatistics::FormatSerialize(FormatSerializer &serializer) const {

@@ -48,8 +48,6 @@ public:
 public:
 	unique_ptr<VacuumInfo> Copy();
 
-	void Serialize(Serializer &serializer) const;
-	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
 };

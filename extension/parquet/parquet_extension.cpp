@@ -18,7 +18,6 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
@@ -35,8 +34,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #endif
 
@@ -141,18 +140,6 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
-void ParquetOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField<bool>(binary_as_string);
-	writer.WriteField<bool>(file_row_number);
-	writer.WriteSerializable(file_options);
-}
-
-void ParquetOptions::Deserialize(FieldReader &reader) {
-	binary_as_string = reader.ReadRequired<bool>();
-	file_row_number = reader.ReadRequired<bool>();
-	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
-}
-
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
@@ -184,8 +171,6 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
-		table_function.format_serialize = ParquetScanFormatSerialize;
-		table_function.format_deserialize = ParquetScanFormatDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -415,28 +400,7 @@ public:
 		return data.batch_index;
 	}
 
-	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-	                                 const TableFunction &function) {
-		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		writer.WriteList<string>(bind_data.files);
-		writer.WriteRegularSerializableList(bind_data.types);
-		writer.WriteList<string>(bind_data.names);
-		bind_data.parquet_options.Serialize(writer);
-	}
-
-	static unique_ptr<FunctionData> ParquetScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                                       TableFunction &function) {
-		auto &context = state.context;
-		auto files = reader.ReadRequiredList<string>();
-		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		auto names = reader.ReadRequiredList<string>();
-		ParquetOptions options(context);
-		options.Deserialize(reader);
-
-		return ParquetScanBindInternal(context, files, types, names, options);
-	}
-
-	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void ParquetScanSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                       const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		serializer.WriteProperty(100, "files", bind_data.files);
@@ -445,7 +409,7 @@ public:
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,
+	static unique_ptr<FunctionData> ParquetScanDeserialize(FormatDeserializer &deserializer,
 	                                                             TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
@@ -882,24 +846,25 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 }
 
 // LCOV_EXCL_START
-static void ParquetCopySerialize(FieldWriter &writer, const FunctionData &bind_data_p, const CopyFunction &function) {
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
-	writer.WriteList<string>(bind_data.column_names);
-	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
-	writer.WriteField<idx_t>(bind_data.row_group_size);
+static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionData &bind_data_p, const CopyFunction &function) {
+	throw InternalException("FIXME ParquetCopySerialize");
+//	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+//	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+//	writer.WriteList<string>(bind_data.column_names);
+//	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
+//	writer.WriteField<idx_t>(bind_data.row_group_size);
 }
 
-static unique_ptr<FunctionData> ParquetCopyDeserialize(ClientContext &context, FieldReader &reader,
-                                                       CopyFunction &function) {
-	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
-
-	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	data->column_names = reader.ReadRequiredList<string>();
-	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
-	data->row_group_size = reader.ReadRequired<idx_t>();
-
-	return std::move(data);
+static unique_ptr<FunctionData> ParquetCopyDeserialize(FormatDeserializer &deserializer, CopyFunction &function) {
+	throw InternalException("FIXME ParquetCopySerialize");
+//	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+//
+//	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+//	data->column_names = reader.ReadRequiredList<string>();
+//	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
+//	data->row_group_size = reader.ReadRequired<idx_t>();
+//
+//	return std::move(data);
 }
 // LCOV_EXCL_STOP
 

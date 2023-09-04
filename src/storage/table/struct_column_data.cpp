@@ -265,7 +265,7 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &source) {
+void StructColumnData::DeserializeColumn(ReadStream &source) {
 	validity.DeserializeColumn(source);
 	for (auto &sub_column : sub_columns) {
 		sub_column->DeserializeColumn(source);

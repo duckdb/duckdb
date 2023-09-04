@@ -11,6 +11,7 @@
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 
 #include <limits>
 
@@ -37,10 +38,9 @@ void SubstringDetection(char &str_1, string &str_2, const string &name_str_1, co
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
-
-void WriteQuoteOrEscape(Serializer &serializer, char quote_or_escape) {
+void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 	if (quote_or_escape != '\0') {
-		serializer.Write(quote_or_escape);
+		writer.Write(quote_or_escape);
 	}
 }
 
@@ -214,7 +214,7 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	return false;
 }
 
-static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, const char *str, idx_t len,
+static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const char *str, idx_t len,
                               bool force_quote) {
 	auto &options = csv_data.options;
 	if (!force_quote) {
@@ -236,9 +236,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 
 		if (!requires_escape) {
 			// fast path: no need to escape anything
-			WriteQuoteOrEscape(serializer, options.dialect_options.state_machine_options.quote);
-			serializer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(serializer, options.dialect_options.state_machine_options.quote);
+			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+			writer.WriteData(const_data_ptr_cast(str), len);
+			WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
 			return;
 		}
 
@@ -252,11 +252,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			new_val = AddEscapes(options.dialect_options.state_machine_options.quote,
 			                     options.dialect_options.state_machine_options.escape, new_val);
 		}
-		WriteQuoteOrEscape(serializer, options.dialect_options.state_machine_options.quote);
-		serializer.WriteBufferData(new_val);
-		WriteQuoteOrEscape(serializer, options.dialect_options.state_machine_options.quote);
+		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
+		writer.WriteBufferData(new_val);
+		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
 	} else {
-		serializer.WriteData(const_data_ptr_cast(str), len);
+		writer.WriteData(const_data_ptr_cast(str), len);
 	}
 }
 

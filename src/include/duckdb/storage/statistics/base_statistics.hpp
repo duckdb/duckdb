@@ -22,10 +22,6 @@ struct SelectionVector;
 class FormatSerializer;
 class FormatDeserializer;
 
-class Serializer;
-class Deserializer;
-class FieldWriter;
-class FieldReader;
 class Vector;
 struct UnifiedVectorFormat;
 
@@ -95,10 +91,6 @@ public:
 	unique_ptr<BaseStatistics> ToUnique() const;
 	void CopyBase(const BaseStatistics &orig);
 
-	void Serialize(Serializer &serializer) const;
-	void Serialize(FieldWriter &writer) const;
-	static BaseStatistics Deserialize(Deserializer &source, LogicalType type);
-
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer);
 
@@ -122,7 +114,6 @@ private:
 
 	static BaseStatistics CreateUnknownType(LogicalType type);
 	static BaseStatistics CreateEmptyType(LogicalType type);
-	static BaseStatistics DeserializeType(FieldReader &reader, LogicalType type);
 	static BaseStatistics FromConstantType(const Value &input);
 
 private:

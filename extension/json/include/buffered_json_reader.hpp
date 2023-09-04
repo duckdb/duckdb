@@ -31,9 +31,6 @@ public:
 	MultiFileReaderOptions file_options;
 
 public:
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
-
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static BufferedJSONReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
 };

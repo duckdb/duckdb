@@ -33,8 +33,6 @@ public:
 	void SetDistinct(unique_ptr<DistinctStatistics> distinct_stats);
 
 	shared_ptr<ColumnStatistics> Copy() const;
-	void Serialize(Serializer &serializer) const;
-	static shared_ptr<ColumnStatistics> Deserialize(Deserializer &source, const LogicalType &type);
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static shared_ptr<ColumnStatistics> FormatDeserialize(FormatDeserializer &source);

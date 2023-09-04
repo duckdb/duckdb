@@ -13,8 +13,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 class Vector;
 class FormatSerializer;
 class FormatDeserializer;
@@ -35,12 +33,6 @@ public:
 	void Merge(const DistinctStatistics &other);
 
 	unique_ptr<DistinctStatistics> Copy() const;
-
-	void Serialize(Serializer &serializer) const;
-	void Serialize(FieldWriter &writer) const;
-
-	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &source);
-	static unique_ptr<DistinctStatistics> Deserialize(FieldReader &reader);
 
 	void Update(Vector &update, idx_t count, bool sample = true);
 	void Update(UnifiedVectorFormat &update_data, const LogicalType &ptype, idx_t count, bool sample = true);

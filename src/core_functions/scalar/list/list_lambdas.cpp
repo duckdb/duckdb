@@ -8,8 +8,8 @@
 #include "duckdb/planner/expression/bound_lambda_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -23,13 +23,6 @@ struct ListLambdaBindData : public FunctionData {
 public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		throw NotImplementedException("FIXME: list lambda serialize");
-	}
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            ScalarFunction &bound_function) {
-		throw NotImplementedException("FIXME: list lambda deserialize");
-	}
 
 	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const ScalarFunction &function) {
@@ -399,10 +392,8 @@ ScalarFunction ListTransformFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
 	                   ListTransformFunction, ListTransformBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.format_serialize = ListLambdaBindData::FormatSerialize;
-	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
+	fun.serialize = ListLambdaBindData::FormatSerialize;
+	fun.deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 
@@ -410,10 +401,8 @@ ScalarFunction ListFilterFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
 	                   ListFilterFunction, ListFilterBind, nullptr, nullptr);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	fun.serialize = ListLambdaBindData::Serialize;
-	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.format_serialize = ListLambdaBindData::FormatSerialize;
-	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
+	fun.serialize = ListLambdaBindData::FormatSerialize;
+	fun.deserialize = ListLambdaBindData::FormatDeserialize;
 	return fun;
 }
 

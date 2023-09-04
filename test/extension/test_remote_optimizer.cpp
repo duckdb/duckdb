@@ -84,26 +84,28 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
-			con2.BeginTransaction();
-			PlanDeserializationState state(*con2.context);
-			auto plan = LogicalOperator::Deserialize(deserializer, state);
-			plan->ResolveOperatorTypes();
-			con2.Commit();
 
-			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
-			auto result = con2.Query(std::move(statement));
-			auto &collection = result->Collection();
-			idx_t num_chunks = collection.ChunkCount();
-			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
-			for (auto &chunk : collection.Chunks()) {
-				BufferedSerializer serializer;
-				chunk.Serialize(serializer);
-				auto data = serializer.GetData();
-				idx_t len = data.size;
-				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
-			}
+			throw InternalException("FIXME loadable extension serialization");
+//			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
+//			con2.BeginTransaction();
+//			PlanDeserializationState state(*con2.context);
+//			auto plan = LogicalOperator::Deserialize(deserializer, state);
+//			plan->ResolveOperatorTypes();
+//			con2.Commit();
+//
+//			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
+//			auto result = con2.Query(std::move(statement));
+//			auto &collection = result->Collection();
+//			idx_t num_chunks = collection.ChunkCount();
+//			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
+//			for (auto &chunk : collection.Chunks()) {
+//				BufferedSerializer serializer;
+//				chunk.Serialize(serializer);
+//				auto data = serializer.GetData();
+//				idx_t len = data.size;
+//				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+//				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
+//			}
 		}
 		exit(0);
 	} else if (pid > 0) { // parent process

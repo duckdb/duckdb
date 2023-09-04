@@ -1,6 +1,5 @@
 #include "duckdb/parser/constraints/check_constraint.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -14,15 +13,6 @@ string CheckConstraint::ToString() const {
 
 unique_ptr<Constraint> CheckConstraint::Copy() const {
 	return make_uniq<CheckConstraint>(expression->Copy());
-}
-
-void CheckConstraint::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*expression);
-}
-
-unique_ptr<Constraint> CheckConstraint::Deserialize(FieldReader &source) {
-	auto expression = source.ReadRequiredSerializable<ParsedExpression>();
-	return make_uniq<CheckConstraint>(std::move(expression));
 }
 
 } // namespace duckdb

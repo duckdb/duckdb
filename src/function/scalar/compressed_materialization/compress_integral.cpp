@@ -143,18 +143,20 @@ static scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalT
 	}
 }
 
-static void CMIntegralSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-	writer.WriteRegularSerializableList(function.arguments);
-	writer.WriteSerializable(function.return_type);
+static void CMIntegralSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data, const ScalarFunction &function) {
+	throw InternalException("CMIntegralSerialize");
+//	writer.WriteRegularSerializableList(function.arguments);
+//	writer.WriteSerializable(function.return_type);
 }
 
 template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
-unique_ptr<FunctionData> CMIntegralDeserialize(PlanDeserializationState &state, FieldReader &reader,
+unique_ptr<FunctionData> CMIntegralDeserialize(FormatDeserializer &deserializer,
                                                ScalarFunction &function) {
-	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	function.function =
-	    GET_FUNCTION(function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
-	return nullptr;
+	throw InternalException("CMIntegralDeserialize");
+//	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+//	function.function =
+//	    GET_FUNCTION(function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
+//	return nullptr;
 }
 
 ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {

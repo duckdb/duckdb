@@ -4,9 +4,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
@@ -229,37 +228,6 @@ string DataChunk::ToString() const {
 		retval += "- " + data[i].ToString(size()) + "\n";
 	}
 	return retval;
-}
-
-void DataChunk::Serialize(Serializer &serializer) {
-	// write the count
-	serializer.Write<sel_t>(size());
-	serializer.Write<idx_t>(ColumnCount());
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		// write the types
-		data[col_idx].GetType().Serialize(serializer);
-	}
-	// write the data
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].Serialize(size(), serializer);
-	}
-}
-
-void DataChunk::Deserialize(Deserializer &source) {
-	auto rows = source.Read<sel_t>();
-	idx_t column_count = source.Read<idx_t>();
-
-	vector<LogicalType> types;
-	for (idx_t i = 0; i < column_count; i++) {
-		types.push_back(LogicalType::Deserialize(source));
-	}
-	Initialize(Allocator::DefaultAllocator(), types);
-	// now load the column data
-	SetCardinality(rows);
-	for (idx_t i = 0; i < column_count; i++) {
-		data[i].Deserialize(rows, source);
-	}
-	Verify();
 }
 
 void DataChunk::FormatSerialize(FormatSerializer &serializer) const {

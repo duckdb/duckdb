@@ -17,8 +17,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class FieldWriter;
-class FieldReader;
 struct SelectionVector;
 class Vector;
 
@@ -57,9 +55,6 @@ struct StringStats {
 	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);
 	//! FIXME: make this part of Set on statistics
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
-
-	DUCKDB_API static void Serialize(const BaseStatistics &stats, FieldWriter &writer);
-	DUCKDB_API static BaseStatistics Deserialize(FieldReader &reader, LogicalType type);
 
 	DUCKDB_API static void FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer);
 	DUCKDB_API static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer, LogicalType type);

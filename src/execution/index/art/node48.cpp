@@ -169,45 +169,45 @@ optional_ptr<Node> Node48::GetNextChild(uint8_t &byte) {
 }
 
 BlockPointer Node48::Serialize(ART &art, MetadataWriter &writer) {
-
-	// recurse into children and retrieve child block pointers
-	vector<BlockPointer> child_block_pointers;
-	for (idx_t i = 0; i < Node::NODE_48_CAPACITY; i++) {
-		child_block_pointers.push_back(children[i].Serialize(art, writer));
-	}
-
-	// get pointer and write fields
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(NType::NODE_48);
-	writer.Write<uint8_t>(count);
-
-	// write key values
-	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
-		writer.Write(child_index[i]);
-	}
-
-	// write child block pointers
-	for (auto &child_block_pointer : child_block_pointers) {
-		writer.Write(child_block_pointer.block_id);
-		writer.Write(child_block_pointer.offset);
-	}
-
-	return block_pointer;
+	throw InternalException("TODO");
+//	// recurse into children and retrieve child block pointers
+//	vector<BlockPointer> child_block_pointers;
+//	for (idx_t i = 0; i < Node::NODE_48_CAPACITY; i++) {
+//		child_block_pointers.push_back(children[i].Serialize(art, writer));
+//	}
+//
+//	// get pointer and write fields
+//	auto block_pointer = writer.GetBlockPointer();
+//	writer.Write(NType::NODE_48);
+//	writer.Write<uint8_t>(count);
+//
+//	// write key values
+//	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+//		writer.Write(child_index[i]);
+//	}
+//
+//	// write child block pointers
+//	for (auto &child_block_pointer : child_block_pointers) {
+//		writer.Write(child_block_pointer.block_id);
+//		writer.Write(child_block_pointer.offset);
+//	}
+//
+//	return block_pointer;
 }
 
 void Node48::Deserialize(MetadataReader &reader) {
-
-	count = reader.Read<uint8_t>();
-
-	// read key values
-	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
-		child_index[i] = reader.Read<uint8_t>();
-	}
-
-	// read child block pointers
-	for (idx_t i = 0; i < Node::NODE_48_CAPACITY; i++) {
-		children[i] = Node(reader);
-	}
+throw InternalException("TODO");
+//	count = reader.Read<uint8_t>();
+//
+//	// read key values
+//	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+//		child_index[i] = reader.Read<uint8_t>();
+//	}
+//
+//	// read child block pointers
+//	for (idx_t i = 0; i < Node::NODE_48_CAPACITY; i++) {
+//		children[i] = Node(reader);
+//	}
 }
 
 void Node48::Vacuum(ART &art, const ARTFlags &flags) {

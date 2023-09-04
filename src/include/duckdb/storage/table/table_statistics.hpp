@@ -49,9 +49,6 @@ public:
 
 	unique_ptr<TableStatisticsLock> GetLock();
 
-	void Serialize(Serializer &serializer);
-	void Deserialize(Deserializer &source, ColumnList &columns);
-
 	void FormatSerialize(FormatSerializer &serializer);
 	void FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns);
 

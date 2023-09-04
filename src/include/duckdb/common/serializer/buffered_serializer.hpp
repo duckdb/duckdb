@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
@@ -20,7 +20,7 @@ struct BinaryData {
 	idx_t size;
 };
 
-class BufferedSerializer : public Serializer {
+class BufferedSerializer : public WriteStream {
 public:
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
@@ -35,7 +35,7 @@ public:
 	BinaryData blob;
 
 public:
-	void WriteData(const_data_ptr_t buffer, uint64_t write_size) override;
+	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
 
 	//! Retrieves the data after the writing has been completed
 	BinaryData GetData() {

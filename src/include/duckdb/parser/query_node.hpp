@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
@@ -70,12 +69,6 @@ public:
 
 	//! Create a copy of this QueryNode
 	virtual unique_ptr<QueryNode> Copy() const = 0;
-	//! Serializes a QueryNode to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	//! Serializes a QueryNode to a stand-alone binary blob
-	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a QueryNode
-	DUCKDB_API static unique_ptr<QueryNode> Deserialize(Deserializer &source);
 
 	string ResultModifiersToString() const;
 

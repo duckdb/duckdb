@@ -110,35 +110,35 @@ optional_ptr<Node> Node256::GetNextChild(uint8_t &byte) {
 }
 
 BlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
-
-	// recurse into children and retrieve child block pointers
-	vector<BlockPointer> child_block_pointers;
-	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
-		child_block_pointers.push_back(children[i].Serialize(art, writer));
-	}
-
-	// get pointer and write fields
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(NType::NODE_256);
-	writer.Write<uint16_t>(count);
-
-	// write child block pointers
-	for (auto &child_block_pointer : child_block_pointers) {
-		writer.Write(child_block_pointer.block_id);
-		writer.Write(child_block_pointer.offset);
-	}
-
-	return block_pointer;
+throw InternalException("TODO");
+//	// recurse into children and retrieve child block pointers
+//	vector<BlockPointer> child_block_pointers;
+//	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+//		child_block_pointers.push_back(children[i].Serialize(art, writer));
+//	}
+//
+//	// get pointer and write fields
+//	auto block_pointer = writer.GetBlockPointer();
+//	writer.Write(NType::NODE_256);
+//	writer.Write<uint16_t>(count);
+//
+//	// write child block pointers
+//	for (auto &child_block_pointer : child_block_pointers) {
+//		writer.Write(child_block_pointer.block_id);
+//		writer.Write(child_block_pointer.offset);
+//	}
+//
+//	return block_pointer;
 }
 
 void Node256::Deserialize(MetadataReader &reader) {
-
-	count = reader.Read<uint16_t>();
-
-	// read child block pointers
-	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
-		children[i] = Node(reader);
-	}
+throw InternalException("TODO");
+//	count = reader.Read<uint16_t>();
+//
+//	// read child block pointers
+//	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+//		children[i] = Node(reader);
+//	}
 }
 
 void Node256::Vacuum(ART &art, const ARTFlags &flags) {

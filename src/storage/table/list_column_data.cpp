@@ -346,7 +346,7 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(Deserializer &source) {
+void ListColumnData::DeserializeColumn(ReadStream &source) {
 	ColumnData::DeserializeColumn(source);
 	validity.DeserializeColumn(source);
 	child_column->DeserializeColumn(source);

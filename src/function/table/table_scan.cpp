@@ -1,7 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/main/client_config.hpp"
 #include "duckdb/optimizer/matcher/expression_matcher.hpp"
@@ -15,8 +14,8 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -417,38 +416,6 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
-
-	writer.WriteString(bind_data.table.schema.name);
-	writer.WriteString(bind_data.table.name);
-	writer.WriteField<bool>(bind_data.is_index_scan);
-	writer.WriteField<bool>(bind_data.is_create_index);
-	writer.WriteList<row_t>(bind_data.result_ids);
-	writer.WriteString(bind_data.table.schema.catalog.GetName());
-}
-
-static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                     TableFunction &function) {
-	auto schema_name = reader.ReadRequired<string>();
-	auto table_name = reader.ReadRequired<string>();
-	auto is_index_scan = reader.ReadRequired<bool>();
-	auto is_create_index = reader.ReadRequired<bool>();
-	auto result_ids = reader.ReadRequiredList<row_t>();
-	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
-
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(state.context, catalog_name, schema_name, table_name);
-	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
-		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
-	}
-
-	auto result = make_uniq<TableScanBindData>(catalog_entry.Cast<DuckTableEntry>());
-	result->is_index_scan = is_index_scan;
-	result->is_create_index = is_create_index;
-	result->result_ids = std::move(result_ids);
-	return std::move(result);
-}
-
 static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
@@ -489,10 +456,8 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_batch_index = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
-	scan_function.serialize = TableScanSerialize;
-	scan_function.deserialize = TableScanDeserialize;
-	scan_function.format_serialize = TableScanFormatSerialize;
-	scan_function.format_deserialize = TableScanFormatDeserialize;
+	scan_function.serialize = TableScanFormatSerialize;
+	scan_function.deserialize = TableScanFormatDeserialize;
 	return scan_function;
 }
 
@@ -511,10 +476,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
-	scan_function.serialize = TableScanSerialize;
-	scan_function.deserialize = TableScanDeserialize;
-	scan_function.format_serialize = TableScanFormatSerialize;
-	scan_function.format_deserialize = TableScanFormatDeserialize;
+	scan_function.serialize = TableScanFormatSerialize;
+	scan_function.deserialize = TableScanFormatDeserialize;
 	return scan_function;
 }
 

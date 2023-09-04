@@ -18,12 +18,13 @@ void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
 	D_ASSERT(!columns.empty());
 
-	// deserialize the total table statistics
-	info.data->table_stats.Deserialize(reader, columns);
-
-	// deserialize each of the individual row groups
-	info.data->row_group_count = reader.Read<uint64_t>();
-	info.data->block_pointer = reader.GetMetaBlockPointer();
+	throw InternalException("TODO");
+//	// deserialize the total table statistics
+//	info.data->table_stats.Deserialize(reader, columns);
+//
+//	// deserialize each of the individual row groups
+//	info.data->row_group_count = reader.Read<uint64_t>();
+//	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

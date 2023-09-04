@@ -20,8 +20,6 @@
 namespace duckdb {
 
 class CastFunctionSet;
-class Deserializer;
-class Serializer;
 struct GetCastFunctionInput;
 struct ExtraValueInfo;
 
@@ -224,11 +222,9 @@ public:
 	DUCKDB_API void Reinterpret(LogicalType new_type);
 
 	//! Serializes a Value to a stand-alone binary blob
-	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static Value FormatDeserialize(FormatDeserializer &deserializer);
 	//! Deserializes a Value from a blob
-	DUCKDB_API static Value Deserialize(Deserializer &source);
+	DUCKDB_API static Value FormatDeserialize(FormatDeserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators

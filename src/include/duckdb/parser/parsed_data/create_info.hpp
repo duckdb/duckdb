@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/enums/catalog_type.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
 #include "duckdb/planner/plan_serialization.hpp"
 
@@ -54,17 +53,7 @@ public:
 	//! The SQL string of the CREATE statement
 	string sql;
 
-protected:
-	virtual void SerializeInternal(Serializer &) const = 0;
-
-	void DeserializeBase(Deserializer &deserializer);
-
 public:
-	void Serialize(Serializer &serializer) const;
-
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
-	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
-
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
 

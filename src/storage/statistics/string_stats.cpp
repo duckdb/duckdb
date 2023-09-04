@@ -1,14 +1,13 @@
 #include "duckdb/storage/statistics/string_stats.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -97,15 +96,6 @@ void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_unicode = true;
 }
 
-void StringStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
-	auto &string_data = StringStats::GetDataUnsafe(stats);
-	writer.WriteBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
-	writer.WriteBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
-	writer.WriteField<bool>(string_data.has_unicode);
-	writer.WriteField<bool>(string_data.has_max_string_length);
-	writer.WriteField<uint32_t>(string_data.max_string_length);
-}
-
 void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	serializer.WriteProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
@@ -113,17 +103,6 @@ void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer 
 	serializer.WriteProperty(202, "has_unicode", string_data.has_unicode);
 	serializer.WriteProperty(203, "has_max_string_length", string_data.has_max_string_length);
 	serializer.WriteProperty(204, "max_string_length", string_data.max_string_length);
-}
-
-BaseStatistics StringStats::Deserialize(FieldReader &reader, LogicalType type) {
-	BaseStatistics result(std::move(type));
-	auto &string_data = StringStats::GetDataUnsafe(result);
-	reader.ReadBlob(string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
-	reader.ReadBlob(string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
-	string_data.has_unicode = reader.ReadRequired<bool>();
-	string_data.has_max_string_length = reader.ReadRequired<bool>();
-	string_data.max_string_length = reader.ReadRequired<uint32_t>();
-	return result;
 }
 
 BaseStatistics StringStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {

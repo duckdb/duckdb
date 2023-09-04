@@ -33,12 +33,7 @@ struct CreateTableInfo : public CreateInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
 
-protected:
-	void SerializeInternal(Serializer &serializer) const override;
-
 public:
-	DUCKDB_API static unique_ptr<CreateTableInfo> Deserialize(Deserializer &deserializer);
-
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;

@@ -14,8 +14,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class FieldWriter;
-class FieldReader;
 class ClientContext;
 
 //!  The Expression class represents a bound Expression with a return type
@@ -54,15 +52,6 @@ public:
 	static bool ListEquals(const vector<unique_ptr<Expression>> &left, const vector<unique_ptr<Expression>> &right);
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
-
-	//! Serializes an Expression to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes an Expression to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-
-	//! Deserializes a blob back into an Expression [CAN THROW:
-	//! SerializationException]
-	static unique_ptr<Expression> Deserialize(Deserializer &source, PlanDeserializationState &state);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);

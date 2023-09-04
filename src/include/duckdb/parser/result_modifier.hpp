@@ -14,8 +14,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
-class FieldWriter;
-class FieldReader;
 class FormatDeserializer;
 class FormatSerializer;
 
@@ -45,12 +43,6 @@ public:
 
 	//! Create a copy of this ResultModifier
 	virtual unique_ptr<ResultModifier> Copy() const = 0;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a ResultModifier
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
@@ -87,9 +79,7 @@ struct OrderByNode {
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	void Serialize(Serializer &serializer) const;
 	string ToString() const;
-	static OrderByNode Deserialize(Deserializer &source);
 
 	void FormatSerialize(FormatSerializer &serializer) const;
 	static OrderByNode FormatDeserialize(FormatDeserializer &deserializer);
@@ -111,8 +101,6 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
@@ -132,8 +120,6 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
@@ -155,8 +141,6 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
@@ -178,8 +162,6 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);

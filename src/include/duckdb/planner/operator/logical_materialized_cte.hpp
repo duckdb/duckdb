@@ -36,8 +36,6 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return children[1]->GetColumnBindings();
 	}
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);

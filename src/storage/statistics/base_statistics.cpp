@@ -1,13 +1,12 @@
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -274,34 +273,6 @@ void BaseStatistics::SetDistinctCount(idx_t count) {
 	this->distinct_count = count;
 }
 
-void BaseStatistics::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<bool>(has_null);
-	writer.WriteField<bool>(has_no_null);
-	writer.WriteField<idx_t>(distinct_count);
-	Serialize(writer);
-	writer.Finalize();
-}
-
-void BaseStatistics::Serialize(FieldWriter &writer) const {
-	switch (GetStatsType()) {
-	case StatisticsType::NUMERIC_STATS:
-		NumericStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::STRING_STATS:
-		StringStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::LIST_STATS:
-		ListStats::Serialize(*this, writer);
-		break;
-	case StatisticsType::STRUCT_STATS:
-		StructStats::Serialize(*this, writer);
-		break;
-	default:
-		break;
-	}
-}
-
 void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "has_null", has_null);
 	serializer.WriteProperty(101, "has_no_null", has_no_null);
@@ -359,34 +330,6 @@ BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserialize
 	stats.distinct_count = distinct_count;
 
 	return stats;
-}
-
-BaseStatistics BaseStatistics::DeserializeType(FieldReader &reader, LogicalType type) {
-	switch (GetStatsType(type)) {
-	case StatisticsType::NUMERIC_STATS:
-		return NumericStats::Deserialize(reader, std::move(type));
-	case StatisticsType::STRING_STATS:
-		return StringStats::Deserialize(reader, std::move(type));
-	case StatisticsType::LIST_STATS:
-		return ListStats::Deserialize(reader, std::move(type));
-	case StatisticsType::STRUCT_STATS:
-		return StructStats::Deserialize(reader, std::move(type));
-	default:
-		return BaseStatistics(std::move(type));
-	}
-}
-
-BaseStatistics BaseStatistics::Deserialize(Deserializer &source, LogicalType type) {
-	FieldReader reader(source);
-	bool has_null = reader.ReadRequired<bool>();
-	bool has_no_null = reader.ReadRequired<bool>();
-	idx_t distinct_count = reader.ReadRequired<idx_t>();
-	auto result = DeserializeType(reader, std::move(type));
-	result.has_null = has_null;
-	result.has_no_null = has_no_null;
-	result.distinct_count = distinct_count;
-	reader.Finalize();
-	return result;
 }
 
 string BaseStatistics::ToString() const {

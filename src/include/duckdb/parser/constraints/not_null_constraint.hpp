@@ -28,11 +28,6 @@ public:
 
 	DUCKDB_API unique_ptr<Constraint> Copy() const override;
 
-	//! Serialize to a stand-alone binary blob
-	DUCKDB_API void Serialize(FieldWriter &writer) const override;
-	//! Deserializes a NotNullConstraint
-	DUCKDB_API static unique_ptr<Constraint> Deserialize(FieldReader &source);
-
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
 	DUCKDB_API static unique_ptr<Constraint> FormatDeserialize(FormatDeserializer &deserializer);
 };

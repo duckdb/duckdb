@@ -1,9 +1,8 @@
 #include "duckdb/common/types/hyperloglog.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include "hyperloglog.hpp"
 
@@ -88,24 +87,6 @@ unique_ptr<HyperLogLog> HyperLogLog::Copy() {
 	lock_guard<mutex> guard(lock);
 	memcpy(result->GetPtr(), GetPtr(), GetSize());
 	D_ASSERT(result->Count() == Count());
-	return result;
-}
-
-void HyperLogLog::Serialize(FieldWriter &writer) const {
-	writer.WriteField<HLLStorageType>(HLLStorageType::UNCOMPRESSED);
-	writer.WriteBlob(GetPtr(), GetSize());
-}
-
-unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<HyperLogLog>();
-	auto storage_type = reader.ReadRequired<HLLStorageType>();
-	switch (storage_type) {
-	case HLLStorageType::UNCOMPRESSED:
-		reader.ReadBlob(result->GetPtr(), GetSize());
-		break;
-	default:
-		throw SerializationException("Unknown HyperLogLog storage type!");
-	}
 	return result;
 }
 

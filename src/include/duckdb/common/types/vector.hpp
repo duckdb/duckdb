@@ -173,11 +173,6 @@ public:
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
-	//! Serializes a Vector to a stand-alone binary blob
-	DUCKDB_API void Serialize(idx_t count, Serializer &serializer);
-	//! Deserializes a blob back into a Vector
-	DUCKDB_API void Deserialize(idx_t count, Deserializer &source);
-
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer, idx_t count);
 	DUCKDB_API void FormatDeserialize(FormatDeserializer &deserializer, idx_t count);
 

@@ -1,7 +1,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -17,8 +16,8 @@
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -848,84 +847,8 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-void RowGroup::CheckpointDeletes(VersionNode *versions, Serializer &serializer) {
-	if (!versions) {
-		// no version information: write nothing
-		serializer.Write<idx_t>(0);
-		return;
-	}
-	// first count how many ChunkInfo's we need to deserialize
-	idx_t chunk_info_count = 0;
-	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		auto chunk_info = versions->info[vector_idx].get();
-		if (!chunk_info) {
-			continue;
-		}
-		chunk_info_count++;
-	}
-	// now serialize the actual version information
-	serializer.Write<idx_t>(chunk_info_count);
-	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		auto chunk_info = versions->info[vector_idx].get();
-		if (!chunk_info) {
-			continue;
-		}
-		serializer.Write<idx_t>(vector_idx);
-		chunk_info->Serialize(serializer);
-	}
-}
-
-shared_ptr<VersionNode> RowGroup::DeserializeDeletes(Deserializer &source) {
-	auto chunk_count = source.Read<idx_t>();
-	if (chunk_count == 0) {
-		// no deletes
-		return nullptr;
-	}
-	auto version_info = make_shared<VersionNode>();
-	for (idx_t i = 0; i < chunk_count; i++) {
-		idx_t vector_index = source.Read<idx_t>();
-		if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
-			throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted file?");
-		}
-		version_info->info[vector_index] = ChunkInfo::Deserialize(source);
-	}
-	return version_info;
-}
-
-void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) {
-	FieldWriter writer(main_serializer);
-	writer.WriteField<uint64_t>(pointer.row_start);
-	writer.WriteField<uint64_t>(pointer.tuple_count);
-	auto &serializer = writer.GetSerializer();
-	for (auto &data_pointer : pointer.data_pointers) {
-		serializer.Write<idx_t>(data_pointer.block_pointer);
-		serializer.Write<uint32_t>(data_pointer.offset);
-	}
-	CheckpointDeletes(pointer.versions.get(), serializer);
-	writer.Finalize();
-}
-
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<LogicalType> &columns) {
-	RowGroupPointer result;
-
-	FieldReader reader(main_source);
-	result.row_start = reader.ReadRequired<uint64_t>();
-	result.tuple_count = reader.ReadRequired<uint64_t>();
-
-	auto physical_columns = columns.size();
-	result.data_pointers.reserve(physical_columns);
-
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < physical_columns; i++) {
-		MetaBlockPointer pointer;
-		pointer.block_pointer = source.Read<idx_t>();
-		pointer.offset = source.Read<uint32_t>();
-		result.data_pointers.push_back(pointer);
-	}
-	result.versions = DeserializeDeletes(source);
-
-	reader.Finalize();
-	return result;
+RowGroupPointer RowGroup::Deserialize(ReadStream &main_source, const vector<LogicalType> &columns) {
+	throw InternalException("FIXME");
 }
 
 void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {

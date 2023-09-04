@@ -7,6 +7,8 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+
 namespace duckdb {
 
 class FormatSerializer;   // Forward declare

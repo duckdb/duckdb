@@ -15,10 +15,12 @@
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 class FormatSerializer;
 class FormatDeserializer;
+class BinarySerializer;
+class BinaryDeserializer;
+class WriteStream;
+class ReadStream;
 
 //! inline std directives that we use frequently
 #ifndef DUCKDB_DEBUG_MOVE
