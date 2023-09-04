@@ -1,0 +1,490 @@
+[
+  {
+    "class": "ParseInfo",
+    "class_type": "info_type",
+    "includes": [
+      "duckdb/parser/parsed_data/parse_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "info_type",
+        "type": "ParseInfoType"
+      }
+    ]
+  },
+  {
+    "class": "AlterInfo",
+    "base": "ParseInfo",
+    "enum": "ALTER_INFO",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/parsed_data/alter_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "AlterType"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "if_not_found",
+        "type": "OnEntryNotFound"
+      },
+      {
+        "id": 205,
+        "name": "allow_internal",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "AlterTableInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_TABLE",
+    "class_type": "alter_table_type",
+    "includes": [
+      "duckdb/parser/parsed_data/alter_table_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 300,
+        "name": "alter_table_type",
+        "type": "AlterTableType"
+      }
+    ]
+  },
+  {
+    "class": "RenameColumnInfo",
+    "base": "AlterTableInfo",
+    "enum": "RENAME_COLUMN",
+    "members": [
+      {
+        "id": 400,
+        "name": "old_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "new_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "RenameTableInfo",
+    "base": "AlterTableInfo",
+    "enum": "RENAME_TABLE",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_table_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "AddColumnInfo",
+    "base": "AlterTableInfo",
+    "enum": "ADD_COLUMN",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_column",
+        "type": "ColumnDefinition"
+      },
+      {
+        "id": 401,
+        "name": "if_column_not_exists",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["new_column"]
+  },
+  {
+    "class": "RemoveColumnInfo",
+    "base": "AlterTableInfo",
+    "enum": "REMOVE_COLUMN",
+    "members": [
+      {
+        "id": 400,
+        "name": "removed_column",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "if_column_exists",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "cascade",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "ChangeColumnTypeInfo",
+    "base": "AlterTableInfo",
+    "enum": "ALTER_COLUMN_TYPE",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "target_type",
+        "type": "LogicalType"
+      },
+      {
+        "id": 402,
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ]
+  },
+  {
+    "class": "SetDefaultInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_DEFAULT",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "expression",
+        "type": "ParsedExpression*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "AlterForeignKeyInfo",
+    "base": "AlterTableInfo",
+    "enum": "FOREIGN_KEY_CONSTRAINT",
+    "members": [
+      {
+        "id": 400,
+        "name": "fk_table",
+        "type": "string"
+      },
+      {
+        "id": 401,
+        "name": "pk_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 402,
+        "name": "fk_columns",
+        "type": "vector<string>"
+      },
+      {
+        "id": 403,
+        "name": "pk_keys",
+        "type": "vector<PhysicalIndex>"
+      },
+      {
+        "id": 404,
+        "name": "fk_keys",
+        "type": "vector<PhysicalIndex>"
+      },
+      {
+        "id": 405,
+        "name": "alter_fk_type",
+        "property": "type",
+        "type": "AlterForeignKeyType"
+      }
+    ]
+  },
+  {
+    "class": "SetNotNullInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_NOT_NULL",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "DropNotNullInfo",
+    "base": "AlterTableInfo",
+    "enum": "DROP_NOT_NULL",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "AlterViewInfo",
+    "base": "AlterInfo",
+    "enum": "ALTER_VIEW",
+    "class_type": "alter_view_type",
+    "members": [
+      {
+        "id": 300,
+        "name": "alter_view_type",
+        "type": "AlterViewType"
+      }
+    ]
+  },
+  {
+    "class": "RenameViewInfo",
+    "base": "AlterViewInfo",
+    "enum": "RENAME_VIEW",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_view_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "AttachInfo",
+    "base": "ParseInfo",
+    "enum": "ATTACH_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/attach_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "path",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "options",
+        "type": "unordered_map<string, Value>"
+      }
+    ]
+  },
+  {
+    "class": "CopyInfo",
+    "base": "ParseInfo",
+    "enum": "COPY_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/copy_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "select_list",
+        "type": "vector<string>"
+      },
+      {
+        "id": 204,
+        "name": "is_from",
+        "type": "bool"
+      },
+      {
+        "id": 205,
+        "name": "format",
+        "type": "string"
+      },
+      {
+        "id": 206,
+        "name": "file_path",
+        "type": "string"
+      },
+      {
+        "id": 207,
+        "name": "options",
+        "type": "unordered_map<vector<Value>>"
+      }
+    ]
+  },
+  {
+    "class": "DetachInfo",
+    "base": "ParseInfo",
+    "enum": "DETACH_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/detach_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "if_not_found",
+        "type": "OnEntryNotFound"
+      }
+    ]
+  },
+  {
+    "class": "DropInfo",
+    "base": "ParseInfo",
+    "enum": "DROP_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/drop_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 201,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 203,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "if_not_found",
+        "type": "OnEntryNotFound"
+      },
+      {
+        "id": 205,
+        "name": "cascade",
+        "type": "bool"
+      },
+      {
+        "id": 206,
+        "name": "allow_drop_internal",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "LoadInfo",
+    "base": "ParseInfo",
+    "enum": "LOAD_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/load_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "filename",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "load_type",
+        "type": "LoadType"
+      },
+      {
+        "id": 202,
+        "name": "repository",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "PragmaInfo",
+    "base": "ParseInfo",
+    "enum": "PRAGMA_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/pragma_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "parameters",
+        "type": "vector<Value>"
+      },
+      {
+        "id": 202,
+        "name": "named_parameters",
+        "type": "unordered_map<string, Value>"
+      }
+    ]
+  },
+  {
+    "class": "TransactionInfo",
+    "base": "ParseInfo",
+    "enum": "TRANSACTION_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/transaction_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "type",
+        "type": "TransactionType"
+      }
+    ]
+  },
+  {
+    "class": "VacuumInfo",
+    "base": "ParseInfo",
+    "enum": "VACUUM_INFO",
+    "includes": [
+      "duckdb/parser/parsed_data/vacuum_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "options",
+        "type": "VacuumOptions"
+      }
+    ],
+    "constructor": ["options"]
+  }
+]

@@ -89,16 +89,19 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	D_ASSERT(scan_count > 0);
 	validity.ScanCount(state.child_states[0], result, count);
 
-	auto data = FlatVector::GetData<uint64_t>(offset_vector);
-	auto last_entry = data[scan_count - 1];
+	UnifiedVectorFormat offsets;
+	offset_vector.ToUnifiedFormat(scan_count, offsets);
+	auto data = UnifiedVectorFormat::GetData<uint64_t>(offsets);
+	auto last_entry = data[offsets.sel->get_index(scan_count - 1)];
 
 	// shift all offsets so they are 0 at the first entry
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	auto base_offset = state.last_offset;
 	idx_t current_offset = 0;
 	for (idx_t i = 0; i < scan_count; i++) {
+		auto offset_index = offsets.sel->get_index(i);
 		result_data[i].offset = current_offset;
-		result_data[i].length = data[i] - current_offset - base_offset;
+		result_data[i].length = data[offset_index] - current_offset - base_offset;
 		current_offset += result_data[i].length;
 	}
 

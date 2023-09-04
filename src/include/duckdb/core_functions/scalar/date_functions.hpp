@@ -264,6 +264,15 @@ struct ISOYearFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct JulianDayFun {
+	static constexpr const char *Name = "julian";
+	static constexpr const char *Parameters = "ts";
+	static constexpr const char *Description = "Extract the Julian Day number from a date or timestamp";
+	static constexpr const char *Example = "julian(timestamp '2006-01-01 12:00')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct LastDayFun {
 	static constexpr const char *Name = "last_day";
 	static constexpr const char *Parameters = "ts";

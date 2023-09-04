@@ -24,12 +24,15 @@ if 'DUCKDB_DEBUG_MOVE' in os.environ:
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
 
+
 def open_utf8(fpath, flags):
     import sys
+
     if sys.version_info[0] < 3:
         return open(fpath, flags)
     else:
         return open(fpath, flags, encoding="utf8")
+
 
 extension_list = ""
 
@@ -89,7 +92,7 @@ linenr = bool(os.getenv("DUCKDB_R_LINENR", ""))
 (source_list, include_list, original_sources) = package_build.build_package(target_dir, extensions, linenr, unity_build)
 
 # object list, relative paths
-script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\','/')
+script_path = os.path.dirname(os.path.abspath(__file__)).replace('\\', '/')
 duckdb_sources = [package_build.get_relative_path(os.path.join(script_path, 'src'), x) for x in source_list]
 object_list = ' '.join([x.rsplit('.', 1)[0] + '.o' for x in duckdb_sources])
 
@@ -99,6 +102,10 @@ include_list += ' -I' + os.path.join('..', 'inst', 'include')
 include_list += ' -Iduckdb'
 include_list += extension_list
 include_list += ' ' + debug_move_flag
+
+# Autoloading is on by default for R builds
+include_list += " -DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1"
+include_list += " -DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1"
 
 # add -Werror if enabled
 if 'TREAT_WARNINGS_AS_ERRORS' in os.environ:

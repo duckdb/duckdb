@@ -120,7 +120,7 @@ public:
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
-	DUCKDB_API static Value TIMETZ(dtime_t time);
+	DUCKDB_API static Value TIMETZ(dtime_tz_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
@@ -177,7 +177,10 @@ public:
 	template <class T>
 	T GetValue() const;
 	template <class T>
-	static Value CreateValue(T value);
+	static Value CreateValue(T value) {
+		static_assert(AlwaysFalse<T>::value, "No specialization exists for this type");
+		return Value(nullptr);
+	}
 	// Returns the internal value. Unlike GetValue(), this method does not perform casting, and assumes T matches the
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
@@ -299,6 +302,7 @@ private:
 		uint64_t hash;
 		date_t date;
 		dtime_t time;
+		dtime_tz_t timetz;
 		timestamp_t timestamp;
 		interval_t interval;
 	} value_; // NOLINT

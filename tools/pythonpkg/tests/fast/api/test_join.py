@@ -1,6 +1,7 @@
 import duckdb
 import pytest
 
+
 class TestJoin(object):
     def test_alias_from_sql(self):
         con = duckdb.connect()
@@ -34,8 +35,8 @@ class TestJoin(object):
     def test_relational_join_with_condition(self):
         con = duckdb.connect()
 
-        rel1 = con.sql("SELECT 1 AS col1, 2 AS col2", 'rel1')
-        rel2 = con.sql("SELECT 1 AS col1, 3 AS col3", 'rel2')
+        rel1 = con.sql("SELECT 1 AS col1, 2 AS col2", alias='rel1')
+        rel2 = con.sql("SELECT 1 AS col1, 3 AS col3", alias='rel2')
 
         # This makes a USING clause, which is kind of unexpected behavior
         rel = rel1.join(rel2, 'rel1.col1 = rel2.col1')

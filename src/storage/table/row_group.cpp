@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -11,13 +10,15 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -116,11 +117,10 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	if (column_pointers.size() != columns.size()) {
 		throw InternalException("Lazy loading a column but the pointer was not set");
 	}
-	auto &block_manager = GetCollection().GetBlockManager();
+	auto &metadata_manager = GetCollection().GetMetadataManager();
 	auto &types = GetCollection().GetTypes();
 	auto &block_pointer = column_pointers[c];
-	MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
-	column_data_reader.offset = block_pointer.offset;
+	MetadataReader column_data_reader(metadata_manager, block_pointer);
 	this->columns[c] =
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
 	is_loaded[c] = true;
@@ -832,7 +832,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	for (auto &state : result.states) {
 		// get the current position of the table data writer
 		auto &data_writer = writer.GetPayloadWriter();
-		auto pointer = data_writer.GetBlockPointer();
+		auto pointer = data_writer.GetMetaBlockPointer();
 
 		// store the stats and the data pointers in the row group pointers
 		row_group_pointer.data_pointers.push_back(pointer);
@@ -898,8 +898,8 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer) 
 	writer.WriteField<uint64_t>(pointer.tuple_count);
 	auto &serializer = writer.GetSerializer();
 	for (auto &data_pointer : pointer.data_pointers) {
-		serializer.Write<block_id_t>(data_pointer.block_id);
-		serializer.Write<uint64_t>(data_pointer.offset);
+		serializer.Write<idx_t>(data_pointer.block_pointer);
+		serializer.Write<uint32_t>(data_pointer.offset);
 	}
 	CheckpointDeletes(pointer.versions.get(), serializer);
 	writer.Finalize();
@@ -917,14 +917,80 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 
 	auto &source = reader.GetSource();
 	for (idx_t i = 0; i < physical_columns; i++) {
-		BlockPointer pointer;
-		pointer.block_id = source.Read<block_id_t>();
-		pointer.offset = source.Read<uint64_t>();
+		MetaBlockPointer pointer;
+		pointer.block_pointer = source.Read<idx_t>();
+		pointer.offset = source.Read<uint32_t>();
 		result.data_pointers.push_back(pointer);
 	}
 	result.versions = DeserializeDeletes(source);
 
 	reader.Finalize();
+	return result;
+}
+
+void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {
+	serializer.WriteProperty(100, "row_start", pointer.row_start);
+	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
+	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
+
+	// Checkpoint deletes
+	auto versions = pointer.versions.get();
+
+	if (!versions) {
+		// no version information: write nothing
+		serializer.WriteProperty(103, "versions_count", 0);
+		return;
+	}
+	// first count how many ChunkInfo's we need to deserialize
+	idx_t chunk_info_count = 0;
+	idx_t idx_map[ROW_GROUP_VECTOR_COUNT];
+	for (idx_t vector_idx = 0; vector_idx < RowGroup::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
+		auto chunk_info = versions->info[vector_idx].get();
+		if (!chunk_info) {
+			continue;
+		}
+		idx_map[chunk_info_count++] = vector_idx;
+	}
+
+	// now serialize the actual version information
+	serializer.WriteProperty(103, "versions_count", chunk_info_count);
+	serializer.WriteList(104, "versions", chunk_info_count, [&](FormatSerializer::List &list, idx_t i) {
+		auto vector_idx = idx_map[i];
+		auto chunk_info = versions->info[vector_idx].get();
+		list.WriteObject([&](FormatSerializer &obj) {
+			obj.WriteProperty(100, "vector_index", vector_idx);
+			obj.WriteProperty(101, "chunk_info", const_cast<const ChunkInfo *>(chunk_info));
+		});
+	});
+}
+
+RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
+	RowGroupPointer result;
+	result.row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
+	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
+	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
+	result.versions = nullptr;
+	// Deserialize Deletes
+	auto chunk_count = deserializer.ReadProperty<idx_t>(103, "versions_count");
+	if (chunk_count == 0) {
+		// no deletes
+		return result;
+	}
+
+	auto version_info = make_shared<VersionNode>();
+	deserializer.ReadList(104, "versions", [&](FormatDeserializer::List &list, idx_t i) {
+		list.ReadObject([&](FormatDeserializer &obj) {
+			auto vector_index = obj.ReadProperty<idx_t>(100, "vector_index");
+			if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
+				throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted "
+				                "file?");
+			}
+			version_info->info[vector_index] = obj.ReadProperty<unique_ptr<ChunkInfo>>(101, "chunk_info");
+		});
+	});
+
+	result.versions = version_info;
+
 	return result;
 }
 

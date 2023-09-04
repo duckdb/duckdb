@@ -71,11 +71,11 @@ string FileSystem::GetEnvVariable(const string &name) {
 }
 
 bool FileSystem::IsPathAbsolute(const string &path) {
-	auto path_separator = FileSystem::PathSeparator();
+	auto path_separator = PathSeparator(path);
 	return PathMatched(path, path_separator);
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator(const string &path) {
 	return "/";
 }
 
@@ -167,7 +167,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 	return result;
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator(const string &path) {
 	return "\\";
 }
 
@@ -210,11 +210,11 @@ string FileSystem::GetWorkingDirectory() {
 
 string FileSystem::JoinPath(const string &a, const string &b) {
 	// FIXME: sanitize paths
-	return a + PathSeparator() + b;
+	return a + PathSeparator(a) + b;
 }
 
 string FileSystem::ConvertSeparators(const string &path) {
-	auto separator_str = PathSeparator();
+	auto separator_str = PathSeparator(path);
 	char separator = separator_str[0];
 	if (separator == '/') {
 		// on unix-based systems we only accept / as a separator
@@ -229,7 +229,7 @@ string FileSystem::ExtractName(const string &path) {
 		return string();
 	}
 	auto normalized_path = ConvertSeparators(path);
-	auto sep = PathSeparator();
+	auto sep = PathSeparator(path);
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
 	return splits.back();
@@ -397,16 +397,31 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
+static string LookupExtensionForPattern(const string &pattern) {
+	for (const auto &entry : EXTENSION_FILE_PREFIXES) {
+		if (StringUtil::StartsWith(pattern, entry.name)) {
+			return entry.extension;
+		}
+	}
+	return "";
+}
+
 vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
-		string required_extension;
-		if (FileSystem::IsRemoteFile(pattern)) {
-			required_extension = "httpfs";
-		}
+		string required_extension = LookupExtensionForPattern(pattern);
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
-			// an extension is required to read this file but it is not loaded - try to load it
-			ExtensionHelper::LoadExternalExtension(context, required_extension);
+			auto &dbconfig = DBConfig::GetConfig(context);
+			if (!ExtensionHelper::CanAutoloadExtension(required_extension) ||
+			    !dbconfig.options.autoload_known_extensions) {
+				auto error_message =
+				    "File " + pattern + " requires the extension " + required_extension + " to be loaded";
+				error_message =
+				    ExtensionHelper::AddExtensionInstallHintToErrorMsg(context, error_message, required_extension);
+				throw MissingExtensionException(error_message);
+			}
+			// an extension is required to read this file, but it is not loaded - try to load it
+			ExtensionHelper::AutoLoadExtension(context, required_extension);
 			// success! glob again
 			// check the extension is loaded just in case to prevent an infinite loop here
 			if (!context.db->ExtensionIsLoaded(required_extension)) {

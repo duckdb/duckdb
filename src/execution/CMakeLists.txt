@@ -14,12 +14,12 @@ add_library_unity(
   expression_executor.cpp
   expression_executor_state.cpp
   join_hashtable.cpp
-  partitionable_hashtable.cpp
   perfect_aggregate_hashtable.cpp
   physical_operator.cpp
   physical_plan_generator.cpp
   radix_partitioned_hashtable.cpp
   reservoir_sample.cpp
+  window_executor.cpp
   window_segment_tree.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>

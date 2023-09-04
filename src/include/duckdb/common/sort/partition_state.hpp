@@ -31,6 +31,7 @@ public:
 
 	GlobalSortStatePtr global_sort;
 	atomic<idx_t> count;
+	idx_t batch_base;
 
 	// Mask computation
 	SortLayout partition_layout;
@@ -42,8 +43,8 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	using GroupingPartition = unique_ptr<PartitionedColumnData>;
-	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
+	using GroupingPartition = unique_ptr<PartitionedTupleData>;
+	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
 	static void GenerateOrderings(Orders &partitions, Orders &orders,
 	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
@@ -53,13 +54,11 @@ public:
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
+	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void SyncPartitioning(const PartitionGlobalSinkState &other);
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
-
-	void BuildSortState(ColumnDataCollection &group_data, GlobalSortState &global_sort) const;
-	void BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
 
 	ClientContext &context;
 	BufferManager &buffer_manager;
@@ -67,9 +66,9 @@ public:
 	mutex lock;
 
 	// OVER(PARTITION BY...) (hash grouping)
-	unique_ptr<RadixPartitionedColumnData> grouping_data;
+	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	Types grouping_types;
+	TupleDataLayout grouping_types;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -88,6 +87,7 @@ public:
 
 	// Threading
 	idx_t memory_per_thread;
+	idx_t max_bits;
 	atomic<idx_t> count;
 
 private:
@@ -107,8 +107,8 @@ public:
 	ExpressionExecutor executor;
 	DataChunk group_chunk;
 	DataChunk payload_chunk;
-	unique_ptr<PartitionedColumnData> local_partition;
-	unique_ptr<PartitionedColumnDataAppendState> local_append;
+	unique_ptr<PartitionedTupleData> local_partition;
+	unique_ptr<PartitionedTupleDataAppendState> local_append;
 
 	// OVER(...) (sorting)
 	size_t sort_cols;
@@ -126,13 +126,13 @@ public:
 	void Combine();
 };
 
-enum class PartitionSortStage : uint8_t { INIT, PREPARE, MERGE, SORTED };
+enum class PartitionSortStage : uint8_t { INIT, SCAN, PREPARE, MERGE, SORTED };
 
 class PartitionLocalMergeState;
 
 class PartitionGlobalMergeState {
 public:
-	using GroupDataPtr = unique_ptr<ColumnDataCollection>;
+	using GroupDataPtr = unique_ptr<TupleDataCollection>;
 
 	PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data, hash_t hash_bin);
 
@@ -148,7 +148,11 @@ public:
 	PartitionGlobalSinkState &sink;
 	GroupDataPtr group_data;
 	PartitionGlobalHashGroup *hash_group;
+	vector<column_t> column_ids;
+	TupleDataParallelScanState chunk_state;
 	GlobalSortState *global_sort;
+	const idx_t memory_per_thread;
+	const idx_t num_threads;
 
 private:
 	mutable mutex lock;
@@ -160,15 +164,14 @@ private:
 
 class PartitionLocalMergeState {
 public:
-	PartitionLocalMergeState() : merge_state(nullptr), stage(PartitionSortStage::INIT) {
-		finished = true;
-	}
+	explicit PartitionLocalMergeState(PartitionGlobalSinkState &gstate);
 
 	bool TaskFinished() {
 		return finished;
 	}
 
 	void Prepare();
+	void Scan();
 	void Merge();
 
 	void ExecuteTask();
@@ -176,6 +179,11 @@ public:
 	PartitionGlobalMergeState *merge_state;
 	PartitionSortStage stage;
 	atomic<bool> finished;
+
+	//	Sorting buffers
+	ExpressionExecutor executor;
+	DataChunk sort_chunk;
+	DataChunk payload_chunk;
 };
 
 class PartitionGlobalMergeStates {

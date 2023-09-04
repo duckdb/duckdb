@@ -126,6 +126,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 //===--------------------------------------------------------------------===//
 static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
 
+// TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 	auto lcase = StringUtil::Lower(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
@@ -134,6 +135,62 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 		}
 	}
 	return false;
+}
+
+bool ExtensionHelper::CanAutoloadExtension(const string &ext_name) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	return false;
+#endif
+
+	if (ext_name.empty()) {
+		return false;
+	}
+	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {
+		if (ext_name == ext) {
+			return true;
+		}
+	}
+	return false;
+}
+
+string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
+                                                          const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	string install_hint;
+
+	if (!ExtensionHelper::CanAutoloadExtension(extension_name)) {
+		install_hint = "Please try installing and loading the " + extension_name + " extension:\nINSTALL " +
+		               extension_name + ";\nLOAD " + extension_name + ";\n\n";
+	} else if (!dbconfig.options.autoload_known_extensions) {
+		install_hint =
+		    "Please try installing and loading the " + extension_name + " extension by running:\nINSTALL " +
+		    extension_name + ";\nLOAD " + extension_name +
+		    ";\n\nAlternatively, consider enabling auto-install "
+		    "and auto-load by running:\nSET autoinstall_known_extensions=1;\nSET autoload_known_extensions=1;";
+	} else if (!dbconfig.options.autoinstall_known_extensions) {
+		install_hint =
+		    "Please try installing the " + extension_name + " extension by running:\nINSTALL " + extension_name +
+		    ";\n\nAlternatively, consider enabling autoinstall by running:\nSET autoinstall_known_extensions=1;";
+	}
+
+	if (!install_hint.empty()) {
+		return base_error + "\n\n" + install_hint;
+	}
+
+	return base_error;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+	} catch (Exception &e) {
+		throw AutoloadException(extension_name, e);
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -171,6 +228,20 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;
 		}
 		result = con.Query("LOAD " + extension);
+		if (result->HasError()) {
+			result->Print();
+			return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		}
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+#endif
+
+#ifdef DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE
+	// Note: weird comma's are on purpose to do easy string contains on a list of extension names
+	if (!initial_load && StringUtil::Contains(DUCKDB_EXTENSIONS_TEST_WITH_LOADABLE, "," + extension + ",")) {
+		Connection con(db);
+		auto result = con.Query((string) "LOAD '" + DUCKDB_EXTENSIONS_BUILD_PATH + "/" + extension + "/" + extension +
+		                        ".duckdb_extension'");
 		if (result->HasError()) {
 			result->Print();
 			return ExtensionLoadResult::EXTENSION_UNKNOWN;

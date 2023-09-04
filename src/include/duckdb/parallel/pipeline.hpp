@@ -71,9 +71,6 @@ public:
 	void ClearSource();
 	void Schedule(shared_ptr<Event> &event);
 
-	//! Finalize this pipeline
-	void Finalize(Event &event);
-
 	string ToString() const;
 	void Print() const;
 	void PrintDependencies() const;

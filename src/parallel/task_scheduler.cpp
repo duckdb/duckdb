@@ -9,6 +9,7 @@
 #include "concurrentqueue.h"
 #include "duckdb/common/thread.hpp"
 #include "lightweightsemaphore.h"
+#include <thread>
 #else
 #include <queue>
 #endif
@@ -253,6 +254,12 @@ void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 void TaskScheduler::Signal(idx_t n) {
 #ifndef DUCKDB_NO_THREADS
 	queue->semaphore.signal(n);
+#endif
+}
+
+void TaskScheduler::YieldThread() {
+#ifndef DUCKDB_NO_THREADS
+	std::this_thread::yield();
 #endif
 }
 

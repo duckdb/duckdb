@@ -169,7 +169,7 @@ shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list) {
 
 shared_ptr<Relation> Relation::Aggregate(const string &aggregate_list, const string &group_list) {
 	auto expression_list = Parser::ParseExpressionList(aggregate_list, context.GetContext()->GetParserOptions());
-	auto groups = Parser::ParseExpressionList(group_list, context.GetContext()->GetParserOptions());
+	auto groups = Parser::ParseGroupByList(group_list, context.GetContext()->GetParserOptions());
 	return make_shared<AggregateRelation>(shared_from_this(), std::move(expression_list), std::move(groups));
 }
 
@@ -179,9 +179,9 @@ shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates) {
 }
 
 shared_ptr<Relation> Relation::Aggregate(const vector<string> &aggregates, const vector<string> &groups) {
-	auto aggregate_list = StringListToExpressionList(*context.GetContext(), aggregates);
-	auto group_list = StringListToExpressionList(*context.GetContext(), groups);
-	return make_shared<AggregateRelation>(shared_from_this(), std::move(aggregate_list), std::move(group_list));
+	auto aggregate_list = StringUtil::Join(aggregates, ", ");
+	auto group_list = StringUtil::Join(groups, ", ");
+	return this->Aggregate(aggregate_list, group_list);
 }
 
 string Relation::GetAlias() {

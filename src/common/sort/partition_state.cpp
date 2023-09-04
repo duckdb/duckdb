@@ -11,7 +11,7 @@ namespace duckdb {
 
 PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
-    : count(0) {
+    : count(0), batch_base(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
@@ -87,16 +87,22 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
                                                    const vector<unique_ptr<BaseStatistics>> &partition_stats,
                                                    idx_t estimated_cardinality)
     : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      fixed_bits(0), payload_types(payload_types), memory_per_thread(0), count(0) {
+      fixed_bits(0), payload_types(payload_types), memory_per_thread(0), max_bits(1), count(0) {
 
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	external = ClientConfig::GetConfig(context).force_external;
 
+	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * idx_t(Storage::BLOCK_ALLOC_SIZE)));
+	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
+		++max_bits;
+	}
+
 	if (!orders.empty()) {
-		grouping_types = payload_types;
-		grouping_types.push_back(LogicalType::HASH);
+		auto types = payload_types;
+		types.push_back(LogicalType::HASH);
+		grouping_types.Initialize(types);
 
 		ResizeGroupingData(estimated_cardinality);
 	}
@@ -108,8 +114,13 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, fixed_bits, hash_col_idx);
+		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, fixed_bits, hash_col_idx);
 	}
+}
+
+unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
+	const auto hash_col_idx = payload_types.size();
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
 }
 
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
@@ -121,47 +132,31 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
-	while (new_bits < 10 && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
+	while (new_bits < max_bits && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
 		++new_bits;
 	}
 
 	// Repartition the grouping data
 	if (new_bits != bits) {
-		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, new_bits, hash_col_idx);
+		grouping_data = CreatePartition(new_bits);
 	}
 }
 
 void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
 	// We are done if the local_partition is right sized.
-	auto &local_radix = local_partition->Cast<RadixPartitionedColumnData>();
-	if (local_radix.GetRadixBits() == grouping_data->GetRadixBits()) {
+	auto &local_radix = local_partition->Cast<RadixPartitionedTupleData>();
+	const auto new_bits = grouping_data->GetRadixBits();
+	if (local_radix.GetRadixBits() == new_bits) {
 		return;
 	}
 
 	// If the local partition is now too small, flush it and reallocate
-	auto new_partition = grouping_data->CreateShared();
-	auto new_append = make_uniq<PartitionedColumnDataAppendState>();
-	new_partition->InitializeAppendState(*new_append);
-
+	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	auto &local_groups = local_partition->GetPartitions();
-	for (auto &local_group : local_groups) {
-		ColumnDataScanState scanner;
-		local_group->InitializeScan(scanner);
-
-		DataChunk scan_chunk;
-		local_group->InitializeScanChunk(scan_chunk);
-		for (scan_chunk.Reset(); local_group->Scan(scanner, scan_chunk); scan_chunk.Reset()) {
-			new_partition->Append(*new_append, scan_chunk);
-		}
-	}
-
-	// The append state has stale pointers to the old local partition, so nuke it from orbit.
-	new_partition->FlushAppendState(*new_append);
+	local_partition->Repartition(*new_partition);
 
 	local_partition = std::move(new_partition);
-	local_append = make_uniq<PartitionedColumnDataAppendState>();
+	local_append = make_uniq<PartitionedTupleDataAppendState>();
 	local_partition->InitializeAppendState(*local_append);
 }
 
@@ -170,8 +165,8 @@ void PartitionGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_par
 	lock_guard<mutex> guard(lock);
 
 	if (!local_partition) {
-		local_partition = grouping_data->CreateShared();
-		local_append = make_uniq<PartitionedColumnDataAppendState>();
+		local_partition = CreatePartition(grouping_data->GetRadixBits());
+		local_append = make_uniq<PartitionedTupleDataAppendState>();
 		local_partition->InitializeAppendState(*local_append);
 		return;
 	}
@@ -196,58 +191,43 @@ void PartitionGlobalSinkState::CombineLocalPartition(GroupingPartition &local_pa
 	grouping_data->Combine(*local_partition);
 }
 
-void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, GlobalSortState &global_sort) const {
+PartitionLocalMergeState::PartitionLocalMergeState(PartitionGlobalSinkState &gstate)
+    : merge_state(nullptr), stage(PartitionSortStage::INIT), finished(true), executor(gstate.context) {
+
 	//	 Set up the sort expression computation.
 	vector<LogicalType> sort_types;
-	ExpressionExecutor executor(context);
-	for (auto &order : orders) {
+	for (auto &order : gstate.orders) {
 		auto &oexpr = order.expression;
 		sort_types.emplace_back(oexpr->return_type);
 		executor.AddExpression(*oexpr);
 	}
-	DataChunk sort_chunk;
-	sort_chunk.Initialize(allocator, sort_types);
+	sort_chunk.Initialize(gstate.allocator, sort_types);
+	payload_chunk.Initialize(gstate.allocator, gstate.payload_types);
+}
 
+void PartitionLocalMergeState::Scan() {
+	auto &group_data = *merge_state->group_data;
+	auto &hash_group = *merge_state->hash_group;
+	auto &chunk_state = merge_state->chunk_state;
 	// Copy the data from the group into the sort code.
+	auto &global_sort = *hash_group.global_sort;
 	LocalSortState local_sort;
 	local_sort.Initialize(global_sort, global_sort.buffer_manager);
 
-	//	Strip hash column
-	DataChunk payload_chunk;
-	payload_chunk.Initialize(allocator, payload_types);
-
-	vector<column_t> column_ids;
-	column_ids.reserve(payload_types.size());
-	for (column_t i = 0; i < payload_types.size(); ++i) {
-		column_ids.emplace_back(i);
-	}
-	ColumnDataConsumer scanner(group_data, column_ids);
-	ColumnDataConsumerScanState chunk_state;
-	chunk_state.current_chunk_state.properties = ColumnDataScanProperties::ALLOW_ZERO_COPY;
-	scanner.InitializeScan();
-	for (auto chunk_idx = scanner.ChunkCount(); chunk_idx-- > 0;) {
-		if (!scanner.AssignChunk(chunk_state)) {
-			break;
-		}
-		scanner.ScanChunk(chunk_state, payload_chunk);
-
+	TupleDataScanState local_scan;
+	group_data.InitializeScan(local_scan, merge_state->column_ids);
+	while (group_data.Scan(chunk_state, local_scan, payload_chunk)) {
 		sort_chunk.Reset();
 		executor.Execute(payload_chunk, sort_chunk);
 
 		local_sort.SinkChunk(sort_chunk, payload_chunk);
-		if (local_sort.SizeInBytes() > memory_per_thread) {
+		if (local_sort.SizeInBytes() > merge_state->memory_per_thread) {
 			local_sort.Sort(global_sort, true);
 		}
-		scanner.FinishChunk(chunk_state);
+		hash_group.count += payload_chunk.size();
 	}
 
 	global_sort.AddLocalState(local_sort);
-}
-
-void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &hash_group) {
-	BuildSortState(group_data, *hash_group.global_sort);
-
-	hash_group.count += group_data.Count();
 }
 
 //	Per-thread sink state
@@ -362,10 +342,11 @@ void PartitionLocalSinkState::Combine() {
 	gstate.CombineLocalPartition(local_partition, local_append);
 }
 
-PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data,
+PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data_p,
                                                      hash_t hash_bin)
-    : sink(sink), group_data(std::move(group_data)), stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0),
-      tasks_completed(0) {
+    : sink(sink), group_data(std::move(group_data_p)), memory_per_thread(sink.memory_per_thread),
+      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
+      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
 	const auto group_idx = sink.hash_groups.size();
 	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
@@ -376,13 +357,18 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 	global_sort = sink.hash_groups[group_idx]->global_sort.get();
 
 	sink.bin_groups[hash_bin] = group_idx;
+
+	column_ids.reserve(sink.payload_types.size());
+	for (column_t i = 0; i < sink.payload_types.size(); ++i) {
+		column_ids.emplace_back(i);
+	}
+	group_data->InitializeScan(chunk_state, column_ids);
 }
 
 void PartitionLocalMergeState::Prepare() {
-	auto &global_sort = *merge_state->global_sort;
-	merge_state->sink.BuildSortState(*merge_state->group_data, *merge_state->hash_group);
 	merge_state->group_data.reset();
 
+	auto &global_sort = *merge_state->global_sort;
 	global_sort.PrepareMergePhase();
 }
 
@@ -394,6 +380,9 @@ void PartitionLocalMergeState::Merge() {
 
 void PartitionLocalMergeState::ExecuteTask() {
 	switch (stage) {
+	case PartitionSortStage::SCAN:
+		Scan();
+		break;
 	case PartitionSortStage::PREPARE:
 		Prepare();
 		break;
@@ -440,6 +429,11 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 	switch (stage) {
 	case PartitionSortStage::INIT:
+		total_tasks = num_threads;
+		stage = PartitionSortStage::SCAN;
+		return true;
+
+	case PartitionSortStage::SCAN:
 		total_tasks = 1;
 		stage = PartitionSortStage::PREPARE;
 		return true;
@@ -487,8 +481,9 @@ PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState 
 
 class PartitionMergeTask : public ExecutorTask {
 public:
-	PartitionMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, PartitionGlobalMergeStates &hash_groups_p)
-	    : ExecutorTask(context_p), event(std::move(event_p)), hash_groups(hash_groups_p) {
+	PartitionMergeTask(shared_ptr<Event> event_p, ClientContext &context_p, PartitionGlobalMergeStates &hash_groups_p,
+	                   PartitionGlobalSinkState &gstate)
+	    : ExecutorTask(context_p), event(std::move(event_p)), local_state(gstate), hash_groups(hash_groups_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
@@ -589,7 +584,7 @@ void PartitionMergeEvent::Schedule() {
 
 	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states));
+		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states, gstate));
 	}
 	SetTasks(std::move(merge_tasks));
 }
