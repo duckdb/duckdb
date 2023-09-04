@@ -71,6 +71,8 @@ public:
 	void VerifyAppend(DataChunk &chunk) override;
 	//! Verify that data can be appended to the index without a constraint violation using the conflict manager
 	void VerifyAppend(DataChunk &chunk, ConflictManager &conflict_manager) override;
+	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	void CommitDrop(IndexLock &index_lock) override;
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	void Delete(IndexLock &lock, DataChunk &entries, Vector &row_identifiers) override;
 	//! Insert a chunk of entries into the index

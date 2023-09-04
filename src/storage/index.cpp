@@ -39,6 +39,12 @@ PreservedError Index::Append(DataChunk &entries, Vector &row_identifiers) {
 	return Append(state, entries, row_identifiers);
 }
 
+void Index::CommitDrop() {
+	IndexLock index_lock;
+	InitializeLock(index_lock);
+	CommitDrop(index_lock);
+}
+
 void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);

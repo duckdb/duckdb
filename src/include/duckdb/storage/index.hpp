@@ -83,6 +83,10 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	virtual void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) = 0;
 
+	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
+	virtual void CommitDrop(IndexLock &index_lock) = 0;
+	//! Deletes all data from the index
+	void CommitDrop();
 	//! Delete a chunk of entries from the index. The lock obtained from InitializeLock must be held
 	virtual void Delete(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Delete while holding that lock

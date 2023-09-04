@@ -1,0 +1,118 @@
+# name: test/sql/index/art/storage/test_art_reclaim_storage.test_slow
+# description: Test that the block manager reclaims blocks previously used for indexes
+# group: [storage]
+
+load __TEST_DIR__/test_reclaim_space.db
+
+statement ok
+PRAGMA force_checkpoint;
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(1000000) tbl(i);
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+statement ok
+CHECKPOINT;
+
+# save the block count (around 37)
+
+statement ok
+CREATE TABLE blocks_tbl AS SELECT total_blocks AS blocks FROM pragma_database_size();
+
+# loop and always DROP INDEX, then recreate (reusing the same blocks)
+
+loop i 0 4
+
+statement ok
+DROP INDEX idx;
+
+query I
+SELECT total_blocks < (blocks / 2) FROM blocks_tbl, pragma_database_size();
+----
+1
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+CHECKPOINT;
+
+# we reclaim blocks, so we stay within some +3 blocks of our previous block count
+query I
+SELECT total_blocks <= (blocks + 3) FROM blocks_tbl, pragma_database_size();
+----
+1
+
+query I
+SELECT i FROM integers WHERE i = 500000;
+----
+500000
+
+endloop
+
+# loop and remove half
+
+statement ok
+CHECKPOINT;
+
+statement ok
+CREATE TABLE prev_tbl AS SELECT total_blocks AS blocks FROM pragma_database_size();
+
+statement ok
+DELETE FROM integers WHERE i > 400000;
+
+query I
+SELECT total_blocks < blocks FROM prev_tbl, pragma_database_size();
+----
+1
+
+statement ok
+CHECKPOINT;
+
+statement ok
+UPDATE prev_tbl SET blocks = (SELECT total_blocks FROM pragma_database_size());
+
+statement ok
+DELETE FROM integers WHERE i > 10000;
+
+query I
+SELECT total_blocks < blocks FROM prev_tbl, pragma_database_size();
+----
+1
+
+statement ok
+CHECKPOINT;
+
+# now insert a bunch of values again
+statement ok
+INSERT INTO integers SELECT i FROM range(1000000) tbl(i);
+
+# and make sure that we do not exceed/hit twice the original size
+
+query I
+SELECT total_blocks > blocks AND total_blocks < (blocks * 2) FROM blocks_tbl, pragma_database_size();
+----
+1
+
+statement ok
+CHECKPOINT;
+
+# now delete everything, but don't drop the index
+
+statement ok
+DELETE FROM integers;
+
+statement ok
+CHECKPOINT;
+
+query I
+SELECT total_blocks < 12 FROM pragma_database_size();
+----
+1

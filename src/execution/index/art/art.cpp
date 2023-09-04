@@ -528,8 +528,15 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 }
 
 //===--------------------------------------------------------------------===//
-// Delete
+// Drop and Delete
 //===--------------------------------------------------------------------===//
+
+void ART::CommitDrop(IndexLock &index_lock) {
+	for (auto &allocator : *allocators) {
+		allocator->Reset();
+	}
+	tree.Clear();
+}
 
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
