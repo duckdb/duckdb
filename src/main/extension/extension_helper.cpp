@@ -117,6 +117,9 @@ static DefaultExtension internal_extensions[] = {
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"substrait", "Adds support for the Substrait integration", false},
+    {"aws", "Provides features that depend on the AWS SDK", false},
+    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+    {"iceberg", "Adds support for Apache Iceberg", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
