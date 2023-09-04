@@ -162,7 +162,6 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		case LogicalTypeId::TIMESTAMP_SEC:
 		case LogicalTypeId::TIME_TZ:
 		case LogicalTypeId::TIMESTAMP_TZ:
-		case LogicalTypeId::ENUM:
 			return true;
 		default:
 			return false;

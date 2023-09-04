@@ -44,9 +44,8 @@ select * from person where current_mood = 'sad'
 Mark	sad
 
 query TT
-select * from person where current_mood > 'sa'
+select * from person where current_mood > 'sad'
 ----
-Mark	sad
 
 
 statement ok
