@@ -282,7 +282,7 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
-                                            const ClientConfig *client_config) {
+                                            optional_ptr<const ClientConfig> client_config) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}

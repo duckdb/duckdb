@@ -47,7 +47,7 @@ public:
 	                             const string &respository = "");
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
-	                                  const ClientConfig *client_config);
+	                                  optional_ptr<const ClientConfig> client_config);
 
 	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
