@@ -71,5 +71,4 @@ unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
 	return cached_buffers[pos]->Pin(*file_handle);
 }
 
-
 } // namespace duckdb

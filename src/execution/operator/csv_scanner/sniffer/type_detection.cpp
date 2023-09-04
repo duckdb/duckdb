@@ -148,7 +148,8 @@ struct SniffValue {
 		scanner.pre_previous_state = scanner.previous_state;
 		scanner.previous_state = scanner.state;
 		scanner.state = static_cast<CSVState>(
-		    sniffing_state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
+		    sniffing_state_machine
+		        .transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
 
 		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
 		if (scanner.previous_state == CSVState::DELIMITER ||
@@ -270,7 +271,7 @@ void CSVSniffer::DetectTypes() {
 			has_format_candidates[t.first] = false;
 			format_candidates[t.first].clear();
 		}
-		D_ASSERT(candidate->dialect_options.num_cols > 0);
+		D_ASSERT(sniffing_state_machine.dialect_options.num_cols > 0);
 
 		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
@@ -339,8 +340,8 @@ void CSVSniffer::DetectTypes() {
 					if (has_format_candidates.count(sql_type.id()) &&
 					    (!has_format_is_set || format_candidates[sql_type.id()].size() > 1) && !dummy_val.IsNull() &&
 					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
-						DetectDateAndTimeStampFormats(sniffing_state_machine, has_format_candidates, format_candidates, sql_type,
-						                              separator, dummy_val);
+						DetectDateAndTimeStampFormats(sniffing_state_machine, has_format_candidates, format_candidates,
+						                              sql_type, separator, dummy_val);
 					}
 					// try cast from string to sql_type
 					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {

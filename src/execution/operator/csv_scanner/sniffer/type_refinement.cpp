@@ -17,7 +17,8 @@ struct Parse {
 		scanner.pre_previous_state = scanner.previous_state;
 		scanner.previous_state = scanner.state;
 		scanner.state = static_cast<CSVState>(
-		    sniffing_state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
+		    sniffing_state_machine
+		        .transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
 
 		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
 		if (scanner.previous_state == CSVState::DELIMITER ||
@@ -65,7 +66,8 @@ struct Parse {
 	}
 
 	inline static void Finalize(CSVScanner &scanner, DataChunk &parse_chunk) {
-		if (scanner.cur_rows < scanner.GetStateMachine().options.sample_chunk_size && scanner.state != CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows < scanner.GetStateMachine().options.sample_chunk_size &&
+		    scanner.state != CSVState::EMPTY_LINE) {
 			scanner.VerifyUTF8();
 			auto &v = parse_chunk.data[scanner.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
@@ -86,11 +88,12 @@ bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const Logica
 		return BaseCSVReader::TryCastDateVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
 		                                        dummy_result, size, error_message, line_error);
 	}
-	if (sniffing_state_machine.dialect_options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
+	if (sniffing_state_machine.dialect_options.has_format[LogicalTypeId::TIMESTAMP] &&
+	    sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
-		return BaseCSVReader::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format, parse_chunk_col,
-		                                             dummy_result, size, error_message);
+		return BaseCSVReader::TryCastTimestampVector(sniffing_state_machine.dialect_options.date_format,
+		                                             parse_chunk_col, dummy_result, size, error_message);
 	}
 	// target type is not varchar: perform a cast
 	string error_message;
@@ -141,7 +144,8 @@ void CSVSniffer::RefineTypes() {
 						sniffing_state_machine.dialect_options.has_format[sql_type.id()] =
 						    (!best_type_format_candidates.empty());
 						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(), sql_type.id());
+							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
+							              sql_type.id());
 						}
 					}
 					//	if none match, then this is not a column of type sql_type,
@@ -149,7 +153,8 @@ void CSVSniffer::RefineTypes() {
 						//	so restore the candidates that did work.
 						best_type_format_candidates.swap(save_format_candidates);
 						if (!best_type_format_candidates.empty()) {
-							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(), sql_type.id());
+							SetDateFormat(best_candidate->GetStateMachine(), best_type_format_candidates.back(),
+							              sql_type.id());
 						}
 					}
 				}

@@ -644,7 +644,6 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 	}
 }
 
-
 bool ParallelCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
 	mode = parser_mode;
 	return Parse(insert_chunk, error_message);

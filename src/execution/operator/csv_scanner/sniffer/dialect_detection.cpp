@@ -14,9 +14,8 @@ struct SniffDialect {
 
 	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
-
-		D_ASSERT(sniffed_column_counts.size() == scanner.options.sample_chunk_size);
 		auto &sniffing_state_machine = scanner.GetStateMachine();
+		D_ASSERT(sniffed_column_counts.size() == sniffing_state_machine.options.sample_chunk_size);
 		if (scanner.state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return true;
@@ -25,7 +24,8 @@ struct SniffDialect {
 		scanner.previous_state = scanner.state;
 
 		scanner.state = static_cast<CSVState>(
-		    sniffing_state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
+		    sniffing_state_machine
+		        .transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
 
 		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
 		scanner.column_count += scanner.previous_state == CSVState::DELIMITER;
@@ -40,11 +40,12 @@ struct SniffDialect {
 		    (scanner.column_count - 1) * (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return);
 
 		// Identify what is our line separator
-		sniffing_state_machine.carry_on_separator =
-		    (scanner.state == CSVState::RECORD_SEPARATOR && carriage_return) || sniffing_state_machine.carry_on_separator;
-		sniffing_state_machine.single_record_separator = ((scanner.state != CSVState::RECORD_SEPARATOR && carriage_return) ||
-		                                   (scanner.state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
-		                                  sniffing_state_machine.single_record_separator;
+		sniffing_state_machine.carry_on_separator = (scanner.state == CSVState::RECORD_SEPARATOR && carriage_return) ||
+		                                            sniffing_state_machine.carry_on_separator;
+		sniffing_state_machine.single_record_separator =
+		    ((scanner.state != CSVState::RECORD_SEPARATOR && carriage_return) ||
+		     (scanner.state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
+		    sniffing_state_machine.single_record_separator;
 		if (scanner.cur_rows >= sniffing_state_machine.options.sample_chunk_size) {
 			// We sniffed enough rows
 			return true;
@@ -56,7 +57,8 @@ struct SniffDialect {
 		if (scanner.state == CSVState::INVALID) {
 			return;
 		}
-		if (scanner.cur_rows < sniffing_state_machine.options.sample_chunk_size && scanner.state != CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows < sniffing_state_machine.options.sample_chunk_size &&
+		    scanner.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[scanner.cur_rows++] = scanner.column_count;
 		}
 		NewLineIdentifier suggested_newline;
@@ -132,17 +134,18 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVScanner>> 
 				for (const auto &escape : escape_candidates) {
 					D_ASSERT(buffer_manager);
 					CSVStateMachineOptions state_machine_options(delimiter, quote, escape);
-					auto sniffing_state_machine = make_uniq<CSVStateMachineSniffing> (options, state_machine_options,
-					                                                            state_machine_cache);
-					csv_state_machines.emplace_back(make_uniq<CSVScanner>(buffer_manager,std::move(sniffing_state_machine)));
+					auto sniffing_state_machine =
+					    make_uniq<CSVStateMachineSniffing>(options, state_machine_options, state_machine_cache);
+					csv_state_machines.emplace_back(
+					    make_uniq<CSVScanner>(buffer_manager, std::move(sniffing_state_machine)));
 				}
 			}
 		}
 	}
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &rows_read,
-                                         idx_t &best_consistent_rows, idx_t &prev_padding_count) {
+void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &rows_read, idx_t &best_consistent_rows,
+                                         idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
 	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
 

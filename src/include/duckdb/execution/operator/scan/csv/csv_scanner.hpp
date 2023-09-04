@@ -56,12 +56,12 @@ public:
 	//! Resets the iterator
 	void Reset();
 
-	CSVStateMachineSniffing& GetStateMachine();
+	CSVStateMachineSniffing &GetStateMachine();
 
 	//! Current Numbers of Rows
-	idx_t cur_rows;
+	idx_t cur_rows = 0;
 	//! Current Number of Columns
-	idx_t column_count;
+	idx_t column_count = 1;
 
 	//! Current, previous, and state before the previous
 	CSVState state;
@@ -70,7 +70,7 @@ public:
 
 	//! String Value
 	string value;
-	idx_t rows_read;
+	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
 	//! Verifies if value is UTF8
@@ -85,13 +85,13 @@ private:
 };
 
 //! The CSV Scanner with special objects to perform sniffing
-//class CSVScannerSniffer: public CSVScanner {
-//public:
+// class CSVScannerSniffer: public CSVScanner {
+// public:
 //	explicit CSVScannerSniffer(shared_ptr<CSVBufferManager> buffer_manager_p)
 //	    : CSVScanner(std::move(buffer_manager_p)) {
 //	};
 //
-//private:
+// private:
 //	 int x = 0;
 //};
 

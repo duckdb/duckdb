@@ -35,7 +35,7 @@ enum class CSVState : uint8_t {
 //! the states. Note: The State Machine is currently utilized solely in the CSV Sniffer.
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(const CSVStateMachineOptions &state_machine_options,
+	explicit CSVStateMachine(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
 	                         CSVStateMachineCache &csv_state_machine_cache_p);
 
 	//! The Transition Array is a Finite State Machine
@@ -43,15 +43,15 @@ public:
 	const state_machine_t &transition_array;
 	//! Options of this state machine
 	const CSVStateMachineOptions state_machine_options;
+	//! CSV Reader Options
+	const CSVReaderOptions &options;
 };
 
 //! State Machine holding options that are detected during sniffing
-class CSVStateMachineSniffing: public CSVStateMachine {
+class CSVStateMachineSniffing : public CSVStateMachine {
 public:
 	explicit CSVStateMachineSniffing(CSVReaderOptions &options_p, const CSVStateMachineOptions &state_machine_options,
-	                         CSVStateMachineCache &csv_state_machine_cache_p);
-
-	const CSVReaderOptions &options;
+	                                 CSVStateMachineCache &csv_state_machine_cache_p);
 	//! Stores identified start row for this file (e.g., a file can start with garbage like notes, before the header)
 	idx_t start_row = 0;
 

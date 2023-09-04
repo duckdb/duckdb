@@ -15,7 +15,8 @@ void CSVSniffer::ReplaceTypes() {
 		for (idx_t i = 0; i < names.size(); i++) {
 			auto it = sniffing_state_machine.options.sql_types_per_column.find(names[i]);
 			if (it != sniffing_state_machine.options.sql_types_per_column.end()) {
-				best_sql_types_candidates_per_column_idx[i] = {sniffing_state_machine.options.sql_type_list[it->second]};
+				best_sql_types_candidates_per_column_idx[i] = {
+				    sniffing_state_machine.options.sql_type_list[it->second]};
 				found++;
 			}
 		}
