@@ -1,4 +1,4 @@
-catalog/catalog.cpp	16
+catalog/catalog.cpp	29
 catalog/catalog_entry.cpp	11
 catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
@@ -27,7 +27,7 @@ common/crypto/md5.cpp	2
 common/enum_util.cpp	3526
 common/enums/expression_type.cpp	185
 common/enums/join_type.cpp	3
-common/exception.cpp	96
+common/exception.cpp	106
 common/exception_format_value.cpp	9
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
@@ -123,6 +123,7 @@ core_functions/scalar/date/date_sub.cpp	209
 core_functions/scalar/date/date_trunc.cpp	23
 core_functions/scalar/date/strftime.cpp	10
 core_functions/scalar/enum/enum_functions.cpp	10
+core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
 core_functions/scalar/list/array_slice.cpp	2
@@ -178,7 +179,7 @@ execution/operator/helper/physical_limit_percent.cpp	4
 execution/operator/helper/physical_load.cpp	2
 execution/operator/helper/physical_reservoir_sample.cpp	8
 execution/operator/helper/physical_reset.cpp	25
-execution/operator/helper/physical_set.cpp	2
+execution/operator/helper/physical_set.cpp	3
 execution/operator/helper/physical_streaming_sample.cpp	16
 execution/operator/join/outer_join_marker.cpp	3
 execution/operator/join/perfect_hash_join_executor.cpp	2
@@ -490,7 +491,7 @@ main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
-main/extension/extension_install.cpp	97
+main/extension/extension_install.cpp	119
 main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
@@ -667,7 +668,7 @@ planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
 planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
-planner/binder/tableref/bind_basetableref.cpp	4
+planner/binder/tableref/bind_basetableref.cpp	15
 planner/binder/tableref/bind_joinref.cpp	3
 planner/binder/tableref/bind_pivot.cpp	6
 planner/binder/tableref/bind_table_function.cpp	18

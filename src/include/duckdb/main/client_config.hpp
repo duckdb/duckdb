@@ -91,6 +91,8 @@ struct ClientConfig {
 
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
+	//! Override for the default autoload extensoin repository
+	string autoinstall_extension_repo = "";
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
