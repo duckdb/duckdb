@@ -90,7 +90,7 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastValue(CSVStateMachineSniffing &candidate, const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
 	}
@@ -116,7 +116,7 @@ bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, co
 	return value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
 }
 
-void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_specifier,
+void CSVSniffer::SetDateFormat(CSVStateMachineSniffing &candidate, const string &format_specifier,
                                const LogicalTypeId &sql_type) {
 	candidate.dialect_options.has_format[sql_type] = true;
 	auto &date_format = candidate.dialect_options.date_format[sql_type];
@@ -125,64 +125,64 @@ void CSVSniffer::SetDateFormat(CSVStateMachine &candidate, const string &format_
 }
 
 struct SniffValue {
-	inline static void Initialize(CSVStateMachine &machine) {
-		machine.state = CSVState::STANDARD;
-		machine.previous_state = CSVState::STANDARD;
-		machine.pre_previous_state = CSVState::STANDARD;
-		machine.cur_rows = 0;
-		machine.value = "";
-		machine.rows_read = 0;
+	inline static void Initialize(CSVScanner &scanner) {
+		scanner.state = CSVState::STANDARD;
+		scanner.previous_state = CSVState::STANDARD;
+		scanner.pre_previous_state = CSVState::STANDARD;
+		scanner.cur_rows = 0;
+		scanner.value = "";
+		scanner.rows_read = 0;
 	}
 
-	inline static bool Process(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values, char current_char,
+	inline static bool Process(CSVScanner &scanner, vector<TupleSniffing> &sniffed_values, char current_char,
 	                           idx_t current_pos) {
-
-		if ((machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
+		auto &sniffing_state_machine = scanner.GetStateMachine();
+		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
-		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
-			machine.rows_read++;
-			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
-			sniffed_values[machine.cur_rows].set = true;
-			machine.line_start_pos = current_pos;
+		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+			scanner.rows_read++;
+			sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;
+			sniffed_values[scanner.cur_rows].set = true;
+			scanner.line_start_pos = current_pos;
 		}
-		machine.pre_previous_state = machine.previous_state;
-		machine.previous_state = machine.state;
-		machine.state = static_cast<CSVState>(
-		    machine.transition_array[static_cast<uint8_t>(machine.state)][static_cast<uint8_t>(current_char)]);
+		scanner.pre_previous_state = scanner.previous_state;
+		scanner.previous_state = scanner.state;
+		scanner.state = static_cast<CSVState>(
+		    sniffing_state_machine.transition_array[static_cast<uint8_t>(scanner.state)][static_cast<uint8_t>(current_char)]);
 
-		bool carriage_return = machine.previous_state == CSVState::CARRIAGE_RETURN;
-		if (machine.previous_state == CSVState::DELIMITER ||
-		    (machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
-		    (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+		bool carriage_return = scanner.previous_state == CSVState::CARRIAGE_RETURN;
+		if (scanner.previous_state == CSVState::DELIMITER ||
+		    (scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE) ||
+		    (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
 			// Check if it's UTF-8
-			machine.VerifyUTF8();
-			if (machine.value.empty() || machine.value == machine.options.null_str) {
+			scanner.VerifyUTF8();
+			if (scanner.value.empty() || scanner.value == sniffing_state_machine.options.null_str) {
 				// We set empty == null value
-				sniffed_values[machine.cur_rows].values.push_back(Value(LogicalType::VARCHAR));
+				sniffed_values[scanner.cur_rows].values.push_back(Value(LogicalType::VARCHAR));
 			} else {
-				sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
+				sniffed_values[scanner.cur_rows].values.push_back(Value(scanner.value));
 			}
-			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
+			sniffed_values[scanner.cur_rows].line_number = scanner.rows_read;
 
-			machine.value = "";
+			scanner.value = "";
 		}
-		if (machine.state == CSVState::STANDARD ||
-		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
-			machine.value += current_char;
+		if (scanner.state == CSVState::STANDARD ||
+		    (scanner.state == CSVState::QUOTED && scanner.previous_state == CSVState::QUOTED)) {
+			scanner.value += current_char;
 		}
-		machine.cur_rows +=
-		    machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE;
+		scanner.cur_rows +=
+		    scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE;
 		// It means our carriage return is actually a record separator
-		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
-		if (machine.cur_rows >= sniffed_values.size()) {
+		scanner.cur_rows += scanner.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		if (scanner.cur_rows >= sniffed_values.size()) {
 			// We sniffed enough rows
 			return true;
 		}
 		return false;
 	}
 
-	inline static void Finalize(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values) {
+	inline static void Finalize(CSVScanner &machine, vector<TupleSniffing> &sniffed_values) {
 		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
 			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
@@ -197,7 +197,7 @@ struct SniffValue {
 	}
 };
 
-void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachine &candidate,
+void CSVSniffer::DetectDateAndTimeStampFormats(CSVStateMachineSniffing &candidate,
                                                map<LogicalTypeId, bool> &has_format_candidates,
                                                map<LogicalTypeId, vector<string>> &format_candidates,
                                                const LogicalType &sql_type, const string &separator, Value &dummy_val) {
@@ -259,9 +259,10 @@ void CSVSniffer::DetectTypes() {
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
+		auto &sniffing_state_machine = candidate->GetStateMachine();
 		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
-		for (idx_t i = 0; i < candidate->dialect_options.num_cols; i++) {
-			info_sql_types_candidates[i] = candidate->options.auto_type_candidates;
+		for (idx_t i = 0; i < sniffing_state_machine.dialect_options.num_cols; i++) {
+			info_sql_types_candidates[i] = sniffing_state_machine.options.auto_type_candidates;
 		}
 		map<LogicalTypeId, bool> has_format_candidates;
 		map<LogicalTypeId, vector<string>> format_candidates;
@@ -273,7 +274,7 @@ void CSVSniffer::DetectTypes() {
 
 		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(candidate->dialect_options.num_cols, LogicalType::VARCHAR);
+		return_types.assign(sniffing_state_machine.dialect_options.num_cols, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
 		candidate->Reset();
@@ -284,7 +285,7 @@ void CSVSniffer::DetectTypes() {
 			sample_size++;
 		}
 		vector<TupleSniffing> tuples(sample_size);
-		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
+		candidate->Process<SniffValue>(*candidate, tuples);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
 		idx_t values_start = 0;
@@ -331,18 +332,18 @@ void CSVSniffer::DetectTypes() {
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					bool has_format_is_set = false;
-					auto format_iterator = candidate->dialect_options.has_format.find(sql_type.id());
-					if (format_iterator != candidate->dialect_options.has_format.end()) {
+					auto format_iterator = sniffing_state_machine.dialect_options.has_format.find(sql_type.id());
+					if (format_iterator != sniffing_state_machine.dialect_options.has_format.end()) {
 						has_format_is_set = format_iterator->second;
 					}
 					if (has_format_candidates.count(sql_type.id()) &&
 					    (!has_format_is_set || format_candidates[sql_type.id()].size() > 1) && !dummy_val.IsNull() &&
 					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
-						DetectDateAndTimeStampFormats(*candidate, has_format_candidates, format_candidates, sql_type,
+						DetectDateAndTimeStampFormats(sniffing_state_machine, has_format_candidates, format_candidates, sql_type,
 						                              separator, dummy_val);
 					}
 					// try cast from string to sql_type
-					if (TryCastValue(*candidate, dummy_val, sql_type)) {
+					if (TryCastValue(sniffing_state_machine, dummy_val, sql_type)) {
 						break;
 					} else {
 						if (row_idx != start_idx_detection && cur_top_candidate == LogicalType::BOOLEAN) {
@@ -375,7 +376,7 @@ void CSVSniffer::DetectTypes() {
 			// we have a new best_options candidate
 			if (true_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->dialect_options.skip_rows += true_start;
+				sniffing_state_machine.dialect_options.skip_rows += true_start;
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
@@ -390,7 +391,7 @@ void CSVSniffer::DetectTypes() {
 
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {
-			SetDateFormat(*best_candidate, best.second.back(), best.first);
+			SetDateFormat(best_candidate->GetStateMachine(), best.second.back(), best.first);
 		}
 	}
 }

@@ -73,6 +73,8 @@ public:
 	idx_t rows_read;
 	idx_t line_start_pos = 0;
 
+	//! Verifies if value is UTF8
+	void VerifyUTF8();
 
 private:
 	idx_t cur_pos = 0;
@@ -80,9 +82,6 @@ private:
 	shared_ptr<CSVBufferManager> buffer_manager;
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;
-
-	//! Verifies if value is UTF8
-	void VerifyUTF8();
 };
 
 //! The CSV Scanner with special objects to perform sniffing
