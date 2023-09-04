@@ -65,6 +65,7 @@ public:
 	void Flush();
 
 	void MarkBlocksAsModified();
+	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
 	idx_t BlockCount();
 

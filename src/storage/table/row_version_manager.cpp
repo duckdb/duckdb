@@ -2,9 +2,10 @@
 
 namespace duckdb {
 
-RowVersionManager::RowVersionManager(idx_t start) : start(start) {}
+RowVersionManager::RowVersionManager(idx_t start) : start(start), has_changes(false) {}
 
 void RowVersionManager::SetStart(idx_t new_start) {
+	lock_guard<mutex> l(version_lock);
 	this->start = new_start;
 	idx_t current_start = start;
 	for (idx_t i = 0; i < Storage::ROW_GROUP_VECTOR_COUNT; i++) {
@@ -16,6 +17,7 @@ void RowVersionManager::SetStart(idx_t new_start) {
 }
 
 idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
+	lock_guard<mutex> l(version_lock);
 	idx_t deleted_count = 0;
 	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
 		if (!vector_info[i]) {
@@ -66,6 +68,7 @@ bool RowVersionManager::Fetch(TransactionData transaction, idx_t row) {
 
 void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t count, idx_t row_group_start, idx_t row_group_end) {
 	lock_guard<mutex> lock(version_lock);
+	has_changes = true;
 	idx_t start_vector_idx = row_group_start / STANDARD_VECTOR_SIZE;
 	idx_t end_vector_idx = (row_group_end - 1) / STANDARD_VECTOR_SIZE;
 	for (idx_t vector_idx = start_vector_idx; vector_idx <= end_vector_idx; vector_idx++) {
@@ -142,15 +145,25 @@ ChunkVectorInfo &RowVersionManager::GetVectorInfo(idx_t vector_idx) {
 
 idx_t RowVersionManager::DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
+	has_changes = true;
 	return GetVectorInfo(vector_idx).Delete(transaction_id, rows, count);
 }
 
 void RowVersionManager::CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count) {
 	lock_guard<mutex> lock(version_lock);
+	has_changes = true;
 	GetVectorInfo(vector_idx).CommitDelete(commit_id, rows, count);
 }
 
-MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {
+vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager) {
+	if (!has_changes && !storage_pointers.empty()) {
+		// the row version manager already exists on disk and no changes were made
+		// we can write the current pointer as-is
+		// ensure the blocks we are pointing to are not marked as free
+		manager.ClearModifiedBlocks(storage_pointers);
+		// return the root pointer
+		return storage_pointers;
+	}
 	// first count how many ChunkInfo's we need to deserialize
 	idx_t chunk_info_count = 0;
 	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
@@ -161,11 +174,12 @@ MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {
 		chunk_info_count++;
 	}
 	if (chunk_info_count == 0) {
-		return MetaBlockPointer();
+		return vector<MetaBlockPointer>();
 	}
 
-	MetadataWriter writer(manager);
-	auto delete_location = writer.GetMetaBlockPointer();
+	storage_pointers.clear();
+
+	MetadataWriter writer(manager, &storage_pointers);
 	// now serialize the actual version information
 	writer.Write<idx_t>(chunk_info_count);
 	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
@@ -177,15 +191,17 @@ MetaBlockPointer RowVersionManager::Checkpoint(MetadataManager &manager) {
 		chunk_info->Serialize(writer);
 	}
 	writer.Flush();
-	return delete_location;
+
+	has_changes = false;
+	return storage_pointers;
 }
 
 shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start) {
 	if (!delete_pointer.IsValid()) {
 		return nullptr;
 	}
-	MetadataReader source(manager, delete_pointer);
 	auto version_info = make_shared<RowVersionManager>(start);
+	MetadataReader source(manager, delete_pointer, &version_info->storage_pointers);
 	auto chunk_count = source.Read<idx_t>();
 	D_ASSERT(chunk_count > 0);
 	for (idx_t i = 0; i < chunk_count; i++) {
@@ -195,6 +211,7 @@ shared_ptr<RowVersionManager> RowVersionManager::Deserialize(MetaBlockPointer de
 		}
 		version_info->vector_info[vector_index] = ChunkInfo::Deserialize(source);
 	}
+	version_info->has_changes = false;
 	return version_info;
 }
 

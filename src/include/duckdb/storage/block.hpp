@@ -32,7 +32,7 @@ struct BlockPointer {
 	block_id_t block_id;
 	uint32_t offset;
 
-	bool IsValid() {
+	bool IsValid() const {
 		return block_id != INVALID_BLOCK;
 	}
 };
@@ -46,11 +46,11 @@ struct MetaBlockPointer {
 	idx_t block_pointer;
 	uint32_t offset;
 
-	bool IsValid() {
+	bool IsValid() const {
 		return block_pointer != DConstants::INVALID_INDEX;
 	}
-	block_id_t GetBlockId();
-	uint32_t GetBlockIndex();
+	block_id_t GetBlockId() const;
+	uint32_t GetBlockIndex() const;
 };
 
 } // namespace duckdb

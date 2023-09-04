@@ -37,13 +37,15 @@ public:
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(idx_t vector_idx, transaction_t commit_id, row_t rows[], idx_t count);
 
-	MetaBlockPointer Checkpoint(MetadataManager &manager);
+	vector<MetaBlockPointer> Checkpoint(MetadataManager &manager);
 	static shared_ptr<RowVersionManager> Deserialize(MetaBlockPointer delete_pointer, MetadataManager &manager, idx_t start);
 
 private:
 	mutex version_lock;
 	idx_t start;
 	unique_ptr<ChunkInfo> vector_info[Storage::ROW_GROUP_VECTOR_COUNT];
+	bool has_changes;
+	vector<MetaBlockPointer> storage_pointers;
 
 private:
 	optional_ptr<ChunkInfo> GetChunkInfo(idx_t vector_idx);

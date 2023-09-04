@@ -39,7 +39,7 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 	for (idx_t c = 0; c < columns.size(); c++) {
 		this->is_loaded[c] = false;
 	}
-	this->deletes_pointer = pointer.deletes_pointer;
+	this->deletes_pointers = std::move(pointer.deletes_pointers);
 	this->deletes_is_loaded = false;
 
 	Verify();
@@ -541,12 +541,16 @@ void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, Tabl
 }
 
 shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
-	if (!deletes_pointer.IsValid() || deletes_is_loaded) {
+	if (!HasUnloadedDeletes()) {
+		// deletes are loaded - return the version info
 		return version_info;
 	}
 	lock_guard<mutex> lock(row_group_lock);
-	if (deletes_pointer.IsValid() && !deletes_is_loaded) {
-		version_info = RowVersionManager::Deserialize(deletes_pointer, GetBlockManager().GetMetadataManager(), start);
+	// double-check after obtaining the lock whether or not deletes are still not loaded to avoid double load
+	if (HasUnloadedDeletes()) {
+		// deletes are not loaded - reload
+		auto root_delete = deletes_pointers[0];
+		version_info = RowVersionManager::Deserialize(root_delete, GetBlockManager().GetMetadataManager(), start);
 		deletes_is_loaded = true;
 	}
 	return version_info;
@@ -743,11 +747,24 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 }
 
 bool RowGroup::AllDeleted() {
+	if (HasUnloadedDeletes()) {
+		// deletes aren't loaded yet - we know not everything is deleted
+		return false;
+	}
 	auto &vinfo = GetVersionInfo();
 	if (!vinfo) {
 		return false;
 	}
 	return vinfo->GetCommittedDeletedCount(count) == count;
+}
+
+bool RowGroup::HasUnloadedDeletes() const {
+	if (deletes_pointers.empty()) {
+		// no stored deletes at all
+		return false;
+	}
+	// return whether or not the deletes have been loaded
+	return !deletes_is_loaded;
 }
 
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
@@ -781,15 +798,21 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		// can cascade recursively into more pointer writes.
 		state->WriteDataPointers(writer);
 	}
-	row_group_pointer.deletes_pointer = CheckpointDeletes(version_info.get(), writer.GetPayloadWriter().GetManager());
+	row_group_pointer.deletes_pointers = CheckpointDeletes(version_info.get(), writer.GetPayloadWriter().GetManager());
 	Verify();
 	return row_group_pointer;
 }
 
-MetaBlockPointer RowGroup::CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager) {
+vector<MetaBlockPointer> RowGroup::CheckpointDeletes(optional_ptr<RowVersionManager> versions, MetadataManager &manager) {
 	if (!versions) {
 		// no version information: write nothing
-		return MetaBlockPointer();
+		return vector<MetaBlockPointer>();
+	}
+	if (HasUnloadedDeletes()) {
+		// deletes were not loaded so they cannot be changed
+		// re-use them as-is
+		manager.ClearModifiedBlocks(deletes_pointers);
+		return deletes_pointers;
 	}
 	return versions->Checkpoint(manager);
 }
@@ -803,7 +826,11 @@ void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, 
 		serializer.Write<idx_t>(data_pointer.block_pointer);
 		serializer.Write<uint32_t>(data_pointer.offset);
 	}
-	serializer.Write<idx_t>(pointer.deletes_pointer.block_pointer);
+	serializer.Write<idx_t>(pointer.deletes_pointers.size());
+	for(auto &delete_pointer : pointer.deletes_pointers) {
+		serializer.Write<idx_t>(delete_pointer.block_pointer);
+		serializer.Write<uint32_t>(delete_pointer.offset);
+	}
 	writer.Finalize();
 }
 
@@ -825,8 +852,13 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager
 		pointer.offset = source.Read<uint32_t>();
 		result.data_pointers.push_back(pointer);
 	}
-	result.deletes_pointer.block_pointer = source.Read<idx_t>();
-	result.deletes_pointer.offset = 0;
+	auto delete_count = source.Read<idx_t>();
+	for(idx_t i = 0; i < delete_count; i++) {
+		MetaBlockPointer pointer;
+		pointer.block_pointer = source.Read<idx_t>();
+		pointer.offset = source.Read<uint32_t>();
+		result.deletes_pointers.push_back(pointer);
+	}
 
 	reader.Finalize();
 	return result;
