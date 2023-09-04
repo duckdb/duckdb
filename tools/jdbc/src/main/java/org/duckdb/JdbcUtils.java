@@ -18,8 +18,11 @@ final class JdbcUtils {
     static byte[] readAllBytes(InputStream x) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         byte[] thing = new byte[256];
-        while (x.read(thing) != 0) {
-            out.write(thing);
+        int length;
+        int offset = 0;
+        while ((length = x.read(thing)) != -1) {
+            out.write(thing, offset, length);
+            offset += length;
         }
         return out.toByteArray();
     }
