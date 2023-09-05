@@ -110,9 +110,8 @@ public:
 		bool has_serialize = function.format_serialize;
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
-			serializer.BeginObject(504, "function_data");
-			function.format_serialize(serializer, bind_info, function);
-			serializer.EndObject();
+			serializer.WriteObject(504, "function_data",
+			                       [&](FormatSerializer &obj) { function.format_serialize(obj, bind_info, function); });
 			D_ASSERT(function.format_deserialize);
 		}
 	}
@@ -150,9 +149,9 @@ public:
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.name);
 		}
-		deserializer.BeginObject(504, "function_data");
-		auto result = function.format_deserialize(deserializer, function);
-		deserializer.EndObject();
+		unique_ptr<FunctionData> result;
+		deserializer.ReadObject(504, "function_data",
+		                        [&](FormatDeserializer &obj) { result = function.format_deserialize(obj, function); });
 		return result;
 	}
 

@@ -1,5 +1,7 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 
@@ -61,6 +63,20 @@ void ColumnStatistics::Serialize(Serializer &serializer) const {
 shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &source, const LogicalType &type) {
 	auto stats = BaseStatistics::Deserialize(source, type);
 	auto distinct_stats = source.ReadOptional<DistinctStatistics>();
+	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
+}
+
+void ColumnStatistics::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(100, "statistics", stats);
+	serializer.WritePropertyWithDefault(101, "distinct", distinct_stats, unique_ptr<DistinctStatistics>());
+}
+
+shared_ptr<ColumnStatistics> ColumnStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
+	// TODO: do we read this as an property or into the object itself?
+	// we have this sort of pseudo inheritance going on here which is annoying
+	auto stats = BaseStatistics::FormatDeserialize(deserializer);
+	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
+	    101, "distinct", unique_ptr<DistinctStatistics>());
 	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
 }
 

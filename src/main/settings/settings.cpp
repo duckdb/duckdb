@@ -527,6 +527,52 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Autoload Extension Repository
+//===--------------------------------------------------------------------===//
+void AutoloadExtensionRepository::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = ClientConfig().autoinstall_extension_repo;
+}
+
+void AutoloadExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+}
+
+Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).autoinstall_extension_repo);
+}
+
+//===--------------------------------------------------------------------===//
+// Autoinstall Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoinstallKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_known_extensions = input.GetValue<bool>();
+}
+
+void AutoinstallKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_known_extensions = DBConfig().options.autoinstall_known_extensions;
+}
+
+Value AutoinstallKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoinstall_known_extensions);
+}
+//===--------------------------------------------------------------------===//
+// Autoload Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoloadKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoload_known_extensions = input.GetValue<bool>();
+}
+
+void AutoloadKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoload_known_extensions = DBConfig().options.autoload_known_extensions;
+}
+
+Value AutoloadKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoload_known_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
