@@ -98,6 +98,9 @@ struct SplitStringListOperation {
 			child_start++;
 			return;
 		}
+		if (start_pos > pos) {
+			pos = start_pos;
+		}
 		child_data[child_start] = StringVector::AddString(child, buf + start_pos, pos - start_pos);
 		child_start++;
 	}
@@ -133,7 +136,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				trailing_whitespace++;
 			}
 			if (!(buf[pos] == ']' && start_pos == pos)) {
-				state.HandleValue(buf, start_pos, pos);
+				state.HandleValue(buf, start_pos, pos - trailing_whitespace);
 			} // else the list is empty
 			if (buf[pos] == ']') {
 				lvl--;

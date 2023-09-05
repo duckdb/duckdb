@@ -41,6 +41,20 @@ NULL
 (empty)
 NULL
 
+query I
+select UNNEST('[NULL,, NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
+
+query I
+select UNNEST('[NULL,   , NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
+
 #               Nested lists
 # ---------------------------------------------------
 query I
