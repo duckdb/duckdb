@@ -1,3 +1,0 @@
-C:/Python37-x64/python.exe ../upload-s3.py rstats duckdb_*.zip
-C:/Python37-x64/python.exe ../upload-s3.py rstats/bin/windows/contrib/4.0 duckdb_*.zip PACKAGES*
-C:/Python37-x64/python.exe ../../scripts/asset-upload.py duckdb_r_windows.zip=duckdb_*.zip
