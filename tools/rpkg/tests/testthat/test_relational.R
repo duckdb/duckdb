@@ -467,7 +467,8 @@ test_that("rel aggregate with no groups but a sum over a column, sums the column
 test_that("rel aggregate with groups and aggregate function works", {
   rel_a <- rel_from_df(con, data.frame(a = c(1, 2, 5, 5), b = c(3, 3, 4, 4)))
   aggrs <- list(sum = expr_function("sum", list(expr_reference("a"))))
-  res <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+  groups <- rel_aggregate(rel_a, list(expr_reference("b")), aggrs)
+  res <- rel_order(groups, list(expr_reference("b")))
   rel_df <- rel_to_altrep(res)
   expected_result <- data.frame(b = c(3, 4), sum = c(3, 10))
   expect_equal(rel_df, expected_result)

@@ -209,7 +209,7 @@ void ChangeColumnTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	AlterTableInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(400, "column_name", column_name);
 	serializer.WriteProperty(401, "target_type", target_type);
-	serializer.WriteProperty(402, "expression", *expression);
+	serializer.WriteProperty(402, "expression", expression);
 }
 
 unique_ptr<AlterTableInfo> ChangeColumnTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -375,13 +375,13 @@ unique_ptr<AlterViewInfo> RenameViewInfo::FormatDeserialize(FormatDeserializer &
 void SetDefaultInfo::FormatSerialize(FormatSerializer &serializer) const {
 	AlterTableInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(400, "column_name", column_name);
-	serializer.WriteOptionalProperty(401, "expression", expression);
+	serializer.WritePropertyWithDefault(401, "expression", expression, unique_ptr<ParsedExpression>());
 }
 
 unique_ptr<AlterTableInfo> SetDefaultInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetDefaultInfo>(new SetDefaultInfo());
 	deserializer.ReadProperty(400, "column_name", result->column_name);
-	deserializer.ReadOptionalProperty(401, "expression", result->expression);
+	deserializer.ReadPropertyWithDefault(401, "expression", result->expression, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 
