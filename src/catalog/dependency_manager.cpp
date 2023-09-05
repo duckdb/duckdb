@@ -175,26 +175,6 @@ void DependencyManager::EraseObjectInternal(CatalogEntry &object) {
 	dependencies_map.erase(object);
 }
 
-void DependencyManager::PrintDependencyMap() {
-	Printer::Print("DEPENDENCIES_MAP");
-	for (auto &entry : dependencies_map) {
-		Printer::Print(entry.first.get().ToSQL());
-		for (auto &other : entry.second) {
-			Printer::Print("\t" + other.get().ToSQL());
-		}
-	}
-}
-
-void DependencyManager::PrintDependentsMap() {
-	Printer::Print("DEPENDENTS_MAP");
-	for (auto &entry : dependents_map) {
-		Printer::Print(entry.first.get().ToSQL());
-		for (auto &other : entry.second) {
-			Printer::Print("\t" + other.entry.get().ToSQL());
-		}
-	}
-}
-
 bool AllExportDependenciesWritten(CatalogEntry &object, optional_ptr<catalog_entry_set_t> dependencies_p,
                                   catalog_entry_set_t &exported) {
 	if (!dependencies_p) {

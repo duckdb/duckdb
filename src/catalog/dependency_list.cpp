@@ -91,22 +91,9 @@ LogicalDependency LogicalDependency::FormatDeserialize(FormatDeserializer &deser
 	return dependency;
 }
 
-void LogicalDependencyList::AddDependency(const LogicalDependency &entry) {
-	set.insert(entry);
-}
-
 void LogicalDependencyList::AddDependency(CatalogEntry &entry) {
 	LogicalDependency dependency(entry);
 	set.insert(dependency);
-}
-
-bool LogicalDependencyList::Contains(LogicalDependency &entry) {
-	return set.count(entry);
-}
-
-bool LogicalDependencyList::Contains(CatalogEntry &entry) {
-	LogicalDependency dependency(entry);
-	return set.count(dependency);
 }
 
 PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, optional_ptr<ClientContext> context) const {
