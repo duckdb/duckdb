@@ -16,7 +16,7 @@ class DataTable;
 
 struct DeleteInfo {
 	DataTable *table;
-	RowVersionManager *vinfo;
+	RowVersionManager *version_info;
 	idx_t vector_idx;
 	idx_t count;
 	idx_t base_row;

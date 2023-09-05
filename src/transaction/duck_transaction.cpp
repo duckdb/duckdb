@@ -74,7 +74,7 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
                                  idx_t base_row) {
 	auto delete_info = reinterpret_cast<DeleteInfo *>(
 	    undo_buffer.CreateEntry(UndoFlags::DELETE_TUPLE, sizeof(DeleteInfo) + sizeof(row_t) * count));
-	delete_info->vinfo = &info;
+	delete_info->version_info = &info;
 	delete_info->vector_idx = vector_idx;
 	delete_info->table = &table;
 	delete_info->count = count;

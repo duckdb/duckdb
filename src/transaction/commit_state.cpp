@@ -263,7 +263,7 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 			WriteDelete(*info);
 		}
 		// mark the tuples as committed
-		info->vinfo->CommitDelete(info->vector_idx, commit_id, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, commit_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
@@ -304,7 +304,7 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		info->table->info->cardinality += info->count;
 		// revert the commit by writing the (uncommitted) transaction_id back into the version info
-		info->vinfo->CommitDelete(info->vector_idx, transaction_id, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, transaction_id, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
