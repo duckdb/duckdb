@@ -249,6 +249,9 @@ protected:
 
 	// Handle primitive types, a serializer needs to implement these.
 	virtual void WriteNull() = 0;
+	virtual void WriteValue(char value) {
+		throw NotImplementedException("Write char value not implemented");
+	}
 	virtual void WriteValue(bool value) = 0;
 	virtual void WriteValue(uint8_t value) = 0;
 	virtual void WriteValue(int8_t value) = 0;

@@ -31,12 +31,12 @@ common/exception.cpp	106
 common/exception_format_value.cpp	9
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
-common/file_system.cpp	19
+common/file_system.cpp	20
 common/fsst.cpp	7
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/http_state.cpp	36
-common/local_file_system.cpp	16
+common/local_file_system.cpp	22
 common/multi_file_reader.cpp	15
 common/operator/cast_operators.cpp	81
 common/operator/convert_to_string.cpp	7
@@ -80,7 +80,7 @@ common/types/hash.cpp	5
 common/types/hugeint.cpp	35
 common/types/hyperloglog.cpp	11
 common/types/interval.cpp	31
-common/types/row/partitioned_tuple_data.cpp	10
+common/types/row/partitioned_tuple_data.cpp	15
 common/types/row/row_data_collection.cpp	8
 common/types/row/row_data_collection_scanner.cpp	61
 common/types/row/row_layout.cpp	4
@@ -93,7 +93,7 @@ common/types/string_heap.cpp	11
 common/types/time.cpp	25
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
-common/types/validity_mask.cpp	10
+common/types/validity_mask.cpp	12
 common/types/value.cpp	180
 common/types/vector.cpp	132
 common/value_operations/comparison_operations.cpp	32
@@ -103,6 +103,7 @@ common/vector_operations/null_operations.cpp	15
 common/vector_operations/numeric_inplace_operators.cpp	6
 common/vector_operations/vector_copy.cpp	2
 common/vector_operations/vector_hash.cpp	7
+core_functions/aggregate/distributive/approx_count.cpp	1
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
 core_functions/aggregate/distributive/bitstring_agg.cpp	6
@@ -115,6 +116,7 @@ core_functions/aggregate/holistic/approximate_quantile.cpp	29
 core_functions/aggregate/holistic/mode.cpp	11
 core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
+core_functions/aggregate/nested/histogram.cpp	1
 core_functions/aggregate/nested/list.cpp	4
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
@@ -192,12 +194,12 @@ execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
-execution/operator/persistent/base_csv_reader.cpp	36
-execution/operator/persistent/buffered_csv_reader.cpp	83
+execution/operator/csv_scanner/base_csv_reader.cpp	31
+execution/operator/csv_scanner/buffered_csv_reader.cpp	47
 execution/operator/persistent/csv_buffer.cpp	2
-execution/operator/persistent/csv_file_handle.cpp	10
-execution/operator/persistent/csv_reader_options.cpp	14
-execution/operator/persistent/parallel_csv_reader.cpp	75
+execution/operator/csv_scanner/csv_file_handle.cpp	7
+execution/operator/csv_scanner/csv_reader_options.cpp	12
+execution/operator/csv_scanner/parallel_csv_reader.cpp	51
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
@@ -228,7 +230,7 @@ execution/physical_plan/plan_sample.cpp	2
 execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
-execution/radix_partitioned_hashtable.cpp	3
+execution/radix_partitioned_hashtable.cpp	11
 execution/reservoir_sample.cpp	60
 execution/window_executor.cpp	29
 execution/window_segment_tree.cpp	12
@@ -354,6 +356,7 @@ include/duckdb/common/operator/multiply.hpp	2
 include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
 include/duckdb/common/pipe_file_system.hpp	3
+include/duckdb/common/printer.hpp	2
 include/duckdb/common/radix.hpp	2
 include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
@@ -457,6 +460,7 @@ include/duckdb/transaction/transaction.hpp	3
 include/duckdb/transaction/transaction_manager.hpp	5
 include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
+include/duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp	1
 main/appender.cpp	23
 main/attached_database.cpp	14
 main/chunk_scan_state.cpp	25

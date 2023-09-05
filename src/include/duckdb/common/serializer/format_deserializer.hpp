@@ -290,6 +290,12 @@ private:
 		return ReadBool();
 	}
 
+	// Deserialize a char
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, char>::value, T>::type Read() {
+		return ReadChar();
+	}
+
 	// Deserialize a int8_t
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, int8_t>::value, T>::type Read() {
@@ -436,6 +442,9 @@ protected:
 	}
 
 	virtual bool ReadBool() = 0;
+	virtual char ReadChar() {
+		throw NotImplementedException("ReadChar not implemented");
+	}
 	virtual int8_t ReadSignedInt8() = 0;
 	virtual uint8_t ReadUnsignedInt8() = 0;
 	virtual int16_t ReadSignedInt16() = 0;

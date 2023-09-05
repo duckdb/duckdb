@@ -56,18 +56,23 @@ class TestRelation(object):
         rel = conn.from_df(test_df)
         rel_2 = conn.from_df(test_df_2)
 
-        assert rel.intersect(rel_2).execute().fetchall() == [(3,), (4,)]
+        assert rel.intersect(rel_2).order('i').execute().fetchall() == [(3,), (4,)]
 
     def test_aggregate_operator(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.aggregate("sum(i)").execute().fetchall() == [(10,)]
-        assert rel.aggregate("j, sum(i)").execute().fetchall() == [('one', 1), ('two', 2), ('three', 3), ('four', 4)]
+        assert rel.aggregate("j, sum(i)").order('#2').execute().fetchall() == [
+            ('one', 1),
+            ('two', 2),
+            ('three', 3),
+            ('four', 4),
+        ]
 
     def test_distinct_operator(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
-        assert rel.distinct().execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
+        assert rel.distinct().order('all').execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
 
     def test_union_operator(self, duckdb_cursor):
         conn = duckdb.connect()
@@ -236,7 +241,7 @@ class TestRelation(object):
 
     def test_df_distinct(self, duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i": [1, 2, 3, 4], "j": ["one", "two", "three", "four"]})
-        rel = duckdb.distinct(test_df)
+        rel = duckdb.distinct(test_df).order('i')
         assert rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')]
 
     def test_df_write_csv(self, duckdb_cursor):
