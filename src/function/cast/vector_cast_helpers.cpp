@@ -133,7 +133,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				trailing_whitespace++;
 			}
 			if (!(buf[pos] == ']' && start_pos == pos)) {
-				state.HandleValue(buf, start_pos, pos - trailing_whitespace);
+				state.HandleValue(buf, start_pos, pos);
 			} // else the list is empty
 			if (buf[pos] == ']') {
 				lvl--;

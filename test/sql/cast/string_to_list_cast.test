@@ -33,6 +33,13 @@ SELECT '[Cast like this]':: VARCHAR[];
 ----
 [Cast like this]
 
+# Issue 8797
+query I
+select UNNEST('[NULL, , NULL]'::varchar[]);
+----
+NULL
+(empty)
+NULL
 
 #               Nested lists
 # ---------------------------------------------------
