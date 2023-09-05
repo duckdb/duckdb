@@ -136,7 +136,7 @@ struct SniffValue {
 
 	inline static bool Process(CSVScanner &scanner, vector<TupleSniffing> &sniffed_values, char current_char,
 	                           idx_t current_pos) {
-		auto &sniffing_state_machine = scanner.GetStateMachine();
+		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 		if ((sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::SINGLE &&
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
@@ -260,7 +260,7 @@ void CSVSniffer::DetectTypes() {
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
-		auto &sniffing_state_machine = candidate->GetStateMachine();
+		auto &sniffing_state_machine = candidate->GetStateMachineSniff();
 		unordered_map<idx_t, vector<LogicalType>> info_sql_types_candidates;
 		for (idx_t i = 0; i < sniffing_state_machine.dialect_options.num_cols; i++) {
 			info_sql_types_candidates[i] = sniffing_state_machine.options.auto_type_candidates;
@@ -392,7 +392,7 @@ void CSVSniffer::DetectTypes() {
 
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {
-			SetDateFormat(best_candidate->GetStateMachine(), best.second.back(), best.first);
+			SetDateFormat(best_candidate->GetStateMachineSniff(), best.second.back(), best.first);
 		}
 	}
 }

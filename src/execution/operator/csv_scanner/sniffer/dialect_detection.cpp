@@ -14,7 +14,7 @@ struct SniffDialect {
 
 	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
-		auto &sniffing_state_machine = scanner.GetStateMachine();
+		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 		D_ASSERT(sniffed_column_counts.size() == sniffing_state_machine.options.sample_chunk_size);
 		if (scanner.state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
@@ -53,7 +53,7 @@ struct SniffDialect {
 		return false;
 	}
 	inline static void Finalize(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts) {
-		auto &sniffing_state_machine = scanner.GetStateMachine();
+		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
 		if (scanner.state == CSVState::INVALID) {
 			return;
 		}
@@ -202,7 +202,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	bool more_than_one_column = (num_cols > 1);
 
 	// If the start position is valid.
-	bool start_good = !candidates.empty() && (start_row <= candidates.front()->GetStateMachine().start_row);
+	bool start_good = !candidates.empty() && (start_row <= candidates.front()->GetStateMachineSniff().start_row);
 
 	// If padding happened but it is not allowed.
 	bool invalid_padding = !allow_padding && padding_count > 0;
@@ -216,7 +216,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	    (single_column_before || (more_values && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding)) &&
 	    !invalid_padding) {
-		auto &sniffing_state_machine = scanner->GetStateMachine();
+		auto &sniffing_state_machine = scanner->GetStateMachineSniff();
 
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
@@ -232,12 +232,12 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVScanner> scanner, idx_t &
 	// with the same quote, we add this state_machine as a suitable candidate.
 	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	    !invalid_padding) {
-		auto &sniffing_state_machine = scanner->GetStateMachine();
+		auto &sniffing_state_machine = scanner->GetStateMachineSniff();
 
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
 			if (sniffing_state_machine.dialect_options.state_machine_options.quote ==
-			    candidate->GetStateMachine().dialect_options.state_machine_options.quote) {
+			    candidate->GetStateMachineSniff().dialect_options.state_machine_options.quote) {
 				same_quote_is_candidate = true;
 			}
 		}

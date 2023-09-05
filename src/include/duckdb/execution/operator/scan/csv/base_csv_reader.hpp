@@ -61,7 +61,7 @@ public:
 
 	DataChunk parse_chunk;
 
-	ParserMode mode;
+	ParserMode mode = ParserMode::PARSING;
 
 public:
 	const string &GetFileName() {

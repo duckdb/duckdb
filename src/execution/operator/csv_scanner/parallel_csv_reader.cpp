@@ -49,145 +49,6 @@ bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, 
 	return (carry && carry_followed_by_nl) || (!carry && first_char);
 }
 
-void ParallelCSVReader::SkipEmptyLines() {
-	idx_t new_pos_buffer = position_buffer;
-	if (parse_chunk.data.size() == 1) {
-		// Empty lines are null data.
-		return;
-	}
-	for (; new_pos_buffer < end_buffer; new_pos_buffer++) {
-		if (StringUtil::CharacterIsNewline((*buffer)[new_pos_buffer])) {
-			bool carrier_return = (*buffer)[new_pos_buffer] == '\r';
-			new_pos_buffer++;
-			if (carrier_return && new_pos_buffer < buffer_size && (*buffer)[new_pos_buffer] == '\n') {
-				position_buffer++;
-			}
-			if (new_pos_buffer > end_buffer) {
-				return;
-			}
-			position_buffer = new_pos_buffer;
-		} else if ((*buffer)[new_pos_buffer] != ' ') {
-			return;
-		}
-	}
-}
-
-bool ParallelCSVReader::SetPosition() {
-	if (buffer->buffer->is_first_buffer && start_buffer == position_buffer && start_buffer == first_pos_first_buffer) {
-		start_buffer = buffer->buffer->start_position;
-		position_buffer = start_buffer;
-		verification_positions.beginning_of_first_line = position_buffer;
-		verification_positions.end_of_last_line = position_buffer;
-		// First buffer doesn't need any setting
-
-		if (options.dialect_options.header) {
-			for (; position_buffer < end_buffer; position_buffer++) {
-				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
-					bool carrier_return = (*buffer)[position_buffer] == '\r';
-					position_buffer++;
-					if (carrier_return && position_buffer < buffer_size && (*buffer)[position_buffer] == '\n') {
-						position_buffer++;
-					}
-					if (position_buffer > end_buffer) {
-						return false;
-					}
-					SkipEmptyLines();
-					if (verification_positions.beginning_of_first_line == 0) {
-						verification_positions.beginning_of_first_line = position_buffer;
-					}
-
-					verification_positions.end_of_last_line = position_buffer;
-					return true;
-				}
-			}
-			return false;
-		}
-		SkipEmptyLines();
-		if (verification_positions.beginning_of_first_line == 0) {
-			verification_positions.beginning_of_first_line = position_buffer;
-		}
-
-		verification_positions.end_of_last_line = position_buffer;
-		return true;
-	}
-
-	// We have to move position up to next new line
-	idx_t end_buffer_real = end_buffer;
-	// Check if we already start in a valid line
-	string error_message;
-	bool successfully_read_first_line = false;
-	while (!successfully_read_first_line) {
-		DataChunk first_line_chunk;
-		first_line_chunk.Initialize(allocator, return_types);
-		// Ensure that parse_chunk has no gunk when trying to figure new line
-		parse_chunk.Reset();
-		for (; position_buffer < end_buffer; position_buffer++) {
-			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
-				bool carriage_return = (*buffer)[position_buffer] == '\r';
-				bool carriage_return_followed = false;
-				position_buffer++;
-				if (position_buffer < end_buffer) {
-					if (carriage_return && (*buffer)[position_buffer] == '\n') {
-						carriage_return_followed = true;
-						position_buffer++;
-					}
-				}
-				if (NewLineDelimiter(carriage_return, carriage_return_followed, position_buffer - 1 == start_buffer)) {
-					break;
-				}
-			}
-		}
-		SkipEmptyLines();
-
-		if (position_buffer > buffer_size) {
-			break;
-		}
-
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
-			break;
-		}
-
-		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
-		    (*buffer)[position_buffer - 1] == '\n') {
-			break;
-		}
-		idx_t position_set = position_buffer;
-		start_buffer = position_buffer;
-		// We check if we can add this line
-		// disable the projection pushdown while reading the first line
-		// otherwise the first line parsing can be influenced by which columns we are reading
-		auto column_ids = std::move(reader_data.column_ids);
-		auto column_mapping = std::move(reader_data.column_mapping);
-		InitializeProjection();
-		try {
-			successfully_read_first_line = Parse(first_line_chunk, error_message, true);
-		} catch (...) {
-			successfully_read_first_line = false;
-		}
-		// restore the projection pushdown
-		reader_data.column_ids = std::move(column_ids);
-		reader_data.column_mapping = std::move(column_mapping);
-		end_buffer = end_buffer_real;
-		start_buffer = position_set;
-		if (position_buffer >= end_buffer) {
-			if (successfully_read_first_line) {
-				position_buffer = position_set;
-			}
-			break;
-		}
-		position_buffer = position_set;
-	}
-	if (verification_positions.beginning_of_first_line == 0) {
-		verification_positions.beginning_of_first_line = position_buffer;
-	}
-	// Ensure that parse_chunk has no gunk when trying to figure new line
-	parse_chunk.Reset();
-
-	verification_positions.end_of_last_line = position_buffer;
-	finished = false;
-	return successfully_read_first_line;
-}
-
 void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	if (!buffer_read_p->buffer) {
 		throw InternalException("ParallelCSVReader::SetBufferRead - CSVBufferRead does not have a buffer to read");
@@ -601,10 +462,9 @@ final_state : {
 		}
 	}
 	// flush the parsed chunk and finalize parsing
-	if (mode == ParserMode::PARSING) {
-		Flush(insert_chunk, buffer->local_batch_index);
-		buffer->lines_read += insert_chunk.size();
-	}
+	Flush(insert_chunk, buffer->local_batch_index);
+	buffer->lines_read += insert_chunk.size();
+
 	if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
 		error_message = "Line does not fit in one buffer. Increase the buffer size.";
 		return false;
@@ -630,7 +490,7 @@ final_state : {
 
 void ParallelCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	string error_message;
-	if (!TryParseCSV(ParserMode::PARSING, insert_chunk, error_message)) {
+	if (!Parse(insert_chunk, error_message)) {
 		throw InvalidInputException(error_message);
 	}
 }
@@ -644,9 +504,5 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 	}
 }
 
-bool ParallelCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
-	mode = parser_mode;
-	return Parse(insert_chunk, error_message);
-}
 
 } // namespace duckdb

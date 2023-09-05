@@ -138,12 +138,6 @@ public:
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);
-	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
-	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition();
-	//! Called when scanning the 1st buffer, skips empty lines
-	void SkipEmptyLines();
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
 	//! Up to finding a new line. This function sets the buffer_end and marks a boolean variable
 	//! when changing the buffer end the first time.

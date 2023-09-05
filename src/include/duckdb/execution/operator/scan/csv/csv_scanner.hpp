@@ -8,18 +8,22 @@
 
 #pragma once
 
-#include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_file_handle.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
-#include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 
 namespace duckdb {
 
 //! The CSV Scanner is what iterates over CSV Buffers
 class CSVScanner {
 public:
+	//! Constructor used when sniffing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
+	//! Constructor used when parsing
+	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer);
 
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
@@ -56,7 +60,9 @@ public:
 	//! Resets the iterator
 	void Reset();
 
-	CSVStateMachineSniffing &GetStateMachine();
+	CSVStateMachine &GetStateMachine();
+
+	CSVStateMachineSniffing &GetStateMachineSniff();
 
 	//! Current Numbers of Rows
 	idx_t cur_rows = 0;
@@ -82,17 +88,23 @@ private:
 	shared_ptr<CSVBufferManager> buffer_manager;
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;
-};
 
-//! The CSV Scanner with special objects to perform sniffing
-// class CSVScannerSniffer: public CSVScanner {
-// public:
-//	explicit CSVScannerSniffer(shared_ptr<CSVBufferManager> buffer_manager_p)
-//	    : CSVScanner(std::move(buffer_manager_p)) {
-//	};
-//
-// private:
-//	 int x = 0;
-//};
+	void InitializeBufferHandle();
+
+	//! ------------- CSV Parsing -------------------//
+	//! The following set of functions and variables are related to actual CSV Parsing
+	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.
+	//! This function walks the buffer until the first new valid line.
+	bool SetStart(VerificationPositions& verification_positions);
+	//! Skips empty lines when reading the first buffer
+	void SkipEmptyLines();
+	//! Skips header when reading the first buffer
+	void SkipHeader();
+
+	//! Start of the piece of the buffer this thread should read
+	idx_t start_buffer = 0;
+	//! End of the piece of this buffer this thread should read
+	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
+};
 
 } // namespace duckdb
