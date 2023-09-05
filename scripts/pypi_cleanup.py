@@ -33,7 +33,7 @@ if pypi_otp == "":
     exit(1)
 
 
-
+###### NOTE: This code is taken from the pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
 class CsfrParser(HTMLParser):
     def __init__(self, target, contains_input=None):
         super().__init__()
