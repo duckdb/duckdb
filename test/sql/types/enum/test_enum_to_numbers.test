@@ -3,47 +3,30 @@
 # group: [enum]
 
 statement ok
-create type enum1 as enum ('1', '2', '3', '4');
+create type enum_numstrings as enum ('1', '2', '3', '4');
 
 statement ok
 create table t1 as select range as a from range(10);
 
 statement ok
-create table t2 (a enum1);
+create table t2 (a enum_numstrings);
 
 statement ok
 insert into t2 values ('1'), ('2'), ('3');
 
-query I
-select t1.a from t1, t2 where t1.a != t2.a order by t1.a;
+query II
+select t1.a, count(*) as num_matches from t1, t2 where t1.a != t2.a group by t1.a order by t1.a;
 ----
-0
-0
-0
-1
-1
-2
-2
-3
-3
-4
-4
-4
-5
-5
-5
-6
-6
-6
-7
-7
-7
-8
-8
-8
-9
-9
-9
+0	3
+1	2
+2	2
+3	2
+4	3
+5	3
+6	3
+7	3
+8	3
+9	3
 
 statement ok
 insert into t2 values ('1'), ('2');
@@ -109,16 +92,56 @@ select * from t1, t2 where t2.a NOT IN ('2', '3', '4') order by t1.a, t2.a NULLS
 9	1
 
 statement ok
-delete from t2 where 1=1;
-
-statement ok
 insert into t2 values ('1'), ('2'), ('3');
 
 # should not do a try cast
 # cast '2' to enum should be used, which is then pushed down
-# into the enum table fileters
+# into the enum table filters
 query II
 EXPLAIN select * from t1, t2 where t2.a = '2' order by t1.a;
 ----
 physical_plan	<!REGEX>:.*TRY_CAST\(.*
 
+statement ok
+drop table t1
+
+statement ok
+drop table t2
+
+statement ok
+create type enum_strings as enum ('hello', 'goodbye', 'mr duck');
+
+statement ok
+create table t1 as select range as a from range(500);
+
+statement ok
+create table t2 (a enum_strings);
+
+statement ok
+insert into t2 values ('hello'), ('goodbye'), ('mr duck'),  ('mr duck'), ('hello'), ('goodbye');
+
+# enums behave like strings so we first cast to varchar, then to int64 for 
+# integer comparison. This should error since 'hello' Cannot be converted to INT64
+statement error
+Select * from t1, t2 where t1.a = t2.a;
+----
+Conversion Error: Could not convert string 'hello' to INT64
+
+# no error because now we compare varchars
+query II
+Select * from t1, t2 where t1.a::VARCHAR = t2.a;
+----
+
+query II
+EXPLAIN select * from t1, t2 where t1.a::VARCHAR = t2.a;
+----
+physical_plan	<REGEX>:.*CAST\(a AS VARCHAR\) = CAST\(a.*AS VARCHAR\).*
+
+# test varchar
+
+statement ok
+create table t3 as select * from VALUES ('11000100'::BIT), ('00011100'::BIT), ('11000111'::BIT), ('11110100'::BIT) t(a);
+
+# BIT gets converted to VARCHAR as well
+query II
+select * from t3, t2 where t2.a = t3.a;
