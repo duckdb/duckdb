@@ -98,6 +98,45 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	REQUIRE(is_null == false);
 }
 
+TEST_CASE("Test streaming arrow results in C API", "[capi][arrow]") {
+	CAPITester tester;
+	CAPIPrepared prepared;
+	CAPIPending pending;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE(prepared.Prepare(tester, "SELECT i::UINT32 FROM range(1000000) tbl(i)"));
+	REQUIRE(pending.PendingStreaming(prepared));
+
+	while (true) {
+		auto state = pending.ExecuteTask();
+		REQUIRE(state != DUCKDB_PENDING_ERROR);
+		if (state == DUCKDB_PENDING_RESULT_READY) {
+			break;
+		}
+	}
+
+	result = pending.Execute();
+	REQUIRE(result);
+	REQUIRE(!result->HasError());
+	auto chunk = result->StreamChunk();
+
+	// Check handle null out_array
+	duckdb_result_arrow_array(result->InternalResult(), chunk->GetChunk(), nullptr);
+
+	int nb_row = 0;
+	while (chunk) {
+		ArrowArray *arrow_array = new ArrowArray();
+		duckdb_result_arrow_array(result->InternalResult(), chunk->GetChunk(), (duckdb_arrow_array *)&arrow_array);
+		nb_row += arrow_array->length;
+		chunk = result->StreamChunk();
+		arrow_array->release(arrow_array);
+		delete arrow_array;
+	}
+	REQUIRE(nb_row == 1000000);
+}
+
 TEST_CASE("Test query progress and interrupt in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
