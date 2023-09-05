@@ -145,8 +145,6 @@ public:
 
 	void NextVector(CollectionScanState &state);
 
-	static RowGroupPointer Deserialize(ReadStream &source, const vector<LogicalType> &columns);
-
 	// Serialization
 	static void FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer);
 	static RowGroupPointer FormatDeserialize(FormatDeserializer &deserializer);

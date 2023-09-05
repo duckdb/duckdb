@@ -51,12 +51,17 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 
 			MemoryStream source(extra_data, extra_data_size);
 			BinaryDeserializer deserializer(source);
+			deserializer.Begin();
 			auto column_name = deserializer.ReadProperty<string>(100, "column_name");
+			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
+			deserializer.End();
+
 			if(!column_name.empty()){
 				// write the alter table in the log
 				table_entry.CommitAlter(column_name);
 			}
-			log->WriteAlter(source.GetData(), source.GetPosition());
+			auto &alter_info = parse_info->Cast<AlterInfo>();
+			log->WriteAlter(alter_info);
 		} else {
 			// CREATE TABLE statement
 			log->WriteCreateTable(parent->Cast<TableCatalogEntry>());
@@ -71,16 +76,22 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		break;
 	case CatalogType::VIEW_ENTRY:
 		if (entry.type == CatalogType::VIEW_ENTRY) {
+			// ALTER TABLE statement, read the extra data after the entry
+			auto extra_data_size = Load<idx_t>(dataptr);
+			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
+			// deserialize it
+			MemoryStream source(extra_data, extra_data_size);
+			BinaryDeserializer deserializer(source);
+			deserializer.Begin();
+			auto column_name = deserializer.ReadProperty<string>(100, "column_name");
+			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
+			deserializer.End();
 
-			throw InternalException("TODO");
-			//			// ALTER TABLE statement, read the extra data after the entry
-			//			auto extra_data_size = Load<idx_t>(dataptr);
-			//			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
-			//			// deserialize it
-			//			BufferedDeserializer source(extra_data, extra_data_size);
-			//			string column_name = source.Read<string>();
-			//			// write the alter table in the log
-			//			log->WriteAlter(source.ptr, source.endptr - source.ptr);
+			(void)column_name;
+
+			// write the alter table in the log
+			auto &alter_info = parse_info->Cast<AlterInfo>();
+			log->WriteAlter(alter_info);
 		} else {
 			log->WriteCreateView(parent->Cast<ViewCatalogEntry>());
 		}

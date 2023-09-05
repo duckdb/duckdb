@@ -59,6 +59,12 @@ public:
 		serializer.OnObjectEnd();
 	}
 
+	void Begin() {
+		OnObjectBegin();
+	}
+	void End() {
+		OnObjectEnd();
+	}
 protected:
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks

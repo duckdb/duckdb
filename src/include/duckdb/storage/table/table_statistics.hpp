@@ -49,7 +49,7 @@ public:
 
 	unique_ptr<TableStatisticsLock> GetLock();
 
-	void FormatSerialize(FormatSerializer &serializer);
+	void FormatSerialize(FormatSerializer &serializer) const;
 	void FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns);
 
 private:

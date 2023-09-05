@@ -10,6 +10,11 @@ void BinarySerializer::OnPropertyBegin(const field_id_t field_id, const char *ta
 	// Just write the field id straight up
 	Write<field_id_t>(field_id);
 #ifdef DEBUG
+	// First of check that we are inside an object
+	if (debug_stack.empty()) {
+		throw InternalException("OnPropertyBegin called outside of object");
+	}
+
 	// Check that the tag is unique
 	auto &state = debug_stack.back();
 	auto &seen_field_ids = state.seen_field_ids;

@@ -44,6 +44,16 @@ public:
 		return deserializer.template Deserialize<T>();
 	}
 
+	void Begin() {
+		OnObjectBegin();
+	}
+
+	void End() {
+		OnObjectEnd();
+		D_ASSERT(nesting_level == 0); // make sure we are at the root level
+	}
+
+
 private:
 	ReadStream &stream;
 	idx_t nesting_level = 0;

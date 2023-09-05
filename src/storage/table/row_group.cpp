@@ -847,10 +847,6 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-RowGroupPointer RowGroup::Deserialize(ReadStream &main_source, const vector<LogicalType> &columns) {
-	throw InternalException("FIXME");
-}
-
 void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {
 	serializer.WriteProperty(100, "row_start", pointer.row_start);
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);

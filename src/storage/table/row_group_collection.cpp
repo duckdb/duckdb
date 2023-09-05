@@ -10,6 +10,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,8 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 		finished_loading = true;
 		return nullptr;
 	}
-	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
+	BinaryDeserializer deserializer(*reader);
+	auto row_group_pointer = RowGroup::FormatDeserialize(deserializer);
 	current_row_group++;
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }

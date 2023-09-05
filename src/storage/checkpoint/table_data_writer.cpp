@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 
@@ -42,37 +43,39 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
+	throw InternalException("TODO: FinalizeTable");
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
+	/*
 	auto pointer = table_data_writer.GetMetaBlockPointer();
-	throw InternalException("TODO");
-	//	global_stats.Serialize(table_data_writer);
-	//
-	//	// now start writing the row group pointers to disk
-	//	table_data_writer.Write<uint64_t>(row_group_pointers.size());
-	//	idx_t total_rows = 0;
-	//	for (auto &row_group_pointer : row_group_pointers) {
-	//		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-	//		if (row_group_count > total_rows) {
-	//			total_rows = row_group_count;
-	//		}
-	//		RowGroup::Serialize(row_group_pointer, table_data_writer);
-	//	}
-	//
-	//	// Pointer to the table itself goes to the metadata stream.
-	//	meta_data_writer.Write<idx_t>(pointer.block_pointer);
-	//	meta_data_writer.Write<uint64_t>(pointer.offset);
-	//	meta_data_writer.Write<idx_t>(total_rows);
-	//
-	//	// Now we serialize indexes in the table_metadata_writer
-	//	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
-	//
-	//	// Write-off to metadata block ids and offsets of indexes
-	//	meta_data_writer.Write<idx_t>(index_pointers.size());
-	//	for (auto &block_info : index_pointers) {
-	//		meta_data_writer.Write<block_id_t>(block_info.block_id);
-	//		meta_data_writer.Write<uint32_t>(block_info.offset);
-	//	}
+
+	global_stats.Serialize(table_data_writer);
+
+	// now start writing the row group pointers to disk
+	table_data_writer.Write<uint64_t>(row_group_pointers.size());
+	idx_t total_rows = 0;
+	for (auto &row_group_pointer : row_group_pointers) {
+		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+		if (row_group_count > total_rows) {
+			total_rows = row_group_count;
+		}
+		RowGroup::Serialize(row_group_pointer, table_data_writer);
+	}
+
+	// Pointer to the table itself goes to the metadata stream.
+	meta_data_writer.Write<idx_t>(pointer.block_pointer);
+	meta_data_writer.Write<uint64_t>(pointer.offset);
+	meta_data_writer.Write<idx_t>(total_rows);
+
+	// Now we serialize indexes in the table_metadata_writer
+	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+
+	// Write-off to metadata block ids and offsets of indexes
+	meta_data_writer.Write<idx_t>(index_pointers.size());
+	for (auto &block_info : index_pointers) {
+		meta_data_writer.Write<block_id_t>(block_info.block_id);
+		meta_data_writer.Write<uint32_t>(block_info.offset);
+	}*/
 }
 
 } // namespace duckdb
