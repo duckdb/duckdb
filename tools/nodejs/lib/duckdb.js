@@ -420,7 +420,6 @@ Connection.prototype.unregister_buffer;
  * @return {void}
  */
 Database.prototype.close = function() {
-    this.default_connection = null
     this.close_internal.apply(this, arguments);
 };
 
