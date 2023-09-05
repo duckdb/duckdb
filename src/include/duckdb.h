@@ -1344,6 +1344,15 @@ This should not be used with `DUCKDB_TYPE_DECIMAL`.
 DUCKDB_API duckdb_logical_type duckdb_create_logical_type(duckdb_type type);
 
 /*!
+Returns the alias of a duckdb_logical_type, if one is set, else `NULL`
+You must free the result.
+
+* type: The logical type to return the alias of
+* returns: The alias or `NULL`
+ */
+DUCKDB_API char *duckdb_logical_type_get_alias(duckdb_logical_type type);
+
+/*!
 Creates a list type from its child type.
 The resulting type should be destroyed with `duckdb_destroy_logical_type`.
 

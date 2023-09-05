@@ -1,4 +1,6 @@
 #include "capi_tester.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -199,4 +201,44 @@ TEST_CASE("Test struct types creation C API", "[capi]") {
 		duckdb_destroy_logical_type(&types[i]);
 	}
 	duckdb_destroy_logical_type(&logical_type);
+}
+
+TEST_CASE("Logical types with aliases", "[capi]") {
+	CAPITester tester;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	Connection *connection = reinterpret_cast<Connection *>(tester.connection);
+
+	connection->BeginTransaction();
+
+	child_list_t<LogicalType> children = {{"hello", LogicalType::VARCHAR}};
+	auto id = LogicalType::STRUCT(children);
+	auto type_name = "test_type";
+	id.SetAlias(type_name);
+	CreateTypeInfo info(type_name, id);
+
+	auto &catalog_name = DatabaseManager::GetDefaultDatabase(*connection->context);
+	auto &catalog = Catalog::GetCatalog(*connection->context, catalog_name);
+	catalog.CreateType(*connection->context, info);
+
+	connection->Commit();
+
+	auto result = tester.Query("SELECT {hello: 'world'}::test_type");
+
+	REQUIRE(NO_FAIL(*result));
+
+	auto chunk = result->FetchChunk(0);
+	REQUIRE(chunk);
+
+	for (idx_t i = 0; i < result->ColumnCount(); i++) {
+		auto logical_type = duckdb_vector_get_column_type(duckdb_data_chunk_get_vector(chunk->GetChunk(), i));
+		REQUIRE(logical_type);
+
+		auto alias = duckdb_logical_type_get_alias(logical_type);
+		REQUIRE(string(alias) == "test_type");
+		duckdb_free(alias);
+
+		duckdb_destroy_logical_type(&logical_type);
+	}
 }

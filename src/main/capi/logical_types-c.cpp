@@ -257,6 +257,11 @@ char *duckdb_struct_type_child_name(duckdb_logical_type type, idx_t index) {
 	return strdup(duckdb::StructType::GetChildName(ltype, index).c_str());
 }
 
+char *duckdb_logical_type_get_alias(duckdb_logical_type type) {
+	auto &ltype = *(reinterpret_cast<duckdb::LogicalType *>(type));
+	return ltype.HasAlias() ? strdup(ltype.GetAlias().c_str()) : nullptr;
+}
+
 duckdb_logical_type duckdb_struct_type_child_type(duckdb_logical_type type, idx_t index) {
 	if (!AssertInternalType(type, duckdb::PhysicalType::STRUCT)) {
 		return nullptr;
