@@ -2,7 +2,6 @@
 # description: ENUM types used in table tests
 # group: [enum]
 
-
 statement ok
 create type enum_numstrings as enum ('1', '2', '3', '4');
 
