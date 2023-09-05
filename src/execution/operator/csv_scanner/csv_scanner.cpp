@@ -16,6 +16,7 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr
 	cur_pos = start_buffer;
 }
 
+//! Skips all empty lines, until a non-empty line shows up
 struct ProcessSkipEmptyLines {
 	inline static void Initialize(CSVScanner &scanner) {
 		scanner.state = CSVState::STANDARD;
@@ -47,7 +48,8 @@ void CSVScanner::SkipEmptyLines() {
 	Process<ProcessSkipEmptyLines>(*this, cur_pos);
 }
 
-struct ProcessSkipHeader {
+//! Moves the buffer until the next new line
+struct SkipUntilNewLine {
 	inline static void Initialize(CSVScanner &scanner) {
 		scanner.state = CSVState::STANDARD;
 	}
@@ -76,10 +78,9 @@ void CSVScanner::SkipHeader() {
 		// No header to skip
 		return;
 	}
-	Process<ProcessSkipHeader>(*this, cur_pos);
+	Process<SkipUntilNewLine>(*this, cur_pos);
 }
 
-void CSVScanner::InitializeBufferHandle();
 
 bool CSVScanner::SetStart(VerificationPositions& verification_positions){
 	if (cur_buffer_idx == 0 && start_buffer <= buffer_manager->GetStartPos()) {
@@ -95,91 +96,29 @@ bool CSVScanner::SetStart(VerificationPositions& verification_positions){
 		verification_positions.end_of_last_line = cur_pos;
 		return true;
 	}
-	// If this is not the first buffer we must move buffer to next new line
 
+	// We have to look for a new line that fits our schema
+	bool successfully_read_first_line = false;
+	while (!successfully_read_first_line && ! Finished()) {
+		// 1. We walk until the next new line
+		// 2. We try to cast all columns to the correct types
+		// 3. If it succeeds we are done, otherwise we walk to the next line
+	}
 	// We try to cast the new line
 
 	// If we succeeded, that's our start
 
 	// We have to move position up to next new line
-	idx_t end_buffer_real = end_buffer;
-	// Check if we already start in a valid line
-	string error_message;
-	bool successfully_read_first_line = false;
-	while (!successfully_read_first_line) {
-		DataChunk first_line_chunk;
-		first_line_chunk.Initialize(allocator, return_types);
-		// Ensure that parse_chunk has no gunk when trying to figure new line
-		parse_chunk.Reset();
-		for (; position_buffer < end_buffer; position_buffer++) {
-			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
-				bool carriage_return = (*buffer)[position_buffer] == '\r';
-				bool carriage_return_followed = false;
-				position_buffer++;
-				if (position_buffer < end_buffer) {
-					if (carriage_return && (*buffer)[position_buffer] == '\n') {
-						carriage_return_followed = true;
-						position_buffer++;
-					}
-				}
-				if (NewLineDelimiter(carriage_return, carriage_return_followed, position_buffer - 1 == start_buffer)) {
-					break;
-				}
-			}
-		}
-		SkipEmptyLines();
-
-		if (position_buffer > buffer_size) {
-			break;
-		}
-
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
-			break;
-		}
-
-		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
-		    (*buffer)[position_buffer - 1] == '\n') {
-			break;
-		}
-		idx_t position_set = position_buffer;
-		start_buffer = position_buffer;
-		// We check if we can add this line
-		// disable the projection pushdown while reading the first line
-		// otherwise the first line parsing can be influenced by which columns we are reading
-		auto column_ids = std::move(reader_data.column_ids);
-		auto column_mapping = std::move(reader_data.column_mapping);
-		InitializeProjection();
-		try {
-			successfully_read_first_line = Parse(first_line_chunk, error_message, true);
-		} catch (...) {
-			successfully_read_first_line = false;
-		}
-		// restore the projection pushdown
-		reader_data.column_ids = std::move(column_ids);
-		reader_data.column_mapping = std::move(column_mapping);
-		end_buffer = end_buffer_real;
-		start_buffer = position_set;
-		if (position_buffer >= end_buffer) {
-			if (successfully_read_first_line) {
-				position_buffer = position_set;
-			}
-			break;
-		}
-		position_buffer = position_set;
-	}
 	if (verification_positions.beginning_of_first_line == 0) {
-		verification_positions.beginning_of_first_line = position_buffer;
+		verification_positions.beginning_of_first_line = cur_pos;
 	}
-	// Ensure that parse_chunk has no gunk when trying to figure new line
-	parse_chunk.Reset();
 
-	verification_positions.end_of_last_line = position_buffer;
-	finished = false;
-	return successfully_read_first_line;
+	verification_positions.end_of_last_line = cur_pos;
+
 }
 
 bool CSVScanner::Finished() {
-	return !cur_buffer_handle;
+	return !cur_buffer_handle && cur_buffer_idx > 0;
 }
 
 void CSVScanner::Reset() {

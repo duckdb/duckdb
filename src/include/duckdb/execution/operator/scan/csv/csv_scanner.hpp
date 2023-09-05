@@ -89,8 +89,6 @@ private:
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;
 
-	void InitializeBufferHandle();
-
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing
 	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.
