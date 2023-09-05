@@ -42,6 +42,8 @@ public:
 	BufferManager &buffer_manager;
 	//! Metadata manager for (de)serialization
 	MetadataManager &metadata_manager;
+	//! Partial block manager of the fixed-size allocator
+	PartialBlockManager partial_block_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
@@ -119,6 +121,8 @@ private:
 	}
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
+	//! Returns the maximum non-free offset in a bitmask
+	uint32_t GetMaxOffset(ValidityMask &mask);
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
 };

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/storage/partial_block_manager.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -23,20 +24,31 @@ class MetadataWriter;
 class FixedSizeBuffer {
 public:
 	//! Constructor for a new in-memory buffer
-	explicit FixedSizeBuffer(BlockManager &block_manager);
+	explicit FixedSizeBuffer(PartialBlockManager &partial_block_manager);
 	//! Constructor for deserializing buffer metadata from disk
-	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const block_id_t &block_id);
+	FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count, const idx_t size,
+	                const uint32_t max_offset, const BlockPointer &block_ptr);
 
-	//! Block manager of the database instance
-	BlockManager &block_manager;
+	//! Partial block manager of the allocator
+	PartialBlockManager &partial_block_manager;
 
 	//! The number of allocated segments
 	idx_t segment_count;
+
+	//! The size of allocated memory in this buffer, skipping gaps
+	idx_t size;
+	//! The maximum offset in this buffer
+	uint32_t max_offset; // TODO: I think that this is not required
 
 	//! True: the in-memory buffer is no longer consistent with a (possibly existing) copy on disk
 	bool dirty;
 	//! True: can be vacuumed after the vacuum operation
 	bool vacuum;
+	//! True: the size of the buffer changed (new/free)
+	bool size_changed;
+
+	//! Partial block id and offset
+	BlockPointer block_pointer;
 
 public:
 	//! Returns true, if the buffer is in-memory
@@ -45,12 +57,7 @@ public:
 	}
 	//! Returns true, if the block is on-disk
 	inline bool OnDisk() const {
-		return (block_handle != nullptr) && (block_handle->BlockId() < MAXIMUM_BLOCK);
-	}
-	//! Returns the block ID
-	inline block_id_t BlockId() const {
-		D_ASSERT(OnDisk());
-		return block_handle->BlockId();
+		return block_pointer.IsValid();
 	}
 	//! Returns a pointer to the buffer in memory, and calls Deserialize, if the buffer is not in memory
 	inline data_ptr_t Get(const bool dirty_p = true) {
@@ -60,7 +67,7 @@ public:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_handle.Ptr();
+		return buffer_handle.Ptr() + block_pointer.offset;
 	}
 	//! Destroys the in-memory buffer and the on-disk block
 	void Destroy();

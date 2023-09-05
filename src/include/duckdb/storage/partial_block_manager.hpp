@@ -69,7 +69,7 @@ struct PartialBlockAllocation {
 	unique_ptr<PartialBlock> partial_block;
 };
 
-enum class CheckpointType { FULL_CHECKPOINT, APPEND_TO_TABLE };
+enum class CheckpointType { FULL_CHECKPOINT, APPEND_TO_TABLE, INDEX_CHECKPOINT };
 
 //! Enables sharing blocks across some scope. Scope is whatever we want to share
 //! blocks across. It may be an entire checkpoint or just a single row group.
@@ -107,6 +107,11 @@ public:
 
 	//! Rollback all data written by this partial block manager
 	void Rollback();
+
+	//! Get the block manager
+	inline BlockManager &GetBlockManager() {
+		return block_manager;
+	}
 
 protected:
 	BlockManager &block_manager;
