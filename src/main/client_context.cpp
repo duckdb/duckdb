@@ -895,6 +895,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContext
                                                                    unique_ptr<SQLStatement> statement,
                                                                    const PendingQueryParameters &parameters,
                                                                    bool verify) {
+	InitialCleanup(lock);
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
 	if (verify) {
@@ -1061,8 +1062,6 @@ unordered_set<string> ClientContext::GetTableNames(const string &query) {
 unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock,
                                                                    const shared_ptr<Relation> &relation,
                                                                    bool allow_stream_result) {
-	InitialCleanup(lock);
-
 	string query;
 	if (config.query_verification_enabled) {
 		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
