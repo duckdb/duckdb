@@ -209,7 +209,7 @@ public:
 	yyjson_val *values[STANDARD_VECTOR_SIZE];
 
 	//! Batch index for order-preserving parallelism
-	optional_idx batch_index;
+	idx_t batch_index;
 
 	//! Options when transforming the JSON to columnar data
 	DateFormatMap date_format_map;

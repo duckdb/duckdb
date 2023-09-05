@@ -203,9 +203,9 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanD
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : scan_count(0), total_read_size(0), total_tuple_count(0), bind_data(gstate.bind_data),
-      allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr), is_last(false),
-      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+    : scan_count(0), batch_index(DConstants::INVALID_INDEX), total_read_size(0), total_tuple_count(0),
+      bind_data(gstate.bind_data), allocator(BufferAllocator::Get(context)), current_reader(nullptr),
+      current_buffer_handle(nullptr), is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON values when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
@@ -306,7 +306,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 }
 
 idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
-	return state.batch_index.GetIndex();
+	return state.batch_index;
 }
 
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, const idx_t &buffer_size) {
@@ -686,6 +686,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		break;
 	}
 	D_ASSERT(buffer_size != 0); // We should have read something if we got here
+	D_ASSERT(buffer_index.IsValid());
 
 	idx_t readers = 1;
 	if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
