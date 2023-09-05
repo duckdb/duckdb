@@ -147,9 +147,9 @@ unique_ptr<ArrowType> ArrowTableFunction::GetArrowLogicalType(ArrowSchema &schem
 
 			children.emplace_back(GetArrowLogicalType(*type));
 			if (type_idx == 0) {
-				D_ASSERT(type->name == "run_ends");
+				D_ASSERT(std::string(type->name) == "run_ends");
 			} else {
-				D_ASSERT(type->name == "values");
+				D_ASSERT(std::string(type->name) == "values");
 			}
 			members.emplace_back(type->name, children.back()->GetDuckType());
 		}
