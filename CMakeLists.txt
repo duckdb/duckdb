@@ -815,6 +815,11 @@ function(duckdb_extension_load NAME)
     return()
   endif()
 
+  list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
+  if (${_index} GREATER -1)
+    return()
+  endif()
+
   # Remote Git extension
   if (${duckdb_extension_load_DONT_BUILD})
     register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "" "" "")
@@ -872,13 +877,6 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
   if (NOT "${EXT}" STREQUAL "")
     string(TOUPPER ${EXT} EXTENSION_NAME_UPPERCASE)
     message(STATUS "Load extension '${EXT}' from '${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH}'")
-  endif()
-endforeach()
-
-# Load extensions passed through cmake config var
-foreach(EXT IN LISTS SKIP_EXTENSIONS)
-  if (NOT "${EXT}" STREQUAL "")
-    duckdb_extension_load(${EXT} DONT_BUILD)
   endif()
 endforeach()
 
