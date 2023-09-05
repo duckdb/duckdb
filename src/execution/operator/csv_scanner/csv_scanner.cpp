@@ -2,6 +2,7 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 #include "duckdb/execution/operator/scan/csv/parse_values.hpp"
+#include "duckdb/execution/operator/scan/csv/parse_chunk.hpp"
 
 namespace duckdb {
 
@@ -82,6 +83,10 @@ void CSVScanner::SkipHeader() {
 
 
 bool CSVScanner::SetStart(VerificationPositions& verification_positions, const vector<LogicalType> &types){
+	if (start_set){
+		return true;
+	}
+	start_set = true;
 	if (cur_buffer_idx == 0 && start_buffer <= buffer_manager->GetStartPos()) {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect so we don't know where exactly it starts
@@ -139,6 +144,22 @@ bool CSVScanner::SetStart(VerificationPositions& verification_positions, const v
 	verification_positions.end_of_last_line = cur_pos;
 	return success;
 
+}
+
+void CSVScanner::Parse(DataChunk &parse_chunk, VerificationPositions& verification_positions, const vector<LogicalType> &types){
+	// If necessary we set the start of the buffer, basically where we need to start scanning from
+	bool found_start = SetStart(verification_positions,types);
+	if (!found_start){
+		// Nothing to Scan
+		return;
+	}
+	// Now we do the actual parsing
+	//TODO: Check for errors.
+	Process<ParseChunk>(*this,parse_chunk);
+}
+
+idx_t CSVScanner::GetBufferIndex(){
+	return cur_buffer_idx - 1;
 }
 
 bool CSVScanner::Finished() {

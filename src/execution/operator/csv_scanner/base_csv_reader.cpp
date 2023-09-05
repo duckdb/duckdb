@@ -34,8 +34,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated,
 	return to_string(GetLineError(line_error, buffer_idx)) + estimated;
 }
 
-BaseCSVReader::BaseCSVReader(ClientContext &context_p, CSVReaderOptions options_p,
-                             const vector<LogicalType> &requested_types)
+BaseCSVReader::BaseCSVReader(ClientContext &context_p, CSVReaderOptions options_p)
     : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(BufferAllocator::Get(context)),
       options(std::move(options_p)) {
 }

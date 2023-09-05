@@ -13,9 +13,13 @@
 #include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 
 namespace duckdb {
+
+struct VerificationPositions {
+	idx_t beginning_of_first_line = 0;
+	idx_t end_of_last_line = 0;
+};
 
 //! The CSV Scanner is what iterates over CSV Buffers
 class CSVScanner {
@@ -82,12 +86,21 @@ public:
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
+	//! End of the piece of this buffer this thread should read
+	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
+
+	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
+	void Parse(DataChunk &parse_chunk, VerificationPositions& verification_positions, const vector<LogicalType> &types);
+
+	idx_t GetBufferIndex();
+
 private:
 	idx_t cur_pos = 0;
 	idx_t cur_buffer_idx = 0;
 	shared_ptr<CSVBufferManager> buffer_manager;
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;
+	bool start_set = false;
 
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing
@@ -101,8 +114,6 @@ private:
 
 	//! Start of the piece of the buffer this thread should read
 	idx_t start_buffer = 0;
-	//! End of the piece of this buffer this thread should read
-	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
 };
 
 } // namespace duckdb

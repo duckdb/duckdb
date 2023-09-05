@@ -35,8 +35,7 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DATATYPES = 1, PARSING_H
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BaseCSVReader {
 public:
-	BaseCSVReader(ClientContext &context, CSVReaderOptions options,
-	              const vector<LogicalType> &requested_types = vector<LogicalType>());
+	BaseCSVReader(ClientContext &context, CSVReaderOptions options);
 	virtual ~BaseCSVReader();
 
 	ClientContext &context;
