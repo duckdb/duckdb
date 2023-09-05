@@ -550,8 +550,8 @@ for entry in file_list:
         json_data = json.load(f)
 
     include_list = [
-        'duckdb/common/serializer/format_serializer.hpp',
-        'duckdb/common/serializer/format_deserializer.hpp',
+        'duckdb/common/serializer/serializer.hpp',
+        'duckdb/common/serializer/deserializer.hpp',
     ]
     base_classes = []
     classes = []

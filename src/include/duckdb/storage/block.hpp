@@ -38,6 +38,9 @@ struct BlockPointer {
 	bool IsValid() {
 		return block_id != INVALID_BLOCK;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static BlockPointer FormatDeserialize(FormatDeserializer &source);
 };
 
 struct MetaBlockPointer {

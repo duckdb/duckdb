@@ -20,6 +20,26 @@
     "constructor": ["block_pointer", "offset"]
   },
   {
+    "class": "BlockPointer",
+    "includes": [
+      "duckdb/storage/block.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "block_id",
+        "type": "block_id_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_id", "offset"]
+  },
+  {
     "class": "DistinctStatistics",
     "includes": [
       "duckdb/storage/statistics/distinct_statistics.hpp"

@@ -2,7 +2,6 @@
 
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
@@ -43,7 +42,46 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
-	throw InternalException("TODO: FinalizeTable");
+
+	auto pointer = table_data_writer.GetMetaBlockPointer();
+
+	// This is the table data stream
+	BinarySerializer table_serializer(table_data_writer);
+	table_serializer.Begin();
+	table_serializer.WriteProperty(100, "table_stats", global_stats);
+
+	// now start writing the row group pointers to disk
+	idx_t total_rows = 0;
+	table_serializer.WriteProperty<uint64_t>(101, "row_group_count", row_group_pointers.size());
+	table_serializer.WriteList(
+	    102, "row_group_pointers", row_group_pointers.size(), [&](FormatSerializer::List &list, idx_t i) {
+		    auto &row_group_pointer = row_group_pointers[i];
+		    auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+		    if (row_group_count > total_rows) {
+			    total_rows = row_group_count;
+		    }
+
+		    list.WriteObject([&](FormatSerializer &obj) { RowGroup::FormatSerialize(row_group_pointer, obj); });
+	    });
+	table_serializer.End();
+
+	// TODO: replace with FormatSerialize
+	// serialize indexes in the table stream
+	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+
+	// Now we write to the metadata stream
+	BinarySerializer meta_serializer(meta_data_writer);
+	meta_serializer.Begin();
+
+	// Pointer to the table itself goes to the metadata stream.
+	meta_serializer.WriteProperty(100, "table_pointer", pointer);
+	meta_serializer.WriteProperty(101, "total_rows", total_rows);
+
+	// Write-off to metadata block ids and offsets of indexes
+	meta_serializer.WriteProperty(102, "index_pointers", index_pointers);
+	meta_serializer.End();
+
+	// throw InternalException("TODO: FinalizeTable");
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	/*

@@ -6,9 +6,22 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/block.hpp"
+#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 namespace duckdb {
+
+void BlockPointer::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty(100, "block_id", block_id);
+	serializer.WriteProperty(101, "offset", offset);
+}
+
+BlockPointer BlockPointer::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto block_id = deserializer.ReadProperty<block_id_t>(100, "block_id");
+	auto offset = deserializer.ReadProperty<uint32_t>(101, "offset");
+	BlockPointer result(block_id, offset);
+	return result;
+}
 
 void DistinctStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "sample_count", sample_count);
