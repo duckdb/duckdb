@@ -366,7 +366,7 @@ public:
 
 	void UpdateVerification(VerificationPositions positions, idx_t file_number, idx_t batch_idx);
 
-	void UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx);
+	void UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx);
 
 	void IncrementThread();
 
@@ -633,9 +633,9 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 	tuple_end[file_number_p].push_back(positions.end_of_last_line);
 }
 
-void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx) {
-	auto batch_idx = buffer_read.local_batch_index;
-	auto lines_read = buffer_read.lines_read;
+void ParallelCSVGlobalState::UpdateLinesRead(CSVScanner &buffer_read, idx_t file_idx) {
+	auto batch_idx = buffer_read.scanner_id;
+	auto lines_read = buffer_read.GetTotalRowsEmmited();
 	lock_guard<mutex> parallel_lock(main_mutex);
 	line_info.current_batches[file_idx].erase(batch_idx);
 	line_info.lines_read[file_idx][batch_idx] += lines_read;
@@ -723,7 +723,6 @@ public:
 
 	//! The CSV reader
 	unique_ptr<ParallelCSVReader> csv_reader;
-	CSVBufferRead previous_buffer;
 	bool done = false;
 };
 
@@ -758,9 +757,9 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
 			csv_global_state.UpdateVerification(verification_updates,
-			                                    csv_local_state.csv_reader->buffer->buffer->file_idx,
-			                                    csv_local_state.csv_reader->buffer->local_batch_index);
-			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
+			                                    csv_local_state.csv_reader->file_idx,
+			                                    csv_local_state.csv_reader->scanner->scanner_id);
+			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (csv_local_state.csv_reader) {
 				csv_local_state.csv_reader->linenr = 0;
@@ -1012,7 +1011,7 @@ static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *
 		return data.file_index;
 	}
 	auto &data = local_state->Cast<ParallelCSVLocalState>();
-	return data.csv_reader->buffer->batch_index;
+	return data.csv_reader->scanner->scanner_id;
 }
 
 static void ReadCSVAddNamedParameters(TableFunction &table_function) {

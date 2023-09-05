@@ -27,7 +27,7 @@ public:
 	//! Constructor used when sniffing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
 	//! Constructor used when parsing
-	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer);
+	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer, idx_t scanner_id);
 
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
@@ -83,6 +83,10 @@ public:
 	idx_t rows_read = 0;
 	idx_t line_start_pos = 0;
 
+	const idx_t initial_buffer_set = 0;
+	const idx_t scanner_id = 0;
+
+
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
@@ -94,6 +98,8 @@ public:
 
 	idx_t GetBufferIndex();
 
+	idx_t GetTotalRowsEmmited();
+
 private:
 	idx_t cur_pos = 0;
 	idx_t cur_buffer_idx = 0;
@@ -101,6 +107,7 @@ private:
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;
 	bool start_set = false;
+	idx_t total_rows_emmited = 0;
 
 	//! ------------- CSV Parsing -------------------//
 	//! The following set of functions and variables are related to actual CSV Parsing

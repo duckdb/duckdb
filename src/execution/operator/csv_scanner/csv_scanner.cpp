@@ -11,8 +11,8 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr
 	cur_pos = buffer_manager->GetStartPos();
 };
 
-CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p)
-    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)), cur_buffer_idx(buffer_idx), start_buffer(start_buffer_p), end_buffer(end_buffer_p){
+CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p, idx_t scanner_id_p)
+    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)), cur_buffer_idx(buffer_idx), start_buffer(start_buffer_p), end_buffer(end_buffer_p), initial_buffer_set(buffer_idx), scanner_id(scanner_id_p){
 	cur_pos = start_buffer;
 }
 
@@ -156,10 +156,15 @@ void CSVScanner::Parse(DataChunk &parse_chunk, VerificationPositions& verificati
 	// Now we do the actual parsing
 	//TODO: Check for errors.
 	Process<ParseChunk>(*this,parse_chunk);
+	total_rows_emmited += parse_chunk.size();
 }
 
 idx_t CSVScanner::GetBufferIndex(){
 	return cur_buffer_idx - 1;
+}
+
+idx_t CSVScanner::GetTotalRowsEmmited(){
+	return total_rows_emmited;
 }
 
 bool CSVScanner::Finished() {
