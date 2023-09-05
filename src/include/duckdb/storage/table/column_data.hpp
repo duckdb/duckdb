@@ -151,7 +151,7 @@ protected:
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
 
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
