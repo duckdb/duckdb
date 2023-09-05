@@ -80,6 +80,10 @@ static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalSta
 	GetValidityMask(mask, array, scan_state, size, nested_offset, add_null);
 }
 
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                             idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
+                                             ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
@@ -341,6 +345,14 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 		tgt_ptr[row].micros = src_ptr[row].nanoseconds / Interval::NANOS_PER_MICRO;
 		tgt_ptr[row].months = src_ptr[row].months;
 	}
+}
+
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                             idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
+                                             ValidityMask *parent_mask, uint64_t parent_offset) {
+	// Scan the 'run_ends' array
+	auto base_vector = make_uniq<Vector>(vector.GetType(), array.length);
+	auto run_ends = ArrowBufferData<data_t>(array, 0) + (scan_state.chunk_offset + array.offset) / 8;
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
@@ -843,8 +855,12 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_type, col_idx);
 		} else {
-			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
-			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_type);
+			if (arrow_type.RunEndEncoded()) {
+				ColumnArrowToDuckDBRunEndEncoded(output.data[idx], array, scan_state, output.size(), arrow_type);
+			} else {
+				SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
+				ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_type);
+			}
 		}
 	}
 }

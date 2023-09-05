@@ -37,6 +37,11 @@ void ArrowType::SetRunEndEncoded() {
 	auto &actual_type = children[1]->GetDuckType();
 	// Override the duckdb type to the actual type
 	type = actual_type;
+	run_end_encoded = true;
+}
+
+bool ArrowType::RunEndEncoded() const {
+	return run_end_encoded;
 }
 
 const LogicalType &ArrowType::GetDuckType() const {
