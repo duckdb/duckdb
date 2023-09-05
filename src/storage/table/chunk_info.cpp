@@ -94,13 +94,14 @@ void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t
 	insert_id = commit_id;
 }
 
+bool ChunkConstantInfo::HasDeletes() const {
+	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
+	return is_deleted;
+}
+
 void ChunkConstantInfo::Serialize(Serializer &serializer) {
 	// we only need to write this node if any tuple deletions have been committed
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
-	if (!is_deleted) {
-		serializer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
-		return;
-	}
+	D_ASSERT(HasDeletes());
 	serializer.Write<ChunkInfoType>(type);
 	serializer.Write<idx_t>(start);
 }
@@ -251,6 +252,10 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	for (idx_t i = start; i < end; i++) {
 		inserted[i] = commit_id;
 	}
+}
+
+bool ChunkVectorInfo::HasDeletes() const {
+	return any_deleted;
 }
 
 void ChunkVectorInfo::Serialize(Serializer &serializer) {

@@ -166,15 +166,18 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 		return storage_pointers;
 	}
 	// first count how many ChunkInfo's we need to deserialize
-	idx_t chunk_info_count = 0;
+	vector<pair<idx_t, reference<ChunkInfo>>> to_serialize;
 	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
 		auto chunk_info = vector_info[vector_idx].get();
 		if (!chunk_info) {
 			continue;
 		}
-		chunk_info_count++;
+		if (!chunk_info->HasDeletes()) {
+			continue;
+		}
+		to_serialize.emplace_back(vector_idx, *chunk_info);
 	}
-	if (chunk_info_count == 0) {
+	if (to_serialize.empty()) {
 		return vector<MetaBlockPointer>();
 	}
 
@@ -182,14 +185,12 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 
 	MetadataWriter writer(manager, &storage_pointers);
 	// now serialize the actual version information
-	writer.Write<idx_t>(chunk_info_count);
-	for (idx_t vector_idx = 0; vector_idx < Storage::ROW_GROUP_VECTOR_COUNT; vector_idx++) {
-		auto chunk_info = vector_info[vector_idx].get();
-		if (!chunk_info) {
-			continue;
-		}
+	writer.Write<idx_t>(to_serialize.size());
+	for(auto &entry : to_serialize) {
+		auto &vector_idx = entry.first;
+		auto &chunk_info = entry.second.get();
 		writer.Write<idx_t>(vector_idx);
-		chunk_info->Serialize(writer);
+		chunk_info.Serialize(writer);
 	}
 	writer.Flush();
 

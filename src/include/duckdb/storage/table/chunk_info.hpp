@@ -46,6 +46,8 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
+	virtual bool HasDeletes() const = 0;
+
 	virtual void Serialize(Serializer &serialize) = 0;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 
@@ -87,6 +89,8 @@ public:
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
+
+	bool HasDeletes() const override;
 
 	void Serialize(Serializer &serialize) override;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
@@ -135,6 +139,8 @@ public:
 	//! i.e. after calling this function, rows will hold [0..actual_delete_count] row ids of the actually deleted tuples
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
+
+	bool HasDeletes() const override;
 
 	void Serialize(Serializer &serialize) override;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
