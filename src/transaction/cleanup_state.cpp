@@ -70,7 +70,7 @@ void CleanupState::CleanupDelete(DeleteInfo &info) {
 
 	count = 0;
 	for (idx_t i = 0; i < info.count; i++) {
-		row_numbers[count++] = info.vinfo->GetStart() + info.rows[i];
+		row_numbers[count++] = info.base_row + info.rows[i];
 	}
 	Flush();
 }
