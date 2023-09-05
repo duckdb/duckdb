@@ -108,6 +108,7 @@ jobs:
         path: |
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
+          duckdb_odbc-linux-amd64.zip
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
