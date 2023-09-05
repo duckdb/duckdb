@@ -347,6 +347,84 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, c
 	}
 }
 
+// FIXME: this is not respecting the chunk offset and array offset yet
+template <class RUN_END_TYPE, class VALUE_TYPE>
+static void FlattenRunEnds(Vector &result, Vector &runs, Vector &values, idx_t compressed_size) {
+	UnifiedVectorFormat run_end_format;
+	UnifiedVectorFormat value_format;
+	runs.ToUnifiedFormat(compressed_size, run_end_format);
+	values.ToUnifiedFormat(compressed_size, value_format);
+	auto run_ends_data = run_end_format.GetData<RUN_END_TYPE>(run_end_format);
+	auto values_data = value_format.GetData<VALUE_TYPE>(value_format);
+	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
+	auto &validity = FlatVector::Validity(result);
+	RUN_END_TYPE index = 0;
+	// Now construct the result vector from the run_ends and the values
+	D_ASSERT(run_end_format.validity.AllValid());
+	if (value_format.validity.AllValid()) {
+		// None of the compressed values are NULL
+		for (idx_t run = 0; run < compressed_size; run++) {
+			auto run_end_index = run_end_format.sel->get_index(run);
+			auto value_index = value_format.sel->get_index(run);
+			auto &value = values_data[value_index];
+			auto &run_end = run_ends_data[run_end_index];
+			D_ASSERT(run_end > index);
+			while (index < run_end) {
+				result_data[index] = value;
+				index++;
+			}
+		}
+	} else {
+		for (idx_t run = 0; run < compressed_size; run++) {
+			auto run_end_index = run_end_format.sel->get_index(run);
+			auto value_index = value_format.sel->get_index(run);
+			auto &run_end = run_ends_data[run_end_index];
+			if (value_format.validity.RowIsValidUnsafe(value_index)) {
+				auto &value = values_data[value_index];
+				D_ASSERT(run_end > index);
+				while (index < run_end) {
+					result_data[index] = value;
+					validity.SetValid(index);
+					index++;
+				}
+			} else {
+				D_ASSERT(run_end > index);
+				while (index < run_end) {
+					validity.SetInvalid(index);
+					index++;
+				}
+			}
+		}
+	}
+}
+
+template <class RUN_END_TYPE>
+static void FlattenRunEndsSwitch(Vector &result, Vector &runs, Vector &values, idx_t compressed_size) {
+	auto physical_type = values.GetType().InternalType();
+	switch (physical_type) {
+	case PhysicalType::INT16:
+		FlattenRunEnds<RUN_END_TYPE, int16_t>(result, runs, values, compressed_size);
+		break;
+	case PhysicalType::INT32:
+		FlattenRunEnds<RUN_END_TYPE, int32_t>(result, runs, values, compressed_size);
+		break;
+	case PhysicalType::INT64:
+		FlattenRunEnds<RUN_END_TYPE, int64_t>(result, runs, values, compressed_size);
+		break;
+	case PhysicalType::UINT16:
+		FlattenRunEnds<RUN_END_TYPE, uint16_t>(result, runs, values, compressed_size);
+		break;
+	case PhysicalType::UINT32:
+		FlattenRunEnds<RUN_END_TYPE, uint32_t>(result, runs, values, compressed_size);
+		break;
+	case PhysicalType::UINT64:
+		FlattenRunEnds<RUN_END_TYPE, uint64_t>(result, runs, values, compressed_size);
+		break;
+	default:
+		throw NotImplementedException("RunEndEncoded value type '%s' not supported yet", TypeIdToString(physical_type));
+	}
+}
+
 static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                              idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                              ValidityMask *parent_mask, uint64_t parent_offset) {
@@ -355,13 +433,33 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, 
 	auto &run_ends_array = *array.children[0];
 	auto &values_array = *array.children[1];
 
-	D_ASSERT(run_ends_array.length == values_array.length);
-	auto &run_end_type = arrow_type.GetRunEndEncodingType();
-	// Create a vector for the run ends and the values
-	auto run_end_vector = make_uniq<Vector>(run_end_type, run_ends_array.length);
-	auto values_vector = make_uniq<Vector>(vector.GetType(), values_array.length);
+	auto &run_ends_type = arrow_type[0];
+	auto &values_type = arrow_type[1];
+	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
-	auto run_ends = ArrowBufferData<data_t>(array, 0) + (scan_state.chunk_offset + array.offset) / 8;
+	D_ASSERT(run_ends_array.length == values_array.length);
+	auto compressed_size = run_ends_array.length;
+	// Create a vector for the run ends and the values
+	auto run_ends_vector = make_uniq<Vector>(run_ends_type.GetDuckType(), compressed_size);
+	auto values_vector = make_uniq<Vector>(values_type.GetDuckType(), compressed_size);
+
+	ColumnArrowToDuckDB(*run_ends_vector, run_ends_array, scan_state, compressed_size, run_ends_type);
+	ColumnArrowToDuckDB(*values_vector, values_array, scan_state, compressed_size, values_type);
+
+	auto physical_type = run_ends_type.GetDuckType().InternalType();
+	switch (physical_type) {
+	case PhysicalType::INT16:
+		FlattenRunEndsSwitch<int16_t>(vector, *run_ends_vector, *values_vector, compressed_size);
+		break;
+	case PhysicalType::INT32:
+		FlattenRunEndsSwitch<int32_t>(vector, *run_ends_vector, *values_vector, compressed_size);
+		break;
+	case PhysicalType::INT64:
+		FlattenRunEndsSwitch<int32_t>(vector, *run_ends_vector, *values_vector, compressed_size);
+		break;
+	default:
+		throw NotImplementedException("Type '%s' not implemented for RunEndEncoding", TypeIdToString(physical_type));
+	}
 }
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,

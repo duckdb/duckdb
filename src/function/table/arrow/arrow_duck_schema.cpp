@@ -40,12 +40,6 @@ void ArrowType::SetRunEndEncoded() {
 	run_end_encoded = true;
 }
 
-const LogicalType &ArrowType::GetRunEndEncodingType() const {
-	D_ASSERT(run_end_encoded);
-	D_ASSERT(children.size() == 2);
-	return children[1]->GetDuckType();
-}
-
 bool ArrowType::RunEndEncoded() const {
 	return run_end_encoded;
 }
