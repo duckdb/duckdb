@@ -1,5 +1,8 @@
 #include "duckdb/parser/expression/lambdaref_expression.hpp"
 
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/field_writer.hpp"
+
 namespace duckdb {
 
 LambdaRefExpression::LambdaRefExpression(const idx_t lambda_idx, const string &column_name)
@@ -47,9 +50,9 @@ void LambdaRefExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> LambdaRefExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto lambda_idx = reader.ReadRequired<idx_t>();
-	auto column_name = reader.ReadRequired<string>();
-	auto expression = make_uniq<LambdaRefExpression>(lambda_idx, column_name);
+	auto lambda_idx_p = reader.ReadRequired<idx_t>();
+	auto column_name_p = reader.ReadRequired<string>();
+	auto expression = make_uniq<LambdaRefExpression>(lambda_idx_p, column_name_p);
 	return std::move(expression);
 }
 

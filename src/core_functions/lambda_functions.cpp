@@ -115,11 +115,6 @@ void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries,
 // ListLambdaBindData
 //===--------------------------------------------------------------------===//
 
-ListLambdaBindData::ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr,
-                                       const bool has_index)
-    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index) {
-}
-
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 	return make_uniq<ListLambdaBindData>(return_type, lambda_expr ? lambda_expr->Copy() : nullptr, has_index);
 }
@@ -128,14 +123,6 @@ bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
 	return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
 	       has_index == other.has_index;
-}
-
-void ListLambdaBindData::Serialize(FieldWriter &, const FunctionData *, const ScalarFunction &) {
-	throw NotImplementedException("FIXME: list lambda serialize");
-}
-
-unique_ptr<FunctionData> ListLambdaBindData::Deserialize(PlanDeserializationState &, FieldReader &, ScalarFunction &) {
-	throw NotImplementedException("FIXME: list lambda deserialize");
 }
 
 void ListLambdaBindData::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,

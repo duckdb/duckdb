@@ -11,6 +11,8 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
+#include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
 
@@ -21,8 +23,9 @@ enum class LambdaType : uint8_t {
 };
 
 struct ListLambdaBindData : public FunctionData {
-	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr,
-	                   const bool has_index = false);
+public:
+	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false)
+	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index) {};
 
 	//! Return type of the scalar function
 	LogicalType return_type;
@@ -37,8 +40,12 @@ public:
 	unique_ptr<FunctionData> Copy() const override;
 
 	//! Old (de)serialization functionality
-	static void Serialize(FieldWriter &, const FunctionData *, const ScalarFunction &);
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &, FieldReader &, ScalarFunction &);
+	static void Serialize(FieldWriter &, const FunctionData *, const ScalarFunction &) {
+		throw NotImplementedException("FIXME: list lambda serialize");
+	}
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &, FieldReader &, ScalarFunction &) {
+		throw NotImplementedException("FIXME: list lambda deserialize");
+	}
 
 	//! Serialize a lambda function's bind data
 	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
@@ -47,8 +54,8 @@ public:
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &);
 };
 
-struct LambdaFunctions {
-
+class LambdaFunctions {
+public:
 	// FIXME: still a pretty massive function
 	// FIXME: more separation between different lambda functions (enum as parameter with lambda function type?)
 	static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type);
