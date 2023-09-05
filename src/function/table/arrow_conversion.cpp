@@ -23,7 +23,7 @@ T *ArrowBufferData(ArrowArray &array, idx_t buffer_idx) {
 	return (T *)array.buffers[buffer_idx]; // NOLINT
 }
 
-static void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void GetValidityMask(ValidityMask &mask, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                             int64_t nested_offset = -1, bool add_null = false) {
 	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
 	//
@@ -73,22 +73,22 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLoca
 	}
 }
 
-static void SetValidityMask(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void SetValidityMask(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                             int64_t nested_offset, bool add_null = false) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &mask = FlatVector::Validity(vector);
 	GetValidityMask(mask, array, scan_state, size, nested_offset, add_null);
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                              idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
                                              ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
 
-static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask) {
 	auto size_type = arrow_type.GetSizeType();
 	idx_t list_size = 0;
@@ -163,7 +163,7 @@ static void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	}
 }
 
-static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                               const ArrowType &arrow_type, int64_t nested_offset) {
 	auto size_type = arrow_type.GetSizeType();
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
@@ -255,8 +255,8 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
-static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                             uint64_t parent_offset) {
+static void DirectConversion(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
+                             int64_t nested_offset, uint64_t parent_offset) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr =
 	    ArrowBufferData<data_t>(array, 1) + internal_type * (scan_state.chunk_offset + array.offset + parent_offset);
@@ -267,8 +267,8 @@ static void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanLocalSt
 }
 
 template <class T>
-static void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, int64_t nested_offset,
-                           idx_t size, int64_t conversion) {
+static void TimeConversion(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
+                           int64_t nested_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = (T *)array.buffers[1] + scan_state.chunk_offset + array.offset;
@@ -285,7 +285,7 @@ static void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanLocalStat
 	}
 }
 
-static void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void TimestampTZConversion(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                   int64_t nested_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
 	auto &validity_mask = FlatVector::Validity(vector);
@@ -303,7 +303,7 @@ static void TimestampTZConversion(Vector &vector, ArrowArray &array, ArrowScanLo
 	}
 }
 
-static void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void IntervalConversionUs(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                  int64_t nested_offset, idx_t size, int64_t conversion) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
 	auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
@@ -319,7 +319,7 @@ static void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanLoc
 	}
 }
 
-static void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void IntervalConversionMonths(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                      int64_t nested_offset, idx_t size) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
 	auto src_ptr = ArrowBufferData<int32_t>(array, 1) + scan_state.chunk_offset + array.offset;
@@ -333,7 +333,7 @@ static void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowSca
 	}
 }
 
-static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                             int64_t nested_offset, idx_t size) {
 	auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
 	auto src_ptr = ArrowBufferData<ArrowInterval>(array, 1) + scan_state.chunk_offset + array.offset;
@@ -347,15 +347,24 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, A
 	}
 }
 
-static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state,
                                              idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                              ValidityMask *parent_mask, uint64_t parent_offset) {
 	// Scan the 'run_ends' array
-	auto base_vector = make_uniq<Vector>(vector.GetType(), array.length);
+	D_ASSERT(array.n_children == 2);
+	auto &run_ends_array = *array.children[0];
+	auto &values_array = *array.children[1];
+
+	D_ASSERT(run_ends_array.length == values_array.length);
+	auto &run_end_type = arrow_type.GetRunEndEncodingType();
+	// Create a vector for the run ends and the values
+	auto run_end_vector = make_uniq<Vector>(run_end_type, run_ends_array.length);
+	auto values_vector = make_uniq<Vector>(vector.GetType(), values_array.length);
+
 	auto run_ends = ArrowBufferData<data_t>(array, 0) + (scan_state.chunk_offset + array.offset) / 8;
 }
 
-static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, const ArrowScanLocalState &scan_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
                                 uint64_t parent_offset) {
 	switch (vector.GetType().id()) {

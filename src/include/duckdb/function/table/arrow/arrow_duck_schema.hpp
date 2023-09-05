@@ -73,6 +73,8 @@ public:
 
 	bool RunEndEncoded() const;
 
+	const LogicalType &GetRunEndEncodingType() const;
+
 	const ArrowType &operator[](idx_t index) const;
 
 private:
