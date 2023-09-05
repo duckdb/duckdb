@@ -52,10 +52,9 @@ unique_ptr<SetStatement> Transformer::TransformSetVariable(duckdb_libpgquery::PG
 	auto ptr_value = stmt.args->head->data.ptr_value;
 
 	Value value;
-	if (auto const_val = PGCheckedCast<duckdb_libpgquery::PGAConst, duckdb_libpgquery::T_PGAConst>(ptr_value)) {
+	if (auto const_val = PGTryCast<duckdb_libpgquery::PGAConst, duckdb_libpgquery::T_PGAConst>(ptr_value)) {
 		value = TransformValue(const_val->val)->value;
-	} else if (auto func_call =
-	               PGCheckedCast<duckdb_libpgquery::PGFuncCall, duckdb_libpgquery::T_PGFuncCall>(ptr_value)) {
+	} else if (auto func_call = PGTryCast<duckdb_libpgquery::PGFuncCall, duckdb_libpgquery::T_PGFuncCall>(ptr_value)) {
 		auto func_expr = TransformFuncCall(*func_call);
 		if (!ConstructConstantFromExpression(*func_expr, value)) {
 			throw ParserException("Unsupported value type for setting");

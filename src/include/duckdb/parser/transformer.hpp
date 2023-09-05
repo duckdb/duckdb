@@ -357,7 +357,7 @@ public:
 		return optional_ptr<T>(reinterpret_cast<T *>(ptr));
 	}
 	template <class T, int ID>
-	static optional_ptr<T> PGCheckedCast(void *ptr) {
+	static optional_ptr<T> PGTryCast(void *ptr) {
 		auto value = PGPointerCast<T>(ptr);
 		return value && value->type == ID ? value : nullptr;
 	}
