@@ -256,15 +256,6 @@ Napi::Value Database::Close(const Napi::CallbackInfo &info) {
 		callback = info[0].As<Napi::Function>();
 	}
 
-	auto connection_wrapper = this->Value().Get("default_connection").As<Napi::Object>();
-	if (connection_wrapper) {
-		auto unwrap = Connection::Unwrap(connection_wrapper);
-		if (unwrap) {
-			unwrap->connection.reset();
-			this->Value().Delete("default_connection");
-		}
-	}
-
 	Schedule(info.Env(), duckdb::make_uniq<CloseTask>(*this, callback));
 
 	return info.This();

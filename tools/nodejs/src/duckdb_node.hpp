@@ -123,6 +123,7 @@ public:
 	static Napi::Object Init(Napi::Env env, Napi::Object exports);
 
 public:
+	Napi::Value Close(const Napi::CallbackInfo &info);
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 	Napi::Value Exec(const Napi::CallbackInfo &info);
 	Napi::Value RegisterUdf(const Napi::CallbackInfo &info);
