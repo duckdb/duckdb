@@ -133,7 +133,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_R OR BUILD_NODE OR CONFIGURE_R)
+if((BUILD_PYTHON OR BUILD_NODE)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
@@ -897,9 +897,6 @@ endif()
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
 endif()
-if(BUILD_R OR CONFIGURE_R)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpkg/duckdb_extension_config.cmake)
-endif()
 if(BUILD_NODE)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
 endif()
@@ -1018,9 +1015,7 @@ if(${EXTENSION_CONFIG_BUILD})
 endif()
 
 if(BUILD_PYTHON
-        OR BUILD_R
-        OR BUILD_NODE
-        OR CONFIGURE_R)
+        OR BUILD_NODE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -1056,32 +1051,6 @@ if(BUILD_PYTHON
               Python package)
     endif()
     add_extension_dependencies(duckdb_python)
-  endif()
-  if(CONFIGURE_R)
-    add_custom_target(
-            duckdb_configure_r ALL
-            COMMAND
-            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
-            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
-            COMMENT Configure
-            R package)
-    add_extension_dependencies(duckdb_configure_r)
-  endif()
-  if(BUILD_R)
-    add_custom_target(
-            duckdb_r ALL
-            COMMAND
-            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
-            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_R_LIBS=\"${duckdb_libs}\" DUCKDB_R_DEBUG= R CMD INSTALL .
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
-            COMMENT Build
-            R package)
-    add_extension_dependencies(duckdb_r)
   endif()
   if(BUILD_NODE)
     add_custom_target(
