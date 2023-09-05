@@ -590,6 +590,8 @@ public:
 	static bool TryOpenNextFile(ClientContext &context, const ParquetReadBindData &bind_data,
 	                            ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
 	                            unique_lock<mutex> &parallel_lock) {
+		const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		const auto file_index_limit = MinValue<idx_t>(parallel_state.file_index + num_threads, bind_data.files.size());
 		for (idx_t i = parallel_state.file_index; i < bind_data.files.size(); i++) {
 			if (parallel_state.file_states[i] == ParquetFileState::UNOPENED) {
 				string file = bind_data.files[i];
