@@ -7,6 +7,12 @@ require json
 statement ok
 pragma enable_verification
 
+# should work within other functions (no conflict with list Lambda functions)
+query T
+SELECT json_structure('{"duck":"goose"}'->'duck');
+----
+"VARCHAR"
+
 # should go to our NULL
 query T
 select json_extract('{"foo": null}', '$.foo')
