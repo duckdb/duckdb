@@ -845,26 +845,81 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 }
 
 // LCOV_EXCL_START
+
+// FIXME: Have these be generated instead
+template <>
+const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
+    duckdb_parquet::format::CompressionCodec::type value) {
+	switch (value) {
+	case CompressionCodec::UNCOMPRESSED:
+		return "UNCOMPRESSED";
+		break;
+	case CompressionCodec::SNAPPY:
+		return "SNAPPY";
+		break;
+	case CompressionCodec::GZIP:
+		return "GZIP";
+		break;
+	case CompressionCodec::LZO:
+		return "LZO";
+		break;
+	case CompressionCodec::BROTLI:
+		return "BROTLI";
+		break;
+	case CompressionCodec::LZ4:
+		return "LZ4";
+		break;
+	case CompressionCodec::ZSTD:
+		return "ZSTD";
+		break;
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+duckdb_parquet::format::CompressionCodec::type
+EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char *value) {
+	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
+		return CompressionCodec::UNCOMPRESSED;
+	}
+	if (StringUtil::Equals(value, "SNAPPY")) {
+		return CompressionCodec::SNAPPY;
+	}
+	if (StringUtil::Equals(value, "GZIP")) {
+		return CompressionCodec::GZIP;
+	}
+	if (StringUtil::Equals(value, "LZO")) {
+		return CompressionCodec::LZO;
+	}
+	if (StringUtil::Equals(value, "BROTLI")) {
+		return CompressionCodec::BROTLI;
+	}
+	if (StringUtil::Equals(value, "LZ4")) {
+		return CompressionCodec::LZ4;
+	}
+	if (StringUtil::Equals(value, "ZSTD")) {
+		return CompressionCodec::ZSTD;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
 static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionData &bind_data_p,
                                  const CopyFunction &function) {
-	throw InternalException("FIXME ParquetCopySerialize");
-	//	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	//	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
-	//	writer.WriteList<string>(bind_data.column_names);
-	//	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
-	//	writer.WriteField<idx_t>(bind_data.row_group_size);
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	serializer.WriteProperty(100, "sql_types", bind_data.sql_types);
+	serializer.WriteProperty(101, "column_names", bind_data.column_names);
+	serializer.WriteProperty(102, "codec", bind_data.codec);
+	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(FormatDeserializer &deserializer, CopyFunction &function) {
-	throw InternalException("FIXME ParquetCopySerialize");
-	//	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
-	//
-	//	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	//	data->column_names = reader.ReadRequiredList<string>();
-	//	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
-	//	data->row_group_size = reader.ReadRequired<idx_t>();
-	//
-	//	return std::move(data);
+	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
+	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
+	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
+	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
+	return data;
 }
 // LCOV_EXCL_STOP
 

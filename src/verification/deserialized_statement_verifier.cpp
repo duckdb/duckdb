@@ -1,7 +1,8 @@
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
+
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 namespace duckdb {
 
 DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLStatement> statement_p)
@@ -12,13 +13,12 @@ unique_ptr<StatementVerifier> DeserializedStatementVerifier::Create(const SQLSta
 
 	auto &select_stmt = statement.Cast<SelectStatement>();
 
-	BufferedSerializer sink;
-	BinarySerializer::Serialize(select_stmt, sink);
-	auto blob = sink.GetData();
+	MemoryStream stream;
+	BinarySerializer::Serialize(select_stmt, stream);
+	stream.Rewind();
+	auto result = BinaryDeserializer::Deserialize<SelectStatement>(stream);
 
-	BufferedDeserializer source(blob.data.get(), blob.size);
-	BinaryDeserializer deserializer(source);
-	return make_uniq<DeserializedStatementVerifier>(deserializer.Deserialize<SelectStatement>());
+	return make_uniq<DeserializedStatementVerifier>(std::move(result));
 }
 
 } // namespace duckdb

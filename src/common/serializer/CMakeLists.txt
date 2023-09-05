@@ -7,6 +7,7 @@ add_library_unity(
   buffered_file_reader.cpp
   buffered_file_writer.cpp
   buffered_serializer.cpp
+  memory_stream.cpp
   serializer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_serializer>

@@ -1,6 +1,8 @@
 #include "duckdb/planner/planner.hpp"
 
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -10,8 +12,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -168,14 +168,11 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		BufferedSerializer sink;
-		BinarySerializer::Serialize(*op, sink, true);
-		auto blob = sink.GetData();
-
-		BufferedDeserializer source(blob.data.get(), blob.size);
-
+		MemoryStream stream;
+		BinarySerializer::Serialize(*op, stream, true);
+		stream.Rewind();
 		bound_parameter_map_t parameters;
-		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(source, context, parameters);
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
 
 		if (map) {
 			*map = std::move(parameters);

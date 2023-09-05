@@ -1601,21 +1601,19 @@ struct StructDatePart {
 		result.Verify(count);
 	}
 
-	static void SerializeFunction(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	static void SerializeFunction(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                              const ScalarFunction &function) {
-		throw InternalException("SerializeFunction");
-		//		D_ASSERT(bind_data_p);
-		//		auto &info = bind_data_p->Cast<BindData>();
-		//		writer.WriteSerializable(info.stype);
-		//		writer.WriteList<DatePartSpecifier>(info.part_codes);
+		D_ASSERT(bind_data_p);
+		auto &info = bind_data_p->Cast<BindData>();
+		serializer.WriteProperty(100, "stype", info.stype);
+		serializer.WriteProperty(101, "part_codes", info.part_codes);
 	}
 
 	static unique_ptr<FunctionData> DeserializeFunction(FormatDeserializer &deserializer,
 	                                                    ScalarFunction &bound_function) {
-		throw InternalException("SerializeFunction");
-		//		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		//		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
-		//		return make_uniq<BindData>(std::move(stype), std::move(part_codes));
+		auto stype = deserializer.ReadProperty<LogicalType>(100, "stype");
+		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(101, "part_codes");
+		return make_uniq<BindData>(std::move(stype), std::move(part_codes));
 	}
 
 	template <typename INPUT_TYPE>
