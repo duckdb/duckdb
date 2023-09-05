@@ -18,8 +18,7 @@ endif()
 duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
-        GIT_TAG 428e7fba74a9833f9e2e771b3eb82ee0ab0bf7b5
-        APPLY_PATCHES
+        GIT_TAG a1f65419dfbc23e8099fbdd1a8a13bfda425165d
         )
 
 ################# AZURE
@@ -40,8 +39,7 @@ endif()
 duckdb_extension_load(iceberg
         ${LOAD_ICEBERG_TESTS}
         GIT_URL https://github.com/duckdblabs/duckdb_iceberg
-        GIT_TAG 90de66a56b9971c08634f48819c099d9c2744720
-        APPLY_PATCHES
+        GIT_TAG 51ba9564859698c29db4165f17143a2f6af2bb18
         )
 
 ################# POSTGRES_SCANNER
