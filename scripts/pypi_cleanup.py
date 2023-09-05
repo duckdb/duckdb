@@ -19,6 +19,6 @@ if pypi_otp == "":
     print(f'need {pypi_username}\' PyPI OTP secret in PYPI_CLEANUP_OTP env variable')
     exit(1)
 
-proc = subprocess.Popen(['pypi-cleanup', '-u', pypi_username, '-p', 'duckdb', '-d', str(retain_days), '--do-it'], stdin=subprocess.PIPE)
+proc = subprocess.Popen(['pypi-cleanup', '-u', pypi_username, '-p', 'duckdb', '-d', str(retain_days), '--do-it', '-v'], stdin=subprocess.PIPE)
 # insert otp
 proc.communicate(input=(pyotp.TOTP(pypi_otp).now() + '\n').encode('utf8'))
