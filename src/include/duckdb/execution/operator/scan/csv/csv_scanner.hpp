@@ -93,7 +93,7 @@ private:
 	//! The following set of functions and variables are related to actual CSV Parsing
 	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.
 	//! This function walks the buffer until the first new valid line.
-	bool SetStart(VerificationPositions& verification_positions);
+	bool SetStart(VerificationPositions& verification_positions, const vector<LogicalType> &types);
 	//! Skips empty lines when reading the first buffer
 	void SkipEmptyLines();
 	//! Skips header when reading the first buffer

@@ -1,8 +1,7 @@
-#include <utility>
-
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
+#include "duckdb/execution/operator/scan/csv/parse_values.hpp"
 
 namespace duckdb {
 
@@ -82,7 +81,7 @@ void CSVScanner::SkipHeader() {
 }
 
 
-bool CSVScanner::SetStart(VerificationPositions& verification_positions){
+bool CSVScanner::SetStart(VerificationPositions& verification_positions, const vector<LogicalType> &types){
 	if (cur_buffer_idx == 0 && start_buffer <= buffer_manager->GetStartPos()) {
 		// This means this is the very first buffer
 		// This CSV is not from auto-detect so we don't know where exactly it starts
@@ -98,22 +97,47 @@ bool CSVScanner::SetStart(VerificationPositions& verification_positions){
 	}
 
 	// We have to look for a new line that fits our schema
-	bool successfully_read_first_line = false;
-	while (!successfully_read_first_line && ! Finished()) {
-		// 1. We walk until the next new line
-		// 2. We try to cast all columns to the correct types
-		// 3. If it succeeds we are done, otherwise we walk to the next line
+	bool success = false;
+	while (!Finished()) {
+			// 1. We walk until the next new line
+			Process<SkipUntilNewLine>(*this, cur_pos);
+		    idx_t position_being_checked = cur_pos;
+			vector<TupleOfValues> tuples(1);
+			Process<ParseValues>(*this, tuples);
+		    if (!tuples.empty()){
+				// If no tuples were parsed, this is not the correct start, we need to skip until the next new line
+				cur_pos = position_being_checked;
+				continue;
+		    }
+		    vector<Value> &values = tuples[0].values;
+
+		    if (values.size() != state_machine->options.dialect_options.num_cols){
+			    // If columns don't match, this is not the correct start, we need to skip until the next new line
+				cur_pos = position_being_checked;
+			    continue;
+		    }
+		    // 2. We try to cast all columns to the correct types
+		    bool all_cast = true;
+		    for (idx_t i = 0; i < values.size(); i ++) {
+			    if (!values[0].TryCastAs(buffer_manager->context, types[i])){
+				    // We could not cast it to the right type, this is probably not the correct line start.
+				    all_cast = false;
+				    break;
+			    };
+		    }
+		    cur_pos = position_being_checked;
+		    if (all_cast){
+			    // We found the start of the line, yay
+			    success = true;
+			    break;
+		    }
 	}
-	// We try to cast the new line
-
-	// If we succeeded, that's our start
-
 	// We have to move position up to next new line
 	if (verification_positions.beginning_of_first_line == 0) {
 		verification_positions.beginning_of_first_line = cur_pos;
 	}
-
 	verification_positions.end_of_last_line = cur_pos;
+	return success;
 
 }
 
