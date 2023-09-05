@@ -84,6 +84,7 @@ protected:
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false);
 	void AddAndRegisterBlock(MetadataBlock block);
+	void ConvertToTransient(MetadataBlock &block);
 };
 
 } // namespace duckdb

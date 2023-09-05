@@ -13,7 +13,7 @@ MetadataManager::~MetadataManager() {
 
 MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
-	// if not allocate a new bloc
+	// if not allocate a new block
 	block_id_t free_block = INVALID_BLOCK;
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -32,6 +32,12 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	MetadataPointer pointer;
 	pointer.block_index = free_block;
 	auto &block = blocks[free_block];
+	if (block.block->BlockId() < MAXIMUM_BLOCK) {
+		// this block is a disk-backed block, yet we are planning to write to it
+		// we need to convert it into a transient block before we can write to it
+		ConvertToTransient(block);
+		D_ASSERT(block.block->BlockId() >= MAXIMUM_BLOCK);
+	}
 	D_ASSERT(!block.free_blocks.empty());
 	pointer.index = block.free_blocks.back();
 	// mark the block as used
@@ -50,6 +56,20 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	handle.pointer.index = pointer.index;
 	handle.handle = buffer_manager.Pin(block.block);
 	return handle;
+}
+
+void MetadataManager::ConvertToTransient(MetadataBlock &block) {
+	// pin the old block
+	auto old_buffer = buffer_manager.Pin(block.block);
+
+	// allocate a new transient block to replace it
+	shared_ptr<BlockHandle> new_block;
+	auto new_buffer = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+
+	// copy the data to the transient block
+	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
+
+	block.block = std::move(new_block);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {
