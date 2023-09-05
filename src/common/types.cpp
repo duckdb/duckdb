@@ -919,10 +919,6 @@ LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 
-LogicalType LogicalType::KEYVALUE(const LogicalType &key_type, const LogicalType &value_type) {
-	return LogicalType::STRUCT({{"key", key_type}, {"value", value_type}});
-}
-
 LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLINT
 	auto info = make_shared<AggregateStateTypeInfo>(std::move(state_type));
 	return LogicalType(LogicalTypeId::AGGREGATE_STATE, std::move(info));

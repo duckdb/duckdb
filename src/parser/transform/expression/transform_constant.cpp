@@ -110,8 +110,8 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				}
 				values.emplace_back(child_value);
 			}
-			auto type = LogicalType::KEYVALUE(ListType::GetChildType(values[0].type()),
-			                                  ListType::GetChildType(values[1].type()));
+			auto type =
+			    LogicalType::MAP(ListType::GetChildType(values[0].type()), ListType::GetChildType(values[1].type()));
 
 			// need to zip these lists together
 			duckdb::vector<Value> pairs;

@@ -369,7 +369,6 @@ public:
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
-	DUCKDB_API static LogicalType KEYVALUE(const LogicalType &key_type, const LogicalType &value_type);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
