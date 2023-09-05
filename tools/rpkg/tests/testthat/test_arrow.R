@@ -158,8 +158,7 @@ test_that("to_arrow roundtrip, with dataset", {
       to_arrow() %>%
       filter(int > 5 & part > 1) %>%
       collect() %>%
-      arrange(part, int) %>%
-      as.data.frame(),
+      arrange(part, int),
     ds %>%
       select(-fct) %>%
       filter(int > 5 & part > 1) %>%

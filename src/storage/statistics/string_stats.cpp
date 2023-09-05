@@ -7,6 +7,9 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "utf8proc_wrapper.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 BaseStatistics StringStats::CreateUnknown(LogicalType type) {
@@ -103,6 +106,15 @@ void StringStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
 	writer.WriteField<uint32_t>(string_data.max_string_length);
 }
 
+void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+	auto &string_data = StringStats::GetDataUnsafe(stats);
+	serializer.WriteProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
+	serializer.WriteProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
+	serializer.WriteProperty(202, "has_unicode", string_data.has_unicode);
+	serializer.WriteProperty(203, "has_max_string_length", string_data.has_max_string_length);
+	serializer.WriteProperty(204, "max_string_length", string_data.max_string_length);
+}
+
 BaseStatistics StringStats::Deserialize(FieldReader &reader, LogicalType type) {
 	BaseStatistics result(std::move(type));
 	auto &string_data = StringStats::GetDataUnsafe(result);
@@ -111,6 +123,17 @@ BaseStatistics StringStats::Deserialize(FieldReader &reader, LogicalType type) {
 	string_data.has_unicode = reader.ReadRequired<bool>();
 	string_data.has_max_string_length = reader.ReadRequired<bool>();
 	string_data.max_string_length = reader.ReadRequired<uint32_t>();
+	return result;
+}
+
+BaseStatistics StringStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
+	BaseStatistics result(std::move(type));
+	auto &string_data = StringStats::GetDataUnsafe(result);
+	deserializer.ReadProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
+	deserializer.ReadProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
+	deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
+	deserializer.ReadProperty(203, "has_max_string_length", string_data.has_max_string_length);
+	deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
 	return result;
 }
 

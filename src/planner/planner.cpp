@@ -169,7 +169,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		auto blob = BinarySerializer::Serialize(*op);
+		auto blob = BinarySerializer::Serialize(*op, true);
 		bound_parameter_map_t parameters;
 		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(), blob.size());
 	} catch (SerializationException &ex) {

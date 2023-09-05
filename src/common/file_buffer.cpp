@@ -68,7 +68,7 @@ FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
 		result.alloc_size = user_size;
 	} else {
 		result.header_size = Storage::BLOCK_HEADER_SIZE;
-		result.alloc_size = AlignValue<uint32_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
+		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
 	return result;
 }

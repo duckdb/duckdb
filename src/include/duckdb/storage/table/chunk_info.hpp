@@ -18,6 +18,9 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 
+class FormatSerializer;
+class FormatDeserializer;
+
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
@@ -45,6 +48,9 @@ public:
 
 	virtual void Serialize(Serializer &serialize) = 0;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const = 0;
+	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -85,10 +91,13 @@ public:
 	void Serialize(Serializer &serialize) override;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count);
+	                            idx_t max_count) const;
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -109,7 +118,7 @@ public:
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                   idx_t max_count);
+	                   idx_t max_count) const;
 	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
 	                            SelectionVector &sel_vector, idx_t max_count) override;
@@ -130,10 +139,13 @@ public:
 	void Serialize(Serializer &serialize) override;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count);
+	                            idx_t max_count) const;
 };
 
 } // namespace duckdb

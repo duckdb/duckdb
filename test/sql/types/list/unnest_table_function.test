@@ -146,6 +146,7 @@ SELECT k, a, b,
 		SELECT DISTINCT ax
 			FROM UNNEST(a) ta(ax)
 			WHERE ax = any(b)
+			ORDER BY ALL
 	) ab_intersect
 	FROM tbl;
 ----

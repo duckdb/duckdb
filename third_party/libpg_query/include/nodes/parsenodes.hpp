@@ -1872,6 +1872,7 @@ typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LO
 typedef struct PGLoadStmt {
 	PGNodeTag type;
 	const char *filename; /* file to load */
+	const char *repository; /* optionally, the repository to load from */
 	PGLoadInstallType load_type;
 } PGLoadStmt;
 

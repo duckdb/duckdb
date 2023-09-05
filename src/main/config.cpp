@@ -70,6 +70,9 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_LOCAL(CustomExtensionRepository),
+                                                 DUCKDB_LOCAL(AutoloadExtensionRepository),
+                                                 DUCKDB_GLOBAL(AutoinstallKnownExtensions),
+                                                 DUCKDB_GLOBAL(AutoloadKnownExtensions),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -282,7 +285,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	}
 }
 
-idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifndef DUCKDB_NO_THREADS
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
@@ -298,7 +301,7 @@ idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
 
 void DBConfig::SetDefaultMaxThreads() {
 #ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreadsInternal(*file_system);
+	options.maximum_threads = GetSystemMaxThreads(*file_system);
 #else
 	options.maximum_threads = 1;
 #endif

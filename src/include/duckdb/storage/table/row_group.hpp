@@ -147,6 +147,10 @@ public:
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	RowVersionManager &GetOrCreateVersionInfo();
 
+	// Serialization
+	static void FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer);
+	static RowGroupPointer FormatDeserialize(FormatDeserializer &deserializer);
+
 private:
 	shared_ptr<RowVersionManager> &GetVersionInfo();
 	ColumnData &GetColumn(storage_t c);
