@@ -58,24 +58,24 @@ test_that("structs give the same results via Arrow", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   res <- dbGetQuery(con, "SELECT {'x': 100, 'y': 'hello', 'z': 3.14} AS s", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     s = tibble::tibble(x = 100L, y = "hello", z = 3.14)
   ))
 
   res <- dbGetQuery(con, "SELECT 1 AS n, {'x': 100, 'y': 'hello', 'z': 3.14} AS s", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     n = 1L,
     s = tibble::tibble(x = 100L, y = "hello", z = 3.14)
   ))
 
   res <- dbGetQuery(con, "values (100, {'x': 100}), (200, {'x': 200}), (300, NULL)", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     col0 = c(100L, 200L, 300L),
     col1 = tibble::tibble(x = c(100L, 200L, NA))
   ))
 
   res <- dbGetQuery(con, "values ('a', {'x': 100, 'y': {'a': 1, 'b': 2}}), ('b', {'x': 200, y: NULL}), ('c', NULL)", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     col0 = c("a", "b", "c"),
     col1 = tibble::tibble(
       x = c(100L, 200L, NA),
@@ -84,7 +84,7 @@ test_that("structs give the same results via Arrow", {
   ))
 
   res <- dbGetQuery(con, "select 100 AS other, [{'x': 1, 'y': 'a'}, {'x': 2, 'y': 'b'}] AS s", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     other = 100L,
     s = vctrs::new_list_of(
       list(
@@ -96,7 +96,7 @@ test_that("structs give the same results via Arrow", {
   ))
 
   res <- dbGetQuery(con, "values ([{'x': 1, 'y': 'a'}, {'x': 2, 'y': 'b'}]), ([]), ([{'x': 1, 'y': 'a'}])", arrow = TRUE)
-  expect_equal(res, tibble::tibble(
+  expect_equal(tibble::as_tibble(res), tibble::tibble(
     col0 = vctrs::new_list_of(
       list(
         tibble::tibble(x = c(1L, 2L), y = c("a", "b")),
