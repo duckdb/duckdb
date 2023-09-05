@@ -179,17 +179,26 @@ class PypiCleanup:
                     two_factor_url = r.url
 
             if two_factor:
-                auth_code = pyotp.TOTP(self.otp).now()
-                with s.post(two_factor_url, data={"csrf_token": csrf,
-                                                  "method": "totp",
-                                                  "totp_value": auth_code},
-                            headers={"referer": two_factor_url}) as r:
-                    r.raise_for_status()
-                    if r.url == two_factor_url:
-                        logging.error(f"Authentication code {auth_code} is invalid")
-                        return 1
+                success = False
+                for i in range(3):
+                    auth_code = pyotp.TOTP(self.otp).now()
+                    with s.post(two_factor_url, data={"csrf_token": csrf,
+                                                      "method": "totp",
+                                                      "totp_value": auth_code},
+                                headers={"referer": two_factor_url}) as r:
+                        r.raise_for_status()
+                        if r.url == two_factor_url:
+                            logging.error(f"Authentication code {auth_code} is invalid, retrying in 5 seconds...")
+                            time.sleep(5)
+                        else:
+                            success = True
+                            break
+                if not success:
+                    raise Exception("Could not authenticate with OTP")
 
             for pkg_ver in pkg_vers:
+                if 'dev' not in pkg_ver:
+                    raise Exception(f"Would be deleting version {pkg_ver} but the version is not a dev version")
                 if self.do_it:
                     logging.info(f"Deleting {self.package} version {pkg_ver}")
                     form_action = f"/manage/project/{self.package}/release/{pkg_ver}/"
