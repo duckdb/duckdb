@@ -44,7 +44,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 			BinaryDeserializer deserializer(*initial_source);
 			deserializer.Begin();
 			auto entry_type = deserializer.ReadProperty<WALType>(100, "wal_type");
-			if(entry_type == WALType::WAL_FLUSH) {
+			if (entry_type == WALType::WAL_FLUSH) {
 				deserializer.End();
 				// check if the file is exhausted
 				if (initial_source->Finished()) {
@@ -89,7 +89,7 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 			BinaryDeserializer deserializer(reader);
 			deserializer.Begin();
 			auto entry_type = deserializer.ReadProperty<WALType>(100, "wal_type");
-			if(entry_type == WALType::WAL_FLUSH) {
+			if (entry_type == WALType::WAL_FLUSH) {
 				deserializer.End();
 				con.Commit();
 				// check if the file is exhausted
@@ -421,7 +421,7 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	switch (index_info.index_type) {
 	case IndexType::ART: {
 		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions,
-							   index_info.constraint_type, data_table.db);
+		                       index_info.constraint_type, data_table.db);
 		break;
 	}
 	default:
@@ -466,9 +466,7 @@ void ReplayState::ReplayUseTable(BinaryDeserializer &deserializer) {
 
 void ReplayState::ReplayInsert(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) {
-		chunk.FormatDeserialize(object);
-	});
+	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -482,9 +480,7 @@ void ReplayState::ReplayInsert(BinaryDeserializer &deserializer) {
 
 void ReplayState::ReplayDelete(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) {
-		chunk.FormatDeserialize(object);
-	});
+	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -508,9 +504,7 @@ void ReplayState::ReplayUpdate(BinaryDeserializer &deserializer) {
 	auto column_path = deserializer.ReadProperty<vector<column_t>>(101, "column_indexes");
 
 	DataChunk chunk;
-	deserializer.ReadObject(102, "chunk", [&](FormatDeserializer &object) {
-		chunk.FormatDeserialize(object);
-	});
+	deserializer.ReadObject(102, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
 
 	if (deserialize_only) {
 		return;

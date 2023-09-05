@@ -258,7 +258,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
 	serializer.WriteProperty(101, "alter_info", alter_info);
 	serializer.End();
-	
+
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();

@@ -65,6 +65,7 @@ public:
 	void End() {
 		OnObjectEnd();
 	}
+
 protected:
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks

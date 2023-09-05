@@ -54,16 +54,16 @@ void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CHECKPOINT);
 	serializer.WriteProperty(101, "meta_block", meta_block);
-    serializer.End();
+	serializer.End();
 }
 
 //===--------------------------------------------------------------------===//
 // CREATE TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateTable(const TableCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_TABLE);
@@ -75,9 +75,9 @@ void WriteAheadLog::WriteCreateTable(const TableCatalogEntry &entry) {
 // DROP TABLE
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_TABLE);
@@ -90,9 +90,9 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 // CREATE SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_SCHEMA);
@@ -104,9 +104,9 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 // SEQUENCES
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateSequence(const SequenceCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_SEQUENCE);
@@ -115,9 +115,9 @@ void WriteAheadLog::WriteCreateSequence(const SequenceCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_SEQUENCE);
@@ -127,9 +127,9 @@ void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, SequenceValue val) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::SEQUENCE_VALUE);
@@ -144,9 +144,9 @@ void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, Sequen
 // MACROS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateMacro(const ScalarMacroCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_MACRO);
@@ -155,9 +155,9 @@ void WriteAheadLog::WriteCreateMacro(const ScalarMacroCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropMacro(const ScalarMacroCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_MACRO);
@@ -178,9 +178,9 @@ void WriteAheadLog::WriteCreateTableMacro(const TableMacroCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_TABLE_MACRO);
@@ -193,9 +193,9 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 // Indexes
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_INDEX);
@@ -204,9 +204,9 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropIndex(const IndexCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_INDEX);
@@ -219,9 +219,9 @@ void WriteAheadLog::WriteDropIndex(const IndexCatalogEntry &entry) {
 // Custom Types
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateType(const TypeCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_TYPE);
@@ -230,9 +230,9 @@ void WriteAheadLog::WriteCreateType(const TypeCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_TYPE);
@@ -245,9 +245,9 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 // VIEWS
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_VIEW);
@@ -256,9 +256,9 @@ void WriteAheadLog::WriteCreateView(const ViewCatalogEntry &entry) {
 }
 
 void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_VIEW);
@@ -271,9 +271,9 @@ void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
 // DROP SCHEMA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::DROP_SCHEMA);
@@ -285,9 +285,9 @@ void WriteAheadLog::WriteDropSchema(const SchemaCatalogEntry &entry) {
 // DATA
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::WriteSetTable(string &schema, string &table) {
-    if (skip_writing) {
-        return;
-    }
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::USE_TABLE);
@@ -297,11 +297,11 @@ void WriteAheadLog::WriteSetTable(string &schema, string &table) {
 }
 
 void WriteAheadLog::WriteInsert(DataChunk &chunk) {
-    if (skip_writing) {
-        return;
-    }
-    D_ASSERT(chunk.size() > 0);
-    chunk.Verify();
+	if (skip_writing) {
+		return;
+	}
+	D_ASSERT(chunk.size() > 0);
+	chunk.Verify();
 
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
@@ -311,12 +311,12 @@ void WriteAheadLog::WriteInsert(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteDelete(DataChunk &chunk) {
-    if (skip_writing) {
-        return;
-    }
-    D_ASSERT(chunk.size() > 0);
-    D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
-    chunk.Verify();
+	if (skip_writing) {
+		return;
+	}
+	D_ASSERT(chunk.size() > 0);
+	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
+	chunk.Verify();
 
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
@@ -326,13 +326,13 @@ void WriteAheadLog::WriteDelete(DataChunk &chunk) {
 }
 
 void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column_indexes) {
-    if (skip_writing) {
-        return;
-    }
-    D_ASSERT(chunk.size() > 0);
-    D_ASSERT(chunk.ColumnCount() == 2);
-    D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
-    chunk.Verify();
+	if (skip_writing) {
+		return;
+	}
+	D_ASSERT(chunk.size() > 0);
+	D_ASSERT(chunk.ColumnCount() == 2);
+	D_ASSERT(chunk.data[1].GetType().id() == LogicalType::ROW_TYPE);
+	chunk.Verify();
 
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
@@ -345,10 +345,10 @@ void WriteAheadLog::WriteUpdate(DataChunk &chunk, const vector<column_t> &column
 //===--------------------------------------------------------------------===//
 // Write ALTER Statement
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteAlter(const AlterInfo& info) {
-	if(skip_writing) {
-        return;
-    }
+void WriteAheadLog::WriteAlter(const AlterInfo &info) {
+	if (skip_writing) {
+		return;
+	}
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::ALTER_INFO);
@@ -361,17 +361,17 @@ void WriteAheadLog::WriteAlter(const AlterInfo& info) {
 //===--------------------------------------------------------------------===//
 void WriteAheadLog::Flush() {
 	if (skip_writing) {
-        return;
-    }
+		return;
+	}
 
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	// write an empty entry
 	serializer.WriteProperty(100, "wal_type", WALType::WAL_FLUSH);
-    serializer.End();
+	serializer.End();
 
-    // flushes all changes made to the WAL to disk
-    writer->Sync();
+	// flushes all changes made to the WAL to disk
+	writer->Sync();
 }
 
 } // namespace duckdb

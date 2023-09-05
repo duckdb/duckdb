@@ -56,7 +56,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
 			deserializer.End();
 
-			if(!column_name.empty()){
+			if (!column_name.empty()) {
 				// write the alter table in the log
 				table_entry.CommitAlter(column_name);
 			}

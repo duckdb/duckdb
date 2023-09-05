@@ -55,11 +55,11 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	table_data_writer.Write<uint64_t>(row_group_pointers.size());
 	idx_t total_rows = 0;
 	for (auto &row_group_pointer : row_group_pointers) {
-		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
-		if (row_group_count > total_rows) {
-			total_rows = row_group_count;
-		}
-		RowGroup::Serialize(row_group_pointer, table_data_writer);
+	    auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+	    if (row_group_count > total_rows) {
+	        total_rows = row_group_count;
+	    }
+	    RowGroup::Serialize(row_group_pointer, table_data_writer);
 	}
 
 	// Pointer to the table itself goes to the metadata stream.
@@ -73,8 +73,8 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());
 	for (auto &block_info : index_pointers) {
-		meta_data_writer.Write<block_id_t>(block_info.block_id);
-		meta_data_writer.Write<uint32_t>(block_info.offset);
+	    meta_data_writer.Write<block_id_t>(block_info.block_id);
+	    meta_data_writer.Write<uint32_t>(block_info.offset);
 	}*/
 }
 
