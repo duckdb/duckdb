@@ -55,6 +55,27 @@ NULL
 (empty)
 NULL
 
+query I
+SELECT UNNEST('[NULL, NULL , ]'::varchar[]);
+----
+NULL
+NULL
+(empty)
+
+query I
+SELECT UNNEST('[NULL, NULL ,]'::varchar[]);
+----
+NULL
+NULL
+(empty)
+
+query I
+SELECT UNNEST('[NULL, NULL,]'::varchar[]);
+----
+NULL
+NULL
+(empty)
+
 #               Nested lists
 # ---------------------------------------------------
 query I
