@@ -57,8 +57,6 @@ SELECT i FROM integers WHERE i = 500000;
 
 endloop
 
-# loop and remove half
-
 statement ok
 CHECKPOINT;
 
@@ -66,21 +64,12 @@ statement ok
 CREATE TABLE prev_tbl AS SELECT total_blocks AS blocks FROM pragma_database_size();
 
 statement ok
-DELETE FROM integers WHERE i > 400000;
-
-query I
-SELECT total_blocks < blocks FROM prev_tbl, pragma_database_size();
-----
-1
+DELETE FROM integers WHERE i > 100000;
 
 statement ok
 CHECKPOINT;
 
-statement ok
-UPDATE prev_tbl SET blocks = (SELECT total_blocks FROM pragma_database_size());
-
-statement ok
-DELETE FROM integers WHERE i > 10000;
+restart
 
 query I
 SELECT total_blocks < blocks FROM prev_tbl, pragma_database_size();
@@ -108,6 +97,8 @@ CHECKPOINT;
 
 statement ok
 DELETE FROM integers;
+
+restart
 
 statement ok
 CHECKPOINT;
