@@ -110,31 +110,39 @@ class PypiCleanup:
 
                 releases_by_date = {}
                 for release, files in r.json()["releases"].items():
-                    releases_by_date[release] = max([datetime.datetime.strptime(f["upload_time"],
-                                                                                '%Y-%m-%dT%H:%M:%S') for f in files])
+                    releases_by_date[release] = max(
+                        [datetime.datetime.strptime(f["upload_time"], '%Y-%m-%dT%H:%M:%S') for f in files]
+                    )
 
             if not releases_by_date:
                 logging.info(f"No releases for package {self.package} have been found")
                 return
 
-            pkg_vers = list(filter(lambda k:
-                                   any(filter(lambda rex: rex.match(k),
-                                              self.patterns)) and releases_by_date[k] < self.date,
-                                   releases_by_date.keys()))
+            pkg_vers = list(
+                filter(
+                    lambda k: any(filter(lambda rex: rex.match(k), self.patterns)) and releases_by_date[k] < self.date,
+                    releases_by_date.keys(),
+                )
+            )
 
             if not pkg_vers:
                 logging.info(f"No releases were found matching specified patterns and dates in package {self.package}")
                 return
 
             if set(pkg_vers) == set(releases_by_date.keys()):
-                print(dedent(f"""
+                print(
+                    dedent(
+                        f"""
                 WARNING:
                 \tYou have selected the following patterns: {self.patterns}
                 \tThese patterns would delete all available released versions of `{self.package}`.
                 \tThis will render your project/package permanently inaccessible.
                 \tSince the costs of an error are too high I'm refusing to do this.
                 \tGoodbye.
-                """), file=sys.stderr)
+                """
+                    ),
+                    file=sys.stderr,
+                )
 
                 if not self.do_it:
                     return 3
@@ -158,18 +166,18 @@ class PypiCleanup:
                 csrf = parser.csrf
 
             two_factor = False
-            with s.post(f"{self.url}/account/login/",
-                        data={"csrf_token": csrf,
-                              "username": self.username,
-                              "password": self.password},
-                        headers={"referer": f"{self.url}/account/login/"}) as r:
+            with s.post(
+                f"{self.url}/account/login/",
+                data={"csrf_token": csrf, "username": self.username, "password": self.password},
+                headers={"referer": f"{self.url}/account/login/"},
+            ) as r:
                 r.raise_for_status()
                 if r.url == f"{self.url}/account/login/":
                     logging.error(f"Login for user {self.username} failed")
                     return 1
 
                 if r.url.startswith(f"{self.url}/account/two-factor/"):
-                    form_action = r.url[len(self.url):]
+                    form_action = r.url[len(self.url) :]
                     parser = CsfrParser(form_action)
                     parser.feed(r.text)
                     if not parser.csrf:
@@ -182,10 +190,11 @@ class PypiCleanup:
                 success = False
                 for i in range(3):
                     auth_code = pyotp.TOTP(self.otp).now()
-                    with s.post(two_factor_url, data={"csrf_token": csrf,
-                                                      "method": "totp",
-                                                      "totp_value": auth_code},
-                                headers={"referer": two_factor_url}) as r:
+                    with s.post(
+                        two_factor_url,
+                        data={"csrf_token": csrf, "method": "totp", "totp_value": auth_code},
+                        headers={"referer": two_factor_url},
+                    ) as r:
                         r.raise_for_status()
                         if r.url == two_factor_url:
                             logging.error(f"Authentication code {auth_code} is invalid, retrying in 5 seconds...")
@@ -212,15 +221,19 @@ class PypiCleanup:
                         csrf = parser.csrf
                         referer = r.url
 
-                    with s.post(form_url,
-                                data={"csrf_token": csrf,
-                                      "confirm_delete_version": pkg_ver,
-                                      },
-                                headers={"referer": referer}) as r:
+                    with s.post(
+                        form_url,
+                        data={
+                            "csrf_token": csrf,
+                            "confirm_delete_version": pkg_ver,
+                        },
+                        headers={"referer": referer},
+                    ) as r:
                         r.raise_for_status()
 
                     logging.info(f"Deleted {self.package} version {pkg_ver}")
                 else:
                     logging.info(f"Would be deleting {self.package} version {pkg_ver}, but not doing it!")
+
 
 PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, retain_days, actually_delete).run()
