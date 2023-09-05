@@ -6,15 +6,15 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 	if (source.id() != LogicalTypeId::STRUCT) {
 		return false;
 	}
-	auto member_count = UnionType::GetMemberCount(target);
+	auto target_fields = StructType::GetChildTypes(target);
 	auto fields = StructType::GetChildTypes(source);
-	if (member_count != fields.size()) {
+	if (target_fields.size() != fields.size()) {
 		// Struct should have the same amount of fields as the union has members
 		return false;
 	}
-	for (idx_t i = 0; i < member_count; i++) {
-		auto &member = UnionType::GetMemberType(target, i);
-		auto &member_name = UnionType::GetMemberName(target, i);
+	for (idx_t i = 0; i < target_fields.size(); i++) {
+		auto &member = target_fields[i].second;
+		auto &member_name = target_fields[i].first;
 		auto &field = fields[i].second;
 		auto &field_name = fields[i].first;
 		if (member != field && field != LogicalType::VARCHAR) {
