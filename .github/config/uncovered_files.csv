@@ -672,7 +672,7 @@ planner/binder/statement/bind_copy.cpp	3
 planner/binder/statement/bind_create.cpp	21
 planner/binder/statement/bind_create_table.cpp	2
 planner/binder/statement/bind_drop.cpp	20
-planner/binder/statement/bind_export.cpp	3
+planner/binder/statement/bind_export.cpp	17
 planner/binder/statement/bind_insert.cpp	19
 planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
