@@ -11,10 +11,25 @@ create table foo as select * from values (4, null), (5, null) t(a, b);
 statement ok
 create table bar as select * from values (4, 'hi'), (6, null) t(c, d);
 
-statement ok
+statement error
 select * from bar left join foo on bar.d = foo.b;
+----
+Conversion Error
+
+statement error
+select * from bar left join foo on bar.d is not distinct from foo.b;
+----
+Conversion Error
 
 statement ok
+insert into foo values (4, 6);
+
+statement error
+select * from bar left join foo on bar.d = foo.b;
+----
+Conversion Error
+
+statement error
 select * from bar left join foo on bar.d is not distinct from foo.b;
-
-
+----
+Conversion Error

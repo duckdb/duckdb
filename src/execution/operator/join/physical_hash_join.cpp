@@ -490,15 +490,15 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
+	// resolve the join keys for the left chunk
+	state.join_keys.Reset();
+	state.probe_executor.Execute(input, state.join_keys);
+
 	// probe the HT
 	if (sink.hash_table->Count() == 0) {
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
-
-	// resolve the join keys for the left chunk
-	state.join_keys.Reset();
-	state.probe_executor.Execute(input, state.join_keys);
 
 	// perform the actual probe
 	if (sink.external) {
