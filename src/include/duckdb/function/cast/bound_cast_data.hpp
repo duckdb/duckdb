@@ -88,7 +88,6 @@ struct UnionBoundCastData : public BoundCastData {
 	      member_cast_info(std::move(member_cast_info)) {
 	}
 
-	bool from_struct = false;
 	union_tag_t tag;
 	string name;
 	LogicalType type;
@@ -103,12 +102,6 @@ public:
 	static bool SortByCostAscending(const UnionBoundCastData &left, const UnionBoundCastData &right) {
 		return left.cost < right.cost;
 	}
-};
-
-// FIXME: can just use StructCastLocalState?
-struct StructToUnionCastLocalState : public FunctionLocalState {
-public:
-	vector<unique_ptr<FunctionLocalState>> local_states;
 };
 
 struct StructToUnionCast {
