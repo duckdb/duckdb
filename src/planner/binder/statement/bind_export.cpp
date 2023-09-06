@@ -115,6 +115,11 @@ string CreateFileName(const string &id_suffix, TableCatalogEntry &table, const s
 	return StringUtil::Format("%s_%s%s.%s", schema, name, id_suffix, extension);
 }
 
+static bool IsSupported(CopyTypeSupport support_level) {
+	// For export purposes we don't want to lose information, so we only accept fully supported types
+	return support_level == CopyTypeSupport::SUPPORTED;
+}
+
 static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_type_t type_check) {
 	D_ASSERT(type_check);
 	auto id = original.id();
@@ -131,7 +136,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 			auto &child_type = child.second;
 
 			LogicalType new_type;
-			if (!type_check(child_type)) {
+			if (!IsSupported(type_check(child_type))) {
 				new_type = AlterLogicalType(child_type, type_check);
 			} else {
 				new_type = child_type;
@@ -148,7 +153,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 			auto &child_type = UnionType::GetMemberType(original, i);
 
 			LogicalType new_type;
-			if (!type_check(child_type)) {
+			if (!IsSupported(type_check(child_type))) {
 				new_type = AlterLogicalType(child_type, type_check);
 			} else {
 				new_type = child_type;
@@ -164,13 +169,13 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 
 		LogicalType new_key_type;
 		LogicalType new_value_type;
-		if (!type_check(key_type)) {
+		if (!IsSupported(type_check(key_type))) {
 			new_key_type = AlterLogicalType(key_type, type_check);
 		} else {
 			new_key_type = key_type;
 		}
 
-		if (!type_check(value_type)) {
+		if (!IsSupported(type_check(value_type))) {
 			new_value_type = AlterLogicalType(value_type, type_check);
 		} else {
 			new_value_type = value_type;
@@ -178,7 +183,7 @@ static LogicalType AlterLogicalType(const LogicalType &original, copy_supports_t
 		return LogicalType::MAP(new_key_type, new_value_type);
 	}
 	default: {
-		D_ASSERT(!type_check(original));
+		D_ASSERT(!IsSupported(type_check(original)));
 		return LogicalType::VARCHAR;
 	}
 	}
@@ -188,7 +193,7 @@ static bool NeedsCast(LogicalType &type, copy_supports_type_t type_check) {
 	if (!type_check) {
 		return false;
 	}
-	if (type_check(type)) {
+	if (IsSupported(type_check(type))) {
 		// The type is supported in it's entirety, no cast is required
 		return false;
 	}
