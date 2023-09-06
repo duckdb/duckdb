@@ -7,6 +7,12 @@ on:
 
 name: R-CMD-check
 
+env:
+  TARGET_REPO: 'duckdb/duckdb-r'
+  TARGET_REF: 'main'
+  SRC_DIR: 'duckdb-r'
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
 jobs:
   R-CMD-check:
     runs-on: ${{ matrix.config.os }}
@@ -30,7 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: 'git@github.com:duckdb/duckdb-r'
+          repository:  ${{ env.TARGET_REPO }}
+          path: ${{ env.SRC_DIR }}
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -42,10 +49,12 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
+          working-directory: ${{ env.SRC_DIR }}
           extra-packages: any::rcmdcheck
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
         with:
+          working-directory: ${{ env.SRC_DIR }}
           upload-snapshots: true
           error-on: '"error"'
