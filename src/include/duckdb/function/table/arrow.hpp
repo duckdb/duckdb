@@ -61,6 +61,12 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowColumnScanLocalState {
+	//! Optional dictionary vector when column is a dictionary
+	unique_ptr<Vector> dictionary;
+	
+};
+
 struct ArrowScanLocalState : public LocalTableFunctionState {
 	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
