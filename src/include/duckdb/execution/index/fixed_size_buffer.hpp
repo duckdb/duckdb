@@ -41,7 +41,7 @@ public:
 public:
 	//! Returns true, if the buffer is in-memory
 	inline bool InMemory() const {
-		return buffer_handle.IsValid();
+		return buffer_handle->IsValid();
 	}
 	//! Returns true, if the block is on-disk
 	inline bool OnDisk() const {
@@ -60,7 +60,7 @@ public:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_handle.Ptr();
+		return buffer_handle->Ptr();
 	}
 	//! Destroys the in-memory buffer and the on-disk block
 	void Destroy();
@@ -71,7 +71,7 @@ public:
 
 private:
 	//! The buffer handle of the in-memory buffer
-	BufferHandle buffer_handle;
+	unique_ptr<BufferHandle> buffer_handle;
 	//! The block handle of the on-disk buffer
 	shared_ptr<BlockHandle> block_handle;
 };
