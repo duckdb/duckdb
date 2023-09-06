@@ -46,13 +46,16 @@ public:
 	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
 	                             const string &respository = "");
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
-	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                                  optional_ptr<const ClientConfig> client_config);
 
 	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
+	static string ExtensionUrlTemplate(optional_ptr<const ClientConfig> config, const string &repository);
+	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
 
 	static idx_t DefaultExtensionCount();
 	static DefaultExtension GetDefaultExtension(idx_t index);
@@ -101,9 +104,10 @@ private:
 	                                     const string &repository);
 	static const vector<string> PathComponents();
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension);
+	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+	                                       optional_ptr<const ClientConfig> client_config);
 	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
-	                           string &error);
+	                           string &error, optional_ptr<const ClientConfig> client_config);
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'

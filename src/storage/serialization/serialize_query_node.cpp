@@ -44,8 +44,8 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 void CTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "cte_name", ctename);
-	serializer.WriteProperty(201, "query", *query);
-	serializer.WriteProperty(202, "child", *child);
+	serializer.WriteProperty(201, "query", query);
+	serializer.WriteProperty(202, "child", child);
 	serializer.WriteProperty(203, "aliases", aliases);
 }
 
@@ -62,8 +62,8 @@ void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "cte_name", ctename);
 	serializer.WriteProperty(201, "union_all", union_all);
-	serializer.WriteProperty(202, "left", *left);
-	serializer.WriteProperty(203, "right", *right);
+	serializer.WriteProperty(202, "left", left);
+	serializer.WriteProperty(203, "right", right);
 	serializer.WriteProperty(204, "aliases", aliases);
 }
 
@@ -80,35 +80,35 @@ unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &de
 void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "select_list", select_list);
-	serializer.WriteOptionalProperty(201, "from_table", from_table);
-	serializer.WriteOptionalProperty(202, "where_clause", where_clause);
+	serializer.WritePropertyWithDefault(201, "from_table", from_table, unique_ptr<TableRef>());
+	serializer.WritePropertyWithDefault(202, "where_clause", where_clause, unique_ptr<ParsedExpression>());
 	serializer.WriteProperty(203, "group_expressions", groups.group_expressions);
 	serializer.WriteProperty(204, "group_sets", groups.grouping_sets);
 	serializer.WriteProperty(205, "aggregate_handling", aggregate_handling);
-	serializer.WriteOptionalProperty(206, "having", having);
-	serializer.WriteOptionalProperty(207, "sample", sample);
-	serializer.WriteOptionalProperty(208, "qualify", qualify);
+	serializer.WritePropertyWithDefault(206, "having", having, unique_ptr<ParsedExpression>());
+	serializer.WritePropertyWithDefault(207, "sample", sample, unique_ptr<SampleOptions>());
+	serializer.WritePropertyWithDefault(208, "qualify", qualify, unique_ptr<ParsedExpression>());
 }
 
 unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectNode>(new SelectNode());
 	deserializer.ReadProperty(200, "select_list", result->select_list);
-	deserializer.ReadOptionalProperty(201, "from_table", result->from_table);
-	deserializer.ReadOptionalProperty(202, "where_clause", result->where_clause);
+	deserializer.ReadPropertyWithDefault(201, "from_table", result->from_table, unique_ptr<TableRef>());
+	deserializer.ReadPropertyWithDefault(202, "where_clause", result->where_clause, unique_ptr<ParsedExpression>());
 	deserializer.ReadProperty(203, "group_expressions", result->groups.group_expressions);
 	deserializer.ReadProperty(204, "group_sets", result->groups.grouping_sets);
 	deserializer.ReadProperty(205, "aggregate_handling", result->aggregate_handling);
-	deserializer.ReadOptionalProperty(206, "having", result->having);
-	deserializer.ReadOptionalProperty(207, "sample", result->sample);
-	deserializer.ReadOptionalProperty(208, "qualify", result->qualify);
+	deserializer.ReadPropertyWithDefault(206, "having", result->having, unique_ptr<ParsedExpression>());
+	deserializer.ReadPropertyWithDefault(207, "sample", result->sample, unique_ptr<SampleOptions>());
+	deserializer.ReadPropertyWithDefault(208, "qualify", result->qualify, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 
 void SetOperationNode::FormatSerialize(FormatSerializer &serializer) const {
 	QueryNode::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "setop_type", setop_type);
-	serializer.WriteProperty(201, "left", *left);
-	serializer.WriteProperty(202, "right", *right);
+	serializer.WriteProperty(201, "left", left);
+	serializer.WriteProperty(202, "right", right);
 }
 
 unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(FormatDeserializer &deserializer) {

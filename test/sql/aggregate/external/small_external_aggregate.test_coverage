@@ -1,0 +1,48 @@
+# name: test/sql/aggregate/external/small_external_aggregate.test_coverage
+# description: Test coverage for aggregate HT abandoning
+# group: [external]
+
+load __TEST_DIR__/small_external_aggregate.db
+
+statement ok
+create table t1 (
+    c0 bigint,
+    c1 bigint,
+    c2 bigint,
+    c3 bigint,
+)
+
+# first we insert a bunch of uniques, then some duplicates, and then uniques again
+statement ok
+insert into t1
+select range c0,
+       range c1,
+       range c2,
+       range c3,
+from (
+    select * from (
+        select * from range(1500000)
+        union all
+        select range % 2048 from range(51200)
+        union all
+        select * from range(1500000)
+    )
+)
+
+# we don't want to compress to smaller sizes,
+# otherwise the size estimates (and therefore this test) won't test what we want it to
+statement ok
+set disabled_optimizers to 'compressed_materialization'
+
+# one thread so we know the order the data arrives in
+statement ok
+set threads=4
+
+# with this memory limit we abandon after seeing ~50k rows
+statement ok
+pragma memory_limit='150mb'
+
+query I
+select count(*) from (select distinct * from t1)
+----
+1500000

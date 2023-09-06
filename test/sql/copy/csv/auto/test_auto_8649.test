@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/auto/test_auto_8649.test
+# description: Test CSV Sample works for #8649
+# group: [auto]
+
+statement ok
+PRAGMA verify_parallelism
+
+# Sample
+query I
+SELECT * FROM read_csv_auto("data/csv/dim0.csv", header = 1) ;
+----
+T
+0
