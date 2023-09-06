@@ -4,7 +4,8 @@ namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
                        CSVStateMachineCache &state_machine_cache_p, bool explicit_set_columns_p)
-    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)), explicit_set_columns(explicit_set_columns_p) {
+    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
+      explicit_set_columns(explicit_set_columns_p) {
 
 	// Check if any type is BLOB
 	for (auto &type : options.sql_type_list) {
@@ -24,8 +25,8 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 SnifferResult CSVSniffer::SniffCSV() {
 	// 1. Dialect Detection
 	DetectDialect();
-	if (explicit_set_columns){
-		if (!candidates.empty()){
+	if (explicit_set_columns) {
+		if (!candidates.empty()) {
 			options.dialect_options = candidates[0]->dialect_options;
 		}
 		// We do not need to run type and header detection as these were defined by the user

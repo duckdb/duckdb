@@ -307,7 +307,7 @@ void CSVSniffer::DetectTypes() {
 				break;
 			}
 		}
-		if (values_start > 0){
+		if (values_start > 0) {
 			tuples.erase(tuples.begin(), tuples.begin() + values_start);
 		}
 
