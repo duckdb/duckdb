@@ -287,7 +287,7 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 		auto buffer_block_pointer = reader.Read<BlockPointer>();
 		auto segment_count = reader.Read<idx_t>();
 		auto allocation_size = reader.Read<idx_t>();
-		FixedSizeBuffer new_buffer (block_manager, segment_count, allocation_size, buffer_block_pointer);
+		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
 		buffers.insert(make_pair(buffer_id, std::move(new_buffer)));
 		total_segment_count += segment_count;
 	}
