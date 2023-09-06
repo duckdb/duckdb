@@ -99,7 +99,9 @@ typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_da
                                    PreparedBatchData &batch);
 typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
-typedef bool (*copy_supports_type_t)(const LogicalType &type);
+enum class CopyTypeSupport { SUPPORTED, LOSSY, UNSUPPORTED };
+
+typedef CopyTypeSupport (*copy_supports_type_t)(const LogicalType &type);
 
 class CopyFunction : public Function {
 public:
