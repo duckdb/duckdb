@@ -474,7 +474,7 @@ main/capi/duckdb-c.cpp	3
 main/capi/duckdb_value-c.cpp	14
 main/capi/helper-c.cpp	49
 main/capi/hugeint-c.cpp	5
-main/capi/logical_types-c.cpp	44
+main/capi/logical_types-c.cpp	45
 main/capi/pending-c.cpp	32
 main/capi/prepared-c.cpp	7
 main/capi/replacement_scan-c.cpp	4
@@ -612,6 +612,7 @@ parser/transform/constraint/transform_constraint.cpp	4
 parser/transform/expression/transform_array_access.cpp	2
 parser/transform/expression/transform_boolean_test.cpp	7
 parser/transform/expression/transform_columnref.cpp	3
+parser/transform/expression/transform_constant.cpp	23
 parser/transform/expression/transform_expression.cpp	4
 parser/transform/expression/transform_function.cpp	21
 parser/transform/expression/transform_interval.cpp	4
@@ -666,7 +667,7 @@ planner/binder/statement/bind_copy.cpp	3
 planner/binder/statement/bind_create.cpp	21
 planner/binder/statement/bind_create_table.cpp	2
 planner/binder/statement/bind_drop.cpp	20
-planner/binder/statement/bind_export.cpp	2
+planner/binder/statement/bind_export.cpp	3
 planner/binder/statement/bind_insert.cpp	19
 planner/binder/statement/bind_logical_plan.cpp	21
 planner/binder/statement/bind_pragma.cpp	3
