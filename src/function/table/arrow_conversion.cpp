@@ -352,8 +352,8 @@ static void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, c
 template <class RUN_END_TYPE, class VALUE_TYPE>
 static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_encoding, idx_t compressed_size,
                            idx_t scan_offset, idx_t count) {
-	auto &run_ends_vector = *run_end_encoding.run_ends;
-	auto &values_vector = *run_end_encoding.values;
+	auto &runs = *run_end_encoding.run_ends;
+	auto &values = *run_end_encoding.values;
 
 	UnifiedVectorFormat run_end_format;
 	UnifiedVectorFormat value_format;
@@ -363,8 +363,11 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 	auto values_data = value_format.GetData<VALUE_TYPE>(value_format);
 	auto result_data = FlatVector::GetData<VALUE_TYPE>(result);
 	auto &validity = FlatVector::Validity(result);
+
+	// According to the arrow spec, the 'run_ends' array is always valid
+	// so we will assume this is true and not check the validity map
+
 	// Now construct the result vector from the run_ends and the values
-	D_ASSERT(run_end_format.validity.AllValid());
 
 	idx_t &run = run_end_encoding.run_index;
 	// FIXME: can not support array.offset currently because
@@ -390,6 +393,10 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			}
 			index += to_scan;
 			if (index >= count) {
+				if (logical_index + index >= run_end) {
+					// The last run was completed, forward the run index
+					run++;
+				}
 				break;
 			}
 		}
@@ -399,6 +406,8 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			auto value_index = value_format.sel->get_index(run);
 			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
 
+			Printer::Print(
+			    StringUtil::Format("run_end: %d | logical_index: %d | index: %d", run_end, logical_index, index));
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
 			// Cap the amount to scan so we don't go over size
@@ -417,6 +426,10 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			}
 			index += to_scan;
 			if (index >= count) {
+				if (logical_index + index >= run_end) {
+					// The last run was completed, forward the run index
+					run++;
+				}
 				break;
 			}
 		}

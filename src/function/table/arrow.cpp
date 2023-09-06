@@ -310,12 +310,27 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	return true;
 }
 
+static bool CanRunMultiThreaded(const ArrowScanFunctionData &function_data) {
+	auto &arrow_table = function_data.arrow_table;
+	auto &columns = arrow_table.GetColumns();
+	for (auto &col : columns) {
+		if (col.second->RunEndEncoded()) {
+			// We currently can not run scans containing REE columns in parallel
+			// because the run index is calculated on the fly
+			return false;
+		}
+	}
+	return true;
+}
+
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
                                                                              TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ArrowScanFunctionData>();
 	auto result = make_uniq<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters.get());
-	result->max_threads = ArrowScanMaxThreads(context, input.bind_data.get());
+	if (CanRunMultiThreaded(bind_data)) {
+		result->max_threads = ArrowScanMaxThreads(context, input.bind_data.get());
+	}
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
 		for (const auto &col_idx : input.column_ids) {

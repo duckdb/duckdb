@@ -13,7 +13,7 @@ class TestArrowREE(object):
 
         rel = con.sql(
             """
-            select (i // 4) as ree from range(1000) t(i);
+            select (i // 4) as ree from range(10000) t(i);
         """
         )
         array = rel.arrow()['ree']
