@@ -6,6 +6,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		throw Exception("Can't pack nothing into a struct");
 	}
 	child_list_t<LogicalType> struct_children;
+	bool has_explicit_names = true;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
 		if (child->alias.empty() && bound_function.name == "struct_pack") {
@@ -46,6 +48,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		}
 		if (child->alias.empty() && bound_function.name == "row") {
 			child->alias = "v" + std::to_string(i + 1);
+			has_explicit_names = false;
 		}
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
@@ -56,6 +59,12 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 
 	// this is more for completeness reasons
 	bound_function.return_type = LogicalType::STRUCT(struct_children);
+
+	auto return_aux = bound_function.return_type.AuxInfo();
+	D_ASSERT(return_aux->type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
+	StructTypeInfo &struct_info = const_cast<StructTypeInfo &>(return_aux->Cast<StructTypeInfo>());
+	struct_info.SetHasExplicitNames(has_explicit_names);
+
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

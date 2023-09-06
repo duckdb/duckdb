@@ -1,6 +1,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -9,10 +10,17 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	vector<BoundCastInfo> child_cast_info;
 	auto &source_child_types = StructType::GetChildTypes(source);
 	auto &result_child_types = StructType::GetChildTypes(target);
+	auto target_aux = target.AuxInfo();
+	D_ASSERT(target_aux->type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
+	auto target_struct_info = target_aux->Cast<StructTypeInfo>();
+
 	if (source_child_types.size() != result_child_types.size()) {
 		throw TypeMismatchException(source, target, "Cannot cast STRUCTs of different size");
 	}
 	for (idx_t i = 0; i < source_child_types.size(); i++) {
+		if (target_struct_info.has_explicit_names && source_child_types[i].first != result_child_types[i].first) {
+			throw TypeMismatchException(source, target, "Cannot cast STRUCTs with different names");
+		}
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}

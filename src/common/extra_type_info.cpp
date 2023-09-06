@@ -196,6 +196,7 @@ void StructTypeInfo::Serialize(FieldWriter &writer) const {
 		serializer.WriteString(child_types[i].first);
 		child_types[i].second.Serialize(serializer);
 	}
+	writer.WriteField<bool>(has_explicit_names);
 }
 
 shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
@@ -213,6 +214,9 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
 bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<StructTypeInfo>();
 	return child_types == other.child_types;
+}
+void StructTypeInfo::SetHasExplicitNames(bool has_explicit_names_p) {
+	has_explicit_names = has_explicit_names_p;
 }
 
 //===--------------------------------------------------------------------===//

@@ -125,6 +125,7 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
 
 	child_list_t<LogicalType> child_types;
+	bool has_explicit_names;
 
 public:
 	void Serialize(FieldWriter &writer) const override;
@@ -133,6 +134,8 @@ public:
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
+	void SetHasExplicitNames(bool has_explicit_names_p);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
