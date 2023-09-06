@@ -12,20 +12,22 @@ static void ListInnerProduct(DataChunk &args, ExpressionState &, Vector &result)
 	auto left_count = ListVector::GetListSize(left);
 	auto right_count = ListVector::GetListSize(right);
 
-	UnifiedVectorFormat left_child_format;
-	ListVector::GetEntry(left).ToUnifiedFormat(left_count, left_child_format);
-	if (!left_child_format.validity.CheckAllValid(left_count)) {
+	auto &left_child = ListVector::GetEntry(left);
+	auto &right_child = ListVector::GetEntry(right);
+
+	D_ASSERT(left_child.GetVectorType() == VectorType::FLAT_VECTOR);
+	D_ASSERT(right_child.GetVectorType() == VectorType::FLAT_VECTOR);
+
+	if (!FlatVector::Validity(left_child).CheckAllValid(left_count)) {
 		throw InvalidInputException("list_inner_product: left argument can not contain NULL values");
 	}
 
-	UnifiedVectorFormat right_child_format;
-	ListVector::GetEntry(right).ToUnifiedFormat(right_count, right_child_format);
-	if (!right_child_format.validity.CheckAllValid(right_count)) {
+	if (!FlatVector::Validity(right_child).CheckAllValid(right_count)) {
 		throw InvalidInputException("list_inner_product: right argument can not contain NULL values");
 	}
 
-	auto left_data = reinterpret_cast<NUMERIC_TYPE *>(left_child_format.data);
-	auto right_data = reinterpret_cast<NUMERIC_TYPE *>(right_child_format.data);
+	auto left_data = FlatVector::GetData<NUMERIC_TYPE>(left_child);
+	auto right_data = FlatVector::GetData<NUMERIC_TYPE>(right_child);
 
 	BinaryExecutor::Execute<list_entry_t, list_entry_t, NUMERIC_TYPE>(
 	    left, right, result, count, [&](list_entry_t left, list_entry_t right) {
