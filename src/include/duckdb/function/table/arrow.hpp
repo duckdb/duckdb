@@ -61,16 +61,32 @@ public:
 	ArrowTableType arrow_table;
 };
 
+struct ArrowRunEndEncodingState {
+public:
+	idx_t run_index;
+	unique_ptr<Vector> run_ends;
+	unique_ptr<Vector> values;
+
+public:
+	void Reset() {
+		run_index = 0;
+		run_ends.reset();
+		values.reset();
+	}
+};
+
 struct ArrowColumnScanLocalState {
 public:
 	//! Optional dictionary vector when column is a dictionary
 	unique_ptr<Vector> dictionary;
 	//! Run-end-encoding state
-	idx_t run_index = 0;
+	ArrowRunEndEncodingState run_end_encoding;
 
 public:
 	void Reset() {
-		run_index = 0;
+		// Note: dictionary is not reset
+		// the dictionary should be the same for every array scanned of this column
+		run_end_encoding.Reset();
 	}
 };
 
