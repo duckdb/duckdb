@@ -9,20 +9,27 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 	auto target_fields = StructType::GetChildTypes(target);
 	auto fields = StructType::GetChildTypes(source);
 	if (target_fields.size() != fields.size()) {
-		// Struct should have the same amount of fields as the union has members
+		// Struct should have the same amount of fields as the union
 		return false;
 	}
 	for (idx_t i = 0; i < target_fields.size(); i++) {
-		auto &member = target_fields[i].second;
-		auto &member_name = target_fields[i].first;
+		auto &target_field = target_fields[i].second;
+		auto &target_field_name = target_fields[i].first;
 		auto &field = fields[i].second;
 		auto &field_name = fields[i].first;
-		if (member != field && field != LogicalType::VARCHAR) {
-			// We allow the field to be VARCHAR, since unsupported types get cast to VARCHAR by EXPORT DATABASE (format
-			// PARQUET) i.e UNION(a BIT) becomes STRUCT(a VARCHAR)
+		if (i == 0) {
+			// For the tag field we don't accept a type substitute as varchar
+			if (target_field != field) {
+				return false;
+			}
+			continue;
+		}
+		if (!StringUtil::CIEquals(target_field_name, field_name)) {
 			return false;
 		}
-		if (!StringUtil::CIEquals(member_name, field_name)) {
+		if (target_field != field && field != LogicalType::VARCHAR) {
+			// We allow the field to be VARCHAR, since unsupported types get cast to VARCHAR by EXPORT DATABASE (format
+			// PARQUET) i.e UNION(a BIT) becomes STRUCT(a VARCHAR)
 			return false;
 		}
 	}
@@ -30,65 +37,6 @@ bool StructToUnionCast::AllowImplicitCastFromStruct(const LogicalType &source, c
 }
 
 // Physical Cast execution
-
-void ReconstructTagVector(Vector &result, idx_t count) {
-	auto &type = result.GetType();
-	auto member_count = static_cast<union_tag_t>(UnionType::GetMemberCount(type));
-
-	// Keep track for every row if the tag is (already) set
-	vector<bool> tag_is_set(count, false);
-
-	auto &tags = UnionVector::GetTags(result);
-	UnifiedVectorFormat tag_format;
-	tags.ToUnifiedFormat(count, tag_format);
-	auto tag_data = UnifiedVectorFormat::GetDataNoConst<union_tag_t>(tag_format);
-
-	for (union_tag_t member_idx = 0; member_idx < member_count; member_idx++) {
-		auto &result_child_vector = UnionVector::GetMember(result, member_idx);
-		UnifiedVectorFormat format;
-		result_child_vector.ToUnifiedFormat(count, format);
-		if (format.validity.AllValid()) {
-			// Fast pass, this means every value has this tag
-			for (idx_t i = 0; i < count; i++) {
-				tag_data[i] = member_idx;
-			}
-			// Verify that no tag has been set yet
-			for (idx_t i = 0; i < count; i++) {
-				if (tag_is_set[i]) {
-					throw InvalidInputException(
-					    "STRUCT -> UNION cast could not be performed because multiple fields are none-null");
-				}
-			}
-			for (idx_t i = 0; i < count; i++) {
-				tag_is_set[i] = true;
-			}
-			// Don't return yet, have to verify that no other tags are non-null
-		} else {
-			for (idx_t i = 0; i < count; i++) {
-				auto index = format.sel->get_index(i);
-				if (!format.validity.RowIsValidUnsafe(index)) {
-					continue;
-				}
-				if (tag_is_set[i]) {
-					throw InvalidInputException(
-					    "STRUCT -> UNION cast could not be performed because multiple fields are none-null");
-				}
-				tag_is_set[i] = true;
-				tag_data[i] = member_idx;
-			}
-		}
-	}
-
-	// Set the validity mask for the tag vector
-	auto &tag_validity = FlatVector::Validity(tags);
-	for (idx_t i = 0; i < count; i++) {
-		if (!tag_is_set[i]) {
-			tag_validity.SetInvalid(i);
-		} else {
-			tag_validity.SetValid(i);
-		}
-	}
-}
 
 bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
@@ -99,11 +47,11 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 	D_ASSERT(cast_data.target.id() == LogicalTypeId::UNION);
 
 	auto &source_children = StructVector::GetEntries(source);
-	D_ASSERT(source_children.size() == UnionType::GetMemberCount(result.GetType()));
+	auto &target_children = StructVector::GetEntries(result);
 
 	bool all_converted = true;
 	for (idx_t i = 0; i < source_children.size(); i++) {
-		auto &result_child_vector = UnionVector::GetMember(result, i);
+		auto &result_child_vector = *target_children[i];
 		auto &source_child_vector = *source_children[i];
 		CastParameters child_parameters(parameters, cast_data.child_cast_info[i].cast_data, lstate.local_states[i]);
 		if (!cast_data.child_cast_info[i].function(source_child_vector, result_child_vector, count, child_parameters)) {
@@ -111,7 +59,20 @@ bool StructToUnionCast::Cast(Vector &source, Vector &result, idx_t count, CastPa
 		}
 	}
 
-	ReconstructTagVector(result, count);
+	auto check_tags = UnionVector::CheckUnionValidity(result, count);
+	switch (check_tags) {
+	case UnionInvalidReason::NO_MEMBERS:
+		throw ConversionException("The produced UNION does not have any members");
+	case UnionInvalidReason::TAG_OUT_OF_RANGE:
+		throw ConversionException("One or more of the tags do not point to a valid union member");
+	case UnionInvalidReason::VALIDITY_OVERLAP:
+		throw ConversionException("One or more rows in the produced UNION have validity set for more than 1 member");
+	case UnionInvalidReason::TAG_MISMATCH:
+		throw ConversionException(
+		    "One or more rows in the produced UNION have tags that don't point to the valid member");
+	case UnionInvalidReason::VALID:
+		break;
+	}
 
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -132,14 +93,12 @@ unique_ptr<BoundCastData> StructToUnionCast::BindData(BindCastInput &input, cons
 	D_ASSERT(source.id() == LogicalTypeId::STRUCT);
 	D_ASSERT(target.id() == LogicalTypeId::UNION);
 
-	auto source_child_count = StructType::GetChildCount(source);
-	(void)source_child_count;
-	auto result_child_count = UnionType::GetMemberCount(target);
-	D_ASSERT(source_child_count == result_child_count);
+	auto result_child_count = StructType::GetChildCount(target);
+	D_ASSERT(result_child_count == StructType::GetChildCount(source));
 
 	for (idx_t i = 0; i < result_child_count; i++) {
 		auto &source_child = StructType::GetChildType(source, i);
-		auto &target_child = UnionType::GetMemberType(target, i);
+		auto &target_child = StructType::GetChildType(target, i);
 
 		auto child_cast = input.GetCastFunction(source_child, target_child);
 		child_cast_info.push_back(std::move(child_cast));

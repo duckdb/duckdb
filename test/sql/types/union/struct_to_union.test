@@ -2,6 +2,9 @@
 # group: [union]
 
 statement ok
+create type my_tags as enum('a', 'b', 'c')
+
+statement ok
 create table union_tbl(
 	col UNION(
 		a BOOL,
@@ -13,6 +16,7 @@ create table union_tbl(
 statement ok
 create table struct_tbl(
 	col STRUCT(
+		tag UINT8,
 		A BOOL,
 		B INTEGER,
 		C TINYINT
@@ -21,37 +25,53 @@ create table struct_tbl(
 
 statement ok
 INSERT INTO struct_tbl VALUES
-	(ROW(True, NULL, NULL)),
-	(ROW(NULL, 23423, NULL)),
-	(ROW(True, NULL, NULL))
+	(ROW(0, True, NULL, NULL)),
+	(ROW(1, NULL, 23423, NULL)),
+	(ROW(0, True, NULL, NULL))
 
 # Verify case-insensitive
 statement ok
 insert into union_tbl select * from struct_tbl;
 
+statement ok
+delete from struct_tbl;
+
+# The tags have to be in line with the result set
+# The tag field of the last inserted row is invalid, should be '0' instead
+statement ok
+INSERT INTO struct_tbl VALUES
+	(ROW(0, True, NULL, NULL)),
+	(ROW(1, NULL, 23423, NULL)),
+	(ROW(2, True, NULL, NULL))
+
+statement error
+insert into union_tbl select * from struct_tbl;
+----
+Conversion Error: One or more rows in the produced UNION have tags that don't point to the valid member
+
 # From struct literal (needs casts because at bind time we can't verify that the values are NULL)
 statement ok
 insert into union_tbl VALUES(
-	{a: False, b: NULL::INTEGER, c: NULL::TINYINT}
+	{tag: 0::UINT8, a: False, b: NULL::INTEGER, c: NULL::TINYINT}
 )
 
 statement error
 insert into union_tbl VALUES(
-	{a: NULL::BOOLEAN, b: 32412, c: 123::TINYINT}
+	{tag: 1::UINT8, a: NULL::BOOLEAN, b: 32412, c: 123::TINYINT}
 )
 ----
-Invalid Input Error: STRUCT -> UNION cast could not be performed because multiple fields are none-null
+Conversion Error: One or more rows in the produced UNION have validity set for more than 1 member
 
 statement ok
 delete from struct_tbl;
 
 statement ok
 insert into struct_tbl VALUES
-	(ROW(NULL, 1, NULL)),
-	(ROW(NULL, 2, NULL)),
-	(ROW(NULL, 3, 0))
+	(ROW(1::UINT8, NULL, 1, NULL)),
+	(ROW(1::UINT8, NULL, 2, NULL)),
+	(ROW(1::UINT8, NULL, 3, 0))
 
 statement error
 insert into union_tbl select * from struct_tbl;
 ----
-Invalid Input Error: STRUCT -> UNION cast could not be performed because multiple fields are none-null
+Conversion Error: One or more rows in the produced UNION have validity set for more than 1 member
