@@ -56,7 +56,7 @@ IndexPointer FixedSizeAllocator::New() {
 		// add a new buffer
 		auto buffer_id = GetAvailableBufferId();
 		auto new_buffer = make_uniq<FixedSizeBuffer>(block_manager);
-		buffers->insert({buffer_id, std::move(new_buffer)});
+		buffers->insert(make_pair(buffer_id, std::move(new_buffer)));
 		buffers_with_free_space.insert(buffer_id);
 
 		// set the bitmask
@@ -132,7 +132,7 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	// remember the buffer count and merge the buffers
 	idx_t upper_bound_id = GetUpperBoundBufferId();
 	for (auto &buffer : *other.buffers) {
-		buffers->insert({buffer.first + upper_bound_id, std::move(buffer.second)});
+		buffers->insert(make_pair(buffer.first + upper_bound_id, std::move(buffer.second)));
 	}
 	other.buffers->clear();
 
@@ -271,7 +271,7 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 		auto block_id = reader.Read<block_id_t>();
 		auto buffer_segment_count = reader.Read<idx_t>();
 		auto new_buffer = make_uniq<FixedSizeBuffer>(block_manager, buffer_segment_count, block_id);
-		buffers->insert({buffer_id, std::move(new_buffer)});
+		buffers->insert(make_pair(buffer_id, std::move(new_buffer)));
 		total_segment_count += buffer_segment_count;
 	}
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
