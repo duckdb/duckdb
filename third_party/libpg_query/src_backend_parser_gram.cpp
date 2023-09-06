@@ -2462,11 +2462,11 @@ static const yytype_int16 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint16 yyrline[] =
 {
-       0,   501,   501,   500,   505,   508,   518,   519,   520,   521,
-     522,   523,   524,   525,   526,   527,   528,   529,   530,   531,
-     532,   533,   534,   535,   536,   537,   538,   539,   540,   541,
-     542,   543,   544,   545,   546,   547,   548,   549,   550,   551,
-     552,   553,   554,   556,     9,    18,    27,    36,    45,    54,
+       0,   501,   501,   500,   505,   508,   521,   522,   523,   524,
+     525,   526,   527,   528,   529,   530,   531,   532,   533,   534,
+     535,   536,   537,   538,   539,   540,   541,   542,   543,   544,
+     545,   546,   547,   548,   549,   550,   551,   552,   553,   554,
+     555,   556,   557,   559,     9,    18,    27,    36,    45,    54,
       63,    72,    85,    87,    93,    94,    99,   103,   107,   118,
      126,   130,   139,   148,   157,   166,   175,   184,   192,   200,
      209,   218,   227,   236,   253,   262,   271,   280,   290,   303,
@@ -19150,7 +19150,7 @@ yyreduce:
     {
         case 2:
 #line 501 "third_party/libpg_query/grammar/grammar.y"
-    {
+    {	// update action comes before stmtblock may generate a parse error
 					if ((yyvsp[(1) - (2)].node)) updateRawStmtEnd((PGRawStmt*) (yyvsp[(1) - (2)].node), (yylsp[(2) - (2)]));
 				;}
     break;
@@ -19160,15 +19160,18 @@ yyreduce:
     {	// immediately save statement (to conserve it even if a parse error occurs later) 
 					PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
         				int location = stmts ? ((PGRawStmt*) stmts->tail)->stmt_location + 1 : 0;
-        				(yyval.node) = (PGNode*) makeRawStmt((yyvsp[(1) - (1)].node), location); 
-        				stmts = stmts ? lappend(stmts, (yyval.node)) : list_make1((yyval.node));
-					pg_yyget_extra(yyscanner)->parsetree = stmts; // for successful parse result 
-					saveparsetree(stmts); // .. but also have it on later failure
+					(yyval.node) = NULL;
+        				if ((yyvsp[(1) - (1)].node)) {
+						(yyval.node) = (PGNode*) makeRawStmt((yyvsp[(1) - (1)].node), location); 
+        					stmts = stmts ? lappend(stmts, (yyval.node)) : list_make1((yyval.node));
+						pg_yyget_extra(yyscanner)->parsetree = stmts; // for successful parse result 
+						saveparsetree(stmts); // .. but also have it on later failure
+					}
 				;}
     break;
 
   case 43:
-#line 556 "third_party/libpg_query/grammar/grammar.y"
+#line 559 "third_party/libpg_query/grammar/grammar.y"
     { (yyval.node) = NULL; ;}
     break;
 
@@ -29463,7 +29466,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 29467 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 29470 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -30435,5 +30438,4 @@ parser_init(base_yy_extra_type *yyext)
 #undef yylloc
 
 } // namespace duckdb_libpgquery
-
 
