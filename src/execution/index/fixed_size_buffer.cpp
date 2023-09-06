@@ -5,21 +5,66 @@
 
 namespace duckdb {
 
-FixedSizeBuffer::FixedSizeBuffer(PartialBlockManager &partial_block_manager)
-    : partial_block_manager(partial_block_manager), segment_count(0), allocated_memory(0), max_offset(0), dirty(false),
-      vacuum(false), size_changed(false), block_pointer(), block_handle(nullptr) {
+//===--------------------------------------------------------------------===//
+// PartialBlockForIndex
+//===--------------------------------------------------------------------===//
 
-	auto &buffer_manager = partial_block_manager.GetBlockManager().buffer_manager;
+PartialBlockForIndex::PartialBlockForIndex(BlockManager &block_manager, PartialBlockState state,
+                                           const shared_ptr<BlockHandle> &block_handle)
+    : PartialBlock(state), block_manager(block_manager), block_handle(block_handle) {
+}
+
+PartialBlockForIndex::~PartialBlockForIndex() {
+}
+
+void PartialBlockForIndex::AddUninitializedRegion(idx_t, idx_t) {
+}
+
+void PartialBlockForIndex::Flush(idx_t free_space_left) {
+
+	if (free_space_left > 0) {
+		auto handle = block_manager.buffer_manager.Pin(block_handle);
+		memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+	}
+	Clear();
+}
+
+void PartialBlockForIndex::Clear() {
+	block_handle.reset();
+}
+
+void PartialBlockForIndex::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
+
+	auto &other = other_p.Cast<PartialBlockForIndex>();
+	auto &buffer_manager = block_manager.buffer_manager;
+
+	auto other_handle = buffer_manager.Pin(other.block_handle);
+	auto this_handle = buffer_manager.Pin(block_handle);
+
+	// copy the contents of the other block to this block
+	memcpy(this_handle.Ptr() + offset, other_handle.Ptr(), other_size);
+	other.Clear();
+}
+
+//===--------------------------------------------------------------------===//
+// FixedSizeBuffer
+//===--------------------------------------------------------------------===//
+
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
+    : block_manager(block_manager), segment_count(0), allocation_size(0), dirty(false), vacuum(false), block_pointer(),
+      block_handle(nullptr) {
+
+	auto &buffer_manager = block_manager.buffer_manager;
 	buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &block_handle);
 }
 
-FixedSizeBuffer::FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count,
-                                 const idx_t allocated_memory, const uint32_t max_offset, const BlockPointer &block_ptr)
-    : partial_block_manager(partial_block_manager), segment_count(segment_count), allocated_memory(allocated_memory),
-      max_offset(max_offset), dirty(false), vacuum(false), size_changed(false), block_pointer(block_ptr) {
+FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
+                                 const BlockPointer &block_ptr)
+    : block_manager(block_manager), segment_count(segment_count), allocation_size(allocation_size), dirty(false),
+      vacuum(false), block_pointer(block_ptr) {
 
 	D_ASSERT(block_ptr.IsValid());
-	block_handle = partial_block_manager.GetBlockManager().RegisterBlock(block_ptr.block_id);
+	block_handle = block_manager.RegisterBlock(block_ptr.block_id);
 }
 
 void FixedSizeBuffer::Destroy() {
@@ -30,20 +75,19 @@ void FixedSizeBuffer::Destroy() {
 	}
 	if (OnDisk()) {
 		// marking a block as modified decreases the reference count of multi-use blocks
-		partial_block_manager.GetBlockManager().MarkBlockAsModified(block_pointer.block_id);
+		block_manager.MarkBlockAsModified(block_pointer.block_id);
 	}
 }
 
-void FixedSizeBuffer::Serialize() {
+void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t allocation_size_p) {
 
 	if (!InMemory()) {
-		if (!OnDisk() || dirty || size_changed) {
+		if (!OnDisk() || dirty) {
 			throw InternalException("invalid/missing buffer in FixedSizeAllocator");
 		}
 		return;
 	}
 	if (!dirty && OnDisk()) {
-		D_ASSERT(!size_changed);
 		return;
 	}
 
@@ -55,45 +99,50 @@ void FixedSizeBuffer::Serialize() {
 	// we persist any changes, so the buffer is no longer dirty
 	dirty = false;
 
-	// TODO: uncomment and use?
-	//	auto &block_manager = partial_block_manager.GetBlockManager();
-
 	if (OnDisk()) {
 		// we only get here if the block is dirty AND already on disk
-		// because the block is dirty, its size possibly changed
-		if (!size_changed) {
-
-			// already a persistent block - only need to write to it (same size)
-			auto block_id = block_handle->BlockId();
-			D_ASSERT(block_pointer.IsValid() && block_id == block_pointer.block_id);
-			// TODO: somehow overwrite the exact same partial block location?
-			return;
-		}
-
-		// the size changed, so our partial block becomes invalid
-		// TODO: free the partial block?
-		// TODO: write to a new partial block (enter !OnDisk case)
+		// we always write new blocks (if dirty), so that we do not invalidate previous checkpoints
+		block_manager.MarkBlockAsModified(block_pointer.block_id);
 	}
 
-	// we persist any changes, and the current size is the size that we observe
-	size_changed = false;
+	// now we write the changes, first get a partial block allocation
+	PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(allocation_size_p);
+	block_pointer.block_id = allocation.state.block_id;
+	block_pointer.offset = allocation.state.offset_in_block;
+	allocation_size = allocation_size_p;
 
-	// not yet on disk
-	// temporary block - convert to persistent (partial) block
-	// TODO: somehow use the PartialBlockManager here to write the partial block
-	auto block_id = partial_block_manager.GetBlockManager().GetFreeBlockId();
-	D_ASSERT(block_id < MAXIMUM_BLOCK);
-	block_handle = partial_block_manager.GetBlockManager().ConvertToPersistent(block_id, std::move(block_handle));
+	auto &buffer_manager = block_manager.buffer_manager;
+
+	// copy to a partial block
+	if (allocation.partial_block) {
+		auto p_block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+		auto p_buffer_handle = buffer_manager.Pin(p_block_handle);
+		memcpy(p_buffer_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
+
+	} else {
+		block_handle = block_manager.ConvertToPersistent(block_pointer.block_id, std::move(block_handle));
+		allocation.partial_block = make_uniq<PartialBlockForIndex>(block_manager, allocation.state, block_handle);
+	}
+
 	buffer_handle.Destroy();
+	partial_block_manager.RegisterPartialBlock(std::move(allocation));
 }
 
 void FixedSizeBuffer::Pin() {
-	// this buffer is not the only one holding a buffer handle of this block,
-	// if the block is a partial block with enough free space
 
-	auto &buffer_manager = partial_block_manager.GetBlockManager().buffer_manager;
+	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
+
 	buffer_handle = BufferHandle(buffer_manager.Pin(block_handle));
+
+	// we need to copy the (partial) data into a new (not yet disk-backed) buffer handle
+	shared_ptr<BlockHandle> new_block_handle;
+	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block_handle);
+
+	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
+	buffer_handle = std::move(new_buffer_handle);
+	block_handle = new_block_handle;
+	block_pointer.block_id = INVALID_BLOCK;
 }
 
 } // namespace duckdb

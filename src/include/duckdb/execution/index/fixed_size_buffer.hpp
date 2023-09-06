@@ -12,11 +12,28 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/storage/block_manager.hpp"
 
 namespace duckdb {
 
 class FixedSizeAllocator;
 class MetadataWriter;
+
+struct PartialBlockForIndex : public PartialBlock {
+public:
+	explicit PartialBlockForIndex(BlockManager &block_manager, PartialBlockState state,
+	                              const shared_ptr<BlockHandle> &block_handle);
+	~PartialBlockForIndex() override;
+
+	BlockManager &block_manager;
+	shared_ptr<BlockHandle> block_handle;
+
+public:
+	void AddUninitializedRegion(idx_t start, idx_t end) override;
+	void Flush(idx_t free_space_left) override;
+	void Clear() override;
+	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
+};
 
 //! A fixed-size buffer holds fixed-size segments of data. It lazily deserializes a buffer, if on-disk and not
 //! yet in memory, and it only serializes dirty and non-written buffers to disk during
@@ -24,29 +41,23 @@ class MetadataWriter;
 class FixedSizeBuffer {
 public:
 	//! Constructor for a new in-memory buffer
-	explicit FixedSizeBuffer(PartialBlockManager &partial_block_manager);
+	explicit FixedSizeBuffer(BlockManager &block_manager);
 	//! Constructor for deserializing buffer metadata from disk
-	FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count, const idx_t allocated_memory,
-	                const uint32_t max_offset, const BlockPointer &block_ptr);
+	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
+	                const BlockPointer &block_ptr);
 
-	//! Partial block manager of the allocator
-	PartialBlockManager &partial_block_manager;
+	//! Block manager of the database instance
+	BlockManager &block_manager;
 
 	//! The number of allocated segments
 	idx_t segment_count;
-
-	//! The size of allocated memory in this buffer, skipping gaps
-	idx_t allocated_memory;
-	//! Maximum free bit in a bitmask plus one, so that max_offset * segment_size = allocated_size of this bitmask's
-	//! buffer
-	uint32_t max_offset;
+	//! The size of allocated memory in this buffer (necessary for copying while pinning)
+	idx_t allocation_size;
 
 	//! True: the in-memory buffer is no longer consistent with a (possibly existing) copy on disk
 	bool dirty;
 	//! True: can be vacuumed after the vacuum operation
 	bool vacuum;
-	//! True: the size of the buffer changed (new/free)
-	bool size_changed;
 
 	//! Partial block id and offset
 	BlockPointer block_pointer;
@@ -68,12 +79,12 @@ public:
 		if (dirty_p) {
 			dirty = dirty_p;
 		}
-		return buffer_handle.Ptr() + block_pointer.offset;
+		return buffer_handle.Ptr();
 	}
 	//! Destroys the in-memory buffer and the on-disk block
 	void Destroy();
 	//! Serializes a buffer (if dirty or not on disk)
-	void Serialize();
+	void Serialize(PartialBlockManager &partial_block_manager, const idx_t allocation_size_p);
 	//! Pin a buffer (if not in-memory)
 	void Pin();
 

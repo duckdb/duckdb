@@ -10,7 +10,7 @@ constexpr uint8_t FixedSizeAllocator::SHIFT[];
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
       metadata_manager(block_manager.GetMetadataManager()),
-      partial_block_manager(block_manager, CheckpointType::INDEX_CHECKPOINT), segment_size(segment_size),
+      partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT), segment_size(segment_size),
       total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
@@ -55,7 +55,7 @@ IndexPointer FixedSizeAllocator::New() {
 
 		// add a new buffer
 		auto buffer_id = GetAvailableBufferId();
-		buffers.insert({buffer_id, FixedSizeBuffer(partial_block_manager)});
+		buffers.insert({buffer_id, FixedSizeBuffer(block_manager)});
 		buffers_with_free_space.insert(buffer_id);
 
 		// set the bitmask
@@ -75,16 +75,8 @@ IndexPointer FixedSizeAllocator::New() {
 	ValidityMask mask(bitmask_ptr);
 	auto offset = GetOffset(mask, buffer.segment_count);
 
-	// adjust the buffer fields
-	buffer.segment_count++;
-	if (offset > buffer.max_offset - 1) {
-		buffer.max_offset = offset + 1;
-		buffer.allocated_memory = buffer.max_offset * segment_size + bitmask_offset;
-		buffer.size_changed = true;
-	}
-
-	// adjust the allocator fields
 	total_segment_count++;
+	buffer.segment_count++;
 	if (buffer.segment_count == available_segments_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
 	}
@@ -108,18 +100,10 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(total_segment_count > 0);
 	D_ASSERT(buffer.segment_count > 0);
 
-	// adjust the buffer fields
-	buffer.segment_count--;
-	auto max_offset = GetMaxOffset(mask);
-	if (max_offset < buffer.max_offset) {
-		buffer.max_offset = max_offset;
-		buffer.allocated_memory = buffer.max_offset * segment_size + bitmask_offset;
-		buffer.size_changed = true;
-	}
-
 	// adjust the allocator fields
 	buffers_with_free_space.insert(buffer_id);
 	total_segment_count--;
+	buffer.segment_count--;
 }
 
 void FixedSizeAllocator::Reset() {
@@ -263,9 +247,11 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 
 	for (auto &buffer : buffers) {
-		buffer.second.Serialize();
+		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.second.Get()));
+		auto max_offset = GetMaxOffset(mask);
+		auto allocation_size = max_offset * segment_size + bitmask_offset;
+		buffer.second.Serialize(partial_block_manager, allocation_size);
 	}
-	// TODO: anything else necessary here?
 	partial_block_manager.FlushPartialBlocks();
 
 	auto block_pointer = writer.GetBlockPointer();
@@ -277,8 +263,7 @@ BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 		writer.Write(buffer.first);
 		writer.Write(buffer.second.block_pointer);
 		writer.Write(buffer.second.segment_count);
-		writer.Write(buffer.second.allocated_memory);
-		writer.Write(buffer.second.max_offset);
+		writer.Write(buffer.second.allocation_size);
 	}
 	for (auto &buffer_id : buffers_with_free_space) {
 		writer.Write(buffer_id);
@@ -300,10 +285,9 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 		auto buffer_id = reader.Read<idx_t>();
 		auto buffer_block_pointer = reader.Read<BlockPointer>();
 		auto segment_count = reader.Read<idx_t>();
-		auto allocated_memory = reader.Read<idx_t>();
-		auto max_offset = reader.Read<uint32_t>();
-		buffers.insert({buffer_id, FixedSizeBuffer(partial_block_manager, segment_count, allocated_memory, max_offset,
-		                                           buffer_block_pointer)});
+		auto allocation_size = reader.Read<idx_t>();
+		buffers.insert(
+		    {buffer_id, FixedSizeBuffer(block_manager, segment_count, allocation_size, buffer_block_pointer)});
 		total_segment_count += segment_count;
 	}
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
@@ -365,17 +349,25 @@ uint32_t FixedSizeAllocator::GetMaxOffset(ValidityMask &mask) {
 	auto data = mask.GetData();
 	uint32_t max_offset = bitmask_count * sizeof(validity_t) * 8;
 
+	auto bits_in_last_entry = available_segments_per_buffer % (sizeof(validity_t) * 8);
+
 	D_ASSERT(bitmask_count > 0);
 	for (idx_t i = bitmask_count; i > 0; i--) {
-		idx_t entry_idx = i - 1;
 
-		if (data[entry_idx] == ~idx_t(0)) {
+		auto entry = data[i - 1];
+
+		// set all bits after bits_in_last_entry
+		if (i == bitmask_count) {
+			entry |= ~idx_t(0) << bits_in_last_entry;
+		}
+
+		if (entry == ~idx_t(0)) {
 			max_offset -= sizeof(validity_t) * 8;
 			continue;
 		}
 
 		// invert data[entry_idx]
-		auto entry_inv = ~data[entry_idx];
+		auto entry_inv = ~entry;
 		idx_t first_valid_bit = 0;
 
 		// then find the position of the LEFTMOST set bit
@@ -390,7 +382,7 @@ uint32_t FixedSizeAllocator::GetMaxOffset(ValidityMask &mask) {
 			} else {
 				// first valid bit is in the rightmost s[level] bits
 				// permanently set the left half of the bits to zero
-				entry_inv &= ~BASE[level];
+				entry_inv &= BASE[level];
 			}
 		}
 		D_ASSERT(entry_inv);
