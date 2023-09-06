@@ -656,6 +656,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (!current_reader->IsOpen()) {
 				current_reader->OpenJSONFile();
 			}
+			batch_index = gstate.batch_index++;
 
 			// Auto-detect format / record type
 			if (gstate.enable_parallel_scans) {

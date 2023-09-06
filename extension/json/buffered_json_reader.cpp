@@ -239,10 +239,6 @@ BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() {
 	return options;
 }
 
-const BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() const {
-	return options;
-}
-
 JSONFormat BufferedJSONReader::GetFormat() const {
 	return options.format;
 }

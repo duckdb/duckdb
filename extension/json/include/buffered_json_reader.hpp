@@ -110,7 +110,6 @@ public:
 	bool IsOpen() const;
 
 	BufferedJSONReaderOptions &GetOptions();
-	const BufferedJSONReaderOptions &GetOptions() const;
 
 	JSONFormat GetFormat() const;
 	void SetFormat(JSONFormat format);
