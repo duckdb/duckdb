@@ -6,7 +6,7 @@
 namespace duckdb {
 
 FixedSizeBuffer::FixedSizeBuffer(PartialBlockManager &partial_block_manager)
-    : partial_block_manager(partial_block_manager), segment_count(0), size(0), max_offset(0), dirty(false),
+    : partial_block_manager(partial_block_manager), segment_count(0), allocated_memory(0), max_offset(0), dirty(false),
       vacuum(false), size_changed(false), block_pointer(), block_handle(nullptr) {
 
 	auto &buffer_manager = partial_block_manager.GetBlockManager().buffer_manager;
@@ -14,9 +14,9 @@ FixedSizeBuffer::FixedSizeBuffer(PartialBlockManager &partial_block_manager)
 }
 
 FixedSizeBuffer::FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count,
-                                 const idx_t size, const uint32_t max_offset, const BlockPointer &block_ptr)
-    : partial_block_manager(partial_block_manager), segment_count(segment_count), size(size), max_offset(max_offset),
-      dirty(false), vacuum(false), size_changed(false), block_pointer(block_ptr) {
+                                 const idx_t allocated_memory, const uint32_t max_offset, const BlockPointer &block_ptr)
+    : partial_block_manager(partial_block_manager), segment_count(segment_count), allocated_memory(allocated_memory),
+      max_offset(max_offset), dirty(false), vacuum(false), size_changed(false), block_pointer(block_ptr) {
 
 	D_ASSERT(block_ptr.IsValid());
 	block_handle = partial_block_manager.GetBlockManager().RegisterBlock(block_ptr.block_id);

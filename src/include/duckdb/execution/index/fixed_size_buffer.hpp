@@ -26,7 +26,7 @@ public:
 	//! Constructor for a new in-memory buffer
 	explicit FixedSizeBuffer(PartialBlockManager &partial_block_manager);
 	//! Constructor for deserializing buffer metadata from disk
-	FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count, const idx_t size,
+	FixedSizeBuffer(PartialBlockManager &partial_block_manager, const idx_t segment_count, const idx_t allocated_memory,
 	                const uint32_t max_offset, const BlockPointer &block_ptr);
 
 	//! Partial block manager of the allocator
@@ -36,9 +36,10 @@ public:
 	idx_t segment_count;
 
 	//! The size of allocated memory in this buffer, skipping gaps
-	idx_t size;
-	//! The maximum offset in this buffer
-	uint32_t max_offset; // TODO: I think that this is not required
+	idx_t allocated_memory;
+	//! Maximum free bit in a bitmask plus one, so that max_offset * segment_size = allocated_size of this bitmask's
+	//! buffer
+	uint32_t max_offset;
 
 	//! True: the in-memory buffer is no longer consistent with a (possibly existing) copy on disk
 	bool dirty;
