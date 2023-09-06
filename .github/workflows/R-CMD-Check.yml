@@ -10,7 +10,8 @@ name: R-CMD-check
 env:
   DUCKDB_R_REPO: 'duckdb/duckdb-r'
   TARGET_REF: 'main'
-  SRC_DIR: 'duckdb-r'
+  DUCKDB_R_SRC: 'duckdb-r'
+  DUCKDB_SRC: 'duckdb'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
@@ -35,18 +36,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+        with:
+          path: ${{ env.DUCKDB_SRC }}
 
       - uses: lhotari/action-upterm@v1
-
-      # need duckdb and duckdb-r on the same level.
-      - name: move code to another /duckdb
-        shell: bash
-        run: mkdir .duckdb && mv * .duckdb && mv .duckdb duckdb
 
       - uses: actions/checkout@v3
         with:
           repository: ${{ env.DUCKDB_R_REPO }}
-          path: ${{ env.SRC_DIR }}
+          path: ${{ env.DUCKDB_R_SRC }}
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -58,21 +56,21 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          working-directory: ${{ env.SRC_DIR }}
+          working-directory: ${{ env.DUCKDB_R_SRC }}
           extra-packages: any::rcmdcheck
           needs: check
 
       - name: update vendors
         shell: bash
-        working-directory: ${{ env.SRC_DIR }}
+        working-directory: ${{ env.DUCKDB_R_SRC }}
         run: ./vendor.sh
 
       - name: Run R CMD BUILD & CHECK
         shell: bash
-        working-directory: ${{ env.SRC_DIR }}
+        working-directory: ${{ env.DUCKDB_R_SRC }}
         run: R CMD BUILD . && R CMD CHECK duckdb_*
 
       - name: check import
         shell: bash
-        working-directory: ${{ env.SRC_DIR }}
+        working-directory: ${{ env.DUCKDB_R_SRC }}
         run: R -q -e "library(duckdb)"
