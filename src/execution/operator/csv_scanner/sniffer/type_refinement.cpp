@@ -46,7 +46,8 @@ struct Parse {
 				validity_mask.SetInvalid(machine.cur_rows);
 			}
 		}
-		if (machine.state == CSVState::STANDARD) {
+		if (machine.state == CSVState::STANDARD ||
+		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
 			machine.value += current_char;
 		}
 		machine.cur_rows +=
@@ -69,7 +70,7 @@ struct Parse {
 			machine.VerifyUTF8();
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			parse_data[machine.cur_rows++] = StringVector::AddStringOrBlob(v, string_t(machine.value));
 		}
 		parse_chunk.SetCardinality(machine.cur_rows);
 	}

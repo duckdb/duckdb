@@ -307,8 +307,10 @@ void CSVSniffer::DetectTypes() {
 				break;
 			}
 		}
+		if (values_start > 0){
+			tuples.erase(tuples.begin(), tuples.begin() + values_start);
+		}
 
-		tuples.erase(tuples.begin(), tuples.begin() + values_start);
 		idx_t row_idx = 0;
 		if (tuples.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
