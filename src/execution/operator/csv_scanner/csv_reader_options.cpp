@@ -141,10 +141,10 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (sample_size_option < 1 && sample_size_option != -1) {
 			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 		}
-		if (sample_size_option == -1){
+		if (sample_size_option == -1) {
 			// If -1, we basically read the whole thing
 			sample_size_chunks = NumericLimits<idx_t>().Maximum();
-		} else{
+		} else {
 			sample_size_chunks = sample_size_option / STANDARD_VECTOR_SIZE;
 			if (sample_size_option % STANDARD_VECTOR_SIZE != 0) {
 				sample_size_chunks++;
