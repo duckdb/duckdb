@@ -70,11 +70,6 @@ bool JSONFileHandle::CanSeek() const {
 	return can_seek;
 }
 
-void JSONFileHandle::Seek(idx_t position) {
-	D_ASSERT(CanSeek());
-	file_handle->Seek(position);
-}
-
 idx_t JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t requested_size) {
 	D_ASSERT(requested_size != 0);
 

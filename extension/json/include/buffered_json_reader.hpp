@@ -68,7 +68,6 @@ public:
 	idx_t Remaining() const;
 
 	bool CanSeek() const;
-	void Seek(idx_t position);
 
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
 	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run);
