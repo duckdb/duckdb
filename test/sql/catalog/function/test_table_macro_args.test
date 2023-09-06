@@ -107,7 +107,7 @@ SELECT * FROM sc(name, suit, 4);
 
 # check limit PERCENT and offset
 statement ok
-CREATE MACRO sc2(dlimit, noffset) AS TABLE SELECT DISTINCT  suit from cards_tbl limit dlimit% offset noffset;
+CREATE MACRO sc2(dlimit, noffset) AS TABLE SELECT DISTINCT  suit from cards_tbl order by all limit dlimit% offset noffset;
 
 query I
 SELECT * FROM sc2(50.0, 2);

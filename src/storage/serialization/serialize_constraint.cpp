@@ -37,7 +37,7 @@ unique_ptr<Constraint> Constraint::FormatDeserialize(FormatDeserializer &deseria
 
 void CheckConstraint::FormatSerialize(FormatSerializer &serializer) const {
 	Constraint::FormatSerialize(serializer);
-	serializer.WriteProperty(200, "expression", *expression);
+	serializer.WriteProperty(200, "expression", expression);
 }
 
 unique_ptr<Constraint> CheckConstraint::FormatDeserialize(FormatDeserializer &deserializer) {

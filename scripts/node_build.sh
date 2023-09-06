@@ -19,7 +19,7 @@ fi
 
 export PATH=$(npm bin):$PATH
 ./node_modules/.bin/node-pre-gyp package testpackage testbinary --target_arch="$TARGET_ARCH"
-if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ ]] ; then
   ./node_modules/.bin/node-pre-gyp publish --target_arch=$TARGET_ARCH
   ./node_modules/.bin/node-pre-gyp info --target_arch=$TARGET_ARCH
 fi

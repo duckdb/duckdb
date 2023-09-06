@@ -927,7 +927,24 @@ LogicalType LogicalType::AGGREGATE_STATE(aggregate_state_t state_type) { // NOLI
 //===--------------------------------------------------------------------===//
 // Map Type
 //===--------------------------------------------------------------------===//
-LogicalType LogicalType::MAP(const LogicalType &child) {
+LogicalType LogicalType::MAP(const LogicalType &child_p) {
+	D_ASSERT(child_p.id() == LogicalTypeId::STRUCT);
+	auto &children = StructType::GetChildTypes(child_p);
+	D_ASSERT(children.size() == 2);
+
+	// We do this to enforce that for every MAP created, the keys are called "key"
+	// and the values are called "value"
+
+	// This is done because for Vector the keys of the STRUCT are used in equality checks.
+	// Vector::Reference will throw if the types don't match
+	child_list_t<LogicalType> new_children(2);
+	new_children[0] = children[0];
+	new_children[0].first = "key";
+
+	new_children[1] = children[1];
+	new_children[1].first = "value";
+
+	auto child = LogicalType::STRUCT(std::move(new_children));
 	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::MAP, std::move(info));
 }

@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/auto/test_auto_5250.test
+# description: Test CSV Sample works for #5250
+# group: [auto]
+
+statement ok
+PRAGMA verify_parallelism
+
+query I
+select count(*) from read_csv_auto('data/csv/page_namespacepage_title_sample.csv')
+----
+3993

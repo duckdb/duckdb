@@ -8,11 +8,9 @@
 ################# ARROW
 if (NOT WIN32)
     duckdb_extension_load(arrow
-            LOAD_TESTS
-            DONT_LINK
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/arrow
-            GIT_TAG 56d24d4224df43cac0e071d71371385de5831129
-            APPLY_PATCHES
+            GIT_TAG 1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5
             )
 endif()
 
@@ -20,7 +18,7 @@ endif()
 duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
-        GIT_TAG b769c8aab638bdbdc46c77fcb3c70412dd715d45
+        GIT_TAG a1f65419dfbc23e8099fbdd1a8a13bfda425165d
         )
 
 ################# AZURE
@@ -41,8 +39,7 @@ endif()
 duckdb_extension_load(iceberg
         ${LOAD_ICEBERG_TESTS}
         GIT_URL https://github.com/duckdblabs/duckdb_iceberg
-        GIT_TAG 6481aa4dd0ab9d724a8df28a1db66800561dd5f9
-        APPLY_PATCHES
+        GIT_TAG 51ba9564859698c29db4165f17143a2f6af2bb18
         )
 
 ################# POSTGRES_SCANNER
@@ -56,11 +53,9 @@ duckdb_extension_load(postgres_scanner
 
 ################# SPATIAL
 duckdb_extension_load(spatial
-        DONT_LINK
-        LOAD_TESTS
+        DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
-        GIT_TAG dc66594776fbe2f0a8a3af30af7f9f8626e6e215
-        APPLY_PATCHES
+        GIT_TAG 2f55d5d64bad9b5fc7ce67e4bcf52617ee31b865
         INCLUDE_DIR spatial/include
         TEST_DIR test/sql
         )
@@ -74,8 +69,7 @@ else ()
 endif()
 
 duckdb_extension_load(sqlite_scanner
-        ${STATIC_LINK_SQLITE}
-        LOAD_TESTS
+        ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/sqlite_scanner
         GIT_TAG 9c38a30be2237456cdcd423d527b96c944158c77
         )
@@ -83,9 +77,8 @@ duckdb_extension_load(sqlite_scanner
 ################# SUBSTRAIT
 if (NOT WIN32)
     duckdb_extension_load(substrait
-            LOAD_TESTS
-            DONT_LINK
+            LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdblabs/substrait
-            GIT_TAG 0cd88fa8b240babe5316924e32fb68aaba408780
+            GIT_TAG 5d621b1d7d16fe86f8b1930870c8e6bf05bcb92a
             )
 endif()

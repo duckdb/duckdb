@@ -23,4 +23,10 @@ public:
 	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
 };
 
+class DeserializedStatementVerifierNoDefaultV2 : public StatementVerifier {
+public:
+	explicit DeserializedStatementVerifierNoDefaultV2(unique_ptr<SQLStatement> statement_p);
+	static unique_ptr<StatementVerifier> Create(const SQLStatement &statement);
+};
+
 } // namespace duckdb

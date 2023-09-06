@@ -5,7 +5,7 @@
 require httpfs
 
 query IIII
-select column00, column01, column02, column03 from read_csv_auto('https://github.com/duckdb/duckdb/raw/master/data/csv/customer.csv')
+select column00, column01, column02, column03 from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv')
 ----
 1	AAAAAAAABAAAAAAA	980124	7135
 2	AAAAAAAACAAAAAAA	819667	1461
@@ -19,7 +19,7 @@ select column00, column01, column02, column03 from read_csv_auto('https://github
 10	AAAAAAAAKAAAAAAA	1207553	5143
 
 query IIIIIIIIIIIIIIIIII
-from read_csv_auto('https://github.com/duckdb/duckdb/raw/master/data/csv/customer.csv');
+from read_csv_auto('https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv');
 ----
 1	AAAAAAAABAAAAAAA	980124	7135	32946	2452238	2452208	Mr.	Javier	Lewis	Y	9	12	1936	CHILE	NULL	Javier.Lewis@VFAxlnZEvOx.org	2452508
 2	AAAAAAAACAAAAAAA	819667	1461	31655	2452318	2452288	Dr.	Amy	Moses	Y	9	4	1966	TOGO	NULL	Amy.Moses@Ovk9KjHH.com	2452318
