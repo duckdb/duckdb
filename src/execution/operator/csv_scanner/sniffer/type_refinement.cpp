@@ -155,6 +155,14 @@ void CSVSniffer::RefineTypes() {
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
 				} else {
+					if (col_type_candidates.back() == LogicalType::BOOLEAN) {
+							// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+							// immediately pop to varchar.
+							while (col_type_candidates.back() != LogicalType::VARCHAR) {
+								col_type_candidates.pop_back();
+							}
+							break;
+					}
 					col_type_candidates.pop_back();
 				}
 			}
