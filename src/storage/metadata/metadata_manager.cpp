@@ -70,6 +70,8 @@ void MetadataManager::ConvertToTransient(MetadataBlock &block) {
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
 
 	block.block = std::move(new_block);
+
+	// unregister the old block
 	block_manager.UnregisterBlock(block.block_id, false);
 }
 
