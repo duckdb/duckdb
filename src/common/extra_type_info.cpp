@@ -186,7 +186,8 @@ StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_
 }
 
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p, bool has_explicit_names_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)), has_explicit_names(has_explicit_names_p) {
+    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)),
+      has_explicit_names(has_explicit_names_p) {
 }
 
 void StructTypeInfo::Serialize(FieldWriter &writer) const {

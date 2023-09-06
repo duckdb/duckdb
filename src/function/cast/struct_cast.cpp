@@ -18,12 +18,12 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 	auto &target_struct_info = target_aux->Cast<StructTypeInfo>();
 	auto &source_struct_info = source_aux->Cast<StructTypeInfo>();
 
-
 	if (source_child_types.size() != result_child_types.size()) {
 		throw TypeMismatchException(source, target, "Cannot cast STRUCTs of different size");
 	}
 	for (idx_t i = 0; i < source_child_types.size(); i++) {
-		if (target_struct_info.has_explicit_names && source_struct_info.has_explicit_names && source_child_types[i].first != result_child_types[i].first) {
+		if (target_struct_info.has_explicit_names && source_struct_info.has_explicit_names &&
+		    source_child_types[i].first != result_child_types[i].first) {
 			throw TypeMismatchException(source, target, "Cannot cast STRUCTs with different names");
 		}
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
