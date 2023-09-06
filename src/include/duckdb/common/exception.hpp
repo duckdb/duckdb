@@ -80,7 +80,8 @@ enum class ExceptionType {
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
 	DEPENDENCY = 37,             // dependency
 	HTTP = 38,
-	MISSING_EXTENSION = 39 // Thrown when an extension is used but not loaded
+	MISSING_EXTENSION = 39, // Thrown when an extension is used but not loaded
+	AUTOLOAD = 40           // Thrown when an extension is used but not loaded
 };
 class HTTPException;
 
@@ -288,6 +289,19 @@ public:
 	explicit MissingExtensionException(const string &msg, Args... params)
 	    : MissingExtensionException(ConstructMessage(msg, params...)) {
 	}
+};
+
+class AutoloadException : public Exception {
+public:
+	DUCKDB_API explicit AutoloadException(const string &extension_name, Exception &e);
+
+	template <typename... Args>
+	explicit AutoloadException(const string &extension_name, Exception &e, Args... params)
+	    : AutoloadException(ConstructMessage(extension_name, e, params...)) {
+	}
+
+protected:
+	Exception &wrapped_exception;
 };
 
 class HTTPException : public IOException {

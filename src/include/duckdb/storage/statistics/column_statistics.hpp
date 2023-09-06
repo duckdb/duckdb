@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
 namespace duckdb {
+class FormatSerializer;
 
 class ColumnStatistics {
 public:
@@ -34,6 +35,9 @@ public:
 	shared_ptr<ColumnStatistics> Copy() const;
 	void Serialize(Serializer &serializer) const;
 	static shared_ptr<ColumnStatistics> Deserialize(Deserializer &source, const LogicalType &type);
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static shared_ptr<ColumnStatistics> FormatDeserialize(FormatDeserializer &source);
 
 private:
 	BaseStatistics stats;
