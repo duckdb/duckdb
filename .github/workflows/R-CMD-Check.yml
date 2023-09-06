@@ -58,6 +58,13 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
+      # needed so we can run git commit in vendor.sh
+      - name: setup github
+        shell: bash
+        run: |
+          git config --global user.email "duck@duck.com"
+          git config --global user.name "mr. duck"
+
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
