@@ -294,7 +294,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	if (parallel_state.done) {
 		return false;
 	}
-	state.chunk_offset = 0;
+	state.Reset();
 	state.batch_index = ++parallel_state.batch_index;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
@@ -340,6 +340,9 @@ ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunc
 	if (input.CanRemoveFilterColumns()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
 		result->all_columns.Initialize(context, asgs.scanned_types);
+	}
+	for (auto index : input.column_ids) {
+		result->column_scan_state.emplace(std::make_pair(index, ArrowColumnScanLocalState()));
 	}
 	if (!ArrowScanParallelStateNext(context, input.bind_data.get(), *result, global_state)) {
 		return nullptr;

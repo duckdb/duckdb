@@ -11,9 +11,11 @@ class TestArrowREE(object):
     def test_arrow_run_end_encoding(self):
         con = duckdb.connect()
 
-        rel = con.sql("""
+        rel = con.sql(
+            """
             select (i // 4) as ree from range(1000) t(i);
-        """)
+        """
+        )
         array = rel.arrow()['ree']
 
         encoded_array = pc.run_end_encode(array)

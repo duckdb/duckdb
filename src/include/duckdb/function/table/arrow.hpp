@@ -62,12 +62,20 @@ public:
 };
 
 struct ArrowColumnScanLocalState {
+public:
 	//! Optional dictionary vector when column is a dictionary
 	unique_ptr<Vector> dictionary;
-	
+	//! Run-end-encoding state
+	idx_t run_index = 0;
+
+public:
+	void Reset() {
+		run_index = 0;
+	}
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
+public:
 	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
 
@@ -76,11 +84,18 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
-	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
-	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
 	TableFilterSet *filters = nullptr;
+	unordered_map<idx_t, ArrowColumnScanLocalState> column_scan_state;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
 	DataChunk all_columns;
+
+public:
+	void Reset() {
+		chunk_offset = 0;
+		for (auto &col : column_scan_state) {
+			col.second.Reset();
+		}
+	}
 };
 
 struct ArrowScanGlobalState : public GlobalTableFunctionState {

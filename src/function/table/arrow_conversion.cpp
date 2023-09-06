@@ -911,14 +911,14 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
                                           idx_t size, const ArrowType &arrow_type, idx_t col_idx) {
 	SelectionVector sel;
-	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
-	if (!dict_vectors.count(col_idx)) {
+	auto &dict_vector = scan_state.column_scan_state[col_idx].dictionary;
+	if (!dict_vector) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length,
 		                    arrow_type.GetDictionary());
-		dict_vectors[col_idx] = std::move(base_vector);
+		dict_vector = std::move(base_vector);
 	}
 	auto dictionary_type = arrow_type.GetDuckType();
 	//! Get Pointer to Indices of Dictionary
@@ -931,7 +931,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	} else {
 		SetSelectionVector(sel, indices, dictionary_type, size);
 	}
-	vector.Slice(*dict_vectors[col_idx], sel, size);
+	vector.Slice(*dict_vector, sel, size);
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
