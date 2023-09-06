@@ -1027,8 +1027,6 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["header"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["auto_detect"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["sample_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["sample_chunk_size"] = LogicalType::BIGINT;
-	table_function.named_parameters["sample_chunks"] = LogicalType::BIGINT;
 	table_function.named_parameters["all_varchar"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
@@ -1157,8 +1155,7 @@ void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(normalize_names);
 	writer.WriteListNoReference<bool>(force_not_null);
 	writer.WriteField<bool>(all_varchar);
-	writer.WriteField<idx_t>(sample_chunk_size);
-	writer.WriteField<idx_t>(sample_chunks);
+	writer.WriteField<idx_t>(sample_size_chunks);
 	writer.WriteField<bool>(auto_detect);
 	writer.WriteString(file_path);
 	writer.WriteString(decimal_separator);
@@ -1195,8 +1192,7 @@ void CSVReaderOptions::Deserialize(FieldReader &reader) {
 	normalize_names = reader.ReadRequired<bool>();
 	force_not_null = reader.ReadRequiredList<bool>();
 	all_varchar = reader.ReadRequired<bool>();
-	sample_chunk_size = reader.ReadRequired<idx_t>();
-	sample_chunks = reader.ReadRequired<idx_t>();
+	sample_size_chunks = reader.ReadRequired<idx_t>();
 	auto_detect = reader.ReadRequired<bool>();
 	file_path = reader.ReadRequired<string>();
 	decimal_separator = reader.ReadRequired<string>();

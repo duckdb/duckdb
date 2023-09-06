@@ -263,7 +263,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 		return true;
 	}
 
-	if (mode == ParserMode::SNIFFING_DATATYPES && parse_chunk.size() == options.sample_chunk_size) {
+	if (mode == ParserMode::SNIFFING_DATATYPES) {
 		return true;
 	}
 
