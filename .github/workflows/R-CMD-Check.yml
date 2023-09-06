@@ -70,6 +70,8 @@ jobs:
         working-directory: ${{ env.DUCKDB_R_SRC }}
         run: ./vendor.sh
 
+      - uses: lhotari/action-upterm@v1
+
       - name: Run R CMD BUILD & CHECK
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
