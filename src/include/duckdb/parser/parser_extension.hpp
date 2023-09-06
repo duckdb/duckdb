@@ -45,12 +45,14 @@ struct ParserExtensionParseResult {
 	    : type(ParserExtensionResultType::PARSE_SUCCESSFUL), parse_data(std::move(parse_data_p)) {
 	}
 
-	//! Whether or not parsing was successful
+	//! What to do with the error (if parsing was not fully successful)
 	ParserExtensionResultType type;
-	//! The parse data (if successful)
+	//! The parse data (if some leading text was parsed correctly)
 	unique_ptr<ParserExtensionParseData> parse_data;
-	//! The error message (if unsuccessful)
+	//! The error message (if there was one)
 	string error;
+	//! The position where the not successfully parsed text starts
+	int resume_location;
 };
 
 typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query);

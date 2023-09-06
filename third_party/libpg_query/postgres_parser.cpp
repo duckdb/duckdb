@@ -13,13 +13,12 @@ void PostgresParser::Parse(const std::string &query) {
 	duckdb_libpgquery::pg_parser_init();
 	duckdb_libpgquery::parse_result res;
 	pg_parser_parse(query.c_str(), &res);
+	parse_tree = res.parse_tree;
 	success = res.success;
-
-	if (success) {
-		parse_tree = res.parse_tree;
-	} else {
+	if (!success) {
 		error_message = std::string(res.error_message);
 		error_location = res.error_location;
+		resume_location = stmtLocation(parse_tree);
 	}
 }
 

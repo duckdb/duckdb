@@ -24,6 +24,7 @@ public:
 	duckdb_libpgquery::PGList *parse_tree;
 	std::string error_message;
 	int error_location;
+	int resume_location;
 public:
 	void Parse(const std::string &query);
 	static duckdb::vector<duckdb_libpgquery::PGSimplifiedToken> Tokenize(const std::string &query);

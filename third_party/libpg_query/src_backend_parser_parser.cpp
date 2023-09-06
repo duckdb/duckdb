@@ -45,7 +45,6 @@ namespace duckdb_libpgquery {
 PGList *raw_parser(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;
-	int yyresult;
 
 	/* initialize the flex scanner */
 	yyscanner = scanner_init(str, &yyextra.core_yy_extra, ScanKeywords, NumScanKeywords);
@@ -57,13 +56,10 @@ PGList *raw_parser(const char *str) {
 	parser_init(&yyextra);
 
 	/* Parse! */
-	yyresult = base_yyparse(yyscanner);
+	(void) base_yyparse(yyscanner);
 
 	/* Clean up (release memory) */
 	scanner_finish(yyscanner);
-
-	if (yyresult) /* error */
-		return NIL;
 
 	return yyextra.parsetree;
 }

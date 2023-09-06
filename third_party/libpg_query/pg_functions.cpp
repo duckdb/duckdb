@@ -22,6 +22,7 @@ struct pg_parser_state_str {
 	int pg_err_code;
 	int pg_err_pos;
 	char pg_err_msg[BUFSIZ];
+	PGList *pg_parsetree;
 
 	size_t malloc_pos;
 	size_t malloc_ptr_idx;
@@ -99,10 +100,12 @@ void pg_parser_init() {
 void pg_parser_parse(const char *query, parse_result *res) {
 	res->parse_tree = nullptr;
 	try {
+		pg_parser_state.pg_parsetree = NULL;
 		res->parse_tree = duckdb_libpgquery::raw_parser(query);
 		res->success = pg_parser_state.pg_err_code == PGUNDEFINED;
 	} catch (std::exception &ex) {
 		res->success = false;
+		res->parse_tree = pg_parser_state.pg_parsetree;
 		res->error_message = ex.what();
 	}
 	res->error_message = pg_parser_state.pg_err_msg;
@@ -120,6 +123,9 @@ void pg_parser_cleanup() {
 	free(pg_parser_state.malloc_ptrs);
 }
 
+void saveparsetree(PGList *parsetree) {
+	pg_parser_state.pg_parsetree = parsetree;
+}
 int ereport(int code, ...) {
 	std::string err = "parser error : " + std::string(pg_parser_state.pg_err_msg);
 	throw std::runtime_error(err);
@@ -194,6 +200,13 @@ void *repalloc(void *ptr, size_t n) {
 	void *new_buf = palloc(n);
 	memcpy(new_buf, ptr, old_len);
 	return new_buf;
+}
+int stmtLocation(PGList *statements) {
+        if (statements) {
+                PGRawStmt *stmt = (PGRawStmt*) lfirst(statements->tail);
+                return stmt->stmt_location + stmt->stmt_len + 1;
+        }
+        return 0;
 }
 char *NameListToString(PGList *names) {
 	throw std::runtime_error("NameListToString NOT IMPLEMENTED");

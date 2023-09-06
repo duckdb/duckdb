@@ -124,29 +124,6 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
-vector<string> SplitQueryStringIntoStatements(const string &query) {
-	// Break sql string down into sql statements using the tokenizer
-	vector<string> query_statements;
-	auto tokens = Parser::Tokenize(query);
-	auto next_statement_start = 0;
-	for (idx_t i = 1; i < tokens.size(); ++i) {
-		auto &t_prev = tokens[i - 1];
-		auto &t = tokens[i];
-		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-			// LCOV_EXCL_START
-			for (idx_t c = t_prev.start; c <= t.start; ++c) {
-				if (query.c_str()[c] == ';') {
-					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
-					next_statement_start = tokens[i].start;
-				}
-			}
-			// LCOV_EXCL_STOP
-		}
-	}
-	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-	return query_statements;
-}
-
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
@@ -161,86 +138,57 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
-		bool parsing_succeed = false;
-		// Creating a new scope to prevent multiple PostgresParser destructors being called
-		// which led to some memory issues
-		{
+		int stmt_loc = 0;
+		while (stmt_loc < query.size()) {
+			auto unparsed_query = query.substr(stmt_loc, query.size() - stmt_loc);
 			PostgresParser parser;
-			parser.Parse(query);
-			if (parser.success) {
-				if (!parser.parse_tree) {
-					// empty statement
-					return;
-				}
-
-				// if it succeeded, we transform the Postgres parse tree into a list of
-				// SQLStatements
+			parser.Parse(unparsed_query);
+			if (parser.parse_tree) {
+				// we transform the Postgres parse tree into a list of SQLStatements
 				transformer.TransformParseTree(parser.parse_tree, statements);
-				parsing_succeed = true;
-			} else {
-				parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
 			}
-		}
-		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
-		// using ';' as the delimiter so that parser extensions can parse the statement
-		if (parsing_succeed) {
-			// no-op
-			// return here would require refactoring into another function. o.w. will just no-op in order to run wrap up
-			// code at the end of this function
-		} else if (!options.extensions || options.extensions->empty()) {
-			throw ParserException(parser_error);
-		} else {
-			// split sql string into statements and re-parse using extension
-			auto query_statements = SplitQueryStringIntoStatements(query);
-			auto stmt_loc = 0;
-			for (auto const &query_statement : query_statements) {
-				string another_parser_error;
-				// Creating a new scope to allow extensions to use PostgresParser, which is not reentrant
-				{
-					PostgresParser another_parser;
-					another_parser.Parse(query_statement);
-					// LCOV_EXCL_START
-					// first see if DuckDB can parse this individual query statement
-					if (another_parser.success) {
-						if (!another_parser.parse_tree) {
-							// empty statement
-							continue;
-						}
-						transformer.TransformParseTree(another_parser.parse_tree, statements);
-						// important to set in the case of a mixture of DDB and parser ext statements
-						statements.back()->stmt_length = query_statement.size() - 1;
-						statements.back()->stmt_location = stmt_loc;
-						stmt_loc += query_statement.size();
-						continue;
-					} else {
-						another_parser_error = QueryErrorContext::Format(query, another_parser.error_message,
-						                                                 another_parser.error_location - 1);
-					}
-				} // LCOV_EXCL_STOP
-				// LCOV_EXCL_START
-				// let extensions parse the statement which DuckDB failed to parse
-				bool parsed_single_statement = false;
+			stmt_loc += parser.resume_location;
+			if (parser.success)
+				break; // no errors, done in one go!
+
+			// could not parse everything correctly, prepare an error message, do not throw it yet though
+			parser_error = QueryErrorContext::Format(unparsed_query, parser.error_message, parser.error_location - 1);
+
+			// ..because extension module parsers might be able to understand the query text. Try their parsers.
+			auto extension_parsed_something = false;
+			if (options.extensions) {
+				unparsed_query = query.substr(stmt_loc, query.size() - stmt_loc);
 				for (auto &ext : *options.extensions) {
-					D_ASSERT(!parsed_single_statement);
-					D_ASSERT(ext.parse_function);
-					auto result = ext.parse_function(ext.parser_info.get(), query_statement);
-					if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-						statement->stmt_length = query_statement.size() - 1;
-						statement->stmt_location = stmt_loc;
-						stmt_loc += query_statement.size();
-						statements.push_back(std::move(statement));
-						parsed_single_statement = true;
-						break;
-					} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+					if (!ext.parse_function)
+						continue; // not all extensions have a parser
+					auto result = ext.parse_function(ext.parser_info.get(), unparsed_query);
+
+					// the resume location (if set) is required to be just after the last correctly parsed semicolon
+					int resume_location = result.resume_location;
+					if (resume_location < 0 || resume_location >= unparsed_query.size()) {
+						D_ASSERT(0);
+						resume_location = 0; // defense
+					}
+					D_ASSERT(resume_location == 0 || unparsed_query[resume_location - 1] == ';');
+
+					if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+						// this extension parser saw an error that it thinks is related to it. Raise error.
 						throw ParserException(result.error);
-					} else {
-						// We move to the next one!
+					}
+					if (result.parse_data) {
+						// this extension parser parsed something
+						auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+						statement->stmt_length = (resume_location ? resume_location : unparsed_query.size()) - 1;
+						statement->stmt_location = stmt_loc;
+						stmt_loc += statement->stmt_length + 1;
+						statements.push_back(std::move(statement));
+						extension_parsed_something = true;
+						break;
 					}
 				}
-				if (!parsed_single_statement) {
-					throw ParserException(parser_error);
-				} // LCOV_EXCL_STOP
+			}
+			if (!extension_parsed_something) { // no forward progress?
+				throw ParserException(parser_error);
 			}
 		}
 	}

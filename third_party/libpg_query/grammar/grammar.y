@@ -60,8 +60,8 @@
 }
 
 %type <node> stmt
+%type <node> savedstmt
 %type <list> stmtblock
-%type <list> stmtmulti
 {{{ TYPES }}}
 
 /*
@@ -168,15 +168,8 @@
 %%
 
 /*
- *	The target production for the whole parse.
- */
-stmtblock:	stmtmulti
-			{
-				pg_yyget_extra(yyscanner)->parsetree = $1;
-			}
-		;
-
-/*
+ * The target production for the whole parse.
+ *
  * At top level, we wrap each stmt with a PGRawStmt node carrying start location
  * and length of the stmt's text.  Notice that the start loc/len are driven
  * entirely from semicolon locations (@2).  It would seem natural to use
@@ -186,26 +179,23 @@ stmtblock:	stmtmulti
  * we'd get -1 for the location in such cases.
  * We also take care to discard empty statements entirely.
  */
-stmtmulti:	stmtmulti ';' stmt
-				{
-					if ($1 != NIL)
-					{
-						/* update length of previous stmt */
-						updateRawStmtEnd(llast_node(PGRawStmt, $1), @2);
-					}
-					if ($3 != NULL)
-						$$ = lappend($1, makeRawStmt($3, @2 + 1));
-					else
-						$$ = $1;
+stmtblock:	savedstmt ';' 
+				{	// update action comes before stmtblock may generate a parse error
+					if ($1) updateRawStmtEnd((PGRawStmt*) $1, @2);
 				}
-			| stmt
-				{
-					if ($1 != NULL)
-						$$ = list_make1(makeRawStmt($1, 0));
-					else
-						$$ = NIL;
+		stmtblock
+	|	savedstmt
+
+savedstmt: 
+		stmt		{	// immediately save statement (to conserve it even if a parse error occurs later) 
+					PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
+        				int location = stmts ? ((PGRawStmt*) stmts->tail)->stmt_location + 1 : 0;
+        				$$ = (PGNode*) makeRawStmt($1, location); 
+        				stmts = stmts ? lappend(stmts, $$) : list_make1($$);
+					pg_yyget_extra(yyscanner)->parsetree = stmts; // for successful parse result 
+					saveparsetree(stmts); // .. but also have it on later failure
 				}
-		;
+
 
 {{{ STATEMENTS }}}
 
