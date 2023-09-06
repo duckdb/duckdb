@@ -18,7 +18,7 @@ void PostgresParser::Parse(const std::string &query) {
 	if (!success) {
 		error_message = std::string(res.error_message);
 		error_location = res.error_location;
-		resume_location = stmtLocation(parse_tree);
+		resume_location = resumeLocation(parse_tree);
 	}
 }
 

@@ -201,7 +201,7 @@ void *repalloc(void *ptr, size_t n) {
 	memcpy(new_buf, ptr, old_len);
 	return new_buf;
 }
-int stmtLocation(PGList *statements) {
+int resumeLocation(PGList *statements) {
         if (statements) {
                 PGRawStmt *stmt = (PGRawStmt*) lfirst(statements->tail);
                 return stmt->stmt_location + stmt->stmt_len + 1;

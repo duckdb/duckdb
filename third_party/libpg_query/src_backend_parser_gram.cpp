@@ -19158,10 +19158,10 @@ yyreduce:
   case 5:
 #line 508 "third_party/libpg_query/grammar/grammar.y"
     {	// immediately save statement (to conserve it even if a parse error occurs later) 
-					PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
-        				int location = stmts ? ((PGRawStmt*) stmts->tail)->stmt_location + 1 : 0;
 					(yyval.node) = NULL;
         				if ((yyvsp[(1) - (1)].node)) {
+						PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
+        					int location = resumeLocation(stmts);
 						(yyval.node) = (PGNode*) makeRawStmt((yyvsp[(1) - (1)].node), location); 
         					stmts = stmts ? lappend(stmts, (yyval.node)) : list_make1((yyval.node));
 						pg_yyget_extra(yyscanner)->parsetree = stmts; // for successful parse result 

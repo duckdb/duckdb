@@ -188,10 +188,10 @@ stmtblock:	savedstmt ';'
 
 savedstmt: 
 		stmt		{	// immediately save statement (to conserve it even if a parse error occurs later) 
-					PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
-        				int location = stmts ? ((PGRawStmt*) stmts->tail)->stmt_location + 1 : 0;
 					$$ = NULL;
         				if ($1) {
+						PGList *stmts = pg_yyget_extra(yyscanner)->parsetree;
+        					int location = resumeLocation(stmts);
 						$$ = (PGNode*) makeRawStmt($1, location); 
         					stmts = stmts ? lappend(stmts, $$) : list_make1($$);
 						pg_yyget_extra(yyscanner)->parsetree = stmts; // for successful parse result 

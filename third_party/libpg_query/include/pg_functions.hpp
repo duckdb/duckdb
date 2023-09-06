@@ -44,7 +44,7 @@ void *palloc0fast(size_t n);
 void *repalloc(void *ptr, size_t n);
 
 void saveparsetree(PGList *parsetree);
-int stmtLocation(PGList *statements);
+int resumeLocation(PGList *statements);
 char *NameListToString(PGList *names);
 void *copyObject(const void *from);
 bool equal(const void *a, const void *b);
