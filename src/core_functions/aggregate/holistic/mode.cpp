@@ -119,16 +119,15 @@ struct ModeState {
 };
 
 struct ModeIncluded {
-	inline explicit ModeIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
-	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
+	inline explicit ModeIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
+	    : fmask(fmask_p), dmask(dmask_p) {
 	}
 
 	inline bool operator()(const idx_t &idx) const {
-		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx - bias);
+		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
 	}
 	const ValidityMask &fmask;
 	const ValidityMask &dmask;
-	const idx_t bias;
 };
 
 struct ModeAssignmentStandard {
@@ -210,11 +209,15 @@ struct ModeFunction {
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
+	                   Vector &result, idx_t rid, WindowExclusion exclusion) {
+		if (exclusion != WindowExclusion::NO_OTHER) {
+			throw NotImplementedException("MODE does not support EXCLUDE");
+		}
+
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		ModeIncluded included(fmask, dmask, bias);
+		ModeIncluded included(fmask, dmask);
 
 		if (!state.frequency_map) {
 			state.frequency_map = new typename STATE::Counts;

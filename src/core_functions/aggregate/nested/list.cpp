@@ -149,7 +149,11 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 
 static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-                       Vector &result, idx_t rid, idx_t bias) {
+                       Vector &result, idx_t rid, WindowExclusion exclusion) {
+
+	if (exclusion != WindowExclusion::NO_OTHER) {
+		throw NotImplementedException("LIST does not support EXCLUDE");
+	}
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	LinkedList linked_list;

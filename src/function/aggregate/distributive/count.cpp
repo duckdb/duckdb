@@ -36,8 +36,12 @@ struct CountStarFunction : public BaseCountFunction {
 	template <typename RESULT_TYPE>
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
 	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, idx_t bias) {
+	                   Vector &result, idx_t rid, WindowExclusion exclusion) {
 		D_ASSERT(input_count == 0);
+		if (exclusion != WindowExclusion::NO_OTHER) {
+			throw NotImplementedException("COUNT(*) does not support EXCLUDE");
+		}
+
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
 		const auto begin = frame.start;
 		const auto end = frame.end;

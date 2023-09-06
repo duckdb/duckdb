@@ -10,6 +10,7 @@
 
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
@@ -44,7 +45,7 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
-                                   idx_t bias);
+                                   WindowExclusion exclusion);
 
 typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                       const AggregateFunction &function);
@@ -230,10 +231,10 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
 	                        idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                        Vector &result, idx_t rid, idx_t bias) {
+	                        Vector &result, idx_t rid, WindowExclusion exclusion) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], filter_mask, aggr_input_data,
-		                                                                   state, frame, prev, result, rid, bias);
+		                                                                   state, frame, prev, result, rid, exclusion);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>

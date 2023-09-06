@@ -12,6 +12,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 
 namespace duckdb {
 
@@ -384,13 +385,14 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector &input, const ValidityMask &ifilter, AggregateInputData &aggr_input_data,
-	                        data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
-	                        idx_t rid, idx_t bias) {
+	                        data_ptr_t state_p, const FrameBounds &frame, const FrameBounds &prev, Vector &result,
+	                        idx_t rid, WindowExclusion exclusion) {
 
-		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - bias;
+		auto idata = FlatVector::GetData<const INPUT_TYPE>(input);
 		const auto &ivalid = FlatVector::Validity(input);
-		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(
-		    idata, ifilter, ivalid, aggr_input_data, *reinterpret_cast<STATE *>(state), frame, prev, result, rid, bias);
+		auto &state = *reinterpret_cast<STATE *>(state_p);
+		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ifilter, ivalid, aggr_input_data, state, frame, prev,
+		                                                    result, rid, exclusion);
 	}
 
 	template <class STATE_TYPE, class OP>

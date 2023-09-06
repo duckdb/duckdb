@@ -66,12 +66,12 @@ struct QuantileState {
 };
 
 struct QuantileIncluded {
-	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
-	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
+	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p)
+	    : fmask(fmask_p), dmask(dmask_p) {
 	}
 
 	inline bool operator()(const idx_t &idx) const {
-		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx - bias);
+		return fmask.RowIsValid(idx) && dmask.RowIsValid(idx);
 	}
 
 	inline bool AllValid() const {
@@ -80,7 +80,6 @@ struct QuantileIncluded {
 
 	const ValidityMask &fmask;
 	const ValidityMask &dmask;
-	const idx_t bias;
 };
 
 void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
@@ -550,11 +549,15 @@ struct QuantileScalarOperation : public QuantileOperation {
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
+	                   const FrameBounds &prev, Vector &result, idx_t ridx, WindowExclusion exclusion) {
+		if (exclusion != WindowExclusion::NO_OTHER) {
+			throw NotImplementedException("QUANTILE does not support EXCLUDE");
+		}
+
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;
@@ -698,11 +701,14 @@ struct QuantileListOperation : public QuantileOperation {
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
+	                   const FrameBounds &prev, Vector &list, idx_t lidx, WindowExclusion exclusion) {
+		if (exclusion != WindowExclusion::NO_OTHER) {
+			throw NotImplementedException("QUANTILE does not support EXCLUDE");
+		}
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
@@ -1052,11 +1058,15 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t ridx, idx_t bias) {
+	                   Vector &result, idx_t ridx, WindowExclusion exclusion) {
+		if (exclusion != WindowExclusion::NO_OTHER) {
+			throw NotImplementedException("MAD does not support EXCLUDE");
+		}
+
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileIncluded included(fmask, dmask, bias);
+		QuantileIncluded included(fmask, dmask);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state.pos;

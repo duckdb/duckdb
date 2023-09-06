@@ -306,7 +306,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
 		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), frame,
-		                     prev, result, i, 0);
+		                     prev, result, i, exclude_mode);
 	}
 }
 
