@@ -17,10 +17,11 @@ class TestArrowREE(object):
         """
         )
         array = rel.arrow()['ree']
+        expected = rel.fetchall()
 
         encoded_array = pc.run_end_encode(array)
 
         schema = pa.schema([("ree", encoded_array.type)])
         tbl = pa.Table.from_arrays([encoded_array], schema=schema)
         res = duckdb.sql("select * from tbl").fetchall()
-        print(res)
+        assert res == expected

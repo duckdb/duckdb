@@ -406,8 +406,6 @@ static void FlattenRunEnds(Vector &result, ArrowRunEndEncodingState &run_end_enc
 			auto value_index = value_format.sel->get_index(run);
 			auto run_end = static_cast<idx_t>(run_ends_data[run_end_index]);
 
-			Printer::Print(
-			    StringUtil::Format("run_end: %d | logical_index: %d | index: %d", run_end, logical_index, index));
 			D_ASSERT(run_end > (logical_index + index));
 			auto to_scan = run_end - (logical_index + index);
 			// Cap the amount to scan so we don't go over size
