@@ -1,11 +1,14 @@
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 namespace duckdb {
 
-CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileHandle> file_handle_p,
-                                   const CSVReaderOptions &options, idx_t file_idx_p)
-    : file_handle(std::move(file_handle_p)), context(context_p), file_idx(file_idx_p),
+CSVBufferManager::CSVBufferManager(ClientContext &context_p,const CSVReaderOptions &options, vector<string> &file_path)
+    :  context(context_p),
       buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
+	D_ASSERT(!file_path.empty());
+	cached_buffers.resize(file_path.size());
+	file_handle = ReadCSV::OpenCSV(file_path[0], options.compression, context);
 	if (options.skip_rows_set) {
 		// Skip rows if they are set
 		skip_rows = options.dialect_options.skip_rows;

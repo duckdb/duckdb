@@ -20,8 +20,7 @@ class CSVStateMachine;
 //! When parsing, buffer are not cached and just returned.
 class CSVBufferManager {
 public:
-	CSVBufferManager(ClientContext &context, unique_ptr<CSVFileHandle> file_handle, const CSVReaderOptions &options,
-	                 idx_t file_idx = 0);
+	CSVBufferManager(ClientContext &context,const CSVReaderOptions &options, vector<string> &file_path);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
 	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t pos);
@@ -36,13 +35,13 @@ public:
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
-	idx_t file_idx;
 	bool done = false;
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
 	bool ReadNextAndCacheIt();
-	vector<shared_ptr<CSVBuffer>> cached_buffers;
+	vector<string> file_path;
+	vector<vector<shared_ptr<CSVBuffer>>> cached_buffers;
 	shared_ptr<CSVBuffer> last_buffer;
 	idx_t global_csv_pos = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
