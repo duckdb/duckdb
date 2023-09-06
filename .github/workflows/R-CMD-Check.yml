@@ -34,9 +34,10 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
+      # need duckdb and duckdb-r on the same level.
       - name: move code to /duckdb
         shell: bash
-        run: mkdir duckdb && mv * duckdb/
+        run: mkdir .duckdb && mv * .duckdb && mv .duckdb duckdb
 
       - uses: actions/checkout@v3
         with:
