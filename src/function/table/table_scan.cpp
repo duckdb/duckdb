@@ -458,7 +458,6 @@ static void TableScanFormatSerialize(FormatSerializer &serializer, const optiona
 	serializer.WriteProperty(103, "is_index_scan", bind_data.is_index_scan);
 	serializer.WriteProperty(104, "is_create_index", bind_data.is_create_index);
 	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
-	serializer.WriteProperty(106, "result_ids", bind_data.result_ids);
 }
 
 static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
@@ -474,7 +473,6 @@ static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &d
 	deserializer.ReadProperty(103, "is_index_scan", result->is_index_scan);
 	deserializer.ReadProperty(104, "is_create_index", result->is_create_index);
 	deserializer.ReadProperty(105, "result_ids", result->result_ids);
-	deserializer.ReadProperty(106, "result_ids", result->result_ids);
 	return std::move(result);
 }
 

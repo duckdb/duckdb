@@ -191,9 +191,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 		}
 		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
-		AggregateHTAppendState append_state;
-		info.correlated_counts->AddChunk(append_state, info.group_chunk, info.correlated_payload,
-		                                 AggregateType::NON_DISTINCT);
+		info.correlated_counts->AddChunk(info.group_chunk, info.correlated_payload, AggregateType::NON_DISTINCT);
 	}
 
 	// prepare the keys for processing
@@ -851,9 +849,10 @@ bool JoinHashTable::RequiresExternalJoin(ClientConfig &config, vector<unique_ptr
 	}
 
 	if (config.force_external) {
-		// Do ~3 rounds if forcing external join to test all code paths
-		auto data_size_per_round = (data_size + 2) / 3;
-		auto count_per_round = (total_count + 2) / 3;
+		// Do 1 round per partition if forcing external join to test all code paths
+		const auto r = RadixPartitioning::NumberOfPartitions(radix_bits);
+		auto data_size_per_round = (data_size + r - 1) / r;
+		auto count_per_round = (total_count + r - 1) / r;
 		max_ht_size = data_size_per_round + PointerTableSize(count_per_round);
 		external = true;
 	} else {

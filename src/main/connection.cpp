@@ -1,7 +1,7 @@
 #include "duckdb/main/connection.hpp"
 
 #include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -219,11 +219,11 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	return ReadCSV(csv_file, options);
 }
 
-shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, BufferedCSVReaderOptions &options) {
+shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, CSVReaderOptions &options) {
 	options.file_path = csv_file;
 	options.auto_detect = true;
 	return make_shared<ReadCSVRelation>(context, csv_file, options);
