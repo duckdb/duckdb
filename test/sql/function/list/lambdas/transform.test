@@ -277,16 +277,20 @@ insert into test values (1, 2), (1, 3), (1, 4), (2, 2), (2, 3), (2, 4), (3, 2), 
 
 query III
 select list_transform(bb, x->[x,b]), bb, b
-from (select list(b) over wind as bb, first(b) over wind as b
-    from test window wind as
-        (order by a asc rows between 4 preceding and current row)
-    qualify row_number() over wind >4);
+from (
+    select list(b) over wind as bb,
+           first(b) over wind as b
+    from test
+    window wind as (
+        order by a, b asc rows between 4 preceding and current row
+    ) qualify row_number() over wind >4)
+order by all;
 ----
 [[2, 2], [3, 2], [4, 2], [2, 2], [3, 2]]	[2, 3, 4, 2, 3]	2
-[[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3
-[[4, 4], [2, 4], [3, 4], [4, 4], [2, 4]]	[4, 2, 3, 4, 2]	4
 [[2, 2], [3, 2], [4, 2], [2, 2], [3, 2]]	[2, 3, 4, 2, 3]	2
 [[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3
+[[3, 3], [4, 3], [2, 3], [3, 3], [4, 3]]	[3, 4, 2, 3, 4]	3
+[[4, 4], [2, 4], [3, 4], [4, 4], [2, 4]]	[4, 2, 3, 4, 2]	4
 
 query I
 SELECT list_transform([[2, 3], [4]], x -> list_transform([42], y -> y + 1))
