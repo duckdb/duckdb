@@ -34,16 +34,18 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
+      - uses: actions/checkout@v3
+
       - uses: lhotari/action-upterm@v1
 
       # need duckdb and duckdb-r on the same level.
-      - name: move code to /duckdb
+      - name: move code to another /duckdb
         shell: bash
         run: mkdir .duckdb && mv * .duckdb && mv .duckdb duckdb
 
       - uses: actions/checkout@v3
         with:
-          repository:  ${{ env.DUCKDB_R_REPO }}
+          repository: ${{ env.DUCKDB_R_REPO }}
           path: ${{ env.SRC_DIR }}
 
       - uses: r-lib/actions/setup-pandoc@v2
