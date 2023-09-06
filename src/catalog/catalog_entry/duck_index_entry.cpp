@@ -25,9 +25,7 @@ string DuckIndexEntry::GetTableName() const {
 }
 
 void DuckIndexEntry::CommitDrop() {
-	if (!info || !index) {
-		return;
-	}
+	D_ASSERT(info && index);
 	index->CommitDrop();
 }
 
