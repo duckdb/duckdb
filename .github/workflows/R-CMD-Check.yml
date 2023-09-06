@@ -8,9 +8,9 @@ on:
 name: R-CMD-check
 
 env:
-  TARGET_REPO: 'duckdb/duckdb-r'
+  DUCKDB_R_REPO: 'duckdb/duckdb-r'
   TARGET_REF: 'main'
-  SRC_DIR: '../duckdb-r'
+  SRC_DIR: 'duckdb-r'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
@@ -34,9 +34,13 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
+      - name: move code to /duckdb
+        shell: bash
+        run: mkdir duckdb && mv * duckdb/
+
       - uses: actions/checkout@v3
         with:
-          repository:  ${{ env.TARGET_REPO }}
+          repository:  ${{ env.DUCKDB_R_REPO }}
           path: ${{ env.SRC_DIR }}
 
       - uses: r-lib/actions/setup-pandoc@v2
