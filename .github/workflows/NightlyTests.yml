@@ -154,7 +154,6 @@ jobs:
 
   old-gcc:
     name: GCC 4.8
-    needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     steps:
@@ -180,7 +179,6 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-memory-leaks
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
@@ -210,7 +208,6 @@ jobs:
   linux-tarball:
      name: Python 3 Tarball
      runs-on: ubuntu-20.04
-     needs: linux-memory-leaks
      steps:
      - uses: actions/checkout@v3
        with:
@@ -249,7 +246,6 @@ jobs:
   python-address-sanitizer:
      name: Python Address Sanitizer (Linux)
      runs-on: ubuntu-latest
-     needs: linux-memory-leaks
      container: ubuntu:16.04
      env:
         GEN: ninja
