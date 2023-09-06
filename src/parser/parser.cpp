@@ -138,7 +138,7 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
-		int stmt_loc = 0;
+		size_t stmt_loc = 0;
 		while (stmt_loc < query.size()) {
 			auto unparsed_query = query.substr(stmt_loc, query.size() - stmt_loc);
 			PostgresParser parser;
@@ -164,8 +164,8 @@ void Parser::ParseQuery(const string &query) {
 					auto result = ext.parse_function(ext.parser_info.get(), unparsed_query);
 
 					// the resume location (if set) is required to be just after the last correctly parsed semicolon
-					int resume_location = result.resume_location;
-					if (resume_location < 0 || resume_location >= unparsed_query.size()) {
+					size_t resume_location = result.resume_location;
+					if (resume_location >= unparsed_query.size()) {
 						D_ASSERT(0);
 						resume_location = 0; // defense
 					}
