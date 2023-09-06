@@ -914,8 +914,8 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
 
-LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
-	auto info = make_shared<StructTypeInfo>(std::move(children));
+LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children, bool has_explicit_names) {
+	auto info = make_shared<StructTypeInfo>(std::move(children), has_explicit_names);
 	return LogicalType(LogicalTypeId::STRUCT, std::move(info));
 }
 

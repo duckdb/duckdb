@@ -111,7 +111,7 @@ void StructTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 shared_ptr<ExtraTypeInfo> StructTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::shared_ptr<StructTypeInfo>(new StructTypeInfo());
 	deserializer.ReadProperty(200, "child_types", result->child_types);
-	deserializer.ReadProperty(201, "has_explicit_names", result->has_explicit_names);
+	result->has_explicit_names = deserializer.ReadProperty<bool>(201, "has_explicit_names");
 	return std::move(result);
 }
 

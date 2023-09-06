@@ -55,7 +55,7 @@ struct list_entry_t {
 	uint64_t length;
 };
 
-using union_tag_t = uint8_t; 
+using union_tag_t = uint8_t;
 
 //===--------------------------------------------------------------------===//
 // Internal Types
@@ -368,7 +368,7 @@ public:
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
 	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children, bool has_explicit_names = true);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
 	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT

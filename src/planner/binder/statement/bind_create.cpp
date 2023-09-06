@@ -39,6 +39,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 namespace duckdb {
 
@@ -202,7 +203,12 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
-		type = LogicalType::STRUCT(child_types);
+
+		auto &return_aux = *type.GetAuxInfoShrPtr();
+		D_ASSERT(return_aux.type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
+		auto &struct_info = return_aux.Cast<StructTypeInfo>();
+
+		type = LogicalType::STRUCT(child_types, struct_info.has_explicit_names);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);

@@ -58,11 +58,11 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	}
 
 	// this is more for completeness reasons
-	bound_function.return_type = LogicalType::STRUCT(struct_children);
+	bound_function.return_type = LogicalType::STRUCT(struct_children, has_explicit_names);
 
-	auto return_aux = bound_function.return_type.AuxInfo();
-	D_ASSERT(return_aux->type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
-	StructTypeInfo &struct_info = const_cast<StructTypeInfo &>(return_aux->Cast<StructTypeInfo>());
+	auto &return_aux = *bound_function.return_type.GetAuxInfoShrPtr();
+	D_ASSERT(return_aux.type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
+	StructTypeInfo &struct_info = return_aux.Cast<StructTypeInfo>();
 	struct_info.SetHasExplicitNames(has_explicit_names);
 
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
