@@ -63,8 +63,7 @@ jobs:
           git config --global user.email "duck@duck.com"
           git config --global user.name "mr. duck"
 
-      - uses: lhotari/action-upterm@v1
-
+      # error is from git_dev_version() but is not
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
