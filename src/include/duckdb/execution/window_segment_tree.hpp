@@ -72,8 +72,9 @@ protected:
 	//! The state used by the aggregator to build.
 	unique_ptr<WindowAggregatorState> gstate;
 
+public:
 	//! The window exclusion clause
-	WindowExclusion exclude_mode;
+	const WindowExclusion exclude_mode;
 };
 
 class WindowConstantAggregator : public WindowAggregator {
@@ -124,8 +125,6 @@ public:
 class WindowSegmentTree : public WindowAggregator {
 
 public:
-	enum FramePart : uint8_t { FULL = 0, LEFT = 1, RIGHT = 2 };
-
 	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, WindowAggregationMode mode_p,
 	                  WindowExclusion exclude_mode_p, idx_t count);
 	~WindowSegmentTree() override;
@@ -135,8 +134,6 @@ public:
 	unique_ptr<WindowAggregatorState> GetLocalState() const override;
 	void Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result, idx_t count,
 	              idx_t row_idx) const override;
-	void EvaluateInternal(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends, Vector &result,
-	                      idx_t count, idx_t row_idx, FramePart frame_part) const;
 
 public:
 	void ConstructTree();
