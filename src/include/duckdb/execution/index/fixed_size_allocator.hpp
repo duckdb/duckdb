@@ -102,7 +102,7 @@ private:
 	idx_t total_segment_count;
 
 	//! Buffers containing the segments
-	unordered_map<idx_t, unique_ptr<FixedSizeBuffer>> buffers;
+	unique_ptr<unordered_map<idx_t, unique_ptr<FixedSizeBuffer>>> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
@@ -112,8 +112,8 @@ private:
 	//! Returns the data_ptr_t to a segment, and sets the dirty flag of the buffer containing that segment
 	inline data_ptr_t Get(const IndexPointer ptr, const bool dirty = true) {
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
-		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
+		D_ASSERT(buffers->find(ptr.GetBufferId()) != buffers.end());
+		auto &buffer = buffers->find(ptr.GetBufferId())->second;
 		auto buffer_ptr = buffer->Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 	}
