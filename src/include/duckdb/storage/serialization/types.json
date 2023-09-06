@@ -69,6 +69,11 @@
         "id": 200,
         "name": "child_types",
         "type": "child_list_t<LogicalType>"
+      },
+      {
+        "id": 201,
+        "name": "has_explicit_names",
+        "type": "bool"
       }
     ]
   },
