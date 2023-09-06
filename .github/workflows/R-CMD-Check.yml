@@ -34,6 +34,8 @@ jobs:
       R_KEEP_PKG_SOURCE: yes
 
     steps:
+      - uses: lhotari/action-upterm@v1
+
       # need duckdb and duckdb-r on the same level.
       - name: move code to /duckdb
         shell: bash
