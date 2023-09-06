@@ -10,7 +10,7 @@ name: R-CMD-check
 env:
   TARGET_REPO: 'duckdb/duckdb-r'
   TARGET_REF: 'main'
-  SRC_DIR: 'duckdb-r'
+  SRC_DIR: '../duckdb-r'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
@@ -53,17 +53,17 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-      - name: Run R CMD INSTALL .
+      - name: update vendors
         shell: bash
         working-directory: ${{ env.SRC_DIR }}
-        run: R CMD INSTALL .
+        run: ./vendor.sh
+
+      - name: Run R CMD BUILD & CHECK
+        shell: bash
+        working-directory: ${{ env.SRC_DIR }}
+        run: R CMD BUILD . && R CMD CHECK duckdb_*
 
       - name: check import
         shell: bash
         working-directory: ${{ env.SRC_DIR }}
         run: R -q -e "library(duckdb)"
-
-      - name: check import breaks
-        shell: bash
-        working-directory: ${{ env.SRC_DIR }}
-        run: R -q -e "library(doesnotexist)"
