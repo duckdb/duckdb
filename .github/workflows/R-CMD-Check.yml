@@ -39,8 +39,6 @@ jobs:
         with:
           path: ${{ env.DUCKDB_SRC }}
 
-      - uses: lhotari/action-upterm@v1
-
       - uses: actions/checkout@v3
         with:
           repository: ${{ env.DUCKDB_R_REPO }}
@@ -60,7 +58,7 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-      - name: update vendors
+      - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
         run: ./vendor.sh
