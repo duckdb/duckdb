@@ -150,7 +150,7 @@ public:
 	//! Create a double Value from a specified value
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
-	DUCKDB_API static Value STRUCT(child_list_t<Value> values, bool has_explicit_names);
+	DUCKDB_API static Value STRUCT(child_list_t<Value> values, bool has_explicit_names = true);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
@@ -221,7 +221,7 @@ public:
 	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
 	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
 
-	DUCKDB_API void Reinterpret(LogicalType new_type);
+	DUCKDB_API void Reinterpret(LogicalType nfew_type);
 
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
