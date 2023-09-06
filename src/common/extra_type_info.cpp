@@ -185,8 +185,8 @@ bool ListTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
-StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
-    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
+StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p, bool has_explicit_names_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)), has_explicit_names(has_explicit_names_p) {
 }
 
 void StructTypeInfo::Serialize(FieldWriter &writer) const {
@@ -208,7 +208,9 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
 		auto type = LogicalType::Deserialize(source);
 		child_list.emplace_back(std::move(name), std::move(type));
 	}
-	return make_shared<StructTypeInfo>(std::move(child_list));
+
+	auto has_explicit_names = reader.ReadRequired<bool>();
+	return make_shared<StructTypeInfo>(std::move(child_list), has_explicit_names);
 }
 
 bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {

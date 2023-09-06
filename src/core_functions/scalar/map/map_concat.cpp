@@ -30,7 +30,7 @@ vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
 		child_list_t<Value> children;
 		children.emplace_back(make_pair("key", std::move(keys[i])));
 		children.emplace_back(make_pair("value", std::move(values[i])));
-		entries.push_back(Value::STRUCT(std::move(children)));
+		entries.push_back(Value::STRUCT(std::move(children), true));
 	}
 	return entries;
 }

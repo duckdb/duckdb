@@ -150,7 +150,7 @@ public:
 	//! Create a double Value from a specified value
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
-	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
+	DUCKDB_API static Value STRUCT(child_list_t<Value> values, bool has_explicit_names);
 	//! Create a list value with the given entries, list type is inferred from children
 	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);

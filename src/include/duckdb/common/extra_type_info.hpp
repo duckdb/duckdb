@@ -122,7 +122,7 @@ private:
 };
 
 struct StructTypeInfo : public ExtraTypeInfo {
-	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p);
+	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p, bool has_explicit_names_p = true);
 
 	child_list_t<LogicalType> child_types;
 	bool has_explicit_names;

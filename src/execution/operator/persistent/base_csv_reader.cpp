@@ -648,7 +648,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
 							recovery_key.emplace_back(names[key_idx], component);
 						}
-						appender.Append(Value::STRUCT(recovery_key));
+						appender.Append(Value::STRUCT(recovery_key, true));
 					}
 
 					appender.Append(string_t(row_error_msg));

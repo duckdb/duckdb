@@ -133,7 +133,7 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 			Value bucket_value = OP::template HistogramFinalize<T>(entry.first);
 			auto count_value = Value::CreateValue(entry.second);
 			auto struct_value =
-			    Value::STRUCT({std::make_pair("key", bucket_value), std::make_pair("value", count_value)});
+			    Value::STRUCT({std::make_pair("key", bucket_value), std::make_pair("value", count_value)}, true);
 			ListVector::PushBack(result, struct_value);
 		}
 
