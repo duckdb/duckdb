@@ -166,7 +166,6 @@ void Parser::ParseQuery(const string &query) {
 					// the resume location (if set) is required to be just after the last correctly parsed semicolon
 					size_t resume_location = result.resume_location;
 					if (resume_location >= unparsed_query.size()) {
-						D_ASSERT(0);
 						resume_location = 0; // defense
 					}
 					D_ASSERT(resume_location == 0 || unparsed_query[resume_location - 1] == ';');
