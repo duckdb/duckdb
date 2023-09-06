@@ -353,7 +353,7 @@ jobs:
 
      - name: Install Packages
        shell: bash
-       run: python3 -m pip install pyotp
+       run: python3 -m pip install pyotp requests
 
      - name: Cleanup Releases
        shell: bash
