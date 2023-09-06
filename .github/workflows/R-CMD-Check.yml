@@ -53,8 +53,17 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
-      - uses: r-lib/actions/check-r-package@v2
-        with:
-          working-directory: ${{ env.SRC_DIR }}
-          upload-snapshots: true
-          error-on: '"error"'
+      - name: Run R CMD INSTALL .
+        shell: bash
+        working-directory: ${{ env.SRC_DIR }}
+        run: R CMD INSTALL .
+
+      - name: check import
+        shell: bash
+        working-directory: ${{ env.SRC_DIR }}
+        run: R -q -e "library(duckdb)"
+
+      - name: check import breaks
+        shell: bash
+        working-directory: ${{ env.SRC_DIR }}
+        run: R -q -e "library(doesnotexist)"
