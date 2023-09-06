@@ -645,7 +645,7 @@ Value Value::TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, i
 	return val;
 }
 
-Value Value::STRUCT(child_list_t<Value> values, bool has_explicit_names) {
+Value Value::STRUCT(child_list_t<Value> values, bool has_explicit_names = true) {
 	Value result;
 	child_list_t<LogicalType> child_types;
 	vector<Value> struct_values;
