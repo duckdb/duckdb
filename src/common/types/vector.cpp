@@ -964,7 +964,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto &entries = StructVector::GetEntries(*this);
 
 			// Serialize entries as a list
-			serializer.WriteList(103, "children", count, [&](FormatSerializer::List &list, idx_t i) {
+			serializer.WriteList(103, "children", entries.size(), [&](FormatSerializer::List &list, idx_t i) {
 				list.WriteObject([&](FormatSerializer &object) { entries[i]->FormatSerialize(object, count); });
 			});
 			break;
