@@ -939,6 +939,9 @@ void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<
 unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &) {
 	unique_ptr<JSONScanData> result;
 	deserializer.ReadProperty(100, "scan_data", result);
+	result->InitializeReaders(deserializer.Get<ClientContext &>());
+	result->InitializeFormats();
+	result->transform_options.date_format_map = &result->date_format_map;
 	return std::move(result);
 }
 
