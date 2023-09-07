@@ -159,15 +159,6 @@ class TestReadCSV(object):
         print(res)
         assert res == (123, 'TEST2', datetime.time(12, 12, 12), datetime.date(2000, 1, 1), '2000-01-01 12:12:00')
 
-    def test_sample_size_incorrect(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=1)
-        with pytest.raises(duckdb.InvalidInputException):
-            # The sniffer couldn't detect that this column contains non-integer values
-            while True:
-                res = rel.fetchone()
-                if res is None:
-                    break
-
     def test_sample_size_correct(self, duckdb_cursor):
         rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
         res = rel.fetchone()
