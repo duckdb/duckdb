@@ -17,7 +17,7 @@ MemoryStream::~MemoryStream() {
 }
 
 void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
-	if (position + write_size > capacity) {
+	while (position + write_size > capacity) {
 		if (owns_data) {
 			capacity *= 2;
 			data = static_cast<data_ptr_t>(realloc(data, capacity));
