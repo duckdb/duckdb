@@ -20,13 +20,16 @@ def get_class_name(path: str) -> str:
     parts = [x.title() for x in parts]
     return ''.join(parts) + 'CacheItem'
 
+
 def get_filename(name: str) -> str:
     return name.replace('_', '').lower() + '_module.hpp'
+
 
 def get_variable_name(name: str) -> str:
     if name in ['short', 'ushort']:
         return name + '_'
     return name
+
 
 def collect_items_of_module(module: dict, collection: Dict):
     global json_data
@@ -138,17 +141,91 @@ namespace duckdb {{
         return string
 
 
-files = []
+files: List[ModuleFile] = []
 for name, value in json_data.items():
     if value['full_path'] != value['name']:
         continue
     files.append(ModuleFile(value))
 
 for file in files:
-    print(file.to_string())
+    content = file.to_string()
+    path = f'tools/pythonpkg/src/include/duckdb_python/import_cache/modules/{file.file_name}'
+    import_cache_path = os.path.join(script_dir, '..', path)
+    with open(import_cache_path, "w") as f:
+        f.write(content)
+
+
+def get_root_modules(files: List[ModuleFile]):
+    modules = []
+    for file in files:
+        name = file.module['name']
+        class_name = get_class_name(name)
+        modules.append(f'\t{class_name} {name};')
+    return '\n'.join(modules)
+
 
 # Generate the python_import_cache.hpp file
 # adding all the root modules with their 'name'
+import_cache_file = f"""
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb_python/import_cache/python_import_cache.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb_python/import_cache/python_import_cache_modules.hpp"
+
+namespace duckdb {{
+
+struct PythonImportCache {{
+public:
+    explicit PythonImportCache() {{
+    }}
+    ~PythonImportCache();
+
+public:
+{get_root_modules(files)}
+
+public:
+    py::handle AddCache(py::object item);
+
+private:
+    vector<py::object> owned_objects;
+}};
+
+}} // namespace duckdb
+
+"""
+
+import_cache_path = os.path.join(
+    script_dir, '..', 'tools/pythonpkg/src/include/duckdb_python/import_cache/python_import_cache.hpp'
+)
+with open(import_cache_path, "w") as f:
+    f.write(import_cache_file)
+
+
+def get_module_file_path_includes(files: List[ModuleFile]):
+    includes = []
+    for file in files:
+        includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}')
+    return '\n'.join(includes)
+
+
+module_includes = get_module_file_path_includes(files)
+print(module_includes)
+
+modules_header = os.path.join(
+    script_dir, '..', 'tools/pythonpkg/src/include/duckdb_python/import_cache/python_import_cache_modules.hpp'
+)
+with open(modules_header, "w") as f:
+    f.write(module_includes)
 
 # Generate the python_import_cache_modules.hpp file
 # listing all the generated header files
