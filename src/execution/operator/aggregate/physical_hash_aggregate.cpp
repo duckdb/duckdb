@@ -788,7 +788,7 @@ public:
 			auto &grouping_gstate = ht_state.grouping_states[sidx];
 			count += grouping.table_data.Count(*grouping_gstate.table_state);
 		}
-		return MaxValue<idx_t>(1, count / STANDARD_VECTOR_SIZE);
+		return MaxValue<idx_t>(1, count / idx_t(10 * STANDARD_VECTOR_SIZE));
 	}
 };
 
