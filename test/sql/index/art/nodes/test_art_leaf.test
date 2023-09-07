@@ -262,3 +262,14 @@ INSERT INTO merge_leaf_tbl SELECT range + 10000 FROM range(2048);
 
 statement ok
 CREATE INDEX idx_merge_leaf_tbl ON merge_leaf_tbl(id);
+
+# code coverage of ART consisting of a single leaf
+
+statement ok
+CREATE TABLE tbl (i TINYINT);
+
+statement ok
+CREATE INDEX idx ON tbl(i);
+
+statement ok
+INSERT INTO tbl VALUES (1), (1), (1);

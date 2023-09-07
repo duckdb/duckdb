@@ -12,7 +12,7 @@ Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_mana
              IndexConstraintType constraint_type_p)
 
     : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db), buffer_manager(BufferManager::GetBufferManager(db)) {
+      db(db) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
@@ -37,6 +37,12 @@ PreservedError Index::Append(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	return Append(state, entries, row_identifiers);
+}
+
+void Index::CommitDrop() {
+	IndexLock index_lock;
+	InitializeLock(index_lock);
+	CommitDrop(index_lock);
 }
 
 void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
