@@ -55,6 +55,7 @@ bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())
+#define REQUIRE_SUCCESS(result) REQUIRE(result == DuckDBSuccess)
 
 #define COMPARE_CSV(result, csv, header)                                                                               \
 	{                                                                                                                  \
