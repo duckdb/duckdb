@@ -313,6 +313,22 @@ TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	REQUIRE(!chunk);
 }
 
+TEST_CASE("Test duckdb_result_return_type", "[capi]") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	result = tester.Query("CREATE TABLE t (id INT)");
+	REQUIRE(duckdb_result_return_type(result->InternalResult()) == DUCKDB_RESULT_TYPE_NOTHING);
+
+	result = tester.Query("INSERT INTO t VALUES (42)");
+	REQUIRE(duckdb_result_return_type(result->InternalResult()) == DUCKDB_RESULT_TYPE_CHANGED_ROWS);
+
+	result = tester.Query("FROM t");
+	REQUIRE(duckdb_result_return_type(result->InternalResult()) == DUCKDB_RESULT_TYPE_QUERY_RESULT);
+}
+
 TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_reserve(nullptr, 100) == duckdb_state::DuckDBError);
 	REQUIRE(duckdb_list_vector_set_size(nullptr, 200) == duckdb_state::DuckDBError);

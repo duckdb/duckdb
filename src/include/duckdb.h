@@ -312,6 +312,13 @@ typedef enum {
 	DUCKDB_PENDING_NO_TASKS_AVAILABLE = 3
 } duckdb_pending_state;
 
+typedef enum {
+	DUCKDB_RESULT_TYPE_CHANGED_ROWS,
+	DUCKDB_RESULT_TYPE_NOTHING,
+	DUCKDB_RESULT_TYPE_QUERY_RESULT,
+	DUCKDB_RESULT_TYPE_INVALID,
+} duckdb_result_type;
+
 //===--------------------------------------------------------------------===//
 // Open/Connect
 //===--------------------------------------------------------------------===//
@@ -626,6 +633,14 @@ Returns the number of data chunks present in the result.
 * returns: Number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
+
+/*!
+Returns the return_type of the given result, or DUCKDB_RETURN_TYPE_INVALID on error
+
+* result: The result object
+* returns: The return_type
+ */
+DUCKDB_API duckdb_result_type duckdb_result_return_type(duckdb_result result);
 
 // Safe fetch functions
 // These functions will perform conversions if necessary.
