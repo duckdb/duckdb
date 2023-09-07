@@ -77,10 +77,11 @@ SELECT CAST(ROW(1, 2) AS ROW(a INTEGER, b INTEGER))
 ----
 {'a': 1, 'b': 2}
 
-statement error
+query I
 select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
 ----
-Mismatch Type Error: Type STRUCT(v1 INTEGER, v2 VARCHAR) does not match with STRUCT(a INTEGER, b VARCHAR). Cannot cast STRUCTs with different names
+{'a': 1, 'b': asdf}
+{'a': 4, 'b': fdsa}
 
 statement error
 select struct_extract({'a': a}, a) from range(10) tbl(a);
