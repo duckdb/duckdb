@@ -412,6 +412,13 @@ Connection.prototype.register_buffer;
  */
 Connection.prototype.unregister_buffer;
 
+/**
+ * Closes connection
+ * @method
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.close;
 
 /**
  * Closes database instance

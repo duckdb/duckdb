@@ -544,6 +544,7 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 
 	return Value();
 }
+
 Napi::Value Connection::Close(const Napi::CallbackInfo &info) {
 	Napi::Function callback;
 	if (info.Length() > 0 && info[0].IsFunction()) {
@@ -552,7 +553,7 @@ Napi::Value Connection::Close(const Napi::CallbackInfo &info) {
 
 	database_ref->Schedule(info.Env(), duckdb::make_uniq<CloseConnectionTask>(*this, callback));
 
-	return info.This();
+	return info.Env().Undefined();
 }
 
 } // namespace node_duckdb
