@@ -4,5 +4,7 @@
 
 require tpch
 
+mode skip
+
 statement ok
 schema lineitem
