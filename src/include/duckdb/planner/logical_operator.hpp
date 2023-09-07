@@ -15,16 +15,11 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
 
 #include <algorithm>
 #include <functional>
 
 namespace duckdb {
-
-//! The current version of the plan serialization format. Exposed via by @Serializer & @Deserializer
-//! to be used by various Operator to know what format to read and write.
-extern const uint64_t PLAN_SERIALIZATION_VERSION;
 
 //! LogicalOperator is the base class of the logical operators present in the
 //! logical query tree

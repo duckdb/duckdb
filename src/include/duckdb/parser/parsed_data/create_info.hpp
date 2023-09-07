@@ -10,7 +10,6 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
 
 namespace duckdb {
 struct AlterInfo;

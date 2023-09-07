@@ -5,6 +5,8 @@
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 using namespace duckdb;
 
@@ -98,41 +100,47 @@ public:
 			throw IOException("Failed to connect socket %s", string(strerror(errno)));
 		}
 
-		throw InternalException("FIXME loadable extension serialization");
-		//		BufferedSerializer serializer;
-		//		plan->Serialize(serializer);
-		//		auto data = serializer.GetData();
-		//
-		//		idx_t len = data.size;
-		//		WriteChecked(sockfd, &len, sizeof(idx_t));
-		//		WriteChecked(sockfd, data.data.get(), len);
-		//
-		//		auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
-		//		idx_t n_chunks;
-		//		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
-		//		for (idx_t i = 0; i < n_chunks; i++) {
-		//			idx_t chunk_len;
-		//			ReadChecked(sockfd, &chunk_len, sizeof(idx_t));
-		//			auto buffer = malloc(chunk_len);
-		//			D_ASSERT(buffer);
-		//			ReadChecked(sockfd, buffer, chunk_len);
-		//			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
-		//			DataChunk chunk;
-		//
-		//			chunk.Deserialize(deserializer);
-		//			chunk_collection->Initialize(chunk.GetTypes());
-		//			chunk_collection->Append(chunk);
-		//			free(buffer);
-		//		}
-		//
-		//		auto types = chunk_collection->Types();
-		//		plan = make_uniq<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
-		//
-		//		len = 0;
-		//		(void)len;
-		//		WriteChecked(sockfd, &len, sizeof(idx_t));
-		//		// close the socket
-		//		close(sockfd);
+			BufferedSerializer target;
+			BinarySerializer serializer(target);
+			serializer.Begin();
+			plan->FormatSerialize(serializer);
+			serializer.End();
+			auto data = target.GetData();
+
+			idx_t len = data.size;
+			WriteChecked(sockfd, &len, sizeof(idx_t));
+			WriteChecked(sockfd, data.data.get(), len);
+
+			auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
+			idx_t n_chunks;
+			ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
+			for (idx_t i = 0; i < n_chunks; i++) {
+				idx_t chunk_len;
+				ReadChecked(sockfd, &chunk_len, sizeof(idx_t));
+				auto buffer = malloc(chunk_len);
+				D_ASSERT(buffer);
+				ReadChecked(sockfd, buffer, chunk_len);
+				BufferedDeserializer source(data_ptr_cast(buffer), chunk_len);
+				DataChunk chunk;
+
+				BinaryDeserializer deserializer(source);
+
+				deserializer.Begin();
+				chunk.FormatDeserialize(deserializer);
+				deserializer.End();
+				chunk_collection->Initialize(chunk.GetTypes());
+				chunk_collection->Append(chunk);
+				free(buffer);
+			}
+
+			auto types = chunk_collection->Types();
+			plan = make_uniq<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
+
+			len = 0;
+			(void)len;
+			WriteChecked(sockfd, &len, sizeof(idx_t));
+			// close the socket
+			close(sockfd);
 	}
 };
 

@@ -98,8 +98,6 @@ void test_deserialization(const string &file_location) {
 		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)),
  false); 		REQUIRE_NO_FAIL(*expected_results);
 
-		PlanDeserializationState state(*con.context);
-
 		BinaryDeserializer deserializer(file_source);
 		deserializer.Set<ClientContext &>(*con.context);
 		deserializer.Begin();

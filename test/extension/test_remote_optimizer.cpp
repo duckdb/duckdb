@@ -3,6 +3,8 @@
 #include "duckdb/main/appender.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 // whatever
 #include <signal.h>
@@ -84,27 +86,35 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			throw InternalException("FIXME loadable extension serialization");
-			//			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
-			//			con2.BeginTransaction();
-			//			PlanDeserializationState state(*con2.context);
-			//			auto plan = LogicalOperator::Deserialize(deserializer, state);
-			//			plan->ResolveOperatorTypes();
-			//			con2.Commit();
-			//
-			//			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
-			//			auto result = con2.Query(std::move(statement));
-			//			auto &collection = result->Collection();
-			//			idx_t num_chunks = collection.ChunkCount();
-			//			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
-			//			for (auto &chunk : collection.Chunks()) {
-			//				BufferedSerializer serializer;
-			//				chunk.Serialize(serializer);
-			//				auto data = serializer.GetData();
-			//				idx_t len = data.size;
-			//				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-			//				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
-			//			}
+			BufferedDeserializer source(data_ptr_cast(buffer), bytes);
+			con2.BeginTransaction();
+
+			BinaryDeserializer deserializer(source);
+			deserializer.Set<ClientContext &>(*con2.context);
+			deserializer.Begin();
+			auto plan = LogicalOperator::FormatDeserialize(deserializer);
+			deserializer.End();
+
+			plan->ResolveOperatorTypes();
+			con2.Commit();
+
+			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
+			auto result = con2.Query(std::move(statement));
+			auto &collection = result->Collection();
+			idx_t num_chunks = collection.ChunkCount();
+			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
+			for (auto &chunk : collection.Chunks()) {
+				BufferedSerializer target;
+
+				BinarySerializer serializer(target);
+				serializer.Begin();
+				chunk.FormatSerialize(serializer);
+				serializer.End();
+				auto data = target.GetData();
+				idx_t len = data.size;
+				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
+				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
+			}
 		}
 		exit(0);
 	} else if (pid > 0) { // parent process

@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
 
 namespace duckdb {
 class BaseStatistics;
