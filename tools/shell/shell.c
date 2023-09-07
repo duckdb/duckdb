@@ -11633,7 +11633,7 @@ static int shell_callback(
       break;
     }
     case MODE_Semi: {   /* .schema and .fullschema output */
-      printSchemaLine(p->out, azArg[0], ";\n");
+      printSchemaLine(p->out, azArg[0], "\n");
       break;
     }
     case MODE_Pretty: {  /* .schema and .fullschema with --indent */
@@ -13587,7 +13587,6 @@ static const char *(azHelp[]) = {
   ".cd DIRECTORY            Change the working directory to DIRECTORY",
   ".changes on|off          Show number of rows changed by SQL",
   ".check GLOB              Fail if output since .testcase does not match",
-  ".clone NEWDB             Clone data into NEWDB from the existing database",
   ".columns                 Column-wise rendering of query results",
   ".constant ?COLOR?        Sets the syntax highlighting color used for constant values",
   "   COLOR is one of:",
@@ -17136,15 +17135,6 @@ static int do_meta_command(char *zLine, ShellState *p){
     sqlite3_free(zRes);
   }else
 
-  if( c=='c' && strncmp(azArg[0], "clone", n)==0 ){
-    if( nArg==2 ){
-      tryToClone(p, azArg[1]);
-    }else{
-      raw_printf(stderr, "Usage: .clone FILENAME\n");
-      rc = 1;
-    }
-  }else
-
   if( c=='d' && n>1 && strncmp(azArg[0], "databases", n)==0 ){
     ShellState data;
     char *zErrMsg = 0;
@@ -18680,7 +18670,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       appendText(&sSelect, "type!='meta' AND sql IS NOT NULL"
                            " ORDER BY name", 0);
       if( bDebug ){
-        utf8_printf(p->out, "SQL: %s\n", sSelect.z);
+        utf8_printf(p->out, "SQL: %s;\n", sSelect.z);
       }else{
         rc = sqlite3_exec(p->db, sSelect.z, callback, &data, &zErrMsg);
       }
