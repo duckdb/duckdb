@@ -13,6 +13,35 @@ create table union_tbl(
 	)
 )
 
+# tag can not be VARCHAR
+statement error
+insert into union_tbl VALUES
+	({tag: '0', a: true, b: null, c: null})
+----
+Conversion Error: Type STRUCT(tag VARCHAR, a BOOLEAN, b NULL, c NULL)
+
+
+# field names have to match
+statement error
+insert into union_tbl VALUES
+	({tag: 0::UINT8, a: true, b: null::INTEGER, d: null::TINYINT})
+----
+Conversion Error: Type STRUCT(tag UTINYINT, a BOOLEAN, b INTEGER, d TINYINT)
+
+# field types have to match
+statement error
+insert into union_tbl VALUES
+	({tag: 0::UINT8, a: 1, b: null::INTEGER, c: null::TINYINT})
+----
+Conversion Error: Type STRUCT(tag UTINYINT, a INTEGER, b INTEGER, c TINYINT)
+
+# tag value can not exceed number of members
+statement error
+insert into union_tbl VALUES
+	({tag: 4::UINT8, a: true, b: null::INTEGER, c: null::TINYINT})
+----
+Conversion Error: One or more of the tags do not point to a valid union member
+
 statement ok
 create table struct_tbl(
 	col STRUCT(
