@@ -14,14 +14,13 @@ Napi::FunctionReference Connection::constructor;
 Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t =
-	    DefineClass(env, "Connection",
-	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
-	                 InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
-	                 InstanceMethod("register_buffer", &Connection::RegisterBuffer),
-	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf),
-	                 InstanceMethod("close", &Connection::Close),
-	                 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
+	Napi::Function t = DefineClass(
+	    env, "Connection",
+	    {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
+	     InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
+	     InstanceMethod("register_buffer", &Connection::RegisterBuffer),
+	     InstanceMethod("unregister_udf", &Connection::UnregisterUdf), InstanceMethod("close", &Connection::Close),
+	     InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -551,7 +550,7 @@ Napi::Value Connection::Close(const Napi::CallbackInfo &info) {
 		callback = info[0].As<Napi::Function>();
 	}
 
-    database_ref->Schedule(info.Env(), duckdb::make_uniq<CloseConnectionTask>(*this, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_uniq<CloseConnectionTask>(*this, callback));
 
 	return info.This();
 }
