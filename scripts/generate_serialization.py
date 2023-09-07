@@ -94,7 +94,14 @@ deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PRO
 deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
-move_list = ['string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType', 'ColumnDefinition']
+move_list = [
+    'string',
+    'ParsedExpression*',
+    'CommonTableExpressionMap',
+    'LogicalType',
+    'ColumnDefinition',
+    'BaseStatistics',
+]
 
 reference_list = ['ClientContext', 'bound_parameter_map_t']
 

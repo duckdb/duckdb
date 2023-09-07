@@ -61,12 +61,10 @@ void ColumnStatistics::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 shared_ptr<ColumnStatistics> ColumnStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
-	// TODO: do we read this as an property or into the object itself?
-	// we have this sort of pseudo inheritance going on here which is annoying
-	auto stats = BaseStatistics::FormatDeserialize(deserializer);
+	auto stats = deserializer.ReadProperty<BaseStatistics>(100, "statistics");
 	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
 	    101, "distinct", unique_ptr<DistinctStatistics>());
-	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
+	return make_shared<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
 }
 
 } // namespace duckdb

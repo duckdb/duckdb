@@ -27,7 +27,7 @@ struct ListStats {
 	DUCKDB_API static void SetChildStats(BaseStatistics &stats, unique_ptr<BaseStatistics> new_stats);
 
 	DUCKDB_API static void FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer);
-	DUCKDB_API static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer, LogicalType type);
+	DUCKDB_API static void FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

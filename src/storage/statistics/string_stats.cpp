@@ -105,15 +105,13 @@ void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer 
 	serializer.WriteProperty(204, "max_string_length", string_data.max_string_length);
 }
 
-BaseStatistics StringStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
-	BaseStatistics result(std::move(type));
-	auto &string_data = StringStats::GetDataUnsafe(result);
+void StringStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base) {
+	auto &string_data = StringStats::GetDataUnsafe(base);
 	deserializer.ReadProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	deserializer.ReadProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	deserializer.ReadProperty(202, "has_unicode", string_data.has_unicode);
 	deserializer.ReadProperty(203, "has_max_string_length", string_data.has_max_string_length);
 	deserializer.ReadProperty(204, "max_string_length", string_data.max_string_length);
-	return result;
 }
 
 static int StringValueComparison(const_data_ptr_t data, idx_t len, const_data_ptr_t comparison) {

@@ -453,16 +453,6 @@ static void FormatSerializeNumericStatsValue(const LogicalType &type, NumericVal
 	}
 }
 
-void NumericStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
-	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
-	serializer.WriteObject(200, "max", [&](FormatSerializer &object) {
-		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
-	});
-	serializer.WriteObject(201, "min", [&](FormatSerializer &object) {
-		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
-	});
-}
-
 static void FormatDeserializeNumericStatsValue(const LogicalType &type, NumericValueUnion &result, bool &has_stats,
                                                FormatDeserializer &deserializer) {
 	auto has_value = deserializer.ReadProperty<bool>(100, "has_value");
@@ -513,8 +503,17 @@ static void FormatDeserializeNumericStatsValue(const LogicalType &type, NumericV
 	}
 }
 
-BaseStatistics NumericStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
-	BaseStatistics result(std::move(type));
+void NumericStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
+	serializer.WriteObject(200, "max", [&](FormatSerializer &object) {
+		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
+	});
+	serializer.WriteObject(201, "min", [&](FormatSerializer &object) {
+		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
+	});
+}
+
+void NumericStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
 
 	deserializer.ReadObject(200, "max", [&](FormatDeserializer &object) {
@@ -523,7 +522,6 @@ BaseStatistics NumericStats::FormatDeserialize(FormatDeserializer &deserializer,
 	deserializer.ReadObject(201, "min", [&](FormatDeserializer &object) {
 		FormatDeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
-	return result;
 }
 
 string NumericStats::ToString(const BaseStatistics &stats) {

@@ -2,8 +2,8 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 
@@ -23,18 +23,13 @@ void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &co
 	auto &meta_writer = table_data_writer;
 	const auto &data_pointers = column_checkpoint_state.data_pointers;
 
-	meta_writer.Write<idx_t>(data_pointers.size());
-	// then write the data pointers themselves
-	for (idx_t k = 0; k < data_pointers.size(); k++) {
-		auto &data_pointer = data_pointers[k];
-		meta_writer.Write<idx_t>(data_pointer.row_start);
-		meta_writer.Write<idx_t>(data_pointer.tuple_count);
-		meta_writer.Write<block_id_t>(data_pointer.block_pointer.block_id);
-		meta_writer.Write<uint32_t>(data_pointer.block_pointer.offset);
-		meta_writer.Write<CompressionType>(data_pointer.compression_type);
-		throw InternalException("FIXME: serialize statistics");
-		//		data_pointer.statistics.Serialize(meta_writer);
-	}
+	BinarySerializer serializer(meta_writer);
+	serializer.Begin();
+	serializer.WriteList(100, "data_pointers", data_pointers.size(), [&](FormatSerializer::List &list, idx_t i) {
+		auto &data_pointer = data_pointers[i];
+		list.WriteElement(data_pointer);
+	});
+	serializer.End();
 }
 
 MetadataWriter &SingleFileRowGroupWriter::GetPayloadWriter() {

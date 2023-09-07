@@ -73,17 +73,15 @@ void ListStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &s
 	serializer.WriteProperty(200, "child_stats", child_stats);
 }
 
-BaseStatistics ListStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
+void ListStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base) {
+	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
-	BaseStatistics result(std::move(type));
 
 	// Push the logical type of the child type to the deserialization context
 	deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type));
-	result.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
+	base.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
 	deserializer.Unset<LogicalType>();
-
-	return result;
 }
 
 string ListStats::ToString(const BaseStatistics &stats) {

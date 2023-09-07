@@ -109,14 +109,18 @@ void TableStatistics::FormatSerialize(FormatSerializer &serializer) const {
 
 void TableStatistics::FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns) {
 	auto physical_columns = columns.Physical();
+
 	auto iter = physical_columns.begin();
 	deserializer.ReadList(100, "column_stats", [&](FormatDeserializer::List &list, idx_t i) {
-		auto &col = *iter.operator++();
+		auto &col = *iter;
+		iter.operator++();
+
 		auto type = col.GetType();
 		deserializer.Set<LogicalType &>(type);
-		auto stats = ColumnStatistics::FormatDeserialize(deserializer);
+
+		column_stats.push_back(list.ReadElement<shared_ptr<ColumnStatistics>>());
+
 		deserializer.Unset<LogicalType>();
-		column_stats.push_back(std::move(stats));
 	});
 }
 

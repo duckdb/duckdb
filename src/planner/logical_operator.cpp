@@ -10,6 +10,9 @@
 #include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -182,19 +185,21 @@ vector<idx_t> LogicalOperator::GetTableIndex() const {
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
-	throw InternalException("FIXME: use format serializer");
-	//	BufferedSerializer logical_op_serializer;
-	//	try {
-	//		this->Serialize(logical_op_serializer);
-	//	} catch (NotImplementedException &ex) {
-	//		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children
-	// to " 		                              "be serializable: " + std::string(ex.what()));
-	//	}
-	//	auto data = logical_op_serializer.GetData();
-	//	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-	//	PlanDeserializationState state(context);
-	//	auto op_copy = LogicalOperator::Deserialize(logical_op_deserializer, state);
-	//	return op_copy;
+	MemoryStream stream;
+	BinarySerializer serializer(stream);
+	try {
+		serializer.Begin();
+		this->FormatSerialize(serializer);
+		serializer.End();
+	} catch (NotImplementedException &ex) {
+		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "
+		                              "be serializable: " +
+		                              std::string(ex.what()));
+	}
+	stream.Rewind();
+	bound_parameter_map_t parameters;
+	auto op_copy = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+	return op_copy;
 }
 
 } // namespace duckdb

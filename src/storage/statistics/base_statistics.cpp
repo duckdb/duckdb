@@ -277,8 +277,7 @@ void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(100, "has_null", has_null);
 	serializer.WriteProperty(101, "has_no_null", has_no_null);
 	serializer.WriteProperty(102, "distinct_count", distinct_count);
-	serializer.WriteProperty(103, "stats_type", GetStatsType());
-	serializer.WriteObject(104, "stats", [this](FormatSerializer &serializer) {
+	serializer.WriteObject(103, "type_stats", [&](FormatSerializer &serializer) {
 		switch (GetStatsType()) {
 		case StatisticsType::NUMERIC_STATS:
 			NumericStats::FormatSerialize(*this, serializer);
@@ -293,7 +292,7 @@ void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
 			StructStats::FormatSerialize(*this, serializer);
 			break;
 		default:
-			throw NotImplementedException("Unrecognized StatisticsType for BaseStatistics::FormatSerialize");
+			break;
 		}
 	});
 }
@@ -306,28 +305,32 @@ BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserialize
 	// Get the logical type from the deserializer context.
 	auto type = deserializer.Get<LogicalType &>();
 
-	BaseStatistics stats;
-	switch (GetStatsType(type)) {
-	case StatisticsType::NUMERIC_STATS:
-		stats = NumericStats::FormatDeserialize(deserializer, type);
-		break;
-	case StatisticsType::STRING_STATS:
-		stats = StringStats::FormatDeserialize(deserializer, type);
-		break;
-	case StatisticsType::LIST_STATS:
-		stats = ListStats::FormatDeserialize(deserializer, type);
-		break;
-	case StatisticsType::STRUCT_STATS:
-		stats = StructStats::FormatDeserialize(deserializer, type);
-		break;
-	default:
-		stats = BaseStatistics(std::move(type));
-		break;
-	}
+	auto stats_type = GetStatsType(type);
+
+	BaseStatistics stats(std::move(type));
 
 	stats.has_null = has_null;
 	stats.has_no_null = has_no_null;
 	stats.distinct_count = distinct_count;
+
+	deserializer.ReadObject(103, "type_stats", [&](FormatDeserializer &obj) {
+		switch (stats_type) {
+		case StatisticsType::NUMERIC_STATS:
+			NumericStats::FormatDeserialize(obj, stats);
+			break;
+		case StatisticsType::STRING_STATS:
+			StringStats::FormatDeserialize(obj, stats);
+			break;
+		case StatisticsType::LIST_STATS:
+			ListStats::FormatDeserialize(obj, stats);
+			break;
+		case StatisticsType::STRUCT_STATS:
+			StructStats::FormatDeserialize(obj, stats);
+			break;
+		default:
+			break;
+		}
+	});
 
 	return stats;
 }

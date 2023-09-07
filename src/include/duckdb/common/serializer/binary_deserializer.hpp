@@ -53,6 +53,10 @@ public:
 		D_ASSERT(nesting_level == 0); // make sure we are at the root level
 	}
 
+	ReadStream &GetStream() {
+		return stream;
+	}
+
 private:
 	ReadStream &stream;
 	idx_t nesting_level = 0;

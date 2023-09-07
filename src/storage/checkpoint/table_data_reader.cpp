@@ -18,24 +18,15 @@ void TableDataReader::ReadTableData() {
 	auto &columns = info.Base().columns;
 	D_ASSERT(!columns.empty());
 
-	BinaryDeserializer table_deserializer(reader);
-	table_deserializer.Begin();
+	// We stored the table statistics as a unit in FinalizeTable.
+	BinaryDeserializer stats_deserializer(reader);
+	stats_deserializer.Begin();
+	info.data->table_stats.FormatDeserialize(stats_deserializer, columns);
+	stats_deserializer.End();
 
-	// Deserialize he table statistics
-	table_deserializer.ReadObject(
-	    100, "table_stats", [&](FormatDeserializer &obj) { info.data->table_stats.FormatDeserialize(obj, columns); });
-
-	// Deserialize the row group pointers
-	info.data->row_group_count = table_deserializer.ReadProperty<uint64_t>(101, "row_group_count");
+	// Deserialize the row group pointers (lazily, just set the count and the pointer to them for now)
+	info.data->row_group_count = reader.Read<uint64_t>();
 	info.data->block_pointer = reader.GetMetaBlockPointer();
-
-	// throw InternalException("TODO");
-	//	// deserialize the total table statistics
-	//	info.data->table_stats.Deserialize(reader, columns);
-	//
-	//	// deserialize each of the individual row groups
-	//	info.data->row_group_count = reader.Read<uint64_t>();
-	//	info.data->block_pointer = reader.GetMetaBlockPointer();
 }
 
 } // namespace duckdb

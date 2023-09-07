@@ -57,7 +57,7 @@ struct StringStats {
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
 
 	DUCKDB_API static void FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer);
-	DUCKDB_API static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer, LogicalType type);
+	DUCKDB_API static void FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 
