@@ -105,6 +105,9 @@ describe('Extension loading', function() {
         if (extension_name.startsWith('parquet')) { // Parquet is built-in in the Node client, so skip
             continue;
         }
+        if (extension_name.startsWith('placeholder')) { // Placeholder is expected to fail, so skip
+            continue;
+        }
 
         it(extension_name, async function () {
             await new Promise<void>((resolve, reject) => db.run(`LOAD '${extension_path}';`, function (err: null | Error) {
