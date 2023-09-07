@@ -1,0 +1,438 @@
+{
+    "pyarrow": {
+        "type": "module",
+        "full_path": "pyarrow",
+        "name": "pyarrow",
+        "children": [
+            "dataset",
+            "Table",
+            "RecordBatchReader"
+        ]
+    },
+    "dataset": {
+        "type": "module",
+        "full_path": "pyarrow.dataset",
+        "name": "dataset",
+        "children": [
+            "dataset"
+        ]
+    },
+    "Table": {
+        "type": "attribute",
+        "full_path": "pyarrow.Table",
+        "name": "Table",
+        "children": []
+    },
+    "RecordBatchReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.RecordBatchReader",
+        "name": "RecordBatchReader",
+        "children": []
+    },
+    "Scanner": {
+        "type": "attribute",
+        "full_path": "pyarrow.dataset.Scanner",
+        "name": "Scanner",
+        "children": []
+    },
+    "Dataset": {
+        "type": "attribute",
+        "full_path": "pyarrow.dataset.Dataset",
+        "name": "Dataset",
+        "children": []
+    },
+    "pandas": {
+        "type": "module",
+        "full_path": "pandas",
+        "name": "pandas",
+        "children": [
+            "DataFrame",
+            "_libs",
+            "isnull",
+            "ArrowDtype"
+        ]
+    },
+    "DataFrame": {
+        "type": "attribute",
+        "full_path": "polars.DataFrame",
+        "name": "DataFrame",
+        "children": []
+    },
+    "_libs": {
+        "type": "attribute",
+        "full_path": "pandas._libs",
+        "name": "_libs",
+        "children": [
+            "missing"
+        ]
+    },
+    "isnull": {
+        "type": "attribute",
+        "full_path": "pandas.isnull",
+        "name": "isnull",
+        "children": []
+    },
+    "ArrowDtype": {
+        "type": "attribute",
+        "full_path": "pandas.ArrowDtype",
+        "name": "ArrowDtype",
+        "children": []
+    },
+    "datetime": {
+        "type": "attribute",
+        "full_path": "datetime.datetime",
+        "name": "datetime",
+        "children": [
+            "min",
+            "max"
+        ]
+    },
+    "date": {
+        "type": "attribute",
+        "full_path": "datetime.date",
+        "name": "date",
+        "children": [
+            "max",
+            "min"
+        ]
+    },
+    "time": {
+        "type": "attribute",
+        "full_path": "datetime.time",
+        "name": "time",
+        "children": []
+    },
+    "timedelta": {
+        "type": "attribute",
+        "full_path": "datetime.timedelta",
+        "name": "timedelta",
+        "children": []
+    },
+    "decimal": {
+        "type": "module",
+        "full_path": "decimal",
+        "name": "decimal",
+        "children": [
+            "Decimal"
+        ]
+    },
+    "Decimal": {
+        "type": "attribute",
+        "full_path": "decimal.Decimal",
+        "name": "Decimal",
+        "children": []
+    },
+    "IPython": {
+        "type": "module",
+        "full_path": "IPython",
+        "name": "IPython",
+        "children": [
+            "get_ipython",
+            "display"
+        ]
+    },
+    "get_ipython": {
+        "type": "attribute",
+        "full_path": "IPython.get_ipython",
+        "name": "get_ipython",
+        "children": []
+    },
+    "display": {
+        "type": "attribute",
+        "full_path": "IPython.display",
+        "name": "display",
+        "children": [
+            "display"
+        ]
+    },
+    "ipywidgets": {
+        "type": "module",
+        "full_path": "ipywidgets",
+        "name": "ipywidgets",
+        "children": [
+            "FloatProgress"
+        ]
+    },
+    "FloatProgress": {
+        "type": "attribute",
+        "full_path": "ipywidgets.FloatProgress",
+        "name": "FloatProgress",
+        "children": []
+    },
+    "numpy": {
+        "type": "module",
+        "full_path": "numpy",
+        "name": "numpy",
+        "children": [
+            "ndarray",
+            "datetime64",
+            "generic;",
+            "int64;",
+            "bool_;",
+            "byte;",
+            "ubyte;",
+            "short;",
+            "ushort;",
+            "intc;",
+            "uintc;",
+            "int_;",
+            "uint;",
+            "longlong;",
+            "ulonglong;",
+            "half;",
+            "float16;",
+            "single;",
+            "longdouble;",
+            "csingle;",
+            "cdouble;",
+            "clongdouble;"
+        ]
+    },
+    "ndarray": {
+        "type": "attribute",
+        "full_path": "numpy.ndarray",
+        "name": "ndarray",
+        "children": []
+    },
+    "datetime64": {
+        "type": "attribute",
+        "full_path": "numpy.datetime64",
+        "name": "datetime64",
+        "children": []
+    },
+    "generic;": {
+        "type": "attribute",
+        "full_path": "numpy.generic;",
+        "name": "generic;",
+        "children": []
+    },
+    "int64;": {
+        "type": "attribute",
+        "full_path": "numpy.int64;",
+        "name": "int64;",
+        "children": []
+    },
+    "bool_;": {
+        "type": "attribute",
+        "full_path": "numpy.bool_;",
+        "name": "bool_;",
+        "children": []
+    },
+    "byte;": {
+        "type": "attribute",
+        "full_path": "numpy.byte;",
+        "name": "byte;",
+        "children": []
+    },
+    "ubyte;": {
+        "type": "attribute",
+        "full_path": "numpy.ubyte;",
+        "name": "ubyte;",
+        "children": []
+    },
+    "short;": {
+        "type": "attribute",
+        "full_path": "numpy.short;",
+        "name": "short;",
+        "children": []
+    },
+    "ushort;": {
+        "type": "attribute",
+        "full_path": "numpy.ushort;",
+        "name": "ushort;",
+        "children": []
+    },
+    "intc;": {
+        "type": "attribute",
+        "full_path": "numpy.intc;",
+        "name": "intc;",
+        "children": []
+    },
+    "uintc;": {
+        "type": "attribute",
+        "full_path": "numpy.uintc;",
+        "name": "uintc;",
+        "children": []
+    },
+    "int_;": {
+        "type": "attribute",
+        "full_path": "numpy.int_;",
+        "name": "int_;",
+        "children": []
+    },
+    "uint;": {
+        "type": "attribute",
+        "full_path": "numpy.uint;",
+        "name": "uint;",
+        "children": []
+    },
+    "longlong;": {
+        "type": "attribute",
+        "full_path": "numpy.longlong;",
+        "name": "longlong;",
+        "children": []
+    },
+    "ulonglong;": {
+        "type": "attribute",
+        "full_path": "numpy.ulonglong;",
+        "name": "ulonglong;",
+        "children": []
+    },
+    "half;": {
+        "type": "attribute",
+        "full_path": "numpy.half;",
+        "name": "half;",
+        "children": []
+    },
+    "float16;": {
+        "type": "attribute",
+        "full_path": "numpy.float16;",
+        "name": "float16;",
+        "children": []
+    },
+    "single;": {
+        "type": "attribute",
+        "full_path": "numpy.single;",
+        "name": "single;",
+        "children": []
+    },
+    "longdouble;": {
+        "type": "attribute",
+        "full_path": "numpy.longdouble;",
+        "name": "longdouble;",
+        "children": []
+    },
+    "csingle;": {
+        "type": "attribute",
+        "full_path": "numpy.csingle;",
+        "name": "csingle;",
+        "children": []
+    },
+    "cdouble;": {
+        "type": "attribute",
+        "full_path": "numpy.cdouble;",
+        "name": "cdouble;",
+        "children": []
+    },
+    "clongdouble;": {
+        "type": "attribute",
+        "full_path": "numpy.clongdouble;",
+        "name": "clongdouble;",
+        "children": []
+    },
+    "pathlib": {
+        "type": "module",
+        "full_path": "pathlib",
+        "name": "pathlib",
+        "children": [
+            "Path"
+        ]
+    },
+    "Path": {
+        "type": "attribute",
+        "full_path": "pathlib.Path",
+        "name": "Path",
+        "children": []
+    },
+    "polars": {
+        "type": "module",
+        "full_path": "polars",
+        "name": "polars",
+        "children": [
+            "DataFrame",
+            "LazyFrame"
+        ]
+    },
+    "LazyFrame": {
+        "type": "attribute",
+        "full_path": "polars.LazyFrame",
+        "name": "LazyFrame",
+        "children": []
+    },
+    "pyduckdb": {
+        "type": "module",
+        "full_path": "pyduckdb",
+        "name": "pyduckdb",
+        "children": [
+            "filesystem",
+            "Value"
+        ]
+    },
+    "filesystem": {
+        "type": "module",
+        "full_path": "pyduckdb.filesystem",
+        "name": "filesystem",
+        "children": [
+            "filesystem"
+        ]
+    },
+    "Value": {
+        "type": "attribute",
+        "full_path": "pyduckdb.Value",
+        "name": "Value",
+        "children": []
+    },
+    "pytz": {
+        "type": "module",
+        "full_path": "pytz",
+        "name": "pytz",
+        "children": [
+            "timezone"
+        ]
+    },
+    "timezone": {
+        "type": "attribute",
+        "full_path": "pytz.timezone",
+        "name": "timezone",
+        "children": []
+    },
+    "types": {
+        "type": "module",
+        "full_path": "types",
+        "name": "types",
+        "children": [
+            "UnionType",
+            "GenericAlias"
+        ]
+    },
+    "UnionType": {
+        "type": "attribute",
+        "full_path": "types.UnionType",
+        "name": "UnionType",
+        "children": []
+    },
+    "GenericAlias": {
+        "type": "attribute",
+        "full_path": "types.GenericAlias",
+        "name": "GenericAlias",
+        "children": []
+    },
+    "typing": {
+        "type": "module",
+        "full_path": "typing",
+        "name": "typing",
+        "children": [
+            "_UnionGenericAlias"
+        ]
+    },
+    "_UnionGenericAlias": {
+        "type": "attribute",
+        "full_path": "typing._UnionGenericAlias",
+        "name": "_UnionGenericAlias",
+        "children": []
+    },
+    "uuid": {
+        "type": "module",
+        "full_path": "uuid",
+        "name": "uuid",
+        "children": [
+            "UUID"
+        ]
+    },
+    "UUID": {
+        "type": "attribute",
+        "full_path": "uuid.UUID",
+        "name": "UUID",
+        "children": []
+    }
+}
