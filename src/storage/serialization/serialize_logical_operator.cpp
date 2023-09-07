@@ -475,6 +475,7 @@ void LogicalInsert::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(216, "excluded_table_index", excluded_table_index);
 	serializer.WriteProperty(217, "columns_to_fetch", columns_to_fetch);
 	serializer.WriteProperty(218, "source_columns", source_columns);
+	serializer.WriteProperty(219, "expressions", expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -498,6 +499,7 @@ unique_ptr<LogicalOperator> LogicalInsert::FormatDeserialize(FormatDeserializer 
 	deserializer.ReadProperty(216, "excluded_table_index", result->excluded_table_index);
 	deserializer.ReadProperty(217, "columns_to_fetch", result->columns_to_fetch);
 	deserializer.ReadProperty(218, "source_columns", result->source_columns);
+	deserializer.ReadProperty(219, "expressions", result->expressions);
 	return std::move(result);
 }
 

@@ -554,7 +554,11 @@ for entry in file_list:
     source_path = entry['source']
     target_path = entry['target']
     with open(source_path, 'r') as f:
-        json_data = json.load(f)
+        try:
+            json_data = json.load(f)
+        except Exception as e:
+            print(f"Failed to parse {source_path}: {str(e)}")
+            exit(1)
 
     include_list = [
         'duckdb/common/serializer/serializer.hpp',
