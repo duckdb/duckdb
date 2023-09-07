@@ -69,12 +69,9 @@ jobs:
         working-directory: ${{ env.DUCKDB_R_SRC }}
         run: ./vendor.sh
 
-      - name: Run R CMD BUILD & CHECK
-        shell: bash
-        working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: R CMD build . && R CMD check --no-tests --no-manual duckdb_*
-
-      - name: check import
-        shell: bash
-        working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: R -q -e "library(duckdb)"
+      - uses: r-lib/actions/check-r-package@v2
+        with:
+          # Fails on R 3.6 on Windows, remove when this job is removed?
+          args: 'c("--no-tests", "--no-manual", "--as-cran", "--no-multiarch")'
+          working-directory: ${{ env.DUCKDB_R_SRC }}
+          error-on: ${{ env.RCMDCHECK_ERROR_ON || '"note"' }}
