@@ -5,28 +5,28 @@
 statement ok
 PRAGMA enable_verification
 
-# struct to struct casts with different names
-query I
+# struct to struct casts with different names doesn't work
+statement error
 select struct_extract(struct_pack(b=>42)::struct(a integer), 'a');
 ----
-42
+Mismatch Type Error: Type STRUCT(b INTEGER) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
 # this all also works with the row type
-query I
+statement error
 select struct_extract(struct_pack(b=>42)::row(a integer), 'a');
 ----
-42
+Mismatch Type Error: Type STRUCT(b INTEGER) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
 # struct to struct casts with different names AND different types
-query I
+statement error
 select struct_extract(struct_pack(b=>42::double)::struct(a integer), 'a');
 ----
-42
+Mismatch Type Error: Type STRUCT(b DOUBLE) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
-query I
+statement error
 select struct_extract(struct_pack(b=>'42'::double)::struct(a integer), 'a');
 ----
-42
+Mismatch Type Error: Type STRUCT(b DOUBLE) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
 statement error
 select struct_pack(b=>'42'::double)::struct(a integer, c string)
@@ -41,12 +41,12 @@ Could not convert string 'hello' to INT32
 statement error
 select struct_pack(b=>'hello'::string)::struct(a integer)
 ----
-Could not convert string 'hello' to INT32
+Mismatch Type Error: Type STRUCT(b VARCHAR) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
-query I
+statement error
 select struct_pack(b=>'42'::double, c => 'asdf'::string)::struct(a1 integer, a2 string);
 ----
-{'a1': 42, 'a2': asdf}
+Mismatch Type Error: Type STRUCT(b DOUBLE, c VARCHAR) does not match with STRUCT(a1 INTEGER, a2 VARCHAR). Cannot cast STRUCTs with different names
 
 query I
 select ROW(42, 'asdf');
@@ -57,6 +57,9 @@ statement error
 select ROW();
 ----
 Can't pack nothing into a struct
+
+# '
+# close quote for formatting
 
 query I
 select ROW(NULL);
@@ -74,11 +77,10 @@ SELECT CAST(ROW(1, 2) AS ROW(a INTEGER, b INTEGER))
 ----
 {'a': 1, 'b': 2}
 
-query I
+statement error
 select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
 ----
-{'a': 1, 'b': asdf}
-{'a': 4, 'b': fdsa}
+Mismatch Type Error: Type STRUCT(v1 INTEGER, v2 VARCHAR) does not match with STRUCT(a INTEGER, b VARCHAR). Cannot cast STRUCTs with different names
 
 statement error
 select struct_extract({'a': a}, a) from range(10) tbl(a);

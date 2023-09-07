@@ -11,8 +11,22 @@ BEGIN TRANSACTION
 statement ok
 create table a (s STRUCT("end" VARCHAR));
 
-statement ok
+statement error
 insert into a values ({'a':'hello'});
+----
+Mismatch Type Error: Type STRUCT(a VARCHAR) does not match with STRUCT("end" VARCHAR). Cannot cast STRUCTs with different names
+
+statement ok
+ROLLBACK
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+create table a (s STRUCT("end" VARCHAR));
+
+statement ok
+insert into a values ({"end":'hello'});
 
 query I
 select * from a
