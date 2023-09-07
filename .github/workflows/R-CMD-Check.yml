@@ -13,7 +13,6 @@ env:
   DUCKDB_R_SRC: 'duckdb-r'
   DUCKDB_SRC: 'duckdb'
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  RCMDCHECK_ERROR_ON: 'Error';
 
 jobs:
   R-CMD-check:
