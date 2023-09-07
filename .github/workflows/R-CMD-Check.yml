@@ -72,7 +72,7 @@ jobs:
       - name: Run R CMD BUILD & CHECK
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
-        run: R CMD build . && R CMD check --no-tests duckdb_*
+        run: R CMD build . && R CMD check --no-tests --no-manual duckdb_*
 
       - name: check import
         shell: bash
