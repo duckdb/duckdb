@@ -79,21 +79,26 @@
       },
       {
         "id": 205,
+        "name": "scan_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 206,
         "name": "names",
         "type": "vector<string>"
       },
       {
-        "id": 206,
+        "id": 207,
         "name": "column_ids",
         "type": "vector<column_t>"
       },
       {
-        "id": 207,
+        "id": 208,
         "name": "options",
         "type": "case_insensitive_map_t<Value>"
       },
       {
-        "id": 208,
+        "id": 209,
         "name": "index_type_name",
         "type": "string"
       }
