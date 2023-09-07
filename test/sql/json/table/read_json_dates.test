@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json_dates.test
+# name: test/sql/json/table/read_json_dates.test
 # description: Read json files - date detection
-# group: [json]
+# group: [table]
 
 require json
 

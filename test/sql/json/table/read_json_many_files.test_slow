@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json_many_files.test_slow
+# name: test/sql/json/table/read_json_many_files.test_slow
 # description: Read > 1000 json files (issue #6249)
-# group: [json]
+# group: [table]
 
 require json
 

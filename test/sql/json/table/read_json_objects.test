@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json_objects.test
+# name: test/sql/json/table/read_json_objects.test
 # description: Read ndjson files
-# group: [json]
+# group: [table]
 
 require no_extension_autoloading
 

@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_transform.test
+# name: test/sql/json/scalar/test_json_transform.test
 # description: Test json_transform function
-# group: [json]
+# group: [scalar]
 
 require json
 
