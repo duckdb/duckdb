@@ -9,7 +9,7 @@ require vector_size 2048
 # Test invalid arguments
 statement error
 SELECT * FROM read_csv_auto(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad.csv',
     ignore_errors=false,
     rejects_table='csv_rejects_table'
 )
@@ -18,7 +18,7 @@ only supported when IGNORE_ERRORS is set to true
 
 statement error
 SELECT * FROM read_csv_auto(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad.csv',
     ignore_errors=true,
     rejects_table='')
 ----
@@ -26,7 +26,7 @@ REJECTS_TABLE option cannot be empty
 
 statement error
 SELECT * FROM read_csv_auto(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad.csv',
     ignore_errors=true,
     rejects_table='csv_rejects_table',
     union_by_name=true)
@@ -35,7 +35,7 @@ UNION_BY_NAME is set to true
 
 statement error
 SELECT * FROM read_csv_auto(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad.csv',
     ignore_errors=true,
     rejects_limit=10)
 ----
@@ -43,7 +43,7 @@ REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name
 
 statement error
 SELECT * FROM read_csv_auto(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad.csv',
     ignore_errors=true,
     rejects_table='csv_rejects_table',
     rejects_limit=-1)
@@ -57,10 +57,10 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*) FROM read_csv_au
     'test/sql/copy/csv/data/error/mismatch/big_bad*.csv',
     sample_size=3000,
     rejects_table='csv_rejects_table',
-    ignore_errors=true, 
+    ignore_errors=true,
 	parallel=${PARALLEL});
 ----
-VARCHAR	VARCHAR	8368
+VARCHAR	VARCHAR	11048
 
 statement ok
 DROP TABLE csv_rejects_table;
@@ -74,7 +74,7 @@ SELECT typeof(first(column0)), typeof(first(column1)), COUNT(*), SUM(column0), M
     ignore_errors=true,
 	parallel=${PARALLEL});
 ----
-BIGINT	VARCHAR	8364	8364	2
+BIGINT	VARCHAR	11044	11044	2
 
 query IIIIII rowsort
 SELECT regexp_replace("file", '\\', '/', 'g') , "line", "column", "column_name", "parsed_value", "error"
@@ -82,8 +82,8 @@ FROM csv_rejects_table;
 ----
 test/sql/copy/csv/data/error/mismatch/big_bad.csv	2176	0	"column0"	B	Could not convert string 'B' to 'BIGINT'
 test/sql/copy/csv/data/error/mismatch/big_bad.csv	4176	0	"column0"	C	Could not convert string 'C' to 'BIGINT'
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	1000	0	"column0"	B	Could not convert string 'B' to 'BIGINT'
-test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3000	0	"column0"	C	Could not convert string 'C' to 'BIGINT'
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	3680	0	"column0"	B	Could not convert string 'B' to 'BIGINT'
+test/sql/copy/csv/data/error/mismatch/big_bad2.csv	5680	0	"column0"	C	Could not convert string 'C' to 'BIGINT'
 
 statement ok
 DROP TABLE csv_rejects_table;
