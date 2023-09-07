@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_merge_patch.test
+# name: test/sql/json/scalar/test_json_merge_patch.test
 # description: Test JSON merge patch
-# group: [json]
+# group: [scalar]
 
 require json
 

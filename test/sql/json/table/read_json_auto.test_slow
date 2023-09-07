@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json_auto.test_slow
+# name: test/sql/json/table/read_json_auto.test_slow
 # description: Read json files - schema detection
-# group: [json]
+# group: [table]
 
 require json
 

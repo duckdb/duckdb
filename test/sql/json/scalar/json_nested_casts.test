@@ -1,6 +1,6 @@
-# name: test/sql/json/json_nested_casts.test
+# name: test/sql/json/scalar/json_nested_casts.test
 # description: Casts to and from nested types with JSON
-# group: [json]
+# group: [scalar]
 
 require json
 

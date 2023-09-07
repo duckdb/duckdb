@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_create.test
+# name: test/sql/json/scalar/test_json_create.test
 # description: Test JSON create functions {json_object(), json_array(), json_quote()}
-# group: [json]
+# group: [scalar]
 
 require json
 

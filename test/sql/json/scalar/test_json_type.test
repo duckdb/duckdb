@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_type.test
+# name: test/sql/json/scalar/test_json_type.test
 # description: Test JSON type
-# group: [json]
+# group: [scalar]
 
 require json
 

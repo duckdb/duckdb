@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_structure.test
+# name: test/sql/json/scalar/test_json_structure.test
 # description: Test json_structure() function
-# group: [json]
+# group: [scalar]
 
 require json
 

@@ -1,6 +1,6 @@
-# name: test/sql/json/large_quoted_string_constant.test
+# name: test/sql/json/issues/large_quoted_string_constant.test
 # description: Issue #2986: Large string constant with quotes
-# group: [json]
+# group: [issues]
 
 statement ok
 CREATE TABLE j2 (id INT, json VARCHAR, src VARCHAR);
