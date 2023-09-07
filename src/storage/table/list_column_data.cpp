@@ -321,10 +321,14 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		ColumnCheckpointState::WriteDataPointers(writer);
-		validity_state->WriteDataPointers(writer);
-		child_state->WriteDataPointers(writer);
+	void WriteDataPointers(RowGroupWriter &writer, FormatSerializer &serializer) override {
+		ColumnCheckpointState::WriteDataPointers(writer, serializer);
+		serializer.WriteObject(101, "validity", [&](FormatSerializer &serializer) {
+			validity_state->WriteDataPointers(writer, serializer);
+		});
+		serializer.WriteObject(102, "child_column", [&](FormatSerializer &serializer) {
+			child_state->WriteDataPointers(writer, serializer);
+		});
 	}
 };
 
@@ -346,10 +350,14 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(ReadStream &source) {
-	ColumnData::DeserializeColumn(source);
-	validity.DeserializeColumn(source);
-	child_column->DeserializeColumn(source);
+void ListColumnData::DeserializeColumn(FormatDeserializer &deserializer) {
+	ColumnData::DeserializeColumn(deserializer);
+
+	deserializer.ReadObject(101, "validity",
+	                        [&](FormatDeserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+
+	deserializer.ReadObject(102, "child_column",
+	                        [&](FormatDeserializer &deserializer) { child_column->DeserializeColumn(deserializer); });
 }
 
 void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

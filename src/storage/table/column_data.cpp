@@ -446,12 +446,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	return checkpoint_state;
 }
 
-void ColumnData::DeserializeColumn(ReadStream &source) {
+void ColumnData::DeserializeColumn(FormatDeserializer &deserializer) {
 	// load the data pointers for the column
 	this->count = 0;
-
-	BinaryDeserializer deserializer(source);
-	deserializer.Begin();
 	deserializer.Set<LogicalType &>(type);
 
 	deserializer.ReadList(100, "data_pointers", [&](FormatDeserializer::List &list, idx_t i) {
@@ -473,14 +470,16 @@ void ColumnData::DeserializeColumn(ReadStream &source) {
 	});
 
 	deserializer.Unset<LogicalType>();
-	deserializer.End();
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
                                                idx_t start_row, ReadStream &source, const LogicalType &type,
                                                optional_ptr<ColumnData> parent) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, parent);
-	entry->DeserializeColumn(source);
+	BinaryDeserializer deserializer(source);
+	deserializer.Begin();
+	entry->DeserializeColumn(deserializer);
+	deserializer.End();
 	return entry;
 }
 

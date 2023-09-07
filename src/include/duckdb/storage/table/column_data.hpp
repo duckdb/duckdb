@@ -125,7 +125,7 @@ public:
 	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
-	virtual void DeserializeColumn(ReadStream &source);
+	virtual void DeserializeColumn(FormatDeserializer &deserializer);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, ReadStream &source, const LogicalType &type,
 	                                          optional_ptr<ColumnData> parent);

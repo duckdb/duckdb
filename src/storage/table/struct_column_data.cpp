@@ -240,11 +240,14 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		validity_state->WriteDataPointers(writer);
-		for (auto &state : child_states) {
-			state->WriteDataPointers(writer);
-		}
+	void WriteDataPointers(RowGroupWriter &writer, FormatSerializer &serializer) override {
+		serializer.WriteObject(101, "validity", [&](FormatSerializer &serializer) {
+			validity_state->WriteDataPointers(writer, serializer);
+		});
+		serializer.WriteList(102, "sub_columns", child_states.size(), [&](FormatSerializer::List &list, idx_t i) {
+			auto &state = child_states[i];
+			list.WriteObject([&](FormatSerializer &serializer) { state->WriteDataPointers(writer, serializer); });
+		});
 	}
 };
 
@@ -265,11 +268,14 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(ReadStream &source) {
-	validity.DeserializeColumn(source);
-	for (auto &sub_column : sub_columns) {
-		sub_column->DeserializeColumn(source);
-	}
+void StructColumnData::DeserializeColumn(FormatDeserializer &deserializer) {
+	deserializer.ReadObject(101, "validity",
+	                        [&](FormatDeserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+
+	deserializer.ReadList(102, "sub_columns", [&](FormatDeserializer::List &list, idx_t i) {
+		list.ReadObject([&](FormatDeserializer &item) { sub_columns[i]->DeserializeColumn(item); });
+	});
+
 	this->count = validity.count;
 }
 

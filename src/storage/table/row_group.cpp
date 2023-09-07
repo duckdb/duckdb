@@ -18,6 +18,7 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 
@@ -840,7 +841,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
-		state->WriteDataPointers(writer);
+		BinarySerializer serializer(data_writer);
+		serializer.Begin();
+		state->WriteDataPointers(writer, serializer);
+		serializer.End();
 	}
 	row_group_pointer.versions = version_info;
 	Verify();
@@ -873,6 +877,9 @@ void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &seria
 
 	// now serialize the actual version information
 	serializer.WriteProperty(103, "versions_count", chunk_info_count);
+	if (chunk_info_count == 0) {
+		return;
+	}
 	serializer.WriteList(104, "versions", chunk_info_count, [&](FormatSerializer::List &list, idx_t i) {
 		auto vector_idx = idx_map[i];
 		auto chunk_info = versions->info[vector_idx].get();
@@ -892,10 +899,8 @@ RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
 	// Deserialize Deletes
 	auto chunk_count = deserializer.ReadProperty<idx_t>(103, "versions_count");
 	if (chunk_count == 0) {
-		// no deletes
 		return result;
 	}
-
 	auto version_info = make_shared<VersionNode>();
 	deserializer.ReadList(104, "versions", [&](FormatDeserializer::List &list, idx_t i) {
 		list.ReadObject([&](FormatDeserializer &obj) {
