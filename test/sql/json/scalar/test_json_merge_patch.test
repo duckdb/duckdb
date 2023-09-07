@@ -1,0 +1,107 @@
+# name: test/sql/json/scalar/test_json_merge_patch.test
+# description: Test JSON merge patch
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# from issue 4227
+query T
+SELECT json_merge_patch('{"a": 1}', '{"a": 2}')
+----
+{"a":2}
+
+query T
+SELECT json_merge_patch('{"a": 1}', '{"b": 2}')
+----
+{"b":2,"a":1}
+
+query T
+SELECT json_merge_patch('{"a": {"c": 1}}', '{"a": {"d": 2}}')
+----
+{"a":{"d":2,"c":1}}
+
+query T
+SELECT json_merge_patch('{"a": {"b": 1}}', '{"a": {"b": 2}}')
+----
+{"a":{"b":2}}
+
+# from MySQL documentation
+query T
+SELECT JSON_MERGE_PATCH('[1, 2]', '[true, false]');
+----
+[true,false]
+
+query T
+SELECT JSON_MERGE_PATCH('{"name": "x"}', '{"id": 47}');
+----
+{"id":47,"name":"x"}
+
+query T
+SELECT JSON_MERGE_PATCH('1', 'true');
+----
+true
+
+query T
+SELECT JSON_MERGE_PATCH('[1, 2]', '{"id": 47}');
+----
+{"id":47}
+
+query T
+SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }');
+----
+{"a":3,"c":4,"b":2}
+
+query T
+SELECT JSON_MERGE_PATCH('{ "a": 1, "b":2 }','{ "a": 3, "c":4 }','{ "a": 5, "d":6 }');
+----
+{"a":5,"d":6,"c":4,"b":2}
+
+query T
+SELECT JSON_MERGE_PATCH('{"a":1, "b":2}', '{"b":null}');
+----
+{"a":1}
+
+query T
+SELECT JSON_MERGE_PATCH('{"a":{"x":1}}', '{"a":{"y":2}}');
+----
+{"a":{"y":2,"x":1}}
+
+# test NULL behaviour
+query T
+select json_merge_patch(NULL, '3')
+----
+3
+
+query T
+select json_merge_patch('3', NULL)
+----
+NULL
+
+query T
+select json_merge_patch(NULL, NULL)
+----
+NULL
+
+# test vararg behaviour
+query T
+select json_merge_patch('{"a":1}', '{"b":2}', '{"c":3}')
+----
+{"c":3,"b":2,"a":1}
+
+query T
+select json_merge_patch(NULL, '{"b":2}', '{"c":3}')
+----
+{"c":3,"b":2}
+
+query T
+select json_merge_patch('{"a":1}', NULL, '{"c":3}')
+----
+{"c":3}
+
+query T
+select json_merge_patch('{"a":1}', '{"b":2}', NULL)
+----
+NULL

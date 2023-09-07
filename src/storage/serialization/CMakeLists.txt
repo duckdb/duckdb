@@ -14,7 +14,8 @@ add_library_unity(
   serialize_statement.cpp
   serialize_table_filter.cpp
   serialize_tableref.cpp
-  serialize_types.cpp)
+  serialize_types.cpp
+  serialize_storage.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_serialization>
     PARENT_SCOPE)

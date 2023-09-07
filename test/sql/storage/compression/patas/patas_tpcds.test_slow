@@ -656,7 +656,18 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 50 99
+loop i 50 67
+
+#Skip tpcds 67 because it doesn't work without decimals
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
+
+endloop
+
+loop i 68 99
 
 query I
 PRAGMA tpcds(${i})

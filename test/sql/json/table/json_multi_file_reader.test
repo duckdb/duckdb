@@ -1,0 +1,120 @@
+# name: test/sql/json/table/json_multi_file_reader.test
+# description: Test MultiFileReader integration in JSON reader
+# group: [table]
+
+require json
+
+statement ok
+create table test as SELECT to_json([i%4]) as j FROM range(0,20) as tbl(i)
+
+# FIXME: we can't do partitioned JSON writes yet because the column we partition by is packed into a to_json
+# because we just push an expression and then use the csv writer, this uses the csv writer for now
+statement ok
+COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j));
+
+# some tests for read_json first
+query III
+select * exclude (filename), replace(filename, '\', '/') as filename from read_json_auto('data/json/example_*.ndjson', filename=true) order by all
+----
+1	O Brother, Where Art Thou?	data/json/example_n.ndjson
+1	O Brother, Where Art Thou?	data/json/example_r.ndjson
+1	O Brother, Where Art Thou?	data/json/example_rn.ndjson
+2	Home for the Holidays	data/json/example_n.ndjson
+2	Home for the Holidays	data/json/example_r.ndjson
+2	Home for the Holidays	data/json/example_rn.ndjson
+3	The Firm	data/json/example_n.ndjson
+3	The Firm	data/json/example_r.ndjson
+3	The Firm	data/json/example_rn.ndjson
+4	Broadcast News	data/json/example_n.ndjson
+4	Broadcast News	data/json/example_r.ndjson
+4	Broadcast News	data/json/example_rn.ndjson
+5	Raising Arizona	data/json/example_n.ndjson
+5	Raising Arizona	data/json/example_r.ndjson
+5	Raising Arizona	data/json/example_rn.ndjson
+
+query III
+select * from read_json_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
+----
+1	O Brother, Where Art Thou?	NULL
+2	Home for the Holidays	NULL
+3	The Firm	NULL
+4	Broadcast News	NULL
+5	Raising Arizona	NULL
+NULL	NULL	cancelled
+NULL	NULL	cancelled
+
+# despite not being able to do partitioned writes, we can do partitioned json reads already!
+query II
+SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j;
+----
+[0]	5
+[1]	5
+[2]	5
+[3]	5
+
+# also test read_json_objects
+query II
+select * exclude (filename), replace(filename, '\', '/') as filename from read_json_objects_auto('data/json/example_*.ndjson', filename=true) order by all
+----
+{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_n.ndjson
+{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_r.ndjson
+{"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_rn.ndjson
+{"id":2,"name":"Home for the Holidays"}	data/json/example_n.ndjson
+{"id":2,"name":"Home for the Holidays"}	data/json/example_r.ndjson
+{"id":2,"name":"Home for the Holidays"}	data/json/example_rn.ndjson
+{"id":3,"name":"The Firm"}	data/json/example_n.ndjson
+{"id":3,"name":"The Firm"}	data/json/example_r.ndjson
+{"id":3,"name":"The Firm"}	data/json/example_rn.ndjson
+{"id":4,"name":"Broadcast News"}	data/json/example_n.ndjson
+{"id":4,"name":"Broadcast News"}	data/json/example_r.ndjson
+{"id":4,"name":"Broadcast News"}	data/json/example_rn.ndjson
+{"id":5,"name":"Raising Arizona"}	data/json/example_n.ndjson
+{"id":5,"name":"Raising Arizona"}	data/json/example_r.ndjson
+{"id":5,"name":"Raising Arizona"}	data/json/example_rn.ndjson
+
+query I
+select * from read_json_objects_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
+----
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
+{"id":1,"name":"O Brother, Where Art Thou?"}
+{"id":2,"name":"Home for the Holidays"}
+{"id":3,"name":"The Firm"}
+{"id":4,"name":"Broadcast News"}
+{"id":5,"name":"Raising Arizona"}
+
+query II
+select j, count(*) from read_json_objects_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j
+----
+[0]	5
+[1]	5
+[2]	5
+[3]	5
+
+# also test the filter pushdown
+query II
+SELECT j, count(*)
+FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+where j='[2]'
+group by j
+order by j;
+----
+[2]	5
+
+query II
+SELECT j, count(*)
+FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+where j>'[2]'
+group by j
+order by j;
+----
+[3]	5
+
+query II
+SELECT j, count(*)
+FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1)
+where sqrt(j[2]::int) > 1.5
+group by j
+order by j;
+----
+[3]	5

@@ -124,7 +124,6 @@ runs:
       shell: bash
       run: |
         make extension_configuration
-        echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 
     - name: Build
       shell: bash
@@ -140,6 +139,7 @@ runs:
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
         LOCAL_EXTENSION_REPO: ${{ inputs.run_autoload_tests == 1 && github.workspace || ''}}
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         ls
         mkdir -p ~/.ssh
@@ -179,6 +179,7 @@ runs:
         ENABLE_EXTENSION_AUTOLOADING: 1
         ENABLE_EXTENSION_AUTOINSTALL: 1
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
+        USE_MERGED_VCPKG_MANIFEST: 1
       run: |
         cd  ${{ inputs.build_dir}}
         rm -rf duckdb_unittest_tempdir/*
@@ -200,21 +201,6 @@ runs:
         rm -rf build/release/extension
         mv build/extension_tmp build/release/extension
 
-    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
-    - name: Test deployed extensions
-      if: ${{ inputs.run_tests == 1 }}
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-        AWS_DEFAULT_REGION: us-east-1
-      run: |
-        rm -rf ~/.duckdb
-        cd  ${{ inputs.build_dir}}
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload-test.sh
-        fi
-
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
@@ -233,4 +219,19 @@ runs:
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
             ./scripts/extension-upload.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
           fi
+        fi
+
+    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
+    - name: Test deployed extensions
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
+        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        rm -rf ~/.duckdb
+        cd  ${{ inputs.build_dir}}
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          ./scripts/extension-upload-test.sh
         fi
