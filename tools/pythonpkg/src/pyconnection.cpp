@@ -709,6 +709,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
+	CSVReaderOptions options;
 	auto path_like = GetPathLike(name_p);
 	auto &name = path_like.str;
 	auto file_like_object_wrapper = std::move(path_like.dependency);

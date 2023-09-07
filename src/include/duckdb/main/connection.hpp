@@ -30,7 +30,7 @@ class DatabaseInstance;
 class DuckDB;
 class LogicalOperator;
 class SelectStatement;
-struct BufferedCSVReaderOptions;
+struct CSVReaderOptions;
 
 typedef void (*warning_callback)(std::string);
 

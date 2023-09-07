@@ -219,4 +219,55 @@ struct ListRangeFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct ListCosineSimilarityFun {
+	static constexpr const char *Name = "list_cosine_similarity";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the cosine similarity between two lists.";
+	static constexpr const char *Example = "list_cosine_similarity([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListCosineSimilarityFunAlias {
+	using ALIAS = ListCosineSimilarityFun;
+
+	static constexpr const char *Name = "<=>";
+};
+
+struct ListDistanceFun {
+	static constexpr const char *Name = "list_distance";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the distance between two lists.";
+	static constexpr const char *Example = "list_distance([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListDistanceFunAlias {
+	using ALIAS = ListDistanceFun;
+
+	static constexpr const char *Name = "<->";
+};
+
+struct ListInnerProductFun {
+	static constexpr const char *Name = "list_inner_product";
+	static constexpr const char *Parameters = "list1,list2";
+	static constexpr const char *Description = "Compute the inner product between two lists.";
+	static constexpr const char *Example = "list_inner_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ListDotProductFun {
+	using ALIAS = ListInnerProductFun;
+
+	static constexpr const char *Name = "list_dot_product";
+};
+
+struct ListInnerProductFunAlias {
+	using ALIAS = ListInnerProductFun;
+
+	static constexpr const char *Name = "<#>";
+};
+
 } // namespace duckdb

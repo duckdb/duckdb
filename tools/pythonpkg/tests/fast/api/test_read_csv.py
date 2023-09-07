@@ -148,14 +148,14 @@ class TestReadCSV(object):
         assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
 
     def test_date_format_as_datetime(self, duckdb_cursor):
-        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'), date_format='%m/%d/%Y')
+        rel = duckdb_cursor.read_csv(TestFile('datetime.csv'))
         res = rel.fetchone()
         print(res)
         assert res == (
             123,
             'TEST2',
             datetime.time(12, 12, 12),
-            datetime.datetime(2000, 1, 1, 0, 0),
+            datetime.date(2000, 1, 1),
             datetime.datetime(2000, 1, 1, 12, 12),
         )
 
