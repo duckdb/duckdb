@@ -155,14 +155,28 @@ for line in lines:
 # Load existing JSON data from a file if it exists
 existing_json_data = {}
 try:
-    with open("cache_data.json", "r") as file:
+    path = os.path.join(script_dir, "cache_data.json")
+    print(path)
+    with open(path, "r") as file:
         existing_json_data = json.load(file)
 except FileNotFoundError:
     pass
 
+
+def update_json(existing: dict, new: dict):
+    for item in new:
+        if item not in existing:
+            continue
+        object = new[item]
+        if isinstance(object, dict):
+            object.update(existing[item])
+            update_json(object, existing[item])
+
+
 # Merge the existing JSON data with the new data
-existing_json_data.update(generator.to_json())
+json_data = generator.to_json()
+update_json(existing_json_data, json_data)
 
 # Save the merged JSON data back to the file
 with open("cache_data.json", "w") as file:
-    json.dump(existing_json_data, file, indent=4)
+    json.dump(json_data, file, indent=4)

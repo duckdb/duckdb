@@ -18,18 +18,6 @@
             "pyarrow.dataset.Dataset"
         ]
     },
-    "pyarrow.Table": {
-        "type": "attribute",
-        "full_path": "pyarrow.Table",
-        "name": "Table",
-        "children": []
-    },
-    "pyarrow.RecordBatchReader": {
-        "type": "attribute",
-        "full_path": "pyarrow.RecordBatchReader",
-        "name": "RecordBatchReader",
-        "children": []
-    },
     "pyarrow.dataset.Scanner": {
         "type": "attribute",
         "full_path": "pyarrow.dataset.Scanner",
@@ -40,6 +28,18 @@
         "type": "attribute",
         "full_path": "pyarrow.dataset.Dataset",
         "name": "Dataset",
+        "children": []
+    },
+    "pyarrow.Table": {
+        "type": "attribute",
+        "full_path": "pyarrow.Table",
+        "name": "Table",
+        "children": []
+    },
+    "pyarrow.RecordBatchReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.RecordBatchReader",
+        "name": "RecordBatchReader",
         "children": []
     },
     "pandas": {
@@ -68,6 +68,20 @@
             "pandas._libs.missing"
         ],
         "required": false
+    },
+    "pandas._libs.missing": {
+        "type": "attribute",
+        "full_path": "pandas._libs.missing",
+        "name": "missing",
+        "children": [
+            "pandas._libs.missing.NAType"
+        ]
+    },
+    "pandas._libs.missing.NAType": {
+        "type": "attribute",
+        "full_path": "pandas._libs.missing.NAType",
+        "name": "NAType",
+        "children": []
     },
     "pandas.isnull": {
         "type": "attribute",
@@ -101,6 +115,18 @@
             "datetime.date.min"
         ]
     },
+    "datetime.date.max": {
+        "type": "attribute",
+        "full_path": "datetime.date.max",
+        "name": "max",
+        "children": []
+    },
+    "datetime.date.min": {
+        "type": "attribute",
+        "full_path": "datetime.date.min",
+        "name": "min",
+        "children": []
+    },
     "datetime.time": {
         "type": "attribute",
         "full_path": "datetime.time",
@@ -121,6 +147,18 @@
             "datetime.datetime.min",
             "datetime.datetime.max"
         ]
+    },
+    "datetime.datetime.min": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.min",
+        "name": "min",
+        "children": []
+    },
+    "datetime.datetime.max": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.max",
+        "name": "max",
+        "children": []
     },
     "decimal": {
         "type": "module",
@@ -159,6 +197,12 @@
         "children": [
             "IPython.display.display"
         ]
+    },
+    "IPython.display.display": {
+        "type": "attribute",
+        "full_path": "IPython.display.display",
+        "name": "display",
+        "children": []
     },
     "ipywidgets": {
         "type": "module",
@@ -390,16 +434,16 @@
             "pyduckdb.filesystem.ModifiedMemoryFileSystem"
         ]
     },
-    "pyduckdb.Value": {
-        "type": "attribute",
-        "full_path": "pyduckdb.Value",
-        "name": "Value",
-        "children": []
-    },
     "pyduckdb.filesystem.ModifiedMemoryFileSystem": {
         "type": "attribute",
         "full_path": "pyduckdb.filesystem.ModifiedMemoryFileSystem",
         "name": "ModifiedMemoryFileSystem",
+        "children": []
+    },
+    "pyduckdb.Value": {
+        "type": "attribute",
+        "full_path": "pyduckdb.Value",
+        "name": "Value",
         "children": []
     },
     "pytz": {
@@ -463,50 +507,6 @@
         "type": "attribute",
         "full_path": "uuid.UUID",
         "name": "UUID",
-        "children": []
-    },
-    "pandas._libs.missing": {
-        "type": "attribute",
-        "full_path": "pandas._libs.missing",
-        "name": "missing",
-        "children": [
-            "pandas._libs.missing.NAType"
-        ]
-    },
-    "pandas._libs.missing.NAType": {
-        "type": "attribute",
-        "full_path": "pandas._libs.missing.NAType",
-        "name": "NAType",
-        "children": []
-    },
-    "datetime.date.max": {
-        "type": "attribute",
-        "full_path": "datetime.date.max",
-        "name": "max",
-        "children": []
-    },
-    "datetime.date.min": {
-        "type": "attribute",
-        "full_path": "datetime.date.min",
-        "name": "min",
-        "children": []
-    },
-    "datetime.datetime.min": {
-        "type": "attribute",
-        "full_path": "datetime.datetime.min",
-        "name": "min",
-        "children": []
-    },
-    "datetime.datetime.max": {
-        "type": "attribute",
-        "full_path": "datetime.datetime.max",
-        "name": "max",
-        "children": []
-    },
-    "IPython.display.display": {
-        "type": "attribute",
-        "full_path": "IPython.display.display",
-        "name": "display",
         "children": []
     }
 }
