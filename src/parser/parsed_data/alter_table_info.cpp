@@ -206,7 +206,7 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
 //===--------------------------------------------------------------------===//
 // Alter View
 //===--------------------------------------------------------------------===//
-AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VIEW) {
+AlterViewInfo::AlterViewInfo(AlterViewType type) : AlterInfo(AlterType::ALTER_VIEW), alter_view_type(type) {
 }
 
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
