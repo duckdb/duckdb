@@ -94,7 +94,7 @@ unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(FormatDeseria
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
-	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children);
+	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, std::move(return_type));
 	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
 	auto filter = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(204, "filter", unique_ptr<Expression>());
 	auto result = make_uniq<BoundAggregateExpression>(std::move(entry.first), std::move(children), std::move(filter),

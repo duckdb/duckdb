@@ -87,7 +87,7 @@ unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserial
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
-	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children);
+	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
 	deserializer.ReadProperty(202, "is_operator", result->is_operator);

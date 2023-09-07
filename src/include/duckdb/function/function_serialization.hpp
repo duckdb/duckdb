@@ -73,9 +73,9 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>> FormatDeserialize(FormatDeserializer &deserializer,
-	                                                              CatalogType catalog_type,
-	                                                              vector<unique_ptr<Expression>> &children) {
+	static pair<FUNC, unique_ptr<FunctionData>>
+	FormatDeserialize(FormatDeserializer &deserializer, CatalogType catalog_type,
+	                  vector<unique_ptr<Expression>> &children, LogicalType return_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto entry = FormatDeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
 		auto &function = entry.first;
@@ -92,6 +92,7 @@ public:
 				throw SerializationException("Error during bind of function in deserialization: %s", ex.what());
 			}
 		}
+		function.return_type = std::move(return_type);
 		return make_pair(std::move(function), std::move(bind_data));
 	}
 };
