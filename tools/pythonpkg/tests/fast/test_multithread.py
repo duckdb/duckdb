@@ -5,6 +5,7 @@ import queue as Queue
 import numpy as np
 from conftest import NumpyPandas, ArrowPandas
 import os
+from typing import List
 
 try:
     import pyarrow as pa
@@ -19,6 +20,10 @@ def connect_duck(duckdb_conn):
     assert out == [(42,), (84,), (None,), (128,)]
 
 
+def everything_succeeded(results: List[bool]):
+    return all([result == True for result in results])
+
+
 class DuckDBThreaded:
     def __init__(self, duckdb_insert_thread_count, thread_function, pandas):
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
@@ -26,11 +31,11 @@ class DuckDBThreaded:
         self.thread_function = thread_function
         self.pandas = pandas
 
-    def multithread_test(self, if_all_true=True):
+    def multithread_test(self, result_verification=everything_succeeded):
         duckdb_conn = duckdb.connect()
         queue = Queue.Queue()
-        return_value = False
 
+        # Create all threads
         for i in range(0, self.duckdb_insert_thread_count):
             self.threads.append(
                 threading.Thread(
@@ -38,21 +43,19 @@ class DuckDBThreaded:
                 )
             )
 
+        # Record for every thread if they succeeded or not
+        thread_results = []
         for i in range(0, len(self.threads)):
             self.threads[i].start()
-            if not if_all_true:
-                if queue.get():
-                    return_value = True
-            else:
-                if i == 0 and queue.get():
-                    return_value = True
-                elif queue.get() and return_value:
-                    return_value = True
+            thread_result: bool = queue.get(timeout=60)
+            thread_results.append(thread_result)
 
+        # Finish all threads
         for i in range(0, len(self.threads)):
             self.threads[i].join()
 
-        assert return_value
+        # Assert that the results are what we expected
+        assert result_verification(thread_results)
 
 
 def execute_query_same_connection(duckdb_conn, queue, pandas):
@@ -89,8 +92,15 @@ def execute_many_query(duckdb_conn, queue, pandas):
     try:
         # from python docs
         duckdb_conn.execute(
-            '''CREATE TABLE stocks
-             (date text, trans text, symbol text, qty real, price real)'''
+            """
+                CREATE TABLE stocks(
+                    date text,
+                    trans text,
+                    symbol text,
+                    qty real,
+                    price real
+                )
+            """
         )
         # Larger example that inserts many records at a time
         purchases = [
@@ -98,7 +108,12 @@ def execute_many_query(duckdb_conn, queue, pandas):
             ('2006-04-05', 'BUY', 'MSFT', 1000, 72.00),
             ('2006-04-06', 'SELL', 'IBM', 500, 53.00),
         ]
-        duckdb_conn.executemany('INSERT INTO stocks VALUES (?,?,?,?,?)', purchases)
+        duckdb_conn.executemany(
+            """
+            INSERT INTO stocks VALUES (?,?,?,?,?)
+        """,
+            purchases,
+        )
         queue.put(True)
     except:
         queue.put(False)
@@ -488,5 +503,12 @@ class TestDuckMultithread(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_cursor(self, duckdb_cursor, pandas):
+        def only_some_succeed(results: List[bool]):
+            if not any([result == True for result in results]):
+                return False
+            if all([result == True for result in results]):
+                return False
+            return True
+
         duck_threads = DuckDBThreaded(10, cursor, pandas)
-        duck_threads.multithread_test(False)
+        duck_threads.multithread_test(only_some_succeed)
