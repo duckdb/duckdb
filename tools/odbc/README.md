@@ -1,4 +1,10 @@
-# ODBC 101: A Guide to ODBC for DuckDB Developers and Users
+# ODBC 101: A Duck Themed Guide to ODBC
+
+* [What is ODBC?](#what-is-odbc)
+* [General Concepts](#general-concepts)
+* [Setting up an Application](#setting-up-an-application)
+* [Sample Application](#sample-application)
+* [Running the ODBC Client and Tests](#running-the-odbc-client-and-tests)
 
 ## What is ODBC?
 [Open Database Connectivity (ODBC)](https://learn.microsoft.com/en-us/sql/odbc/microsoft-open-database-connectivity-odbc?view=sql-server-ver16) is a standard API for accessing databases. It is a C API, and is supported by most programming languages as well as most databases, including, of course, **DuckDB**🦆.  Essentially ODBC acts as a middleman between the database and the application. The application uses the ODBC API to communicate with the database, and the ODBC driver translates the ODBC API calls into database specific calls.  This allows the application to be database agnostic, and the database to be application agnostic.  
@@ -50,7 +56,7 @@ A DSN (_Data Source Name_) is a string that identifies a database.  It can be a 
 [//]: # (| `SAVEFILE` | The path to a file to which the connection string should be saved.                                                                                                        |)
 
 ### Error Handling and Diagnostics
-All functions in ODBC return a code which represents the success or failure of the function.  This allows for easy error handling, as the application can simply check the return code of each function call to determine if it was successful.  If the function was unsuccessful, the application can then use the [`SQLGetDiagRec`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetdiagrec-function?view=sql-server-ver16) function to retrieve the error information. The following table defines the [return codes](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/return-codes-odbc?view=sql-server-ver16):
+All functions in ODBC return a code which represents the success or failure of the function.  This allows for easy error handling, as the application can simply check the return code of each function call to determine if it was successful.  When unsuccessful, the application can then use the [`SQLGetDiagRec`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetdiagrec-function?view=sql-server-ver16) function to retrieve the error information. The following table defines the [return codes](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/return-codes-odbc?view=sql-server-ver16):
 
 | Return Code             | Description                                                                                                                                  |
 |-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
@@ -287,6 +293,14 @@ BUILD_ODBC=1 DISABLE_SANITIZER=1 make debug -j
 
 #### Run the ODBC Unit Tests
 
+The ODBC tests are written with the catch framework. To run the tests, run the following command from the main DuckDB repository:
+
 ```bash
 build/debug/tools/odbc/test/test_odbc
+```
+
+You can also individually run the tests by specifying the test name as an argument to the test executable:
+
+```bash
+build/debug/tools/odbc/test/test_odbc 'Test ALTER TABLE statement'
 ```
