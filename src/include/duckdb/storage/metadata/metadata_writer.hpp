@@ -14,6 +14,9 @@ namespace duckdb {
 
 class MetadataWriter : public Serializer {
 public:
+	MetadataWriter(const MetadataWriter &) = delete;
+	MetadataWriter &operator=(const MetadataWriter &) = delete;
+
 	explicit MetadataWriter(MetadataManager &manager);
 	~MetadataWriter() override;
 
