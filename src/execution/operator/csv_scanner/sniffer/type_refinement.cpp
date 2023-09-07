@@ -70,7 +70,18 @@ struct Parse {
 			machine.VerifyUTF8();
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			parse_data[machine.cur_rows++] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			if (machine.value.empty()) {
+				auto &validity_mask = FlatVector::Validity(v);
+				validity_mask.SetInvalid(machine.cur_rows);
+			} else {
+				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			}
+			while (machine.column_count < parse_chunk.ColumnCount()) {
+				auto &v_pad = parse_chunk.data[machine.column_count++];
+				auto &validity_mask = FlatVector::Validity(v_pad);
+				validity_mask.SetInvalid(machine.cur_rows);
+			}
+			machine.cur_rows++;
 		}
 		parse_chunk.SetCardinality(machine.cur_rows);
 	}

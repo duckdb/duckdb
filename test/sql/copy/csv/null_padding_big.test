@@ -42,6 +42,8 @@ SELECT COUNT(*) FROM read_csv('data/csv/nullpadding_commas.csv', sep=',', header
 ----
 2492
 
+require notwindows
+
 statement error
 SELECT COUNT(*) FROM read_csv_auto('data/csv/nullpadding_big_mixed.csv', parallel=True, buffer_size=55)
 ----

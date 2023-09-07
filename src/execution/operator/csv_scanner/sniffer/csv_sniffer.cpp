@@ -27,7 +27,8 @@ SnifferResult CSVSniffer::SniffCSV() {
 	DetectDialect();
 	if (explicit_set_columns) {
 		if (!candidates.empty()) {
-			options.dialect_options = candidates[0]->dialect_options;
+			options.dialect_options.state_machine_options = candidates[0]->dialect_options.state_machine_options;
+			options.dialect_options.new_line = candidates[0]->dialect_options.new_line;
 		}
 		// We do not need to run type and header detection as these were defined by the user
 		return SnifferResult(detected_types, names);

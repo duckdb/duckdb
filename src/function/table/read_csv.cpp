@@ -332,6 +332,7 @@ public:
 		auto file_count = files_path_p.size();
 		line_info.current_batches.resize(file_count);
 		line_info.lines_read.resize(file_count);
+		line_info.lines_errored.resize(file_count);
 		tuple_start.resize(file_count);
 		tuple_end.resize(file_count);
 		tuple_end_to_batch.resize(file_count);
@@ -656,6 +657,11 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	return false;
 }
 
+void LineInfo::Increment(idx_t file_idx, idx_t batch_idx) {
+	auto parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
+	lines_errored[file_idx][batch_idx]++;
+}
+
 // Returns the 1-indexed line number
 idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify,
                         bool stop_at_first) {
@@ -667,12 +673,11 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 
 	if (!stop_at_first) {
 		// Figure out the amount of lines read in the current file
-		auto &file_batches = current_batches[file_idx];
-		for (auto &batch : file_batches) {
-			if (batch > batch_idx) {
-				break;
+		for (idx_t cur_batch_idx = 0; cur_batch_idx <= batch_idx; cur_batch_idx++) {
+			if (cur_batch_idx < batch_idx) {
+				line_count += lines_errored[file_idx][cur_batch_idx];
 			}
-			line_count += lines_read[file_idx][batch];
+			line_count += lines_read[file_idx][cur_batch_idx];
 		}
 		return line_count + line_error + 1;
 	}
