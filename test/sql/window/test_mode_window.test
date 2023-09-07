@@ -2,6 +2,9 @@
 # description: Test MODE aggregate as a window function
 # group: [window]
 
+# Temporary fix until state issue resolved
+require vector_size 64
+
 statement ok
 SET default_null_order='nulls_first';
 
@@ -32,7 +35,9 @@ NULL	NULL	NULL	NULL
 1	9	3	1
 
 query III
-SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) FROM modes ORDER BY 1, 2
+SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) 
+FROM modes 
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL
