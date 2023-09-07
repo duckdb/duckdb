@@ -1,4 +1,9 @@
 #include "duckdb/storage/table/row_version_manager.hpp"
+#include "duckdb/transaction/transaction_data.hpp"
+#include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 

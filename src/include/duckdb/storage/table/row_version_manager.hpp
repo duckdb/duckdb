@@ -15,6 +15,9 @@
 
 namespace duckdb {
 
+class MetadataManager;
+struct MetaBlockPointer;
+
 class RowVersionManager {
 public:
 	explicit RowVersionManager(idx_t start);

@@ -11,8 +11,8 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
-class ChunkVectorInfo;
 class DataTable;
+class RowVersionManager;
 
 struct DeleteInfo {
 	DataTable *table;
