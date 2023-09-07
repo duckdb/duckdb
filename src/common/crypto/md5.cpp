@@ -20,6 +20,7 @@
  * will fill a supplied 16-byte array with the digest.
  */
 #include "duckdb/common/crypto/md5.hpp"
+#include "mbedtls_wrapper.hpp"
 
 namespace duckdb {
 
@@ -236,21 +237,10 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 	memcpy(out_digest, buf, 16);
 }
 
-void MD5Context::DigestToBase16(const_data_ptr_t digest, char *zbuf) {
-	static char const HEX_CODES[] = "0123456789abcdef";
-	int i, j;
-
-	for (j = i = 0; i < 16; i++) {
-		int a = digest[i];
-		zbuf[j++] = HEX_CODES[(a >> 4) & 0xf];
-		zbuf[j++] = HEX_CODES[a & 0xf];
-	}
-}
-
 void MD5Context::FinishHex(char *out_digest) {
 	data_t digest[MD5_HASH_LENGTH_BINARY];
 	Finish(digest);
-	DigestToBase16(digest, out_digest);
+	duckdb_mbedtls::MbedTlsWrapper::ToBase16(reinterpret_cast<char *>(digest), out_digest, MD5_HASH_LENGTH_BINARY);
 }
 
 string MD5Context::FinishHex() {
