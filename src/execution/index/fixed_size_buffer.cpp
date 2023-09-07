@@ -17,10 +17,11 @@ void PartialBlockForIndex::Flush(idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on PartialBlockForIndex that was already flushed");
 	}
+	auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
 	if (free_space_left > 0) {
-		auto handle = block_manager.buffer_manager.Pin(block_handle);
-		memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+		memset(buffer_handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
 	}
+	block_manager.Write(buffer_handle.GetFileBuffer(), block_handle->BlockId());
 	Clear();
 }
 
@@ -47,6 +48,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
 
 	D_ASSERT(block_ptr.IsValid());
 	block_handle = block_manager.RegisterBlock(block_ptr.block_id);
+	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 
 void FixedSizeBuffer::Destroy() {
@@ -97,11 +99,12 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 
 	// copy to a partial block
 	if (allocation.partial_block) {
-		auto p_block_handle = block_manager.RegisterBlock(block_pointer.block_id);
-		auto p_buffer_handle = buffer_manager.Pin(p_block_handle);
+		block_handle = block_manager.RegisterBlock(block_pointer.block_id);
+		auto p_buffer_handle = buffer_manager.Pin(block_handle);
 		memcpy(p_buffer_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
 
 	} else {
+		D_ASSERT(block_handle);
 		block_handle = block_manager.ConvertToPersistent(block_pointer.block_id, std::move(block_handle));
 		allocation.partial_block = make_uniq<PartialBlockForIndex>(block_manager, allocation.state, block_handle);
 	}
@@ -114,6 +117,7 @@ void FixedSizeBuffer::Pin() {
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
+	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 
 	buffer_handle = buffer_manager.Pin(block_handle);
 

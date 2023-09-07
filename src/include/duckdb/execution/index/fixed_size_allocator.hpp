@@ -80,7 +80,7 @@ public:
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
 	//! Serializes all in-memory buffers and the metadata
-	BlockPointer Serialize(MetadataWriter &writer);
+	BlockPointer Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer);
 	//! Deserializes all metadata
 	void Deserialize(const BlockPointer &block_pointer);
 

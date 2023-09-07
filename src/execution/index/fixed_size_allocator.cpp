@@ -243,16 +243,14 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
+BlockPointer FixedSizeAllocator::Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer) {
 
-	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
 	for (auto &buffer : buffers) {
 		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.second.Get()));
 		auto max_offset = GetMaxOffset(mask);
 		auto allocation_size = max_offset * segment_size + bitmask_offset;
 		buffer.second.Serialize(partial_block_manager, allocation_size);
 	}
-	partial_block_manager.FlushPartialBlocks();
 
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(segment_size);
