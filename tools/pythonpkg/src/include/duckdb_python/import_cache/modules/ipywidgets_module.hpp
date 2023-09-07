@@ -1,7 +1,8 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/ipython_module.hpp
+// duckdb_python/import_cache/modules/ipywidgets_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,6 +14,7 @@
 namespace duckdb {
 
 struct IpywidgetsCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "ipywidgets";
 
@@ -22,7 +24,6 @@ public:
 	~IpywidgetsCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem FloatProgress;
 
 protected:

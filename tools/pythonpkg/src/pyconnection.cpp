@@ -66,7 +66,7 @@ void DuckDBPyConnection::DetectEnvironment() {
 		return;
 	}
 	DuckDBPyConnection::environment = PythonEnvironmentType::INTERACTIVE;
-	if (!ModuleIsLoaded<IPythonCacheItem>()) {
+	if (!ModuleIsLoaded<IpythonCacheItem>()) {
 		return;
 	}
 
@@ -1687,19 +1687,19 @@ NumpyObjectType DuckDBPyConnection::IsAcceptedNumpyObject(const py::object &obje
 }
 
 bool DuckDBPyConnection::IsAcceptedArrowObject(const py::object &object) {
-	if (!ModuleIsLoaded<ArrowLibCacheItem>()) {
+	if (!ModuleIsLoaded<PyarrowCacheItem>()) {
 		return false;
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	if (py::isinstance(object, import_cache_py.arrow.Table()) ||
-	    py::isinstance(object, import_cache_py.arrow.RecordBatchReader())) {
+	if (py::isinstance(object, import_cache_py.pyarrow.Table()) ||
+	    py::isinstance(object, import_cache_py.pyarrow.RecordBatchReader())) {
 		return true;
 	}
-	if (!ModuleIsLoaded<ArrowDatasetCacheItem>()) {
+	if (!ModuleIsLoaded<PyarrowDatasetCacheItem>()) {
 		return false;
 	}
-	return (py::isinstance(object, import_cache_py.arrow.dataset.Dataset()) ||
-	        py::isinstance(object, import_cache_py.arrow.dataset.Scanner()));
+	return (py::isinstance(object, import_cache_py.pyarrow.dataset.Dataset()) ||
+	        py::isinstance(object, import_cache_py.pyarrow.dataset.Scanner()));
 }
 
 unique_lock<std::mutex> DuckDBPyConnection::AcquireConnectionLock() {

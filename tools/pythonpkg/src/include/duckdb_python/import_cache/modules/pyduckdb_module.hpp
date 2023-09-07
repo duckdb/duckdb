@@ -1,7 +1,8 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/import_cache/modules/numpy_module.hpp
+// duckdb_python/import_cache/modules/pyduckdb_module.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,32 +13,33 @@
 
 namespace duckdb {
 
-struct PyDuckDBFileSystemCacheItem : public PythonImportCacheItem {
+struct PyduckdbFilesystemCacheItem : public PythonImportCacheItem {
+
+public:
 	static constexpr const char *Name = "pyduckdb.filesystem";
 
 public:
-	PyDuckDBFileSystemCacheItem()
+	PyduckdbFilesystemCacheItem()
 	    : PythonImportCacheItem("pyduckdb.filesystem"), ModifiedMemoryFileSystem("ModifiedMemoryFileSystem", this) {
 	}
-	~PyDuckDBFileSystemCacheItem() override {
+	~PyduckdbFilesystemCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem ModifiedMemoryFileSystem;
 };
 
-struct PyDuckDBCacheItem : public PythonImportCacheItem {
+struct PyduckdbCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "pyduckdb";
 
 public:
-	PyDuckDBCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), Value("Value", this) {
+	PyduckdbCacheItem() : PythonImportCacheItem("pyduckdb"), filesystem(), Value("Value", this) {
 	}
-	~PyDuckDBCacheItem() override {
+	~PyduckdbCacheItem() override {
 	}
 
-public:
-	PyDuckDBFileSystemCacheItem filesystem;
+	PyduckdbFilesystemCacheItem filesystem;
 	PythonImportCacheItem Value;
 };
 

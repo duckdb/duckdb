@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,6 +14,7 @@
 namespace duckdb {
 
 struct NumpyCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "numpy";
 
@@ -26,11 +28,9 @@ public:
 	      longdouble("longdouble", this), csingle("csingle", this), cdouble("cdouble", this),
 	      clongdouble("clongdouble", this) {
 	}
-
 	~NumpyCacheItem() override {
 	}
 
-public:
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;
 	PythonImportCacheItem generic;

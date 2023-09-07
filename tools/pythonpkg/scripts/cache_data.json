@@ -51,7 +51,8 @@
             "pandas._libs",
             "pandas.isnull",
             "pandas.ArrowDtype"
-        ]
+        ],
+        "required": false
     },
     "pandas.DataFrame": {
         "type": "attribute",
@@ -65,7 +66,8 @@
         "name": "_libs",
         "children": [
             "pandas._libs.missing"
-        ]
+        ],
+        "required": false
     },
     "pandas.isnull": {
         "type": "attribute",
@@ -141,7 +143,8 @@
         "children": [
             "IPython.get_ipython",
             "IPython.display"
-        ]
+        ],
+        "required": false
     },
     "IPython.get_ipython": {
         "type": "attribute",
@@ -163,7 +166,8 @@
         "name": "ipywidgets",
         "children": [
             "ipywidgets.FloatProgress"
-        ]
+        ],
+        "required": false
     },
     "ipywidgets.FloatProgress": {
         "type": "attribute",
@@ -338,7 +342,8 @@
         "name": "pathlib",
         "children": [
             "pathlib.Path"
-        ]
+        ],
+        "required": false
     },
     "pathlib.Path": {
         "type": "attribute",
@@ -353,7 +358,8 @@
         "children": [
             "polars.DataFrame",
             "polars.LazyFrame"
-        ]
+        ],
+        "required": false
     },
     "polars.DataFrame": {
         "type": "attribute",

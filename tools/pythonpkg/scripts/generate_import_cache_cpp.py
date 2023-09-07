@@ -46,6 +46,26 @@ class CacheItem:
         self.items = items
         self.class_name = get_class_name(module['full_path'])
 
+    def get_full_module_path(self):
+        if self.module['type'] != 'module':
+            return ''
+        full_path = self.module['full_path']
+        return f"""
+public:
+\tstatic constexpr const char *Name = "{full_path}";
+"""
+
+    def get_optionally_required(self):
+        if 'required' not in self.module:
+            return ''
+        string = f"""
+protected:
+\tbool IsRequired() const override final {{
+\t\treturn {str(self.module['required']).lower()};
+\t}}
+"""
+        return string
+
     def get_variables(self):
         variables = []
         for key in self.module['children']:
@@ -75,7 +95,13 @@ class CacheItem:
                     arguments = 'this'
                 initialization = f'{var_name}({arguments})'
                 variables.append(initialization)
-        return f'PythonImportCacheItem("{self.name}"), ' + ', '.join(variables) + '{}'
+        if self.module['type'] != 'module':
+            constructor_params = f'"{self.name}"'
+            constructor_params += ', parent'
+        else:
+            full_path = self.module['full_path']
+            constructor_params = f'"{full_path}"'
+        return f'PythonImportCacheItem({constructor_params}), ' + ', '.join(variables) + '{}'
 
     def get_constructor(self):
         if self.module['type'] == 'module':
@@ -85,14 +111,13 @@ class CacheItem:
     def to_string(self):
         return f"""
 struct {self.class_name} : public PythonImportCacheItem {{
-public:
-\tstatic constexpr const char *Name = "{self.name}";
-
+{self.get_full_module_path()}
 public:
 \t{self.get_constructor()} : {self.get_initializer()}
 \t~{self.class_name}() override {{}}
 
 {self.get_variables()}
+{self.get_optionally_required()}
 }};
 """
 
@@ -113,6 +138,7 @@ class ModuleFile:
         self.items = {}
         collect_items_of_module(module, self.items)
         self.classes = collect_classes(self.items)
+        self.classes.reverse()
 
     def get_classes(self):
         classes = []
@@ -149,7 +175,7 @@ for name, value in json_data.items():
 
 for file in files:
     content = file.to_string()
-    path = f'tools/pythonpkg/src/include/duckdb_python/import_cache/modules/{file.file_name}'
+    path = f'src/include/duckdb_python/import_cache/modules/{file.file_name}'
     import_cache_path = os.path.join(script_dir, '..', path)
     with open(import_cache_path, "w") as f:
         f.write(content)
@@ -204,9 +230,7 @@ private:
 
 """
 
-import_cache_path = os.path.join(
-    script_dir, '..', 'tools/pythonpkg/src/include/duckdb_python/import_cache/python_import_cache.hpp'
-)
+import_cache_path = os.path.join(script_dir, '..', 'src/include/duckdb_python/import_cache/python_import_cache.hpp')
 with open(import_cache_path, "w") as f:
     f.write(import_cache_file)
 
@@ -214,15 +238,14 @@ with open(import_cache_path, "w") as f:
 def get_module_file_path_includes(files: List[ModuleFile]):
     includes = []
     for file in files:
-        includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}')
+        includes.append(f'#include "duckdb_python/import_cache/modules/{file.file_name}"')
     return '\n'.join(includes)
 
 
 module_includes = get_module_file_path_includes(files)
-print(module_includes)
 
 modules_header = os.path.join(
-    script_dir, '..', 'tools/pythonpkg/src/include/duckdb_python/import_cache/python_import_cache_modules.hpp'
+    script_dir, '..', 'src/include/duckdb_python/import_cache/python_import_cache_modules.hpp'
 )
 with open(modules_header, "w") as f:
     f.write(module_includes)

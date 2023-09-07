@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -12,32 +13,31 @@
 
 namespace duckdb {
 
-struct IPythonDisplayCacheItem : public PythonImportCacheItem {
-public:
-	IPythonDisplayCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("display", parent), display("display", this) {
-	}
-	~IPythonDisplayCacheItem() override {
-	}
+struct IpythonDisplayCacheItem : public PythonImportCacheItem {
 
 public:
+	IpythonDisplayCacheItem(optional_ptr<PythonImportCacheItem> parent)
+	    : PythonImportCacheItem("display", parent), display("display", this) {
+	}
+	~IpythonDisplayCacheItem() override {
+	}
+
 	PythonImportCacheItem display;
 };
 
-struct IPythonCacheItem : public PythonImportCacheItem {
+struct IpythonCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "IPython";
 
 public:
-	IPythonCacheItem() : PythonImportCacheItem("IPython"), get_ipython("get_ipython", this), display(this) {
+	IpythonCacheItem() : PythonImportCacheItem("IPython"), get_ipython("get_ipython", this), display(this) {
+	}
+	~IpythonCacheItem() override {
 	}
 
-	~IPythonCacheItem() override {
-	}
-
-public:
 	PythonImportCacheItem get_ipython;
-	IPythonDisplayCacheItem display;
+	IpythonDisplayCacheItem display;
 
 protected:
 	bool IsRequired() const override final {

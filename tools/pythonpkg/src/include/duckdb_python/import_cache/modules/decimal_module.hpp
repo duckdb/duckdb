@@ -1,3 +1,4 @@
+
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
@@ -13,6 +14,7 @@
 namespace duckdb {
 
 struct DecimalCacheItem : public PythonImportCacheItem {
+
 public:
 	static constexpr const char *Name = "decimal";
 
@@ -22,8 +24,6 @@ public:
 	~DecimalCacheItem() override {
 	}
 
-public:
-	//! decimal.Decimal
 	PythonImportCacheItem Decimal;
 };
 
