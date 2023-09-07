@@ -9,8 +9,7 @@ constexpr uint8_t FixedSizeAllocator::SHIFT[];
 
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
-      metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size),
-      total_segment_count(0) {
+      metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size), total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
