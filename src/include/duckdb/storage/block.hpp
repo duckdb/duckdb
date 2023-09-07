@@ -35,7 +35,7 @@ struct BlockPointer {
 	block_id_t block_id;
 	uint32_t offset;
 
-	bool IsValid() {
+	bool IsValid() const {
 		return block_id != INVALID_BLOCK;
 	}
 };
