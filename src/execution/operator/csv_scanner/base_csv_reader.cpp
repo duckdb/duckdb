@@ -482,8 +482,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
 					Increment(buffer_idx);
 					auto bla = GetLineError(global_row_idx, buffer_idx, false);
-					row_idx+=bla;
-					row_idx-=bla;
+					row_idx += bla;
+					row_idx -= bla;
 					row_failed = true;
 					failed_cells.emplace_back(row_idx, col_idx, row_line);
 				}

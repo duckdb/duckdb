@@ -657,7 +657,7 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	return false;
 }
 
-void LineInfo::Increment(idx_t file_idx, idx_t batch_idx){
+void LineInfo::Increment(idx_t file_idx, idx_t batch_idx) {
 	auto parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
 	lines_errored[file_idx][batch_idx]++;
 }
@@ -673,8 +673,8 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 
 	if (!stop_at_first) {
 		// Figure out the amount of lines read in the current file
-		for (idx_t cur_batch_idx = 0; cur_batch_idx <= batch_idx; cur_batch_idx++){
-			if (cur_batch_idx < batch_idx){
+		for (idx_t cur_batch_idx = 0; cur_batch_idx <= batch_idx; cur_batch_idx++) {
+			if (cur_batch_idx < batch_idx) {
 				line_count += lines_errored[file_idx][cur_batch_idx];
 			}
 			line_count += lines_read[file_idx][cur_batch_idx];

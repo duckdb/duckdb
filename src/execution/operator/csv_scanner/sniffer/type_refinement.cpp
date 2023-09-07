@@ -40,7 +40,7 @@ struct Parse {
 		     (machine.state != CSVState::RECORD_SEPARATOR && carriage_return)) &&
 		    machine.options.null_padding && machine.column_count < parse_chunk.ColumnCount()) {
 			// It's a new row, check if we need to pad stuff
-			while (machine.column_count < parse_chunk.ColumnCount() ) {
+			while (machine.column_count < parse_chunk.ColumnCount()) {
 				auto &v = parse_chunk.data[machine.column_count++];
 				auto &validity_mask = FlatVector::Validity(v);
 				validity_mask.SetInvalid(machine.cur_rows);
@@ -76,13 +76,13 @@ struct Parse {
 			} else {
 				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
 			}
-			while (machine.column_count < parse_chunk.ColumnCount() ) {
+			while (machine.column_count < parse_chunk.ColumnCount()) {
 				auto &v_pad = parse_chunk.data[machine.column_count++];
 				auto &validity_mask = FlatVector::Validity(v_pad);
 				validity_mask.SetInvalid(machine.cur_rows);
 			}
+			machine.cur_rows++;
 		}
-		machine.cur_rows++;
 		parse_chunk.SetCardinality(machine.cur_rows);
 	}
 };
