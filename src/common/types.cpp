@@ -722,7 +722,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
 		}
 
-		return LogicalType::STRUCT(child_types);
+		auto &return_aux = *left.GetAuxInfoShrPtr();
+		D_ASSERT(return_aux.type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
+		StructTypeInfo &struct_info = return_aux.Cast<StructTypeInfo>();
+
+		return LogicalType::STRUCT(child_types, struct_info.has_explicit_names);
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
