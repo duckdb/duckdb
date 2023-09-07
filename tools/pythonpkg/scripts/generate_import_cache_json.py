@@ -1,10 +1,11 @@
-from inspect import getmodule
 import os
+
 script_dir = os.path.dirname(__file__)
 from typing import List, Dict, Union
 import json
 
 lines: List[str] = [file for file in open(f'{script_dir}/imports.py').read().split('\n') if file != '']
+
 
 class ImportCacheAttribute:
     def __init__(self, full_path: str):
@@ -22,8 +23,8 @@ class ImportCacheAttribute:
         return self.children[item_name]
 
     def add_item(self, item: "ImportCacheAttribute"):
-        assert not self.has_item(item.name)
-        self.children[item.name] = item
+        assert not self.has_item(item.full_path)
+        self.children[item.full_path] = item
 
     def __repr__(self) -> str:
         return str(self.children)
@@ -33,8 +34,9 @@ class ImportCacheAttribute:
             "type": self.type,
             "full_path": self.full_path,
             "name": self.name,
-            "children": list(self.children.keys())
+            "children": list(self.children.keys()),
         }
+
 
 class ImportCacheModule:
     def __init__(self, full_path):
@@ -45,20 +47,16 @@ class ImportCacheModule:
         self.items: Dict[str, Union[ImportCacheAttribute, "ImportCacheModule"]] = {}
 
     def add_item(self, item: Union[ImportCacheAttribute, "ImportCacheModule"]):
-        assert not self.has_item(item.name)
-        self.items[item.name] = item
+        assert self.full_path != item.full_path
+        assert not self.has_item(item.full_path)
+        self.items[item.full_path] = item
 
     def get_item(self, item_name: str) -> Union[ImportCacheAttribute, "ImportCacheModule"]:
         assert self.has_item(item_name)
         return self.items[item_name]
 
     def to_json(self):
-        return {
-            "type": self.type,
-            "full_path": self.full_path,
-            "name": self.name,
-            "children": list(self.items.keys())
-        }
+        return {"type": self.type, "full_path": self.full_path, "name": self.name, "children": list(self.items.keys())}
 
     def has_item(self, item_name: str) -> bool:
         return item_name in self.items
@@ -69,26 +67,27 @@ class ImportCacheModule:
     def root_module(self) -> bool:
         return self.name == self.full_path
 
+
 class ImportCacheGenerator:
     def __init__(self):
         self.modules: Dict[str, ImportCacheModule] = {}
-    
+
     def add_module(self, path: str):
         assert path.startswith('import')
         path = path[7:]
         module = ImportCacheModule(path)
-        self.modules[module.name] = module
+        self.modules[module.full_path] = module
 
         # Add it to the parent module if present
         parts = path.split('.')
-        if (len(parts) == 1):
+        if len(parts) == 1:
             return
 
         # This works back from the furthest child module to the top level module
         child_module = module
         for i in range(1, len(parts)):
-            parent_path = '.'.join(parts[:len(parts)-i])
-            parent_module = self.add_or_get_module(parts[i])
+            parent_path = '.'.join(parts[: len(parts) - i])
+            parent_module = self.add_or_get_module(parent_path)
             parent_module.add_item(child_module)
             child_module = parent_module
 
@@ -104,14 +103,14 @@ class ImportCacheGenerator:
 
     def get_item(self, item_name: str) -> Union[ImportCacheModule, ImportCacheAttribute]:
         parts = item_name.split('.')
-        if (len(parts) == 1):
+        if len(parts) == 1:
             return self.get_module(item_name)
 
         parent = self.get_module(parts[0])
         for i in range(1, len(parts)):
-            child_path = '.'.join(parts[:i+1])
-            if parent.has_item(parts[i]):
-                parent = parent.get_item(parts[i])
+            child_path = '.'.join(parts[: i + 1])
+            if parent.has_item(child_path):
+                parent = parent.get_item(child_path)
             else:
                 attribute = ImportCacheAttribute(child_path)
                 parent.add_item(attribute)
@@ -157,6 +156,3 @@ existing_json_data.update(generator.to_json())
 # Save the merged JSON data back to the file
 with open("cache_data.json", "w") as file:
     json.dump(existing_json_data, file, indent=4)
-
-# Print the merged JSON data
-#print(json.dumps(existing_json_data, indent=4))

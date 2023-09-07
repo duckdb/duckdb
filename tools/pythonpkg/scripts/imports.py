@@ -1,17 +1,20 @@
 import pyarrow
 import pyarrow.dataset
+
 pyarrow.dataset.Scanner
 pyarrow.dataset.Dataset
 pyarrow.Table
 pyarrow.RecordBatchReader
 
 import pandas
+
 pandas.DataFrame
 pandas._libs.missing.NAType
 pandas.isnull
 pandas.ArrowDtype
 
 import datetime
+
 datetime.date
 datetime.date.max
 datetime.date.min
@@ -22,62 +25,73 @@ datetime.datetime.min
 datetime.datetime.max
 
 import decimal
+
 decimal.Decimal
 
 import IPython
+
 IPython.get_ipython
 IPython.display
 IPython.display.display
 
 
 import ipywidgets
+
 ipywidgets.FloatProgress
 
 import numpy
+
 numpy.ndarray
 numpy.datetime64
-numpy.generic;
-numpy.int64;
-numpy.bool_;
-numpy.byte;
-numpy.ubyte;
-numpy.short;
-numpy.ushort;
-numpy.intc;
-numpy.uintc;
-numpy.int_;
-numpy.uint;
-numpy.longlong;
-numpy.ulonglong;
-numpy.half;
-numpy.float16;
-numpy.single;
-numpy.longdouble;
-numpy.csingle;
-numpy.cdouble;
-numpy.clongdouble;
+numpy.generic
+numpy.int64
+numpy.bool_
+numpy.byte
+numpy.ubyte
+numpy.short
+numpy.ushort
+numpy.intc
+numpy.uintc
+numpy.int_
+numpy.uint
+numpy.longlong
+numpy.ulonglong
+numpy.half
+numpy.float16
+numpy.single
+numpy.longdouble
+numpy.csingle
+numpy.cdouble
+numpy.clongdouble
 
 import pathlib
+
 pathlib.Path
 
 import polars
+
 polars.DataFrame
 polars.LazyFrame
 
 import pyduckdb
 import pyduckdb.filesystem
+
 pyduckdb.filesystem.ModifiedMemoryFileSystem
 pyduckdb.Value
 
 import pytz
+
 pytz.timezone
 
 import types
+
 types.UnionType
 types.GenericAlias
 
 import typing
+
 typing._UnionGenericAlias
 
 import uuid
+
 uuid.UUID

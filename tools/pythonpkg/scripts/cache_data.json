@@ -4,38 +4,39 @@
         "full_path": "pyarrow",
         "name": "pyarrow",
         "children": [
-            "dataset",
-            "Table",
-            "RecordBatchReader"
+            "pyarrow.dataset",
+            "pyarrow.Table",
+            "pyarrow.RecordBatchReader"
         ]
     },
-    "dataset": {
+    "pyarrow.dataset": {
         "type": "module",
         "full_path": "pyarrow.dataset",
         "name": "dataset",
         "children": [
-            "dataset"
+            "pyarrow.dataset.Scanner",
+            "pyarrow.dataset.Dataset"
         ]
     },
-    "Table": {
+    "pyarrow.Table": {
         "type": "attribute",
         "full_path": "pyarrow.Table",
         "name": "Table",
         "children": []
     },
-    "RecordBatchReader": {
+    "pyarrow.RecordBatchReader": {
         "type": "attribute",
         "full_path": "pyarrow.RecordBatchReader",
         "name": "RecordBatchReader",
         "children": []
     },
-    "Scanner": {
+    "pyarrow.dataset.Scanner": {
         "type": "attribute",
         "full_path": "pyarrow.dataset.Scanner",
         "name": "Scanner",
         "children": []
     },
-    "Dataset": {
+    "pyarrow.dataset.Dataset": {
         "type": "attribute",
         "full_path": "pyarrow.dataset.Dataset",
         "name": "Dataset",
@@ -46,77 +47,88 @@
         "full_path": "pandas",
         "name": "pandas",
         "children": [
-            "DataFrame",
-            "_libs",
-            "isnull",
-            "ArrowDtype"
+            "pandas.DataFrame",
+            "pandas._libs",
+            "pandas.isnull",
+            "pandas.ArrowDtype"
         ]
     },
-    "DataFrame": {
+    "pandas.DataFrame": {
         "type": "attribute",
-        "full_path": "polars.DataFrame",
+        "full_path": "pandas.DataFrame",
         "name": "DataFrame",
         "children": []
     },
-    "_libs": {
+    "pandas._libs": {
         "type": "attribute",
         "full_path": "pandas._libs",
         "name": "_libs",
         "children": [
-            "missing"
+            "pandas._libs.missing"
         ]
     },
-    "isnull": {
+    "pandas.isnull": {
         "type": "attribute",
         "full_path": "pandas.isnull",
         "name": "isnull",
         "children": []
     },
-    "ArrowDtype": {
+    "pandas.ArrowDtype": {
         "type": "attribute",
         "full_path": "pandas.ArrowDtype",
         "name": "ArrowDtype",
         "children": []
     },
     "datetime": {
-        "type": "attribute",
-        "full_path": "datetime.datetime",
+        "type": "module",
+        "full_path": "datetime",
         "name": "datetime",
         "children": [
-            "min",
-            "max"
+            "datetime.date",
+            "datetime.time",
+            "datetime.timedelta",
+            "datetime.datetime"
         ]
     },
-    "date": {
+    "datetime.date": {
         "type": "attribute",
         "full_path": "datetime.date",
         "name": "date",
         "children": [
-            "max",
-            "min"
+            "datetime.date.max",
+            "datetime.date.min"
         ]
     },
-    "time": {
+    "datetime.time": {
         "type": "attribute",
         "full_path": "datetime.time",
         "name": "time",
         "children": []
     },
-    "timedelta": {
+    "datetime.timedelta": {
         "type": "attribute",
         "full_path": "datetime.timedelta",
         "name": "timedelta",
         "children": []
+    },
+    "datetime.datetime": {
+        "type": "attribute",
+        "full_path": "datetime.datetime",
+        "name": "datetime",
+        "children": [
+            "datetime.datetime.min",
+            "datetime.datetime.max"
+        ]
     },
     "decimal": {
         "type": "module",
         "full_path": "decimal",
         "name": "decimal",
         "children": [
-            "Decimal"
+            "decimal.Decimal"
         ]
     },
-    "Decimal": {
+    "decimal.Decimal": {
         "type": "attribute",
         "full_path": "decimal.Decimal",
         "name": "Decimal",
@@ -127,22 +139,22 @@
         "full_path": "IPython",
         "name": "IPython",
         "children": [
-            "get_ipython",
-            "display"
+            "IPython.get_ipython",
+            "IPython.display"
         ]
     },
-    "get_ipython": {
+    "IPython.get_ipython": {
         "type": "attribute",
         "full_path": "IPython.get_ipython",
         "name": "get_ipython",
         "children": []
     },
-    "display": {
+    "IPython.display": {
         "type": "attribute",
         "full_path": "IPython.display",
         "name": "display",
         "children": [
-            "display"
+            "IPython.display.display"
         ]
     },
     "ipywidgets": {
@@ -150,10 +162,10 @@
         "full_path": "ipywidgets",
         "name": "ipywidgets",
         "children": [
-            "FloatProgress"
+            "ipywidgets.FloatProgress"
         ]
     },
-    "FloatProgress": {
+    "ipywidgets.FloatProgress": {
         "type": "attribute",
         "full_path": "ipywidgets.FloatProgress",
         "name": "FloatProgress",
@@ -164,157 +176,157 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-            "ndarray",
-            "datetime64",
-            "generic;",
-            "int64;",
-            "bool_;",
-            "byte;",
-            "ubyte;",
-            "short;",
-            "ushort;",
-            "intc;",
-            "uintc;",
-            "int_;",
-            "uint;",
-            "longlong;",
-            "ulonglong;",
-            "half;",
-            "float16;",
-            "single;",
-            "longdouble;",
-            "csingle;",
-            "cdouble;",
-            "clongdouble;"
+            "numpy.ndarray",
+            "numpy.datetime64",
+            "numpy.generic;",
+            "numpy.int64;",
+            "numpy.bool_;",
+            "numpy.byte;",
+            "numpy.ubyte;",
+            "numpy.short;",
+            "numpy.ushort;",
+            "numpy.intc;",
+            "numpy.uintc;",
+            "numpy.int_;",
+            "numpy.uint;",
+            "numpy.longlong;",
+            "numpy.ulonglong;",
+            "numpy.half;",
+            "numpy.float16;",
+            "numpy.single;",
+            "numpy.longdouble;",
+            "numpy.csingle;",
+            "numpy.cdouble;",
+            "numpy.clongdouble;"
         ]
     },
-    "ndarray": {
+    "numpy.ndarray": {
         "type": "attribute",
         "full_path": "numpy.ndarray",
         "name": "ndarray",
         "children": []
     },
-    "datetime64": {
+    "numpy.datetime64": {
         "type": "attribute",
         "full_path": "numpy.datetime64",
         "name": "datetime64",
         "children": []
     },
-    "generic;": {
+    "numpy.generic;": {
         "type": "attribute",
         "full_path": "numpy.generic;",
         "name": "generic;",
         "children": []
     },
-    "int64;": {
+    "numpy.int64;": {
         "type": "attribute",
         "full_path": "numpy.int64;",
         "name": "int64;",
         "children": []
     },
-    "bool_;": {
+    "numpy.bool_;": {
         "type": "attribute",
         "full_path": "numpy.bool_;",
         "name": "bool_;",
         "children": []
     },
-    "byte;": {
+    "numpy.byte;": {
         "type": "attribute",
         "full_path": "numpy.byte;",
         "name": "byte;",
         "children": []
     },
-    "ubyte;": {
+    "numpy.ubyte;": {
         "type": "attribute",
         "full_path": "numpy.ubyte;",
         "name": "ubyte;",
         "children": []
     },
-    "short;": {
+    "numpy.short;": {
         "type": "attribute",
         "full_path": "numpy.short;",
         "name": "short;",
         "children": []
     },
-    "ushort;": {
+    "numpy.ushort;": {
         "type": "attribute",
         "full_path": "numpy.ushort;",
         "name": "ushort;",
         "children": []
     },
-    "intc;": {
+    "numpy.intc;": {
         "type": "attribute",
         "full_path": "numpy.intc;",
         "name": "intc;",
         "children": []
     },
-    "uintc;": {
+    "numpy.uintc;": {
         "type": "attribute",
         "full_path": "numpy.uintc;",
         "name": "uintc;",
         "children": []
     },
-    "int_;": {
+    "numpy.int_;": {
         "type": "attribute",
         "full_path": "numpy.int_;",
         "name": "int_;",
         "children": []
     },
-    "uint;": {
+    "numpy.uint;": {
         "type": "attribute",
         "full_path": "numpy.uint;",
         "name": "uint;",
         "children": []
     },
-    "longlong;": {
+    "numpy.longlong;": {
         "type": "attribute",
         "full_path": "numpy.longlong;",
         "name": "longlong;",
         "children": []
     },
-    "ulonglong;": {
+    "numpy.ulonglong;": {
         "type": "attribute",
         "full_path": "numpy.ulonglong;",
         "name": "ulonglong;",
         "children": []
     },
-    "half;": {
+    "numpy.half;": {
         "type": "attribute",
         "full_path": "numpy.half;",
         "name": "half;",
         "children": []
     },
-    "float16;": {
+    "numpy.float16;": {
         "type": "attribute",
         "full_path": "numpy.float16;",
         "name": "float16;",
         "children": []
     },
-    "single;": {
+    "numpy.single;": {
         "type": "attribute",
         "full_path": "numpy.single;",
         "name": "single;",
         "children": []
     },
-    "longdouble;": {
+    "numpy.longdouble;": {
         "type": "attribute",
         "full_path": "numpy.longdouble;",
         "name": "longdouble;",
         "children": []
     },
-    "csingle;": {
+    "numpy.csingle;": {
         "type": "attribute",
         "full_path": "numpy.csingle;",
         "name": "csingle;",
         "children": []
     },
-    "cdouble;": {
+    "numpy.cdouble;": {
         "type": "attribute",
         "full_path": "numpy.cdouble;",
         "name": "cdouble;",
         "children": []
     },
-    "clongdouble;": {
+    "numpy.clongdouble;": {
         "type": "attribute",
         "full_path": "numpy.clongdouble;",
         "name": "clongdouble;",
@@ -325,10 +337,10 @@
         "full_path": "pathlib",
         "name": "pathlib",
         "children": [
-            "Path"
+            "pathlib.Path"
         ]
     },
-    "Path": {
+    "pathlib.Path": {
         "type": "attribute",
         "full_path": "pathlib.Path",
         "name": "Path",
@@ -339,11 +351,17 @@
         "full_path": "polars",
         "name": "polars",
         "children": [
-            "DataFrame",
-            "LazyFrame"
+            "polars.DataFrame",
+            "polars.LazyFrame"
         ]
     },
-    "LazyFrame": {
+    "polars.DataFrame": {
+        "type": "attribute",
+        "full_path": "polars.DataFrame",
+        "name": "DataFrame",
+        "children": []
+    },
+    "polars.LazyFrame": {
         "type": "attribute",
         "full_path": "polars.LazyFrame",
         "name": "LazyFrame",
@@ -354,22 +372,28 @@
         "full_path": "pyduckdb",
         "name": "pyduckdb",
         "children": [
-            "filesystem",
-            "Value"
+            "pyduckdb.filesystem",
+            "pyduckdb.Value"
         ]
     },
-    "filesystem": {
+    "pyduckdb.filesystem": {
         "type": "module",
         "full_path": "pyduckdb.filesystem",
         "name": "filesystem",
         "children": [
-            "filesystem"
+            "pyduckdb.filesystem.ModifiedMemoryFileSystem"
         ]
     },
-    "Value": {
+    "pyduckdb.Value": {
         "type": "attribute",
         "full_path": "pyduckdb.Value",
         "name": "Value",
+        "children": []
+    },
+    "pyduckdb.filesystem.ModifiedMemoryFileSystem": {
+        "type": "attribute",
+        "full_path": "pyduckdb.filesystem.ModifiedMemoryFileSystem",
+        "name": "ModifiedMemoryFileSystem",
         "children": []
     },
     "pytz": {
@@ -377,10 +401,10 @@
         "full_path": "pytz",
         "name": "pytz",
         "children": [
-            "timezone"
+            "pytz.timezone"
         ]
     },
-    "timezone": {
+    "pytz.timezone": {
         "type": "attribute",
         "full_path": "pytz.timezone",
         "name": "timezone",
@@ -391,17 +415,17 @@
         "full_path": "types",
         "name": "types",
         "children": [
-            "UnionType",
-            "GenericAlias"
+            "types.UnionType",
+            "types.GenericAlias"
         ]
     },
-    "UnionType": {
+    "types.UnionType": {
         "type": "attribute",
         "full_path": "types.UnionType",
         "name": "UnionType",
         "children": []
     },
-    "GenericAlias": {
+    "types.GenericAlias": {
         "type": "attribute",
         "full_path": "types.GenericAlias",
         "name": "GenericAlias",
@@ -412,10 +436,10 @@
         "full_path": "typing",
         "name": "typing",
         "children": [
-            "_UnionGenericAlias"
+            "typing._UnionGenericAlias"
         ]
     },
-    "_UnionGenericAlias": {
+    "typing._UnionGenericAlias": {
         "type": "attribute",
         "full_path": "typing._UnionGenericAlias",
         "name": "_UnionGenericAlias",
@@ -426,10 +450,10 @@
         "full_path": "uuid",
         "name": "uuid",
         "children": [
-            "UUID"
+            "uuid.UUID"
         ]
     },
-    "UUID": {
+    "uuid.UUID": {
         "type": "attribute",
         "full_path": "uuid.UUID",
         "name": "UUID",
