@@ -1,0 +1,8 @@
+# name: test/sql/dot_commands/test_dot_schema.test
+# description: Test Dot commands taken over by SQL lite
+# group: [dot_commands]
+
+require tpch
+
+statement ok
+schema lineitem
