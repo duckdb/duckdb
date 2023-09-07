@@ -34,20 +34,20 @@ body:
   - type: input
     attributes:
       label: "OS:"
-      placeholder: e.g. iOS
-      description: Please include operating system version and architecture (eg, aarch64, x86, x64, etc)
+      placeholder: e.g., iOS
+      description: Please include operating system version and architecture (e.g., aarch64, x86, x64, etc)
     validations:
       required: true
   - type: input
     attributes:
       label: "DuckDB Version:"
-      placeholder: e.g. 22
+      placeholder: e.g., 22
     validations:
       required: true
   - type: input
     attributes:
       label: "DuckDB Client:"
-      placeholder: e.g. Python
+      placeholder: e.g., Python
     validations:
       required: true
 
@@ -57,13 +57,13 @@ body:
   - type: input
     attributes:
       label: "Full Name:"
-      placeholder: e.g. John Doe
+      placeholder: e.g., John Doe
     validations:
       required: true
   - type: input
     attributes:
       label: "Affiliation:"
-      placeholder: e.g. Oracle
+      placeholder: e.g., Oracle
     validations:
       required: true
 
