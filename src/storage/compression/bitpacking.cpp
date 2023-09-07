@@ -696,7 +696,7 @@ public:
 			}
 
 			idx_t offset_in_compression_group =
-				current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			    current_group_offset % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 			if (current_group.mode == BitpackingMode::CONSTANT) {
 				idx_t remaining = skip_count - skipped;
@@ -712,26 +712,26 @@ public:
 				current_group_offset += to_skip;
 				continue;
 			}
-			D_ASSERT(current_group.mode == BitpackingMode::FOR ||
-					 current_group.mode == BitpackingMode::DELTA_FOR);
+			D_ASSERT(current_group.mode == BitpackingMode::FOR || current_group.mode == BitpackingMode::DELTA_FOR);
 
-			idx_t to_skip = MinValue<idx_t>(skip_count - skipped, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
-																	  offset_in_compression_group);
+			idx_t to_skip =
+			    MinValue<idx_t>(skip_count - skipped,
+			                    BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - offset_in_compression_group);
 			// Calculate start of compression algorithm group
 			if (current_group.mode == BitpackingMode::DELTA_FOR) {
 				data_ptr_t current_position_ptr = current_group_ptr + current_group_offset * current_width / 8;
 				data_ptr_t decompression_group_start_pointer =
-					current_position_ptr - offset_in_compression_group * current_width / 8;
+				    current_position_ptr - offset_in_compression_group * current_width / 8;
 
 				BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(decompression_buffer),
-													 decompression_group_start_pointer, current_width,
-													 skip_sign_extend);
+				                                     decompression_group_start_pointer, current_width,
+				                                     skip_sign_extend);
 
 				T *decompression_ptr = decompression_buffer + offset_in_compression_group;
 				ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
-										   static_cast<T_S>(current_frame_of_reference), to_skip);
-				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr),
-								 static_cast<T_S>(current_delta_offset), to_skip);
+				                           static_cast<T_S>(current_frame_of_reference), to_skip);
+				DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_ptr), static_cast<T_S>(current_delta_offset),
+				                 to_skip);
 				current_delta_offset = decompression_ptr[to_skip - 1];
 			}
 

@@ -242,7 +242,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetVersionInfo();
+	row_group->version_info = GetOrCreateVersionInfoPtr();
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
 		if (i == changed_idx) {
@@ -281,7 +281,7 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 
 	// set up the row_group based on this row_group
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetVersionInfo();
+	row_group->version_info = GetOrCreateVersionInfoPtr();
 	row_group->columns = GetColumns();
 	// now add the new column
 	row_group->columns.push_back(std::move(added_column));
@@ -296,7 +296,7 @@ unique_ptr<RowGroup> RowGroup::RemoveColumn(RowGroupCollection &new_collection, 
 	D_ASSERT(removed_column < columns.size());
 
 	auto row_group = make_uniq<RowGroup>(new_collection, this->start, this->count);
-	row_group->version_info = GetVersionInfo();
+	row_group->version_info = GetOrCreateVersionInfoPtr();
 	// copy over all columns except for the removed one
 	auto &cols = GetColumns();
 	for (idx_t i = 0; i < cols.size(); i++) {
@@ -559,7 +559,7 @@ shared_ptr<RowVersionManager> &RowGroup::GetVersionInfo() {
 	return version_info;
 }
 
-RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
+shared_ptr<RowVersionManager> &RowGroup::GetOrCreateVersionInfoPtr() {
 	auto vinfo = GetVersionInfo();
 	if (!vinfo) {
 		lock_guard<mutex> lock(row_group_lock);
@@ -567,7 +567,11 @@ RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
 			version_info = make_shared<RowVersionManager>(start);
 		}
 	}
-	return *version_info;
+	return version_info;
+}
+
+RowVersionManager &RowGroup::GetOrCreateVersionInfo() {
+	return *GetOrCreateVersionInfoPtr();
 }
 
 idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
@@ -633,11 +637,8 @@ void RowGroup::CommitAppend(transaction_t commit_id, idx_t row_group_start, idx_
 }
 
 void RowGroup::RevertAppend(idx_t row_group_start) {
-	auto &vinfo = GetVersionInfo();
-	if (!vinfo) {
-		return;
-	}
-	vinfo->RevertAppend(row_group_start - this->start);
+	auto &vinfo = GetOrCreateVersionInfo();
+	vinfo.RevertAppend(row_group_start - this->start);
 	for (auto &column : columns) {
 		column->RevertAppend(row_group_start);
 	}

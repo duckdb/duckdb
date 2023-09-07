@@ -153,6 +153,8 @@ public:
 
 private:
 	shared_ptr<RowVersionManager> &GetVersionInfo();
+	shared_ptr<RowVersionManager> &GetOrCreateVersionInfoPtr();
+
 	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();

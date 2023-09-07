@@ -191,7 +191,7 @@ vector<MetaBlockPointer> RowVersionManager::Checkpoint(MetadataManager &manager)
 	MetadataWriter writer(manager, &storage_pointers);
 	// now serialize the actual version information
 	writer.Write<idx_t>(to_serialize.size());
-	for(auto &entry : to_serialize) {
+	for (auto &entry : to_serialize) {
 		auto &vector_idx = entry.first;
 		auto &chunk_info = entry.second.get();
 		writer.Write<idx_t>(vector_idx);
