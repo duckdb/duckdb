@@ -45,7 +45,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 
 string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
-	static_assert(0, "ExtensionDirectory functionality is not supported in duckdb-wasm");
+	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
 	string extension_directory;
 	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
