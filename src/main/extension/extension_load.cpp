@@ -77,8 +77,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 		char *str = (char *)EM_ASM_PTR(
 		    {
-			    var jsString = ((typeof runtime == = 'object') && runtime &&
-			                    (typeof runtime.whereToLoad == = 'function') && runtime.whereToLoad)
+			    var jsString = ((typeof runtime == 'object') && runtime && (typeof runtime.whereToLoad == 'function') &&
+			                    runtime.whereToLoad)
 			                       ? runtime.whereToLoad(UTF8ToString($0))
 			                       : (UTF8ToString($1));
 			    var lengthBytes = lengthBytesUTF8(jsString) + 1;
