@@ -82,7 +82,7 @@ jobs:
       run: |
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+        cibuildwheel --output-dir wheelhouse duckdb_tarball
 
    manylinux-extensions-x64:
     # Builds extensions for linux_md64_gcc4
@@ -173,7 +173,7 @@ jobs:
     - name: Install
       shell: bash
       run: |
-        pip install cibuildwheel twine pip setuptools wheel -U
+        pip install cibuildwheel twine build pip setuptools wheel -U
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - run: pip install git+https://github.com/pypa/pip#egg=pip
@@ -200,7 +200,7 @@ jobs:
       shell: bash
       run: |
         cd tools/pythonpkg
-        python setup.py sdist
+        pyproject-build --sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         ls duckdb_tarball
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
@@ -208,7 +208,7 @@ jobs:
         if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
           export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
         fi
-        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+        cibuildwheel --output-dir wheelhouse duckdb_tarball
         ls wheelhouse
 
     - name: Deploy
@@ -268,7 +268,7 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
           fi
-          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
         env:
@@ -338,7 +338,7 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
           fi
-          cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
       - name: Deploy
         env:
