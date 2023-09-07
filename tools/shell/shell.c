@@ -18658,28 +18658,6 @@ static int do_meta_command(char *zLine, ShellState *p){
         goto meta_command_exit;
       }
     }
-    if( zName!=0 ){
-      int isSchema = sqlite3_strlike(zName, "sqlite_master", '\\')==0
-                  || sqlite3_strlike(zName, "sqlite_schema", '\\')==0
-                  || sqlite3_strlike(zName,"sqlite_temp_master", '\\')==0
-                  || sqlite3_strlike(zName,"sqlite_temp_schema", '\\')==0;
-      if( isSchema ){
-        char *new_argv[2], *new_colv[2];
-        new_argv[0] = sqlite3_mprintf(
-                      "CREATE TABLE %s (\n"
-                      "  type text,\n"
-                      "  name text,\n"
-                      "  tbl_name text,\n"
-                      "  rootpage integer,\n"
-                      "  sql text\n"
-                      ")", zName);
-        new_argv[1] = 0;
-        new_colv[0] = "sql";
-        new_colv[1] = 0;
-        callback(&data, 1, new_argv, new_colv);
-        sqlite3_free(new_argv[0]);
-      }
-    }
     if( zDiv ){
       appendText(&sSelect, "SELECT sql FROM sqlite_master WHERE ", 0);
       if( zName ){
@@ -18702,7 +18680,7 @@ static int do_meta_command(char *zLine, ShellState *p){
       appendText(&sSelect, "type!='meta' AND sql IS NOT NULL"
                            " ORDER BY name", 0);
       if( bDebug ){
-        utf8_printf(p->out, "SQL: %s;\n", sSelect.z);
+        utf8_printf(p->out, "SQL: %s\n", sSelect.z);
       }else{
         rc = sqlite3_exec(p->db, sSelect.z, callback, &data, &zErrMsg);
       }
