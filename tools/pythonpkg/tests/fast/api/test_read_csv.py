@@ -441,9 +441,9 @@ class TestReadCSV(object):
         file1_path, file2_path = create_temp_csv
 
         # Use the temporary file paths to read CSV files
-        rel = duckdb.read_csv(f'{tmp_path}/file*.csv')
-        rel.show()
-        res = rel.fetchall()
+        con = duckdb.connect()
+        rel = con.read_csv(f'{tmp_path}/file*.csv')
+        res = con.sql("select * from rel order by all").fetchall()
         assert res == [(1,), (2,), (3,), (4,), (5,), (6,)]
 
     def test_read_csv_combined(self):
