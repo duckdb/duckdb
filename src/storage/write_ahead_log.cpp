@@ -96,7 +96,7 @@ void WriteAheadLog::WriteCreateSchema(const SchemaCatalogEntry &entry) {
 	BinarySerializer serializer(*writer);
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_SCHEMA);
-	serializer.WriteProperty(101, "schema", &entry.name);
+	serializer.WriteProperty(101, "schema", entry.name);
 	serializer.End();
 }
 
