@@ -178,26 +178,26 @@
         "children": [
             "numpy.ndarray",
             "numpy.datetime64",
-            "numpy.generic;",
-            "numpy.int64;",
-            "numpy.bool_;",
-            "numpy.byte;",
-            "numpy.ubyte;",
-            "numpy.short;",
-            "numpy.ushort;",
-            "numpy.intc;",
-            "numpy.uintc;",
-            "numpy.int_;",
-            "numpy.uint;",
-            "numpy.longlong;",
-            "numpy.ulonglong;",
-            "numpy.half;",
-            "numpy.float16;",
-            "numpy.single;",
-            "numpy.longdouble;",
-            "numpy.csingle;",
-            "numpy.cdouble;",
-            "numpy.clongdouble;"
+            "numpy.generic",
+            "numpy.int64",
+            "numpy.bool_",
+            "numpy.byte",
+            "numpy.ubyte",
+            "numpy.short",
+            "numpy.ushort",
+            "numpy.intc",
+            "numpy.uintc",
+            "numpy.int_",
+            "numpy.uint",
+            "numpy.longlong",
+            "numpy.ulonglong",
+            "numpy.half",
+            "numpy.float16",
+            "numpy.single",
+            "numpy.longdouble",
+            "numpy.csingle",
+            "numpy.cdouble",
+            "numpy.clongdouble"
         ]
     },
     "numpy.ndarray": {
@@ -212,124 +212,124 @@
         "name": "datetime64",
         "children": []
     },
-    "numpy.generic;": {
+    "numpy.generic": {
         "type": "attribute",
-        "full_path": "numpy.generic;",
-        "name": "generic;",
+        "full_path": "numpy.generic",
+        "name": "generic",
         "children": []
     },
-    "numpy.int64;": {
+    "numpy.int64": {
         "type": "attribute",
-        "full_path": "numpy.int64;",
-        "name": "int64;",
+        "full_path": "numpy.int64",
+        "name": "int64",
         "children": []
     },
-    "numpy.bool_;": {
+    "numpy.bool_": {
         "type": "attribute",
-        "full_path": "numpy.bool_;",
-        "name": "bool_;",
+        "full_path": "numpy.bool_",
+        "name": "bool_",
         "children": []
     },
-    "numpy.byte;": {
+    "numpy.byte": {
         "type": "attribute",
-        "full_path": "numpy.byte;",
-        "name": "byte;",
+        "full_path": "numpy.byte",
+        "name": "byte",
         "children": []
     },
-    "numpy.ubyte;": {
+    "numpy.ubyte": {
         "type": "attribute",
-        "full_path": "numpy.ubyte;",
-        "name": "ubyte;",
+        "full_path": "numpy.ubyte",
+        "name": "ubyte",
         "children": []
     },
-    "numpy.short;": {
+    "numpy.short": {
         "type": "attribute",
-        "full_path": "numpy.short;",
-        "name": "short;",
+        "full_path": "numpy.short",
+        "name": "short",
         "children": []
     },
-    "numpy.ushort;": {
+    "numpy.ushort": {
         "type": "attribute",
-        "full_path": "numpy.ushort;",
-        "name": "ushort;",
+        "full_path": "numpy.ushort",
+        "name": "ushort",
         "children": []
     },
-    "numpy.intc;": {
+    "numpy.intc": {
         "type": "attribute",
-        "full_path": "numpy.intc;",
-        "name": "intc;",
+        "full_path": "numpy.intc",
+        "name": "intc",
         "children": []
     },
-    "numpy.uintc;": {
+    "numpy.uintc": {
         "type": "attribute",
-        "full_path": "numpy.uintc;",
-        "name": "uintc;",
+        "full_path": "numpy.uintc",
+        "name": "uintc",
         "children": []
     },
-    "numpy.int_;": {
+    "numpy.int_": {
         "type": "attribute",
-        "full_path": "numpy.int_;",
-        "name": "int_;",
+        "full_path": "numpy.int_",
+        "name": "int_",
         "children": []
     },
-    "numpy.uint;": {
+    "numpy.uint": {
         "type": "attribute",
-        "full_path": "numpy.uint;",
-        "name": "uint;",
+        "full_path": "numpy.uint",
+        "name": "uint",
         "children": []
     },
-    "numpy.longlong;": {
+    "numpy.longlong": {
         "type": "attribute",
-        "full_path": "numpy.longlong;",
-        "name": "longlong;",
+        "full_path": "numpy.longlong",
+        "name": "longlong",
         "children": []
     },
-    "numpy.ulonglong;": {
+    "numpy.ulonglong": {
         "type": "attribute",
-        "full_path": "numpy.ulonglong;",
-        "name": "ulonglong;",
+        "full_path": "numpy.ulonglong",
+        "name": "ulonglong",
         "children": []
     },
-    "numpy.half;": {
+    "numpy.half": {
         "type": "attribute",
-        "full_path": "numpy.half;",
-        "name": "half;",
+        "full_path": "numpy.half",
+        "name": "half",
         "children": []
     },
-    "numpy.float16;": {
+    "numpy.float16": {
         "type": "attribute",
-        "full_path": "numpy.float16;",
-        "name": "float16;",
+        "full_path": "numpy.float16",
+        "name": "float16",
         "children": []
     },
-    "numpy.single;": {
+    "numpy.single": {
         "type": "attribute",
-        "full_path": "numpy.single;",
-        "name": "single;",
+        "full_path": "numpy.single",
+        "name": "single",
         "children": []
     },
-    "numpy.longdouble;": {
+    "numpy.longdouble": {
         "type": "attribute",
-        "full_path": "numpy.longdouble;",
-        "name": "longdouble;",
+        "full_path": "numpy.longdouble",
+        "name": "longdouble",
         "children": []
     },
-    "numpy.csingle;": {
+    "numpy.csingle": {
         "type": "attribute",
-        "full_path": "numpy.csingle;",
-        "name": "csingle;",
+        "full_path": "numpy.csingle",
+        "name": "csingle",
         "children": []
     },
-    "numpy.cdouble;": {
+    "numpy.cdouble": {
         "type": "attribute",
-        "full_path": "numpy.cdouble;",
-        "name": "cdouble;",
+        "full_path": "numpy.cdouble",
+        "name": "cdouble",
         "children": []
     },
-    "numpy.clongdouble;": {
+    "numpy.clongdouble": {
         "type": "attribute",
-        "full_path": "numpy.clongdouble;",
-        "name": "clongdouble;",
+        "full_path": "numpy.clongdouble",
+        "name": "clongdouble",
         "children": []
     },
     "pathlib": {
@@ -457,6 +457,50 @@
         "type": "attribute",
         "full_path": "uuid.UUID",
         "name": "UUID",
+        "children": []
+    },
+    "pandas._libs.missing": {
+        "type": "attribute",
+        "full_path": "pandas._libs.missing",
+        "name": "missing",
+        "children": [
+            "pandas._libs.missing.NAType"
+        ]
+    },
+    "pandas._libs.missing.NAType": {
+        "type": "attribute",
+        "full_path": "pandas._libs.missing.NAType",
+        "name": "NAType",
+        "children": []
+    },
+    "datetime.date.max": {
+        "type": "attribute",
+        "full_path": "datetime.date.max",
+        "name": "max",
+        "children": []
+    },
+    "datetime.date.min": {
+        "type": "attribute",
+        "full_path": "datetime.date.min",
+        "name": "min",
+        "children": []
+    },
+    "datetime.datetime.min": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.min",
+        "name": "min",
+        "children": []
+    },
+    "datetime.datetime.max": {
+        "type": "attribute",
+        "full_path": "datetime.datetime.max",
+        "name": "max",
+        "children": []
+    },
+    "IPython.display.display": {
+        "type": "attribute",
+        "full_path": "IPython.display.display",
+        "name": "display",
         "children": []
     }
 }

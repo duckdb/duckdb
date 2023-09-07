@@ -29,13 +29,15 @@ class ImportCacheAttribute:
     def __repr__(self) -> str:
         return str(self.children)
 
-    def to_json(self):
-        return {
+    def populate_json(self, json_data: dict):
+        json_data[self.full_path] = {
             "type": self.type,
             "full_path": self.full_path,
             "name": self.name,
             "children": list(self.children.keys()),
         }
+        for item in self.children:
+            self.children[item].populate_json(json_data)
 
 
 class ImportCacheModule:
@@ -55,8 +57,15 @@ class ImportCacheModule:
         assert self.has_item(item_name)
         return self.items[item_name]
 
-    def to_json(self):
-        return {"type": self.type, "full_path": self.full_path, "name": self.name, "children": list(self.items.keys())}
+    def populate_json(self, json_data: dict):
+        json_data[self.full_path] = {
+            "type": self.type,
+            "full_path": self.full_path,
+            "name": self.name,
+            "children": list(self.items.keys()),
+        }
+        for key_name in self.items:
+            self.items[key_name].populate_json(json_data)
 
     def has_item(self, item_name: str) -> bool:
         return item_name in self.items
@@ -123,12 +132,13 @@ class ImportCacheGenerator:
         assert len(parts) >= 2
         self.get_item(path)
 
+    def populate_json(self, json_data: dict):
+        for module_name in self.modules:
+            self.modules[module_name].populate_json(json_data)
+
     def to_json(self):
         json_data = {}
-        for module_name, module in self.modules.items():
-            json_data[module_name] = module.to_json()
-            for item_name, item in module.items.items():
-                json_data[item_name] = item.to_json()
+        self.populate_json(json_data)
         return json_data
 
 
