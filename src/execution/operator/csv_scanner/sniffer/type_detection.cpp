@@ -321,6 +321,11 @@ void CSVSniffer::DetectTypes() {
 		for (; row_idx < tuples.size(); row_idx++) {
 			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
+				if (col_type_candidates.empty()){
+					throw InvalidInputException(
+		    "Error in file \"%s\": CSV types could not be auto-detected. Consider setting parser types manually.",
+		    options.file_path);
+				}
 				auto cur_top_candidate = col_type_candidates.back();
 				auto dummy_val = tuples[row_idx].values[col];
 				// try cast from string to sql_type
