@@ -70,6 +70,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
+		string extension_name = ApplyExtensionAlias(extension);
 #ifdef WASM_LOADABLE_EXTENSIONS
 		string url_template = ExtensionUrlTemplate(client_config, "");
 		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
@@ -105,7 +106,6 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
-		string extension_name = ApplyExtensionAlias(extension);
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
 #endif
 	}
