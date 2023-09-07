@@ -174,7 +174,7 @@ optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
 }
 
 BlockPointer Node16::Serialize(ART &art, MetadataWriter &writer) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	// recurse into children and retrieve child block pointers
 	//	vector<BlockPointer> child_block_pointers;
 	//	for (idx_t i = 0; i < count; i++) {
@@ -204,7 +204,7 @@ BlockPointer Node16::Serialize(ART &art, MetadataWriter &writer) {
 }
 
 void Node16::Deserialize(MetadataReader &reader) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	count = reader.Read<uint8_t>();
 	//
 	//	// read key values

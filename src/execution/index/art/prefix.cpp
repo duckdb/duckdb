@@ -307,7 +307,7 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 }
 
 BlockPointer Prefix::Serialize(ART &art, Node &node, MetadataWriter &writer) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	reference<Node> first_non_prefix(node);
 	//	idx_t total_count = Prefix::TotalCount(art, first_non_prefix);
 	//	auto child_block_pointer = first_non_prefix.get().Serialize(art, writer);
@@ -338,7 +338,7 @@ BlockPointer Prefix::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 }
 
 void Prefix::Deserialize(ART &art, Node &node, MetadataReader &reader) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	auto total_count = reader.Read<idx_t>();
 	//	reference<Node> current_node(node);
 	//

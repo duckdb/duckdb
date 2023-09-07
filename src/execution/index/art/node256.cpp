@@ -110,7 +110,7 @@ optional_ptr<Node> Node256::GetNextChild(uint8_t &byte) {
 }
 
 BlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	// recurse into children and retrieve child block pointers
 	//	vector<BlockPointer> child_block_pointers;
 	//	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
@@ -132,7 +132,7 @@ BlockPointer Node256::Serialize(ART &art, MetadataWriter &writer) {
 }
 
 void Node256::Deserialize(MetadataReader &reader) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	count = reader.Read<uint16_t>();
 	//
 	//	// read child block pointers

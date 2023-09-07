@@ -526,7 +526,7 @@ void ReplayState::ReplayUpdate(BinaryDeserializer &deserializer) {
 }
 
 void ReplayState::ReplayCheckpoint(BinaryDeserializer &deserializer) {
-	checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(100, "meta_block");
+	checkpoint_id = deserializer.ReadProperty<MetaBlockPointer>(101, "meta_block");
 }
 
 } // namespace duckdb

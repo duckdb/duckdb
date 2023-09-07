@@ -325,7 +325,7 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 
 BlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	if (node.GetType() == NType::LEAF_INLINED) {
 	//		auto block_pointer = writer.GetBlockPointer();
 	//		writer.Write(NType::LEAF_INLINED);
@@ -355,7 +355,7 @@ BlockPointer Leaf::Serialize(ART &art, Node &node, MetadataWriter &writer) {
 }
 
 void Leaf::Deserialize(ART &art, Node &node, MetadataReader &reader) {
-	throw InternalException("TODO");
+	throw InternalException("TODO ART SERIALIZATION");
 	//	auto total_count = reader.Read<idx_t>();
 	//	reference<Node> ref_node(node);
 	//
