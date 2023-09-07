@@ -36,7 +36,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-
 #endif
 
 namespace duckdb {
@@ -77,6 +76,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 	DataChunk all_columns;
 };
 
+enum class ParquetFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
+
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	mutex lock;
 
@@ -85,7 +86,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	//! Currently opened readers
 	vector<shared_ptr<ParquetReader>> readers;
 	//! Flag to indicate a file is being opened
-	vector<bool> file_opening;
+	vector<ParquetFileState> file_states;
 	//! Mutexes to wait for a file that is currently being opened
 	unique_ptr<mutex[]> file_mutexes;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
@@ -344,7 +345,7 @@ public:
 		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
 
-		result->file_opening = vector<bool>(bind_data.files.size(), false);
+		result->file_states = vector<ParquetFileState>(bind_data.files.size(), ParquetFileState::UNOPENED);
 		result->file_mutexes = unique_ptr<mutex[]>(new mutex[bind_data.files.size()]);
 		if (bind_data.files.empty()) {
 			result->initial_reader = nullptr;
@@ -352,6 +353,8 @@ public:
 			result->readers = std::move(bind_data.union_readers);
 			if (result->readers.size() != bind_data.files.size()) {
 				result->readers = vector<shared_ptr<ParquetReader>>(bind_data.files.size(), nullptr);
+			} else {
+				std::fill(result->file_states.begin(), result->file_states.end(), ParquetFileState::OPEN);
 			}
 			if (bind_data.initial_reader) {
 				result->initial_reader = std::move(bind_data.initial_reader);
@@ -363,6 +366,7 @@ public:
 				    make_shared<ParquetReader>(context, bind_data.files[0], bind_data.parquet_options);
 				result->readers[0] = result->initial_reader;
 			}
+			result->file_states[0] = ParquetFileState::OPEN;
 		}
 		for (auto &reader : result->readers) {
 			if (!reader) {
@@ -474,7 +478,7 @@ public:
 
 			D_ASSERT(parallel_state.initial_reader);
 
-			if (parallel_state.readers[parallel_state.file_index]) {
+			if (parallel_state.file_states[parallel_state.file_index] == ParquetFileState::OPEN) {
 				if (parallel_state.row_group_index <
 				    parallel_state.readers[parallel_state.file_index]->NumRowGroups()) {
 					// The current reader has rowgroups left to be scanned
@@ -486,11 +490,13 @@ public:
 					parallel_state.row_group_index++;
 					return true;
 				} else {
+					// Close current file
+					parallel_state.file_states[parallel_state.file_index] = ParquetFileState::CLOSED;
+					parallel_state.readers[parallel_state.file_index] = nullptr;
+
 					// Set state to the next file
 					parallel_state.file_index++;
 					parallel_state.row_group_index = 0;
-
-					parallel_state.readers[parallel_state.file_index - 1] = nullptr;
 
 					if (parallel_state.file_index >= bind_data.files.size()) {
 						return false;
@@ -504,8 +510,7 @@ public:
 			}
 
 			// Check if the current file is being opened, in that case we need to wait for it.
-			if (!parallel_state.readers[parallel_state.file_index] &&
-			    parallel_state.file_opening[parallel_state.file_index]) {
+			if (parallel_state.file_states[parallel_state.file_index] == ParquetFileState::OPENING) {
 				WaitForFile(parallel_state.file_index, parallel_state, parallel_lock);
 			}
 		}
@@ -536,7 +541,8 @@ public:
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
 			if (parallel_state.file_index >= parallel_state.readers.size() ||
-			    parallel_state.readers[parallel_state.file_index] || parallel_state.error_opening_file) {
+			    parallel_state.file_states[parallel_state.file_index] != ParquetFileState::OPENING ||
+			    parallel_state.error_opening_file) {
 				return;
 			}
 		}
@@ -546,10 +552,12 @@ public:
 	static bool TryOpenNextFile(ClientContext &context, const ParquetReadBindData &bind_data,
 	                            ParquetReadLocalState &scan_data, ParquetReadGlobalState &parallel_state,
 	                            unique_lock<mutex> &parallel_lock) {
-		for (idx_t i = parallel_state.file_index; i < bind_data.files.size(); i++) {
-			if (!parallel_state.readers[i] && parallel_state.file_opening[i] == false) {
+		const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+		const auto file_index_limit = MinValue<idx_t>(parallel_state.file_index + num_threads, bind_data.files.size());
+		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
+			if (parallel_state.file_states[i] == ParquetFileState::UNOPENED) {
 				string file = bind_data.files[i];
-				parallel_state.file_opening[i] = true;
+				parallel_state.file_states[i] = ParquetFileState::OPENING;
 				auto pq_options = parallel_state.initial_reader->parquet_options;
 
 				// Now we switch which lock we are holding, instead of locking the global state, we grab the lock on
@@ -574,6 +582,7 @@ public:
 				// Now re-lock the state and add the reader
 				parallel_lock.lock();
 				parallel_state.readers[i] = reader;
+				parallel_state.file_states[i] = ParquetFileState::OPEN;
 
 				return true;
 			}

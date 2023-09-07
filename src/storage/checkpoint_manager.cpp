@@ -13,11 +13,8 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
@@ -283,10 +280,11 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 }
 
 void CheckpointReader::ReadSchema(ClientContext &context, FormatDeserializer &deserializer) {
-
 	// Read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
+
+	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	schema_info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, schema_info);
 
@@ -356,11 +354,11 @@ void CheckpointReader::ReadSequence(ClientContext &context, FormatDeserializer &
 // Indexes
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, FormatSerializer &serializer) {
-	// The index data should already have been written as part of WriteTableData.
+	// The index data is written as part of WriteTableData.
 	// Here, we need only serialize the pointer to that data.
-	auto root_offset = index_catalog.index->GetSerializedDataPointer();
+	auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
 	serializer.WriteProperty(100, "index", &index_catalog);
-	serializer.WriteProperty(101, "root_offset", root_offset);
+	serializer.WriteProperty(101, "root_block_pointer", root_block_pointer);
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, FormatDeserializer &deserializer) {
@@ -377,8 +375,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, FormatDeserializer &des
 	index_catalog.info = table_catalog.GetStorage().info;
 
 	// We deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block id and offset
-	auto root_offset = deserializer.ReadProperty<BlockPointer>(101, "root_offset");
+	// except the root block pointer
+	auto index_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
 
 	// obtain the expressions of the ART from the index metadata
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -419,7 +417,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, FormatDeserializer &des
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
 		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          index_info.constraint_type, storage.db, nullptr, root_offset);
+		                          index_info.constraint_type, storage.db, nullptr, index_block_pointer);
+
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 	} break;
@@ -468,7 +467,6 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, FormatDeserializer
 // Table Metadata
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteTable(TableCatalogEntry &table, FormatSerializer &serializer) {
-
 	// Write the table meta data
 	serializer.WriteProperty(100, "table", &table);
 
@@ -479,7 +477,6 @@ void CheckpointWriter::WriteTable(TableCatalogEntry &table, FormatSerializer &se
 }
 
 void CheckpointReader::ReadTable(ClientContext &context, FormatDeserializer &deserializer) {
-
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
 	auto binder = Binder::CreateBinder(context);
