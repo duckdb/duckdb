@@ -5,7 +5,14 @@
 
 *There will be links throughout this README to the official [Microsoft ODBC documentation](https://learn.microsoft.com/en-us/sql/odbc/reference/odbc-programmer-s-reference?view=sql-server-ver16), which is a great resource for learning more about ODBC.*
 
-## Handles
+## General Concepts:
+
+* [Handles](#handles)
+* [Connecting](#connecting)
+* [Error Handling and Diagnostics](#error-handling-and-diagnostics)
+* [Buffers and Binding](#buffers-and-binding)
+
+### Handles
 A [handle](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/handles?view=sql-server-ver16) is a pointer to a specific ODBC object which is used to interact with the database.  There are several different types of handles, each with a different purpose, these are the environment handle, the connection handle, the statement handle, and the descriptor handle. Handles are allocated using the [`SQLAllocHandle`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function?view=sql-server-ver16) which takes as input the type of handle to allocate, and a pointer to the handle, the driver then creates a new handle of the specified type which it returns to the application.
 
 #### Handle Types
@@ -17,32 +24,32 @@ A [handle](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/hand
 | [Statement](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/statement-handles?view=sql-server-ver16)     | `SQL_HANDLE_STMT` | 	Handles the execution of SQL statements, as well as the returned result sets.                                                                                         | Executing SQL queries, fetching result sets, managing statement options          | To facilitate the execution of concurrent queries, multiple handles can be [allocated](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/allocating-a-statement-handle-odbc?view=sql-server-ver16) per connection.                                                                                                                                                                                                                  |
 | [Descriptor](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptor-handles?view=sql-server-ver16)   | `SQL_HANDLE_DESC` | 	Describes the attributes of a data structure or parameter, and allows the application to specify the structure of data to be bound/retrieved.                         | Describing table structures, result sets, binding columns to application buffers | Used in situations where data structures need to be explicitly defined, for example during parameter binding or result set fetching.  They are automatically allocated when a statement is allocated, but can also be allocated explicitly.                                                                                                                                                                                                        |
 
-## ODBC  Lifecycle
-### 1. Connecting
+### Connecting
 The first step is to connect to the data source so that the application can perform database operations.  First the application must allocate an environment handle, and then a connection handle.  The connection handle is then used to connect to the data source.  There are two functions which can be used to connect to a data source, [`SQLDriverConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqldriverconnect-function?view=sql-server-ver16) and [`SQLConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlconnect-function?view=sql-server-ver16).  The former is used to connect to a data source using a connection string, while the latter is used to connect to a data source using a DSN. 
 
 #### Connection String
-A [connection string](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-strings?view=sql-server-ver16) is a string which contains the information needed to connect to a data source.  It is formatted as a semicolon separated list of key-value pairs.  The following table lists the keys which can be used in a connection string, and their corresponding values, however currently DuckDB only utilizes the DSN and ignores the rest of the parameters.
+A [connection string](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-strings?view=sql-server-ver16) is a string which contains the information needed to connect to a data source.  It is formatted as a semicolon separated list of key-value pairs, however DuckDB currently  only utilizes the DSN and ignores the rest of the parameters.  
 
-| Key        | Value                                                                                                                    |
-|------------|--------------------------------------------------------------------------------------------------------------------------|
-| `DSN`      | The name of the data source to connect to. See more [below](#data-source-name-dsn).                                      |                                                     
-| `FILEDSN`  | The path to a file containing a DSN.                                                                                     |
-| `DRIVER`   | The name of the ODBC driver to use.  This is the name of the driver as it appears in the ODBC Data Source Administrator. |
-| `UID`      | The username to use when connecting to the database.                                                                     |
-| `PWD`      | The password to use when connecting to the database.                                                                     |
-| `SAVEFILE` | The path to a file to which the connection string should be saved.                                                       |
+#### DSN
+A DSN (_Data Source Name_) is a string that identifies a database.  It can be a file path, URL, or a database name.  For example:  `C:\Users\me\duckdb.db`, and `DuckDB` are both valid DSN's. More information on DSN's can be found [here](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/choosing-a-data-source-or-driver?view=sql-server-ver16).
 
+[//]: # (| Key        | Value                                                                                                                                                                     |)
 
-#### Data Source Name (DSN)
-A DSN is a string that identifies a database. It can be a file path, a URL, or a database name.  For example, the following are all valid DSNs:
+[//]: # (|------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|)
 
-[//]: # (TODO: change to example relevent to duckdb)
-- `C:\Users\me\duckdb.db`
-- `DuckDB`
+[//]: # (| `DSN`      | A DSN is a string that identifies a database. It can be a file path, a URL, or a database name.  For example:  `C:\Users\me\duckdb.db`, and `DuckDB` are both valid DSN's |                                                     )
 
+[//]: # (| `FILEDSN`  | The path to a file containing a DSN.                                                                                                                                      |)
 
-## Error Handling
+[//]: # (| `DRIVER`   | The name of the ODBC driver to use.  This is the name of the driver as it appears in the ODBC Data Source Administrator.                                                  |)
+
+[//]: # (| `UID`      | The username to use when connecting to the database.                                                                                                                      |)
+
+[//]: # (| `PWD`      | The password to use when connecting to the database.                                                                                                                      |)
+
+[//]: # (| `SAVEFILE` | The path to a file to which the connection string should be saved.                                                                                                        |)
+
+### Error Handling and Diagnostics
 All functions in ODBC return a code which represents the success or failure of the function.  This allows for easy error handling, as the application can simply check the return code of each function call to determine if it was successful.  If the function was unsuccessful, the application can then use the [`SQLGetDiagRec`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetdiagrec-function?view=sql-server-ver16) function to retrieve the error information. The following table defines the [return codes](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/return-codes-odbc?view=sql-server-ver16):
 
 | Return Code             | Description                                                                                                                                  |
@@ -55,10 +62,17 @@ All functions in ODBC return a code which represents the success or failure of t
 | `SQL_NEED_DATA`         | More data is needed, such as when a parameter data is sent at execution time, or additional connection information is required.              |
 | `SQL_STILL_EXECUTING`   | A function that was asynchronously executed is still executing.                                                                              |
 
-## Buffers and Binding
+### Buffers and Binding
 A buffer is a block of memory used to store data.  Buffers are used to store data retrieved from the database, or to send data to the database.  Buffers are allocated by the application, and then bound to a column in a result set, or a parameter in a query, using the [`SQLBindCol`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function?view=sql-server-ver16) and [`SQLBindParameter`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindparameter-function?view=sql-server-ver16) functions.  When the application fetches a row from the result set, or executes a query, the data is stored in the buffer.  When the application sends a query to the database, the data in the buffer is sent to the database.
 
 ## Setting up an Application:
+1. [Include the SQL Header Files](#1-include-the-sql-header-files)
+2. [Define the ODBC Handles and Connect to the Database ](#2-define-the-odbc-handles-and-connect-to-the-database)
+3. [Adding a Query](#3-adding-a-query)
+4. [Fetching Results](#4-fetching-results)
+5. [Go Wild](#5-go-wild)
+6. [Free the Handles and Disconnecting](#6-free-the-handles-and-disconnecting)
+
 ### 1. Include the SQL Header Files
 The first step is to include the SQL header files:
 
@@ -102,7 +116,7 @@ For `MAKEFILE`:
 LDLIBS=-L/path/to/duckdb_odbc/libduckdb_odbc.dylib
 ```
 
-### 2. Define the ODBC Handles
+### 2. Define the ODBC Handles and Connect to the Database
 Then set up the ODBC handles, allocate them, and connect to the database.  First the environment handle is allocated, then the environment is set to ODBC version 3, then the connection handle is allocated, and finally the connection is made to the database.  The following code snippet shows how to do this:
 
 ```c
@@ -182,7 +196,7 @@ SQLFreeHandle(SQL_HANDLE_ENV, env);
 Freeing the connection and environment handles can only be done after the connection to the database has been closed.  Trying to free them before disconnecting from the database will result in an error.
 
 ## Sample Application
-The following is a sample application that includes a `cpp` file that connects to the database, executes a query, fetches the results, and prints them.  It also disconnects from the database and frees the handles, and includes a fuction to check the return value of ODBC functions.  It also includes a `CMakeLists.txt` file that can be used to build the application.
+The following is a sample application that includes a `cpp` file that connects to the database, executes a query, fetches the results, and prints them.  It also disconnects from the database and frees the handles, and includes a function to check the return value of ODBC functions.  It also includes a `CMakeLists.txt` file that can be used to build the application.
 
 #### Sample `.cpp` file:
 ```c
@@ -263,15 +277,6 @@ add_executable(ODBC_Tester_App main.cpp)
 target_link_libraries(ODBC_Tester_App /duckdb_odbc/libduckdb_odbc.dylib)
 ```
 
-[//]: # (<details>)
-
-[//]: # (    <summary>Click to expand for more information on handles</summary>)
-
-[//]: # ()
-[//]: # (</details>)
-
-
-
 ## Running the ODBC Client and Tests
 
 #### Build the ODBC client (from within the main DuckDB repository)
@@ -280,46 +285,8 @@ target_link_libraries(ODBC_Tester_App /duckdb_odbc/libduckdb_odbc.dylib)
 BUILD_ODBC=1 DISABLE_SANITIZER=1 make debug -j
 ```
 
-#### Run the ODBC client tests
+#### Run the ODBC Unit Tests
 
 ```bash
-# run all tests
-python3 tools/odbc/test/run_psqlodbc_test.py --build_psqlodbc --overwrite --no-trace
-
-# run an individual test
-python3 tools/odbc/test/run_psqlodbc_test.py --build_psqlodbc --overwrite --no-trace --test result-conversions-test
-```
-
-#### Fix the ODBC Client Tests
-First verify that the new output is correct. Then run the test using the `run_psqlodbc_test.py` script as usual, but use the `--fix` parameter.
-
-```bash
-python3 tools/odbc/test/run_psqlodbc_test.py --build_psqlodbc --overwrite --no-trace --test result-conversions-test --fix
-```
-
-This overwrites the stored output. You can run the test without the fix flag, and it should now pass.
-
-Afterwards, we need to commit the changes to the psqlodbc repository:
-
-```bash
-cd psqlodbc
-git add -p
-git commit -m "Fix output"
-git push
-```
-
-Then we need to update the git hash in our PR that broke the psqlodbc tests. Use `git log` to get the hash of the previous commit and the current commit.
-
-```
-git log
-# old: d4d9097b87c46ddee5c8ae015c3ea27a6bd8938e
-# new: 4acd0c615b690d526fd3cf7f2e666eee4ff9cbdb
-```
-
-Then search in the CI folder for the old hash, and replace it within the new hash:
-
-```bash
-grep -R .github 4acd0c615b690d526fd3cf7f2e666eee4ff9cbdb
-.github/workflows/Windows.yml:        (cd psqlodbc && git checkout d4d9097b87c46ddee5c8ae015c3ea27a6bd8938e && make release)
-.github/workflows/Main.yml:        (cd psqlodbc && git checkout d4d9097b87c46ddee5c8ae015c3ea27a6bd8938e && make debug)
+build/debug/tools/odbc/test/test_odbc
 ```
