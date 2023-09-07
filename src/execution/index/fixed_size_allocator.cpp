@@ -9,8 +9,7 @@ constexpr uint8_t FixedSizeAllocator::SHIFT[];
 
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
-      metadata_manager(block_manager.GetMetadataManager()),
-      partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT), segment_size(segment_size),
+      metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size),
       total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
@@ -247,6 +246,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 
 BlockPointer FixedSizeAllocator::Serialize(MetadataWriter &writer) {
 
+	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
 	for (auto &buffer : buffers) {
 		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.second.Get()));
 		auto max_offset = GetMaxOffset(mask);
@@ -393,7 +393,7 @@ uint32_t FixedSizeAllocator::GetMaxOffset(ValidityMask &mask) {
 	}
 
 	// there are no allocations in this buffer
-	return 0;
+	throw InternalException("tried to serialize empty buffer");
 }
 
 idx_t FixedSizeAllocator::GetAvailableBufferId() const {

@@ -42,8 +42,6 @@ public:
 	BufferManager &buffer_manager;
 	//! Metadata manager for (de)serialization
 	MetadataManager &metadata_manager;
-	//! Partial block manager of the fixed-size allocator
-	PartialBlockManager partial_block_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation

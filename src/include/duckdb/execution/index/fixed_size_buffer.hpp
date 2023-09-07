@@ -22,16 +22,23 @@ class MetadataWriter;
 struct PartialBlockForIndex : public PartialBlock {
 public:
 	explicit PartialBlockForIndex(BlockManager &block_manager, PartialBlockState state,
-	                              const shared_ptr<BlockHandle> &block_handle);
-	~PartialBlockForIndex() override;
+	                                                    const shared_ptr<BlockHandle> &block_handle)
+	    : PartialBlock(state), block_manager(block_manager), block_handle(block_handle) {
+	}
+	~PartialBlockForIndex() override {};
 
 	BlockManager &block_manager;
 	shared_ptr<BlockHandle> block_handle;
 
 public:
+	inline bool IsFlushed() {
+		return block_handle == nullptr;
+	};
 	void AddUninitializedRegion(idx_t start, idx_t end) override;
 	void Flush(idx_t free_space_left) override;
-	void Clear() override;
+	inline void Clear() override {
+	    block_handle.reset();
+	};
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 };
 

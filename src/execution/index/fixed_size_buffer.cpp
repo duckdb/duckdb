@@ -9,19 +9,14 @@ namespace duckdb {
 // PartialBlockForIndex
 //===--------------------------------------------------------------------===//
 
-PartialBlockForIndex::PartialBlockForIndex(BlockManager &block_manager, PartialBlockState state,
-                                           const shared_ptr<BlockHandle> &block_handle)
-    : PartialBlock(state), block_manager(block_manager), block_handle(block_handle) {
-}
-
-PartialBlockForIndex::~PartialBlockForIndex() {
-}
-
-void PartialBlockForIndex::AddUninitializedRegion(idx_t, idx_t) {
+void PartialBlockForIndex::AddUninitializedRegion(idx_t start, idx_t end) {
+	throw InternalException("no uninitialized regions for PartialBlockForIndex");
 }
 
 void PartialBlockForIndex::Flush(idx_t free_space_left) {
-
+	if (IsFlushed()) {
+		throw InternalException("Flush called on PartialBlockForIndex that was already flushed");
+	}
 	if (free_space_left > 0) {
 		auto handle = block_manager.buffer_manager.Pin(block_handle);
 		memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
@@ -29,21 +24,8 @@ void PartialBlockForIndex::Flush(idx_t free_space_left) {
 	Clear();
 }
 
-void PartialBlockForIndex::Clear() {
-	block_handle.reset();
-}
-
-void PartialBlockForIndex::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
-
-	auto &other = other_p.Cast<PartialBlockForIndex>();
-	auto &buffer_manager = block_manager.buffer_manager;
-
-	auto other_handle = buffer_manager.Pin(other.block_handle);
-	auto this_handle = buffer_manager.Pin(block_handle);
-
-	// copy the contents of the other block to this block
-	memcpy(this_handle.Ptr() + offset, other_handle.Ptr(), other_size);
-	other.Clear();
+void PartialBlockForIndex::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {
+	throw InternalException("no merge for PartialBlockForIndex");
 }
 
 //===--------------------------------------------------------------------===//
@@ -133,13 +115,15 @@ void FixedSizeBuffer::Pin() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
 
-	buffer_handle = BufferHandle(buffer_manager.Pin(block_handle));
+	buffer_handle = buffer_manager.Pin(block_handle);
 
 	// we need to copy the (partial) data into a new (not yet disk-backed) buffer handle
 	shared_ptr<BlockHandle> new_block_handle;
 	auto new_buffer_handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block_handle);
 
 	memcpy(new_buffer_handle.Ptr(), buffer_handle.Ptr() + block_pointer.offset, allocation_size);
+
+	Destroy();
 	buffer_handle = std::move(new_buffer_handle);
 	block_handle = new_block_handle;
 	block_pointer.block_id = INVALID_BLOCK;
