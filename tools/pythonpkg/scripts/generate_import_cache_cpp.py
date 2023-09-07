@@ -20,6 +20,13 @@ def get_class_name(path: str) -> str:
     parts = [x.title() for x in parts]
     return ''.join(parts) + 'CacheItem'
 
+def get_filename(name: str) -> str:
+    return name.replace('_', '').lower() + '_module.hpp'
+
+def get_variable_name(name: str) -> str:
+    if name in ['short', 'ushort']:
+        return name + '_'
+    return name
 
 def collect_items_of_module(module: dict, collection: Dict):
     global json_data
@@ -39,14 +46,14 @@ class CacheItem:
     def get_variables(self):
         variables = []
         for key in self.module['children']:
-            # TODO: overwrite for [short, ushort]
             item = self.items[key]
             name = item['name']
+            var_name = get_variable_name(name)
             if item['children'] == []:
                 class_name = 'PythonImportCacheItem'
             else:
                 class_name = get_class_name(item['full_path'])
-            variables.append(f'\t{class_name} {name};')
+            variables.append(f'\t{class_name} {var_name};')
         return '\n'.join(variables)
 
     def get_initializer(self):
@@ -54,15 +61,16 @@ class CacheItem:
         for key in self.module['children']:
             item = self.items[key]
             name = item['name']
+            var_name = get_variable_name(name)
             if item['children'] == []:
-                initialization = f'{name}("{name}", this)'
+                initialization = f'{var_name}("{name}", this)'
                 variables.append(initialization)
             else:
                 if item['type'] == 'module':
                     arguments = ''
                 else:
                     arguments = 'this'
-                initialization = f'{name}({arguments})'
+                initialization = f'{var_name}({arguments})'
                 variables.append(initialization)
         return f'PythonImportCacheItem("{self.name}"), ' + ', '.join(variables) + '{}'
 
@@ -98,7 +106,7 @@ def collect_classes(items: Dict) -> List:
 class ModuleFile:
     def __init__(self, module: dict):
         self.module = module
-        self.file_name = module['name'] + '_module.hpp'
+        self.file_name = get_filename(module['name'])
         self.items = {}
         collect_items_of_module(module, self.items)
         self.classes = collect_classes(self.items)
