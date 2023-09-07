@@ -318,8 +318,9 @@ private:
 		case LogicalTypeId::DATE:
 			return std::is_same<T, date_t>();
 		case LogicalTypeId::TIME:
-		case LogicalTypeId::TIME_TZ:
 			return std::is_same<T, dtime_t>();
+		case LogicalTypeId::TIME_TZ:
+			return std::is_same<T, dtime_tz_t>();
 		case LogicalTypeId::TIMESTAMP:
 		case LogicalTypeId::TIMESTAMP_MS:
 		case LogicalTypeId::TIMESTAMP_NS:

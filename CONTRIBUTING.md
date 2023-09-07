@@ -26,9 +26,9 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Pull Requests
 
-* Do not commit/push directly to the master branch. Instead, create a fork and file a pull request.
-* When maintaining a branch, merge frequently with the master.
-* When maintaining a branch, submit pull requests to the master frequently.
+* Do not commit/push directly to the main branch. Instead, create a fork and file a pull request.
+* When maintaining a branch, merge frequently with the main.
+* When maintaining a branch, submit pull requests to the main frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
 * Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.

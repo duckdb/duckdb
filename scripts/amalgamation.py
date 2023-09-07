@@ -69,7 +69,7 @@ if '--extended' in sys.argv:
             "duckdb/storage/statistics/base_statistics.hpp",
             "duckdb/planner/filter/conjunction_filter.hpp",
             "duckdb/planner/filter/constant_filter.hpp",
-            "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
+            "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp",
             "duckdb/common/types/vector_cache.hpp",
             "duckdb/common/string_map_set.hpp",
             "duckdb/planner/filter/null_filter.hpp",
@@ -435,7 +435,7 @@ def gather_files(dir, source_files, header_files):
 
 
 def write_license(hfile):
-    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/master/LICENSE for licensing information\n\n")
+    hfile.write("// See https://raw.githubusercontent.com/duckdb/duckdb/main/LICENSE for licensing information\n\n")
 
 
 def generate_amalgamation_splits(source_file, header_file, nsplits):

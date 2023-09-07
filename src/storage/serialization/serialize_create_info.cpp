@@ -81,6 +81,8 @@ void CreateIndexInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(204, "parsed_expressions", parsed_expressions);
 	serializer.WriteProperty(205, "names", names);
 	serializer.WriteProperty(206, "column_ids", column_ids);
+	serializer.WriteProperty(207, "options", options);
+	serializer.WriteProperty(208, "index_type_name", index_type_name);
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -92,13 +94,15 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty(204, "parsed_expressions", result->parsed_expressions);
 	deserializer.ReadProperty(205, "names", result->names);
 	deserializer.ReadProperty(206, "column_ids", result->column_ids);
+	deserializer.ReadProperty(207, "options", result->options);
+	deserializer.ReadProperty(208, "index_type_name", result->index_type_name);
 	return std::move(result);
 }
 
 void CreateMacroInfo::FormatSerialize(FormatSerializer &serializer) const {
 	CreateInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "name", name);
-	serializer.WriteProperty(201, "function", *function);
+	serializer.WriteProperty(201, "function", function);
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -145,7 +149,7 @@ void CreateTableInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(200, "table", table);
 	serializer.WriteProperty(201, "columns", columns);
 	serializer.WriteProperty(202, "constraints", constraints);
-	serializer.WriteOptionalProperty(203, "query", query);
+	serializer.WritePropertyWithDefault(203, "query", query, unique_ptr<SelectStatement>());
 }
 
 unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -153,7 +157,7 @@ unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty(200, "table", result->table);
 	deserializer.ReadProperty(201, "columns", result->columns);
 	deserializer.ReadProperty(202, "constraints", result->constraints);
-	deserializer.ReadOptionalProperty(203, "query", result->query);
+	deserializer.ReadPropertyWithDefault(203, "query", result->query, unique_ptr<SelectStatement>());
 	return std::move(result);
 }
 
@@ -175,7 +179,7 @@ void CreateViewInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(200, "view_name", view_name);
 	serializer.WriteProperty(201, "aliases", aliases);
 	serializer.WriteProperty(202, "types", types);
-	serializer.WriteOptionalProperty(203, "query", query);
+	serializer.WritePropertyWithDefault(203, "query", query, unique_ptr<SelectStatement>());
 }
 
 unique_ptr<CreateInfo> CreateViewInfo::FormatDeserialize(FormatDeserializer &deserializer) {
@@ -183,7 +187,7 @@ unique_ptr<CreateInfo> CreateViewInfo::FormatDeserialize(FormatDeserializer &des
 	deserializer.ReadProperty(200, "view_name", result->view_name);
 	deserializer.ReadProperty(201, "aliases", result->aliases);
 	deserializer.ReadProperty(202, "types", result->types);
-	deserializer.ReadOptionalProperty(203, "query", result->query);
+	deserializer.ReadPropertyWithDefault(203, "query", result->query, unique_ptr<SelectStatement>());
 	return std::move(result);
 }
 

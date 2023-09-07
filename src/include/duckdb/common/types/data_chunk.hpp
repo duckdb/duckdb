@@ -14,13 +14,13 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
-struct ArrowArray;
-
 namespace duckdb {
 class Allocator;
 class ClientContext;
 class ExecutionContext;
 class VectorCache;
+class FormatSerializer;
+class FormatDeserializer;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -142,6 +142,9 @@ public:
 	DUCKDB_API void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a DataChunk
 	DUCKDB_API void Deserialize(Deserializer &source);
+
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API void FormatDeserialize(FormatDeserializer &source);
 
 	//! Hashes the DataChunk to the target vector
 	DUCKDB_API void Hash(Vector &result);
