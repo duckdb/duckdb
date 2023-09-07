@@ -930,20 +930,6 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 	}
 }
 
-<<<<<<< HEAD
-=======
-void JSONScan::Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &) {
-	auto &bind_data = bind_data_p->Cast<JSONScanData>();
-	bind_data.Serialize(writer);
-}
-
-unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, FieldReader &reader, TableFunction &) {
-	auto result = make_uniq<JSONScanData>();
-	result->Deserialize(state.context, reader);
-	return std::move(result);
-}
-
->>>>>>> main
 void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
