@@ -226,7 +226,7 @@ void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t str
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
 	if (state.overflow_writer) {
 		// overflow writer is set: write string there
-		state.overflow_writer->WriteString(string, result_block, result_offset);
+		state.overflow_writer->WriteString(state, string, result_block, result_offset);
 	} else {
 		// default overflow behavior: use in-memory buffer to store the overflow string
 		WriteStringMemory(segment, string, result_block, result_offset);
@@ -251,7 +251,7 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
 		handle = buffer_manager.Allocate(alloc_size, false, &block);
-		state.overflow_blocks[block->BlockId()] = new_block.get();
+		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
 		new_block->block = std::move(block);
 		new_block->next = std::move(state.head);
 		state.head = std::move(new_block);
@@ -282,7 +282,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
-		auto block_handle = block_manager.RegisterBlock(block);
+		auto block_handle = state.GetHandle(block_manager, block);
 		auto handle = buffer_manager.Pin(block_handle);
 
 		// read header
@@ -312,7 +312,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				if (remaining > 0) {
 					// read the next block
 					block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
-					block_handle = block_manager.RegisterBlock(next_block);
+					block_handle = state.GetHandle(block_manager, next_block);
 					handle = buffer_manager.Pin(block_handle);
 					offset = 0;
 				}
@@ -336,7 +336,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		// first pin the handle, if it is not pinned yet
 		auto entry = state.overflow_blocks.find(block);
 		D_ASSERT(entry != state.overflow_blocks.end());
-		auto handle = buffer_manager.Pin(entry->second->block);
+		auto handle = buffer_manager.Pin(entry->second.get().block);
 		auto final_buffer = handle.Ptr();
 		StringVector::AddHandle(result, std::move(handle));
 		return ReadStringWithLength(final_buffer, offset);

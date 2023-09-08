@@ -65,7 +65,7 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
-		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetColumnData().GetBlockManager());
+		state.overflow_writer = checkpointer.GetCheckpointState().GetPartialBlockManager().GetOverflowWriter();
 	}
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);

@@ -43,6 +43,10 @@ public:
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void WriteDataPointers(RowGroupWriter &writer);
 
+	PartialBlockManager &GetPartialBlockManager() {
+		return partial_block_manager;
+	}
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
