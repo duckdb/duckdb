@@ -234,6 +234,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",
+    "aws",
     "autocomplete",
     "excel",
     "fts",
