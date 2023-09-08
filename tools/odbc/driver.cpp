@@ -128,6 +128,7 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		case SQL_OV_ODBC2:
 			// TODO actually do something with this?
 			// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
+			env->odbc_version = major_version;
 			return SQL_SUCCESS;
 		default:
 			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
@@ -135,30 +136,34 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 			                                   SQLStateType::ST_HY092, "");
 		}
 	}
-	case SQL_ATTR_CONNECTION_POOLING:
-		switch (static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr))) {
+	case SQL_ATTR_CONNECTION_POOLING: {
+		auto pooling = static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr));
+		switch (pooling) {
 		case SQL_CP_OFF:
 		case SQL_CP_ONE_PER_DRIVER:
 		case SQL_CP_ONE_PER_HENV:
+			env->connection_pooling = pooling;
 			return SQL_SUCCESS;
 		default:
 			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
 			                                   "Connection pooling not supported: " + std::to_string(attribute),
 			                                   SQLStateType::ST_HY092, "");
 		}
+	}
 	case SQL_ATTR_CP_MATCH:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
 		                                   "Optional feature not implemented.",
 		                                   SQLStateType::ST_HY092, "");
-	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */
-		switch (*(SQLINTEGER *)value_ptr) {
-		case SQL_TRUE:
+	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */ {
+		auto output_nts = static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr));
+		if (output_nts == SQL_TRUE) {
+			env->output_nts = SQL_TRUE;
 			return SQL_SUCCESS;
-		default:
-			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
-			                                   "Optional feature not implemented.",
-			                                   SQLStateType::ST_HY092, "");
 		}
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+										   "Optional feature not implemented.  SQL_ATTR_OUTPUT_NTS must be SQL_TRUE",
+										   SQLStateType::ST_HY092, "");
+	}
 	default:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
 		                                   "Invalid attribute value",
@@ -168,23 +173,25 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 
 SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                 SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
+
 	if (value_ptr == nullptr) {
-		return SQL_ERROR;
+		return SQL_SUCCESS;
 	}
-	auto *env = (duckdb::OdbcHandleEnv *)environment_handle;
+
+	auto *env = static_cast<duckdb::OdbcHandleEnv *>(environment_handle);
 	if (env->type != duckdb::OdbcHandleType::ENV) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION:
-		*(SQLUINTEGER *)value_ptr = SQL_OV_ODBC3;
+		*static_cast<SQLINTEGER *>(value_ptr) = env->odbc_version;
 		break;
 	case SQL_ATTR_CONNECTION_POOLING:
-		*(SQLINTEGER *)value_ptr = SQL_CP_OFF;
+		*static_cast<SQLUINTEGER *>(value_ptr) = env->connection_pooling;
 		break;
 	case SQL_ATTR_OUTPUT_NTS:
-		*(SQLINTEGER *)value_ptr = SQL_TRUE;
+		*static_cast<SQLINTEGER *>(value_ptr) = env->output_nts;
 		break;
 	case SQL_ATTR_CP_MATCH:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLGetEnvAttr",

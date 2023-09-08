@@ -35,9 +35,8 @@ SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
 		return ret;
 	}
 
-	// TODO: per the docs record number 0 is the bookmark record, so we should support that
 	if (rec_number < 1) {
-		return SQL_ERROR;
+		return SQL_ERROR; // TODO: per the docs record number 0 is the bookmark record, so we should support that
 	}
 	if (rec_number > desc->header.sql_desc_count) {
 		return SQL_NO_DATA;
@@ -871,7 +870,7 @@ SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 		sql_desc_concise_type = type;
 		auto interval_code = OdbcInterval::GetIntervalCode(type);
 		if (interval_code == SQL_ERROR) {
-			return SQL_ERROR;
+			return SQL_ERROR; // handled
 		}
 		sql_desc_datetime_interval_code = interval_code;
 	}
@@ -883,10 +882,10 @@ SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
 	vector<duckdb::TypeInfo> vec_typeinfo;
 	ApiInfo::FindDataType(type, vec_typeinfo);
 	if (vec_typeinfo.empty()) {
-		return SQL_ERROR;
+		return SQL_ERROR; // handled
 	}
 	auto type_info = vec_typeinfo.front();
-	// for consistency check set all other fields according with the first returned TypeInfo
+	// for consistency check set all other fields according to the first returned TypeInfo
 	SetSqlDataType(type_info.sql_data_type);
 
 	sql_desc_datetime_interval_code = type_info.sql_datetime_sub;

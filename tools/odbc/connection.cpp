@@ -23,7 +23,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	// From the docs: "If ValuePtr is NULL, StringLengthPtr will still return the total number of bytes (excluding the
 	// null-termination character for character data) available to return in the buffer pointed to by ValuePtr."
 	if (!value_ptr) {
-		return SQL_ERROR;
+		return SQL_ERROR; // TODO: Incorrect return code? See above.
 	}
 	switch (attribute) {
 	case SQL_ATTR_AUTOCOMMIT: {
@@ -1062,9 +1062,8 @@ SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALL
 	case SQL_COMMIT:
 		// it needs to materialize the result set because ODBC can still fetch after a commit
 		if (dbc->MaterializeResult() != SQL_SUCCESS) {
-			// TODO add a proper error message
 			// for some reason we couldn't materialize the result set
-			return SQL_ERROR;
+			return SQL_ERROR; // TODO add a proper error message
 		}
 		if (dbc->conn->IsAutoCommit()) {
 			return SQL_SUCCESS;
