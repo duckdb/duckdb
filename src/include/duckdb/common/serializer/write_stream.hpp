@@ -30,43 +30,45 @@ public:
 		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
+	/*
 	//! Write data from a string buffer directly (without length prefix)
 	void WriteBufferData(const string &str) {
-		WriteData(const_data_ptr_cast(str.c_str()), str.size());
+	    WriteData(const_data_ptr_cast(str.c_str()), str.size());
 	}
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
+	    WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
-		Write<uint32_t>((uint32_t)len);
-		if (len > 0) {
-			WriteData(val, len);
-		}
+	    Write<uint32_t>((uint32_t)len);
+	    if (len > 0) {
+	        WriteData(val, len);
+	    }
 	}
 
 	template <class T>
 	void WriteList(const vector<unique_ptr<T>> &list) {
-		Write<uint32_t>((uint32_t)list.size());
-		for (auto &child : list) {
-			child->Serialize(*this);
-		}
+	    Write<uint32_t>((uint32_t)list.size());
+	    for (auto &child : list) {
+	        child->Serialize(*this);
+	    }
 	}
 
 	void WriteStringVector(const vector<string> &list) {
-		Write<uint32_t>((uint32_t)list.size());
-		for (auto &child : list) {
-			WriteString(child);
-		}
+	    Write<uint32_t>((uint32_t)list.size());
+	    for (auto &child : list) {
+	        WriteString(child);
+	    }
 	}
 
 	template <class T>
 	void WriteOptional(const unique_ptr<T> &element) {
-		Write<bool>(element ? true : false);
-		if (element) {
-			element->Serialize(*this);
-		}
+	    Write<bool>(element ? true : false);
+	    if (element) {
+	        element->Serialize(*this);
+	    }
 	}
+	 */
 };
 
 } // namespace duckdb

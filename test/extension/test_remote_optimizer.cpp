@@ -1,7 +1,7 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/parser/statement/logical_plan_statement.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
@@ -86,10 +86,11 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			BufferedDeserializer source(data_ptr_cast(buffer), bytes);
+			// Non-owning stream
+			MemoryStream stream(data_ptr_cast(buffer), bytes);
 			con2.BeginTransaction();
 
-			BinaryDeserializer deserializer(source);
+			BinaryDeserializer deserializer(stream);
 			deserializer.Set<ClientContext &>(*con2.context);
 			deserializer.Begin();
 			auto plan = LogicalOperator::FormatDeserialize(deserializer);
@@ -104,16 +105,15 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : collection.Chunks()) {
-				BufferedSerializer target;
-
+				MemoryStream target;
 				BinarySerializer serializer(target);
 				serializer.Begin();
 				chunk.FormatSerialize(serializer);
 				serializer.End();
 				auto data = target.GetData();
-				idx_t len = data.size;
+				idx_t len = target.GetPosition();
 				REQUIRE(write(connfd, &len, sizeof(idx_t)) == sizeof(idx_t));
-				REQUIRE(write(connfd, data.data.get(), len) == ssize_t(len));
+				REQUIRE(write(connfd, data, len) == ssize_t(len));
 			}
 		}
 		exit(0);

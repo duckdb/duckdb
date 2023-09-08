@@ -24,7 +24,6 @@ namespace duckdb {
 struct AlterInfo;
 
 class AttachedDatabase;
-class BufferedSerializer;
 class Catalog;
 class DatabaseInstance;
 class SchemaCatalogEntry;

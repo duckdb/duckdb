@@ -1,18 +1,13 @@
 #include "duckdb/planner/logical_operator.hpp"
 
 #include "duckdb/common/printer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/operator/logical_extension_operator.hpp"
-#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -129,19 +124,19 @@ void LogicalOperator::Verify(ClientContext &context) {
 		if (expressions[expr_idx]->HasParameter()) {
 			continue;
 		}
-		BufferedSerializer sink;
+		MemoryStream stream;
 		// We are serializing a query plan
 		try {
-			BinarySerializer::Serialize(*expressions[expr_idx], sink);
+			BinarySerializer::Serialize(*expressions[expr_idx], stream);
 		} catch (NotImplementedException &ex) {
 			// ignore for now (FIXME)
 			continue;
 		}
+		// Rewind the stream
+		stream.Rewind();
 
-		auto data = sink.GetData();
-		BufferedDeserializer source(data.data.get(), data.size);
 		bound_parameter_map_t parameters;
-		auto deserialized_expression = BinaryDeserializer::Deserialize<Expression>(source, context, parameters);
+		auto deserialized_expression = BinaryDeserializer::Deserialize<Expression>(stream, context, parameters);
 
 		// FIXME: expressions might not be equal yet because of statistics propagation
 		continue;

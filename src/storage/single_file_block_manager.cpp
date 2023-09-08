@@ -3,8 +3,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -92,13 +91,13 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 
 template <class T>
 void SerializeHeaderStructure(T header, data_ptr_t ptr) {
-	BufferedSerializer ser(ptr, Storage::FILE_HEADER_SIZE);
+	MemoryStream ser(ptr, Storage::FILE_HEADER_SIZE);
 	header.Write(ser);
 }
 
 template <class T>
 T DeserializeHeaderStructure(data_ptr_t ptr) {
-	BufferedDeserializer source(ptr, Storage::FILE_HEADER_SIZE);
+	MemoryStream source(ptr, Storage::FILE_HEADER_SIZE);
 	return T::Read(source);
 }
 
@@ -483,9 +482,9 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	BufferedSerializer serializer;
+	MemoryStream serializer;
 	header.Write(serializer);
-	memcpy(header_buffer.buffer, serializer.blob.data.get(), serializer.blob.size);
+	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);

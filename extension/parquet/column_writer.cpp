@@ -10,7 +10,6 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -19,6 +18,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #endif
 
 #include "miniz_wrapper.hpp"
@@ -184,36 +184,36 @@ ColumnWriter::~ColumnWriter() {
 ColumnWriterState::~ColumnWriterState() {
 }
 
-void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
+void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
                                 unique_ptr<data_t[]> &compressed_buf) {
 	switch (writer.GetCodec()) {
 	case CompressionCodec::UNCOMPRESSED:
-		compressed_size = temp_writer.blob.size;
-		compressed_data = temp_writer.blob.data.get();
+		compressed_size = temp_writer.GetPosition();
+		compressed_data = temp_writer.GetData();
 		break;
 	case CompressionCodec::SNAPPY: {
-		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.blob.size);
+		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		duckdb_snappy::RawCompress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size,
+		duckdb_snappy::RawCompress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
-		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.blob.size));
+		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition()));
 		break;
 	}
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
-		compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
+		compressed_size = s.MaxCompressedLength(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-		s.Compress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size,
+		s.Compress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		break;
 	}
 	case CompressionCodec::ZSTD: {
-		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.blob.size);
+		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
 		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
-		                                             (const void *)temp_writer.blob.data.get(), temp_writer.blob.size,
+		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
 		                                             ZSTD_CLEVEL_DEFAULT);
 		compressed_data = compressed_buf.get();
 		break;
@@ -224,7 +224,7 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 
 	if (compressed_size > idx_t(NumericLimits<int32_t>::Maximum())) {
 		throw InternalException("Parquet writer: %d compressed page size out of range for type integer",
-		                        temp_writer.blob.size);
+		                        temp_writer.GetPosition());
 	}
 }
 
@@ -304,7 +304,7 @@ struct PageInformation {
 
 struct PageWriteInformation {
 	PageHeader page_header;
-	unique_ptr<BufferedSerializer> temp_writer;
+	unique_ptr<MemoryStream> temp_writer;
 	unique_ptr<ColumnWriterPageState> page_state;
 	idx_t write_page_idx = 0;
 	idx_t write_count = 0;
@@ -391,7 +391,7 @@ protected:
 	}
 	//! The number of elements in the dictionary
 	virtual idx_t DictionarySize(BasicColumnWriterState &state_p);
-	void WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer, idx_t row_count);
+	void WriteDictionary(BasicColumnWriterState &state, unique_ptr<MemoryStream> temp_writer, idx_t row_count);
 	virtual void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats);
 
 	void SetParquetStatistics(BasicColumnWriterState &state, duckdb_parquet::format::ColumnChunk &column);
@@ -482,7 +482,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
-		write_info.temp_writer = make_uniq<BufferedSerializer>();
+		write_info.temp_writer = make_uniq<MemoryStream>();
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
 		write_info.page_state = InitializePageState(state);
@@ -558,11 +558,11 @@ void BasicColumnWriter::FlushPage(BasicColumnWriterState &state) {
 	FlushPageState(temp_writer, write_info.page_state.get());
 
 	// now that we have finished writing the data we know the uncompressed size
-	if (temp_writer.blob.size > idx_t(NumericLimits<int32_t>::Maximum())) {
+	if (temp_writer.GetPosition() > idx_t(NumericLimits<int32_t>::Maximum())) {
 		throw InternalException("Parquet writer: %d uncompressed page size out of range for type integer",
-		                        temp_writer.blob.size);
+		                        temp_writer.GetPosition());
 	}
-	hdr.uncompressed_page_size = temp_writer.blob.size;
+	hdr.uncompressed_page_size = temp_writer.GetPosition();
 
 	// compress the data
 	CompressPage(temp_writer, write_info.compressed_size, write_info.compressed_data, write_info.compressed_buf);
@@ -696,16 +696,16 @@ idx_t BasicColumnWriter::DictionarySize(BasicColumnWriterState &state) {
 	throw InternalException("This page does not have a dictionary");
 }
 
-void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_ptr<BufferedSerializer> temp_writer,
+void BasicColumnWriter::WriteDictionary(BasicColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
                                         idx_t row_count) {
 	D_ASSERT(temp_writer);
-	D_ASSERT(temp_writer->blob.size > 0);
+	D_ASSERT(temp_writer->GetPosition() > 0);
 
 	// write the dictionary page header
 	PageWriteInformation write_info;
 	// set up the header
 	auto &hdr = write_info.page_header;
-	hdr.uncompressed_page_size = temp_writer->blob.size;
+	hdr.uncompressed_page_size = temp_writer->GetPosition();
 	hdr.type = PageType::DICTIONARY_PAGE;
 	hdr.__isset.dictionary_page_header = true;
 
@@ -1399,7 +1399,7 @@ public:
 			values[entry.second] = entry.first;
 		}
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<BufferedSerializer>();
+		auto temp_writer = make_uniq<MemoryStream>();
 		for (idx_t r = 0; r < values.size(); r++) {
 			auto &value = values[r];
 			// update the statistics
@@ -1526,7 +1526,7 @@ public:
 		auto enum_count = EnumType::GetSize(enum_type);
 		auto string_values = FlatVector::GetData<string_t>(enum_values);
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<BufferedSerializer>();
+		auto temp_writer = make_uniq<MemoryStream>();
 		for (idx_t r = 0; r < enum_count; r++) {
 			D_ASSERT(!FlatVector::IsNull(enum_values, r));
 			// update the statistics

@@ -95,8 +95,8 @@ void test_deserialization(const string &file_location) {
 		planner.CreatePlan(std::move(p.statements[0]));
 		auto expected_plan = std::move(planner.plan);
 		expected_plan->ResolveOperatorTypes();
-		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)),
- false); 		REQUIRE_NO_FAIL(*expected_results);
+		auto expected_results = con.context->Query(make_uniq<LogicalPlanStatement>(std::move(expected_plan)), false);
+		REQUIRE_NO_FAIL(*expected_results);
 
 		BinaryDeserializer deserializer(file_source);
 		deserializer.Set<ClientContext &>(*con.context);
@@ -106,7 +106,7 @@ void test_deserialization(const string &file_location) {
 
 		deserialized_plan->ResolveOperatorTypes();
 		auto deserialized_results =
-			con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
+		    con.context->Query(make_uniq<LogicalPlanStatement>(std::move(deserialized_plan)), false);
 		REQUIRE_NO_FAIL(*deserialized_results);
 
 		REQUIRE(deserialized_results->Equals(*expected_results));

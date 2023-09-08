@@ -1,7 +1,6 @@
 #include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -12,6 +11,7 @@
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 #include <limits>
 
@@ -253,7 +253,7 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 			                     options.dialect_options.state_machine_options.escape, new_val);
 		}
 		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
-		writer.WriteBufferData(new_val);
+		writer.WriteData(const_data_ptr_cast(new_val.c_str()), new_val.size());
 		WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.quote);
 	} else {
 		writer.WriteData(const_data_ptr_cast(str), len);
@@ -265,7 +265,7 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 //===--------------------------------------------------------------------===//
 struct LocalWriteCSVData : public LocalFunctionData {
 	//! The thread-local buffer to write data into
-	BufferedSerializer serializer;
+	MemoryStream stream;
 	//! A chunk with VARCHAR columns to cast intermediates into
 	DataChunk cast_chunk;
 	//! If we've written any rows yet, allows us to prevent a trailing comma when writing JSON ARRAY
@@ -333,25 +333,25 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	}
 
 	if (options.dialect_options.header) {
-		BufferedSerializer serializer;
+		MemoryStream stream;
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(serializer, options.dialect_options.state_machine_options.delimiter);
+				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter);
 			}
-			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
+			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
 		}
-		serializer.WriteBufferData(csv_data.newline);
+		stream.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
 
-		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
+		global_data->WriteData(stream.GetData(), stream.GetPosition());
 	}
 
 	return std::move(global_data);
 }
 
 static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
-                                  BufferedSerializer &writer, DataChunk &input, bool &written_anything) {
+                                  MemoryStream &writer, DataChunk &input, bool &written_anything) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
@@ -385,7 +385,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		if (row_idx == 0 && !written_anything) {
 			written_anything = true;
 		} else {
-			writer.WriteBufferData(csv_data.newline);
+			writer.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
 		}
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
@@ -394,7 +394,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value
-				writer.WriteBufferData(options.null_str);
+				writer.WriteData(const_data_ptr_cast(options.null_str.c_str()), options.null_str.size());
 				continue;
 			}
 
@@ -416,14 +416,14 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	// write data into the local buffer
-	WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.serializer, input,
+	WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.stream, input,
 	                      local_data.written_anything);
 
 	// check if we should flush what we have currently written
-	auto &writer = local_data.serializer;
-	if (writer.blob.size >= csv_data.flush_size) {
-		global_state.WriteRows(writer.blob.data.get(), writer.blob.size, csv_data.newline);
-		writer.Reset();
+	auto &writer = local_data.stream;
+	if (writer.GetPosition() >= csv_data.flush_size) {
+		global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
+		writer.Rewind();
 		local_data.written_anything = false;
 	}
 }
@@ -436,11 +436,11 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
 	auto &local_data = lstate.Cast<LocalWriteCSVData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto &writer = local_data.serializer;
+	auto &writer = local_data.stream;
 	// flush the local writer
 	if (local_data.written_anything) {
-		global_state.WriteRows(writer.blob.data.get(), writer.blob.size, csv_data.newline);
-		writer.Reset();
+		global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
+		writer.Rewind();
 	}
 }
 
@@ -452,13 +452,13 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
-	BufferedSerializer serializer;
+	MemoryStream stream;
 	if (!options.suffix.empty()) {
-		serializer.WriteBufferData(options.suffix);
+		stream.WriteData(const_data_ptr_cast(options.suffix.c_str()), options.suffix.size());
 	} else if (global_state.written_anything) {
-		serializer.WriteBufferData(csv_data.newline);
+		stream.WriteData(const_data_ptr_cast(csv_data.newline.c_str()), csv_data.newline.size());
 	}
-	global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
+	global_state.WriteData(stream.GetData(), stream.GetPosition());
 
 	global_state.handle->Close();
 	global_state.handle.reset();
@@ -481,7 +481,7 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
 	//! The thread-local buffer to write data into
-	BufferedSerializer serializer;
+	MemoryStream stream;
 };
 
 unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
@@ -499,7 +499,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	bool written_anything = false;
 	auto batch = make_uniq<WriteCSVBatchData>();
 	for (auto &chunk : collection->Chunks()) {
-		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->serializer, chunk, written_anything);
+		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->stream, chunk, written_anything);
 	}
 	return std::move(batch);
 }
@@ -512,9 +512,9 @@ void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalF
 	auto &csv_batch = batch.Cast<WriteCSVBatchData>();
 	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
-	auto &writer = csv_batch.serializer;
-	global_state.WriteRows(writer.blob.data.get(), writer.blob.size, csv_data.newline);
-	writer.Reset();
+	auto &writer = csv_batch.stream;
+	global_state.WriteRows(writer.GetData(), writer.GetPosition(), csv_data.newline);
+	writer.Rewind();
 }
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
