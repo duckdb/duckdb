@@ -692,13 +692,16 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
 		scan_status = RadixHTScanStatus::DONE;
-		if (++gstate.scan_done == sink.partitions.size()) {
-			gstate.finished = true;
-		}
 		if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
 			data_collection.Reset();
 		}
 		return;
+	}
+
+	if (data_collection.ScanComplete(scan_state)) {
+		if (++gstate.scan_done == sink.partitions.size()) {
+			gstate.finished = true;
+		}
 	}
 
 	RowOperationsState row_state(aggregate_allocator);
@@ -797,11 +800,10 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		}
 	}
 
-	if (gstate.finished) {
-		return SourceResultType::FINISHED;
-	} else {
-		D_ASSERT(chunk.size() != 0);
+	if (chunk.size() != 0) {
 		return SourceResultType::HAVE_MORE_OUTPUT;
+	} else {
+		return SourceResultType::FINISHED;
 	}
 }
 
