@@ -1,0 +1,11 @@
+# name: test/fuzzer/duckfuzz/json_functions_null_params.test
+# description: JSON functions with parameters that evaluate to NULL (duckdb-fuzzer #294 and #319)
+# group: [duckfuzz]
+
+require json
+
+statement ok
+SELECT from_json('{"duck": 42}', NULL::JSON)
+
+statement ok
+SELECT json_extract('{"duck": 42}', NULL::VARCHAR[])

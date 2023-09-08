@@ -75,8 +75,13 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.SetCardinality(count);
 
 	state->profiler.BeginSample();
-	D_ASSERT(expr.function.function);
-	expr.function.function(arguments, *state, result);
+	if (expr.function.return_type.id() == LogicalTypeId::SQLNULL) {
+		FlatVector::Validity(result).SetAllInvalid(arguments.size());
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	} else {
+		D_ASSERT(expr.function.function);
+		expr.function.function(arguments, *state, result);
+	}
 	state->profiler.EndSample(count);
 
 	VerifyNullHandling(expr, arguments, result);

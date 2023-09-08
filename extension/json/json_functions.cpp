@@ -49,7 +49,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
 }
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadFunctionData &)other_p;
+	auto &other = other_p.Cast<JSONReadFunctionData>();
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
@@ -83,7 +83,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
 }
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadManyFunctionData &)other_p;
+	auto &other = other_p.Cast<JSONReadManyFunctionData>();
 	return paths == other.paths && lens == other.lens;
 }
 
@@ -100,11 +100,16 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	vector<string> paths;
 	vector<size_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-	for (auto &path_val : ListValue::GetChildren(paths_val)) {
-		paths.emplace_back("");
-		lens.push_back(0);
-		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
-			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
+
+	if (paths_val.IsNull()) {
+		bound_function.return_type = LogicalTypeId::SQLNULL;
+	} else {
+		for (auto &path_val : ListValue::GetChildren(paths_val)) {
+			paths.emplace_back("");
+			lens.push_back(0);
+			if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+				throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
+			}
 		}
 	}
 
