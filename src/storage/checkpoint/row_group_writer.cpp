@@ -19,7 +19,6 @@ PartialBlockAllocation RowGroupWriter::GetBlockAllocation(uint32_t segment_size)
 
 void SingleFileRowGroupWriter::WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
                                                        Serializer &serializer) {
-	auto &meta_writer = table_data_writer;
 	const auto &data_pointers = column_checkpoint_state.data_pointers;
 	serializer.WriteList(100, "data_pointers", data_pointers.size(), [&](Serializer::List &list, idx_t i) {
 		auto &data_pointer = data_pointers[i];
