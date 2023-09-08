@@ -18,8 +18,8 @@ COPY (SELECT repeat('X', len) FROM (VALUES (903), (4932)) t(len)) TO '__TEST_DIR
 
 statement ok
 INSERT INTO test FROM read_parquet([
-	'bug2.parquet',
-	'bug2.parquet']
+	'__TEST_DIR__/large_strings.parquet',
+	'__TEST_DIR__/large_strings.parquet']
 );
 
 query I
