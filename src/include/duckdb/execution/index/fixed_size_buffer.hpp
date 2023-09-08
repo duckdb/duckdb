@@ -21,24 +21,14 @@ class MetadataWriter;
 
 struct PartialBlockForIndex : public PartialBlock {
 public:
-	explicit PartialBlockForIndex(BlockManager &block_manager, PartialBlockState state,
-	                              const shared_ptr<BlockHandle> &block_handle)
-	    : PartialBlock(state), block_manager(block_manager), block_handle(block_handle) {
-	}
+	PartialBlockForIndex(PartialBlockState state, BlockManager &block_manager,
+	                     const shared_ptr<BlockHandle> &block_handle);
 	~PartialBlockForIndex() override {};
 
-	BlockManager &block_manager;
-	shared_ptr<BlockHandle> block_handle;
-
 public:
-	inline bool IsFlushed() {
-		return block_handle == nullptr;
-	};
 	void AddUninitializedRegion(idx_t start, idx_t end) override;
 	void Flush(idx_t free_space_left) override;
-	inline void Clear() override {
-		block_handle.reset();
-	};
+	inline void Clear() override {};
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 };
 
@@ -47,11 +37,16 @@ public:
 //! serialization.
 class FixedSizeBuffer {
 public:
+	//! Constants for fast offset calculations in the bitmask
+	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
+	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
+
+public:
 	//! Constructor for a new in-memory buffer
 	explicit FixedSizeBuffer(BlockManager &block_manager);
 	//! Constructor for deserializing buffer metadata from disk
 	FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
-	                const BlockPointer &block_ptr);
+	                const BlockPointer &block_pointer);
 
 	//! Block manager of the database instance
 	BlockManager &block_manager;
@@ -94,12 +89,21 @@ public:
 	void Serialize(PartialBlockManager &partial_block_manager, const idx_t allocation_size_p);
 	//! Pin a buffer (if not in-memory)
 	void Pin();
+	//! Returns the first free offset in a bitmask
+	uint32_t GetOffset(const idx_t bitmask_count);
+	//! Returns the maximum non-free offset in a bitmask
+	uint32_t GetMaxOffset(const idx_t bitmask_count, const idx_t available_segments_per_buffer);
 
 private:
 	//! The buffer handle of the in-memory buffer
 	BufferHandle buffer_handle;
 	//! The block handle of the on-disk buffer
 	shared_ptr<BlockHandle> block_handle;
+
+private:
+	// TODO
+	//! Sets all uninitialized regions of a buffer in the respective partial block allocation
+	//	void SetUninitializedRegions(ValidityMask &mask, vector<UninitializedRegion> &uninitialized_regions);
 };
 
 } // namespace duckdb

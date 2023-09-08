@@ -22,9 +22,9 @@ unique_ptr<BaseStatistics> ColumnCheckpointState::GetStatistics() {
 	return std::move(global_stats);
 }
 
-PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment,
-                                                     BlockManager &block_manager, PartialBlockState state)
-    : PartialBlock(state), block_manager(block_manager), block(segment.block) {
+PartialBlockForCheckpoint::PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
+                                                     BlockManager &block_manager)
+    : PartialBlock(state, block_manager, segment.block) {
 	AddSegmentToTail(data, segment, 0);
 }
 
@@ -47,7 +47,7 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	}
 	// if we have any free space or uninitialized regions we need to zero-initialize them
 	if (free_space_left > 0 || !uninitialized_regions.empty()) {
-		auto handle = block_manager.buffer_manager.Pin(block);
+		auto handle = block_manager.buffer_manager.Pin(block_handle);
 		// memset any uninitialized regions
 		for (auto &uninitialized : uninitialized_regions) {
 			memset(handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
@@ -71,10 +71,10 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 			D_ASSERT(segment.offset_in_block == 0);
 			segment.segment.ConvertToPersistent(&block_manager, state.block_id);
 			// update the block after it has been converted to a persistent segment
-			block = segment.segment.block;
+			block_handle = segment.segment.block;
 		} else {
 			// subsequent segments are MARKED as persistent - they don't need to be rewritten
-			segment.segment.MarkAsPersistent(block, segment.offset_in_block);
+			segment.segment.MarkAsPersistent(block_handle, segment.offset_in_block);
 			if (fetch_new_block) {
 				// if we fetched a new block we need to increase the reference count to the block
 				block_manager.IncreaseBlockReferenceCount(state.block_id);
@@ -86,7 +86,7 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 
 void PartialBlockForCheckpoint::Clear() {
 	uninitialized_regions.clear();
-	block.reset();
+	block_handle.reset();
 	segments.clear();
 }
 
@@ -95,13 +95,13 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 
 	auto &buffer_manager = block_manager.buffer_manager;
 	// pin the source block
-	auto old_handle = buffer_manager.Pin(other.block);
+	auto old_handle = buffer_manager.Pin(other.block_handle);
 	// pin the target block
-	auto new_handle = buffer_manager.Pin(block);
+	auto new_handle = buffer_manager.Pin(block_handle);
 	// memcpy the contents of the old block to the new block
 	memcpy(new_handle.Ptr() + offset, old_handle.Ptr(), other_size);
 
-	// now copy over all of the segments to the new block
+	// now copy over all segments to the new block
 	// move over the uninitialized regions
 	for (auto &region : other.uninitialized_regions) {
 		region.start += offset;
@@ -140,7 +140,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		// non-constant block
 		PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(segment_size);
 		block_id = allocation.state.block_id;
-		offset_in_block = allocation.state.offset_in_block;
+		offset_in_block = allocation.state.offset;
 
 		if (allocation.partial_block) {
 			// Use an existing block.
@@ -149,7 +149,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 			// pin the source block
 			auto old_handle = buffer_manager.Pin(segment->block);
 			// pin the target block
-			auto new_handle = buffer_manager.Pin(pstate.block);
+			auto new_handle = buffer_manager.Pin(pstate.block_handle);
 			// memcpy the contents of the old block to the new block
 			memcpy(new_handle.Ptr() + offset_in_block, old_handle.Ptr(), segment_size);
 			pstate.AddSegmentToTail(column_data, *segment, offset_in_block);
@@ -162,8 +162,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 				segment->Resize(Storage::BLOCK_SIZE);
 			}
 			D_ASSERT(offset_in_block == 0);
-			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(
-			    column_data, *segment, *allocation.block_manager, allocation.state);
+			allocation.partial_block = make_uniq<PartialBlockForCheckpoint>(column_data, *segment, allocation.state,
+			                                                                *allocation.block_manager);
 		}
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));

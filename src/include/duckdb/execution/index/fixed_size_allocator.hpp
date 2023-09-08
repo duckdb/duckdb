@@ -29,10 +29,6 @@ public:
 	//! We can vacuum 10% or more of the total in-memory footprint
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
 
-	//! Constants for fast offset calculations in the bitmask
-	static constexpr idx_t BASE[] = {0x00000000FFFFFFFF, 0x0000FFFF, 0x00FF, 0x0F, 0x3, 0x1};
-	static constexpr uint8_t SHIFT[] = {32, 16, 8, 4, 2, 1};
-
 public:
 	FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager);
 
@@ -117,10 +113,6 @@ private:
 		auto buffer_ptr = buffer.Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 	}
-	//! Returns the first free offset in a bitmask
-	uint32_t GetOffset(ValidityMask &mask, const idx_t segment_count);
-	//! Returns the maximum non-free offset in a bitmask
-	uint32_t GetMaxOffset(ValidityMask &mask);
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
 };

@@ -4,9 +4,6 @@
 
 namespace duckdb {
 
-constexpr idx_t FixedSizeAllocator::BASE[];
-constexpr uint8_t FixedSizeAllocator::SHIFT[];
-
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
       metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size), total_segment_count(0) {
@@ -70,9 +67,7 @@ IndexPointer FixedSizeAllocator::New() {
 
 	D_ASSERT(buffers.find(buffer_id) != buffers.end());
 	auto &buffer = buffers.find(buffer_id)->second;
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer.Get());
-	ValidityMask mask(bitmask_ptr);
-	auto offset = GetOffset(mask, buffer.segment_count);
+	auto offset = buffer.GetOffset(bitmask_count);
 
 	total_segment_count++;
 	buffer.segment_count++;
@@ -246,8 +241,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 BlockPointer FixedSizeAllocator::Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer) {
 
 	for (auto &buffer : buffers) {
-		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.second.Get()));
-		auto max_offset = GetMaxOffset(mask);
+		auto max_offset = buffer.second.GetMaxOffset(bitmask_count, available_segments_per_buffer);
 		auto allocation_size = max_offset * segment_size + bitmask_offset;
 		buffer.second.Serialize(partial_block_manager, allocation_size);
 	}
@@ -291,109 +285,6 @@ void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
 	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
 		buffers_with_free_space.insert(reader.Read<idx_t>());
 	}
-}
-
-uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t segment_count) {
-
-	auto data = mask.GetData();
-
-	// fills up a buffer sequentially before searching for free bits
-	if (mask.RowIsValid(segment_count)) {
-		mask.SetInvalid(segment_count);
-		return segment_count;
-	}
-
-	for (idx_t entry_idx = 0; entry_idx < bitmask_count; entry_idx++) {
-		// get an entry with free bits
-		if (data[entry_idx] == 0) {
-			continue;
-		}
-
-		// find the position of the free bit
-		auto entry = data[entry_idx];
-		idx_t first_valid_bit = 0;
-
-		// this loop finds the position of the rightmost set bit in entry and stores it
-		// in first_valid_bit
-		for (idx_t i = 0; i < 6; i++) {
-			// set the left half of the bits of this level to zero and test if the entry is still not zero
-			if (entry & BASE[i]) {
-				// first valid bit is in the rightmost s[i] bits
-				// permanently set the left half of the bits to zero
-				entry &= BASE[i];
-			} else {
-				// first valid bit is in the leftmost s[i] bits
-				// shift by s[i] for the next iteration and add s[i] to the position of the rightmost set bit
-				entry >>= SHIFT[i];
-				first_valid_bit += SHIFT[i];
-			}
-		}
-		D_ASSERT(entry);
-
-		auto prev_bits = entry_idx * sizeof(validity_t) * 8;
-		D_ASSERT(mask.RowIsValid(prev_bits + first_valid_bit));
-		mask.SetInvalid(prev_bits + first_valid_bit);
-		return (prev_bits + first_valid_bit);
-	}
-
-	throw InternalException("Invalid bitmask for FixedSizeAllocator");
-}
-
-uint32_t FixedSizeAllocator::GetMaxOffset(ValidityMask &mask) {
-
-	// finds the maximum free bit in a bitmask, and adds one to it,
-	// so that max_offset * segment_size = allocated_size of this bitmask's buffer
-
-	auto data = mask.GetData();
-	uint32_t max_offset = bitmask_count * sizeof(validity_t) * 8;
-
-	auto bits_in_last_entry = available_segments_per_buffer % (sizeof(validity_t) * 8);
-
-	D_ASSERT(bitmask_count > 0);
-	for (idx_t i = bitmask_count; i > 0; i--) {
-
-		auto entry = data[i - 1];
-
-		// set all bits after bits_in_last_entry
-		if (i == bitmask_count) {
-			entry |= ~idx_t(0) << bits_in_last_entry;
-		}
-
-		if (entry == ~idx_t(0)) {
-			max_offset -= sizeof(validity_t) * 8;
-			continue;
-		}
-
-		// invert data[entry_idx]
-		auto entry_inv = ~entry;
-		idx_t first_valid_bit = 0;
-
-		// then find the position of the LEFTMOST set bit
-		for (idx_t level = 0; level < 6; level++) {
-
-			// set the right half of the bits of this level to zero and test if the entry is still not zero
-			if (entry_inv & ~BASE[level]) {
-				// first valid bit is in the leftmost s[level] bits
-				// shift by s[level] for the next iteration and add s[level] to the position of the leftmost set bit
-				entry_inv >>= SHIFT[level];
-				first_valid_bit += SHIFT[level];
-			} else {
-				// first valid bit is in the rightmost s[level] bits
-				// permanently set the left half of the bits to zero
-				entry_inv &= BASE[level];
-			}
-		}
-		D_ASSERT(entry_inv);
-		max_offset -= sizeof(validity_t) * 8 - first_valid_bit;
-		D_ASSERT(!mask.RowIsValid(max_offset));
-		return max_offset + 1;
-	}
-
-	// there are no allocations in this buffer
-	// FIXME: put this line back in and then fix the missing vacuum bug in
-	// FIXME: test_index_large_aborted_append.test with force_restart
-	//	throw InternalException("tried to serialize empty buffer");
-	return 0;
 }
 
 idx_t FixedSizeAllocator::GetAvailableBufferId() const {
