@@ -14202,7 +14202,6 @@ static void shellEscapeCrnl(
 */
 #define OPEN_DB_KEEPALIVE   0x001   /* Return after error if true */
 #define OPEN_DB_ZIPFILE     0x002   /* Open as ZIP if name matches *.zip */
-/**/
 /*
 ** Make sure the database is open.  If it is not, then open it.  If
 ** the database fails to open, print an error message and exit.
