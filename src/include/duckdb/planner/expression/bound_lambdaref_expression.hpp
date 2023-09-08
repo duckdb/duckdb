@@ -26,8 +26,7 @@ public:
 
 public:
 	BoundLambdaRefExpression(LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
-	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_idx,
-	                         idx_t depth = 0);
+	BoundLambdaRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t lambda_idx, idx_t depth = 0);
 	//! Column index set by the binder, used to generate the final BoundExpression
 	ColumnBinding binding;
 	//! The index of the lambda parameter in the lambda bindings vector

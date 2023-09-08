@@ -42,8 +42,8 @@ string BoundLambdaRefExpression::ToString() const {
 	if (!alias.empty()) {
 		return alias;
 	}
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "." +
-	       to_string(lambda_idx) + "]";
+	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "." + to_string(lambda_idx) +
+	       "]";
 }
 
 void BoundLambdaRefExpression::Serialize(FieldWriter &writer) const {

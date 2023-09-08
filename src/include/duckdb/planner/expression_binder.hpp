@@ -136,8 +136,8 @@ protected:
 	BindResult BindExpression(ConjunctionExpression &expr, idx_t depth);
 	BindResult BindExpression(ConstantExpression &expr, idx_t depth);
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
-	BindResult BindExpression(LambdaExpression &expr, idx_t depth,
-	                          const LogicalType &list_child_type, optional_ptr<bind_lambda_function_t> bind_lambda_function);
+	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
+	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
@@ -148,7 +148,8 @@ protected:
 	                                   const optional_ptr<bind_lambda_function_t> bind_lambda_function,
 	                                   const LogicalType &list_child_type);
 	void CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
-	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function, const LogicalType &list_child_type);
+	                          const optional_ptr<bind_lambda_function_t> bind_lambda_function,
+	                          const LogicalType &list_child_type);
 
 	static unique_ptr<ParsedExpression> GetSQLValueFunction(const string &column_name);
 

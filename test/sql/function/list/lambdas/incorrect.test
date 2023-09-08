@@ -59,33 +59,29 @@ SELECT ${func_name}(1, 1);
 statement error
 SELECT ${func_name}([1], x -> x, 3);
 ----
-Binder Error: Invalid function arguments!
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x);
 ----
-Binder Error: Invalid function arguments!
+Binder Error: failed to bind function, either: Invalid number of function arguments!
+ or: Referenced column "x" not found in FROM clause!
+
+statement error
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
 
 endloop
 
 # list_transform specific test
 
 statement error
-SELECT list_transform(1, x -> x + 1);
-----
-Binder Error: Invalid LIST argument to list_transform!
-
-statement error
 SELECT [split('01:08:22', ':'), x -> CAST (x AS INTEGER)];
 ----
-This scalar function does not support lambdas as direct parameters!
-
-# list_filter specific test
-
-statement error
-SELECT list_filter(1, x -> x + 1);
-----
-Binder Error: Invalid LIST argument to list_filter!
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
 # lambda parameter has the same name as a column
 
@@ -150,12 +146,14 @@ Binder Error: This lambda function only supports up to two lambda parameters!
 statement error
 SELECT cos(x -> x + 1);
 ----
-Binder Error: Invalid function arguments!
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
 statement error
 SELECT cos([1], x -> x + 1);
 ----
-This scalar function does not support lambdas as direct parameters!
+Binder Error: failed to bind function, either: This scalar function does not support lambdas!
+ or: Referenced column "x" not found in FROM clause!
 
 # FIXME: support lambdas in CHECK constraints
 

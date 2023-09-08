@@ -29,14 +29,13 @@ idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const Bou
 	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].names.size();
 	}
-	offset += lambda_bindings[bound_lambda_ref_expr.lambda_idx].names.size() -
-	          bound_lambda_ref_expr.binding.column_index - 1;
+	offset +=
+	    lambda_bindings[bound_lambda_ref_expr.lambda_idx].names.size() - bound_lambda_ref_expr.binding.column_index - 1;
 	offset += bound_lambda_expr.parameter_count;
 	return offset;
 }
 
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
-                                            const LogicalType &list_child_type,
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
 	// this is for binding JSON

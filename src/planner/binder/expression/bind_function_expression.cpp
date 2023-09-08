@@ -82,16 +82,25 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 
-		if (try_bind_lambda) {
-			auto result = BindLambdaFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
-			if (!result.HasError()) {
-				// Lambda bind successful
-				return result;
-			}
+		// other scalar function
+		if (!try_bind_lambda) {
+			return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
 		}
 
-		// other scalar function
-		return BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+		auto lambda_bind_result = BindLambdaFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+		if (!lambda_bind_result.HasError()) {
+			return lambda_bind_result;
+		}
+
+		auto json_bind_result = BindFunction(function, func->Cast<ScalarFunctionCatalogEntry>(), depth);
+		if (!json_bind_result.HasError()) {
+			return json_bind_result;
+		}
+
+		return BindResult("failed to bind function, either: " + lambda_bind_result.error +
+		                  "\n"
+		                  " or: " +
+		                  json_bind_result.error);
 	}
 	case CatalogType::MACRO_ENTRY:
 		// macro function
@@ -139,8 +148,20 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, ScalarFunctionCatalogEntry &func,
                                                 idx_t depth) {
 
+	// scalar functions with lambdas can never be overloaded
+	if (func.functions.functions.size() != 1) {
+		return BindResult("This scalar function does not support lambdas!");
+	}
+
+	// get the callback function for the lambda parameter types
+	auto &scalar_function = func.functions.functions.front();
+	auto &bind_lambda_function = scalar_function.bind_lambda;
+	if (!bind_lambda_function) {
+		return BindResult("This scalar function does not support lambdas!");
+	}
+
 	if (function.children.size() != 2) {
-		return BindResult("Invalid function arguments!");
+		return BindResult("Invalid number of function arguments!");
 	}
 	D_ASSERT(function.children[1]->GetExpressionClass() == ExpressionClass::LAMBDA);
 
@@ -155,22 +176,13 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &list_child = BoundExpression::GetExpression(*function.children[0]);
 	if (list_child->return_type.id() != LogicalTypeId::LIST && list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
-		return BindResult(" Invalid LIST argument to during lambda function binding!");
+		return BindResult("Invalid LIST argument during lambda function binding!");
 	}
 
 	LogicalType list_child_type = list_child->return_type.id();
 	if (list_child->return_type.id() != LogicalTypeId::SQLNULL &&
 	    list_child->return_type.id() != LogicalTypeId::UNKNOWN) {
 		list_child_type = ListType::GetChildType(list_child->return_type);
-	}
-
-	// get the callback function for the lambda parameter types
-	// NOTE: lambdas can never be overloaded
-	D_ASSERT(func.functions.functions.size() == 1);
-	auto &scalar_function = func.functions.functions.front();
-	auto &bind_lambda_function = scalar_function.bind_lambda;
-	if (!bind_lambda_function) {
-		return BindResult("This scalar function does not support lambdas as direct parameters!");
 	}
 
 	// bind the lambda parameter
