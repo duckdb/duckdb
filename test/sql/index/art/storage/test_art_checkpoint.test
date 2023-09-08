@@ -42,8 +42,8 @@ INSERT INTO integers (SELECT range FROM range(512) UNION ALL SELECT 55);
 statement ok
 CHECKPOINT;
 
-# we expect only two additional block, one for the index metadata and another one for the index data
+# we expect fewer than 4 additional blocks, because we combine partial blocks
 query I
-SELECT total_blocks FROM pragma_database_size();
+SELECT total_blocks < 5 FROM pragma_database_size();
 ----
-3
+1
