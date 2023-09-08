@@ -1,0 +1,206 @@
+# name: test/sql/json/table/read_json_auto.test_slow
+# description: Read json files - schema detection
+# group: [table]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# some arrow tests (python/pyarrow/tests/test_json.py) on their github
+# these are very similar to the pandas tests, so let's not copy those
+# instead of adding all of these files to data/test we just create them on the fly here
+# whenever we add a '' at the end it's just to check we skip the newline at the end that's sometimes there
+statement ok
+copy (select * from (values ('{"a": 1, "b": 2}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '');
+
+query II
+select * from '__TEST_DIR__/my_file.json'
+----
+1	2
+
+statement ok
+copy (select * from (values ('{"a": 1}'), ('{"a": 2}'), ('{"a": 3}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query I
+select * from '__TEST_DIR__/my_file.json'
+----
+1
+2
+3
+
+query I
+select count(*) from '__TEST_DIR__/my_file.json'
+----
+3
+
+statement ok
+copy (select * from (values ('{"a": 1,"b": 2, "c": 3}'), ('{"a": 4,"b": 5, "c": 6}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query III
+select * from '__TEST_DIR__/my_file.json'
+----
+1	2	3
+4	5	6
+
+statement ok
+copy (select * from (values ('{"a": 1,"b": 2, "c": "3", "d": false}'), ('{"a": 4.0, "b": -5, "c": "foo", "d": true}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query IIII
+select * from '__TEST_DIR__/my_file.json'
+----
+1.0	2	3	false
+4.0	-5	foo	true
+
+# mixed types that cannot be resolved, defaults to JSON (column 3)
+statement ok
+copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'), ('{"a": null, "b": -5, "c": "foo", "d": null, "e": true}'), ('{"a": 4.5, "b": null, "c": "nan", "d": null,"e": false}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query IIIII
+select * from '__TEST_DIR__/my_file.json'
+----
+1.0	2	NULL	NULL	NULL
+NULL	-5	foo	NULL	true
+4.5	NULL	nan	NULL	false
+
+# mixed types are resolved to DOUBLE here
+statement ok
+copy (select * from (values ('{"a": 1}'), ('{"a": 1.45}'), ('{"a": -23.456}'), ('{}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query II
+select typeof(a), a from '__TEST_DIR__/my_file.json'
+----
+DOUBLE	1.0
+DOUBLE	1.45
+DOUBLE	-23.456
+DOUBLE	NULL
+
+statement ok
+copy (select * from (values ('{"foo": "bar", "num": 0}'), ('{"foo": "baz", "num": 1}'), (''))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query II
+select * from '__TEST_DIR__/my_file.json'
+----
+bar	0
+baz	1
+
+# we can read values from a top-level list
+query I
+select * from 'data/json/top_level_array.json'
+----
+cancelled
+cancelled
+
+query I
+select count(*) from 'data/json/top_level_array.json'
+----
+2
+
+# for maximum_depth=0 this is two records of JSON
+query I
+select * from read_json_auto('data/json/top_level_array.json', maximum_depth=0)
+----
+{"conclusion":"cancelled"}
+{"conclusion":"cancelled"}
+
+# for 1 it's 1 column of JSON
+query I
+select * from read_json_auto('data/json/top_level_array.json', maximum_depth=1)
+----
+"cancelled"
+"cancelled"
+
+# if we read this with records='false', we get the struct instead of the unpacked columns
+query I
+select typeof(json) from read_json_auto('data/json/top_level_array.json', records='false')
+----
+STRUCT(conclusion VARCHAR)
+STRUCT(conclusion VARCHAR)
+
+# however, if there are multiple top-level arrays, we default to reading them as lists
+query I
+select * from 'data/json/top_level_two_arrays.json'
+----
+[{'conclusion': cancelled}, {'conclusion': cancelled}]
+[{'conclusion': cancelled}, {'conclusion': cancelled}]
+
+# if we read a top-level array as if it is a record, then we get an error
+statement error
+select * from read_json_auto('data/json/top_level_array.json', format='unstructured', records='true')
+----
+Binder Error: json_read expected records
+
+# issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
+statement ok
+select * from 'data/json/projection_pushdown_example.json' WHERE status <> 'completed'
+
+# different schema's - this one should work regardless of sampling 1 or all lines
+query II
+select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=1)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
+
+query II
+select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-1)
+----
+1	O Brother, Where Art Thou?
+2	NULL
+3	The Firm
+4	NULL
+5	Raising Arizona
+
+# inconsistent schema's - if we only sample 1 row, we get an error, because we only see a NULL value for the 2nd column
+statement error
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
+----
+Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
+
+# if we increase the sample size to 2, we can read it just fine
+query II
+select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=2)
+----
+"1"	NULL
+2	Home for the Holidays
+[3]	The Firm
+4	Broadcast News
+5	Raising Arizona
+
+# we can also find bigint in strings (happens a lot in JSON for some reason ...
+statement ok
+copy (select * from (values ('{"id": "26941143801"}'), ('{"id": "26941143807"}'))) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select typeof(id) from '__TEST_DIR__/my_file.json'
+----
+BIGINT
+BIGINT
+
+statement ok
+pragma disable_verification
+
+require httpfs
+
+# this is one big object - yyjson uses it as a benchmark
+query II
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=3);
+----
+VARCHAR	STRUCT("type" JSON, properties JSON, geometry JSON)[]
+
+# let's crank up maximum_depth and see if we can fully unnest this big object
+query II
+select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=8);
+----
+VARCHAR	STRUCT("type" VARCHAR, properties STRUCT("name" VARCHAR), geometry STRUCT("type" VARCHAR, coordinates DOUBLE[][][]))[]
+
+# ^ fully unnested, no more JSON type in there
+
+# the "coordinates" array in "features.geometry" is huge, let's just check the length - not all the values
+query IIIII
+select type, features[1].type, features[1].properties.name, features[1].geometry.type, length(features[1].geometry.coordinates)
+from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=8);
+----
+FeatureCollection	Feature	Canada	Polygon	480

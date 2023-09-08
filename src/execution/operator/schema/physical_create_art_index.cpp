@@ -89,7 +89,7 @@ SinkResultType PhysicalCreateARTIndex::SinkUnsorted(Vector &row_identifiers, Ope
 	// insert the row IDs
 	auto &art = l_state.local_index->Cast<ART>();
 	for (idx_t i = 0; i < count; i++) {
-		if (!art.Insert(*art.tree, l_state.keys[i], 0, row_ids[i])) {
+		if (!art.Insert(art.tree, l_state.keys[i], 0, row_ids[i])) {
 			throw ConstraintException("Data contains duplicates on indexed column(s)");
 		}
 	}

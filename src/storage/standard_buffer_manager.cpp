@@ -77,14 +77,6 @@ idx_t StandardBufferManager::GetMaxMemory() const {
 	return buffer_pool.GetMaxMemory();
 }
 
-// POTENTIALLY PROBLEMATIC
-// void StandardBufferManager::IncreaseUsedMemory(idx_t size, bool unsafe) {
-//	if (!unsafe && buffer_pool.GetUsedMemory() + size > buffer_pool.GetMaxMemory()) {
-//		throw OutOfMemoryException("Failed to allocate data of size %lld%s", size, InMemoryWarning());
-//	}
-//	buffer_pool.IncreaseUsedMemory(size);
-//}
-
 template <typename... ARGS>
 TempBufferPoolReservation StandardBufferManager::EvictBlocksOrThrow(idx_t memory_delta, unique_ptr<FileBuffer> *buffer,
                                                                     ARGS... args) {

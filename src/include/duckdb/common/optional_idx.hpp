@@ -34,7 +34,7 @@ public:
 	void Invalidate() {
 		index = INVALID_INDEX;
 	}
-	idx_t GetIndex() {
+	idx_t GetIndex() const {
 		if (index == INVALID_INDEX) {
 			throw InternalException("Attempting to get the index of an optional_idx that is not set");
 		}
