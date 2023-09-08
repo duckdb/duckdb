@@ -208,18 +208,10 @@ void ArrowTableFunction::RenameArrowColumns(vector<string> &names) {
 	}
 }
 
-unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
-                                                           vector<LogicalType> &return_types, vector<string> &names) {
-	auto stream_factory_ptr = input.inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
-	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
-
-	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
-
-	auto &data = *res;
-	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
-	for (idx_t col_idx = 0; col_idx < (idx_t)data.schema_root.arrow_schema.n_children; col_idx++) {
-		auto &schema = *data.schema_root.arrow_schema.children[col_idx];
+void ArrowTableFunction::PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p,
+                                                vector<string> &names, vector<LogicalType> &return_types) {
+	for (idx_t col_idx = 0; col_idx < (idx_t)schema_p.arrow_schema.n_children; col_idx++) {
+		auto &schema = *schema_p.arrow_schema.children[col_idx];
 		if (!schema.release) {
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
@@ -233,7 +225,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		} else {
 			return_types.emplace_back(arrow_type->GetDuckType());
 		}
-		res->arrow_table.AddColumn(col_idx, std::move(arrow_type));
+		arrow_table.AddColumn(col_idx, std::move(arrow_type));
 		auto format = string(schema.format);
 		auto name = string(schema.name);
 		if (name.empty()) {
@@ -241,6 +233,19 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		names.push_back(name);
 	}
+}
+
+unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
+                                                           vector<LogicalType> &return_types, vector<string> &names) {
+	auto stream_factory_ptr = input.inputs[0].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
+	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
+
+	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
+
+	auto &data = *res;
+	stream_factory_get_schema(stream_factory_ptr, data.schema_root);
+	PopulateArrowTableType(res->arrow_table, data.schema_root, names, return_types);
 	RenameArrowColumns(names);
 	res->all_types = return_types;
 	return std::move(res);
