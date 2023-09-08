@@ -6,6 +6,7 @@
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
@@ -119,6 +120,7 @@ public:
 	idx_t insert_count;
 	vector<RowGroupBatchEntry> collections;
 	idx_t next_start = 0;
+	bool optimistically_written = false;
 
 	void FindMergeCollections(idx_t min_batch_index, optional_idx &merged_batch_index,
 	                          vector<unique_ptr<RowGroupCollection>> &result) {
@@ -176,10 +178,12 @@ public:
 	unique_ptr<RowGroupCollection> MergeCollections(ClientContext &context,
 	                                                vector<unique_ptr<RowGroupCollection>> merge_collections,
 	                                                OptimisticDataWriter &writer) {
+		D_ASSERT(!merge_collections.empty());
 		CollectionMerger merger(context);
 		for (auto &collection : merge_collections) {
 			merger.AddCollection(std::move(collection));
 		}
+		optimistically_written = true;
 		return merger.Flush(writer);
 	}
 
@@ -373,48 +377,65 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
                                                OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
 
-	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
-	// together
-	vector<unique_ptr<CollectionMerger>> mergers;
-	unique_ptr<CollectionMerger> current_merger;
+	if (gstate.optimistically_written || gstate.insert_count >= LocalStorage::MERGE_THRESHOLD) {
+		// we have written data to disk optimistically or are inserting a large amount of data
+		// perform a final pass over all of the row groups and merge them together
+		vector<unique_ptr<CollectionMerger>> mergers;
+		unique_ptr<CollectionMerger> current_merger;
 
-	auto &storage = gstate.table.GetStorage();
-	for (auto &entry : gstate.collections) {
-		if (entry.type == RowGroupBatchType::NOT_FLUSHED) {
-			// this collection has not been flushed: add it to the merge set
-			if (!current_merger) {
-				current_merger = make_uniq<CollectionMerger>(context);
+		auto &storage = gstate.table.GetStorage();
+		for (auto &entry : gstate.collections) {
+			if (entry.type == RowGroupBatchType::NOT_FLUSHED) {
+				// this collection has not been flushed: add it to the merge set
+				if (!current_merger) {
+					current_merger = make_uniq<CollectionMerger>(context);
+				}
+				current_merger->AddCollection(std::move(entry.collection));
+			} else {
+				// this collection has been flushed: it does not need to be merged
+				// create a separate collection merger only for this entry
+				if (current_merger) {
+					// we have small collections remaining: flush them
+					mergers.push_back(std::move(current_merger));
+					current_merger.reset();
+				}
+				auto larger_merger = make_uniq<CollectionMerger>(context);
+				larger_merger->AddCollection(std::move(entry.collection));
+				mergers.push_back(std::move(larger_merger));
 			}
-			current_merger->AddCollection(std::move(entry.collection));
-		} else {
-			// this collection has been flushed: it does not need to be merged
-			// create a separate collection merger only for this entry
-			if (current_merger) {
-				// we have small collections remaining: flush them
-				mergers.push_back(std::move(current_merger));
-				current_merger.reset();
-			}
-			auto larger_merger = make_uniq<CollectionMerger>(context);
-			larger_merger->AddCollection(std::move(entry.collection));
-			mergers.push_back(std::move(larger_merger));
 		}
-	}
-	if (current_merger) {
-		mergers.push_back(std::move(current_merger));
-	}
+		if (current_merger) {
+			mergers.push_back(std::move(current_merger));
+		}
 
-	// now that we have created all of the mergers, perform the actual merging
-	vector<unique_ptr<RowGroupCollection>> final_collections;
-	final_collections.reserve(mergers.size());
-	auto &writer = storage.CreateOptimisticWriter(context);
-	for (auto &merger : mergers) {
-		final_collections.push_back(merger->Flush(writer));
-	}
-	storage.FinalizeOptimisticWriter(context, writer);
+		// now that we have created all of the mergers, perform the actual merging
+		vector<unique_ptr<RowGroupCollection>> final_collections;
+		final_collections.reserve(mergers.size());
+		auto &writer = storage.CreateOptimisticWriter(context);
+		for (auto &merger : mergers) {
+			final_collections.push_back(merger->Flush(writer));
+		}
+		storage.FinalizeOptimisticWriter(context, writer);
 
-	// finally, merge the row groups into the local storage
-	for (auto &collection : final_collections) {
-		storage.LocalMerge(context, *collection);
+		// finally, merge the row groups into the local storage
+		for (auto &collection : final_collections) {
+			storage.LocalMerge(context, *collection);
+		}
+	} else {
+		// we are writing a small amount of data to disk
+		// append directly to transaction local storage
+		auto &table = gstate.table;
+		auto &storage = table.GetStorage();
+		LocalAppendState append_state;
+		storage.InitializeLocalAppend(append_state, context);
+		auto &transaction = DuckTransaction::Get(context, table.catalog);
+		for (auto &entry : gstate.collections) {
+			entry.collection->Scan(transaction, [&](DataChunk &insert_chunk) {
+				storage.LocalAppend(append_state, table, context, insert_chunk);
+				return true;
+			});
+		}
+		storage.FinalizeLocalAppend(append_state);
 	}
 	return SinkFinalizeType::READY;
 }
