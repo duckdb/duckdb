@@ -11,7 +11,7 @@ WriteOverflowStringsToDisk::WriteOverflowStringsToDisk(BlockManager &block_manag
 
 WriteOverflowStringsToDisk::~WriteOverflowStringsToDisk() {
 	// verify that the overflow writer has been flushed
-    D_ASSERT(Exception::UncaughtException() || offset == 0);
+	D_ASSERT(Exception::UncaughtException() || offset == 0);
 }
 
 shared_ptr<BlockHandle> UncompressedStringSegmentState::GetHandle(BlockManager &manager, block_id_t block_id) {
@@ -29,13 +29,15 @@ void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager, block_
 	lock_guard<mutex> lock(block_lock);
 	auto entry = handles.find(block_id);
 	if (entry != handles.end()) {
-		throw InternalException("UncompressedStringSegmentState::RegisterBlock - block id %llu already exists", block_id);
+		throw InternalException("UncompressedStringSegmentState::RegisterBlock - block id %llu already exists",
+		                        block_id);
 	}
 	auto result = manager.RegisterBlock(block_id);
 	handles.insert(make_pair(block_id, std::move(result)));
 }
 
-void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string, block_id_t &result_block, int32_t &result_offset) {
+void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
+                                             block_id_t &result_block, int32_t &result_offset) {
 	auto &buffer_manager = block_manager.buffer_manager;
 	if (!handle.IsValid()) {
 		handle = buffer_manager.Allocate(Storage::BLOCK_SIZE);
