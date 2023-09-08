@@ -19,6 +19,7 @@ duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
         GIT_TAG a1f65419dfbc23e8099fbdd1a8a13bfda425165d
+	APPLY_PATCHES
         )
 
 ################# AZURE

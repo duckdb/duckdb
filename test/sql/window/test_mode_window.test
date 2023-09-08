@@ -32,7 +32,9 @@ NULL	NULL	NULL	NULL
 1	9	3	1
 
 query III
-SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) FROM modes ORDER BY 1, 2
+SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) 
+FROM modes 
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL
@@ -88,7 +90,7 @@ NULL	NULL	NULL	NULL
 query III
 SELECT r, n, mode(n) over (order by r rows between 1 preceding and 1 following)
 FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM modes) nulls
-ORDER BY 1
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL
@@ -153,7 +155,9 @@ PRAGMA debug_window_mode=${windowmode}
 
 query III
 WITH t(r) AS (VALUES (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (NULL), (NULL), (NULL))
-SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) FROM t ORDER BY 1, 2
+SELECT r, r//3, mode(r//3) over (order by r rows between 1 preceding and 1 following) 
+FROM t 
+ORDER BY ALL
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL

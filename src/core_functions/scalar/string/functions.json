@@ -230,6 +230,14 @@
         "type": "scalar_function_set"
     },
     {
+        "name": "sha256",
+        "parameters": "value",
+        "description": "Returns the SHA256 hash of the value",
+        "example": "sha256('hello')",
+        "type": "scalar_function",
+        "struct": "SHA256Fun"
+    },
+    {
         "name": "string_split",
         "parameters": "string,separator",
         "description": "Splits the string along the separator",
