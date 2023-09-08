@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 

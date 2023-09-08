@@ -50,9 +50,8 @@ common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
 common/row_operations/row_gather.cpp	11
 common/row_operations/row_match.cpp	4
-common/serializer/binary_deserializer.cpp	13
-common/serializer/binary_serializer.cpp	21
-common/serializer/buffered_deserializer.cpp	3
+common/serializer/deserializer.cpp	13
+common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
@@ -335,7 +334,7 @@ include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
 include/duckdb/catalog/catalog_set.hpp	2
 include/duckdb/catalog/mapping_value.hpp	2
 include/duckdb/common/allocator.hpp	2
-include/duckdb/common/serializer/binary_deserializer.hpp	2
+include/duckdb/common/serializer/deserializer.hpp	2
 include/duckdb/common/serializer/deserialization_data.hpp	10
 include/duckdb/common/bit_utils.hpp	4
 include/duckdb/common/bitpacking.hpp	11
@@ -365,8 +364,8 @@ include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
 include/duckdb/common/serializer.hpp	4
 include/duckdb/common/serializer/binary_deserializer.cpp	2
-include/duckdb/common/serializer/format_deserializer.hpp	37
-include/duckdb/common/serializer/format_serializer.hpp	34
+include/duckdb/common/serializer/deserializer.hpp	37
+include/duckdb/common/serializer/serializer.hpp	34
 include/duckdb/common/sort/duckdb_pdqsort.hpp	3
 include/duckdb/common/sort/sorted_block.hpp	1
 include/duckdb/common/string_util.hpp	9
