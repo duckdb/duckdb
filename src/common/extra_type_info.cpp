@@ -3,7 +3,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/string_map_set.hpp"
 
 namespace duckdb {
@@ -180,8 +179,11 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 
 	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &deserializer, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
-		deserializer.ReadObject(201, "values_insert_order",
-		                        [&](Deserializer &source) { values_insert_order.Deserialize(source, size); });
+		auto strings = FlatVector::GetData<string_t>(values_insert_order);
+
+		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
+			strings[i] = StringVector::AddStringOrBlob(values_insert_order, list.ReadElement<string>());
+		});
 		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
@@ -263,15 +265,15 @@ string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 }
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(Deserializer &deserializer) {
-	auto enum_size = deserializer.ReadProperty<idx_t>(200, "enum_size");
-	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
+	auto values_count = deserializer.ReadProperty<idx_t>(200, "values_count");
+	auto enum_internal_type = EnumTypeInfo::DictType(values_count);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
-		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, enum_size);
+		return EnumTypeInfoTemplated<uint8_t>::Deserialize(deserializer, values_count);
 	case PhysicalType::UINT16:
-		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, enum_size);
+		return EnumTypeInfoTemplated<uint16_t>::Deserialize(deserializer, values_count);
 	case PhysicalType::UINT32:
-		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, enum_size);
+		return EnumTypeInfoTemplated<uint32_t>::Deserialize(deserializer, values_count);
 	default:
 		throw InternalException("Invalid Physical Type for ENUMs");
 	}
@@ -302,13 +304,12 @@ bool EnumTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 
 void EnumTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty(200, "dict_size", dict_size);
-	serializer.WriteObject(201, "values_insert_order", [&](Serializer &serializer) {
-		auto &v = GetValuesInsertOrder();
-		Vector ref(v.GetType());
-		ref.Reference(v);
-		ref.Serialize(serializer, dict_size);
-	});
+
+	// Enums are special in that we serialize their values as a list instead of dumping the whole vector
+	auto strings = FlatVector::GetData<string_t>(values_insert_order);
+	serializer.WriteProperty(200, "values_count", dict_size);
+	serializer.WriteList(201, "values", dict_size,
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(strings[i]); });
 }
 
 } // namespace duckdb
