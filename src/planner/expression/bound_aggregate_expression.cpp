@@ -80,20 +80,20 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	return std::move(copy);
 }
 
-void BoundAggregateExpression::FormatSerialize(Serializer &serializer) const {
-	Expression::FormatSerialize(serializer);
+void BoundAggregateExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
-	FunctionSerializer::FormatSerialize(serializer, function, bind_info.get());
+	FunctionSerializer::Serialize(serializer, function, bind_info.get());
 	serializer.WriteProperty(203, "aggregate_type", aggr_type);
 	serializer.WritePropertyWithDefault(204, "filter", filter, unique_ptr<Expression>());
 	serializer.WritePropertyWithDefault(205, "order_bys", order_bys, unique_ptr<BoundOrderModifier>());
 }
 
-unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<Expression> BoundAggregateExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 	    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, std::move(return_type));
 	auto aggregate_type = deserializer.ReadProperty<AggregateType>(203, "aggregate_type");
 	auto filter = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(204, "filter", unique_ptr<Expression>());

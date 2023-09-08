@@ -26,8 +26,8 @@ public:
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR, std::move(expressions)) {
 	}
 
-	virtual void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
 

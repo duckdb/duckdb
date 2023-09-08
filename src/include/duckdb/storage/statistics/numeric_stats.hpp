@@ -59,8 +59,8 @@ struct NumericStats {
 
 	DUCKDB_API static void Merge(BaseStatistics &stats, const BaseStatistics &other_p);
 
-	DUCKDB_API static void FormatSerialize(const BaseStatistics &stats, Serializer &serializer);
-	DUCKDB_API static void FormatDeserialize(Deserializer &deserializer, BaseStatistics &stats);
+	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
+	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &stats);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

@@ -230,7 +230,7 @@ string DataChunk::ToString() const {
 	return retval;
 }
 
-void DataChunk::FormatSerialize(Serializer &serializer) const {
+void DataChunk::Serialize(Serializer &serializer) const {
 	// write the count
 	auto row_count = size();
 	serializer.WriteProperty<sel_t>(100, "rows", row_count);
@@ -246,12 +246,12 @@ void DataChunk::FormatSerialize(Serializer &serializer) const {
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
-			serialized_vector.FormatSerialize(object, row_count);
+			serialized_vector.Serialize(object, row_count);
 		});
 	});
 }
 
-void DataChunk::FormatDeserialize(Deserializer &deserializer) {
+void DataChunk::Deserialize(Deserializer &deserializer) {
 	// read the count
 	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
 
@@ -268,7 +268,7 @@ void DataChunk::FormatDeserialize(Deserializer &deserializer) {
 
 	// Read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
-		list.ReadObject([&](Deserializer &object) { data[i].FormatDeserialize(object, row_count); });
+		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
 	});
 }
 

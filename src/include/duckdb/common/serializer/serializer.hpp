@@ -224,11 +224,11 @@ protected:
 		OnListEnd();
 	}
 
-	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
+	// class or struct implementing `Serialize(Serializer& Serializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
 		OnObjectBegin();
-		value.FormatSerialize(*this);
+		value.Serialize(*this);
 		OnObjectEnd();
 	}
 

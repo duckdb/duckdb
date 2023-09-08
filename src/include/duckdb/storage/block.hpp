@@ -39,8 +39,8 @@ struct BlockPointer {
 		return block_id != INVALID_BLOCK;
 	}
 
-	void FormatSerialize(Serializer &serializer) const;
-	static BlockPointer FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static BlockPointer Deserialize(Deserializer &source);
 };
 
 struct MetaBlockPointer {
@@ -58,8 +58,8 @@ struct MetaBlockPointer {
 	block_id_t GetBlockId();
 	uint32_t GetBlockIndex();
 
-	void FormatSerialize(Serializer &serializer) const;
-	static MetaBlockPointer FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static MetaBlockPointer Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

@@ -543,12 +543,12 @@ struct ICUDatePart : public ICUDateFunc {
 		return make_uniq<BindStructData>(context, part_codes, bigints, doubles);
 	}
 
-	static void SerializeFunction(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                              const ScalarFunction &function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static duckdb::unique_ptr<FunctionData> DeserializeFunction(FormatDeserializer &deserializer,
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer,
 	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}

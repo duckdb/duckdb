@@ -416,8 +416,8 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                     const TableFunction &function) {
+static void TableScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
 	serializer.WriteProperty(101, "schema", bind_data.table.schema.name);
@@ -427,7 +427,7 @@ static void TableScanFormatSerialize(Serializer &serializer, const optional_ptr<
 	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
 }
 
-static unique_ptr<FunctionData> TableScanFormatDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> TableScanDeserialize(Deserializer &deserializer, TableFunction &function) {
 	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
 	auto schema = deserializer.ReadProperty<string>(101, "schema");
 	auto table = deserializer.ReadProperty<string>(102, "table");
@@ -456,8 +456,8 @@ TableFunction TableScanFunction::GetIndexScanFunction() {
 	scan_function.get_batch_index = nullptr;
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = false;
-	scan_function.serialize = TableScanFormatSerialize;
-	scan_function.deserialize = TableScanFormatDeserialize;
+	scan_function.serialize = TableScanSerialize;
+	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
 }
 
@@ -476,8 +476,8 @@ TableFunction TableScanFunction::GetFunction() {
 	scan_function.projection_pushdown = true;
 	scan_function.filter_pushdown = true;
 	scan_function.filter_prune = true;
-	scan_function.serialize = TableScanFormatSerialize;
-	scan_function.deserialize = TableScanFormatDeserialize;
+	scan_function.serialize = TableScanSerialize;
+	scan_function.deserialize = TableScanDeserialize;
 	return scan_function;
 }
 

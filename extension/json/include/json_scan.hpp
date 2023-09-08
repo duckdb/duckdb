@@ -92,8 +92,8 @@ public:
 	void InitializeFormats(bool auto_detect);
 	void SetCompression(const string &compression);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<JSONScanData> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<JSONScanData> Deserialize(Deserializer &deserializer);
 
 public:
 	//! Scan type
@@ -291,9 +291,9 @@ public:
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);
 
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
-	                            const TableFunction &function);
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, TableFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };

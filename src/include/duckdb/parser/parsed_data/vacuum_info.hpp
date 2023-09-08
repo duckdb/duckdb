@@ -25,8 +25,8 @@ struct VacuumOptions {
 	bool vacuum;
 	bool analyze;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static VacuumOptions FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static VacuumOptions Deserialize(Deserializer &deserializer);
 };
 
 struct VacuumInfo : public ParseInfo {
@@ -48,8 +48,8 @@ public:
 public:
 	unique_ptr<VacuumInfo> Copy();
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<ParseInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

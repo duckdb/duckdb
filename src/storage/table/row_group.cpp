@@ -851,7 +851,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-void RowGroup::FormatSerialize(RowGroupPointer &pointer, Serializer &serializer) {
+void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(100, "row_start", pointer.row_start);
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
@@ -890,7 +890,7 @@ void RowGroup::FormatSerialize(RowGroupPointer &pointer, Serializer &serializer)
 	});
 }
 
-RowGroupPointer RowGroup::FormatDeserialize(Deserializer &deserializer) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	RowGroupPointer result;
 	result.row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");

@@ -28,8 +28,8 @@ public:
 	SetScope scope;
 
 public:
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 

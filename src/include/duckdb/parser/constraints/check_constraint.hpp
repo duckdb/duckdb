@@ -30,8 +30,8 @@ public:
 
 	DUCKDB_API unique_ptr<Constraint> Copy() const override;
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const override;
-	DUCKDB_API static unique_ptr<Constraint> FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-void CreateInfo::FormatSerialize(Serializer &serializer) const {
+void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WriteProperty(101, "catalog", catalog);
 	serializer.WriteProperty(102, "schema", schema);
@@ -26,7 +26,7 @@ void CreateInfo::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(106, "sql", sql);
 }
 
-unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<CatalogType>(100, "type");
 	auto catalog = deserializer.ReadProperty<string>(101, "catalog");
 	auto schema = deserializer.ReadProperty<string>(102, "schema");
@@ -37,28 +37,28 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(Deserializer &deserializer)
 	unique_ptr<CreateInfo> result;
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:
-		result = CreateIndexInfo::FormatDeserialize(deserializer);
+		result = CreateIndexInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::MACRO_ENTRY:
-		result = CreateMacroInfo::FormatDeserialize(deserializer);
+		result = CreateMacroInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::SCHEMA_ENTRY:
-		result = CreateSchemaInfo::FormatDeserialize(deserializer);
+		result = CreateSchemaInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::SEQUENCE_ENTRY:
-		result = CreateSequenceInfo::FormatDeserialize(deserializer);
+		result = CreateSequenceInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::TABLE_ENTRY:
-		result = CreateTableInfo::FormatDeserialize(deserializer);
+		result = CreateTableInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::TABLE_MACRO_ENTRY:
-		result = CreateMacroInfo::FormatDeserialize(deserializer);
+		result = CreateMacroInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::TYPE_ENTRY:
-		result = CreateTypeInfo::FormatDeserialize(deserializer);
+		result = CreateTypeInfo::Deserialize(deserializer);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		result = CreateViewInfo::FormatDeserialize(deserializer);
+		result = CreateViewInfo::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
@@ -72,8 +72,8 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(Deserializer &deserializer)
 	return result;
 }
 
-void CreateIndexInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateIndexInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "name", index_name);
 	serializer.WriteProperty(201, "table", table);
 	serializer.WriteProperty(202, "index_type", index_type);
@@ -86,7 +86,7 @@ void CreateIndexInfo::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(209, "index_type_name", index_type_name);
 }
 
-unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
 	deserializer.ReadProperty(200, "name", result->index_name);
 	deserializer.ReadProperty(201, "table", result->table);
@@ -101,30 +101,30 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(Deserializer &deserial
 	return std::move(result);
 }
 
-void CreateMacroInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateMacroInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "name", name);
 	serializer.WriteProperty(201, "function", function);
 }
 
-unique_ptr<CreateInfo> CreateMacroInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo());
 	deserializer.ReadProperty(200, "name", result->name);
 	deserializer.ReadProperty(201, "function", result->function);
 	return std::move(result);
 }
 
-void CreateSchemaInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateSchemaInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 }
 
-unique_ptr<CreateInfo> CreateSchemaInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateSchemaInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSchemaInfo>(new CreateSchemaInfo());
 	return std::move(result);
 }
 
-void CreateSequenceInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateSequenceInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "name", name);
 	serializer.WriteProperty(201, "usage_count", usage_count);
 	serializer.WriteProperty(202, "increment", increment);
@@ -134,7 +134,7 @@ void CreateSequenceInfo::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(206, "cycle", cycle);
 }
 
-unique_ptr<CreateInfo> CreateSequenceInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSequenceInfo>(new CreateSequenceInfo());
 	deserializer.ReadProperty(200, "name", result->name);
 	deserializer.ReadProperty(201, "usage_count", result->usage_count);
@@ -146,15 +146,15 @@ unique_ptr<CreateInfo> CreateSequenceInfo::FormatDeserialize(Deserializer &deser
 	return std::move(result);
 }
 
-void CreateTableInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateTableInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "table", table);
 	serializer.WriteProperty(201, "columns", columns);
 	serializer.WriteProperty(202, "constraints", constraints);
 	serializer.WritePropertyWithDefault(203, "query", query, unique_ptr<SelectStatement>());
 }
 
-unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateTableInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTableInfo>(new CreateTableInfo());
 	deserializer.ReadProperty(200, "table", result->table);
 	deserializer.ReadProperty(201, "columns", result->columns);
@@ -163,28 +163,28 @@ unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(Deserializer &deserial
 	return std::move(result);
 }
 
-void CreateTypeInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateTypeInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "name", name);
 	serializer.WriteProperty(201, "logical_type", type);
 }
 
-unique_ptr<CreateInfo> CreateTypeInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateTypeInfo>(new CreateTypeInfo());
 	deserializer.ReadProperty(200, "name", result->name);
 	deserializer.ReadProperty(201, "logical_type", result->type);
 	return std::move(result);
 }
 
-void CreateViewInfo::FormatSerialize(Serializer &serializer) const {
-	CreateInfo::FormatSerialize(serializer);
+void CreateViewInfo::Serialize(Serializer &serializer) const {
+	CreateInfo::Serialize(serializer);
 	serializer.WriteProperty(200, "view_name", view_name);
 	serializer.WriteProperty(201, "aliases", aliases);
 	serializer.WriteProperty(202, "types", types);
 	serializer.WritePropertyWithDefault(203, "query", query, unique_ptr<SelectStatement>());
 }
 
-unique_ptr<CreateInfo> CreateViewInfo::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<CreateInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo());
 	deserializer.ReadProperty(200, "view_name", result->view_name);
 	deserializer.ReadProperty(201, "aliases", result->aliases);

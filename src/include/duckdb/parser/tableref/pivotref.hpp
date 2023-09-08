@@ -24,8 +24,8 @@ struct PivotColumnEntry {
 	bool Equals(const PivotColumnEntry &other) const;
 	PivotColumnEntry Copy() const;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static PivotColumnEntry FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static PivotColumnEntry Deserialize(Deserializer &source);
 };
 
 struct PivotValueElement {
@@ -49,8 +49,8 @@ struct PivotColumn {
 	bool Equals(const PivotColumn &other) const;
 	PivotColumn Copy() const;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static PivotColumn FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static PivotColumn Deserialize(Deserializer &source);
 };
 
 //! Represents a PIVOT or UNPIVOT expression
@@ -90,7 +90,7 @@ public:
 	unique_ptr<TableRef> Copy() override;
 
 	//! Deserializes a blob back into a PivotRef
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<TableRef> FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

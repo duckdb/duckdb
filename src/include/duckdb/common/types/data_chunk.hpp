@@ -138,8 +138,8 @@ public:
 	//! Vector to point back to the data owned by this DataChunk.
 	DUCKDB_API void Reset();
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
-	DUCKDB_API void FormatDeserialize(Deserializer &source);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API void Deserialize(Deserializer &source);
 
 	//! Hashes the DataChunk to the target vector
 	DUCKDB_API void Hash(Vector &result);

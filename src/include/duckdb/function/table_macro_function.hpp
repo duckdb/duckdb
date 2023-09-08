@@ -34,8 +34,8 @@ public:
 
 	string ToSQL(const string &schema, const string &name) const override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<MacroFunction> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

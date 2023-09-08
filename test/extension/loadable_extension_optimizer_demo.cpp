@@ -103,7 +103,7 @@ public:
 		MemoryStream stream;
 		BinarySerializer serializer(stream);
 		serializer.Begin();
-		plan->FormatSerialize(serializer);
+		plan->Serialize(serializer);
 		serializer.End();
 		auto data = stream.GetData();
 		idx_t len = stream.GetPosition();
@@ -127,7 +127,7 @@ public:
 			BinaryDeserializer deserializer(source);
 
 			deserializer.Begin();
-			chunk.FormatDeserialize(deserializer);
+			chunk.Deserialize(deserializer);
 			deserializer.End();
 			chunk_collection->Initialize(chunk.GetTypes());
 			chunk_collection->Append(chunk);

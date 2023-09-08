@@ -162,8 +162,8 @@ struct CSVReaderOptions {
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 
-	void FormatSerialize(Serializer &serializer) const;
-	static CSVReaderOptions FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static CSVReaderOptions Deserialize(Deserializer &deserializer);
 
 	void SetCompression(const string &compression);
 	void SetHeader(bool has_header);

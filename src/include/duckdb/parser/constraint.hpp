@@ -60,8 +60,8 @@ public:
 
 	DUCKDB_API virtual unique_ptr<Constraint> Copy() const = 0;
 
-	DUCKDB_API virtual void FormatSerialize(Serializer &serializer) const;
-	DUCKDB_API static unique_ptr<Constraint> FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API virtual void Serialize(Serializer &serializer) const;
+	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>

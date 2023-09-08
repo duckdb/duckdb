@@ -12,19 +12,19 @@
 
 namespace duckdb {
 
-void BlockPointer::FormatSerialize(Serializer &serializer) const {
+void BlockPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "block_id", block_id);
 	serializer.WriteProperty(101, "offset", offset);
 }
 
-BlockPointer BlockPointer::FormatDeserialize(Deserializer &deserializer) {
+BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 	auto block_id = deserializer.ReadProperty<block_id_t>(100, "block_id");
 	auto offset = deserializer.ReadProperty<uint32_t>(101, "offset");
 	BlockPointer result(block_id, offset);
 	return result;
 }
 
-void DataPointer::FormatSerialize(Serializer &serializer) const {
+void DataPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "row_start", row_start);
 	serializer.WriteProperty(101, "tuple_count", tuple_count);
 	serializer.WriteProperty(102, "block_pointer", block_pointer);
@@ -32,7 +32,7 @@ void DataPointer::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(104, "statistics", statistics);
 }
 
-DataPointer DataPointer::FormatDeserialize(Deserializer &deserializer) {
+DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 	auto row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
 	auto tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
 	auto block_pointer = deserializer.ReadProperty<BlockPointer>(102, "block_pointer");
@@ -46,13 +46,13 @@ DataPointer DataPointer::FormatDeserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void DistinctStatistics::FormatSerialize(Serializer &serializer) const {
+void DistinctStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "sample_count", sample_count);
 	serializer.WriteProperty(101, "total_count", total_count);
 	serializer.WriteProperty(102, "log", log);
 }
 
-unique_ptr<DistinctStatistics> DistinctStatistics::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &deserializer) {
 	auto sample_count = deserializer.ReadProperty<idx_t>(100, "sample_count");
 	auto total_count = deserializer.ReadProperty<idx_t>(101, "total_count");
 	auto log = deserializer.ReadProperty<unique_ptr<HyperLogLog>>(102, "log");
@@ -60,12 +60,12 @@ unique_ptr<DistinctStatistics> DistinctStatistics::FormatDeserialize(Deserialize
 	return result;
 }
 
-void MetaBlockPointer::FormatSerialize(Serializer &serializer) const {
+void MetaBlockPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "block_pointer", block_pointer);
 	serializer.WriteProperty(101, "offset", offset);
 }
 
-MetaBlockPointer MetaBlockPointer::FormatDeserialize(Deserializer &deserializer) {
+MetaBlockPointer MetaBlockPointer::Deserialize(Deserializer &deserializer) {
 	auto block_pointer = deserializer.ReadProperty<idx_t>(100, "block_pointer");
 	auto offset = deserializer.ReadProperty<uint32_t>(101, "offset");
 	MetaBlockPointer result(block_pointer, offset);

@@ -43,7 +43,7 @@ public:
 	//! Whether or not the statements are equivalent
 	bool Equals(const SQLStatement &other) const;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<SelectStatement> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<SelectStatement> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

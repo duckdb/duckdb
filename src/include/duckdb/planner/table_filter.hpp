@@ -42,8 +42,8 @@ public:
 		return filter_type != other.filter_type;
 	}
 
-	virtual void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<TableFilter> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -95,8 +95,8 @@ public:
 		return left->Equals(*right);
 	}
 
-	void FormatSerialize(Serializer &serializer) const;
-	static TableFilterSet FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static TableFilterSet Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

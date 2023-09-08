@@ -29,8 +29,8 @@ struct interval_t {
 	}
 
 	// Serialization
-	void FormatSerialize(Serializer &serializer) const;
-	static interval_t FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static interval_t Deserialize(Deserializer &source);
 };
 
 //! The Interval class is a static class that holds helper functions for the Interval

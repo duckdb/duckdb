@@ -36,11 +36,11 @@ struct ListAggregatesBindData : public FunctionData {
 		auto &other = other_p.Cast<ListAggregatesBindData>();
 		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
-	void FormatSerialize(Serializer &serializer) const {
+	void Serialize(Serializer &serializer) const {
 		serializer.WriteProperty(1, "stype", stype);
 		serializer.WriteProperty(2, "aggr_expr", aggr_expr);
 	}
-	static unique_ptr<ListAggregatesBindData> FormatDeserialize(Deserializer &deserializer) {
+	static unique_ptr<ListAggregatesBindData> Deserialize(Deserializer &deserializer) {
 		auto stype = deserializer.ReadProperty<LogicalType>(1, "stype");
 		auto aggr_expr = deserializer.ReadProperty<unique_ptr<Expression>>(2, "aggr_expr");
 		auto result = make_uniq<ListAggregatesBindData>(std::move(stype), std::move(aggr_expr));

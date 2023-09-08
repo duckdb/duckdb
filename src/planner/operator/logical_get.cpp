@@ -121,15 +121,15 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
-void LogicalGet::FormatSerialize(Serializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
+void LogicalGet::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
 	serializer.WriteProperty(202, "names", names);
 	serializer.WriteProperty(203, "column_ids", column_ids);
 	serializer.WriteProperty(204, "projection_ids", projection_ids);
 	serializer.WriteProperty(205, "table_filters", table_filters);
-	FunctionSerializer::FormatSerialize(serializer, function, bind_data.get());
+	FunctionSerializer::Serialize(serializer, function, bind_data.get());
 	if (!function.serialize) {
 		D_ASSERT(!function.serialize);
 		// no serialize method: serialize input values and named_parameters for rebinding purposes
@@ -141,7 +141,7 @@ void LogicalGet::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);
@@ -149,7 +149,7 @@ unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(Deserializer &deserial
 	deserializer.ReadProperty(203, "column_ids", result->column_ids);
 	deserializer.ReadProperty(204, "projection_ids", result->projection_ids);
 	deserializer.ReadProperty(205, "table_filters", result->table_filters);
-	auto entry = FunctionSerializer::FormatDeserializeBase<TableFunction, TableFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::DeserializeBase<TableFunction, TableFunctionCatalogEntry>(
 	    deserializer, CatalogType::TABLE_FUNCTION_ENTRY);
 	result->function = entry.first;
 	auto &function = result->function;

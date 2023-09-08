@@ -23,8 +23,8 @@ public:
 		return std::move(result);
 	}
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const override;
-	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

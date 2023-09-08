@@ -56,7 +56,7 @@ public:
 	bool Equals(const BaseExpression &other) const override;
 	unique_ptr<Expression> Copy() override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

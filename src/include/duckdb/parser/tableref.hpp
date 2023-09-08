@@ -47,8 +47,8 @@ public:
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;
 
-	virtual void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<TableRef> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<TableRef> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>

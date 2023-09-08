@@ -1059,7 +1059,7 @@ const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::Get
 	return segments;
 }
 
-void ColumnDataCollection::FormatSerialize(Serializer &serializer) const {
+void ColumnDataCollection::Serialize(Serializer &serializer) const {
 	vector<vector<Value>> values;
 	values.resize(ColumnCount());
 	for (auto &chunk : Chunks()) {
@@ -1073,7 +1073,7 @@ void ColumnDataCollection::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(101, "values", values);
 }
 
-unique_ptr<ColumnDataCollection> ColumnDataCollection::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ColumnDataCollection> ColumnDataCollection::Deserialize(Deserializer &deserializer) {
 	auto types = deserializer.ReadProperty<vector<LogicalType>>(100, "types");
 	auto values = deserializer.ReadProperty<vector<vector<Value>>>(101, "values");
 

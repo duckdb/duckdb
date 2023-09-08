@@ -27,8 +27,8 @@ public:
 public:
 	string ParamsToString() const override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

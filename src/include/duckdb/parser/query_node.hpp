@@ -40,9 +40,9 @@ public:
 	string ToString() const;
 	CommonTableExpressionMap Copy() const;
 
-	void FormatSerialize(Serializer &serializer) const;
-	// static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
-	static CommonTableExpressionMap FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	// static void Deserialize(Deserializer &deserializer, CommonTableExpressionMap &ret);
+	static CommonTableExpressionMap Deserialize(Deserializer &deserializer);
 };
 
 class QueryNode {
@@ -75,8 +75,8 @@ public:
 	//! Adds a distinct modifier to the query node
 	void AddDistinct();
 
-	virtual void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<QueryNode> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<QueryNode> Deserialize(Deserializer &deserializer);
 
 protected:
 	//! Copy base QueryNode properties from another expression to this one,

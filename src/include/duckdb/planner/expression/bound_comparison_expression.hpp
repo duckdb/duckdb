@@ -29,8 +29,8 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 public:
 	static LogicalType BindComparison(LogicalType left_type, LogicalType right_type);

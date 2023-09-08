@@ -91,8 +91,8 @@ public:
 	unique_ptr<BaseStatistics> ToUnique() const;
 	void CopyBase(const BaseStatistics &orig);
 
-	void FormatSerialize(Serializer &serializer) const;
-	static BaseStatistics FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;

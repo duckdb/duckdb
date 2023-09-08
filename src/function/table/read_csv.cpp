@@ -1089,14 +1089,14 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
 
-static void CSVReaderFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                     const TableFunction &function) {
+static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+                               const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	serializer.WriteProperty(100, "extra_info", function.extra_info);
 	serializer.WriteProperty(101, "csv_data", &bind_data);
 }
 
-static unique_ptr<FunctionData> CSVReaderFormatDeserialize(Deserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer, TableFunction &function) {
 	unique_ptr<ReadCSVData> result;
 	deserializer.ReadProperty(100, "extra_info", function.extra_info);
 	deserializer.ReadProperty(101, "csv_data", result);
@@ -1108,8 +1108,8 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	                       ReadCSVInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = CSVComplexFilterPushdown;
-	read_csv.serialize = CSVReaderFormatSerialize;
-	read_csv.deserialize = CSVReaderFormatDeserialize;
+	read_csv.serialize = CSVReaderSerialize;
+	read_csv.deserialize = CSVReaderDeserialize;
 	read_csv.get_batch_index = CSVReaderGetBatchIndex;
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;

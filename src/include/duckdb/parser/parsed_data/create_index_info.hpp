@@ -48,8 +48,8 @@ struct CreateIndexInfo : public CreateInfo {
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

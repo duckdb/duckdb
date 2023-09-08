@@ -9,11 +9,11 @@
 
 namespace duckdb {
 
-void SelectStatement::FormatSerialize(Serializer &serializer) const {
+void SelectStatement::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "node", node);
 }
 
-unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SelectStatement>(new SelectStatement());
 	deserializer.ReadProperty(100, "node", result->node);
 	return result;

@@ -16,8 +16,8 @@ struct BoundCaseCheck {
 	unique_ptr<Expression> when_expr;
 	unique_ptr<Expression> then_expr;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static BoundCaseCheck FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static BoundCaseCheck Deserialize(Deserializer &deserializer);
 };
 
 class BoundCaseExpression : public Expression {
@@ -39,7 +39,7 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

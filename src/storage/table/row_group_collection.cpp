@@ -38,7 +38,7 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	}
 	BinaryDeserializer deserializer(*reader);
 	deserializer.Begin();
-	auto row_group_pointer = RowGroup::FormatDeserialize(deserializer);
+	auto row_group_pointer = RowGroup::Deserialize(deserializer);
 	deserializer.End();
 	current_row_group++;
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));

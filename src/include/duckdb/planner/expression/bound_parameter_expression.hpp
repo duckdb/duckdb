@@ -40,8 +40,8 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
 	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,

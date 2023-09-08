@@ -930,13 +930,12 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 	}
 }
 
-void JSONScan::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                               const TableFunction &) {
+void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
 	auto &bind_data = bind_data_p->Cast<JSONScanData>();
 	serializer.WriteProperty(100, "scan_data", &bind_data);
 }
 
-unique_ptr<FunctionData> JSONScan::FormatDeserialize(FormatDeserializer &deserializer, TableFunction &) {
+unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, TableFunction &) {
 	unique_ptr<JSONScanData> result;
 	deserializer.ReadProperty(100, "scan_data", result);
 	result->InitializeReaders(deserializer.Get<ClientContext &>());
@@ -957,8 +956,8 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.get_batch_index = GetBatchIndex;
 	table_function.cardinality = Cardinality;
 
-	table_function.serialize = FormatSerialize;
-	table_function.deserialize = FormatDeserialize;
+	table_function.serialize = Serialize;
+	table_function.deserialize = Deserialize;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

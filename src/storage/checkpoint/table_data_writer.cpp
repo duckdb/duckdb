@@ -49,7 +49,7 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	// Serialize statistics as a single unit
 	BinarySerializer stats_serializer(table_data_writer);
 	stats_serializer.Begin();
-	global_stats.FormatSerialize(stats_serializer);
+	global_stats.Serialize(stats_serializer);
 	stats_serializer.End();
 
 	// now start writing the row group pointers to disk
@@ -64,11 +64,11 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		// Each RowGroup is its own unit
 		BinarySerializer row_group_serializer(table_data_writer);
 		row_group_serializer.Begin();
-		RowGroup::FormatSerialize(row_group_pointer, row_group_serializer);
+		RowGroup::Serialize(row_group_pointer, row_group_serializer);
 		row_group_serializer.End();
 	}
 
-	// TODO: FormatSerialize this:
+	// TODO: Serialize this:
 	auto index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Now begin the metadata as a unit

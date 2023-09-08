@@ -182,7 +182,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 	BinarySerializer serializer(stream);
 	try {
 		serializer.Begin();
-		this->FormatSerialize(serializer);
+		this->Serialize(serializer);
 		serializer.End();
 	} catch (NotImplementedException &ex) {
 		throw NotImplementedException("Logical Operator Copy requires the logical operator and all of its children to "

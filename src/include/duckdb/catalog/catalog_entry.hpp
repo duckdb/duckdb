@@ -74,8 +74,8 @@ public:
 
 	virtual void Verify(Catalog &catalog);
 
-	void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>

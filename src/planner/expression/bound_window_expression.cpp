@@ -108,13 +108,13 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	return std::move(new_window);
 }
 
-void BoundWindowExpression::FormatSerialize(Serializer &serializer) const {
-	Expression::FormatSerialize(serializer);
+void BoundWindowExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
 	if (type == ExpressionType::WINDOW_AGGREGATE) {
 		D_ASSERT(aggregate);
-		FunctionSerializer::FormatSerialize(serializer, *aggregate, bind_info.get());
+		FunctionSerializer::Serialize(serializer, *aggregate, bind_info.get());
 	}
 	serializer.WriteProperty(202, "partitions", partitions);
 	serializer.WriteProperty(203, "orders", orders);
@@ -128,14 +128,14 @@ void BoundWindowExpression::FormatSerialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
 }
 
-unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<Expression> BoundWindowExpression::Deserialize(Deserializer &deserializer) {
 	auto expression_type = deserializer.Get<ExpressionType>();
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	unique_ptr<AggregateFunction> aggregate;
 	unique_ptr<FunctionData> bind_info;
 	if (expression_type == ExpressionType::WINDOW_AGGREGATE) {
-		auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
+		auto entry = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 		    deserializer, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, return_type);
 		aggregate = make_uniq<AggregateFunction>(std::move(entry.first));
 		bind_info = std::move(entry.second);

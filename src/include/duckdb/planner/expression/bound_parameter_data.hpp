@@ -36,8 +36,8 @@ public:
 		return value;
 	}
 
-	void FormatSerialize(Serializer &serializer) const;
-	static shared_ptr<BoundParameterData> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static shared_ptr<BoundParameterData> Deserialize(Deserializer &deserializer);
 };
 
 struct BoundParameterMap {

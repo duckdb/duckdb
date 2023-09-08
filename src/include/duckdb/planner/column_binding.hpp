@@ -39,8 +39,8 @@ struct ColumnBinding {
 		return !(*this == rhs);
 	}
 
-	void FormatSerialize(Serializer &serializer) const;
-	static ColumnBinding FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static ColumnBinding Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

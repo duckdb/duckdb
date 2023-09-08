@@ -31,8 +31,8 @@ public:
 	MultiFileReaderOptions file_options;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static BufferedJSONReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static BufferedJSONReaderOptions Deserialize(Deserializer &deserializer);
 };
 
 struct JSONBufferHandle {

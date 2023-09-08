@@ -222,9 +222,9 @@ public:
 	DUCKDB_API void Reinterpret(LogicalType new_type);
 
 	//! Serializes a Value to a stand-alone binary blob
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
+	DUCKDB_API void Serialize(Serializer &serializer) const;
 	//! Deserializes a Value from a blob
-	DUCKDB_API static Value FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API static Value Deserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators

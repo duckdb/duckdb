@@ -31,8 +31,8 @@ struct DataPointer {
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static DataPointer FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static DataPointer Deserialize(Deserializer &source);
 };
 
 struct RowGroupPointer {

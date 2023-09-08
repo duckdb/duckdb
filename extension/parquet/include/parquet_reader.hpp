@@ -74,8 +74,8 @@ struct ParquetOptions {
 	MultiFileReaderOptions file_options;
 
 public:
-	void FormatSerialize(Serializer &serializer) const;
-	static ParquetOptions FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static ParquetOptions Deserialize(Deserializer &deserializer);
 };
 
 class ParquetReader {

@@ -30,8 +30,8 @@ struct HivePartitioningIndex {
 	string value;
 	idx_t index;
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
-	DUCKDB_API static HivePartitioningIndex FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
@@ -41,8 +41,8 @@ struct MultiFileReaderBindData {
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
-	DUCKDB_API static MultiFileReaderBindData FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
 };
 
 struct MultiFileFilterEntry {

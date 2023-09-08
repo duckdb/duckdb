@@ -53,7 +53,7 @@ public:
 
 	static void PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out);
 
-	static void PandasSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+	static void PandasSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                            const TableFunction &function);
 };
 

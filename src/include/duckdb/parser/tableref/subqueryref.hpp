@@ -35,7 +35,7 @@ public:
 	unique_ptr<TableRef> Copy() override;
 
 	//! Deserializes a blob back into a SubqueryRef
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<TableRef> FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<TableRef> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

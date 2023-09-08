@@ -47,8 +47,8 @@ public:
 	//! Get copy of the HLL
 	unique_ptr<HyperLogLog> Copy();
 
-	void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<HyperLogLog> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<HyperLogLog> Deserialize(Deserializer &deserializer);
 
 public:
 	//! Compute HLL hashes over vdata, and store them in 'hashes'

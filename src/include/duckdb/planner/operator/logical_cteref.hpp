@@ -43,8 +43,8 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override {
 		return GenerateColumnBindings(table_index, chunk_types.size());
 	}
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;
 

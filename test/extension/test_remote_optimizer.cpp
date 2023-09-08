@@ -93,7 +93,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			BinaryDeserializer deserializer(stream);
 			deserializer.Set<ClientContext &>(*con2.context);
 			deserializer.Begin();
-			auto plan = LogicalOperator::FormatDeserialize(deserializer);
+			auto plan = LogicalOperator::Deserialize(deserializer);
 			deserializer.End();
 
 			plan->ResolveOperatorTypes();
@@ -108,7 +108,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 				MemoryStream target;
 				BinarySerializer serializer(target);
 				serializer.Begin();
-				chunk.FormatSerialize(serializer);
+				chunk.Serialize(serializer);
 				serializer.End();
 				auto data = target.GetData();
 				idx_t len = target.GetPosition();

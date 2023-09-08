@@ -923,7 +923,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	auxiliary.reset();
 }
 
-void Vector::FormatSerialize(Serializer &serializer, idx_t count) {
+void Vector::Serialize(Serializer &serializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	UnifiedVectorFormat vdata;
@@ -965,7 +965,7 @@ void Vector::FormatSerialize(Serializer &serializer, idx_t count) {
 
 			// Serialize entries as a list
 			serializer.WriteList(103, "children", entries.size(), [&](Serializer::List &list, idx_t i) {
-				list.WriteObject([&](Serializer &object) { entries[i]->FormatSerialize(object, count); });
+				list.WriteObject([&](Serializer &object) { entries[i]->Serialize(object, count); });
 			});
 			break;
 		}
@@ -989,7 +989,7 @@ void Vector::FormatSerialize(Serializer &serializer, idx_t count) {
 					object.WriteProperty(101, "length", entries[i].length);
 				});
 			});
-			serializer.WriteObject(106, "child", [&](Serializer &object) { child.FormatSerialize(object, list_size); });
+			serializer.WriteObject(106, "child", [&](Serializer &object) { child.Serialize(object, list_size); });
 			break;
 		}
 		default:
@@ -998,7 +998,7 @@ void Vector::FormatSerialize(Serializer &serializer, idx_t count) {
 	}
 }
 
-void Vector::FormatDeserialize(Deserializer &deserializer, idx_t count) {
+void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	auto &validity = FlatVector::Validity(*this);
@@ -1032,7 +1032,7 @@ void Vector::FormatDeserialize(Deserializer &deserializer, idx_t count) {
 			auto &entries = StructVector::GetEntries(*this);
 			// Deserialize entries as a list
 			deserializer.ReadList(103, "children", [&](Deserializer::List &list, idx_t i) {
-				list.ReadObject([&](Deserializer &obj) { entries[i]->FormatDeserialize(obj, count); });
+				list.ReadObject([&](Deserializer &obj) { entries[i]->Deserialize(obj, count); });
 			});
 			break;
 		}
@@ -1054,7 +1054,7 @@ void Vector::FormatDeserialize(Deserializer &deserializer, idx_t count) {
 			// Read the child vector
 			deserializer.ReadObject(106, "child", [&](Deserializer &obj) {
 				auto &child = ListVector::GetEntry(*this);
-				child.FormatDeserialize(obj, list_size);
+				child.Deserialize(obj, list_size);
 			});
 			break;
 		}

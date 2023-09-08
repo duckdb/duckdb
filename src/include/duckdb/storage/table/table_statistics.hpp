@@ -49,8 +49,8 @@ public:
 
 	unique_ptr<TableStatisticsLock> GetLock();
 
-	void FormatSerialize(Serializer &serializer) const;
-	void FormatDeserialize(Deserializer &deserializer, ColumnList &columns);
+	void Serialize(Serializer &serializer) const;
+	void Deserialize(Deserializer &deserializer, ColumnList &columns);
 
 private:
 	//! The statistics lock

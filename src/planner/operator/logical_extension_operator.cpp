@@ -20,17 +20,17 @@ void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res,
 	bindings = GetColumnBindings();
 }
 
-void LogicalExtensionOperator::FormatSerialize(Serializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
+void LogicalExtensionOperator::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "extension_name", GetExtensionName());
 }
 
-unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalExtensionOperator::Deserialize(Deserializer &deserializer) {
 	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
 	auto extension_name = deserializer.ReadProperty<string>(200, "extension_name");
 	for (auto &extension : config.operator_extensions) {
 		if (extension->GetName() == extension_name) {
-			return extension->FormatDeserialize(deserializer);
+			return extension->Deserialize(deserializer);
 		}
 	}
 	throw SerializationException("No deserialization method exists for extension: " + extension_name);

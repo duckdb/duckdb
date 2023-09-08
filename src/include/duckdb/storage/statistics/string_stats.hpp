@@ -56,8 +56,8 @@ struct StringStats {
 	//! FIXME: make this part of Set on statistics
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
 
-	DUCKDB_API static void FormatSerialize(const BaseStatistics &stats, Serializer &serializer);
-	DUCKDB_API static void FormatDeserialize(Deserializer &deserializer, BaseStatistics &base);
+	DUCKDB_API static void Serialize(const BaseStatistics &stats, Serializer &serializer);
+	DUCKDB_API static void Deserialize(Deserializer &deserializer, BaseStatistics &base);
 
 	DUCKDB_API static string ToString(const BaseStatistics &stats);
 

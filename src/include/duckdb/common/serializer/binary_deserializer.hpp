@@ -24,7 +24,7 @@ public:
 	template <class T>
 	unique_ptr<T> Deserialize() {
 		OnObjectBegin();
-		auto result = T::FormatDeserialize(*this);
+		auto result = T::Deserialize(*this);
 		OnObjectEnd();
 		D_ASSERT(nesting_level == 0); // make sure we are at the root level
 		return result;

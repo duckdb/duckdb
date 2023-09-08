@@ -55,7 +55,7 @@ public:
 	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
 		BinarySerializer serializer(stream, serialize_default_values);
 		serializer.OnObjectBegin();
-		value.FormatSerialize(serializer);
+		value.Serialize(serializer);
 		serializer.OnObjectEnd();
 	}
 

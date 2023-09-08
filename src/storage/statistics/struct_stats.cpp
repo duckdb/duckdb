@@ -92,7 +92,7 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void StructStats::FormatSerialize(const BaseStatistics &stats, Serializer &serializer) {
+void StructStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto child_stats = StructStats::GetChildStats(stats);
 	auto child_count = StructType::GetChildCount(stats.GetType());
 
@@ -100,7 +100,7 @@ void StructStats::FormatSerialize(const BaseStatistics &stats, Serializer &seria
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_stats[i]); });
 }
 
-void StructStats::FormatDeserialize(Deserializer &deserializer, BaseStatistics &base) {
+void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 

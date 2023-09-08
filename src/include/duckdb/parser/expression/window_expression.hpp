@@ -74,8 +74,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 
 	static ExpressionType WindowToExpressionType(string &fun_name);
 

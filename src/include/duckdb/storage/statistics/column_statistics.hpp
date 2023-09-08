@@ -34,8 +34,8 @@ public:
 
 	shared_ptr<ColumnStatistics> Copy() const;
 
-	void FormatSerialize(Serializer &serializer) const;
-	static shared_ptr<ColumnStatistics> FormatDeserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static shared_ptr<ColumnStatistics> Deserialize(Deserializer &source);
 
 private:
 	BaseStatistics stats;

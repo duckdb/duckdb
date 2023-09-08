@@ -173,8 +173,8 @@ public:
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer, idx_t count);
-	DUCKDB_API void FormatDeserialize(Deserializer &deserializer, idx_t count);
+	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
+	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	// Getters
 	inline VectorType GetVectorType() const {

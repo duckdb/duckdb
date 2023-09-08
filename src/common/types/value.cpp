@@ -1650,7 +1650,7 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-void Value::FormatSerialize(Serializer &serializer) const {
+void Value::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type_);
 	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
@@ -1717,12 +1717,12 @@ void Value::FormatSerialize(Serializer &serializer) const {
 			});
 		} break;
 		default:
-			throw NotImplementedException("Unimplemented type for FormatSerialize");
+			throw NotImplementedException("Unimplemented type for Serialize");
 		}
 	}
 }
 
-Value Value::FormatDeserialize(Deserializer &deserializer) {
+Value Value::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
@@ -1793,7 +1793,7 @@ Value Value::FormatDeserialize(Deserializer &deserializer) {
 		});
 	} break;
 	default:
-		throw NotImplementedException("Unimplemented type for FormatDeserialize");
+		throw NotImplementedException("Unimplemented type for Deserialize");
 	}
 	return new_value;
 }

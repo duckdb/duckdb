@@ -53,8 +53,8 @@ public:
 	string sql;
 
 public:
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 

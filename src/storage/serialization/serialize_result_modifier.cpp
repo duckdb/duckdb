@@ -10,25 +10,25 @@
 
 namespace duckdb {
 
-void ResultModifier::FormatSerialize(Serializer &serializer) const {
+void ResultModifier::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 }
 
-unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ResultModifierType>(100, "type");
 	unique_ptr<ResultModifier> result;
 	switch (type) {
 	case ResultModifierType::DISTINCT_MODIFIER:
-		result = DistinctModifier::FormatDeserialize(deserializer);
+		result = DistinctModifier::Deserialize(deserializer);
 		break;
 	case ResultModifierType::LIMIT_MODIFIER:
-		result = LimitModifier::FormatDeserialize(deserializer);
+		result = LimitModifier::Deserialize(deserializer);
 		break;
 	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-		result = LimitPercentModifier::FormatDeserialize(deserializer);
+		result = LimitPercentModifier::Deserialize(deserializer);
 		break;
 	case ResultModifierType::ORDER_MODIFIER:
-		result = OrderModifier::FormatDeserialize(deserializer);
+		result = OrderModifier::Deserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of ResultModifier!");
@@ -36,59 +36,59 @@ unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(Deserializer &deser
 	return result;
 }
 
-void BoundOrderModifier::FormatSerialize(Serializer &serializer) const {
+void BoundOrderModifier::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "orders", orders);
 }
 
-unique_ptr<BoundOrderModifier> BoundOrderModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<BoundOrderModifier> BoundOrderModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BoundOrderModifier>(new BoundOrderModifier());
 	deserializer.ReadProperty(100, "orders", result->orders);
 	return result;
 }
 
-void DistinctModifier::FormatSerialize(Serializer &serializer) const {
-	ResultModifier::FormatSerialize(serializer);
+void DistinctModifier::Serialize(Serializer &serializer) const {
+	ResultModifier::Serialize(serializer);
 	serializer.WriteProperty(200, "distinct_on_targets", distinct_on_targets);
 }
 
-unique_ptr<ResultModifier> DistinctModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ResultModifier> DistinctModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<DistinctModifier>(new DistinctModifier());
 	deserializer.ReadProperty(200, "distinct_on_targets", result->distinct_on_targets);
 	return std::move(result);
 }
 
-void LimitModifier::FormatSerialize(Serializer &serializer) const {
-	ResultModifier::FormatSerialize(serializer);
+void LimitModifier::Serialize(Serializer &serializer) const {
+	ResultModifier::Serialize(serializer);
 	serializer.WritePropertyWithDefault(200, "limit", limit, unique_ptr<ParsedExpression>());
 	serializer.WritePropertyWithDefault(201, "offset", offset, unique_ptr<ParsedExpression>());
 }
 
-unique_ptr<ResultModifier> LimitModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LimitModifier>(new LimitModifier());
 	deserializer.ReadPropertyWithDefault(200, "limit", result->limit, unique_ptr<ParsedExpression>());
 	deserializer.ReadPropertyWithDefault(201, "offset", result->offset, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 
-void LimitPercentModifier::FormatSerialize(Serializer &serializer) const {
-	ResultModifier::FormatSerialize(serializer);
+void LimitPercentModifier::Serialize(Serializer &serializer) const {
+	ResultModifier::Serialize(serializer);
 	serializer.WritePropertyWithDefault(200, "limit", limit, unique_ptr<ParsedExpression>());
 	serializer.WritePropertyWithDefault(201, "offset", offset, unique_ptr<ParsedExpression>());
 }
 
-unique_ptr<ResultModifier> LimitPercentModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<LimitPercentModifier>(new LimitPercentModifier());
 	deserializer.ReadPropertyWithDefault(200, "limit", result->limit, unique_ptr<ParsedExpression>());
 	deserializer.ReadPropertyWithDefault(201, "offset", result->offset, unique_ptr<ParsedExpression>());
 	return std::move(result);
 }
 
-void OrderModifier::FormatSerialize(Serializer &serializer) const {
-	ResultModifier::FormatSerialize(serializer);
+void OrderModifier::Serialize(Serializer &serializer) const {
+	ResultModifier::Serialize(serializer);
 	serializer.WriteProperty(200, "orders", orders);
 }
 
-unique_ptr<ResultModifier> OrderModifier::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<OrderModifier>(new OrderModifier());
 	deserializer.ReadProperty(200, "orders", result->orders);
 	return std::move(result);

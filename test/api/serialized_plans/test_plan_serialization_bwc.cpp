@@ -63,7 +63,7 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 
 		BinarySerializer serializer(target);
 		serializer.Begin();
-		plan->FormatSerialize(serializer);
+		plan->Serialize(serializer);
 		serializer.End();
 
 		con.Rollback();
@@ -101,7 +101,7 @@ void test_deserialization(const string &file_location) {
 		BinaryDeserializer deserializer(file_source);
 		deserializer.Set<ClientContext &>(*con.context);
 		deserializer.Begin();
-		auto deserialized_plan = LogicalOperator::FormatDeserialize(deserializer);
+		auto deserialized_plan = LogicalOperator::Deserialize(deserializer);
 		deserializer.End();
 
 		deserialized_plan->ResolveOperatorTypes();

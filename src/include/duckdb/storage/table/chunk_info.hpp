@@ -46,8 +46,8 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
-	virtual void FormatSerialize(Serializer &serializer) const = 0;
-	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const = 0;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -85,8 +85,8 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
@@ -130,8 +130,8 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
-	void FormatSerialize(Serializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>

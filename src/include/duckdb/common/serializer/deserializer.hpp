@@ -134,11 +134,11 @@ public:
 	}
 
 private:
-	// Deserialize anything implementing a FormatDeserialize method
+	// Deserialize anything implementing a Deserialize method
 	template <typename T = void>
 	inline typename std::enable_if<has_deserialize<T>::value, T>::type Read() {
 		OnObjectBegin();
-		auto val = T::FormatDeserialize(*this);
+		auto val = T::Deserialize(*this);
 		OnObjectEnd();
 		return val;
 	}
@@ -150,7 +150,7 @@ private:
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
-			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			ptr = ELEMENT_TYPE::Deserialize(*this);
 			OnObjectEnd();
 		}
 		OnNullableEnd();
@@ -165,7 +165,7 @@ private:
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
-			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			ptr = ELEMENT_TYPE::Deserialize(*this);
 			OnObjectEnd();
 		}
 		OnNullableEnd();

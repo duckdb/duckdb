@@ -8,11 +8,11 @@ namespace duckdb {
 
 struct Bar {
 	uint32_t b;
-	void FormatSerialize(Serializer &serializer) const {
+	void Serialize(Serializer &serializer) const {
 		serializer.WriteProperty<uint32_t>(1, "b", b);
 	}
 
-	static unique_ptr<Bar> FormatDeserialize(Deserializer &deserializer) {
+	static unique_ptr<Bar> Deserialize(Deserializer &deserializer) {
 		auto result = make_uniq<Bar>();
 		deserializer.ReadProperty<uint32_t>(1, "b", result->b);
 		return result;
@@ -24,13 +24,13 @@ struct Foo {
 	unique_ptr<Bar> bar;
 	int32_t c;
 
-	void FormatSerialize(Serializer &serializer) const {
+	void Serialize(Serializer &serializer) const {
 		serializer.WriteProperty<int32_t>(1, "a", a);
 		serializer.WritePropertyWithDefault<unique_ptr<Bar>>(2, "bar", bar, unique_ptr<Bar>());
 		serializer.WriteProperty<int32_t>(3, "c", c);
 	}
 
-	static unique_ptr<Foo> FormatDeserialize(Deserializer &deserializer) {
+	static unique_ptr<Foo> Deserialize(Deserializer &deserializer) {
 		auto result = make_uniq<Foo>();
 		deserializer.ReadProperty<int32_t>(1, "a", result->a);
 		deserializer.ReadPropertyWithDefault<unique_ptr<Bar>>(2, "bar", result->bar, unique_ptr<Bar>());

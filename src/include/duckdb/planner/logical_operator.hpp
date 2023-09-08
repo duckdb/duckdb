@@ -60,8 +60,8 @@ public:
 	void AddChild(unique_ptr<LogicalOperator> child);
 	virtual idx_t EstimateCardinality(ClientContext &context);
 
-	virtual void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 	virtual unique_ptr<LogicalOperator> Copy(ClientContext &context) const;
 

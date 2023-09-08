@@ -184,7 +184,7 @@ static unique_ptr<SelectStatement> DeserializeSelectStatement(string_t input, yy
 	}
 	auto stmt_json = yyjson_arr_get(statements, 0);
 	JsonDeserializer deserializer(stmt_json, doc);
-	return SelectStatement::FormatDeserialize(deserializer);
+	return SelectStatement::Deserialize(deserializer);
 }
 
 //----------------------------------------------------------------------

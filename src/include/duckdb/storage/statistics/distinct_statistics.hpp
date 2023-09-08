@@ -42,8 +42,8 @@ public:
 
 	static bool TypeIsSupported(const LogicalType &type);
 
-	void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<DistinctStatistics> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<DistinctStatistics> Deserialize(Deserializer &deserializer);
 
 private:
 	//! For distinct statistics we sample the input to speed up insertions

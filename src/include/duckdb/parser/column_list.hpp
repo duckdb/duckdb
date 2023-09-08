@@ -50,8 +50,8 @@ public:
 	}
 
 	ColumnList Copy() const;
-	void FormatSerialize(Serializer &serializer) const;
-	static ColumnList FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static ColumnList Deserialize(Deserializer &deserializer);
 
 	DUCKDB_API ColumnListIterator Logical() const;
 	DUCKDB_API ColumnListIterator Physical() const;

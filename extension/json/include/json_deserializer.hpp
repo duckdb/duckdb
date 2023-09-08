@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-class JsonDeserializer : public FormatDeserializer {
+class JsonDeserializer : public Deserializer {
 public:
 	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
 		deserialize_enum_from_string = true;

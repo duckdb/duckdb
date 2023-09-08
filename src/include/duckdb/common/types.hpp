@@ -280,8 +280,8 @@ struct LogicalType {
 		return !(*this == rhs);
 	}
 
-	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
-	DUCKDB_API static LogicalType FormatDeserialize(Deserializer &deserializer);
+	DUCKDB_API void Serialize(Serializer &serializer) const;
+	DUCKDB_API static LogicalType Deserialize(Deserializer &deserializer);
 
 
 	static bool TypeIsTimestamp(LogicalTypeId id) {

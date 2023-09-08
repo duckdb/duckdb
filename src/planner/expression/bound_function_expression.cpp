@@ -75,18 +75,18 @@ void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.name.empty());
 }
 
-void BoundFunctionExpression::FormatSerialize(Serializer &serializer) const {
-	Expression::FormatSerialize(serializer);
+void BoundFunctionExpression::Serialize(Serializer &serializer) const {
+	Expression::Serialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
-	FunctionSerializer::FormatSerialize(serializer, function, bind_info.get());
+	FunctionSerializer::Serialize(serializer, function, bind_info.get());
 	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
-unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
-	auto entry = FunctionSerializer::FormatDeserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
+	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 	auto result = make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));

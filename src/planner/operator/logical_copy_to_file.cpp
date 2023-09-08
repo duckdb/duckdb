@@ -5,11 +5,11 @@
 
 namespace duckdb {
 
-void LogicalCopyToFile::FormatSerialize(Serializer &serializer) const {
+void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	throw SerializationException("LogicalCopyToFile not implemented yet");
 }
 
-unique_ptr<LogicalOperator> LogicalCopyToFile::FormatDeserialize(Deserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
 	throw SerializationException("LogicalCopyToFile not implemented yet");
 }
 

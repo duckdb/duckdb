@@ -28,8 +28,8 @@ struct SampleOptions {
 
 	unique_ptr<SampleOptions> Copy();
 	static bool Equals(SampleOptions *a, SampleOptions *b);
-	void FormatSerialize(Serializer &serializer) const;
-	static unique_ptr<SampleOptions> FormatDeserialize(Deserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<SampleOptions> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

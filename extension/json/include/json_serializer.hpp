@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-struct JsonSerializer : FormatSerializer {
+struct JsonSerializer : Serializer {
 private:
 	yyjson_mut_doc *doc;
 	yyjson_mut_val *current_tag;
@@ -34,7 +34,7 @@ public:
 	template <class T>
 	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty) {
 		JsonSerializer serializer(doc, skip_if_null, skip_if_empty);
-		value.FormatSerialize(serializer);
+		value.Serialize(serializer);
 		return serializer.GetRootObject();
 	}
 
