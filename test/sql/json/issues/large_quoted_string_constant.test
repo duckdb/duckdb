@@ -1,0 +1,84 @@
+# name: test/sql/json/issues/large_quoted_string_constant.test
+# description: Issue #2986: Large string constant with quotes
+# group: [issues]
+
+statement ok
+CREATE TABLE j2 (id INT, json VARCHAR, src VARCHAR);
+
+statement ok
+INSERT INTO j2(id,json,src)
+    VALUES(3,'[
+    {
+        "id": "0001",
+        "type": "donut",
+        "name": "Cake",
+        "ppu": 0.55,
+        "batters":
+            {
+                "batter":
+                    [
+                        { "id": "1001", "type": "Regular" },
+                        { "id": "1002", "type": "Chocolate" },
+                        { "id": "1003", "type": "Blueberry" },
+                        { "id": "1004", "type": "Devil''s Food" }
+                    ]
+            },
+        "topping":
+            [
+                { "id": "5001", "type": "None" },
+                { "id": "5002", "type": "Glazed" },
+                { "id": "5005", "type": "Sugar" },
+                { "id": "5007", "type": "Powdered Sugar" },
+                { "id": "5006", "type": "Chocolate with Sprinkles" },
+                { "id": "5003", "type": "Chocolate" },
+                { "id": "5004", "type": "Maple" }
+            ]
+    },
+    {
+        "id": "0002",
+        "type": "donut",
+        "name": "Raised",
+        "ppu": 0.55,
+        "batters":
+            {
+                "batter":
+                    [
+                        { "id": "1001", "type": "Regular" }
+                    ]
+            },
+        "topping":
+            [
+                { "id": "5001", "type": "None" },
+                { "id": "5002", "type": "Glazed" },
+                { "id": "5005", "type": "Sugar" },
+                { "id": "5003", "type": "Chocolate" },
+                { "id": "5004", "type": "Maple" }
+            ]
+    },
+    {
+        "id": "0003",
+        "type": "donut",
+        "name": "Old Fashioned",
+        "ppu": 0.55,
+        "batters":
+            {
+                "batter":
+                    [
+                        { "id": "1001", "type": "Regular" },
+                        { "id": "1002", "type": "Chocolate" }
+                    ]
+            },
+        "topping":
+            [
+                { "id": "5001", "type": "None" },
+                { "id": "5002", "type": "Glazed" },
+                { "id": "5003", "type": "Chocolate" },
+                { "id": "5004", "type": "Maple" }
+            ]
+    }
+    ]','https://adobe.github.io/Spry/samples/data_region/JSONDataSetSample.html');
+
+query I
+SELECT len(json) FROM j2;
+----
+2115
