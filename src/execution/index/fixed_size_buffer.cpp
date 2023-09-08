@@ -98,14 +98,12 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
 		memcpy(dst_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
-		SetUninitializedRegions(p_block_for_index, available_segments, segment_size, bitmask_offset,
-		                        block_pointer.offset);
+		SetUninitializedRegions(p_block_for_index, segment_size, bitmask_offset + block_pointer.offset);
 
 	} else {
 		D_ASSERT(block_handle);
 		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
-		SetUninitializedRegions(*p_block_for_index, available_segments, segment_size, bitmask_offset,
-		                        block_pointer.offset);
+		SetUninitializedRegions(*p_block_for_index, segment_size, bitmask_offset + block_pointer.offset);
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
@@ -258,51 +256,21 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 	return 0;
 }
 
-void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t available_segments,
-                                              const idx_t segment_size, const idx_t bitmask_offset,
-                                              const idx_t block_offset) {
+void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size,
+                                              idx_t offset) {
 
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
 	ValidityMask mask(bitmask_ptr);
-	return;
 
-	//	for (idx_t i = 0; i < available_segments; i++) {
-	//		if (mask.RowIsValid(i)) {
-	//			auto start = segment_size * i + bitmask_offset + block_offset;
-	//			p_block_for_index.AddUninitializedRegion(start, start + segment_size);
-	//		}
-	//	}
+	idx_t idx = 0;
+	while (offset < allocation_size) {
 
-	//	idx_t offset = 0;
-	//	for (idx_t i = 0; i < bitmask_count; i++) {
-	//
-	//		if (offset == available_segments) {
-	//			return;
-	//		}
-	//
-	//		auto entry = data[i];
-	//		if (entry == 0) {
-	//			offset += entry_size;
-	//			continue;
-	//		}
-	////		if (entry == ~idx_t(0)) {
-	////			auto start = segment_size * offset + bitmask_offset;
-	////			p_block_for_index.AddUninitializedRegion(start, start + segment_size * entry_size);
-	////			offset += entry_size;
-	////			continue;
-	////		}
-	//
-	//		for (idx_t offset_in_entry = 0; offset_in_entry < entry_size; offset_in_entry++) {
-	//			if (mask.RowIsValid(offset)) {
-	//				auto start = segment_size * offset + bitmask_offset + block_offset;
-	//				p_block_for_index.AddUninitializedRegion(start, start + segment_size);
-	//			}
-	//			offset++;
-	//			if (offset == available_segments) {
-	//				return;
-	//			}
-	//		}
-	//	}
+		if (mask.RowIsValid(idx)) {
+			p_block_for_index.AddUninitializedRegion(offset, offset + segment_size);
+		}
+		offset += segment_size;
+		idx++;
+	}
 }
 
 } // namespace duckdb
