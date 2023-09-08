@@ -69,9 +69,8 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());
-	for (auto &block_info : index_pointers) {
-		meta_data_writer.Write<block_id_t>(block_info.block_id);
-		meta_data_writer.Write<uint32_t>(block_info.offset);
+	for (const auto &index_pointer : index_pointers) {
+		meta_data_writer.Write<BlockPointer>(index_pointer);
 	}
 }
 

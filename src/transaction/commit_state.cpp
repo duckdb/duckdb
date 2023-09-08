@@ -1,5 +1,6 @@
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_index_entry.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
@@ -124,9 +125,12 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		case CatalogType::TYPE_ENTRY:
 			log->WriteDropType(entry.Cast<TypeCatalogEntry>());
 			break;
-		case CatalogType::INDEX_ENTRY:
+		case CatalogType::INDEX_ENTRY: {
+			auto &index_entry = entry.Cast<DuckIndexEntry>();
+			index_entry.CommitDrop();
 			log->WriteDropIndex(entry.Cast<IndexCatalogEntry>());
 			break;
+		}
 		case CatalogType::PREPARED_STATEMENT:
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			// do nothing, indexes/prepared statements/functions aren't persisted to disk

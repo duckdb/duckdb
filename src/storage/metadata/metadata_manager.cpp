@@ -13,7 +13,7 @@ MetadataManager::~MetadataManager() {
 
 MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
-	// if not allocate a new bloc
+	// if not allocate a new block
 	block_id_t free_block = INVALID_BLOCK;
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -230,27 +230,27 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-	if (!modified_blocks.empty()) {
-		// for any blocks that were modified in the last checkpoint - set them to free blocks currently
-		for (auto &kv : modified_blocks) {
-			auto block_id = kv.first;
-			idx_t modified_list = kv.second;
-			auto entry = blocks.find(block_id);
-			D_ASSERT(entry != blocks.end());
-			auto &block = entry->second;
-			idx_t current_free_blocks = block.FreeBlocksToInteger();
-			// merge the current set of free blocks with the modified blocks
-			idx_t new_free_blocks = current_free_blocks | modified_list;
-			//			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
-			//				// if new free_blocks is all blocks - mark entire block as modified
-			//				blocks.erase(entry);
-			//				block_manager.MarkBlockAsModified(block_id);
-			//			} else {
-			// set the new set of free blocks
-			block.FreeBlocksFromInteger(new_free_blocks);
-			//			}
-		}
+
+	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
+	for (auto &kv : modified_blocks) {
+		auto block_id = kv.first;
+		idx_t modified_list = kv.second;
+		auto entry = blocks.find(block_id);
+		D_ASSERT(entry != blocks.end());
+		auto &block = entry->second;
+		idx_t current_free_blocks = block.FreeBlocksToInteger();
+		// merge the current set of free blocks with the modified blocks
+		idx_t new_free_blocks = current_free_blocks | modified_list;
+		//			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
+		//				// if new free_blocks is all blocks - mark entire block as modified
+		//				blocks.erase(entry);
+		//				block_manager.MarkBlockAsModified(block_id);
+		//			} else {
+		// set the new set of free blocks
+		block.FreeBlocksFromInteger(new_free_blocks);
+		//			}
 	}
+
 	modified_blocks.clear();
 	for (auto &kv : blocks) {
 		auto &block = kv.second;

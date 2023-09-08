@@ -57,7 +57,7 @@ class TestFetchNested(object):
 
         compare_results(
             '''SELECT grp,lst,a FROM (select grp, lst, case when grp>1 then lst else list_value(null) end as a
-                         from (SELECT a_1%4 as grp, list(a_1) as lst FROM range(7) tbl(a_1) group by grp) as lst_tbl) as T;''',
+                         from (SELECT a_1%4 as grp, list(a_1) as lst FROM range(7) tbl(a_1) group by grp order by all) as lst_tbl) as T;''',
             [[None], [None], [2, 6], [3]],
         )
 
@@ -156,7 +156,7 @@ class TestFetchNested(object):
         )
 
         compare_results(
-            "SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5) as lst_tbl) as T",
+            "SELECT m as a from (select MAP(lsta,lstb) as m from (SELECT list(i) as lsta, list(i) as lstb from range(10) tbl(i) group by i%5 order by all) as lst_tbl) as T",
             [
                 {'key': [0, 5], 'value': [0, 5]},
                 {'key': [1, 6], 'value': [1, 6]},

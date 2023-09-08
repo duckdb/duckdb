@@ -146,7 +146,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 		// format (de)serialization of expressions
 		try {
-			auto blob = BinarySerializer::Serialize(*expressions[expr_idx]);
+			auto blob = BinarySerializer::Serialize(*expressions[expr_idx], true);
 			bound_parameter_map_t parameters;
 			auto result = BinaryDeserializer::Deserialize<Expression>(context, parameters, blob.data(), blob.size());
 			result->Hash();
