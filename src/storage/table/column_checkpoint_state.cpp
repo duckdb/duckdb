@@ -37,24 +37,15 @@ bool PartialBlockForCheckpoint::IsFlushed() {
 	return segments.empty();
 }
 
-void PartialBlockForCheckpoint::AddUninitializedRegion(idx_t start, idx_t end) {
-	uninitialized_regions.push_back({start, end});
-}
+void PartialBlockForCheckpoint::Flush(const idx_t free_space_left) {
 
-void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	if (IsFlushed()) {
 		throw InternalException("Flush called on partial block that was already flushed");
 	}
-	// if we have any free space or uninitialized regions we need to zero-initialize them
-	if (free_space_left > 0 || !uninitialized_regions.empty()) {
-		auto handle = block_manager.buffer_manager.Pin(block_handle);
-		// memset any uninitialized regions
-		for (auto &uninitialized : uninitialized_regions) {
-			memset(handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
-		}
-		// memset any free space at the end of the block to 0 prior to writing to disk
-		memset(handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
-	}
+
+	// zero-initialize unused memory
+	FlushInternal(free_space_left);
+
 	// At this point, we've already copied all data from tail_segments
 	// into the page owned by first_segment. We flush all segment data to
 	// disk with the following call.
@@ -63,6 +54,7 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	if (fetch_new_block) {
 		state.block_id = block_manager.GetFreeBlockId();
 	}
+
 	for (idx_t i = 0; i < segments.size(); i++) {
 		auto &segment = segments[i];
 		segment.data.IncrementVersion();
@@ -81,13 +73,8 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 			}
 		}
 	}
-	Clear();
-}
 
-void PartialBlockForCheckpoint::Clear() {
-	uninitialized_regions.clear();
-	block_handle.reset();
-	segments.clear();
+	Clear();
 }
 
 void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t other_size) {
@@ -113,11 +100,18 @@ void PartialBlockForCheckpoint::Merge(PartialBlock &other_p, idx_t offset, idx_t
 	for (auto &segment : other.segments) {
 		AddSegmentToTail(segment.data, segment.segment, segment.offset_in_block + offset);
 	}
+
 	other.Clear();
 }
 
 void PartialBlockForCheckpoint::AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block) {
 	segments.emplace_back(data, segment, offset_in_block);
+}
+
+void PartialBlockForCheckpoint::Clear() {
+	uninitialized_regions.clear();
+	block_handle.reset();
+	segments.clear();
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {

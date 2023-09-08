@@ -2,21 +2,44 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// PartialBlock
+//===--------------------------------------------------------------------===//
+
+PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
+                           const shared_ptr<BlockHandle> &block_handle)
+    : state(state), block_manager(block_manager), block_handle(block_handle) {
+}
+
+void PartialBlock::AddUninitializedRegion(idx_t start, idx_t end) {
+	uninitialized_regions.push_back({start, end});
+}
+
+void PartialBlock::FlushInternal(const idx_t free_space_left) {
+
+	// ensure that we do not leak any data
+	if (free_space_left > 0 || !uninitialized_regions.empty()) {
+		auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
+
+		// memset any uninitialized regions
+		for (auto &uninitialized : uninitialized_regions) {
+			memset(buffer_handle.Ptr() + uninitialized.start, 0, uninitialized.end - uninitialized.start);
+		}
+		// memset any free space at the end of the block to 0 prior to writing to disk
+		memset(buffer_handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// PartialBlockManager
+//===--------------------------------------------------------------------===//
+
 PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
                                          uint32_t max_partial_block_size, uint32_t max_use_count)
     : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
       max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
-}
-
-//===--------------------------------------------------------------------===//
-// Partial Blocks
-//===--------------------------------------------------------------------===//
-
-PartialBlock::PartialBlock(PartialBlockState state, BlockManager &block_manager,
-                           const shared_ptr<BlockHandle> &block_handle)
-    : state(state), block_manager(block_manager), block_handle(block_handle) {
 }
 
 PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_size) {
@@ -104,10 +127,6 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		block_to_free->Flush(free_space);
 		AddWrittenBlock(block_to_free->state.block_id);
 	}
-}
-
-void PartialBlock::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {
-	throw InternalException("PartialBlock::Merge not implemented for this block type");
 }
 
 void PartialBlockManager::Merge(PartialBlockManager &other) {

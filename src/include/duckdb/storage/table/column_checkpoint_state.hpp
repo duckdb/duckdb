@@ -80,11 +80,10 @@ public:
 
 public:
 	bool IsFlushed();
-	void AddUninitializedRegion(idx_t start, idx_t end) override;
-	void Flush(idx_t free_space_left) override;
-	void Clear() override;
+	void Flush(const idx_t free_space_left) override;
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
+	void Clear() override;
 };
 
 } // namespace duckdb

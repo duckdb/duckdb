@@ -52,14 +52,19 @@ struct PartialBlock {
 	PartialBlockState state;
 	//! All uninitialized regions on this block, we need to zero-initialize them when flushing
 	vector<UninitializedRegion> uninitialized_regions;
+	//! The block manager of the partial block manager
 	BlockManager &block_manager;
+	//! The block handle of the underlying block that this partial block writes to
 	shared_ptr<BlockHandle> block_handle;
 
 public:
-	virtual void AddUninitializedRegion(idx_t start, idx_t end) = 0;
-	virtual void Flush(idx_t free_space_left) = 0;
+	//! Add regions that need zero-initialization to avoid leaking memory
+	void AddUninitializedRegion(const idx_t start, const idx_t end);
+	//! Flush the block to disk and zero-initialize any free space and uninitialized regions
+	virtual void Flush(const idx_t free_space_left) = 0;
+	void FlushInternal(const idx_t free_space_left);
+	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size) = 0;
 	virtual void Clear() = 0;
-	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size);
 
 public:
 	template <class TARGET>

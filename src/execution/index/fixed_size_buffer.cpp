@@ -14,15 +14,8 @@ PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager
     : PartialBlock(state, block_manager, block_handle) {
 }
 
-void PartialBlockForIndex::AddUninitializedRegion(idx_t start, idx_t end) {
-	throw InternalException("no uninitialized regions for PartialBlockForIndex");
-}
-
-void PartialBlockForIndex::Flush(idx_t free_space_left) {
-	auto buffer_handle = block_manager.buffer_manager.Pin(block_handle);
-	if (free_space_left > 0) {
-		memset(buffer_handle.Ptr() + Storage::BLOCK_SIZE - free_space_left, 0, free_space_left);
-	}
+void PartialBlockForIndex::Flush(const idx_t free_space_left) {
+	FlushInternal(free_space_left);
 	block_handle = block_manager.ConvertToPersistent(state.block_id, std::move(block_handle));
 }
 
@@ -67,29 +60,35 @@ void FixedSizeBuffer::Destroy() {
 	}
 }
 
-void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t allocation_size_p) {
+void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments,
+                                const idx_t segment_size, const idx_t bitmask_offset) {
 
+	// we do not serialize a block that is already on disk and not in memory
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {
 			throw InternalException("invalid/missing buffer in FixedSizeAllocator");
 		}
 		return;
 	}
+	// we do not serialize a block that is already on disk and not dirty
 	if (!dirty && OnDisk()) {
 		return;
+	}
+
+	if (dirty) {
+		// the allocation size only changes if the buffer is dirty
+		auto max_offset = GetMaxOffset(available_segments);
+		allocation_size = max_offset * segment_size + bitmask_offset;
 	}
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
 	D_ASSERT(InMemory() && !OnDisk());
 	D_ASSERT(buffer_handle.IsValid());
-	// we persist any changes, so the buffer is no longer dirty
-	dirty = false;
 
 	// now we write the changes, first get a partial block allocation
-	PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(allocation_size_p);
+	PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(allocation_size);
 	block_pointer.block_id = allocation.state.block_id;
 	block_pointer.offset = allocation.state.offset;
-	allocation_size = allocation_size_p;
 
 	auto &buffer_manager = block_manager.buffer_manager;
 
@@ -99,16 +98,26 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
 		memcpy(dst_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
+		SetUninitializedRegions(p_block_for_index, available_segments, segment_size, bitmask_offset,
+		                        block_pointer.offset);
 
 	} else {
 		D_ASSERT(block_handle);
-		allocation.partial_block = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
+		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
+		SetUninitializedRegions(*p_block_for_index, available_segments, segment_size, bitmask_offset,
+		                        block_pointer.offset);
+		allocation.partial_block = std::move(p_block_for_index);
 	}
 
-	buffer_handle.Destroy();
 	partial_block_manager.RegisterPartialBlock(std::move(allocation));
+
+	// resetting this buffer
+	buffer_handle.Destroy();
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
+
+	// we persist any changes, so the buffer is no longer dirty
+	dirty = false;
 }
 
 void FixedSizeBuffer::Pin() {
@@ -116,6 +125,7 @@ void FixedSizeBuffer::Pin() {
 	auto &buffer_manager = block_manager.buffer_manager;
 	D_ASSERT(block_pointer.IsValid());
 	D_ASSERT(block_handle && block_handle->BlockId() < MAXIMUM_BLOCK);
+	D_ASSERT(!dirty);
 
 	buffer_handle = buffer_manager.Pin(block_handle);
 
@@ -180,17 +190,25 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 	throw InternalException("Invalid bitmask for FixedSizeAllocator");
 }
 
-uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t bitmask_count, const idx_t available_segments_per_buffer) {
+uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
+
+	// this function calls Get() on the buffer, so the buffer must already be in memory
+	D_ASSERT(InMemory());
 
 	// finds the maximum free bit in a bitmask, and adds one to it,
 	// so that max_offset * segment_size = allocated_size of this bitmask's buffer
+	idx_t entry_size = sizeof(validity_t) * 8;
+	idx_t bitmask_count = available_segments / entry_size;
+	if (available_segments % entry_size != 0) {
+		bitmask_count++;
+	}
 	uint32_t max_offset = bitmask_count * sizeof(validity_t) * 8;
-	auto bits_in_last_entry = available_segments_per_buffer % (sizeof(validity_t) * 8);
+	auto bits_in_last_entry = available_segments % (sizeof(validity_t) * 8);
 
 	// get the bitmask data
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	ValidityMask mask(bitmask_ptr);
-	auto data = mask.GetData();
+	const ValidityMask mask(bitmask_ptr);
+	const auto data = mask.GetData();
 
 	D_ASSERT(bitmask_count > 0);
 	for (idx_t i = bitmask_count; i > 0; i--) {
@@ -235,8 +253,56 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t bitmask_count, const idx_t av
 	// there are no allocations in this buffer
 	// FIXME: put this line back in and then fix the missing vacuum bug in
 	// FIXME: test_index_large_aborted_append.test with force_restart
+	// FIXME: test if we still have non-dirty buffer to serialize after fixing this
 	//	throw InternalException("tried to serialize empty buffer");
 	return 0;
+}
+
+void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t available_segments,
+                                              const idx_t segment_size, const idx_t bitmask_offset,
+                                              const idx_t block_offset) {
+
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
+	ValidityMask mask(bitmask_ptr);
+	return;
+
+	//	for (idx_t i = 0; i < available_segments; i++) {
+	//		if (mask.RowIsValid(i)) {
+	//			auto start = segment_size * i + bitmask_offset + block_offset;
+	//			p_block_for_index.AddUninitializedRegion(start, start + segment_size);
+	//		}
+	//	}
+
+	//	idx_t offset = 0;
+	//	for (idx_t i = 0; i < bitmask_count; i++) {
+	//
+	//		if (offset == available_segments) {
+	//			return;
+	//		}
+	//
+	//		auto entry = data[i];
+	//		if (entry == 0) {
+	//			offset += entry_size;
+	//			continue;
+	//		}
+	////		if (entry == ~idx_t(0)) {
+	////			auto start = segment_size * offset + bitmask_offset;
+	////			p_block_for_index.AddUninitializedRegion(start, start + segment_size * entry_size);
+	////			offset += entry_size;
+	////			continue;
+	////		}
+	//
+	//		for (idx_t offset_in_entry = 0; offset_in_entry < entry_size; offset_in_entry++) {
+	//			if (mask.RowIsValid(offset)) {
+	//				auto start = segment_size * offset + bitmask_offset + block_offset;
+	//				p_block_for_index.AddUninitializedRegion(start, start + segment_size);
+	//			}
+	//			offset++;
+	//			if (offset == available_segments) {
+	//				return;
+	//			}
+	//		}
+	//	}
 }
 
 } // namespace duckdb

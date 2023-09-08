@@ -241,9 +241,7 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 BlockPointer FixedSizeAllocator::Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer) {
 
 	for (auto &buffer : buffers) {
-		auto max_offset = buffer.second.GetMaxOffset(bitmask_count, available_segments_per_buffer);
-		auto allocation_size = max_offset * segment_size + bitmask_offset;
-		buffer.second.Serialize(partial_block_manager, allocation_size);
+		buffer.second.Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}
 
 	auto block_pointer = writer.GetBlockPointer();

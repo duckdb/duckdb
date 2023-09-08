@@ -26,8 +26,7 @@ public:
 	~PartialBlockForIndex() override {};
 
 public:
-	void AddUninitializedRegion(idx_t start, idx_t end) override;
-	void Flush(idx_t free_space_left) override;
+	void Flush(const idx_t free_space_left) override;
 	inline void Clear() override {};
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
 };
@@ -86,13 +85,12 @@ public:
 	//! Destroys the in-memory buffer and the on-disk block
 	void Destroy();
 	//! Serializes a buffer (if dirty or not on disk)
-	void Serialize(PartialBlockManager &partial_block_manager, const idx_t allocation_size_p);
+	void Serialize(PartialBlockManager &partial_block_manager, const idx_t available_segments, const idx_t segment_size,
+	               const idx_t bitmask_offset);
 	//! Pin a buffer (if not in-memory)
 	void Pin();
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(const idx_t bitmask_count);
-	//! Returns the maximum non-free offset in a bitmask
-	uint32_t GetMaxOffset(const idx_t bitmask_count, const idx_t available_segments_per_buffer);
 
 private:
 	//! The buffer handle of the in-memory buffer
@@ -101,9 +99,11 @@ private:
 	shared_ptr<BlockHandle> block_handle;
 
 private:
-	// TODO
+	//! Returns the maximum non-free offset in a bitmask
+	uint32_t GetMaxOffset(const idx_t available_segments_per_buffer);
 	//! Sets all uninitialized regions of a buffer in the respective partial block allocation
-	//	void SetUninitializedRegions(ValidityMask &mask, vector<UninitializedRegion> &uninitialized_regions);
+	void SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t available_segments,
+	                             const idx_t segment_size, const idx_t bitmask_offset, const idx_t block_offset);
 };
 
 } // namespace duckdb
