@@ -51,7 +51,7 @@ MetadataManager &SingleFileCheckpointWriter::GetMetadataManager() {
 }
 
 unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(TableCatalogEntry &table) {
-	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer, GetMetadataWriter());
+	return make_uniq<SingleFileTableDataWriter>(*this, table, *table_metadata_writer);
 }
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {

@@ -30,10 +30,8 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
-                                                     TableCatalogEntry &table, MetadataWriter &table_data_writer,
-                                                     MetadataWriter &meta_data_writer)
-    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer),
-      meta_data_writer(meta_data_writer) {
+                                                     TableCatalogEntry &table, MetadataWriter &table_data_writer)
+    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer) {
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {

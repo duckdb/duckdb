@@ -46,7 +46,7 @@ protected:
 class SingleFileTableDataWriter : public TableDataWriter {
 public:
 	SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager, TableCatalogEntry &table,
-	                          MetadataWriter &table_data_writer, MetadataWriter &meta_data_writer);
+	                          MetadataWriter &table_data_writer);
 
 public:
 	virtual void FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
@@ -57,8 +57,6 @@ private:
 	SingleFileCheckpointWriter &checkpoint_manager;
 	// Writes the actual table data
 	MetadataWriter &table_data_writer;
-	// Writes the metadata of the table
-	MetadataWriter &meta_data_writer;
 };
 
 } // namespace duckdb
