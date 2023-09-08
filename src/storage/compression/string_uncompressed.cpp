@@ -295,7 +295,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		unsafe_unique_array<data_t> decompression_buffer;
 
 		// If string is in single block we decompress straight from it, else we copy first
-		if (remaining <= Storage::BLOCK_SIZE - sizeof(block_id_t) - offset) {
+		if (remaining <= WriteOverflowStringsToDisk::STRING_SPACE - offset) {
 			decompression_ptr = handle.Ptr() + offset;
 		} else {
 			decompression_buffer = make_unsafe_uniq_array<data_t>(compressed_size);
@@ -303,7 +303,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 			// now append the string to the single buffer
 			while (remaining > 0) {
-				idx_t to_write = MinValue<idx_t>(remaining, Storage::BLOCK_SIZE - sizeof(block_id_t) - offset);
+				idx_t to_write = MinValue<idx_t>(remaining, WriteOverflowStringsToDisk::STRING_SPACE - offset);
 				memcpy(target_ptr, handle.Ptr() + offset, to_write);
 
 				remaining -= to_write;
@@ -311,7 +311,8 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 				target_ptr += to_write;
 				if (remaining > 0) {
 					// read the next block
-					block_id_t next_block = Load<block_id_t>(handle.Ptr() + offset);
+					D_ASSERT(offset == WriteOverflowStringsToDisk::STRING_SPACE);
+					block_id_t next_block = Load<block_id_t>(handle.Ptr() + WriteOverflowStringsToDisk::STRING_SPACE);
 					block_handle = state.GetHandle(block_manager, next_block);
 					handle = buffer_manager.Pin(block_handle);
 					offset = 0;

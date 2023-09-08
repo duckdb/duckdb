@@ -77,27 +77,33 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 			strptr += to_write;
 		}
 		if (remaining > 0) {
+			D_ASSERT(offset == WriteOverflowStringsToDisk::STRING_SPACE);
 			// there is still remaining stuff to write
-			// first get the new block id and write it to the end of the previous block
-			auto new_block_id = block_manager.GetFreeBlockId();
-			Store<block_id_t>(new_block_id, data_ptr + offset);
 			// now write the current block to disk and allocate a new block
-			AllocateNewBlock(state, new_block_id);
+			AllocateNewBlock(state, block_manager.GetFreeBlockId());
 		}
 	}
 }
 
 void WriteOverflowStringsToDisk::Flush() {
-	if (offset > 0) {
+	if (block_id != INVALID_BLOCK && offset > 0) {
+		// zero-initialize the empty part of the overflow string buffer (if any)
+		if (offset < STRING_SPACE) {
+			memset(handle.Ptr() + offset, 0, STRING_SPACE - offset);
+		}
+		// write to disk
 		block_manager.Write(handle.GetFileBuffer(), block_id);
 	}
+	block_id = INVALID_BLOCK;
 	offset = 0;
 }
 
 void WriteOverflowStringsToDisk::AllocateNewBlock(UncompressedStringSegmentState &state, block_id_t new_block_id) {
 	if (block_id != INVALID_BLOCK) {
 		// there is an old block, write it first
-		block_manager.Write(handle.GetFileBuffer(), block_id);
+		// write the new block id at the end of the previous block
+		Store<block_id_t>(new_block_id, handle.Ptr() + WriteOverflowStringsToDisk::STRING_SPACE);
+		Flush();
 	}
 	offset = 0;
 	block_id = new_block_id;
