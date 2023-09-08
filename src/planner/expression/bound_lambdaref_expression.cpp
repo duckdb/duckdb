@@ -59,13 +59,13 @@ unique_ptr<Expression> BoundLambdaRefExpression::Deserialize(ExpressionDeseriali
                                                              FieldReader &reader) {
 	auto alias = reader.ReadRequired<string>();
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto lambda_index = reader.ReadRequired<idx_t>();
+	auto lambda_idx = reader.ReadRequired<idx_t>();
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto column_index = reader.ReadRequired<idx_t>();
 	auto depth = reader.ReadRequired<idx_t>();
 
-	return make_uniq<BoundLambdaRefExpression>(alias, return_type, ColumnBinding(table_index, column_index),
-	                                           lambda_index, depth);
+	return make_uniq<BoundLambdaRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), lambda_idx,
+	                                           depth);
 }
 
 } // namespace duckdb

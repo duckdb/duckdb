@@ -229,7 +229,7 @@
       },
       {
         "id": 202,
-        "name": "lambda_index",
+        "name": "lambda_idx",
         "type": "idx_t"
       },
       {
@@ -238,7 +238,7 @@
         "type": "idx_t"
       }
     ],
-    "constructor": ["return_type", "binding", "lambda_index", "depth"]
+    "constructor": ["return_type", "binding", "lambda_idx", "depth"]
   },
   {
     "class": "BoundOperatorExpression",

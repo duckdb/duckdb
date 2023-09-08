@@ -213,16 +213,16 @@ void BoundLambdaRefExpression::FormatSerialize(FormatSerializer &serializer) con
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "binding", binding);
-	serializer.WriteProperty(202, "lambda_index", lambda_idx);
+	serializer.WriteProperty(202, "lambda_idx", lambda_idx);
 	serializer.WriteProperty(203, "depth", depth);
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto binding = deserializer.ReadProperty<ColumnBinding>(201, "binding");
-	auto lambda_index = deserializer.ReadProperty<idx_t>(202, "lambda_index");
+	auto lambda_idx = deserializer.ReadProperty<idx_t>(202, "lambda_idx");
 	auto depth = deserializer.ReadProperty<idx_t>(203, "depth");
-	auto result = duckdb::unique_ptr<BoundLambdaRefExpression>(new BoundLambdaRefExpression(std::move(return_type), binding, lambda_index, depth));
+	auto result = duckdb::unique_ptr<BoundLambdaRefExpression>(new BoundLambdaRefExpression(std::move(return_type), binding, lambda_idx, depth));
 	return std::move(result);
 }
 
