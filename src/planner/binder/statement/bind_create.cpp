@@ -203,12 +203,7 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		}
 		// Generate new Struct Type
 		auto alias = type.GetAlias();
-
-		auto &return_aux = *type.GetAuxInfoShrPtr();
-		D_ASSERT(return_aux.type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
-		auto &struct_info = return_aux.Cast<StructTypeInfo>();
-
-		type = LogicalType::STRUCT(child_types, struct_info.has_explicit_names);
+		type = LogicalType::STRUCT(child_types, StructType::HasExplicitName(type));
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::UNION) {
 		auto member_types = UnionType::CopyMemberTypes(type);

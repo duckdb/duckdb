@@ -576,12 +576,9 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			auto &struct_child = child_entries[child_idx];
 			children.push_back(make_pair(StructType::GetChildName(type, child_idx), struct_child->GetValue(index_p)));
 		}
-		auto &type = v_p.GetType();
-		auto type_aux = type.AuxInfo();
-		D_ASSERT(type_aux->type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
-		auto &type_struct_info = type_aux->Cast<StructTypeInfo>();
+		auto &v_p_type = v_p.GetType();
 
-		return Value::STRUCT(std::move(children), type_struct_info.has_explicit_names);
+		return Value::STRUCT(std::move(children), StructType::HasExplicitName(v_p_type));
 	}
 	case LogicalTypeId::LIST: {
 		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];

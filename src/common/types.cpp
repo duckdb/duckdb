@@ -721,12 +721,7 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 			auto child_type = MaxLogicalType(left_child_types[i].second, right_child_types[i].second);
 			child_types.emplace_back(left_child_types[i].first, std::move(child_type));
 		}
-
-		auto &return_aux = *left.GetAuxInfoShrPtr();
-		D_ASSERT(return_aux.type == ExtraTypeInfoType::STRUCT_TYPE_INFO);
-		StructTypeInfo &struct_info = return_aux.Cast<StructTypeInfo>();
-
-		return LogicalType::STRUCT(child_types, struct_info.has_explicit_names);
+		return LogicalType::STRUCT(child_types, StructType::HasExplicitName(left));
 	}
 	if (type_id == LogicalTypeId::UNION) {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -916,6 +911,10 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
+}
+
+bool StructType::HasExplicitName(const LogicalType &type) {
+	return type.AuxInfo()->Cast<StructTypeInfo>().has_explicit_names;
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children, bool has_explicit_names) {
