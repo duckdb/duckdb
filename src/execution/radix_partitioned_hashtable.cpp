@@ -474,14 +474,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-idx_t RadixPartitionedHashTable::Count(GlobalSinkState &sink_p) const {
-	const auto count = CountInternal(sink_p);
-	return count == 0 && grouping_set.empty() ? 1 : count;
-}
-
-idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
+idx_t RadixPartitionedHashTable::NumberOfPartitions(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	return sink.count_before_combining;
+	return sink.partitions.size();
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -762,7 +757,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		return SourceResultType::FINISHED;
 	}
 
-	if (CountInternal(sink_p) == 0) {
+	if (sink.count_before_combining == 0) {
 		if (grouping_set.empty()) {
 			// Special case hack to sort out aggregating from empty intermediates for aggregations without groups
 			D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
