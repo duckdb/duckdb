@@ -16,6 +16,6 @@ if(BUILD_PYTHON_PKG)
 endif()
 
 # Just to make CLion aware of the NodeJS package for development purposes
-if (BUILD_NODE_PKG)
+if(BUILD_NODE_PKG)
   add_subdirectory(nodejs)
 endif()
