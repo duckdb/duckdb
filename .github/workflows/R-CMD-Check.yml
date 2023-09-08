@@ -21,7 +21,7 @@ jobs:
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})
 
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         config:
           - {os: macos-latest,   r: 'release'}
@@ -63,7 +63,7 @@ jobs:
           git config --global user.email "duck@duck.com"
           git config --global user.name "mr. duck"
 
-      # error is from git_dev_version() but is not
+      # error is from git_dev_version() but does not affect this workflow
       - name: update duckdb-r src code with PR code
         shell: bash
         working-directory: ${{ env.DUCKDB_R_SRC }}
