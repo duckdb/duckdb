@@ -429,7 +429,11 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 	switch (stage) {
 	case PartitionSortStage::INIT:
-		total_tasks = num_threads;
+		//	If the partitions are unordered, don't scan in parallel
+		//	because it produces non-deterministic orderings.
+		//	This can theoretically happen with ORDER BY,
+		//	but that is something the query should be explicit about.
+		total_tasks = sink.orders.size() > sink.partitions.size() ? num_threads : 1;
 		stage = PartitionSortStage::SCAN;
 		return true;
 

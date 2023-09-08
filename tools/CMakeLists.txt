@@ -15,10 +15,6 @@ if(BUILD_PYTHON_PKG)
   add_subdirectory(pythonpkg)
 endif()
 
-if(BUILD_R OR CONFIGURE_R)
-  add_subdirectory(rpkg)
-endif()
-
 # Just to make CLion aware of the NodeJS package for development purposes
 if (BUILD_NODE_PKG)
   add_subdirectory(nodejs)
