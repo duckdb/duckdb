@@ -59,6 +59,9 @@ public:
 	idx_t FreeBlocks() override {
 		throw InternalException("Cannot perform IO in in-memory database - FreeBlocks!");
 	}
+	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block) override {
+		throw InternalException("Cannot perform IO in in-memory database - ConvertToPersistent!");
+	}
 	// LCOV_EXCL_STOP
 };
 } // namespace duckdb

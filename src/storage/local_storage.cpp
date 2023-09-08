@@ -429,6 +429,7 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 
 	TableAppendState append_state;
 	table.AppendLock(append_state);
+	// FIXME: if ANY data has been optimistically written we HAVE to respect that and flush the blocks
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
