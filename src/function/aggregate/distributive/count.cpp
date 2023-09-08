@@ -35,16 +35,16 @@ struct CountStarFunction : public BaseCountFunction {
 
 	template <typename RESULT_TYPE>
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, WindowExclusion exclusion) {
+	                   idx_t input_count, data_ptr_t state, const FrameBounds *frame, const FrameBounds *prev,
+	                   Vector &result, idx_t rid, idx_t nframes) {
 		D_ASSERT(input_count == 0);
-		if (exclusion != WindowExclusion::NO_OTHER) {
+		if (nframes != 1) {
 			throw NotImplementedException("COUNT(*) does not support EXCLUDE");
 		}
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
-		const auto begin = frame.start;
-		const auto end = frame.end;
+		const auto begin = frame->start;
+		const auto end = frame->end;
 		// Slice to any filtered rows
 		if (!filter_mask.AllValid()) {
 			RESULT_TYPE filtered = 0;

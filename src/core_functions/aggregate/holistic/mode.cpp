@@ -208,12 +208,14 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t rid, WindowExclusion exclusion) {
-		if (exclusion != WindowExclusion::NO_OTHER) {
+	                   AggregateInputData &, STATE &state, const FrameBounds *frames, const FrameBounds *prevs,
+	                   Vector &result, idx_t rid, idx_t nframes) {
+		if (nframes != 1) {
 			throw NotImplementedException("MODE does not support EXCLUDE");
 		}
 
+		auto &frame = *frames;
+		auto &prev = *prevs;
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 

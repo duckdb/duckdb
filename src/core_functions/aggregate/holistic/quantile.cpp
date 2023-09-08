@@ -548,12 +548,14 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &result, idx_t ridx, WindowExclusion exclusion) {
-		if (exclusion != WindowExclusion::NO_OTHER) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds *frames,
+	                   const FrameBounds *prevs, Vector &result, idx_t ridx, idx_t nframes) {
+		if (nframes != 1) {
 			throw NotImplementedException("QUANTILE does not support EXCLUDE");
 		}
 
+		auto &frame = *frames;
+		auto &prev = *prevs;
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -700,11 +702,14 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds &frame,
-	                   const FrameBounds &prev, Vector &list, idx_t lidx, WindowExclusion exclusion) {
-		if (exclusion != WindowExclusion::NO_OTHER) {
+	                   AggregateInputData &aggr_input_data, STATE &state, const FrameBounds *frames,
+	                   const FrameBounds *prevs, Vector &list, idx_t lidx, idx_t nframes) {
+		if (nframes != 1) {
 			throw NotImplementedException("QUANTILE does not support EXCLUDE");
 		}
+		auto &frame = *frames;
+		auto &prev = *prevs;
+
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
@@ -1057,12 +1062,14 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
-	                   Vector &result, idx_t ridx, WindowExclusion exclusion) {
-		if (exclusion != WindowExclusion::NO_OTHER) {
+	                   AggregateInputData &, STATE &state, const FrameBounds *frames, const FrameBounds *prevs,
+	                   Vector &result, idx_t ridx, idx_t nframes) {
+		if (nframes != 1) {
 			throw NotImplementedException("MAD does not support EXCLUDE");
 		}
 
+		auto &frame = *frames;
+		auto &prev = *prevs;
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
