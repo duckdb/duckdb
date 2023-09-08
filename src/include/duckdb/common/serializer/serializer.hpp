@@ -17,21 +17,21 @@
 
 namespace duckdb {
 
-class FormatSerializer {
+class Serializer {
 protected:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
 
 public:
-	virtual ~FormatSerializer() {
+	virtual ~Serializer() {
 	}
 
 	class List {
-		friend FormatSerializer;
+		friend Serializer;
 
 	private:
-		FormatSerializer &serializer;
-		explicit List(FormatSerializer &serializer) : serializer(serializer) {
+		Serializer &serializer;
+		explicit List(Serializer &serializer) : serializer(serializer) {
 		}
 
 	public:
@@ -276,18 +276,18 @@ protected:
 
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
-void FormatSerializer::WriteValue(const vector<bool> &vec);
+void Serializer::WriteValue(const vector<bool> &vec);
 
 // List Impl
 template <class FUNC>
-void FormatSerializer::List::WriteObject(FUNC f) {
+void Serializer::List::WriteObject(FUNC f) {
 	serializer.OnObjectBegin();
 	f(serializer);
 	serializer.OnObjectEnd();
 }
 
 template <class T>
-void FormatSerializer::List::WriteElement(const T &value) {
+void Serializer::List::WriteElement(const T &value) {
 	serializer.WriteValue(value);
 }
 

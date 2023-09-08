@@ -19,8 +19,8 @@ class Allocator;
 class ClientContext;
 class ExecutionContext;
 class VectorCache;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -138,8 +138,8 @@ public:
 	//! Vector to point back to the data owned by this DataChunk.
 	DUCKDB_API void Reset();
 
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API void FormatDeserialize(FormatDeserializer &source);
+	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
+	DUCKDB_API void FormatDeserialize(Deserializer &source);
 
 	//! Hashes the DataChunk to the target vector
 	DUCKDB_API void Hash(Vector &result);

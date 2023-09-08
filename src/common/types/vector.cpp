@@ -923,7 +923,7 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	auxiliary.reset();
 }
 
-void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
+void Vector::FormatSerialize(Serializer &serializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	UnifiedVectorFormat vdata;
@@ -952,7 +952,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 			// Serialize data as a list
-			serializer.WriteList(102, "data", count, [&](FormatSerializer::List &list, idx_t i) {
+			serializer.WriteList(102, "data", count, [&](Serializer::List &list, idx_t i) {
 				auto idx = vdata.sel->get_index(i);
 				auto str = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
 				list.WriteElement(str);
@@ -964,8 +964,8 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto &entries = StructVector::GetEntries(*this);
 
 			// Serialize entries as a list
-			serializer.WriteList(103, "children", entries.size(), [&](FormatSerializer::List &list, idx_t i) {
-				list.WriteObject([&](FormatSerializer &object) { entries[i]->FormatSerialize(object, count); });
+			serializer.WriteList(103, "children", entries.size(), [&](Serializer::List &list, idx_t i) {
+				list.WriteObject([&](Serializer &object) { entries[i]->FormatSerialize(object, count); });
 			});
 			break;
 		}
@@ -983,14 +983,13 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 				entries[i].length = source.length;
 			}
 			serializer.WriteProperty(104, "list_size", list_size);
-			serializer.WriteList(105, "entries", count, [&](FormatSerializer::List &list, idx_t i) {
-				list.WriteObject([&](FormatSerializer &object) {
+			serializer.WriteList(105, "entries", count, [&](Serializer::List &list, idx_t i) {
+				list.WriteObject([&](Serializer &object) {
 					object.WriteProperty(100, "offset", entries[i].offset);
 					object.WriteProperty(101, "length", entries[i].length);
 				});
 			});
-			serializer.WriteObject(106, "child",
-			                       [&](FormatSerializer &object) { child.FormatSerialize(object, list_size); });
+			serializer.WriteObject(106, "child", [&](Serializer &object) { child.FormatSerialize(object, list_size); });
 			break;
 		}
 		default:
@@ -999,7 +998,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 	}
 }
 
-void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
+void Vector::FormatDeserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 
 	auto &validity = FlatVector::Validity(*this);
@@ -1021,7 +1020,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
 			auto strings = FlatVector::GetData<string_t>(*this);
-			deserializer.ReadList(102, "data", [&](FormatDeserializer::List &list, idx_t i) {
+			deserializer.ReadList(102, "data", [&](Deserializer::List &list, idx_t i) {
 				auto str = list.ReadElement<string>();
 				if (validity.RowIsValid(i)) {
 					strings[i] = StringVector::AddStringOrBlob(*this, str);
@@ -1032,8 +1031,8 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 		case PhysicalType::STRUCT: {
 			auto &entries = StructVector::GetEntries(*this);
 			// Deserialize entries as a list
-			deserializer.ReadList(103, "children", [&](FormatDeserializer::List &list, idx_t i) {
-				list.ReadObject([&](FormatDeserializer &obj) { entries[i]->FormatDeserialize(obj, count); });
+			deserializer.ReadList(103, "children", [&](Deserializer::List &list, idx_t i) {
+				list.ReadObject([&](Deserializer &obj) { entries[i]->FormatDeserialize(obj, count); });
 			});
 			break;
 		}
@@ -1045,15 +1044,15 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 
 			// Read the entries
 			auto list_entries = FlatVector::GetData<list_entry_t>(*this);
-			deserializer.ReadList(105, "entries", [&](FormatDeserializer::List &list, idx_t i) {
-				list.ReadObject([&](FormatDeserializer &obj) {
+			deserializer.ReadList(105, "entries", [&](Deserializer::List &list, idx_t i) {
+				list.ReadObject([&](Deserializer &obj) {
 					list_entries[i].offset = obj.ReadProperty<uint64_t>(100, "offset");
 					list_entries[i].length = obj.ReadProperty<uint64_t>(101, "length");
 				});
 			});
 
 			// Read the child vector
-			deserializer.ReadObject(106, "child", [&](FormatDeserializer &obj) {
+			deserializer.ReadObject(106, "child", [&](Deserializer &obj) {
 				auto &child = ListVector::GetEntry(*this);
 				child.FormatDeserialize(obj, list_size);
 			});

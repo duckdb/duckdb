@@ -45,8 +45,8 @@ public:
 
 	virtual string ToSQL(const string &schema, const string &name) const;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<MacroFunction> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<MacroFunction> FormatDeserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>

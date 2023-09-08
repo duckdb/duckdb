@@ -30,8 +30,8 @@ public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<TableFilter> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

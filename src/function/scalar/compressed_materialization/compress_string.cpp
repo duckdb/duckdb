@@ -188,13 +188,13 @@ static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &in
 	}
 }
 
-static void CMStringCompressSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+static void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const ScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.arguments);
 	serializer.WriteProperty(101, "return_type", function.return_type);
 }
 
-unique_ptr<FunctionData> CMStringCompressDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
 	function.function = GetStringCompressFunctionSwitch(return_type);
@@ -215,12 +215,12 @@ void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 }
 
-static void CMStringDecompressSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+static void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                         const ScalarFunction &function) {
 	serializer.WriteProperty(100, "arguments", function.arguments);
 }
 
-unique_ptr<FunctionData> CMStringDecompressDeserialize(FormatDeserializer &deserializer, ScalarFunction &function) {
+unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
 	return nullptr;

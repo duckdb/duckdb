@@ -416,7 +416,7 @@ string TableScanToString(const FunctionData *bind_data_p) {
 	return result;
 }
 
-static void TableScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+static void TableScanFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<TableScanBindData>();
 	serializer.WriteProperty(100, "catalog", bind_data.table.schema.catalog.GetName());
@@ -427,7 +427,7 @@ static void TableScanFormatSerialize(FormatSerializer &serializer, const optiona
 	serializer.WriteProperty(105, "result_ids", bind_data.result_ids);
 }
 
-static unique_ptr<FunctionData> TableScanFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> TableScanFormatDeserialize(Deserializer &deserializer, TableFunction &function) {
 	auto catalog = deserializer.ReadProperty<string>(100, "catalog");
 	auto schema = deserializer.ReadProperty<string>(101, "schema");
 	auto table = deserializer.ReadProperty<string>(102, "table");

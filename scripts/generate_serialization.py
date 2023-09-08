@@ -53,7 +53,7 @@ footer = '''
 '''
 
 serialize_base = '''
-void ${CLASS_NAME}::FormatSerialize(FormatSerializer &serializer) const {
+void ${CLASS_NAME}::Serialize(Serializer &serializer) const {
 ${MEMBERS}}
 '''
 
@@ -61,12 +61,12 @@ serialize_element = (
     '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 )
 
-base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
+base_serialize = '\t${BASE_CLASS_NAME}::Serialize(serializer);\n'
 
 pointer_return = '${POINTER}<${CLASS_NAME}>'
 
 deserialize_base = '''
-${DESERIALIZE_RETURN} ${CLASS_NAME}::FormatDeserialize(FormatDeserializer &deserializer) {
+${DESERIALIZE_RETURN} ${CLASS_NAME}::Deserialize(Deserializer &deserializer) {
 ${MEMBERS}
 }
 '''
@@ -85,7 +85,7 @@ switch_header = '\tcase ${ENUM_TYPE}::${ENUM_VALUE}:\n'
 
 switch_statement = (
     switch_header
-    + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(deserializer);
+    + '''\t\tresult = ${CLASS_DESERIALIZE}::Deserialize(deserializer);
 \t\tbreak;
 '''
 )

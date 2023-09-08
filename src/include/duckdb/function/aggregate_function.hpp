@@ -46,10 +46,9 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
                                    idx_t bias);
 
-typedef void (*aggregate_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*aggregate_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(FormatDeserializer &deserializer,
-                                                            AggregateFunction &function);
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(Deserializer &deserializer, AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
 public:

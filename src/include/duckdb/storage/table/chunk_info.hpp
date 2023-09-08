@@ -18,8 +18,8 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
@@ -46,8 +46,8 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const = 0;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const = 0;
+	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -85,8 +85,8 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
@@ -130,8 +130,8 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>

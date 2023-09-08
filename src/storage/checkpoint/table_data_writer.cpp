@@ -15,7 +15,7 @@ TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table(table_p.Cas
 TableDataWriter::~TableDataWriter() {
 }
 
-void TableDataWriter::WriteTableData(FormatSerializer &metadata_serializer) {
+void TableDataWriter::WriteTableData(Serializer &metadata_serializer) {
 	// start scanning the table and append the data to the uncompressed segments
 	table.GetStorage().Checkpoint(*this, metadata_serializer);
 }
@@ -41,7 +41,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
-                                              FormatSerializer &metadata_serializer) {
+                                              Serializer &metadata_serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetMetaBlockPointer();

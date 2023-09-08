@@ -90,12 +90,12 @@ unique_ptr<HyperLogLog> HyperLogLog::Copy() {
 	return result;
 }
 
-void HyperLogLog::FormatSerialize(FormatSerializer &serializer) const {
+void HyperLogLog::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", HLLStorageType::UNCOMPRESSED);
 	serializer.WriteProperty(101, "data", GetPtr(), GetSize());
 }
 
-unique_ptr<HyperLogLog> HyperLogLog::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<HyperLogLog> HyperLogLog::FormatDeserialize(Deserializer &deserializer) {
 	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = deserializer.ReadProperty<HLLStorageType>(100, "type");
 	switch (storage_type) {

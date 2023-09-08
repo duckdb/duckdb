@@ -14,8 +14,8 @@
 
 namespace duckdb {
 class Vector;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 class DistinctStatistics {
 public:
@@ -42,8 +42,8 @@ public:
 
 	static bool TypeIsSupported(const LogicalType &type);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<DistinctStatistics> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<DistinctStatistics> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	//! For distinct statistics we sample the input to speed up insertions

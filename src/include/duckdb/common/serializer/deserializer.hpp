@@ -17,21 +17,21 @@
 
 namespace duckdb {
 
-class FormatDeserializer {
+class Deserializer {
 protected:
 	bool deserialize_enum_from_string = false;
 	DeserializationData data;
 
 public:
-	virtual ~FormatDeserializer() {
+	virtual ~Deserializer() {
 	}
 
 	class List {
-		friend FormatDeserializer;
+		friend Deserializer;
 
 	private:
-		FormatDeserializer &deserializer;
-		explicit List(FormatDeserializer &deserializer) : deserializer(deserializer) {
+		Deserializer &deserializer;
+		explicit List(Deserializer &deserializer) : deserializer(deserializer) {
 		}
 
 	public:
@@ -416,14 +416,14 @@ protected:
 };
 
 template <class FUNC>
-void FormatDeserializer::List::ReadObject(FUNC f) {
+void Deserializer::List::ReadObject(FUNC f) {
 	deserializer.OnObjectBegin();
 	f(deserializer);
 	deserializer.OnObjectEnd();
 }
 
 template <class T>
-T FormatDeserializer::List::ReadElement() {
+T Deserializer::List::ReadElement() {
 	return deserializer.Read<T>();
 }
 

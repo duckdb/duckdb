@@ -29,7 +29,7 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkInfo::FormatDeserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ChunkInfoType>(100, "type");
 	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
@@ -83,7 +83,7 @@ idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
 }
 
-void ChunkConstantInfo::FormatSerialize(FormatSerializer &serializer) const {
+void ChunkConstantInfo::FormatSerialize(Serializer &serializer) const {
 	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
 	if (!is_deleted) {
 		serializer.WriteProperty(100, "type", ChunkInfoType::EMPTY_INFO);
@@ -93,7 +93,7 @@ void ChunkConstantInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(200, "start", start);
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkConstantInfo::FormatDeserialize(Deserializer &deserializer) {
 	auto start = deserializer.ReadProperty<idx_t>(200, "start");
 	auto info = make_uniq<ChunkConstantInfo>(start);
 	info->insert_id = 0;
@@ -231,7 +231,7 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_count;
 }
 
-void ChunkVectorInfo::FormatSerialize(FormatSerializer &serializer) const {
+void ChunkVectorInfo::FormatSerialize(Serializer &serializer) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	transaction_t start_time = TRANSACTION_ID_START - 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
@@ -260,7 +260,7 @@ void ChunkVectorInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(201, "deleted_tuples", data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkVectorInfo::FormatDeserialize(Deserializer &deserializer) {
 	auto start = deserializer.ReadProperty<idx_t>(200, "start");
 
 	auto result = make_uniq<ChunkVectorInfo>(start);

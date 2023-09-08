@@ -48,8 +48,8 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<ParseInfo> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

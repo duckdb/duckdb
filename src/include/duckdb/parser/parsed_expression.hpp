@@ -15,8 +15,8 @@
 #include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
-class FormatDeserializer;
-class FormatSerializer;
+class Deserializer;
+class Serializer;
 
 //!  The ParsedExpression class is a base class that can represent any expression
 //!  part of a SQL statement.
@@ -49,8 +49,8 @@ public:
 	//! Create a copy of this expression
 	virtual unique_ptr<ParsedExpression> Copy() const = 0;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<ParsedExpression> FormatDeserialize(Deserializer &deserializer);
 
 	static bool Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right);
 	static bool ListEquals(const vector<unique_ptr<ParsedExpression>> &left,

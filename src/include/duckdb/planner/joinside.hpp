@@ -24,8 +24,8 @@ public:
 	static unique_ptr<Expression> CreateExpression(JoinCondition cond);
 	static unique_ptr<Expression> CreateExpression(vector<JoinCondition> conditions);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static JoinCondition FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static JoinCondition FormatDeserialize(Deserializer &deserializer);
 
 public:
 	unique_ptr<Expression> left;

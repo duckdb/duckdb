@@ -12,11 +12,11 @@
 
 namespace duckdb {
 
-void TableFilter::FormatSerialize(FormatSerializer &serializer) const {
+void TableFilter::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "filter_type", filter_type);
 }
 
-unique_ptr<TableFilter> TableFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> TableFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto filter_type = deserializer.ReadProperty<TableFilterType>(100, "filter_type");
 	unique_ptr<TableFilter> result;
 	switch (filter_type) {
@@ -41,55 +41,55 @@ unique_ptr<TableFilter> TableFilter::FormatDeserialize(FormatDeserializer &deser
 	return result;
 }
 
-void ConjunctionAndFilter::FormatSerialize(FormatSerializer &serializer) const {
+void ConjunctionAndFilter::FormatSerialize(Serializer &serializer) const {
 	TableFilter::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "child_filters", child_filters);
 }
 
-unique_ptr<TableFilter> ConjunctionAndFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> ConjunctionAndFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionAndFilter>(new ConjunctionAndFilter());
 	deserializer.ReadProperty(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
-void ConjunctionOrFilter::FormatSerialize(FormatSerializer &serializer) const {
+void ConjunctionOrFilter::FormatSerialize(Serializer &serializer) const {
 	TableFilter::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "child_filters", child_filters);
 }
 
-unique_ptr<TableFilter> ConjunctionOrFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> ConjunctionOrFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionOrFilter>(new ConjunctionOrFilter());
 	deserializer.ReadProperty(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
-void ConstantFilter::FormatSerialize(FormatSerializer &serializer) const {
+void ConstantFilter::FormatSerialize(Serializer &serializer) const {
 	TableFilter::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "comparison_type", comparison_type);
 	serializer.WriteProperty(201, "constant", constant);
 }
 
-unique_ptr<TableFilter> ConstantFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> ConstantFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto comparison_type = deserializer.ReadProperty<ExpressionType>(200, "comparison_type");
 	auto constant = deserializer.ReadProperty<Value>(201, "constant");
 	auto result = duckdb::unique_ptr<ConstantFilter>(new ConstantFilter(comparison_type, constant));
 	return std::move(result);
 }
 
-void IsNotNullFilter::FormatSerialize(FormatSerializer &serializer) const {
+void IsNotNullFilter::FormatSerialize(Serializer &serializer) const {
 	TableFilter::FormatSerialize(serializer);
 }
 
-unique_ptr<TableFilter> IsNotNullFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> IsNotNullFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<IsNotNullFilter>(new IsNotNullFilter());
 	return std::move(result);
 }
 
-void IsNullFilter::FormatSerialize(FormatSerializer &serializer) const {
+void IsNullFilter::FormatSerialize(Serializer &serializer) const {
 	TableFilter::FormatSerialize(serializer);
 }
 
-unique_ptr<TableFilter> IsNullFilter::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<TableFilter> IsNullFilter::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<IsNullFilter>(new IsNullFilter());
 	return std::move(result);
 }

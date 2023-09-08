@@ -15,8 +15,8 @@
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 class BinarySerializer;
 class BinaryDeserializer;
 class WriteStream;

@@ -17,8 +17,8 @@
 
 namespace duckdb {
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 struct DataPointer {
 	DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
@@ -31,8 +31,8 @@ struct DataPointer {
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static DataPointer FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const;
+	static DataPointer FormatDeserialize(Deserializer &source);
 };
 
 struct RowGroupPointer {

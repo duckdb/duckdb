@@ -64,8 +64,8 @@ public:
 	bool Generated() const;
 	DUCKDB_API ColumnDefinition Copy() const;
 
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static ColumnDefinition FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
+	DUCKDB_API static ColumnDefinition FormatDeserialize(Deserializer &deserializer);
 
 	//===--------------------------------------------------------------------===//
 	// Generated Columns (VIRTUAL)

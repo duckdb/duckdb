@@ -15,7 +15,7 @@
 namespace duckdb {
 class ClientContext;
 
-class BinaryDeserializer : public FormatDeserializer {
+class BinaryDeserializer : public Deserializer {
 public:
 	explicit BinaryDeserializer(ReadStream &stream) : stream(stream) {
 		deserialize_enum_from_string = false;

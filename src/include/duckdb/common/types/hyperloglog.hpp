@@ -20,8 +20,8 @@ namespace duckdb {
 
 enum class HLLStorageType : uint8_t { UNCOMPRESSED = 1 };
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 //! The HyperLogLog class holds a HyperLogLog counter for approximate cardinality counting
 class HyperLogLog {
@@ -47,8 +47,8 @@ public:
 	//! Get copy of the HLL
 	unique_ptr<HyperLogLog> Copy();
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<HyperLogLog> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<HyperLogLog> FormatDeserialize(Deserializer &deserializer);
 
 public:
 	//! Compute HLL hashes over vdata, and store them in 'hashes'

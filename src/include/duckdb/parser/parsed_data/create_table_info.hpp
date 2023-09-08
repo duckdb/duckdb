@@ -36,8 +36,8 @@ struct CreateTableInfo : public CreateInfo {
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const override;
-	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API void FormatSerialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

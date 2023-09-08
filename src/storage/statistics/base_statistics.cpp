@@ -273,11 +273,11 @@ void BaseStatistics::SetDistinctCount(idx_t count) {
 	this->distinct_count = count;
 }
 
-void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
+void BaseStatistics::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "has_null", has_null);
 	serializer.WriteProperty(101, "has_no_null", has_no_null);
 	serializer.WriteProperty(102, "distinct_count", distinct_count);
-	serializer.WriteObject(103, "type_stats", [&](FormatSerializer &serializer) {
+	serializer.WriteObject(103, "type_stats", [&](Serializer &serializer) {
 		switch (GetStatsType()) {
 		case StatisticsType::NUMERIC_STATS:
 			NumericStats::FormatSerialize(*this, serializer);
@@ -297,7 +297,7 @@ void BaseStatistics::FormatSerialize(FormatSerializer &serializer) const {
 	});
 }
 
-BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
+BaseStatistics BaseStatistics::FormatDeserialize(Deserializer &deserializer) {
 	auto has_null = deserializer.ReadProperty<bool>(100, "has_null");
 	auto has_no_null = deserializer.ReadProperty<bool>(101, "has_no_null");
 	auto distinct_count = deserializer.ReadProperty<idx_t>(102, "distinct_count");
@@ -313,7 +313,7 @@ BaseStatistics BaseStatistics::FormatDeserialize(FormatDeserializer &deserialize
 	stats.has_no_null = has_no_null;
 	stats.distinct_count = distinct_count;
 
-	deserializer.ReadObject(103, "type_stats", [&](FormatDeserializer &obj) {
+	deserializer.ReadObject(103, "type_stats", [&](Deserializer &obj) {
 		switch (stats_type) {
 		case StatisticsType::NUMERIC_STATS:
 			NumericStats::FormatDeserialize(obj, stats);

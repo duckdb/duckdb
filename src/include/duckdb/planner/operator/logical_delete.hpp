@@ -25,8 +25,8 @@ public:
 	bool return_chunk;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<idx_t> GetTableIndex() const override;

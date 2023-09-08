@@ -108,7 +108,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	return std::move(new_window);
 }
 
-void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const {
+void BoundWindowExpression::FormatSerialize(Serializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
@@ -128,7 +128,7 @@ void BoundWindowExpression::FormatSerialize(FormatSerializer &serializer) const 
 	serializer.WritePropertyWithDefault(211, "default_expr", default_expr, unique_ptr<Expression>());
 }
 
-unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<Expression> BoundWindowExpression::FormatDeserialize(Deserializer &deserializer) {
 	auto expression_type = deserializer.Get<ExpressionType>();
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");

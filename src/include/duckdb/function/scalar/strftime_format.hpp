@@ -150,8 +150,8 @@ public:
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static StrpTimeFormat FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static StrpTimeFormat FormatDeserialize(Deserializer &deserializer);
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);

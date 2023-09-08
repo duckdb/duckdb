@@ -20,12 +20,12 @@ void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res,
 	bindings = GetColumnBindings();
 }
 
-void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
+void LogicalExtensionOperator::FormatSerialize(Serializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "extension_name", GetExtensionName());
 }
 
-unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(Deserializer &deserializer) {
 	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
 	auto extension_name = deserializer.ReadProperty<string>(200, "extension_name");
 	for (auto &extension : config.operator_extensions) {

@@ -30,8 +30,7 @@ public:
 
 	CompressionType GetColumnCompressionType(idx_t i);
 
-	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-	                                     FormatSerializer &serializer) = 0;
+	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state, Serializer &serializer) = 0;
 
 	virtual MetadataWriter &GetPayloadWriter() = 0;
 
@@ -61,7 +60,7 @@ public:
 
 public:
 	virtual void WriteColumnDataPointers(ColumnCheckpointState &column_checkpoint_state,
-	                                     FormatSerializer &serializer) override;
+	                                     Serializer &serializer) override;
 
 	virtual MetadataWriter &GetPayloadWriter() override;
 };

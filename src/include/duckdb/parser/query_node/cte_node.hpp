@@ -45,8 +45,8 @@ public:
 	//! Serializes a QueryNode to a stand-alone binary blob
 	//! Deserializes a blob back into a QueryNode
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<QueryNode> FormatDeserialize(Deserializer &source);
 };
 
 } // namespace duckdb

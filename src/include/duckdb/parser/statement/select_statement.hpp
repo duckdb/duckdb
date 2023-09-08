@@ -17,8 +17,8 @@
 namespace duckdb {
 
 class QueryNode;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 //! SelectStatement is a typical SELECT clause
 class SelectStatement : public SQLStatement {
@@ -43,7 +43,7 @@ public:
 	//! Whether or not the statements are equivalent
 	bool Equals(const SQLStatement &other) const;
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<SelectStatement> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<SelectStatement> FormatDeserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

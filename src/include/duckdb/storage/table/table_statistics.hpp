@@ -16,8 +16,8 @@
 namespace duckdb {
 class ColumnList;
 class PersistentTableData;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 class TableStatisticsLock {
 public:
@@ -49,8 +49,8 @@ public:
 
 	unique_ptr<TableStatisticsLock> GetLock();
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	void FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns);
+	void FormatSerialize(Serializer &serializer) const;
+	void FormatDeserialize(Deserializer &deserializer, ColumnList &columns);
 
 private:
 	//! The statistics lock

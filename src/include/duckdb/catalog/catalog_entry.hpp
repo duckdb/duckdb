@@ -21,8 +21,8 @@ class Catalog;
 class CatalogSet;
 class ClientContext;
 class SchemaCatalogEntry;
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 struct CreateInfo;
 
@@ -74,8 +74,8 @@ public:
 
 	virtual void Verify(Catalog &catalog);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<CreateInfo> FormatDeserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>

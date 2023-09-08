@@ -60,8 +60,8 @@ public:
 
 	//! Deserializes a blob back into a QueryNode
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<QueryNode> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

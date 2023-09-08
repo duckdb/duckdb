@@ -457,7 +457,7 @@ struct QuantileBindData : public FunctionData {
 		return desc == other.desc && quantiles == other.quantiles && order == other.order;
 	}
 
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void FormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const AggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<QuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
@@ -465,7 +465,7 @@ struct QuantileBindData : public FunctionData {
 		serializer.WriteProperty(102, "desc", bind_data.desc);
 	}
 
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> FormatDeserialize(Deserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<QuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "order", result->order);
@@ -473,7 +473,7 @@ struct QuantileBindData : public FunctionData {
 		return std::move(result);
 	}
 
-	static void FormatSerializeDecimal(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void FormatSerializeDecimal(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                   const AggregateFunction &function) {
 		throw SerializationException("FIXME: quantile serialize for decimal");
 	}

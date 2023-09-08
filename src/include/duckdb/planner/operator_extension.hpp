@@ -34,7 +34,7 @@ public:
 	shared_ptr<OperatorExtensionInfo> operator_info;
 
 	virtual std::string GetName() = 0;
-	virtual unique_ptr<LogicalExtensionOperator> FormatDeserialize(FormatDeserializer &deserializer) = 0;
+	virtual unique_ptr<LogicalExtensionOperator> FormatDeserialize(Deserializer &deserializer) = 0;
 
 	virtual ~OperatorExtension() {
 	}

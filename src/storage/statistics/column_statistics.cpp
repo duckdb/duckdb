@@ -55,12 +55,12 @@ shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
 	return make_shared<ColumnStatistics>(stats.Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
 }
 
-void ColumnStatistics::FormatSerialize(FormatSerializer &serializer) const {
+void ColumnStatistics::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "statistics", stats);
 	serializer.WritePropertyWithDefault(101, "distinct", distinct_stats, unique_ptr<DistinctStatistics>());
 }
 
-shared_ptr<ColumnStatistics> ColumnStatistics::FormatDeserialize(FormatDeserializer &deserializer) {
+shared_ptr<ColumnStatistics> ColumnStatistics::FormatDeserialize(Deserializer &deserializer) {
 	auto stats = deserializer.ReadProperty<BaseStatistics>(100, "statistics");
 	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
 	    101, "distinct", unique_ptr<DistinctStatistics>());

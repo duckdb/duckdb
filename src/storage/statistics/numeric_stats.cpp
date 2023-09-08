@@ -406,7 +406,7 @@ Value NumericStats::MaxOrNull(const BaseStatistics &stats) {
 }
 
 static void FormatSerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, bool has_value,
-                                             FormatSerializer &serializer) {
+                                             Serializer &serializer) {
 	serializer.WriteProperty(100, "has_value", has_value);
 	if (!has_value) {
 		return;
@@ -454,7 +454,7 @@ static void FormatSerializeNumericStatsValue(const LogicalType &type, NumericVal
 }
 
 static void FormatDeserializeNumericStatsValue(const LogicalType &type, NumericValueUnion &result, bool &has_stats,
-                                               FormatDeserializer &deserializer) {
+                                               Deserializer &deserializer) {
 	auto has_value = deserializer.ReadProperty<bool>(100, "has_value");
 	if (!has_value) {
 		has_stats = false;
@@ -503,23 +503,23 @@ static void FormatDeserializeNumericStatsValue(const LogicalType &type, NumericV
 	}
 }
 
-void NumericStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+void NumericStats::FormatSerialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(stats);
-	serializer.WriteObject(200, "max", [&](FormatSerializer &object) {
+	serializer.WriteObject(200, "max", [&](Serializer &object) {
 		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
-	serializer.WriteObject(201, "min", [&](FormatSerializer &object) {
+	serializer.WriteObject(201, "min", [&](Serializer &object) {
 		FormatSerializeNumericStatsValue(stats.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 }
 
-void NumericStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &result) {
+void NumericStats::FormatDeserialize(Deserializer &deserializer, BaseStatistics &result) {
 	auto &numeric_stats = NumericStats::GetDataUnsafe(result);
 
-	deserializer.ReadObject(200, "max", [&](FormatDeserializer &object) {
+	deserializer.ReadObject(200, "max", [&](Deserializer &object) {
 		FormatDeserializeNumericStatsValue(result.GetType(), numeric_stats.min, numeric_stats.has_min, object);
 	});
-	deserializer.ReadObject(201, "min", [&](FormatDeserializer &object) {
+	deserializer.ReadObject(201, "min", [&](Deserializer &object) {
 		FormatDeserializeNumericStatsValue(result.GetType(), numeric_stats.max, numeric_stats.has_max, object);
 	});
 }

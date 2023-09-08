@@ -19,8 +19,8 @@
 namespace duckdb {
 struct SelectionVector;
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 class Vector;
 struct UnifiedVectorFormat;
@@ -91,8 +91,8 @@ public:
 	unique_ptr<BaseStatistics> ToUnique() const;
 	void CopyBase(const BaseStatistics &orig);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static BaseStatistics FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static BaseStatistics FormatDeserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;

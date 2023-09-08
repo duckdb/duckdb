@@ -154,8 +154,8 @@ public:
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ColumnDataCollection> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<ColumnDataCollection> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	//! Creates a new segment within the ColumnDataCollection

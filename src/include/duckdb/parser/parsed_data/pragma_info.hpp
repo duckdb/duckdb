@@ -41,8 +41,8 @@ public:
 		return result;
 	}
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

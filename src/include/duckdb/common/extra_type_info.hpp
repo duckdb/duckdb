@@ -37,8 +37,8 @@ struct ExtraTypeInfo {
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -62,8 +62,8 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -78,8 +78,8 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -94,8 +94,8 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -110,8 +110,8 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &deserializer);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -126,8 +126,8 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	aggregate_state_t state_type;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -142,8 +142,8 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -168,8 +168,8 @@ public:
 
 	static LogicalType CreateType(Vector &ordered_data, idx_t size);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void FormatSerialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(Deserializer &source);
 
 protected:
 	// Equalities are only used in enums with different catalog entries

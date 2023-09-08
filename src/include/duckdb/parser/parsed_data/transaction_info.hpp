@@ -25,8 +25,8 @@ public:
 	TransactionType type;
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParseInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	TransactionInfo();

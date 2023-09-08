@@ -230,7 +230,7 @@ string DataChunk::ToString() const {
 	return retval;
 }
 
-void DataChunk::FormatSerialize(FormatSerializer &serializer) const {
+void DataChunk::FormatSerialize(Serializer &serializer) const {
 	// write the count
 	auto row_count = size();
 	serializer.WriteProperty<sel_t>(100, "rows", row_count);
@@ -238,11 +238,11 @@ void DataChunk::FormatSerialize(FormatSerializer &serializer) const {
 
 	// Write the types
 	serializer.WriteList(101, "types", column_count,
-	                     [&](FormatSerializer::List &list, idx_t i) { list.WriteElement(data[i].GetType()); });
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(data[i].GetType()); });
 
 	// Write the data
-	serializer.WriteList(102, "columns", column_count, [&](FormatSerializer::List &list, idx_t i) {
-		list.WriteObject([&](FormatSerializer &object) {
+	serializer.WriteList(102, "columns", column_count, [&](Serializer::List &list, idx_t i) {
+		list.WriteObject([&](Serializer &object) {
 			// Reference the vector to avoid potentially mutating it during serialization
 			Vector serialized_vector(data[i].GetType());
 			serialized_vector.Reference(data[i]);
@@ -251,13 +251,13 @@ void DataChunk::FormatSerialize(FormatSerializer &serializer) const {
 	});
 }
 
-void DataChunk::FormatDeserialize(FormatDeserializer &deserializer) {
+void DataChunk::FormatDeserialize(Deserializer &deserializer) {
 	// read the count
 	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
 
 	// Read the types
 	vector<LogicalType> types;
-	deserializer.ReadList(101, "types", [&](FormatDeserializer::List &list, idx_t i) {
+	deserializer.ReadList(101, "types", [&](Deserializer::List &list, idx_t i) {
 		auto type = list.ReadElement<LogicalType>();
 		types.push_back(type);
 	});
@@ -267,8 +267,8 @@ void DataChunk::FormatDeserialize(FormatDeserializer &deserializer) {
 	SetCardinality(row_count);
 
 	// Read the data
-	deserializer.ReadList(102, "columns", [&](FormatDeserializer::List &list, idx_t i) {
-		list.ReadObject([&](FormatDeserializer &object) { data[i].FormatDeserialize(object, row_count); });
+	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &object) { data[i].FormatDeserialize(object, row_count); });
 	});
 }
 

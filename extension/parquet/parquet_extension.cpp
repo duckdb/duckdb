@@ -404,7 +404,7 @@ public:
 		return data.batch_index;
 	}
 
-	static void ParquetScanSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		serializer.WriteProperty(100, "files", bind_data.files);
@@ -413,7 +413,7 @@ public:
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+	static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
 		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
@@ -913,7 +913,7 @@ EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char 
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
-static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionData &bind_data_p,
+static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bind_data_p,
                                  const CopyFunction &function) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	serializer.WriteProperty(100, "sql_types", bind_data.sql_types);
@@ -922,7 +922,7 @@ static void ParquetCopySerialize(FormatSerializer &serializer, const FunctionDat
 	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
 }
 
-static unique_ptr<FunctionData> ParquetCopyDeserialize(FormatDeserializer &deserializer, CopyFunction &function) {
+static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
 	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");

@@ -33,7 +33,7 @@ public:
 		throw InternalException("Cannot copy bound subquery node");
 	}
 
-	void FormatSerialize(FormatSerializer &serializer) const override {
+	void FormatSerialize(Serializer &serializer) const override {
 		throw InternalException("Cannot serialize bound subquery node");
 	}
 };

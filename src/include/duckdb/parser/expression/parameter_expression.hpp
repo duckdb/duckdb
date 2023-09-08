@@ -51,7 +51,7 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 	hash_t Hash() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

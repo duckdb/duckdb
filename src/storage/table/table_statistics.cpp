@@ -101,17 +101,17 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	}
 }
 
-void TableStatistics::FormatSerialize(FormatSerializer &serializer) const {
+void TableStatistics::FormatSerialize(Serializer &serializer) const {
 	auto column_count = column_stats.size();
 	serializer.WriteList(100, "column_stats", column_count,
-	                     [&](FormatSerializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
 }
 
-void TableStatistics::FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns) {
+void TableStatistics::FormatDeserialize(Deserializer &deserializer, ColumnList &columns) {
 	auto physical_columns = columns.Physical();
 
 	auto iter = physical_columns.begin();
-	deserializer.ReadList(100, "column_stats", [&](FormatDeserializer::List &list, idx_t i) {
+	deserializer.ReadList(100, "column_stats", [&](Deserializer::List &list, idx_t i) {
 		auto &col = *iter;
 		iter.operator++();
 

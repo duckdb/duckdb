@@ -52,8 +52,8 @@ public:
 	//! Create a copy of this expression
 	virtual unique_ptr<Expression> Copy() = 0;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<Expression> FormatDeserialize(Deserializer &deserializer);
 
 protected:
 	//! Copy base Expression properties from another expression to this one,

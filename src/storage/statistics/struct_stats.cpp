@@ -92,21 +92,21 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void StructStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+void StructStats::FormatSerialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto child_stats = StructStats::GetChildStats(stats);
 	auto child_count = StructType::GetChildCount(stats.GetType());
 
 	serializer.WriteList(200, "child_stats", child_count,
-	                     [&](FormatSerializer::List &list, idx_t i) { list.WriteElement(child_stats[i]); });
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_stats[i]); });
 }
 
-void StructStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base) {
+void StructStats::FormatDeserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 
 	auto &child_types = StructType::GetChildTypes(type);
 
-	deserializer.ReadList(200, "child_stats", [&](FormatDeserializer::List &list, idx_t i) {
+	deserializer.ReadList(200, "child_stats", [&](Deserializer::List &list, idx_t i) {
 		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_types[i].second));
 		auto stat = list.ReadElement<BaseStatistics>();
 		base.child_stats[i].Copy(stat);

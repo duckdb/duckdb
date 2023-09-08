@@ -121,7 +121,7 @@ idx_t LogicalGet::EstimateCardinality(ClientContext &context) {
 	return 1;
 }
 
-void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
+void LogicalGet::FormatSerialize(Serializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "table_index", table_index);
 	serializer.WriteProperty(201, "returned_types", returned_types);
@@ -141,7 +141,7 @@ void LogicalGet::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(210, "projected_input", projected_input);
 }
 
-unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalGet::FormatDeserialize(Deserializer &deserializer) {
 	auto result = unique_ptr<LogicalGet>(new LogicalGet());
 	deserializer.ReadProperty(200, "table_index", result->table_index);
 	deserializer.ReadProperty(201, "returned_types", result->returned_types);

@@ -18,8 +18,7 @@ namespace duckdb {
 class FunctionSerializer {
 public:
 	template <class FUNC>
-	static void FormatSerialize(FormatSerializer &serializer, const FUNC &function,
-	                            optional_ptr<FunctionData> bind_info) {
+	static void FormatSerialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
 		serializer.WriteProperty(500, "name", function.name);
 		serializer.WriteProperty(501, "arguments", function.arguments);
@@ -28,7 +27,7 @@ public:
 		serializer.WriteProperty(503, "has_serialize", has_serialize);
 		if (has_serialize) {
 			serializer.WriteObject(504, "function_data",
-			                       [&](FormatSerializer &obj) { function.serialize(obj, bind_info, function); });
+			                       [&](Serializer &obj) { function.serialize(obj, bind_info, function); });
 			D_ASSERT(function.deserialize);
 		}
 	}
@@ -49,7 +48,7 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, bool> FormatDeserializeBase(FormatDeserializer &deserializer, CatalogType catalog_type) {
+	static pair<FUNC, bool> FormatDeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
@@ -61,21 +60,21 @@ public:
 	}
 
 	template <class FUNC>
-	static unique_ptr<FunctionData> FunctionDeserialize(FormatDeserializer &deserializer, FUNC &function) {
+	static unique_ptr<FunctionData> FunctionDeserialize(Deserializer &deserializer, FUNC &function) {
 		if (!function.deserialize) {
 			throw SerializationException("Function requires deserialization but no deserialization function for %s",
 			                             function.name);
 		}
 		unique_ptr<FunctionData> result;
 		deserializer.ReadObject(504, "function_data",
-		                        [&](FormatDeserializer &obj) { result = function.deserialize(obj, function); });
+		                        [&](Deserializer &obj) { result = function.deserialize(obj, function); });
 		return result;
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static pair<FUNC, unique_ptr<FunctionData>>
-	FormatDeserialize(FormatDeserializer &deserializer, CatalogType catalog_type,
-	                  vector<unique_ptr<Expression>> &children, LogicalType return_type) {
+	static pair<FUNC, unique_ptr<FunctionData>> FormatDeserialize(Deserializer &deserializer, CatalogType catalog_type,
+	                                                              vector<unique_ptr<Expression>> &children,
+	                                                              LogicalType return_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto entry = FormatDeserializeBase<FUNC, CATALOG_ENTRY>(deserializer, catalog_type);
 		auto &function = entry.first;

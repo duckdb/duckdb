@@ -96,7 +96,7 @@ void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_unicode = true;
 }
 
-void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+void StringStats::FormatSerialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	serializer.WriteProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	serializer.WriteProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);
@@ -105,7 +105,7 @@ void StringStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer 
 	serializer.WriteProperty(204, "max_string_length", string_data.max_string_length);
 }
 
-void StringStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base) {
+void StringStats::FormatDeserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &string_data = StringStats::GetDataUnsafe(base);
 	deserializer.ReadProperty(200, "min", string_data.min, StringStatsData::MAX_STRING_MINMAX_SIZE);
 	deserializer.ReadProperty(201, "max", string_data.max, StringStatsData::MAX_STRING_MINMAX_SIZE);

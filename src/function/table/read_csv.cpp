@@ -1089,14 +1089,14 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
 
-static void CSVReaderFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+static void CSVReaderFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                      const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	serializer.WriteProperty(100, "extra_info", function.extra_info);
 	serializer.WriteProperty(101, "csv_data", &bind_data);
 }
 
-static unique_ptr<FunctionData> CSVReaderFormatDeserialize(FormatDeserializer &deserializer, TableFunction &function) {
+static unique_ptr<FunctionData> CSVReaderFormatDeserialize(Deserializer &deserializer, TableFunction &function) {
 	unique_ptr<ReadCSVData> result;
 	deserializer.ReadProperty(100, "extra_info", function.extra_info);
 	deserializer.ReadProperty(101, "csv_data", result);

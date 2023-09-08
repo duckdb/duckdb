@@ -174,11 +174,10 @@ public:
 		return std::move(global_stats);
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer, FormatSerializer &serializer) override {
+	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
 		ColumnCheckpointState::WriteDataPointers(writer, serializer);
-		serializer.WriteObject(101, "validity", [&](FormatSerializer &serializer) {
-			validity_state->WriteDataPointers(writer, serializer);
-		});
+		serializer.WriteObject(101, "validity",
+		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
 	}
 };
 
@@ -205,10 +204,10 @@ void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
-void StandardColumnData::DeserializeColumn(FormatDeserializer &deserializer) {
+void StandardColumnData::DeserializeColumn(Deserializer &deserializer) {
 	ColumnData::DeserializeColumn(deserializer);
 	deserializer.ReadObject(101, "validity",
-	                        [&](FormatDeserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
 }
 
 void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

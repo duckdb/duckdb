@@ -851,7 +851,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	return row_group_pointer;
 }
 
-void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {
+void RowGroup::FormatSerialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(100, "row_start", pointer.row_start);
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
@@ -880,17 +880,17 @@ void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &seria
 	if (chunk_info_count == 0) {
 		return;
 	}
-	serializer.WriteList(104, "versions", chunk_info_count, [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(104, "versions", chunk_info_count, [&](Serializer::List &list, idx_t i) {
 		auto vector_idx = idx_map[i];
 		auto chunk_info = versions->info[vector_idx].get();
-		list.WriteObject([&](FormatSerializer &obj) {
+		list.WriteObject([&](Serializer &obj) {
 			obj.WriteProperty(100, "vector_index", vector_idx);
 			obj.WriteProperty(101, "chunk_info", const_cast<const ChunkInfo *>(chunk_info));
 		});
 	});
 }
 
-RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
+RowGroupPointer RowGroup::FormatDeserialize(Deserializer &deserializer) {
 	RowGroupPointer result;
 	result.row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
@@ -902,8 +902,8 @@ RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
 		return result;
 	}
 	auto version_info = make_shared<VersionNode>();
-	deserializer.ReadList(104, "versions", [&](FormatDeserializer::List &list, idx_t i) {
-		list.ReadObject([&](FormatDeserializer &obj) {
+	deserializer.ReadList(104, "versions", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &obj) {
 			auto vector_index = obj.ReadProperty<idx_t>(100, "vector_index");
 			if (vector_index >= RowGroup::ROW_GROUP_VECTOR_COUNT) {
 				throw Exception("In DeserializeDeletes, vector_index is out of range for the row group. Corrupted "

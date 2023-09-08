@@ -63,9 +63,9 @@ typedef unique_ptr<BaseStatistics> (*function_statistics_t)(ClientContext &conte
 //! Adds the dependencies of this BoundFunctionExpression to the set of dependencies
 typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyList &dependencies);
 
-typedef void (*function_serialize_t)(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data,
+typedef void (*function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                      const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_deserialize_t)(FormatDeserializer &deserializer, ScalarFunction &function);
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(Deserializer &deserializer, ScalarFunction &function);
 
 class ScalarFunction : public BaseScalarFunction {
 public:

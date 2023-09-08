@@ -277,23 +277,22 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 	return aggregate->Equals(*other.aggregate);
 }
 
-static void ExportStateAggregateFormatSerialize(FormatSerializer &serializer,
-                                                const optional_ptr<FunctionData> bind_data_p,
+static void ExportStateAggregateFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                                 const AggregateFunction &function) {
 	throw SerializationException("FIXME: export state serialize");
 }
 
-static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(FormatDeserializer &deserializer,
+static unique_ptr<FunctionData> ExportStateAggregateFormatDeserialize(Deserializer &deserializer,
                                                                       AggregateFunction &function) {
 	throw SerializationException("FIXME: export state deserialize");
 }
 
-static void ExportStateScalarFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+static void ExportStateScalarFormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                              const ScalarFunction &function) {
 	throw SerializationException("FIXME: export state serialize");
 }
 
-static unique_ptr<FunctionData> ExportStateScalarFormatDeserialize(FormatDeserializer &deserializer,
+static unique_ptr<FunctionData> ExportStateScalarFormatDeserialize(Deserializer &deserializer,
                                                                    ScalarFunction &function) {
 	throw SerializationException("FIXME: export state deserialize");
 }

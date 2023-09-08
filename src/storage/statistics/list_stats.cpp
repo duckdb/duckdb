@@ -68,12 +68,12 @@ void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	child_stats.Merge(other_child_stats);
 }
 
-void ListStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+void ListStats::FormatSerialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &child_stats = ListStats::GetChildStats(stats);
 	serializer.WriteProperty(200, "child_stats", child_stats);
 }
 
-void ListStats::FormatDeserialize(FormatDeserializer &deserializer, BaseStatistics &base) {
+void ListStats::FormatDeserialize(Deserializer &deserializer, BaseStatistics &base) {
 	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);

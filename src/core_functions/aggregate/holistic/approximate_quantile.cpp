@@ -39,13 +39,13 @@ struct ApproximateQuantileBindData : public FunctionData {
 		return true;
 	}
 
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void FormatSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const AggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ApproximateQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 	}
 
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> FormatDeserialize(Deserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<ApproximateQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		return std::move(result);

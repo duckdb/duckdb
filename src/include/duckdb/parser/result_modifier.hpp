@@ -14,8 +14,8 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
-class FormatDeserializer;
-class FormatSerializer;
+class Deserializer;
+class Serializer;
 
 enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,
@@ -44,8 +44,8 @@ public:
 	//! Create a copy of this ResultModifier
 	virtual unique_ptr<ResultModifier> Copy() const = 0;
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<ResultModifier> FormatDeserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -81,8 +81,8 @@ struct OrderByNode {
 public:
 	string ToString() const;
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static OrderByNode FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static OrderByNode FormatDeserialize(Deserializer &deserializer);
 };
 
 class LimitModifier : public ResultModifier {
@@ -102,8 +102,8 @@ public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(Deserializer &deserializer);
 };
 
 class OrderModifier : public ResultModifier {
@@ -121,8 +121,8 @@ public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(Deserializer &deserializer);
 
 	static bool Equals(const unique_ptr<OrderModifier> &left, const unique_ptr<OrderModifier> &right);
 };
@@ -142,8 +142,8 @@ public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(Deserializer &deserializer);
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -163,8 +163,8 @@ public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> FormatDeserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

@@ -99,9 +99,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	 */
 	BinarySerializer serializer(*metadata_writer);
 	serializer.Begin();
-	serializer.WriteList(100, "schemas", schemas.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(100, "schemas", schemas.size(), [&](Serializer::List &list, idx_t i) {
 		auto &schema = schemas[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteSchema(schema.get(), obj); });
+		list.WriteObject([&](Serializer &obj) { WriteSchema(schema.get(), obj); });
 	});
 	serializer.End();
 
@@ -143,8 +143,8 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
 	deserializer.Begin();
-	deserializer.ReadList(100, "schemas", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadSchema(context, obj); });
+	deserializer.ReadList(100, "schemas", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadSchema(context, obj); });
 	});
 	deserializer.End();
 }
@@ -174,7 +174,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer &serializer) {
+void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, Serializer &serializer) {
 	// write the schema data
 	serializer.WriteProperty(100, "schema", &schema);
 
@@ -187,9 +187,9 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 		custom_types.push_back(entry.Cast<TypeCatalogEntry>());
 	});
 
-	serializer.WriteList(101, "custom_types", custom_types.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(101, "custom_types", custom_types.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = custom_types[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteType(entry, obj); });
+		list.WriteObject([&](Serializer &obj) { WriteType(entry, obj); });
 	});
 
 	// Write the sequences
@@ -201,9 +201,9 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 		sequences.push_back(entry.Cast<SequenceCatalogEntry>());
 	});
 
-	serializer.WriteList(102, "sequences", sequences.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(102, "sequences", sequences.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = sequences[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteSequence(entry, obj); });
+		list.WriteObject([&](Serializer &obj) { WriteSequence(entry, obj); });
 	});
 
 	// Read the tables and views
@@ -224,16 +224,16 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 	// Reorder tables because of foreign key constraint
 	ReorderTableEntries(tables);
 	// Tables
-	serializer.WriteList(103, "tables", tables.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(103, "tables", tables.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = tables[i];
 		auto &table = entry.get().Cast<TableCatalogEntry>();
-		list.WriteObject([&](FormatSerializer &obj) { WriteTable(table, obj); });
+		list.WriteObject([&](Serializer &obj) { WriteTable(table, obj); });
 	});
 
 	// Views
-	serializer.WriteList(104, "views", views.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(104, "views", views.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = views[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteView(entry.get(), obj); });
+		list.WriteObject([&](Serializer &obj) { WriteView(entry.get(), obj); });
 	});
 
 	// Scalar macros
@@ -246,9 +246,9 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 			macros.push_back(entry.Cast<ScalarMacroCatalogEntry>());
 		}
 	});
-	serializer.WriteList(105, "macros", macros.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(105, "macros", macros.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = macros[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteMacro(entry.get(), obj); });
+		list.WriteObject([&](Serializer &obj) { WriteMacro(entry.get(), obj); });
 	});
 
 	// Table macros
@@ -261,9 +261,9 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 			table_macros.push_back(entry.Cast<TableMacroCatalogEntry>());
 		}
 	});
-	serializer.WriteList(106, "table_macros", table_macros.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(106, "table_macros", table_macros.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = table_macros[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteTableMacro(entry.get(), obj); });
+		list.WriteObject([&](Serializer &obj) { WriteTableMacro(entry.get(), obj); });
 	});
 
 	// Indexes
@@ -273,13 +273,13 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema, FormatSerializer 
 		indexes.push_back(entry.Cast<IndexCatalogEntry>());
 	});
 
-	serializer.WriteList(107, "indexes", indexes.size(), [&](FormatSerializer::List &list, idx_t i) {
+	serializer.WriteList(107, "indexes", indexes.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = indexes[i];
-		list.WriteObject([&](FormatSerializer &obj) { WriteIndex(entry.get(), obj); });
+		list.WriteObject([&](Serializer &obj) { WriteIndex(entry.get(), obj); });
 	});
 }
 
-void CheckpointReader::ReadSchema(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
 	// Read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();
@@ -289,49 +289,49 @@ void CheckpointReader::ReadSchema(ClientContext &context, FormatDeserializer &de
 	catalog.CreateSchema(context, schema_info);
 
 	// Read the custom types
-	deserializer.ReadList(101, "custom_types", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadType(context, obj); });
+	deserializer.ReadList(101, "custom_types", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadType(context, obj); });
 	});
 
 	// Read the sequences
-	deserializer.ReadList(102, "sequences", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadSequence(context, obj); });
+	deserializer.ReadList(102, "sequences", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadSequence(context, obj); });
 	});
 
 	// Read the tables
-	deserializer.ReadList(103, "tables", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadTable(context, obj); });
+	deserializer.ReadList(103, "tables", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadTable(context, obj); });
 	});
 
 	// Read the views
-	deserializer.ReadList(104, "views", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadView(context, obj); });
+	deserializer.ReadList(104, "views", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadView(context, obj); });
 	});
 
 	// Read the macros
-	deserializer.ReadList(105, "macros", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadMacro(context, obj); });
+	deserializer.ReadList(105, "macros", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadMacro(context, obj); });
 	});
 
 	// Read the table macros
-	deserializer.ReadList(106, "table_macros", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadTableMacro(context, obj); });
+	deserializer.ReadList(106, "table_macros", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadTableMacro(context, obj); });
 	});
 
 	// Read the indexes
-	deserializer.ReadList(107, "indexes", [&](FormatDeserializer::List &list, idx_t i) {
-		return list.ReadObject([&](FormatDeserializer &obj) { ReadIndex(context, obj); });
+	deserializer.ReadList(107, "indexes", [&](Deserializer::List &list, idx_t i) {
+		return list.ReadObject([&](Deserializer &obj) { ReadIndex(context, obj); });
 	});
 }
 
 //===--------------------------------------------------------------------===//
 // Views
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteView(ViewCatalogEntry &view, FormatSerializer &serializer) {
+void CheckpointWriter::WriteView(ViewCatalogEntry &view, Serializer &serializer) {
 	serializer.WriteProperty(100, "view", &view);
 }
 
-void CheckpointReader::ReadView(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadView(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "view");
 	auto &view_info = info->Cast<CreateViewInfo>();
 	catalog.CreateView(context, view_info);
@@ -340,11 +340,11 @@ void CheckpointReader::ReadView(ClientContext &context, FormatDeserializer &dese
 //===--------------------------------------------------------------------===//
 // Sequences
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, FormatSerializer &serializer) {
+void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq, Serializer &serializer) {
 	serializer.WriteProperty(100, "sequence", &seq);
 }
 
-void CheckpointReader::ReadSequence(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "sequence");
 	auto &sequence_info = info->Cast<CreateSequenceInfo>();
 	catalog.CreateSequence(context, sequence_info);
@@ -353,7 +353,7 @@ void CheckpointReader::ReadSequence(ClientContext &context, FormatDeserializer &
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, FormatSerializer &serializer) {
+void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, Serializer &serializer) {
 	// The index data is written as part of WriteTableData.
 	// Here, we need only serialize the pointer to that data.
 	auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
@@ -361,7 +361,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, FormatSerial
 	serializer.WriteProperty(101, "root_block_pointer", root_block_pointer);
 }
 
-void CheckpointReader::ReadIndex(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
 
 	// Deserialize the index metadata
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
@@ -430,11 +430,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, FormatDeserializer &des
 //===--------------------------------------------------------------------===//
 // Custom Types
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteType(TypeCatalogEntry &type, FormatSerializer &serializer) {
+void CheckpointWriter::WriteType(TypeCatalogEntry &type, Serializer &serializer) {
 	serializer.WriteProperty(100, "type", &type);
 }
 
-void CheckpointReader::ReadType(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadType(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "type");
 	auto &type_info = info->Cast<CreateTypeInfo>();
 	catalog.CreateType(context, type_info);
@@ -443,21 +443,21 @@ void CheckpointReader::ReadType(ClientContext &context, FormatDeserializer &dese
 //===--------------------------------------------------------------------===//
 // Macro's
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, FormatSerializer &serializer) {
+void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro, Serializer &serializer) {
 	serializer.WriteProperty(100, "macro", &macro);
 }
 
-void CheckpointReader::ReadMacro(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadMacro(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
 	catalog.CreateFunction(context, macro_info);
 }
 
-void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, FormatSerializer &serializer) {
+void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro, Serializer &serializer) {
 	serializer.WriteProperty(100, "table_macro", &macro);
 }
 
-void CheckpointReader::ReadTableMacro(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &deserializer) {
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table_macro");
 	auto &macro_info = info->Cast<CreateMacroInfo>();
 	catalog.CreateFunction(context, macro_info);
@@ -466,7 +466,7 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, FormatDeserializer
 //===--------------------------------------------------------------------===//
 // Table Metadata
 //===--------------------------------------------------------------------===//
-void CheckpointWriter::WriteTable(TableCatalogEntry &table, FormatSerializer &serializer) {
+void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
 	// Write the table meta data
 	serializer.WriteProperty(100, "table", &table);
 
@@ -476,7 +476,7 @@ void CheckpointWriter::WriteTable(TableCatalogEntry &table, FormatSerializer &se
 	}
 }
 
-void CheckpointReader::ReadTable(ClientContext &context, FormatDeserializer &deserializer) {
+void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deserializer) {
 	// deserialize the table meta data
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "table");
 	auto binder = Binder::CreateBinder(context);
@@ -490,7 +490,7 @@ void CheckpointReader::ReadTable(ClientContext &context, FormatDeserializer &des
 	catalog.CreateTable(context, *bound_info);
 }
 
-void CheckpointReader::ReadTableData(ClientContext &context, FormatDeserializer &deserializer,
+void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deserializer,
                                      BoundCreateTableInfo &bound_info) {
 
 	// This is written in "SingleFileTableDataWriter::FinalizeTable"

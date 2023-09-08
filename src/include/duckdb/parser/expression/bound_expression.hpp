@@ -36,7 +36,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
+	void FormatSerialize(Serializer &serializer) const override;
 };
 
 } // namespace duckdb

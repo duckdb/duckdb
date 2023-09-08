@@ -178,11 +178,10 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		}
 	}
 
-	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &deserializer, uint32_t size) {
+	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(Deserializer &deserializer, uint32_t size) {
 		Vector values_insert_order(LogicalType::VARCHAR, size);
-		deserializer.ReadObject(201, "values_insert_order", [&](FormatDeserializer &source) {
-			values_insert_order.FormatDeserialize(source, size);
-		});
+		deserializer.ReadObject(201, "values_insert_order",
+		                        [&](Deserializer &source) { values_insert_order.FormatDeserialize(source, size); });
 		return make_shared<EnumTypeInfoTemplated>(values_insert_order, size);
 	}
 
@@ -263,7 +262,7 @@ string_t EnumType::GetString(const LogicalType &type, idx_t pos) {
 	return FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type))[pos];
 }
 
-shared_ptr<ExtraTypeInfo> EnumTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+shared_ptr<ExtraTypeInfo> EnumTypeInfo::FormatDeserialize(Deserializer &deserializer) {
 	auto enum_size = deserializer.ReadProperty<idx_t>(200, "enum_size");
 	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
 	switch (enum_internal_type) {
@@ -301,10 +300,10 @@ bool EnumTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	return true;
 }
 
-void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
+void EnumTypeInfo::FormatSerialize(Serializer &serializer) const {
 	ExtraTypeInfo::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "dict_size", dict_size);
-	serializer.WriteObject(201, "values_insert_order", [&](FormatSerializer &serializer) {
+	serializer.WriteObject(201, "values_insert_order", [&](Serializer &serializer) {
 		auto &v = GetValuesInsertOrder();
 		Vector ref(v.GetType());
 		ref.Reference(v);

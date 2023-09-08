@@ -50,12 +50,12 @@ SchemaCatalogEntry &CatalogEntry::ParentSchema() {
 }
 // LCOV_EXCL_STOP
 
-void CatalogEntry::FormatSerialize(FormatSerializer &serializer) const {
+void CatalogEntry::FormatSerialize(Serializer &serializer) const {
 	const auto info = GetInfo();
 	info->FormatSerialize(serializer);
 }
 
-unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(Deserializer &deserializer) {
 	return CreateInfo::FormatDeserialize(deserializer);
 }
 

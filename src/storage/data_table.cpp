@@ -1282,7 +1282,7 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void DataTable::Checkpoint(TableDataWriter &writer, FormatSerializer &metadata_serializer) {
+void DataTable::Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	TableStatistics global_stats;

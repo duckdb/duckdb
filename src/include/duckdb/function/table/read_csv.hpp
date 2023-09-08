@@ -65,8 +65,8 @@ struct ColumnInfo {
 		names = std::move(names_p);
 		types = std::move(types_p);
 	}
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static ColumnInfo FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static ColumnInfo FormatDeserialize(Deserializer &deserializer);
 
 	vector<std::string> names;
 	vector<LogicalType> types;
@@ -103,8 +103,8 @@ struct ReadCSVData : public BaseCSVData {
 	}
 	void FinalizeRead(ClientContext &context);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ReadCSVData> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const;
+	static unique_ptr<ReadCSVData> FormatDeserialize(Deserializer &deserializer);
 };
 
 struct CSVCopyFunction {

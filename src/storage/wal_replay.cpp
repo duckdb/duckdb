@@ -466,7 +466,7 @@ void ReplayState::ReplayUseTable(BinaryDeserializer &deserializer) {
 
 void ReplayState::ReplayInsert(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.FormatDeserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -480,7 +480,7 @@ void ReplayState::ReplayInsert(BinaryDeserializer &deserializer) {
 
 void ReplayState::ReplayDelete(BinaryDeserializer &deserializer) {
 	DataChunk chunk;
-	deserializer.ReadObject(101, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
+	deserializer.ReadObject(101, "chunk", [&](Deserializer &object) { chunk.FormatDeserialize(object); });
 	if (deserialize_only) {
 		return;
 	}
@@ -504,7 +504,7 @@ void ReplayState::ReplayUpdate(BinaryDeserializer &deserializer) {
 	auto column_path = deserializer.ReadProperty<vector<column_t>>(101, "column_indexes");
 
 	DataChunk chunk;
-	deserializer.ReadObject(102, "chunk", [&](FormatDeserializer &object) { chunk.FormatDeserialize(object); });
+	deserializer.ReadObject(102, "chunk", [&](Deserializer &object) { chunk.FormatDeserialize(object); });
 
 	if (deserialize_only) {
 		return;

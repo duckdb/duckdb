@@ -38,8 +38,8 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(Deserializer &deserializer);
 
 private:
 	LambdaExpression();

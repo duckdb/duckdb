@@ -61,11 +61,11 @@ public:
 		return internal_vector.end();
 	}
 
-	void FormatSerialize(FormatSerializer &serializer) const {
+	void FormatSerialize(Serializer &serializer) const {
 		serializer.WriteProperty(100, "internal_vector", internal_vector);
 	}
 
-	static IndexVector<T, INDEX_TYPE> FormatDeserialize(FormatDeserializer &deserializer) {
+	static IndexVector<T, INDEX_TYPE> FormatDeserialize(Deserializer &deserializer) {
 		IndexVector<T, INDEX_TYPE> result;
 		deserializer.ReadProperty(100, "internal_vector", result.internal_vector);
 		return result;

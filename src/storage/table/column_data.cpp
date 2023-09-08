@@ -446,12 +446,12 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	return checkpoint_state;
 }
 
-void ColumnData::DeserializeColumn(FormatDeserializer &deserializer) {
+void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 	// load the data pointers for the column
 	this->count = 0;
 	deserializer.Set<LogicalType &>(type);
 
-	deserializer.ReadList(100, "data_pointers", [&](FormatDeserializer::List &list, idx_t i) {
+	deserializer.ReadList(100, "data_pointers", [&](Deserializer::List &list, idx_t i) {
 		auto data_pointer = list.ReadElement<DataPointer>();
 
 		// Update the count and statistics

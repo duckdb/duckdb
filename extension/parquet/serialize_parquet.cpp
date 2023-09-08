@@ -9,13 +9,13 @@
 
 namespace duckdb {
 
-void ParquetOptions::FormatSerialize(FormatSerializer &serializer) const {
+void ParquetOptions::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "binary_as_string", binary_as_string);
 	serializer.WriteProperty(101, "file_row_number", file_row_number);
 	serializer.WriteProperty(102, "file_options", file_options);
 }
 
-ParquetOptions ParquetOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+ParquetOptions ParquetOptions::FormatDeserialize(Deserializer &deserializer) {
 	ParquetOptions result;
 	deserializer.ReadProperty(100, "binary_as_string", result.binary_as_string);
 	deserializer.ReadProperty(101, "file_row_number", result.file_row_number);

@@ -80,7 +80,7 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	return std::move(copy);
 }
 
-void BoundAggregateExpression::FormatSerialize(FormatSerializer &serializer) const {
+void BoundAggregateExpression::FormatSerialize(Serializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
@@ -90,7 +90,7 @@ void BoundAggregateExpression::FormatSerialize(FormatSerializer &serializer) con
 	serializer.WritePropertyWithDefault(205, "order_bys", order_bys, unique_ptr<BoundOrderModifier>());
 }
 
-unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<Expression> BoundAggregateExpression::FormatDeserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<AggregateFunction, AggregateFunctionCatalogEntry>(

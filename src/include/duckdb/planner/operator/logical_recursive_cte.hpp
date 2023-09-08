@@ -38,8 +38,8 @@ public:
 		return GenerateColumnBindings(table_index, column_count);
 	}
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
 
 	vector<idx_t> GetTableIndex() const override;
 	string GetName() const override;

@@ -24,8 +24,8 @@ struct MultiFileReaderOptions {
 	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static MultiFileReaderOptions FormatDeserialize(FormatDeserializer &source);
+	DUCKDB_API void FormatSerialize(Serializer &serializer) const;
+	DUCKDB_API static MultiFileReaderOptions FormatDeserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 	DUCKDB_API void AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context);
 	DUCKDB_API static bool AutoDetectHivePartitioningInternal(const vector<string> &files, ClientContext &context);

@@ -36,24 +36,24 @@ struct ListAggregatesBindData : public FunctionData {
 		auto &other = other_p.Cast<ListAggregatesBindData>();
 		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
-	void FormatSerialize(FormatSerializer &serializer) const {
+	void FormatSerialize(Serializer &serializer) const {
 		serializer.WriteProperty(1, "stype", stype);
 		serializer.WriteProperty(2, "aggr_expr", aggr_expr);
 	}
-	static unique_ptr<ListAggregatesBindData> FormatDeserialize(FormatDeserializer &deserializer) {
+	static unique_ptr<ListAggregatesBindData> FormatDeserialize(Deserializer &deserializer) {
 		auto stype = deserializer.ReadProperty<LogicalType>(1, "stype");
 		auto aggr_expr = deserializer.ReadProperty<unique_ptr<Expression>>(2, "aggr_expr");
 		auto result = make_uniq<ListAggregatesBindData>(std::move(stype), std::move(aggr_expr));
 		return result;
 	}
 
-	static void Serialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                      const ScalarFunction &function) {
 		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p.get());
 		serializer.WritePropertyWithDefault(100, "bind_data", bind_data, (const ListAggregatesBindData *)nullptr);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(FormatDeserializer &deserializer, ScalarFunction &bound_function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &bound_function) {
 		auto result = deserializer.ReadProperty<unique_ptr<ListAggregatesBindData>>(100, "bind_data");
 		if (!result) {
 			return ListAggregatesBindFailure(bound_function);

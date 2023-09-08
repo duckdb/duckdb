@@ -75,7 +75,7 @@ void BoundFunctionExpression::Verify() const {
 	D_ASSERT(!function.name.empty());
 }
 
-void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+void BoundFunctionExpression::FormatSerialize(Serializer &serializer) const {
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "children", children);
@@ -83,7 +83,7 @@ void BoundFunctionExpression::FormatSerialize(FormatSerializer &serializer) cons
 	serializer.WriteProperty(202, "is_operator", is_operator);
 }
 
-unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<Expression> BoundFunctionExpression::FormatDeserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
 	auto entry = FunctionSerializer::FormatDeserialize<ScalarFunction, ScalarFunctionCatalogEntry>(

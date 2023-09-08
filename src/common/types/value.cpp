@@ -1650,7 +1650,7 @@ void Value::Reinterpret(LogicalType new_type) {
 	this->type_ = std::move(new_type);
 }
 
-void Value::FormatSerialize(FormatSerializer &serializer) const {
+void Value::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type_);
 	serializer.WriteProperty(101, "is_null", is_null);
 	if (!IsNull()) {
@@ -1705,13 +1705,13 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 			}
 		} break;
 		case PhysicalType::LIST: {
-			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
 				auto &children = ListValue::GetChildren(*this);
 				serializer.WriteProperty(100, "children", children);
 			});
 		} break;
 		case PhysicalType::STRUCT: {
-			serializer.WriteObject(102, "value", [&](FormatSerializer &serializer) {
+			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
 				auto &children = StructValue::GetChildren(*this);
 				serializer.WriteProperty(100, "children", children);
 			});
@@ -1722,7 +1722,7 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 	}
 }
 
-Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
+Value Value::FormatDeserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<LogicalType>(100, "type");
 	auto is_null = deserializer.ReadProperty<bool>(101, "is_null");
 	Value new_value = Value(type);
@@ -1781,13 +1781,13 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 		}
 	} break;
 	case PhysicalType::LIST: {
-		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared<NestedValueInfo>(children);
 		});
 	} break;
 	case PhysicalType::STRUCT: {
-		deserializer.ReadObject(102, "value", [&](FormatDeserializer &obj) {
+		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared<NestedValueInfo>(children);
 		});

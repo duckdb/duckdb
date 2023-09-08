@@ -69,8 +69,8 @@ public:
 		return function.verify_serialization;
 	}
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<LogicalOperator> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> FormatDeserialize(Deserializer &deserializer);
 
 protected:
 	void ResolveTypes() override;

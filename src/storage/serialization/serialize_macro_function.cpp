@@ -11,13 +11,13 @@
 
 namespace duckdb {
 
-void MacroFunction::FormatSerialize(FormatSerializer &serializer) const {
+void MacroFunction::FormatSerialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WriteProperty(101, "parameters", parameters);
 	serializer.WriteProperty(102, "default_parameters", default_parameters);
 }
 
-unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<MacroType>(100, "type");
 	auto parameters = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>(101, "parameters");
 	auto default_parameters = deserializer.ReadProperty<unordered_map<string, unique_ptr<ParsedExpression>>>(102, "default_parameters");
@@ -37,23 +37,23 @@ unique_ptr<MacroFunction> MacroFunction::FormatDeserialize(FormatDeserializer &d
 	return result;
 }
 
-void ScalarMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
+void ScalarMacroFunction::FormatSerialize(Serializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "expression", expression);
 }
 
-unique_ptr<MacroFunction> ScalarMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<MacroFunction> ScalarMacroFunction::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ScalarMacroFunction>(new ScalarMacroFunction());
 	deserializer.ReadProperty(200, "expression", result->expression);
 	return std::move(result);
 }
 
-void TableMacroFunction::FormatSerialize(FormatSerializer &serializer) const {
+void TableMacroFunction::FormatSerialize(Serializer &serializer) const {
 	MacroFunction::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "query_node", query_node);
 }
 
-unique_ptr<MacroFunction> TableMacroFunction::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<MacroFunction> TableMacroFunction::FormatDeserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableMacroFunction>(new TableMacroFunction());
 	deserializer.ReadProperty(200, "query_node", result->query_node);
 	return std::move(result);
