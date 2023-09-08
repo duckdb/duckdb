@@ -97,10 +97,12 @@ void RowVersionManager::AppendVersionInfo(TransactionData transaction, idx_t cou
 				auto insert_info = make_uniq<ChunkVectorInfo>(start + vector_idx * STANDARD_VECTOR_SIZE);
 				new_info = insert_info.get();
 				vector_info[vector_idx] = std::move(insert_info);
-			} else {
-				D_ASSERT(vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
+			} else if (vector_info[vector_idx]->type == ChunkInfoType::VECTOR_INFO) {
 				// use existing vector
 				new_info = &vector_info[vector_idx]->Cast<ChunkVectorInfo>();
+			} else {
+				throw InternalException("Error in RowVersionManager::AppendVersionInfo - expected either a "
+				                        "ChunkVectorInfo or no version info");
 			}
 			new_info->Append(vector_start, vector_end, transaction.transaction_id);
 		}

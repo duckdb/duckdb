@@ -101,6 +101,11 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	this->columns[c] =
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
 	is_loaded[c] = true;
+	if (this->columns[c]->count != this->count) {
+		throw InternalException("Corrupted database - loaded column with index %llu at row start %llu, count %llu did "
+		                        "not match count of row group %llu",
+		                        c, start, this->columns[c]->count, this->count.load());
+	}
 	return *columns[c];
 }
 
