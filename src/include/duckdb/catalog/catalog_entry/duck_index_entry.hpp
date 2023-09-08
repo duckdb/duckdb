@@ -24,6 +24,8 @@ public:
 public:
 	string GetSchemaName() const override;
 	string GetTableName() const override;
+	//! This drops in-memory index data and marks all blocks on disk as free blocks, allowing to reclaim them
+	void CommitDrop();
 };
 
 } // namespace duckdb

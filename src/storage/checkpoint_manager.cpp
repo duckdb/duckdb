@@ -262,7 +262,8 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 void CheckpointReader::ReadSchema(ClientContext &context, MetadataReader &reader) {
 	// read the schema and create it in the catalog
 	auto info = CatalogEntry::Deserialize(reader);
-	// we set create conflict to ignore to ignore the failure of recreating the main schema
+
+	// we set create conflict to IGNORE_ON_CONFLICT, so that we can ignore a failure when recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info->Cast<CreateSchemaInfo>());
 
@@ -336,14 +337,12 @@ void CheckpointReader::ReadSequence(ClientContext &context, MetadataReader &read
 // Indexes
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
-	// The index data should already have been written as part of WriteTableData.
-	// Here, we need only serialize the pointer to that data.
-	auto root_offset = index_catalog.index->GetSerializedDataPointer();
+	// we write the index data in WriteTableData
+	// here, we only write the root pointer
+	const auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
 	auto &metadata_writer = GetMetadataWriter();
 	index_catalog.Serialize(metadata_writer);
-	// Serialize the Block id and offset of root node
-	metadata_writer.Write(root_offset.block_id);
-	metadata_writer.Write(root_offset.offset);
+	metadata_writer.Write(root_block_pointer);
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader) {
@@ -358,10 +357,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 	auto &index_catalog = schema_catalog.CreateIndex(context, index_info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
 
-	// we deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block id and offset
-	auto root_block_id = reader.Read<block_id_t>();
-	auto root_offset = reader.Read<uint32_t>();
+	// we deserialize the index lazily, i.e., we only load the root block pointer
+	const auto index_block_pointer = reader.Read<BlockPointer>();
 
 	// obtain the expressions of the ART from the index metadata
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -401,9 +398,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetadataReader &reader)
 	switch (index_info.index_type) {
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
-		auto art =
-		    make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                   index_info.constraint_type, storage.db, nullptr, BlockPointer(root_block_id, root_offset));
+		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                          index_info.constraint_type, storage.db, nullptr, index_block_pointer);
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
@@ -450,7 +446,7 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, MetadataReader &re
 // Table Metadata
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteTable(TableCatalogEntry &table) {
-	// write the table meta data
+	// write the table metadata
 	table.Serialize(GetMetadataWriter());
 	// now we need to write the table data.
 	if (auto writer = GetTableDataWriter(table)) {
@@ -483,12 +479,11 @@ void CheckpointReader::ReadTableData(ClientContext &context, MetadataReader &rea
 	data_reader.ReadTableData();
 	bound_info.data->total_rows = reader.Read<idx_t>();
 
-	// Get any indexes block info
-	idx_t num_indexes = reader.Read<idx_t>();
-	for (idx_t i = 0; i < num_indexes; i++) {
-		auto idx_block_id = reader.Read<block_id_t>();
-		auto idx_offset = reader.Read<uint32_t>();
-		bound_info.indexes.emplace_back(idx_block_id, idx_offset);
+	// get the root block pointers of each index
+	idx_t index_count = reader.Read<idx_t>();
+	for (idx_t i = 0; i < index_count; i++) {
+		const auto index_pointer = reader.Read<BlockPointer>();
+		bound_info.indexes.emplace_back(index_pointer);
 	}
 }
 

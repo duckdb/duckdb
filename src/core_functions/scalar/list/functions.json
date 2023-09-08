@@ -93,5 +93,29 @@
         "example": "range(2, 5, 3)",
         "type": "scalar_function_set",
         "struct": "ListRangeFun"
+    },
+    {
+        "name": "list_cosine_similarity",
+        "parameters": "list1,list2",
+        "description": "Compute the cosine similarity between two lists.",
+        "example": "list_cosine_similarity([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["<=>"]
+    },
+    {
+        "name": "list_distance",
+        "parameters": "list1,list2",
+        "description": "Compute the distance between two lists.",
+        "example": "list_distance([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["<->"]
+    },
+    {
+        "name": "list_inner_product",
+        "parameters": "list1,list2",
+        "description": "Compute the inner product between two lists.",
+        "example": "list_inner_product([1, 2, 3], [1, 2, 3])",
+        "type": "scalar_function_set",
+        "aliases": ["list_dot_product", "<#>"]
     }
 ]
