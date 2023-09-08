@@ -431,6 +431,26 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+bool Catalog::TryAutoLoad(ClientContext &context, const string &extension_name) noexcept {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+	auto &dbconfig = DBConfig::GetConfig(context);
+	if (!dbconfig.options.autoload_known_extensions) {
+		return false;
+	}
+	try {
+		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			return ExtensionHelper::TryAutoLoadExtension(context, extension_name);
+		}
+	} catch (...) {
+		return false;
+	}
+#endif
+	return false;
+}
+
 void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
