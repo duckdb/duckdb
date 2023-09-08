@@ -654,7 +654,7 @@ Value Value::STRUCT(child_list_t<Value> values, bool has_explicit_names) {
 		struct_values.push_back(std::move(child.second));
 	}
 	result.value_info_ = make_shared<NestedValueInfo>(std::move(struct_values));
-	result.type_ = LogicalType::STRUCT(child_types);
+	result.type_ = LogicalType::STRUCT(child_types, has_explicit_names);
 	result.is_null = false;
 	return result;
 }
