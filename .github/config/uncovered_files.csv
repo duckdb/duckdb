@@ -197,6 +197,7 @@ execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
 execution/operator/csv_scanner/base_csv_reader.cpp	31
 execution/operator/csv_scanner/buffered_csv_reader.cpp	47
+execution/operator/csv_scanner/csv_reader_options.cpp	49
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/persistent/csv_file_handle.cpp	10
 execution/operator/persistent/csv_reader_options.cpp	38

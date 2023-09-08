@@ -1,6 +1,5 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
