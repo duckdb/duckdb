@@ -11,20 +11,16 @@ static void ListTransformFunction(DataChunk &args, ExpressionState &state, Vecto
 static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 
-	// at least the list column and the lambda function
+	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
 	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
 
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
-	if (bound_lambda_expr.parameter_count == 2) {
-		return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, bound_lambda_expr.parameter_count,
-		                                       true);
-	}
-	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, bound_lambda_expr.parameter_count);
+	auto has_index = bound_lambda_expr.parameter_count == 2;
+	return LambdaFunctions::ListLambdaBind(context, bound_function, arguments, has_index);
 }
 
 static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {
@@ -42,12 +38,14 @@ static LogicalType ListTransformBindLambda(const idx_t parameter_idx, const Logi
 ScalarFunction ListTransformFun::GetFunction() {
 	ScalarFunction fun({LogicalType::LIST(LogicalType::ANY), LogicalType::LAMBDA}, LogicalType::LIST(LogicalType::ANY),
 	                   ListTransformFunction, ListTransformBind, nullptr, nullptr);
+
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
 	fun.format_serialize = ListLambdaBindData::FormatSerialize;
 	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	fun.bind_lambda = ListTransformBindLambda;
+
 	return fun;
 }
 

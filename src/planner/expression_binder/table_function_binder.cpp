@@ -9,9 +9,9 @@ TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context)
 }
 
 BindResult TableFunctionBinder::BindLambdaReference(LambdaRefExpression &expr, idx_t depth) {
-	D_ASSERT(lambda_bindings && expr.lambda_index < lambda_bindings->size());
+	D_ASSERT(lambda_bindings && expr.lambda_idx < lambda_bindings->size());
 	auto &lambdaref = expr.Cast<LambdaRefExpression>();
-	return (*lambda_bindings)[expr.lambda_index].Bind(lambdaref, depth);
+	return (*lambda_bindings)[expr.lambda_idx].Bind(lambdaref, depth);
 }
 
 BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression) {

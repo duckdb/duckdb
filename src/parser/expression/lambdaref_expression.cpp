@@ -6,17 +6,13 @@
 namespace duckdb {
 
 LambdaRefExpression::LambdaRefExpression(const idx_t lambda_idx, const string &column_name)
-    : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_index(lambda_idx),
+    : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_idx(lambda_idx),
       column_name(column_name) {
 	alias = column_name;
 }
 
-bool LambdaRefExpression::IsQualified() const {
+bool LambdaRefExpression::IsScalar() const {
 	return false;
-}
-
-const string &LambdaRefExpression::GetColumnName() const {
-	return column_name;
 }
 
 string LambdaRefExpression::GetName() const {
@@ -27,25 +23,21 @@ string LambdaRefExpression::ToString() const {
 	return KeywordHelper::WriteOptionallyQuoted(column_name);
 }
 
-bool LambdaRefExpression::Equal(const LambdaRefExpression &a, const LambdaRefExpression &b) {
-	return a.lambda_index == b.lambda_index && a.column_name == b.column_name;
-}
-
 hash_t LambdaRefExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
-	result = CombineHash(result, lambda_index);
+	result = CombineHash(result, lambda_idx);
 	result = CombineHash(result, StringUtil::CIHash(column_name));
 	return result;
 }
 
 unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
-	auto copy = make_uniq<LambdaRefExpression>(lambda_index, column_name);
+	auto copy = make_uniq<LambdaRefExpression>(lambda_idx, column_name);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
 
 void LambdaRefExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(lambda_index);
+	writer.WriteField<idx_t>(lambda_idx);
 	writer.WriteString(column_name);
 }
 

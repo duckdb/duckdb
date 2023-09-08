@@ -213,7 +213,7 @@ void BoundLambdaRefExpression::FormatSerialize(FormatSerializer &serializer) con
 	Expression::FormatSerialize(serializer);
 	serializer.WriteProperty(200, "return_type", return_type);
 	serializer.WriteProperty(201, "binding", binding);
-	serializer.WriteProperty(202, "lambda_index", lambda_index);
+	serializer.WriteProperty(202, "lambda_index", lambda_idx);
 	serializer.WriteProperty(203, "depth", depth);
 }
 

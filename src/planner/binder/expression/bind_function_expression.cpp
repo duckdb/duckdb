@@ -156,7 +156,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// get the callback function for the lambda parameter types
-	// lambdas cannot be overloaded
+	// NOTE: lambdas can never be overloaded
 	D_ASSERT(func.functions.functions.size() == 1);
 	auto &scalar_function = func.functions.functions.front();
 	auto &bind_lambda_function = scalar_function.bind_lambda;
@@ -166,7 +166,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// bind the lambda parameter
 	auto &lambda_expr = function.children[1]->Cast<LambdaExpression>();
-	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, true, list_child_type, &bind_lambda_function);
+	BindResult bind_lambda_result = BindExpression(lambda_expr, depth, list_child_type, &bind_lambda_function);
 
 	if (bind_lambda_result.HasError()) {
 		return BindResult(bind_lambda_result.error);

@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
-#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -19,32 +18,25 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA_REF;
 
 public:
-	//! Specify both the column and table name
+	//! Constructs a LambdaRefExpression from a lambda_idx and a column_name. We do not specify a table name,
+	//! because we use dummy tables to bind lambda parameters
 	LambdaRefExpression(const idx_t lambda_idx, const string &column_name);
 
-	//! The index of the lambda parameter in the lambda bindings vector
-	idx_t lambda_index;
-	//! ??
+	//! The index of the lambda parameter in the lambda_bindings vector
+	idx_t lambda_idx;
+	//! The name of the lambda parameter (in a specific Binding in lambda_bindings)
 	string column_name;
 
 public:
-	bool IsQualified() const;
-	const string &GetColumnName() const;
-	bool IsScalar() const override {
-		return false;
-	}
-
+	bool IsScalar() const override;
 	string GetName() const override;
 	string ToString() const override;
-
-	static bool Equal(const LambdaRefExpression &a, const LambdaRefExpression &b);
 	hash_t Hash() const override;
-
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
-	//	void FormatSerialize(FormatSerializer &serializer) const override;
-	//	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 };
 } // namespace duckdb

@@ -9,11 +9,10 @@
 #pragma once
 
 #include "duckdb/planner/expression_binder.hpp"
-#include "duckdb/parser/expression/lambdaref_expression.hpp"
 
 namespace duckdb {
 
-//! The table function binder can bind standard table function parameters (i.e. non-table-in-out functions)
+//! The table function binder can bind standard table function parameters (i.e., non-table-in-out functions)
 class TableFunctionBinder : public ExpressionBinder {
 public:
 	TableFunctionBinder(Binder &binder, ClientContext &context);

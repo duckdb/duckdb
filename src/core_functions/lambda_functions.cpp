@@ -8,37 +8,39 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// Specific helper functions
+// Helper functions
 //===--------------------------------------------------------------------===//
 
+// FIXME: move these parameters into a struct/ more const
 void ExecuteExpression(idx_t &elem_cnt, SelectionVector &sel, vector<SelectionVector> &sel_vectors,
                        DataChunk &input_chunk, DataChunk &lambda_chunk, Vector &child_vector, DataChunk &args,
                        ExpressionExecutor &expr_executor, const bool has_index, Vector &index_vector) {
-
-	// FIXME: no more slice and flatten, we should be able to use dictionary vectors
 
 	input_chunk.SetCardinality(elem_cnt);
 	lambda_chunk.SetCardinality(elem_cnt);
 
 	// set the list child vector
+	// FIXME: no more flatten, we should be able to use dictionary vectors
 	Vector slice(child_vector, sel, elem_cnt);
 	slice.Flatten(elem_cnt);
 
-	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
+	// check if the lambda expression has an index parameter
+	// FIXME: this has to be more generic, only LIST_TRANSFORM and LIST_FILTER have the index as their
+	// FIXME: second argument, LIST_REDUCE will have it as its third argument, and its always the first
+	// FIXME: bound index, if it exists
 	if (has_index) {
 		input_chunk.data[0].Reference(index_vector);
 		input_chunk.data[1].Reference(slice);
 	} else {
 		input_chunk.data[0].Reference(slice);
 	}
-
-	// check if the lambda expression has an index parameter
 	idx_t slice_offset = has_index ? 2 : 1;
 
-	// set the other vectors
+	// set the other vectors (outer lambdas and captures)
 	vector<Vector> slices;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount() - 1; col_idx++) {
 		slices.emplace_back(args.data[col_idx + 1], sel_vectors[col_idx], elem_cnt);
+		// FIXME: no more flatten, we should be able to use dictionary vectors
 		slices[col_idx].Flatten(elem_cnt);
 		input_chunk.data[col_idx + slice_offset].Reference(slices[col_idx]);
 	}
@@ -55,6 +57,7 @@ void AppendTransformedToResult(Vector &lambda_vector, idx_t &elem_cnt, Vector &r
 	ListVector::Append(result, lambda_vector, *lambda_child_data.sel, elem_cnt, 0);
 }
 
+// FIXME: move these parameters into a struct/ more const
 void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries, idx_t &elem_cnt, Vector &result,
                             idx_t &curr_list_len, idx_t &curr_list_offset, idx_t &appended_lists_cnt,
                             vector<idx_t> &lists_len, idx_t &curr_original_list_len, DataChunk &input_chunk,
@@ -105,6 +108,7 @@ void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries,
 	// slice to get the new lists and append them to the result
 	auto new_lists_idx = has_index ? 1 : 0;
 	Vector new_lists(input_chunk.data[new_lists_idx], true_sel, true_count);
+	// FIXME: no more flatten, we should be able to use dictionary vectors
 	new_lists.Flatten(true_count);
 	UnifiedVectorFormat new_lists_child_data;
 	new_lists.ToUnifiedFormat(true_count, new_lists_child_data);
@@ -116,7 +120,8 @@ void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_entries,
 //===--------------------------------------------------------------------===//
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	return make_uniq<ListLambdaBindData>(return_type, lambda_expr ? lambda_expr->Copy() : nullptr, has_index);
+	auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
@@ -126,7 +131,7 @@ bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 }
 
 void ListLambdaBindData::FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                         const ScalarFunction &function) {
+                                         const ScalarFunction &) {
 	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
@@ -160,9 +165,9 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 		return;
 	}
 
-	// FIXME: remove all flatten and use ToUnifiedFormat instead
 	// e.g. window functions in sub queries return dictionary vectors, which segfault on expression execution
 	// if not flattened first
+	// FIXME: no more flatten, we should be able to use dictionary vectors (on top of these dictionary vectors?)
 	for (idx_t i = 1; i < args.ColumnCount(); i++) {
 		if (args.data[i].GetVectorType() != VectorType::FLAT_VECTOR &&
 		    args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
@@ -181,9 +186,9 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	auto &lambda_expr = info.lambda_expr;
 
 	// get the child vector and child data
+	// FIXME: no more flatten, we should be able to use dictionary vectors
 	auto lists_size = ListVector::GetListSize(lists);
 	auto &child_vector = ListVector::GetEntry(lists);
-	// FIXME: remove Flatten, use ToUnifiedFormat instead
 	child_vector.Flatten(lists_size);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
@@ -195,16 +200,14 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	vector<LogicalType> result_types;
 	result_types.push_back(lambda_expr->return_type);
 
-	// non-lambda parameter columns
+	// FIXME: currently, we also slice/flatten constant vectors, which should not be necessary
+	// outer lambdas and captures
 	vector<UnifiedVectorFormat> columns;
 	vector<idx_t> indexes;
-	// FIXME: I think that this shouldn't be necessary, e.g., we do not need to slice constant vectors
 	vector<SelectionVector> sel_vectors;
-
-	// the types of the vectors passed to the expression executor
 	vector<LogicalType> types;
 
-	// TODO: this has to be more generic and also more specialized for LIST_TRANSFORM
+	// FIXME: more generic? or can we just assume the index to be always bound to zero, if it exists?
 	if (info.has_index) {
 		// binary lambda function with an index
 		types.push_back(LogicalType::BIGINT);
@@ -224,7 +227,9 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 	// get the expression executor
 	ExpressionExecutor expr_executor(state.GetContext(), *lambda_expr);
 
-	// these are only for the list_filter
+	// FIXME: this function should be more generic and not contain these if-else code paths
+	// FIXME: for different scalar functions
+	// these are only for LIST_FILTER
 	vector<idx_t> lists_len;
 	idx_t curr_list_len = 0;
 	idx_t curr_list_offset = 0;
@@ -336,13 +341,7 @@ void LambdaFunctions::ExecuteLambda(DataChunk &args, ExpressionState &state, Vec
 
 unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
                                                          vector<unique_ptr<Expression>> &arguments,
-                                                         const idx_t parameter_count, const bool has_index) {
-
-	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
-	if (bound_lambda_expr.parameter_count != parameter_count) {
-		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
-		                      " expects " + to_string(parameter_count) + " parameter(s).");
-	}
+                                                         const bool has_index) {
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
 		bound_function.arguments[0] = LogicalType::SQLNULL;
@@ -357,6 +356,7 @@ unique_ptr<FunctionData> LambdaFunctions::ListLambdaBind(ClientContext &, Scalar
 	D_ASSERT(arguments[0]->return_type.id() == LogicalTypeId::LIST);
 
 	// get the lambda expression and put it in the bind info
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	auto lambda_expr = std::move(bound_lambda_expr.lambda_expr);
 	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(lambda_expr), has_index);
 }

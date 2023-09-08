@@ -22,41 +22,25 @@ idx_t GetLambdaParamCount(const vector<DummyBinding> &lambda_bindings) {
 
 idx_t GetLambdaParamIndex(const vector<DummyBinding> &lambda_bindings, const BoundLambdaExpression &bound_lambda_expr,
                           const BoundLambdaRefExpression &bound_lambda_ref_expr) {
-	D_ASSERT(bound_lambda_ref_expr.lambda_index < lambda_bindings.size());
+	D_ASSERT(bound_lambda_ref_expr.lambda_idx < lambda_bindings.size());
 	idx_t offset = 0;
 	// count the remaining lambda parameters BEFORE the current lambda parameter,
 	// as these will be in front of the current lambda parameter in the input chunk
-	for (idx_t i = bound_lambda_ref_expr.lambda_index + 1; i < lambda_bindings.size(); i++) {
+	for (idx_t i = bound_lambda_ref_expr.lambda_idx + 1; i < lambda_bindings.size(); i++) {
 		offset += lambda_bindings[i].names.size();
 	}
-	offset += lambda_bindings[bound_lambda_ref_expr.lambda_index].names.size() -
+	offset += lambda_bindings[bound_lambda_ref_expr.lambda_idx].names.size() -
 	          bound_lambda_ref_expr.binding.column_index - 1;
 	offset += bound_lambda_expr.parameter_count;
 	return offset;
 }
 
-idx_t GetOuterLambdaIndex(const vector<DummyBinding> &lambda_bindings, const string &alias) {
-	// we assume that lambda parameters can never have the same alias
-	idx_t offset = 0;
-	for (idx_t i = lambda_bindings.size(); i > 0; i--) {
-		auto &binding = lambda_bindings[i - 1];
-		for (idx_t column_idx = binding.names.size(); column_idx > 0; column_idx--) {
-			if (binding.names[column_idx - 1] == alias) {
-				return offset;
-			}
-			offset++;
-		}
-	}
-	// we did not find the alias in the outer lambdas, it must be in the current lambda parameters
-	return DConstants::INVALID_INDEX;
-}
-
-BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const bool is_lambda,
+BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
                                             const LogicalType &list_child_type,
-                                            bind_lambda_function_t *bind_lambda_function) {
+                                            optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
-	if (!is_lambda) {
-		// this is for binding JSON
+	// this is for binding JSON
+	if (!bind_lambda_function) {
 		auto lhs_expr = expr.lhs->Copy();
 		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(lhs_expr), expr.expr->Copy());
 		return BindExpression(arrow_expr, depth);
@@ -144,7 +128,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
                                                      unique_ptr<Expression> &replacement,
                                                      BoundLambdaExpression &bound_lambda_expr,
-                                                     const bind_lambda_function_t *bind_lambda_function,
+                                                     const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                                      const LogicalType &list_child_type) {
 
 	// check if the original expression is a lambda parameter
@@ -155,9 +139,9 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 
 		// refers to a lambda parameter outside the current lambda function
 		// so the lambda parameter will be inside the lambda_bindings
-		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {
+		if (lambda_bindings && bound_lambda_ref.lambda_idx != lambda_bindings->size()) {
 
-			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_index];
+			auto &binding = (*lambda_bindings)[bound_lambda_ref.lambda_idx];
 			D_ASSERT(binding.names.size() == binding.types.size());
 
 			// find the matching dummy column in the lambda binding
@@ -196,21 +180,11 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 }
 
 void ExpressionBinder::CaptureLambdaColumns(BoundLambdaExpression &bound_lambda_expr, unique_ptr<Expression> &expr,
-                                            const bind_lambda_function_t *bind_lambda_function,
+                                            const optional_ptr<bind_lambda_function_t> bind_lambda_function,
                                             const LogicalType &list_child_type) {
 
 	if (expr->expression_class == ExpressionClass::BOUND_SUBQUERY) {
 		throw InvalidInputException("Subqueries are not supported in lambda expressions!");
-	}
-
-	if (expr->expression_class == ExpressionClass::BOUND_REF) {
-		//		// we need to determine the index of this outer lambda parameter
-		//		idx_t offset = DConstants::INVALID_INDEX;
-		//		if (lambda_bindings) {
-		//			offset =
-		//		}
-		//		auto &bound_ref_expr = expr->Cast<BoundReferenceExpression>();
-		//		bound_ref_expr.index = bound_ref_expr.index - 1;
 	}
 
 	// these expression classes do not have children, transform them

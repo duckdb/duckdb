@@ -13,7 +13,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
-#include "duckdb/parser/expression/lambdaref_expression.hpp"
 
 namespace duckdb {
 
@@ -313,8 +312,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 }
 
 BindResult ExpressionBinder::BindExpression(LambdaRefExpression &lambdaref, idx_t depth) {
-	D_ASSERT(lambda_bindings && lambdaref.lambda_index < lambda_bindings->size());
-	return (*lambda_bindings)[lambdaref.lambda_index].Bind(lambdaref, depth);
+	D_ASSERT(lambda_bindings && lambdaref.lambda_idx < lambda_bindings->size());
+	return (*lambda_bindings)[lambdaref.lambda_idx].Bind(lambdaref, depth);
 }
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {

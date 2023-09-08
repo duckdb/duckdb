@@ -6,8 +6,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// FIXME: more const, slimmer functions (there are some pretty massive parameters - structs?)
-
 #pragma once
 
 #include "duckdb/function/function.hpp"
@@ -31,8 +29,7 @@ public:
 	LogicalType return_type;
 	//! Lambda expression that the expression executor executes
 	unique_ptr<Expression> lambda_expr;
-	//! True, if list_transform has two lambda parameters (the second parameter is the index of the
-	//! first parameter in the list)
+	//! True, if the last parameter in a lambda parameter list represents the index of the current list element
 	bool has_index;
 
 public:
@@ -47,23 +44,21 @@ public:
 		throw NotImplementedException("FIXME: list lambda deserialize");
 	}
 
-	//! Serialize a lambda function's bind data
+	//! Serializes a lambda function's bind data
 	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                            const ScalarFunction &function);
-	//! Deserialize a lambda function's bind data
+	//! Deserializes a lambda function's bind data
 	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &);
 };
 
 class LambdaFunctions {
 public:
-	// FIXME: still a pretty massive function
-	// FIXME: more separation between different lambda functions (enum as parameter with lambda function type?)
+	//! Prepares the input for the expression executor and then executes the lambda expression on it for each row
 	static void ExecuteLambda(DataChunk &args, ExpressionState &state, Vector &result, LambdaType lambda_type);
-
-	//! Generic binding functionality of lambda functions
+	//! Returns the ListLambdaBindData containing the lambda expression
 	static unique_ptr<FunctionData> ListLambdaBind(ClientContext &, ScalarFunction &bound_function,
 	                                               vector<unique_ptr<Expression>> &arguments,
-	                                               const idx_t parameter_count, const bool has_index = false);
+	                                               const bool has_index = false);
 };
 
 } // namespace duckdb

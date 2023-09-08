@@ -14,7 +14,6 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
-#include "duckdb/parser/expression/lambdaref_expression.hpp"
 
 namespace duckdb {
 class BindContext;

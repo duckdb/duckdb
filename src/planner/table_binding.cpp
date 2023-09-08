@@ -241,12 +241,12 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 
 BindResult DummyBinding::Bind(LambdaRefExpression &lambdaref, idx_t depth) {
 	column_t column_index;
-	if (!TryGetBindingIndex(lambdaref.GetColumnName(), column_index)) {
-		throw InternalException("Column %s not found in bindings", lambdaref.GetColumnName());
+	if (!TryGetBindingIndex(lambdaref.GetName(), column_index)) {
+		throw InternalException("Column %s not found in bindings", lambdaref.GetName());
 	}
 	ColumnBinding binding(index, column_index);
 	return BindResult(make_uniq<BoundLambdaRefExpression>(lambdaref.GetName(), types[column_index], binding,
-	                                                      lambdaref.lambda_index, depth));
+	                                                      lambdaref.lambda_idx, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

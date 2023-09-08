@@ -128,12 +128,7 @@ SELECT list_transform([1, 2, 3], (x, i) -> list_transform([4, 5, 6], y -> list_t
 ----
 [[[13, 14, 15], [14, 15, 16], [15, 16, 17]], [[15, 16, 17], [16, 17, 18], [17, 18, 19]], [[17, 18, 19], [18, 19, 20], [19, 20, 21]]]
 
-# TODO: this test is still failing, and we need more nested tests
-#mode skip
-
 query I
 SELECT list_transform([1, 2, 3], x -> list_transform([4, 5, 6], (y, i) -> list_transform([7, 8, 9], z -> x + y + z + i)));
 ----
 [[[13, 14, 15], [15, 16, 17], [17, 18, 19]], [[14, 15, 16], [16, 17, 18], [18, 19, 20]], [[15, 16, 17], [17, 18, 19], [19, 20, 21]]]
-
-#mode unskip
