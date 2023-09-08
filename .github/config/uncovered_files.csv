@@ -200,7 +200,7 @@ execution/operator/csv_scanner/buffered_csv_reader.cpp	47
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/csv_scanner/csv_file_handle.cpp	7
 execution/operator/csv_scanner/csv_reader_options.cpp	12
-execution/operator/csv_scanner/parallel_csv_reader.cpp	51
+execution/operator/csv_scanner/parallel_csv_reader.cpp	52
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
@@ -464,7 +464,7 @@ include/duckdb/transaction/transaction.hpp	3
 include/duckdb/transaction/transaction_manager.hpp	5
 include/duckdb/verification/no_operator_caching_verifier.hpp	3
 include/duckdb/verification/parsed_statement_verifier.hpp	3
-include/duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp	1
+include/duckdb/execution/operator/scan/csv/parallel_csv_reader.hpp	2
 main/appender.cpp	23
 main/attached_database.cpp	14
 main/chunk_scan_state.cpp	25
@@ -499,7 +499,7 @@ main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
-main/extension/extension_install.cpp	124
+main/extension/extension_install.cpp	125
 main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
