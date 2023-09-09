@@ -475,7 +475,7 @@ struct QuantileBindData : public FunctionData {
 
 	static void SerializeDecimal(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                             const AggregateFunction &function) {
-		throw SerializationException("FIXME: quantile serialize for decimal");
+		throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
 	}
 
 	vector<Value> quantiles;
