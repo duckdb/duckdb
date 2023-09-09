@@ -279,21 +279,21 @@ bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const 
 
 static void ExportStateAggregateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                           const AggregateFunction &function) {
-	throw SerializationException("FIXME: export state serialize");
+	throw NotImplementedException("FIXME: export state serialize");
 }
 
 static unique_ptr<FunctionData> ExportStateAggregateDeserialize(Deserializer &deserializer,
                                                                 AggregateFunction &function) {
-	throw SerializationException("FIXME: export state deserialize");
+	throw NotImplementedException("FIXME: export state deserialize");
 }
 
 static void ExportStateScalarSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                        const ScalarFunction &function) {
-	throw SerializationException("FIXME: export state serialize");
+	throw NotImplementedException("FIXME: export state serialize");
 }
 
 static unique_ptr<FunctionData> ExportStateScalarDeserialize(Deserializer &deserializer, ScalarFunction &function) {
-	throw SerializationException("FIXME: export state deserialize");
+	throw NotImplementedException("FIXME: export state deserialize");
 }
 
 unique_ptr<BoundAggregateExpression>
