@@ -5,14 +5,11 @@
 
 namespace duckdb {
 
-CreateMacroInfo::CreateMacroInfo() : CreateFunctionInfo(CatalogType::MACRO_ENTRY, INVALID_SCHEMA) {
-}
-
 CreateMacroInfo::CreateMacroInfo(CatalogType type) : CreateFunctionInfo(type, INVALID_SCHEMA) {
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Copy() const {
-	auto result = make_uniq<CreateMacroInfo>();
+	auto result = make_uniq<CreateMacroInfo>(type);
 	result->function = function->Copy();
 	result->name = name;
 	CopyProperties(*result);

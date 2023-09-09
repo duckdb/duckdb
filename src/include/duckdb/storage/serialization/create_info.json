@@ -2,6 +2,9 @@
   {
     "class": "CreateInfo",
     "class_type": "type",
+    "set_parameters": [
+      "type"
+    ],
     "includes": [
       "duckdb/parser/parsed_data/create_info.hpp"
     ],
@@ -215,7 +218,8 @@
         "name": "function",
         "type": "MacroFunction*"
       }
-    ]
+    ],
+    "constructor": ["$CatalogType"]
   },
   {
     "class": "CreateSequenceInfo",

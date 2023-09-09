@@ -34,6 +34,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto internal = deserializer.ReadProperty<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadProperty<string>(106, "sql");
+	deserializer.Set<CatalogType>(type);
 	unique_ptr<CreateInfo> result;
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:
@@ -63,6 +64,7 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	default:
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
 	}
+	deserializer.Unset<CatalogType>();
 	result->catalog = std::move(catalog);
 	result->schema = std::move(schema);
 	result->temporary = temporary;
@@ -108,7 +110,7 @@ void CreateMacroInfo::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<CreateInfo> CreateMacroInfo::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo());
+	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo(deserializer.Get<CatalogType>()));
 	deserializer.ReadProperty(200, "name", result->name);
 	deserializer.ReadProperty(201, "function", result->function);
 	return std::move(result);
