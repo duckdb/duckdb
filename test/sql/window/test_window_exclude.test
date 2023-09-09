@@ -475,56 +475,67 @@ SELECT unique1, four, sum(unique1) OVER (PARTITION BY four ROWS BETWEEN UNBOUNDE
 #4	4	[1, 1, 2, 2, 3, 3]
 #5	4	[1, 1, 2, 2, 3, 3, 4, 4]
 #5	5	[1, 1, 2, 2, 3, 3, 4, 4]
-#
-#
+
 ## COUNT(*) and CURRENT ROW
-#query II
-#SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i) ORDER BY i;
-#----
-#1 	3
-#2 	4
-#3 	5
-#4 	6
-#5 	6
-#6 	6
-#7 	6
-#8 	5
-#9 	4
-#10 	3
-#
-#
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE CURRENT ROW) 
+FROM generate_series(1,10) AS _(i) 
+ORDER BY i;
+----
+1 	3
+2 	4
+3 	5
+4 	6
+5 	6
+6 	6
+7 	6
+8 	5
+9 	4
+10 	3
+
 ## COUNT(*) and GROUP
-#query II
-#SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE GROUP) FROM (SELECT * FROM generate_series(1,5) UNION ALL SELECT * FROM generate_series(1,5)) AS _(i) ORDER BY i;
-#----
-#1 	2
-#1 	3
-#2 	4
-#2 	5
-#3 	5
-#3 	5
-#4 	5
-#4 	4
-#5 	3
-#5 	2
-#
-#
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE GROUP) 
+FROM (
+	SELECT * FROM generate_series(1,5) 
+	UNION ALL 
+	SELECT * FROM generate_series(1,5)
+) AS _(i) 
+ORDER BY i;
+----
+1 	2
+1 	3
+2 	4
+2 	5
+3 	5
+3 	5
+4 	5
+4 	4
+5 	3
+5 	2
+
+
 ## COUNT(*) and TIES
-#query II
-#SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE TIES) FROM (SELECT * FROM generate_series(1,5) UNION ALL SELECT * FROM generate_series(1,5)) AS _(i) ORDER BY i;
-#----
-#1 	3
-#1 	4
-#2 	5
-#2 	6
-#3 	6
-#3 	6
-#4 	6
-#4 	5
-#5 	4
-#5 	3
-#
-#
+query II
+SELECT i, COUNT(*) OVER (ORDER BY i ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING EXCLUDE TIES) 
+FROM (
+	SELECT *  FROM generate_series(1,5) 
+	UNION ALL 
+	SELECT *  FROM generate_series(1,5)) 
+	AS _(i) 
+ORDER BY i;
+----
+1 	3
+1 	4
+2 	5
+2 	6
+3 	6
+3 	6
+4 	6
+4 	5
+5 	4
+5 	3
+
 ## MEDIAN and CURRENT ROW
 #query II
 #SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i) ORDER BY i;

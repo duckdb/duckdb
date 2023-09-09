@@ -35,26 +35,27 @@ struct CountStarFunction : public BaseCountFunction {
 
 	template <typename RESULT_TYPE>
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
-	                   idx_t input_count, data_ptr_t state, const FrameBounds *frame, const FrameBounds *prev,
+	                   idx_t input_count, data_ptr_t state, const FrameBounds *frames, const FrameBounds *prevs,
 	                   Vector &result, idx_t rid, idx_t nframes) {
 		D_ASSERT(input_count == 0);
-		if (nframes != 1) {
-			throw NotImplementedException("COUNT(*) does not support EXCLUDE");
-		}
 
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
-		const auto begin = frame->start;
-		const auto end = frame->end;
-		// Slice to any filtered rows
-		if (!filter_mask.AllValid()) {
-			RESULT_TYPE filtered = 0;
-			for (auto i = begin; i < end; ++i) {
-				filtered += filter_mask.RowIsValid(i);
+		RESULT_TYPE total = 0;
+		for (idx_t f = 0; f < nframes; ++f) {
+			const auto &frame = frames[f];
+			const auto begin = frame.start;
+			const auto end = frame.end;
+
+			// Slice to any filtered rows
+			if (!filter_mask.AllValid()) {
+				for (auto i = begin; i < end; ++i) {
+					total += filter_mask.RowIsValid(i);
+				}
+			} else {
+				total += end - begin;
 			}
-			data[rid] = filtered;
-		} else {
-			data[rid] = end - begin;
 		}
+		data[rid] = total;
 	}
 };
 

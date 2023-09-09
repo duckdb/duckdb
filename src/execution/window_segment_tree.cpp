@@ -248,7 +248,7 @@ WindowCustomAggregator::~WindowCustomAggregator() {
 
 class WindowCustomAggregatorState : public WindowAggregatorState {
 public:
-	explicit WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs);
+	explicit WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs, WindowExclusion exclude_mode);
 	~WindowCustomAggregatorState() override;
 
 public:
@@ -261,14 +261,32 @@ public:
 	//! Reused result state container for the window functions
 	Vector statef;
 	//! The frame boundaries, used for the window functions
-	FrameBounds frame;
+	vector<FrameBounds> frames;
+	vector<FrameBounds> prevs;
 };
 
-WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs)
+WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &aggr, DataChunk &inputs,
+                                                         WindowExclusion exclude_mode)
     : aggr(aggr), inputs(inputs), state(aggr.function.state_size()),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0) {
+      statef(Value::POINTER(CastPointerToValue(state.data()))), frames(3, {0, 0}) {
 	// if we have a frame-by-frame method, share the single state
 	aggr.function.initialize(state.data());
+
+	idx_t nframes = 0;
+	switch (exclude_mode) {
+	case WindowExclusion::NO_OTHER:
+		nframes = 1;
+		break;
+	case WindowExclusion::TIES:
+		nframes = 3;
+		break;
+	case WindowExclusion::CURRENT_ROW:
+	case WindowExclusion::GROUP:
+		nframes = 2;
+		break;
+	}
+	frames.resize(nframes, {0, 0});
+	prevs = frames;
 }
 
 WindowCustomAggregatorState::~WindowCustomAggregatorState() {
@@ -279,34 +297,78 @@ WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 }
 
 unique_ptr<WindowAggregatorState> WindowCustomAggregator::GetLocalState() const {
-	return make_uniq<WindowCustomAggregatorState>(aggr, const_cast<DataChunk &>(inputs));
+	return make_uniq<WindowCustomAggregatorState>(aggr, const_cast<DataChunk &>(inputs), exclude_mode);
 }
 
 void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataChunk &bounds, Vector &result,
                                       idx_t count, idx_t row_idx) const {
 	auto begins = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	auto ends = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
+	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
+
 	//	TODO: window should take a const Vector*
 	auto &lcstate = lstate.Cast<WindowCustomAggregatorState>();
-	auto &frame = lcstate.frame;
+	auto &frames = lcstate.frames;
+	auto &prevs = lcstate.prevs;
 	auto params = lcstate.inputs.data.data();
 	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto begin = begins[i];
-		const auto end = ends[i];
+	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
+		auto begin = begins[i];
+		auto end = ends[i];
 		if (begin >= end) {
 			rmask.SetInvalid(i);
 			continue;
 		}
 
-		// Frame boundaries
-		auto prev = frame;
-		frame = FrameBounds(begin, end);
+		idx_t nframes = 0;
+		if (exclude_mode == WindowExclusion::NO_OTHER) {
+			prevs[nframes] = frames[nframes];
+			frames[nframes++] = FrameBounds(begin, end);
+		} else {
+			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
+			//	even if they would be included according to the frame start and frame end options.
+			//	EXCLUDE CURRENT ROW excludes the current row from the frame.
+			//	EXCLUDE GROUP excludes the current row and its ordering peers from the frame.
+			//	EXCLUDE TIES excludes any peers of the current row from the frame, but not the current row itself.
+			//	EXCLUDE NO OTHERS simply specifies explicitly the default behavior
+			//	of not excluding the current row or its peers.
+			//	https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-WINDOW-FUNCTIONS
+			//
+			//	For the sake of the client, we make some guarantees about the subframes:
+			//	* They are in order left-to-right
+			//	* They do not intersect
+			//	* start <= end
+			//	* The number is always the same
+			//
+			//	Since we always have peer_begin <= cur_row < cur_row + 1 <= peer_end
+			//	this is not too hard to arrange, but it may be that some subframes are contiguous,
+			//	and some are empty.
+
+			//	WindowSegmentTreePart::LEFT
+			begin = begins[i];
+			end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
+			prevs[nframes] = frames[nframes];
+			frames[nframes++] = FrameBounds(begin, MaxValue(begin, end));
+
+			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
+			// we also need to consider the current row
+			if (exclude_mode == WindowExclusion::TIES) {
+				prevs[nframes] = frames[nframes];
+				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
+			}
+
+			//	WindowSegmentTreePart::RIGHT
+			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
+			end = ends[i];
+			prevs[nframes] = frames[nframes];
+			frames[nframes++] = FrameBounds(MinValue(begin, end), end);
+		}
 
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
-		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), &frame,
-		                     &prev, result, i, 1);
+		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(),
+		                     frames.data(), prevs.data(), result, i, nframes);
 	}
 }
 
