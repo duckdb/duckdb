@@ -114,6 +114,7 @@ private:
 		T value;
 		auto read_size = EncodingUtil::DecodeLEB128<T>(buffer, value);
 		D_ASSERT(read_size == varint_size);
+		(void) read_size;
 		return value;
 	}
 
