@@ -13,6 +13,11 @@ Prefix &Prefix::New(ART &art, Node &node) {
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
 	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
+	// zero-initialize to avoid leaking memory to disk
+	for (idx_t i = 0; i < Node::PREFIX_SIZE; i++) {
+		prefix.data[i] = 0;
+	}
+	prefix.ptr.Clear();
 	prefix.data[Node::PREFIX_SIZE] = 0;
 	return prefix;
 }
@@ -23,6 +28,11 @@ Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, const Node &next) {
 	node.SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 
 	auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
+	// zero-initialize to avoid leaking memory to disk
+	for (idx_t i = 0; i < Node::PREFIX_SIZE; i++) {
+		prefix.data[i] = 0;
+	}
+	prefix.ptr.Clear();
 	prefix.data[Node::PREFIX_SIZE] = 1;
 	prefix.data[0] = byte;
 	prefix.ptr = next;
@@ -40,6 +50,12 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
 		node.get().SetMetadata(static_cast<uint8_t>(NType::PREFIX));
 		auto &prefix = Node::RefMutable<Prefix>(art, node, NType::PREFIX);
+
+		// zero-initialize to avoid leaking memory to disk
+		for (idx_t i = 0; i < Node::PREFIX_SIZE; i++) {
+			prefix.data[i] = 0;
+		}
+		prefix.ptr.Clear();
 
 		auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);
 		prefix.data[Node::PREFIX_SIZE] = (uint8_t)this_count;

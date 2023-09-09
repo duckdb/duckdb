@@ -58,6 +58,14 @@ IndexPointer FixedSizeAllocator::New() {
 		D_ASSERT(buffers.find(buffer_id) != buffers.end());
 		auto &buffer = buffers.find(buffer_id)->second;
 		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.Get()));
+
+		// zero-initialize to avoid leaking memory to disk
+		auto data = mask.GetData();
+		for (idx_t i = 0; i < bitmask_count; i++) {
+			data[i] = 0;
+		}
+
+		// initializing the bitmask of the new buffer
 		mask.SetAllValid(available_segments_per_buffer);
 	}
 

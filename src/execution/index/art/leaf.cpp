@@ -26,6 +26,11 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 		auto &leaf = Node::RefMutable<Leaf>(art, node, NType::LEAF);
 
 		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, count);
+		// zero-initialize to avoid leaking memory to disk
+		for (idx_t i = 0; i < Node::LEAF_SIZE; i++) {
+			leaf.row_ids[i] = 0;
+		}
+
 		for (idx_t i = 0; i < leaf.count; i++) {
 			leaf.row_ids[i] = row_ids[copy_count + i];
 		}

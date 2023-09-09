@@ -11,7 +11,7 @@ statement ok
 CHECKPOINT;
 
 statement ok
-CREATE TABLE blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE blocks_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
 
 statement ok
 CREATE INDEX idx ON integers(i);
@@ -24,9 +24,9 @@ SELECT i FROM integers WHERE i = 500000;
 statement ok
 CHECKPOINT;
 
-# save the block count (around 37)
+# save the total block count and the used block count
 statement ok
-CREATE TABLE blocks_idx AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE blocks_idx AS SELECT total_blocks, used_blocks FROM pragma_database_size();
 
 # loop and always DROP INDEX, then recreate (reusing the same blocks)
 
@@ -70,7 +70,7 @@ statement ok
 CHECKPOINT;
 
 statement ok
-CREATE TABLE prev_delete_tbl AS SELECT total_blocks FROM pragma_database_size();
+CREATE TABLE prev_delete_tbl AS SELECT total_blocks, used_blocks FROM pragma_database_size();
 
 statement ok
 DELETE FROM integers WHERE i > 100000;
@@ -79,7 +79,7 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT current.total_blocks < prev_delete_tbl.total_blocks
+SELECT current.used_blocks < prev_delete_tbl.total_blocks
 FROM pragma_database_size() current, prev_delete_tbl;
 ----
 1
@@ -112,7 +112,7 @@ statement ok
 CHECKPOINT;
 
 query I
-SELECT current.total_blocks < blocks_idx.total_blocks
+SELECT current.used_blocks < blocks_idx.total_blocks
 FROM pragma_database_size() current, blocks_idx;
 ----
 1

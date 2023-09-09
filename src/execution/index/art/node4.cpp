@@ -12,6 +12,12 @@ Node4 &Node4::New(ART &art, Node &node) {
 	auto &n4 = Node::RefMutable<Node4>(art, node, NType::NODE_4);
 
 	n4.count = 0;
+	// zero-initialize to avoid leaking memory to disk
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+		n4.key[i] = 0;
+		n4.children[i].Clear();
+	}
+
 	return n4;
 }
 
