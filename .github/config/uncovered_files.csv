@@ -54,6 +54,8 @@ common/serializer/deserializer.cpp	13
 common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
 common/serializer/buffered_file_writer.cpp	2
+common/serializer/binary_serializer.cpp	11
+common/serializer/memory_stream.cpp	5
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
 common/sort/partition_state.cpp	44
@@ -102,6 +104,7 @@ common/vector_operations/null_operations.cpp	15
 common/vector_operations/numeric_inplace_operators.cpp	6
 common/vector_operations/vector_copy.cpp	2
 common/vector_operations/vector_hash.cpp	7
+common/vector_operations/vector_storage.cpp	13
 core_functions/aggregate/distributive/approx_count.cpp	1
 core_functions/aggregate/distributive/arg_min_max.cpp	10
 core_functions/aggregate/distributive/bitagg.cpp	8
@@ -336,6 +339,7 @@ include/duckdb/catalog/mapping_value.hpp	2
 include/duckdb/common/allocator.hpp	2
 include/duckdb/common/serializer/deserializer.hpp	2
 include/duckdb/common/serializer/deserialization_data.hpp	10
+include/duckdb/common/serializer/binary_deserializer.hpp	1
 include/duckdb/common/bit_utils.hpp	4
 include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
@@ -498,7 +502,7 @@ main/db_instance_cache.cpp	27
 main/error_manager.cpp	9
 main/extension/extension_alias.cpp	2
 main/extension/extension_helper.cpp	8
-main/extension/extension_install.cpp	124
+main/extension/extension_install.cpp	125
 main/extension/extension_load.cpp	70
 main/extension/extension_util.cpp	18
 main/materialized_query_result.cpp	9
@@ -763,7 +767,7 @@ storage/buffer_manager.cpp	20
 storage/checkpoint/row_group_writer.cpp	6
 storage/checkpoint/table_data_writer.cpp	3
 storage/checkpoint/write_overflow_strings_to_disk.cpp	5
-storage/checkpoint_manager.cpp	8
+storage/checkpoint_manager.cpp	9
 storage/compression/bitpacking.cpp	19
 storage/compression/dictionary_compression.cpp	2
 storage/compression/fsst.cpp	11
