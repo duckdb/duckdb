@@ -321,9 +321,11 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			continue;
 		}
 
+		// Frame boundaries
+		prevs.swap(frames);
+
 		idx_t nframes = 0;
 		if (exclude_mode == WindowExclusion::NO_OTHER) {
-			prevs[nframes] = frames[nframes];
 			frames[nframes++] = FrameBounds(begin, end);
 		} else {
 			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
@@ -348,20 +350,17 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			//	WindowSegmentTreePart::LEFT
 			begin = begins[i];
 			end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
-			prevs[nframes] = frames[nframes];
 			frames[nframes++] = FrameBounds(begin, MaxValue(begin, end));
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
 			if (exclude_mode == WindowExclusion::TIES) {
-				prevs[nframes] = frames[nframes];
 				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
 			//	WindowSegmentTreePart::RIGHT
 			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			end = ends[i];
-			prevs[nframes] = frames[nframes];
 			frames[nframes++] = FrameBounds(MinValue(begin, end), end);
 		}
 
