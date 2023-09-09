@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_keys.test
+# name: test/sql/json/scalar/test_json_keys.test
 # description: Test JSON keys function
-# group: [json]
+# group: [scalar]
 
 require json
 

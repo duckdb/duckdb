@@ -1,6 +1,6 @@
-# name: test/sql/json/test_json_valid.test
+# name: test/sql/json/scalar/test_json_valid.test
 # description: Test JSON valid
-# group: [json]
+# group: [scalar]
 
 require json
 

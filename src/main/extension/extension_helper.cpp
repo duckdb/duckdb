@@ -194,13 +194,30 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 	return base_error;
 }
 
-void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			ExtensionHelper::InstallExtension(context, extension_name, false,
 			                                  context.config.autoinstall_extension_repo);
 		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+	return false;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+#ifndef DUCKDB_WASM
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+#endif
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		throw AutoloadException(extension_name, e);

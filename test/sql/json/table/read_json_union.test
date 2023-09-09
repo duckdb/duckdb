@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json_union.test
+# name: test/sql/json/table/read_json_union.test
 # description: Read json files with unions straight to columnar data
-# group: [json]
+# group: [table]
 
 require json
 

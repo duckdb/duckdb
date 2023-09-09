@@ -1,6 +1,6 @@
-# name: test/sql/json/read_json.test
+# name: test/sql/json/table/read_json.test
 # description: Read json files straight to columnar data
-# group: [json]
+# group: [table]
 
 require json
 
