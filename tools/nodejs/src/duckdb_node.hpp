@@ -11,6 +11,11 @@
 
 using duckdb::vector;
 
+class NodeDuckDB : public Napi::Addon<NodeDuckDB> {
+public:
+	NodeDuckDB(Napi::Env env, Napi::Object exports);
+};
+
 namespace node_duckdb {
 
 struct Task {
