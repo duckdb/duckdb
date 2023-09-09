@@ -923,12 +923,12 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
-	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+	auto data = make_uniq<ParquetWriteBindData>();
 	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
 	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
 	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
 	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
-	return data;
+	return std::move(data);
 }
 // LCOV_EXCL_STOP
 
