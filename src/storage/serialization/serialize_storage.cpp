@@ -6,7 +6,6 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/block.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
 
