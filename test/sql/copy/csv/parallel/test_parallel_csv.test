@@ -11,19 +11,19 @@ PRAGMA enable_verification
 
 
 query III
-select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true)
+select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true, skip = 1)
 ----
 1.5	a	3
 2.5	b	4
 
 query II
-explain select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true)
+explain select * from read_csv_auto('data/csv/dirty_line.csv', parallel = true, skip = 1)
 ----
 physical_plan	<REGEX>:.*MULTI.*
 
 
 query III
-select * from read_csv_auto('data/csv/dirty_line.csv', parallel = false)
+select * from read_csv_auto('data/csv/dirty_line.csv', parallel = false , skip = 1)
 ----
 1.5	a	3
 2.5	b	4

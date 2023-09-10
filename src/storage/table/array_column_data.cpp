@@ -1,6 +1,5 @@
 #include "duckdb/storage/table/array_column_data.hpp"
 #include "duckdb/storage/statistics/array_stats.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -206,9 +205,12 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		validity_state->WriteDataPointers(writer);
-		child_state->WriteDataPointers(writer);
+	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
+		ColumnCheckpointState::WriteDataPointers(writer, serializer);
+		serializer.WriteObject(101, "validity",
+		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
+		serializer.WriteObject(102, "child_column",
+		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
 	}
 };
 

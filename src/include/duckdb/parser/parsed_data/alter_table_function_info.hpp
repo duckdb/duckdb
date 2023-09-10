@@ -27,8 +27,6 @@ struct AlterTableFunctionInfo : public AlterInfo {
 
 public:
 	CatalogType GetCatalogType() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader);
 };
 
 //===--------------------------------------------------------------------===//

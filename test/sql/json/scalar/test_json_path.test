@@ -1,0 +1,209 @@
+# name: test/sql/json/scalar/test_json_path.test
+# description: Test JSON extract (path notation)
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement error
+select json_extract('{"my_field": "duck"}', '')
+----
+Binder Error
+
+query T
+select json_extract('{"my_field": "duck"}', '$.my_field')
+----
+"duck"
+
+query T
+select json_extract('[0, 1, 2]', '$[1]')
+----
+1
+
+query T
+select json_extract('[[1]]', '$[0][0]')
+----
+1
+
+statement ok
+create table test (j varchar, q varchar)
+
+statement ok
+insert into test values ('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '$.my_field.my_nested_field[0]')
+
+# wrong syntax
+statement error
+select json_extract(j, '$.my_field.my_nested_field[]') from test
+----
+Binder Error
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[0]') from test
+----
+"goose"
+
+# SQLite's indexing from back of the list requires '#'
+query T
+select json_extract(j, '$.my_field.my_nested_field[#-1]') from test
+----
+"duck"
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[#-2]') from test
+----
+"goose"
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[#-3]') from test
+----
+NULL
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[#]') from test
+----
+NULL
+
+# we can also do without '#'
+query T
+select json_extract(j, '$.my_field.my_nested_field[-1]') from test
+----
+"duck"
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[-2]') from test
+----
+"goose"
+
+query T
+select json_extract(j, '$.my_field.my_nested_field[-3]') from test
+----
+NULL
+
+query T
+select json_extract(j, q) from test
+----
+"goose"
+
+query T
+select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[0].my_nested_field[0]')
+----
+"duck"
+
+query T
+select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$.my_field[#-1].my_nested_field[#-1]')
+----
+"goose"
+
+# some NULLs
+query T
+select json_extract(j, '$.my_field.my_nested_field.3') from test
+----
+NULL
+
+# invalid path error that happens during execution, not binding
+statement error
+with tbl as (
+    select '[{"duck":42},{"duck":43}]' j, '$duck' p
+)
+select json_extract(j, p) from tbl
+----
+Invalid Input Error
+
+# path error
+statement error
+select json_extract('{"a": {"b": "c"}}', '$[]');
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$[#');
+
+statement error
+select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
+
+statement error
+select json_extract(j, '$.my_field.my_nested_field[!]') from test
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$.a..');
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$[[');
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$[.');
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$]');
+
+# with JSON path we support wildcards in arrays and objects, this results in a LIST
+query T
+select json_extract('[{"duck":42},{"duck":43}]', '$[*].duck')
+----
+[42, 43]
+
+query T
+select json_extract('{"duck":42, "goose":43}', '$.*');
+----
+[42, 43]
+
+# check for invalid syntax
+statement error
+select json_extract('[{"duck":42},{"duck":43}]', '$[*.duck')
+----
+Binder Error: JSON path error
+
+statement error
+select json_extract('[{"duck":42},{"duck":43}]', '$*.duck')
+----
+Binder Error: JSON path error
+
+statement error
+select json_extract('{"duck":42, "goose":43}', '$.[*]');
+----
+Binder Error: JSON path error
+
+# wildcards yields empty list if none are found
+query T
+select json_extract('[{"duck":42},{"duck":43}]', '$.*')
+----
+[]
+
+query T
+select json_extract('{"duck":[42,43]}', '$.*[-1]')
+----
+[43]
+
+# can have multiple wildcards
+query T
+select json_extract('[{"duck":42},{"duck":43}]', '$[*].*')
+----
+[42, 43]
+
+# wildcards do not work when path param is not foldable
+statement error
+with tbl as (
+    select '[{"duck":42},{"duck":43}]' j, '$[*].duck' p
+)
+select json_extract(j, p) from tbl
+----
+Invalid Input Error
+
+# wildcards do not work inside of a multi-extract
+statement error
+select json_extract('[{"duck":42},{"goose":43}]', ['$[*].duck', '$[*].goose'])
+----
+Binder Error
+
+# test with a larger input
+query T
+select sum((to_json({duck:range})->'$.*')[1]::int) = sum(range) from range(10000)
+----
+1
+
+# test some nulls (JSON Path reference implementation returns NULLs in wildcards),
+# if the path is not there, it's not added to the LIST
+query T
+select json_extract('[{"duck":null},{"duck":42},{"duck":null},{}]', '$[*].*')
+----
+[NULL, 42, NULL]

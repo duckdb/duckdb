@@ -6,7 +6,6 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/statistics/distinct_statistics.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
@@ -16,7 +15,8 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/main/attached_database.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -446,45 +446,40 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 	return checkpoint_state;
 }
 
-void ColumnData::DeserializeColumn(Deserializer &source) {
+void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 	// load the data pointers for the column
 	this->count = 0;
-	idx_t data_pointer_count = source.Read<idx_t>();
-	for (idx_t data_ptr = 0; data_ptr < data_pointer_count; data_ptr++) {
-		// read the data pointer
-		auto row_start = source.Read<idx_t>();
-		auto tuple_count = source.Read<idx_t>();
-		auto block_pointer_block_id = source.Read<block_id_t>();
-		auto block_pointer_offset = source.Read<uint32_t>();
-		auto compression_type = source.Read<CompressionType>();
-		auto segment_stats = BaseStatistics::Deserialize(source, type);
+	deserializer.Set<LogicalType &>(type);
+
+	deserializer.ReadList(100, "data_pointers", [&](Deserializer::List &list, idx_t i) {
+		auto data_pointer = list.ReadElement<DataPointer>();
+
+		// Update the count and statistics
+		this->count += data_pointer.tuple_count;
 		if (stats) {
-			stats->statistics.Merge(segment_stats);
+			stats->statistics.Merge(data_pointer.statistics);
 		}
-
-		DataPointer data_pointer(std::move(segment_stats));
-		data_pointer.row_start = row_start;
-		data_pointer.tuple_count = tuple_count;
-		data_pointer.block_pointer.block_id = block_pointer_block_id;
-		data_pointer.block_pointer.offset = block_pointer_offset;
-		data_pointer.compression_type = compression_type;
-
-		this->count += tuple_count;
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(
 		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
 		    std::move(data_pointer.statistics));
+
 		data.AppendSegment(std::move(segment));
-	}
+	});
+
+	deserializer.Unset<LogicalType>();
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                               idx_t start_row, Deserializer &source, const LogicalType &type,
+                                               idx_t start_row, ReadStream &source, const LogicalType &type,
                                                optional_ptr<ColumnData> parent) {
 	auto entry = ColumnData::CreateColumn(block_manager, info, column_index, start_row, type, parent);
-	entry->DeserializeColumn(source);
+	BinaryDeserializer deserializer(source);
+	deserializer.Begin();
+	entry->DeserializeColumn(deserializer);
+	deserializer.End();
 	return entry;
 }
 

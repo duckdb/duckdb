@@ -18,6 +18,9 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 
+class Serializer;
+class Deserializer;
+
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
@@ -43,8 +46,8 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
-	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
+	virtual void Serialize(Serializer &serializer) const = 0;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -82,13 +85,13 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count);
+	                            idx_t max_count) const;
 };
 
 class ChunkVectorInfo : public ChunkInfo {
@@ -109,7 +112,7 @@ public:
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                   idx_t max_count);
+	                   idx_t max_count) const;
 	idx_t GetSelVector(TransactionData transaction, SelectionVector &sel_vector, idx_t max_count) override;
 	idx_t GetCommittedSelVector(transaction_t min_start_id, transaction_t min_transaction_id,
 	                            SelectionVector &sel_vector, idx_t max_count) override;
@@ -127,13 +130,13 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
 	idx_t TemplatedGetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
-	                            idx_t max_count);
+	                            idx_t max_count) const;
 };
 
 } // namespace duckdb

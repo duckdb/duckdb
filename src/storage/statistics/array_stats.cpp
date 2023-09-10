@@ -1,6 +1,5 @@
 #include "duckdb/storage/statistics/array_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -66,17 +65,20 @@ void ArrayStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	child_stats.Merge(other_child_stats);
 }
 
-void ArrayStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
+void ArrayStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &child_stats = ArrayStats::GetChildStats(stats);
-	writer.WriteSerializable(child_stats);
+	serializer.WriteProperty(200, "child_stats", child_stats);
 }
 
-BaseStatistics ArrayStats::Deserialize(FieldReader &reader, LogicalType type) {
-	D_ASSERT(type.InternalType() == PhysicalType::ARRAY);
+void ArrayStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
+	auto &type = base.GetType();
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
 	auto &child_type = ArrayType::GetChildType(type);
-	BaseStatistics result(std::move(type));
-	result.child_stats[0].Copy(reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_type));
-	return result;
+
+	// Push the logical type of the child type to the deserialization context
+	deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type));
+	base.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
+	deserializer.Unset<LogicalType>();
 }
 
 string ArrayStats::ToString(const BaseStatistics &stats) {

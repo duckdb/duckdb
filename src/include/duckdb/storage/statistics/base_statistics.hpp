@@ -21,8 +21,7 @@ struct SelectionVector;
 
 class Serializer;
 class Deserializer;
-class FieldWriter;
-class FieldReader;
+
 class Vector;
 struct UnifiedVectorFormat;
 
@@ -94,11 +93,7 @@ public:
 	void CopyBase(const BaseStatistics &orig);
 
 	void Serialize(Serializer &serializer) const;
-	void Serialize(FieldWriter &writer) const;
-
-	idx_t GetDistinctCount();
-
-	static BaseStatistics Deserialize(Deserializer &source, LogicalType type);
+	static BaseStatistics Deserialize(Deserializer &deserializer);
 
 	//! Verify that a vector does not violate the statistics
 	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) const;
@@ -106,6 +101,7 @@ public:
 
 	string ToString() const;
 
+	idx_t GetDistinctCount();
 	static BaseStatistics FromConstant(const Value &input);
 
 private:
@@ -119,7 +115,6 @@ private:
 
 	static BaseStatistics CreateUnknownType(LogicalType type);
 	static BaseStatistics CreateEmptyType(LogicalType type);
-	static BaseStatistics DeserializeType(FieldReader &reader, LogicalType type);
 	static BaseStatistics FromConstantType(const Value &input);
 
 private:

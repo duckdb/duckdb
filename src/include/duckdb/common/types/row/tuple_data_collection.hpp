@@ -51,6 +51,7 @@ enum class WithinCollection : uint8_t {
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
 	friend class TupleDataChunkIterator;
+	friend class PartitionedTupleData;
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
@@ -69,8 +70,6 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
-	//! Get pointers to the pinned blocks
-	void GetBlockPointers(vector<data_ptr_t> &block_pointers) const;
 	//! Unpins all held pins
 	void Unpin();
 
@@ -194,6 +193,8 @@ private:
 	void Initialize();
 	//! Gets all column ids
 	void GetAllColumnIDs(vector<column_t> &column_ids);
+	//! Adds a segment to this TupleDataCollection
+	void AddSegment(TupleDataSegment &&segment);
 
 	//! Computes the heap sizes for the specific Vector that will be appended
 	static void ComputeHeapSizes(Vector &heap_sizes_v, const Vector &source_v, TupleDataVectorFormat &source,
@@ -230,7 +231,7 @@ private:
 	void ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const vector<column_t> &column_ids,
 	                 idx_t segment_index, idx_t chunk_index, DataChunk &result);
 
-	//! Verify counts of the segments in this collection
+	//! Verify count/data size of this collection
 	void Verify() const;
 
 private:
@@ -240,6 +241,8 @@ private:
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
 	idx_t count;
+	//! The size (in bytes) of this TupleDataCollection
+	idx_t data_size;
 	//! The data segments of the TupleDataCollection
 	unsafe_vector<TupleDataSegment> segments;
 	//! The set of scatter functions
