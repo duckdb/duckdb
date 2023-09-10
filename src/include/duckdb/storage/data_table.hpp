@@ -175,7 +175,7 @@ public:
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	//! Checkpoint the table to the specified table data writer
-	void Checkpoint(TableDataWriter &writer);
+	void Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer);
 	void CommitDropTable();
 	void CommitDropColumn(idx_t index);
 

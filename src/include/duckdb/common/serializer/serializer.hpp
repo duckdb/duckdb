@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/serializer/format_serializer.hpp
+// duckdb/common/serializer/serializer.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -19,18 +17,21 @@
 
 namespace duckdb {
 
-class FormatSerializer {
+class Serializer {
 protected:
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
 
 public:
+	virtual ~Serializer() {
+	}
+
 	class List {
-		friend FormatSerializer;
+		friend Serializer;
 
 	private:
-		FormatSerializer &serializer;
-		explicit List(FormatSerializer &serializer) : serializer(serializer) {
+		Serializer &serializer;
+		explicit List(Serializer &serializer) : serializer(serializer) {
 		}
 
 	public:
@@ -223,11 +224,11 @@ protected:
 		OnListEnd();
 	}
 
-	// class or struct implementing `FormatSerialize(FormatSerializer& FormatSerializer)`;
+	// class or struct implementing `Serialize(Serializer& Serializer)`;
 	template <typename T>
 	typename std::enable_if<has_serialize<T>::value>::type WriteValue(const T &value) {
 		OnObjectBegin();
-		value.FormatSerialize(*this);
+		value.Serialize(*this);
 		OnObjectEnd();
 	}
 
@@ -275,18 +276,18 @@ protected:
 
 // We need to special case vector<bool> because elements of vector<bool> cannot be referenced
 template <>
-void FormatSerializer::WriteValue(const vector<bool> &vec);
+void Serializer::WriteValue(const vector<bool> &vec);
 
 // List Impl
 template <class FUNC>
-void FormatSerializer::List::WriteObject(FUNC f) {
+void Serializer::List::WriteObject(FUNC f) {
 	serializer.OnObjectBegin();
 	f(serializer);
 	serializer.OnObjectEnd();
 }
 
 template <class T>
-void FormatSerializer::List::WriteElement(const T &value) {
+void Serializer::List::WriteElement(const T &value) {
 	serializer.WriteValue(value);
 }
 

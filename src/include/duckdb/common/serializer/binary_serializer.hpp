@@ -8,13 +8,20 @@
 
 #pragma once
 
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/serializer/encoding_util.hpp"
 
 namespace duckdb {
 
-struct BinarySerializer : public FormatSerializer {
+class BinarySerializer : public Serializer {
+public:
+	explicit BinarySerializer(WriteStream &stream, bool serialize_default_values_p = false) : stream(stream) {
+		serialize_default_values = serialize_default_values_p;
+		serialize_enum_as_string = false;
+	}
+
 private:
 	struct DebugState {
 		unordered_set<const char *> seen_field_tags;
@@ -22,19 +29,17 @@ private:
 		vector<pair<const char *, field_id_t>> seen_fields;
 	};
 
-	vector<DebugState> debug_stack;
-	vector<data_t> data;
+	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
+		stream.WriteData(buffer, write_size);
+	}
 
 	template <class T>
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
-		WriteDataInternal(const_data_ptr_cast(&element), sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
-	void WriteDataInternal(const_data_ptr_t buffer, idx_t write_size) {
-		data.insert(data.end(), buffer, buffer + write_size);
-	}
-	void WriteDataInternal(const char *ptr, idx_t write_size) {
-		WriteDataInternal(const_data_ptr_cast(ptr), write_size);
+	void WriteData(const char *ptr, idx_t write_size) {
+		WriteData(const_data_ptr_cast(ptr), write_size);
 	}
 
 	template <class T>
@@ -42,27 +47,26 @@ private:
 		uint8_t buffer[16];
 		auto write_size = EncodingUtil::EncodeLEB128<T>(buffer, value);
 		D_ASSERT(write_size <= sizeof(buffer));
-		WriteDataInternal(buffer, write_size);
-	}
-
-	explicit BinarySerializer(bool serialize_default_values_p) {
-		serialize_default_values = serialize_default_values_p;
-		serialize_enum_as_string = false;
+		WriteData(buffer, write_size);
 	}
 
 public:
-	//! Serializes the given object into a binary blob, optionally serializing default values if
-	//! serialize_default_values is set to true, otherwise properties set to their provided default value
-	//! will not be serialized
 	template <class T>
-	static vector<data_t> Serialize(T &obj, bool serialize_default_values) {
-		BinarySerializer serializer(serialize_default_values);
+	static void Serialize(const T &value, WriteStream &stream, bool serialize_default_values = false) {
+		BinarySerializer serializer(stream, serialize_default_values);
 		serializer.OnObjectBegin();
-		obj.FormatSerialize(serializer);
+		value.Serialize(serializer);
 		serializer.OnObjectEnd();
-		return std::move(serializer.data);
 	}
 
+	void Begin() {
+		OnObjectBegin();
+	}
+	void End() {
+		OnObjectEnd();
+	}
+
+protected:
 	//-------------------------------------------------------------------------
 	// Nested Type Hooks
 	//-------------------------------------------------------------------------
@@ -99,6 +103,10 @@ public:
 	void WriteValue(const char *value) final;
 	void WriteValue(bool value) final;
 	void WriteDataPtr(const_data_ptr_t ptr, idx_t count) final;
+
+private:
+	vector<DebugState> debug_stack;
+	WriteStream &stream;
 };
 
 } // namespace duckdb
