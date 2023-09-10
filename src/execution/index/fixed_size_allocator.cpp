@@ -59,7 +59,7 @@ IndexPointer FixedSizeAllocator::New() {
 		auto &buffer = buffers.find(buffer_id)->second;
 		ValidityMask mask(reinterpret_cast<validity_t *>(buffer.Get()));
 
-		// zero-initialize to avoid leaking memory to disk
+		// zero-initialize the bitmask to avoid leaking memory to disk
 		auto data = mask.GetData();
 		for (idx_t i = 0; i < bitmask_count; i++) {
 			data[i] = 0;
@@ -69,7 +69,7 @@ IndexPointer FixedSizeAllocator::New() {
 		mask.SetAllValid(available_segments_per_buffer);
 	}
 
-	// return a pointer
+	// return a pointer to a free segment
 	D_ASSERT(!buffers_with_free_space.empty());
 	auto buffer_id = uint32_t(*buffers_with_free_space.begin());
 
@@ -82,6 +82,11 @@ IndexPointer FixedSizeAllocator::New() {
 	if (buffer.segment_count == available_segments_per_buffer) {
 		buffers_with_free_space.erase(buffer_id);
 	}
+
+	// zero-initialize that segment
+	auto buffer_ptr = buffer.Get();
+	auto offset_in_buffer = buffer_ptr + offset * segment_size + bitmask_offset;
+	memset(offset_in_buffer, 0, segment_size);
 
 	return IndexPointer(buffer_id, offset);
 }

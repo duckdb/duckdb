@@ -17,10 +17,15 @@ PartialBlockForIndex::PartialBlockForIndex(PartialBlockState state, BlockManager
 void PartialBlockForIndex::Flush(const idx_t free_space_left) {
 	FlushInternal(free_space_left);
 	block_handle = block_manager.ConvertToPersistent(state.block_id, std::move(block_handle));
+	Clear();
 }
 
 void PartialBlockForIndex::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {
 	throw InternalException("no merge for PartialBlockForIndex");
+}
+
+void PartialBlockForIndex::Clear() {
+	block_handle.reset();
 }
 
 //===--------------------------------------------------------------------===//
@@ -50,8 +55,8 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
 
 void FixedSizeBuffer::Destroy() {
 	if (InMemory()) {
-		// we can have multiple readers on a pinned block, and unpinning (Destroy unpins)
-		// the buffer handle decrements the reader count on the underlying block handle
+		// we can have multiple readers on a pinned block, and unpinning the buffer handle
+		// decrements the reader count on the underlying block handle (Destroy() unpins)
 		buffer_handle.Destroy();
 	}
 	if (OnDisk()) {
@@ -66,24 +71,24 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 	// we do not serialize a block that is already on disk and not in memory
 	if (!InMemory()) {
 		if (!OnDisk() || dirty) {
-			throw InternalException("invalid/missing buffer in FixedSizeAllocator");
+			throw InternalException("invalid or missing buffer in FixedSizeAllocator");
 		}
 		return;
 	}
+
 	// we do not serialize a block that is already on disk and not dirty
 	if (!dirty && OnDisk()) {
 		return;
 	}
 
 	if (dirty) {
-		// the allocation size only changes if the buffer is dirty
+		// the allocation possibly changed
 		auto max_offset = GetMaxOffset(available_segments);
 		allocation_size = max_offset * segment_size + bitmask_offset;
 	}
 
 	// the buffer is in memory, so we copied it onto a new buffer when pinning
 	D_ASSERT(InMemory() && !OnDisk());
-	D_ASSERT(buffer_handle.IsValid());
 
 	// now we write the changes, first get a partial block allocation
 	PartialBlockAllocation allocation = partial_block_manager.GetBlockAllocation(allocation_size);
@@ -92,18 +97,20 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 
 	auto &buffer_manager = block_manager.buffer_manager;
 
-	// copy to a partial block
 	if (allocation.partial_block) {
+		// copy to an existing partial block
 		D_ASSERT(block_pointer.offset > 0);
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
 		memcpy(dst_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
-		SetUninitializedRegions(p_block_for_index, segment_size, bitmask_offset + block_pointer.offset);
+		SetUninitializedRegions(p_block_for_index, segment_size, block_pointer.offset, bitmask_offset);
 
 	} else {
+		// create a new block that can potentially be used as a partial block
 		D_ASSERT(block_handle);
+		D_ASSERT(!block_pointer.offset);
 		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
-		SetUninitializedRegions(*p_block_for_index, segment_size, bitmask_offset + block_pointer.offset);
+		SetUninitializedRegions(*p_block_for_index, segment_size, block_pointer.offset, bitmask_offset);
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
@@ -136,10 +143,13 @@ void FixedSizeBuffer::Pin() {
 	Destroy();
 	buffer_handle = std::move(new_buffer_handle);
 	block_handle = new_block_handle;
-	block_pointer.block_id = INVALID_BLOCK;
+	block_pointer = BlockPointer();
 }
 
 uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
+
+	// this function calls Get() on the buffer, so the buffer must already be in memory
+	D_ASSERT(InMemory());
 
 	// get the bitmask data
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
@@ -193,7 +203,7 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 	// this function calls Get() on the buffer, so the buffer must already be in memory
 	D_ASSERT(InMemory());
 
-	// finds the maximum free bit in a bitmask, and adds one to it,
+	// finds the maximum zero bit in a bitmask, and adds one to it,
 	// so that max_offset * segment_size = allocated_size of this bitmask's buffer
 	idx_t entry_size = sizeof(validity_t) * 8;
 	idx_t bitmask_count = available_segments / entry_size;
@@ -257,19 +267,25 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 }
 
 void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size,
-                                              idx_t offset) {
+                                              const idx_t offset, const idx_t bitmask_offset) {
+
+	// this function calls Get() on the buffer, so the buffer must already be in memory
+	D_ASSERT(InMemory());
 
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
 	ValidityMask mask(bitmask_ptr);
 
-	idx_t idx = 0;
-	while (offset < allocation_size) {
+	idx_t i = 0;
+	idx_t max_offset = offset + allocation_size;
+	idx_t current_offset = offset + bitmask_offset;
+	while (current_offset < max_offset) {
 
-		if (mask.RowIsValid(idx)) {
-			p_block_for_index.AddUninitializedRegion(offset, offset + segment_size);
+		if (mask.RowIsValid(i)) {
+			D_ASSERT(current_offset + segment_size <= max_offset);
+			p_block_for_index.AddUninitializedRegion(current_offset, current_offset + segment_size);
 		}
-		offset += segment_size;
-		idx++;
+		current_offset += segment_size;
+		i++;
 	}
 }
 
