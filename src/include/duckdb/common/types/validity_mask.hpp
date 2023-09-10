@@ -333,8 +333,8 @@ public:
 
 	DUCKDB_API static bool IsAligned(idx_t count);
 
-	void Serialize(Serializer &serializer, idx_t count);
-	void Deserialize(Deserializer &source, idx_t count);
+	void Write(WriteStream &writer, idx_t count);
+	void Read(ReadStream &reader, idx_t count);
 };
 
 } // namespace duckdb

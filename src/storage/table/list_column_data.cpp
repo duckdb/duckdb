@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_stats.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -321,10 +322,12 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		ColumnCheckpointState::WriteDataPointers(writer);
-		validity_state->WriteDataPointers(writer);
-		child_state->WriteDataPointers(writer);
+	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
+		ColumnCheckpointState::WriteDataPointers(writer, serializer);
+		serializer.WriteObject(101, "validity",
+		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
+		serializer.WriteObject(102, "child_column",
+		                       [&](Serializer &serializer) { child_state->WriteDataPointers(writer, serializer); });
 	}
 };
 
@@ -346,10 +349,14 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	return base_state;
 }
 
-void ListColumnData::DeserializeColumn(Deserializer &source) {
-	ColumnData::DeserializeColumn(source);
-	validity.DeserializeColumn(source);
-	child_column->DeserializeColumn(source);
+void ListColumnData::DeserializeColumn(Deserializer &deserializer) {
+	ColumnData::DeserializeColumn(deserializer);
+
+	deserializer.ReadObject(101, "validity",
+	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+
+	deserializer.ReadObject(102, "child_column",
+	                        [&](Deserializer &deserializer) { child_column->DeserializeColumn(deserializer); });
 }
 
 void ListColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,

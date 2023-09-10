@@ -120,9 +120,6 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	bool AllDeleted();
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer, MetadataManager &manager);
-	static RowGroupPointer Deserialize(Deserializer &source, MetadataManager &manager,
-	                                   const vector<LogicalType> &columns);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -148,8 +145,8 @@ public:
 	RowVersionManager &GetOrCreateVersionInfo();
 
 	// Serialization
-	static void FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer);
-	static RowGroupPointer FormatDeserialize(FormatDeserializer &deserializer);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 private:
 	shared_ptr<RowVersionManager> &GetVersionInfo();

@@ -14,6 +14,8 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
 
 #include <algorithm>
 
@@ -33,7 +35,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const shared_ptr<vector<FixedSizeAllocator>> &allocators_ptr, BlockPointer pointer)
+         AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
+         const BlockPointer &pointer)
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
       allocators(allocators_ptr), owns_data(false) {
 	if (!Radix::IsLittleEndian()) {
@@ -43,22 +46,20 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// initialize all allocators
 	if (!allocators) {
 		owns_data = true;
-		allocators = make_shared<vector<FixedSizeAllocator>>();
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node4), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node16), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node48), buffer_manager.GetBufferAllocator()));
-		allocators->emplace_back(FixedSizeAllocator(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+		auto &block_manager = table_io_manager.GetIndexBlockManager();
+
+		array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT> allocator_array = {
+		    make_uniq<FixedSizeAllocator>(sizeof(Prefix), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Leaf), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node4), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node16), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node48), block_manager),
+		    make_uniq<FixedSizeAllocator>(sizeof(Node256), block_manager)};
+		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	// set the root node of the tree
-	tree = make_uniq<Node>();
-	serialized_data_pointer = pointer;
 	if (pointer.IsValid()) {
-		tree->SetSerialized();
-		tree->SetPtr(pointer.block_id, pointer.offset);
-		tree->Deserialize(*this);
+		Deserialize(pointer);
 	}
 
 	// validate the types of the key columns
@@ -82,10 +83,6 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
 	}
-}
-
-ART::~ART() {
-	tree->Reset();
 }
 
 //===--------------------------------------------------------------------===//
@@ -351,7 +348,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	if (!Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint)) {
+	if (!Construct(*this, keys, row_ids, tree, key_section, has_constraint)) {
 		return false;
 	}
 
@@ -359,9 +356,8 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 	for (idx_t i = 0; i < count; i++) {
 		D_ASSERT(!keys[i].Empty());
-		auto leaf = Lookup(*tree, keys[i], 0);
-		D_ASSERT(leaf.IsSet());
-		D_ASSERT(Leaf::ContainsRowId(*this, leaf, row_ids[i]));
+		auto leaf = Lookup(tree, keys[i], 0);
+		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_ids[i]));
 	}
 #endif
 
@@ -393,7 +389,7 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		}
 
 		row_t row_id = row_identifiers[i];
-		if (!Insert(*tree, keys[i], 0, row_id)) {
+		if (!Insert(tree, keys[i], 0, row_id)) {
 			// failed to insert because of constraint violation
 			failed_index = i;
 			break;
@@ -407,7 +403,7 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 				continue;
 			}
 			row_t row_id = row_identifiers[i];
-			Erase(*tree, keys[i], 0, row_id);
+			Erase(tree, keys[i], 0, row_id);
 		}
 	}
 
@@ -422,9 +418,8 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		D_ASSERT(leaf.IsSet());
-		D_ASSERT(Leaf::ContainsRowId(*this, leaf, row_identifiers[i]));
+		auto leaf = Lookup(tree, keys[i], 0);
+		D_ASSERT(Leaf::ContainsRowId(*this, *leaf, row_identifiers[i]));
 	}
 #endif
 
@@ -465,7 +460,7 @@ bool ART::InsertToLeaf(Node &leaf, const row_t &row_id) {
 bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
 
 	// node is currently empty, create a leaf here with the key
-	if (!node.IsSet()) {
+	if (!node.HasMetadata()) {
 		D_ASSERT(depth <= key.len);
 		reference<Node> ref_node(node);
 		Prefix::New(*this, ref_node, key, depth, key.len - depth);
@@ -482,7 +477,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	if (node_type != NType::PREFIX) {
 		D_ASSERT(depth < key.len);
-		auto child = node.GetChild(*this, key[depth]);
+		auto child = node.GetChildMutable(*this, key[depth]);
 
 		// recurse, if a child exists at key[depth]
 		if (child) {
@@ -504,7 +499,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	// this is a prefix node, traverse
 	reference<Node> next_node(node);
-	auto mismatch_position = Prefix::Traverse(*this, next_node, key, depth);
+	auto mismatch_position = Prefix::TraverseMutable(*this, next_node, key, depth);
 
 	// prefix matches key
 	if (next_node.get().GetType() != NType::PREFIX) {
@@ -533,8 +528,15 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 }
 
 //===--------------------------------------------------------------------===//
-// Delete
+// Drop and Delete
 //===--------------------------------------------------------------------===//
+
+void ART::CommitDrop(IndexLock &index_lock) {
+	for (auto &allocator : *allocators) {
+		allocator->Reset();
+	}
+	tree.Clear();
+}
 
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
@@ -557,7 +559,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		if (keys[i].Empty()) {
 			continue;
 		}
-		Erase(*tree, keys[i], 0, row_identifiers[i]);
+		Erase(tree, keys[i], 0, row_identifiers[i]);
 	}
 
 #ifdef DEBUG
@@ -567,9 +569,9 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		if (leaf.IsSet()) {
-			D_ASSERT(!Leaf::ContainsRowId(*this, leaf, row_identifiers[i]));
+		auto leaf = Lookup(tree, keys[i], 0);
+		if (leaf) {
+			D_ASSERT(!Leaf::ContainsRowId(*this, *leaf, row_identifiers[i]));
 		}
 	}
 #endif
@@ -577,14 +579,14 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 
 void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
 
-	if (!node.IsSet()) {
+	if (!node.HasMetadata()) {
 		return;
 	}
 
 	// handle prefix
 	reference<Node> next_node(node);
 	if (next_node.get().GetType() == NType::PREFIX) {
-		Prefix::Traverse(*this, next_node, key, depth);
+		Prefix::TraverseMutable(*this, next_node, key, depth);
 		if (next_node.get().GetType() == NType::PREFIX) {
 			return;
 		}
@@ -599,14 +601,14 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	}
 
 	D_ASSERT(depth < key.len);
-	auto child = next_node.get().GetChild(*this, key[depth]);
+	auto child = next_node.get().GetChildMutable(*this, key[depth]);
 	if (child) {
-		D_ASSERT(child->IsSet());
+		D_ASSERT(child->HasMetadata());
 
 		auto temp_depth = depth + 1;
 		reference<Node> child_node(*child);
 		if (child_node.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, child_node, key, temp_depth);
+			Prefix::TraverseMutable(*this, child_node, key, temp_depth);
 			if (child_node.get().GetType() == NType::PREFIX) {
 				return;
 			}
@@ -666,24 +668,24 @@ static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &val
 
 bool ART::SearchEqual(ARTKey &key, idx_t max_count, vector<row_t> &result_ids) {
 
-	auto leaf = Lookup(*tree, key, 0);
-	if (!leaf.IsSet()) {
+	auto leaf = Lookup(tree, key, 0);
+	if (!leaf) {
 		return true;
 	}
-	return Leaf::GetRowIds(*this, leaf, result_ids, max_count);
+	return Leaf::GetRowIds(*this, *leaf, result_ids, max_count);
 }
 
 void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 
 	// we need to look for a leaf
-	auto leaf_node = Lookup(*tree, key, 0);
-	if (!leaf_node.IsSet()) {
+	auto leaf_node = Lookup(tree, key, 0);
+	if (!leaf_node) {
 		result_size = 0;
 		return;
 	}
 
 	// we only perform index joins on PK/FK columns
-	D_ASSERT(leaf_node.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(leaf_node->GetType() == NType::LEAF_INLINED);
 	result_size = 1;
 	return;
 }
@@ -692,37 +694,38 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 // Lookup
 //===--------------------------------------------------------------------===//
 
-Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
+optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey &key, idx_t depth) {
 
-	while (node.IsSet()) {
+	reference<const Node> node_ref(node);
+	while (node_ref.get().HasMetadata()) {
 
 		// traverse prefix, if exists
-		reference<Node> next_node(node);
+		reference<const Node> next_node(node_ref.get());
 		if (next_node.get().GetType() == NType::PREFIX) {
 			Prefix::Traverse(*this, next_node, key, depth);
 			if (next_node.get().GetType() == NType::PREFIX) {
-				return Node();
+				return nullptr;
 			}
 		}
 
 		if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
-			return next_node.get();
+			return &next_node.get();
 		}
 
 		D_ASSERT(depth < key.len);
 		auto child = next_node.get().GetChild(*this, key[depth]);
 		if (!child) {
 			// prefix matches key, but no child at byte, ART/subtree does not contain key
-			return Node();
+			return nullptr;
 		}
 
 		// lookup in child node
-		node = *child;
-		D_ASSERT(node.IsSet());
+		node_ref = *child;
+		D_ASSERT(node_ref.get().HasMetadata());
 		depth++;
 	}
 
-	return Node();
+	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
@@ -731,7 +734,7 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids) {
 
-	if (!tree->IsSet()) {
+	if (!tree.HasMetadata()) {
 		return true;
 	}
 	Iterator &it = state.iterator;
@@ -739,7 +742,7 @@ bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t
 	// find the lowest value that satisfies the predicate
 	if (!it.art) {
 		it.art = this;
-		if (!it.LowerBound(*tree, key, equal, 0)) {
+		if (!it.LowerBound(tree, key, equal, 0)) {
 			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
@@ -754,7 +757,7 @@ bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t
 bool ART::SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool equal, idx_t max_count,
                      vector<row_t> &result_ids) {
 
-	if (!tree->IsSet()) {
+	if (!tree.HasMetadata()) {
 		return true;
 	}
 	Iterator &it = state.iterator;
@@ -762,7 +765,7 @@ bool ART::SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool equal, 
 	if (!it.art) {
 		it.art = this;
 		// find the minimum value in the ART: we start scanning from this value
-		it.FindMinimum(*tree);
+		it.FindMinimum(tree);
 		// early-out, if the minimum value is higher than the upper bound
 		if (it.current_key > upper_bound) {
 			return true;
@@ -785,7 +788,7 @@ bool ART::SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey
 	// find the first node that satisfies the left predicate
 	if (!it.art) {
 		it.art = this;
-		if (!it.LowerBound(*tree, lower_bound, left_equal, 0)) {
+		if (!it.LowerBound(tree, lower_bound, left_equal, 0)) {
 			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
@@ -940,8 +943,8 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 			continue;
 		}
 
-		auto leaf = Lookup(*tree, keys[i], 0);
-		if (!leaf.IsSet()) {
+		auto leaf = Lookup(tree, keys[i], 0);
+		if (!leaf) {
 			if (conflict_manager.AddMiss(i)) {
 				found_conflict = i;
 			}
@@ -950,8 +953,8 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 		// when we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: leaves can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
-		D_ASSERT(leaf.GetType() == NType::LEAF_INLINED);
-		if (conflict_manager.AddHit(i, leaf.GetRowId())) {
+		D_ASSERT(leaf->GetType() == NType::LEAF_INLINED);
+		if (conflict_manager.AddHit(i, leaf->GetRowId())) {
 			found_conflict = i;
 		}
 	}
@@ -973,14 +976,38 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 BlockPointer ART::Serialize(MetadataWriter &writer) {
 
-	lock_guard<mutex> l(lock);
-	if (tree->IsSet()) {
-		serialized_data_pointer = tree->Serialize(*this, writer);
-	} else {
-		serialized_data_pointer = BlockPointer();
+	D_ASSERT(owns_data);
+
+	// early-out, if all allocators are empty
+	if (!tree.HasMetadata()) {
+		root_block_pointer = BlockPointer();
+		return root_block_pointer;
 	}
 
-	return serialized_data_pointer;
+	lock_guard<mutex> l(lock);
+	vector<BlockPointer> allocator_pointers;
+	for (auto &allocator : *allocators) {
+		allocator_pointers.push_back(allocator->Serialize(writer));
+	}
+
+	root_block_pointer = writer.GetBlockPointer();
+	writer.Write(tree);
+	for (auto &allocator_pointer : allocator_pointers) {
+		writer.Write(allocator_pointer);
+	}
+
+	return root_block_pointer;
+}
+
+void ART::Deserialize(const BlockPointer &pointer) {
+
+	D_ASSERT(pointer.IsValid());
+	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
+	tree = reader.Read<Node>();
+
+	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
+		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -991,7 +1018,7 @@ void ART::InitializeVacuum(ARTFlags &flags) {
 
 	flags.vacuum_flags.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.vacuum_flags.push_back(allocator.InitializeVacuum());
+		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}
 }
 
@@ -999,7 +1026,7 @@ void ART::FinalizeVacuum(const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < allocators->size(); i++) {
 		if (flags.vacuum_flags[i]) {
-			(*allocators)[i].FinalizeVacuum();
+			(*allocators)[i]->FinalizeVacuum();
 		}
 	}
 }
@@ -1008,9 +1035,9 @@ void ART::Vacuum(IndexLock &state) {
 
 	D_ASSERT(owns_data);
 
-	if (!tree->IsSet()) {
+	if (!tree.HasMetadata()) {
 		for (auto &allocator : *allocators) {
-			allocator.Reset();
+			allocator->Reset();
 		}
 		return;
 	}
@@ -1032,14 +1059,10 @@ void ART::Vacuum(IndexLock &state) {
 	}
 
 	// traverse the allocated memory of the tree to perform a vacuum
-	tree->Vacuum(*this, flags);
+	tree.Vacuum(*this, flags);
 
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
-
-	for (auto &allocator : *allocators) {
-		allocator.Verify();
-	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1052,38 +1075,34 @@ void ART::InitializeMerge(ARTFlags &flags) {
 
 	flags.merge_buffer_counts.reserve(allocators->size());
 	for (auto &allocator : *allocators) {
-		flags.merge_buffer_counts.emplace_back(allocator.buffers.size());
+		flags.merge_buffer_counts.emplace_back(allocator->GetUpperBoundBufferId());
 	}
 }
 
 bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 	auto &other_art = other_index.Cast<ART>();
-	if (!other_art.tree->IsSet()) {
+	if (!other_art.tree.HasMetadata()) {
 		return true;
 	}
 
 	if (other_art.owns_data) {
-		if (tree->IsSet()) {
+		if (tree.HasMetadata()) {
 			//  fully deserialize other_index, and traverse it to increment its buffer IDs
 			ARTFlags flags;
 			InitializeMerge(flags);
-			other_art.tree->InitializeMerge(other_art, flags);
+			other_art.tree.InitializeMerge(other_art, flags);
 		}
 
 		// merge the node storage
 		for (idx_t i = 0; i < allocators->size(); i++) {
-			(*allocators)[i].Merge((*other_art.allocators)[i]);
+			(*allocators)[i]->Merge(*(*other_art.allocators)[i]);
 		}
 	}
 
 	// merge the ARTs
-	if (!tree->Merge(*this, *other_art.tree)) {
+	if (!tree.Merge(*this, other_art.tree)) {
 		return false;
-	}
-
-	for (auto &allocator : *allocators) {
-		allocator.Verify();
 	}
 	return true;
 }
@@ -1100,8 +1119,8 @@ string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
 }
 
 string ART::VerifyAndToStringInternal(const bool only_verify) {
-	if (tree->IsSet()) {
-		return "ART: " + tree->VerifyAndToString(*this, only_verify);
+	if (tree.HasMetadata()) {
+		return "ART: " + tree.VerifyAndToString(*this, only_verify);
 	}
 	return "[empty]";
 }

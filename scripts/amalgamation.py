@@ -35,7 +35,7 @@ main_header_files = [
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'timestamp.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'time.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_file_writer.hpp'),
-    os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'buffered_serializer.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'serializer', 'memory_stream.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'appender.hpp'),
     os.path.join(include_dir, 'duckdb', 'main', 'client_context.hpp'),
     os.path.join(include_dir, 'duckdb', 'function', 'function.hpp'),

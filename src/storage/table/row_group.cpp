@@ -1,7 +1,6 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
@@ -18,8 +17,9 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/row_version_manager.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
 
 namespace duckdb {
 
@@ -805,7 +805,10 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 		//
 		// Just as above, the state can refer to many other states, so this
 		// can cascade recursively into more pointer writes.
-		state->WriteDataPointers(writer);
+		BinarySerializer serializer(data_writer);
+		serializer.Begin();
+		state->WriteDataPointers(writer, serializer);
+		serializer.End();
 	}
 	row_group_pointer.deletes_pointers = CheckpointDeletes(writer.GetPayloadWriter().GetManager());
 	Verify();
@@ -826,61 +829,14 @@ vector<MetaBlockPointer> RowGroup::CheckpointDeletes(MetadataManager &manager) {
 	return version_info->Checkpoint(manager);
 }
 
-void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &main_serializer, MetadataManager &manager) {
-	FieldWriter writer(main_serializer);
-	writer.WriteField<uint64_t>(pointer.row_start);
-	writer.WriteField<uint64_t>(pointer.tuple_count);
-	auto &serializer = writer.GetSerializer();
-	for (auto &data_pointer : pointer.data_pointers) {
-		serializer.Write<idx_t>(data_pointer.block_pointer);
-		serializer.Write<uint32_t>(data_pointer.offset);
-	}
-	serializer.Write<idx_t>(pointer.deletes_pointers.size());
-	for (auto &delete_pointer : pointer.deletes_pointers) {
-		serializer.Write<idx_t>(delete_pointer.block_pointer);
-		serializer.Write<uint32_t>(delete_pointer.offset);
-	}
-	writer.Finalize();
-}
-
-RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, MetadataManager &manager,
-                                      const vector<LogicalType> &columns) {
-	RowGroupPointer result;
-
-	FieldReader reader(main_source);
-	result.row_start = reader.ReadRequired<uint64_t>();
-	result.tuple_count = reader.ReadRequired<uint64_t>();
-
-	auto physical_columns = columns.size();
-	result.data_pointers.reserve(physical_columns);
-
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < physical_columns; i++) {
-		MetaBlockPointer pointer;
-		pointer.block_pointer = source.Read<idx_t>();
-		pointer.offset = source.Read<uint32_t>();
-		result.data_pointers.push_back(pointer);
-	}
-	auto delete_count = source.Read<idx_t>();
-	for (idx_t i = 0; i < delete_count; i++) {
-		MetaBlockPointer pointer;
-		pointer.block_pointer = source.Read<idx_t>();
-		pointer.offset = source.Read<uint32_t>();
-		result.deletes_pointers.push_back(pointer);
-	}
-
-	reader.Finalize();
-	return result;
-}
-
-void RowGroup::FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer) {
+void RowGroup::Serialize(RowGroupPointer &pointer, Serializer &serializer) {
 	serializer.WriteProperty(100, "row_start", pointer.row_start);
 	serializer.WriteProperty(101, "tuple_count", pointer.tuple_count);
 	serializer.WriteProperty(102, "data_pointers", pointer.data_pointers);
 	serializer.WriteProperty(103, "delete_pointers", pointer.deletes_pointers);
 }
 
-RowGroupPointer RowGroup::FormatDeserialize(FormatDeserializer &deserializer) {
+RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	RowGroupPointer result;
 	result.row_start = deserializer.ReadProperty<uint64_t>(100, "row_start");
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");

@@ -18,8 +18,8 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
@@ -48,11 +48,8 @@ public:
 
 	virtual bool HasDeletes() const = 0;
 
-	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	virtual void FormatSerialize(FormatSerializer &serializer) const = 0;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void Write(WriteStream &writer) const;
+	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 public:
 	template <class TARGET>
@@ -92,11 +89,8 @@ public:
 
 	bool HasDeletes() const override;
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Write(WriteStream &writer) const override;
+	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
 	template <class OP>
@@ -142,11 +136,8 @@ public:
 
 	bool HasDeletes() const override;
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Write(WriteStream &writer) const override;
+	static unique_ptr<ChunkInfo> Read(ReadStream &reader);
 
 private:
 	template <class OP>

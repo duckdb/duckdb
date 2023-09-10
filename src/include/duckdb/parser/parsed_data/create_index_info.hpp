@@ -45,16 +45,11 @@ struct CreateIndexInfo : public CreateInfo {
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;
 
-protected:
-	void SerializeInternal(Serializer &serializer) const override;
-
 public:
 	DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
 
-	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &deserializer);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

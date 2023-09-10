@@ -1,0 +1,315 @@
+# name: test/sql/json/scalar/test_json_create.test
+# description: Test JSON create functions {json_object(), json_array(), json_quote()}
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# issue #7727
+query T
+SELECT TRY_CAST('{{P{P{{{{ASD{AS{D{' AS JSON);
+----
+NULL
+
+query T
+select json_quote({n: 42})
+----
+{"n":42}
+
+# alias
+query T
+select to_json({n: 42})
+----
+{"n":42}
+
+statement error
+select to_json({n: 42}, {extra: 'argument'})
+----
+Invalid Input Error: to_json() takes exactly one argument
+
+query T
+select to_json(union_value(n := 42))
+----
+{"n":42}
+
+query T
+SELECT to_json(union_value(a := NULL)::UNION(a INTEGER, b VARCHAR))
+----
+{"a":null}
+
+query T
+SELECT to_json(union_value(b := 'abc')::UNION(a INTEGER, b VARCHAR, c FLOAT))
+----
+{"b":"abc"}
+
+query I
+select to_json(i::UNION(a varchar, b bool)) from (VALUES (null), ('test')) tbl(i);
+----
+{"a":null}
+{"a":"test"}
+
+query I
+select to_json(null::UNION(a varchar, b bool));
+----
+NULL
+
+query T
+select json_object('duck', 42)
+----
+{"duck":42}
+
+query T
+select json_object('duck', '{"goose": [1, 2, 3, 4, 5, 6, 7]}'::JSON)
+----
+{"duck":{"goose":[1,2,3,4,5,6,7]}}
+
+query T
+select json_object('nested', {duck: 42})
+----
+{"nested":{"duck":42}}
+
+query T
+select json_object('nested', [{duck: 42}, NULL])
+----
+{"nested":[{"duck":42},null]}
+
+query T
+select json_object('nested', map(['duck'], [42]))
+----
+{"nested":{"duck":42}}
+
+query T
+select json_object('nested', map(['duck', 'goose'], [42, 7]))
+----
+{"nested":{"duck":42,"goose":7}}
+
+query T
+select json_object('nested', map([0, 'goose'], [42, 7]))
+----
+{"nested":{"0":42,"goose":7}}
+
+query T
+select json_object('nested', map(['duck', 'goose'], [NULL, 7]))
+----
+{"nested":{"duck":null,"goose":7}}
+
+query T
+select json_object('nested', [1, 2, 3])
+----
+{"nested":[1,2,3]}
+
+query T
+select json_object('nested', {nested2: [1, 2, 3]})
+----
+{"nested":{"nested2":[1,2,3]}}
+
+query T
+select json_object('nested', [{nested2: 1}, {nested2: 2}, {nested2: 3}])
+----
+{"nested":[{"nested2":1},{"nested2":2},{"nested2":3}]}
+
+statement ok
+create table test (a int, b double, c varchar, d int[], e uinteger)
+
+statement ok
+insert into test values
+    (0,		0.5,	'short',				[0, 1, 2, 3, 4, 5, 6, 7, 9],	33),
+    (42,	1,		'looooooooooooooong',	[],								42),
+    (-42,	0.42,	2,						[1, 2, 3],						1111),
+    (777,	19.96,	'duck',					NULL,							1),
+    (-777,	4.2,	'goose',				[4, 2],							NULL)
+#	a		b		c						d								e
+
+query T
+select json_quote(row(a, b, c, d, e)) from test
+----
+{"a":0,"b":0.5,"c":"short","d":[0,1,2,3,4,5,6,7,9],"e":33}
+{"a":42,"b":1.0,"c":"looooooooooooooong","d":[],"e":42}
+{"a":-42,"b":0.42,"c":"2","d":[1,2,3],"e":1111}
+{"a":777,"b":19.96,"c":"duck","d":null,"e":1}
+{"a":-777,"b":4.2,"c":"goose","d":[4,2],"e":null}
+
+query T
+select json_array(a, b, c, d, e) from test
+----
+[0,0.5,"short",[0,1,2,3,4,5,6,7,9],33]
+[42,1.0,"looooooooooooooong",[],42]
+[-42,0.42,"2",[1,2,3],1111]
+[777,19.96,"duck",null,1]
+[-777,4.2,"goose",[4,2],null]
+
+query T
+select json_object(a, a, b, b, c, c, d, d, e, e) from test
+----
+{"0":0,"0.5":0.5,"short":"short","[0, 1, 2, 3, 4, 5, 6, 7, 9]":[0,1,2,3,4,5,6,7,9],"33":33}
+{"42":42,"1.0":1.0,"looooooooooooooong":"looooooooooooooong","[]":[],"42":42}
+{"-42":-42,"0.42":0.42,"2":"2","[1, 2, 3]":[1,2,3],"1111":1111}
+{"777":777,"19.96":19.96,"duck":"duck","1":1}
+{"-777":-777,"4.2":4.2,"goose":"goose","[4, 2]":[4,2]}
+
+query T
+select json_quote(map(list(a), list(b))) from test
+----
+{"0":0.5,"42":1.0,"-42":0.42,"777":19.96,"-777":4.2}
+
+query T
+select json_quote(map(list(b), list(c))) from test
+----
+{"0.5":"short","1.0":"looooooooooooooong","0.42":"2","19.96":"duck","4.2":"goose"}
+
+query T
+select json_quote(map(list(c), list(d))) from test
+----
+{"short":[0,1,2,3,4,5,6,7,9],"looooooooooooooong":[],"2":[1,2,3],"duck":null,"goose":[4,2]}
+
+# Histogram not implemented for INT[]
+statement error
+select json_quote(map(list(d), list(e))) from test
+
+query T
+select json_quote(map(list(c), list(e))) from test
+----
+{"short":33,"looooooooooooooong":42,"2":1111,"duck":1,"goose":null}
+
+# some postgres aliases
+query T
+select row_to_json({a: 42})
+----
+{"a":42}
+
+statement error
+select row_to_json({a: 42}, false)
+----
+row_to_json() takes exactly one argument
+
+query T
+select row_to_json(NULL)
+----
+NULL
+
+statement error
+select row_to_json([42])
+
+query T
+select array_to_json([42])
+----
+[42]
+
+statement error
+select array_to_json([42], [21])
+----
+array_to_json() takes exactly one argument
+
+query T
+select array_to_json(NULL)
+----
+NULL
+
+statement error
+select array_to_json({a: 42})
+
+# Some SQLite tests
+query T
+SELECT json_array(1,json_object('abc',2.5,'def',null,'ghi','hello'),99);
+----
+[1,{"abc":2.5,"def":null,"ghi":"hello"},99]
+
+query T
+SELECT json_object('a',1,'b',2.5,'c',null,'d','String Test');
+----
+{"a":1,"b":2.5,"c":null,"d":"String Test"}
+
+# must have even number of args
+statement error
+SELECT json_object('a',1,'b');
+
+query T
+SELECT json_array(1,2.5,null,'hello');
+----
+[1,2.5,null,"hello"]
+
+query T
+SELECT json_array(1,'{"abc":2.5,"def":null,"ghi":hello}',99);
+----
+[1,"{\"abc\":2.5,\"def\":null,\"ghi\":hello}",99]
+
+query T
+SELECT json_array(1,json_quote('{"abc":2.5,"def":null,"ghi":"hello"}'),99);
+----
+[1,"{\"abc\":2.5,\"def\":null,\"ghi\":\"hello\"}",99]
+
+query T
+SELECT json_array(1,json_object('abc',2.5,'def',null,'ghi','hello'),99);
+----
+[1,{"abc":2.5,"def":null,"ghi":"hello"},99]
+
+query T
+SELECT json_object('ex','[52,3.14159]');
+----
+{"ex":"[52,3.14159]"}
+
+query T
+SELECT json_object('ex','[52,3.14159]'::JSON);
+----
+{"ex":[52,3.14159]}
+
+query T
+SELECT json_object('ex',json_array(52,3.14159));
+----
+{"ex":[52,3.14159]}
+
+query T
+SELECT json_object('a',2,'c',4);
+----
+{"a":2,"c":4}
+
+query T
+SELECT json_object('a',2,'c','{e:5}');
+----
+{"a":2,"c":"{e:5}"}
+
+query T
+SELECT json_object('a',2,'c',json_object('e',5));
+----
+{"a":2,"c":{"e":5}}
+
+query T
+SELECT json_array(1,2,'3',4);
+----
+[1,2,"3",4]
+
+query T
+SELECT json_array('[1,2]');
+----
+["[1,2]"]
+
+query T
+SELECT json_array(json_array(1,2));
+----
+[[1,2]]
+
+query T
+SELECT json_array(1,null,'3','[4,5]','{"six":7.7}');
+----
+[1,null,"3","[4,5]","{\"six\":7.7}"]
+
+query T
+SELECT json_array(1,null,'3','[4,5]'::JSON,'{"six":7.7}'::JSON);
+----
+[1,null,"3",[4,5],{"six":7.7}]
+
+query T
+SELECT json_array(
+  -9223372036854775808,9223372036854775807,0,1,-1,
+  0.0, 1.0, -1.0, -1e99, +2e100,
+  'one','two','three',
+  4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18,
+  19, NULL, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+  'abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  99);
+----
+[-9223372036854775808,9223372036854775807,0,1,-1,0.0,1.0,-1.0,-1e99,2e100,"one","two","three",4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,null,21,22,23,24,25,26,27,28,29,30,31,"abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ","abcdefghijklmnopqrstuvwyxzABCDEFGHIJKLMNOPQRSTUVWXYZ",99]

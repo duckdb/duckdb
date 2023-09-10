@@ -14,10 +14,8 @@
 #include "duckdb/parser/parsed_expression.hpp"
 
 namespace duckdb {
-class FieldWriter;
-class FieldReader;
-class FormatDeserializer;
-class FormatSerializer;
+class Deserializer;
+class Serializer;
 
 enum class ResultModifierType : uint8_t {
 	LIMIT_MODIFIER = 1,
@@ -45,15 +43,9 @@ public:
 
 	//! Create a copy of this ResultModifier
 	virtual unique_ptr<ResultModifier> Copy() const = 0;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	void Serialize(Serializer &serializer) const;
-	//! Serializes a ResultModifier to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	//! Deserializes a blob back into a ResultModifier
-	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -87,12 +79,10 @@ struct OrderByNode {
 	unique_ptr<ParsedExpression> expression;
 
 public:
-	void Serialize(Serializer &serializer) const;
 	string ToString() const;
-	static OrderByNode Deserialize(Deserializer &source);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static OrderByNode FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static OrderByNode Deserialize(Deserializer &deserializer);
 };
 
 class LimitModifier : public ResultModifier {
@@ -111,11 +101,9 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 class OrderModifier : public ResultModifier {
@@ -132,11 +120,9 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 
 	static bool Equals(const unique_ptr<OrderModifier> &left, const unique_ptr<OrderModifier> &right);
 };
@@ -155,11 +141,9 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 class LimitPercentModifier : public ResultModifier {
@@ -178,11 +162,9 @@ public:
 public:
 	bool Equals(const ResultModifier &other) const override;
 	unique_ptr<ResultModifier> Copy() const override;
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<ResultModifier> Deserialize(FieldReader &reader);
 
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ResultModifier> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

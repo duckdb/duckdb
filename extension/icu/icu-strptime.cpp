@@ -48,15 +48,6 @@ struct ICUStrptime : public ICUDateFunc {
 		duckdb::unique_ptr<FunctionData> Copy() const override {
 			return make_uniq<ICUStrptimeBindData>(*this);
 		}
-
-		static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-			throw NotImplementedException("FIXME: serialize icu-strptime");
-		}
-
-		static duckdb::unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-		                                                    ScalarFunction &bound_function) {
-			throw NotImplementedException("FIXME: serialize icu-strptime");
-		}
 	};
 
 	static void ParseFormatSpecifier(string_t &format_specifier, StrpTimeFormat &format) {

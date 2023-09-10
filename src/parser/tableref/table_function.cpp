@@ -1,8 +1,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -19,20 +18,6 @@ bool TableFunctionRef::Equals(const TableRef &other_p) const {
 	}
 	auto &other = other_p.Cast<TableFunctionRef>();
 	return function->Equals(*other.function);
-}
-
-void TableFunctionRef::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*function);
-	writer.WriteString(alias);
-	writer.WriteList<string>(column_name_alias);
-}
-
-unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<TableFunctionRef>();
-	result->function = reader.ReadRequiredSerializable<ParsedExpression>();
-	result->alias = reader.ReadRequired<string>();
-	result->column_name_alias = reader.ReadRequiredList<string>();
-	return std::move(result);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Copy() {

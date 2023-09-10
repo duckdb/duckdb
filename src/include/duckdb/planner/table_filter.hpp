@@ -15,8 +15,6 @@
 
 namespace duckdb {
 class BaseStatistics;
-class FieldWriter;
-class FieldReader;
 
 enum class TableFilterType : uint8_t {
 	CONSTANT_COMPARISON = 0, // constant comparison (e.g. =C, >C, >=C, <C, <=C)
@@ -44,12 +42,8 @@ public:
 		return filter_type != other.filter_type;
 	}
 
-	void Serialize(Serializer &serializer) const;
-	virtual void Serialize(FieldWriter &writer) const = 0;
-	static unique_ptr<TableFilter> Deserialize(Deserializer &source);
-
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<TableFilter> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const;
+	static unique_ptr<TableFilter> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -102,10 +96,7 @@ public:
 	}
 
 	void Serialize(Serializer &serializer) const;
-	static unique_ptr<TableFilterSet> Deserialize(Deserializer &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static TableFilterSet FormatDeserialize(FormatDeserializer &deserializer);
+	static TableFilterSet Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

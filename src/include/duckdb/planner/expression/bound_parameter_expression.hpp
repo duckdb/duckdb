@@ -40,11 +40,8 @@ public:
 
 	unique_ptr<Expression> Copy() override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<Expression> Deserialize(Deserializer &deserializer);
 
 private:
 	BoundParameterExpression(bound_parameter_map_t &global_parameter_set, string identifier, LogicalType return_type,
