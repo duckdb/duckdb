@@ -23,8 +23,6 @@ public:
 
 	//! The expression rewriter this rule belongs to
 	ExpressionRewriter &rewriter;
-	//! The root
-	unique_ptr<LogicalOperatorMatcher> logical_root;
 	//! The expression matcher of the rule
 	unique_ptr<ExpressionMatcher> root;
 
