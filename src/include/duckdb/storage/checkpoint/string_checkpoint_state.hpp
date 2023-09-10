@@ -51,7 +51,7 @@ struct UncompressedStringSegmentState : public CompressedSegmentState {
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
 	unique_ptr<OverflowStringWriter> overflow_writer;
 	//! Map of block id to string block
-	unordered_map<block_id_t, reference<StringBlock>> overflow_blocks;
+	unordered_map<block_id_t, StringBlock *> overflow_blocks;
 };
 
 } // namespace duckdb
