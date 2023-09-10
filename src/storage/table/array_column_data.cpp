@@ -58,58 +58,29 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 
 	// TODO: Get the actual offset
 	auto array_size = ArrayType::GetSize(type);
-	auto child_offset = row_idx * array_size;
-	D_ASSERT(child_offset <= child_column->GetMaxEntry()); // TODO: This assert fails
-
-	if (child_offset < child_column->GetMaxEntry()) {
-		child_column->InitializeScanWithOffset(state.child_states[1], child_offset);
-	}
-	state.last_offset = child_offset;
-
-	// we need to read the list at position row_idx to get the correct row offset of the child
-	/*
-	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
+	auto child_offset = row_idx == start ? 0 : (row_idx * array_size);
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
+
 	if (child_offset < child_column->GetMaxEntry()) {
-	    child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
+		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
 	state.last_offset = child_offset;
-	*/
 }
 
 idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	/*
-	// Scan validity
-	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result);
-	// Scan child column
-	auto &child_vec = ArrayVector::GetEntry(result);
-	child_column->Scan(transaction, vector_index, state.child_states[1], child_vec);
-	return scan_count;
-	*/
 	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
 idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	/*
-	// Scan validity
-	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
-	// Scan child column
-	auto &child_vec = ArrayVector::GetEntry(result);
-	child_column->ScanCommitted(vector_index, state.child_states[1], child_vec, allow_updates);
-	return scan_count;
-	*/
 	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
 idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	// Scan validity
 	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
-
 	auto array_size = ArrayType::GetSize(type);
-
 	// Scan child column
 	auto &child_vec = ArrayVector::GetEntry(result);
-	// TODO: Is it that simple?
 	child_column->ScanCount(state.child_states[1], child_vec, count * array_size);
 	return scan_count;
 }
