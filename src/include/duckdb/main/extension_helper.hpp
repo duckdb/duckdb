@@ -51,6 +51,7 @@ public:
 
 	//! Autoload an extension by name. Depending on the current settings, this will either load or install+load
 	static void AutoLoadExtension(ClientContext &context, const string &extension_name);
+	DUCKDB_API static bool TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept;
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
