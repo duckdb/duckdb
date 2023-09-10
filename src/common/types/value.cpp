@@ -1773,6 +1773,12 @@ void Value::Serialize(Serializer &serializer) const {
 				serializer.WriteProperty(100, "children", children);
 			});
 		} break;
+		case PhysicalType::ARRAY: {
+			serializer.WriteObject(102, "value", [&](Serializer &serializer) {
+				auto &children = ArrayValue::GetChildren(*this);
+				serializer.WriteProperty(100, "children", children);
+			});
+		} break;
 		default:
 			throw NotImplementedException("Unimplemented type for Serialize");
 		}
@@ -1844,6 +1850,12 @@ Value Value::Deserialize(Deserializer &deserializer) {
 		});
 	} break;
 	case PhysicalType::STRUCT: {
+		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
+			auto children = obj.ReadProperty<vector<Value>>(100, "children");
+			new_value.value_info_ = make_shared<NestedValueInfo>(children);
+		});
+	} break;
+	case PhysicalType::ARRAY: {
 		deserializer.ReadObject(102, "value", [&](Deserializer &obj) {
 			auto children = obj.ReadProperty<vector<Value>>(100, "children");
 			new_value.value_info_ = make_shared<NestedValueInfo>(children);

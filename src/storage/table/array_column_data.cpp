@@ -206,7 +206,6 @@ public:
 	}
 
 	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
-		ColumnCheckpointState::WriteDataPointers(writer, serializer);
 		serializer.WriteObject(101, "validity",
 		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
 		serializer.WriteObject(102, "child_column",
@@ -229,9 +228,13 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 	return std::move(checkpoint_state);
 }
 
-void ArrayColumnData::DeserializeColumn(Deserializer &source) {
-	validity.DeserializeColumn(source);
-	child_column->DeserializeColumn(source);
+void ArrayColumnData::DeserializeColumn(Deserializer &deserializer) {
+	deserializer.ReadObject(101, "validity",[&](Deserializer &source) {
+		validity.DeserializeColumn(source);
+	});
+	deserializer.ReadObject(102, "child_column",[&](Deserializer &source) {
+		child_column->DeserializeColumn(source);
+	});
 	this->count = validity.count;
 }
 
