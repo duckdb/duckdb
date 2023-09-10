@@ -63,8 +63,6 @@ SELECT COUNT(*) FROM test WHERE i%7=0
 ----
 200
 
-mode skip
-
 query I
 DELETE FROM test WHERE i%7=0;
 ----
