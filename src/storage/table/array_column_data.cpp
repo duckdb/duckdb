@@ -200,12 +200,9 @@ unique_ptr<ColumnCheckpointState> ArrayColumnData::Checkpoint(RowGroup &row_grou
 }
 
 void ArrayColumnData::DeserializeColumn(Deserializer &deserializer) {
-	deserializer.ReadObject(101, "validity",[&](Deserializer &source) {
-		validity.DeserializeColumn(source);
-	});
-	deserializer.ReadObject(102, "child_column",[&](Deserializer &source) {
-		child_column->DeserializeColumn(source);
-	});
+	deserializer.ReadObject(101, "validity", [&](Deserializer &source) { validity.DeserializeColumn(source); });
+	deserializer.ReadObject(102, "child_column",
+	                        [&](Deserializer &source) { child_column->DeserializeColumn(source); });
 	this->count = validity.count;
 }
 
