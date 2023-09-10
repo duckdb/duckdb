@@ -28,29 +28,6 @@ unique_ptr<CreateInfo> CreateViewInfo::Copy() const {
 	return std::move(result);
 }
 
-unique_ptr<CreateViewInfo> CreateViewInfo::Deserialize(Deserializer &deserializer) {
-	auto result = make_uniq<CreateViewInfo>();
-	result->DeserializeBase(deserializer);
-
-	FieldReader reader(deserializer);
-	result->view_name = reader.ReadRequired<string>();
-	result->aliases = reader.ReadRequiredList<string>();
-	result->types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	result->query = reader.ReadOptional<SelectStatement>(nullptr);
-	reader.Finalize();
-
-	return result;
-}
-
-void CreateViewInfo::SerializeInternal(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(view_name);
-	writer.WriteList<string>(aliases);
-	writer.WriteRegularSerializableList(types);
-	writer.WriteOptional(query);
-	writer.Finalize();
-}
-
 unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, unique_ptr<CreateViewInfo> info) {
 	D_ASSERT(info);
 	D_ASSERT(!info->view_name.empty());
