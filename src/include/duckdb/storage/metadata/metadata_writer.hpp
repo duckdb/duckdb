@@ -16,7 +16,7 @@ namespace duckdb {
 class MetadataWriter : public WriteStream {
 public:
 	explicit MetadataWriter(MetadataManager &manager,
-							optional_ptr<vector<MetaBlockPointer>> written_pointers = nullptr);
+	                        optional_ptr<vector<MetaBlockPointer>> written_pointers = nullptr);
 	MetadataWriter(const MetadataWriter &) = delete;
 	MetadataWriter &operator=(const MetadataWriter &) = delete;
 	~MetadataWriter() override;
