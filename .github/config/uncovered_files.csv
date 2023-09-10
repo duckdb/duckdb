@@ -49,7 +49,7 @@ common/re2_regex.cpp	37
 common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
 common/row_operations/row_gather.cpp	11
-common/row_operations/row_match.cpp	4
+common/row_operations/row_match.cpp	6
 common/serializer/deserializer.cpp	13
 common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
@@ -97,7 +97,7 @@ common/types/uuid.cpp	3
 common/types/validity_mask.cpp	12
 common/types/value.cpp	180
 common/types/vector.cpp	153
-common/value_operations/comparison_operations.cpp	32
+common/value_operations/comparison_operations.cpp	33
 common/vector_operations/generators.cpp	29
 common/vector_operations/is_distinct_from.cpp	49
 common/vector_operations/null_operations.cpp	15
@@ -111,7 +111,7 @@ core_functions/aggregate/distributive/bitagg.cpp	8
 core_functions/aggregate/distributive/bitstring_agg.cpp	6
 core_functions/aggregate/distributive/entropy.cpp	9
 core_functions/aggregate/distributive/kurtosis.cpp	3
-core_functions/aggregate/distributive/minmax.cpp	2
+core_functions/aggregate/distributive/minmax.cpp	3
 core_functions/aggregate/distributive/skew.cpp	2
 core_functions/aggregate/distributive/sum.cpp	10
 core_functions/aggregate/holistic/approximate_quantile.cpp	29
@@ -386,6 +386,7 @@ include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
 include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
+include/duckdb/common/types/vector_buffer.hpp	1
 include/duckdb/common/vector_operations/aggregate_executor.hpp	17
 include/duckdb/common/vector_operations/binary_executor.hpp	15
 include/duckdb/common/vector_operations/generic_executor.hpp	9
@@ -787,6 +788,7 @@ storage/standard_buffer_manager.cpp	128
 storage/statistics/base_statistics.cpp	48
 storage/statistics/column_statistics.cpp	8
 storage/statistics/distinct_statistics.cpp	12
+storage/statistics/array_stats.cpp	1
 storage/statistics/list_stats.cpp	13
 storage/statistics/numeric_stats.cpp	117
 storage/statistics/numeric_stats_union.cpp	3
@@ -805,6 +807,7 @@ storage/table/column_data.cpp	16
 storage/table/column_data_checkpointer.cpp	4
 storage/table/column_segment.cpp	62
 storage/table/list_column_data.cpp	28
+storage/table/array_column_data.cpp	25
 storage/table/row_group.cpp	54
 storage/table/row_group_collection.cpp	7
 storage/table/scan_state.cpp	7
