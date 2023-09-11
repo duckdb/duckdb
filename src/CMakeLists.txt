@@ -75,7 +75,8 @@ else()
       duckdb_utf8proc
       duckdb_hyperloglog
       duckdb_fastpforlib
-      duckdb_mbedtls)
+      duckdb_mbedtls
+      duckdb_zstd)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})

@@ -48,8 +48,8 @@ namespace duckdb_zstd {
  *  Special values : if return == 0, srcData is not compressible => Nothing is stored within dst !!!
  *                   if HUF_isError(return), compression failed (more details using HUF_getErrorName())
  */
-HUF_PUBLIC_API size_t HUF_compress(void* dst, size_t dstCapacity,
-                             const void* src, size_t srcSize);
+	HUF_PUBLIC_API size_t HUF_compress(void *dst, size_t dstCapacity,
+									   const void *src, size_t srcSize);
 
 /** HUF_decompress() :
  *  Decompress HUF data from buffer 'cSrc', of size 'cSrcSize',
@@ -61,17 +61,17 @@ HUF_PUBLIC_API size_t HUF_compress(void* dst, size_t dstCapacity,
  * @return : size of regenerated data (== originalSize),
  *           or an error code, which can be tested using HUF_isError()
  */
-HUF_PUBLIC_API size_t HUF_decompress(void* dst,  size_t originalSize,
-                               const void* cSrc, size_t cSrcSize);
+	HUF_PUBLIC_API size_t HUF_decompress(void *dst, size_t originalSize,
+										 const void *cSrc, size_t cSrcSize);
 
 
 /* ***   Tool functions *** */
 #define HUF_BLOCKSIZE_MAX (128 * 1024)                  /**< maximum input size for a single block compressed with HUF_compress */
-HUF_PUBLIC_API size_t HUF_compressBound(size_t size);   /**< maximum compressed size (worst case) */
+	HUF_PUBLIC_API size_t HUF_compressBound(size_t size);   /**< maximum compressed size (worst case) */
 
 /* Error Management */
-HUF_PUBLIC_API unsigned    HUF_isError(size_t code);       /**< tells if a return value is an error code */
-HUF_PUBLIC_API const char* HUF_getErrorName(size_t code);  /**< provides error code string (useful for debugging) */
+	HUF_PUBLIC_API unsigned HUF_isError(size_t code);       /**< tells if a return value is an error code */
+	HUF_PUBLIC_API const char *HUF_getErrorName(size_t code);  /**< provides error code string (useful for debugging) */
 
 
 /* ***   Advanced function   *** */
@@ -80,18 +80,18 @@ HUF_PUBLIC_API const char* HUF_getErrorName(size_t code);  /**< provides error c
  *  Same as HUF_compress(), but offers control over `maxSymbolValue` and `tableLog`.
  * `maxSymbolValue` must be <= HUF_SYMBOLVALUE_MAX .
  * `tableLog` must be `<= HUF_TABLELOG_MAX` . */
-HUF_PUBLIC_API size_t HUF_compress2 (void* dst, size_t dstCapacity,
-                               const void* src, size_t srcSize,
-                               unsigned maxSymbolValue, unsigned tableLog);
+	HUF_PUBLIC_API size_t HUF_compress2(void *dst, size_t dstCapacity,
+										const void *src, size_t srcSize,
+										unsigned maxSymbolValue, unsigned tableLog);
 
 /** HUF_compress4X_wksp() :
  *  Same as HUF_compress2(), but uses externally allocated `workSpace`.
  * `workspace` must have minimum alignment of 4, and be at least as large as HUF_WORKSPACE_SIZE */
 #define HUF_WORKSPACE_SIZE ((6 << 10) + 256)
 #define HUF_WORKSPACE_SIZE_U32 (HUF_WORKSPACE_SIZE / sizeof(U32))
-HUF_PUBLIC_API size_t HUF_compress4X_wksp (void* dst, size_t dstCapacity,
-                                     const void* src, size_t srcSize,
-                                     unsigned maxSymbolValue, unsigned tableLog,
-                                     void* workSpace, size_t wkspSize);
+	HUF_PUBLIC_API size_t HUF_compress4X_wksp(void *dst, size_t dstCapacity,
+											  const void *src, size_t srcSize,
+											  unsigned maxSymbolValue, unsigned tableLog,
+											  void *workSpace, size_t wkspSize);
 
 #endif   /* HUF_H_298734234 */
