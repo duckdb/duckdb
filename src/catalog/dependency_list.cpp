@@ -38,7 +38,7 @@ bool PhysicalDependencyList::Contains(CatalogEntry &entry) {
 	return set.count(entry);
 }
 
-uint64_t CreateInfoHashFunction::operator()(const LogicalDependency &a) const {
+uint64_t LogicalDependencyHashFunction::operator()(const LogicalDependency &a) const {
 	hash_t hash = duckdb::Hash(a.name.c_str());
 	hash = CombineHash(hash, duckdb::Hash(a.schema.c_str()));
 	hash = CombineHash(hash, duckdb::Hash(a.catalog.c_str()));
@@ -46,7 +46,7 @@ uint64_t CreateInfoHashFunction::operator()(const LogicalDependency &a) const {
 	return hash;
 }
 
-bool CreateInfoEquality::operator()(const LogicalDependency &a, const LogicalDependency &b) const {
+bool LogicalDependencyEquality::operator()(const LogicalDependency &a, const LogicalDependency &b) const {
 	if (a.type != b.type) {
 		return false;
 	}

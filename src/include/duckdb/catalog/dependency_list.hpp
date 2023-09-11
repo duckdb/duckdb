@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/common/enums/catalog_type.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -54,17 +55,18 @@ public:
 	static LogicalDependency Deserialize(Deserializer &deserializer);
 };
 
-struct CreateInfoHashFunction {
+struct LogicalDependencyHashFunction {
 	uint64_t operator()(const LogicalDependency &a) const;
 };
 
-struct CreateInfoEquality {
+struct LogicalDependencyEquality {
 	bool operator()(const LogicalDependency &a, const LogicalDependency &b) const;
 };
 
 //! The DependencyList containing LogicalDependency objects, not looked up in the catalog yet
 class LogicalDependencyList {
-	using create_info_set_t = unordered_set<LogicalDependency, CreateInfoHashFunction, CreateInfoEquality>;
+	using create_info_set_t =
+	    unordered_set<LogicalDependency, LogicalDependencyHashFunction, LogicalDependencyEquality>;
 
 public:
 	DUCKDB_API void AddDependency(CatalogEntry &entry);
