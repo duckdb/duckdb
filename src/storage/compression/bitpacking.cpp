@@ -23,8 +23,7 @@ static constexpr const idx_t BITPACKING_METADATA_GROUP_SIZE = STANDARD_VECTOR_SI
 
 BitpackingMode BitpackingModeFromString(const string &str) {
 	auto mode = StringUtil::Lower(str);
-
-	if (mode == "auto") {
+	if (mode == "auto" || mode == "none") {
 		return BitpackingMode::AUTO;
 	} else if (mode == "constant") {
 		return BitpackingMode::CONSTANT;
@@ -35,21 +34,21 @@ BitpackingMode BitpackingModeFromString(const string &str) {
 	} else if (mode == "for") {
 		return BitpackingMode::FOR;
 	} else {
-		return BitpackingMode::AUTO;
+		return BitpackingMode::INVALID;
 	}
 }
 
 string BitpackingModeToString(const BitpackingMode &mode) {
 	switch (mode) {
-	case (BitpackingMode::AUTO):
+	case BitpackingMode::AUTO:
 		return "auto";
-	case (BitpackingMode::CONSTANT):
+	case BitpackingMode::CONSTANT:
 		return "constant";
-	case (BitpackingMode::CONSTANT_DELTA):
+	case BitpackingMode::CONSTANT_DELTA:
 		return "constant_delta";
-	case (BitpackingMode::DELTA_FOR):
+	case BitpackingMode::DELTA_FOR:
 		return "delta_for";
-	case (BitpackingMode::FOR):
+	case BitpackingMode::FOR:
 		return "for";
 	default:
 		throw NotImplementedException("Unknown bitpacking mode: " + to_string((uint8_t)mode) + "\n");
@@ -161,7 +160,7 @@ public:
 		// Don't delta encoding 1 value makes no sense
 		if (compression_buffer_idx < 2) {
 			return;
-		};
+		}
 
 		// TODO: handle NULLS here?
 		// Currently we cannot handle nulls because we would need an additional step of patching for this.
