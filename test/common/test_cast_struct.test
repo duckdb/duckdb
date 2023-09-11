@@ -11,11 +11,21 @@ select struct_extract(struct_pack(b=>42)::struct(a integer), 'a');
 ----
 Mismatch Type Error: Type STRUCT(b INTEGER) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
-# this all also works with the row type
+query I
+select struct_extract(struct_pack(a=>42)::struct(a string), 'a');
+----
+42
+
+# this all also doesn't works with the row type
 statement error
 select struct_extract(struct_pack(b=>42)::row(a integer), 'a');
 ----
 Mismatch Type Error: Type STRUCT(b INTEGER) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
+
+query I
+select struct_extract(struct_pack(a=>42)::row(a integer), 'a');
+----
+42
 
 # struct to struct casts with different names AND different types
 statement error
@@ -23,10 +33,20 @@ select struct_extract(struct_pack(b=>42::double)::struct(a integer), 'a');
 ----
 Mismatch Type Error: Type STRUCT(b DOUBLE) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
 
+query I
+select struct_extract(struct_pack(a=>42::double)::struct(a integer), 'a');
+----
+42
+
 statement error
 select struct_extract(struct_pack(b=>'42'::double)::struct(a integer), 'a');
 ----
 Mismatch Type Error: Type STRUCT(b DOUBLE) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
+
+query I
+select struct_extract(struct_pack(a=>'42'::double)::struct(a integer), 'a');
+----
+42
 
 statement error
 select struct_pack(b=>'42'::double)::struct(a integer, c string)
@@ -39,6 +59,21 @@ select struct_pack(b=>'hello'::string)::struct(b integer)
 Could not convert string 'hello' to INT32
 
 statement error
+select struct_pack(a=>'hello'::string, b=>'world'::string)::struct(a string, b integer)
+----
+Could not convert string 'world' to INT32
+
+statement error
+select struct_pack(a=>[1,2,3])::struct(a integer)
+----
+Unimplemented type for cast (INTEGER[] -> INTEGER)
+
+statement error
+select struct_pack(a=>struct_pack(b=>42)::struct(b integer))::struct(a integer)
+----
+Unimplemented type for cast (STRUCT(b INTEGER) -> INTEGER)
+
+statement error
 select struct_pack(b=>'hello'::string)::struct(a integer)
 ----
 Mismatch Type Error: Type STRUCT(b VARCHAR) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs with different names
@@ -49,6 +84,11 @@ select struct_pack(b=>'42'::double, c => 'asdf'::string)::struct(a1 integer, a2 
 Mismatch Type Error: Type STRUCT(b DOUBLE, c VARCHAR) does not match with STRUCT(a1 INTEGER, a2 VARCHAR). Cannot cast STRUCTs with different names
 
 query I
+select struct_pack(a1 =>'42'::double, a2 => 'asdf'::string)::struct(a1 integer, a2 string);
+----
+{'a1': 42, 'a2': asdf}
+
+query I
 select ROW(42, 'asdf');
 ----
 {'v1': 42, 'v2': asdf}
@@ -57,9 +97,6 @@ statement error
 select ROW();
 ----
 Can't pack nothing into a struct
-
-# '
-# close quote for formatting
 
 query I
 select ROW(NULL);
