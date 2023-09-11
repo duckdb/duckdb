@@ -221,8 +221,7 @@ public:
 	DUCKDB_API bool TryCastAs(ClientContext &context, const LogicalType &target_type, bool strict = false);
 	DUCKDB_API bool DefaultTryCastAs(const LogicalType &target_type, bool strict = false);
 
-	DUCKDB_API void Reinterpret(LogicalType nfew_type);
-
+	DUCKDB_API void Reinterpret(LogicalType few_type);
 	//! Serializes a Value to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
