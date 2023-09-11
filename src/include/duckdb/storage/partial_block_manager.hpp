@@ -24,7 +24,6 @@ class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
 class TypeCatalogEntry;
-class OverflowStringWriter;
 
 struct PartialBlockState {
 	block_id_t block_id;
@@ -109,8 +108,6 @@ public:
 	//! Rollback all data written by this partial block manager
 	void Rollback();
 
-	shared_ptr<OverflowStringWriter> GetOverflowWriter();
-
 protected:
 	BlockManager &block_manager;
 	CheckpointType checkpoint_type;
@@ -124,9 +121,6 @@ protected:
 	//! The maximum size (in bytes) at which a partial block will be considered a partial block
 	uint32_t max_partial_block_size;
 	uint32_t max_use_count;
-
-	//! The overflow writer
-	shared_ptr<OverflowStringWriter> overflow_writer;
 
 protected:
 	//! Try to obtain a partially filled block that can fit "segment_size" bytes

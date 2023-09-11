@@ -801,7 +801,6 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 		result.statistics.push_back(stats->Copy());
 		result.states.push_back(std::move(checkpoint_state));
 	}
-	manager.GetOverflowWriter()->Flush();
 	D_ASSERT(result.states.size() == result.statistics.size());
 	return result;
 }

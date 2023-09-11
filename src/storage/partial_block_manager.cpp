@@ -1,12 +1,11 @@
 #include "duckdb/storage/partial_block_manager.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 
 namespace duckdb {
 
 PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
                                          uint32_t max_partial_block_size, uint32_t max_use_count)
     : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
-      max_use_count(max_use_count), overflow_writer(make_shared<WriteOverflowStringsToDisk>(block_manager)) {
+      max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
 }
@@ -97,10 +96,6 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 		block_to_free->Flush(free_space);
 		AddWrittenBlock(block_to_free->state.block_id);
 	}
-}
-
-shared_ptr<OverflowStringWriter> PartialBlockManager::GetOverflowWriter() {
-	return overflow_writer;
 }
 
 void PartialBlock::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {

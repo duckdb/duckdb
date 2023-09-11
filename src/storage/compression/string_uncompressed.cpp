@@ -141,7 +141,6 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
                                                                                 block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);

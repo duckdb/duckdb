@@ -52,7 +52,7 @@ struct UncompressedStringSegmentState : public CompressedSegmentState {
 	//! FIXME: this should be replaced by a heap that also allows freeing of unused strings
 	unique_ptr<StringBlock> head;
 	//! Overflow string writer (if any), if not set overflow strings will be written to memory blocks
-	shared_ptr<OverflowStringWriter> overflow_writer;
+	unique_ptr<OverflowStringWriter> overflow_writer;
 	//! Map of block id to string block
 	unordered_map<block_id_t, reference<StringBlock>> overflow_blocks;
 
