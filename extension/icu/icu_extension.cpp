@@ -43,13 +43,13 @@ struct IcuBindData : public FunctionData {
 		UErrorCode status = U_ZERO_ERROR;
 		auto locale = icu::Locale(language.c_str(), country.c_str());
 		if (locale.isBogus()) {
-			throw InternalException("Locale is bogus!?");
+			throw InvalidInputException("Locale is bogus!?");
 		}
 		this->collator = duckdb::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
 			auto error_name = u_errorName(status);
-			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
-			                        language, country);
+			throw InvalidInputException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
+			                            language, country);
 		}
 	}
 
@@ -113,7 +113,7 @@ static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, S
 	} else if (splits.size() == 2) {
 		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
-		throw InternalException("Expected one or two splits");
+		throw InvalidInputException("Expected one or two splits");
 	}
 }
 
@@ -132,16 +132,16 @@ static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, S
 	} else if (splits.size() == 2) {
 		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
-		throw InternalException("Expected one or two splits");
+		throw InvalidInputException("Expected one or two splits");
 	}
 }
 
-static void ICUCollateSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
+static void ICUCollateSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+                                const ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
-static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                              ScalarFunction &bound_function) {
+static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(Deserializer &deserializer, ScalarFunction &function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 

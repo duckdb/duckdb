@@ -9,6 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #endif
@@ -55,7 +56,7 @@ FieldID FieldID::Copy() const {
 
 class MyTransport : public TTransport {
 public:
-	explicit MyTransport(Serializer &serializer) : serializer(serializer) {
+	explicit MyTransport(WriteStream &serializer) : serializer(serializer) {
 	}
 
 	bool isOpen() const override {
@@ -73,7 +74,7 @@ public:
 	}
 
 private:
-	Serializer &serializer;
+	WriteStream &serializer;
 };
 
 bool ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type, Type::type &parquet_type) {

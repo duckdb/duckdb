@@ -21,6 +21,7 @@ struct DeserializationData {
 	stack<reference<ClientContext>> contexts;
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
+	stack<reference<LogicalType>> types;
 
 	template <class T>
 	void Set(T entry) = delete;
@@ -74,6 +75,23 @@ inline void DeserializationData::Unset<LogicalOperatorType>() {
 }
 
 template <>
+inline void DeserializationData::Set(CatalogType type) {
+	enums.push(idx_t(type));
+}
+
+template <>
+inline CatalogType DeserializationData::Get() {
+	AssertNotEmpty(enums);
+	return CatalogType(enums.top());
+}
+
+template <>
+inline void DeserializationData::Unset<CatalogType>() {
+	AssertNotEmpty(enums);
+	enums.pop();
+}
+
+template <>
 inline void DeserializationData::Set(ClientContext &context) {
 	contexts.push(context);
 }
@@ -105,6 +123,23 @@ template <>
 inline void DeserializationData::Unset<bound_parameter_map_t>() {
 	AssertNotEmpty(parameter_data);
 	parameter_data.pop();
+}
+
+template <>
+inline void DeserializationData::Set(LogicalType &type) {
+	types.emplace(type);
+}
+
+template <>
+inline LogicalType &DeserializationData::Get() {
+	AssertNotEmpty(types);
+	return types.top();
+}
+
+template <>
+inline void DeserializationData::Unset<LogicalType>() {
+	AssertNotEmpty(types);
+	types.pop();
 }
 
 } // namespace duckdb
