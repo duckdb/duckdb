@@ -1,0 +1,29 @@
+# name: test/fuzzer/duckfuzz/issue_1138.test
+# description: ????
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma disable_optimizer
+
+# seems like the issue is the limit 0.
+statement ok
+create table all_types as select * exclude(small_enum, medium_enum, large_enum) from test_all_types() limit 0;
+
+statement ok
+SELECT count_star() 
+OVER (PARTITION BY ref_1.hugeint, ref_1."timestamp" ORDER BY subq_0.c0) AS c0 
+FROM 
+(SELECT 
+ref_0."int" AS c0, 
+ref_0.timestamp_s AS c1 
+FROM main.all_types AS ref_0 
+WHERE 
+ref_0."varchar") AS subq_0 
+INNER JOIN
+main.all_types AS ref_1 
+ON 
+((subq_0.c1 = ref_1.timestamp_s))
+WHERE (ref_1."time" IS NOT NULL)
