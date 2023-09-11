@@ -12,5 +12,5 @@ sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,05dd50b3fc91ee497496
 postgres_scanner,https://github.com/duckdblabs/postgres_scanner,cd043b49cdc9e0d3752535b8333c9433e1007a48,
 substrait,https://github.com/duckdblabs/substrait,5d621b1d7d16fe86f8b1930870c8e6bf05bcb92a,no-windows
 arrow,https://github.com/duckdblabs/arrow,1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5,no-windows
-spatial,https://github.com/duckdblabs/duckdb_spatial.git,2f55d5d64bad9b5fc7ce67e4bcf52617ee31b865,
+spatial,https://github.com/duckdblabs/duckdb_spatial.git,a99134fdaa9472ad6c7830729a7536306b89d9cd,
 iceberg,https://github.com/duckdblabs/duckdb_iceberg.git,90de66a56b9971c08634f48819c099d9c2744720,
