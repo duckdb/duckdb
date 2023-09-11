@@ -73,7 +73,7 @@ struct TestVectorFlat {
 				}
 			}
 			for (auto &struct_child : struct_children) {
-				result.push_back(Value::STRUCT(std::move(struct_child), true));
+				result.push_back(Value::STRUCT(std::move(struct_child)));
 			}
 			break;
 		}

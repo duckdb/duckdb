@@ -31,7 +31,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		column_names.push_back(make_pair(columns[i].Name(), Value(columns[i].Type().ToString())));
 	}
 
-	AddNamedParameter("columns", Value::STRUCT(std::move(column_names), true));
+	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
 ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,

@@ -151,12 +151,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	child_list_t<Value> min_struct_list;
 	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
 	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
-	auto min_struct_val = Value::STRUCT(std::move(min_struct_list), true);
+	auto min_struct_val = Value::STRUCT(std::move(min_struct_list));
 
 	child_list_t<Value> max_struct_list;
 	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
 	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
-	auto max_struct_val = Value::STRUCT(std::move(max_struct_list), true);
+	auto max_struct_val = Value::STRUCT(std::move(max_struct_list));
 
 	result.emplace_back(struct_type, "struct", min_struct_val, max_struct_val);
 
@@ -169,12 +169,12 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	child_list_t<Value> min_struct_vl_list;
 	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
 	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
-	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list), true);
+	auto min_struct_val_list = Value::STRUCT(std::move(min_struct_vl_list));
 
 	child_list_t<Value> max_struct_vl_list;
 	max_struct_vl_list.push_back(make_pair("a", int_list));
 	max_struct_vl_list.push_back(make_pair("b", varchar_list));
-	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list), true);
+	auto max_struct_val_list = Value::STRUCT(std::move(max_struct_vl_list));
 
 	result.emplace_back(struct_list_type, "struct_of_arrays", std::move(min_struct_val_list),
 	                    std::move(max_struct_val_list));
@@ -198,8 +198,8 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	map_struct2.push_back(make_pair("key", Value("goose")));
 
 	vector<Value> map_values;
-	map_values.push_back(Value::STRUCT(map_struct1, true));
-	map_values.push_back(Value::STRUCT(map_struct2, true));
+	map_values.push_back(Value::STRUCT(map_struct1));
+	map_values.push_back(Value::STRUCT(map_struct2));
 
 	auto max_map_value = Value::MAP(ListType::GetChildType(map_type), map_values);
 	result.emplace_back(map_type, "map", std::move(min_map_value), std::move(max_map_value));

@@ -98,7 +98,7 @@ bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, 
 				}
 				values.emplace_back(child->alias, std::move(child_value));
 			}
-			value = Value::STRUCT(std::move(values), true);
+			value = Value::STRUCT(std::move(values));
 			return true;
 		} else {
 			return false;
