@@ -188,3 +188,13 @@ size_t MbedTlsWrapper::AESGCMState::Process(duckdb::const_data_ptr_t in, duckdb:
 	}
 	return result;
 }
+
+size_t MbedTlsWrapper::AESGCMState::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
+                                             duckdb::idx_t tag_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	size_t result;
+	if (mbedtls_gcm_finish(context, out, out_len, &result, tag, tag_len) != 0) {
+		throw runtime_error("Unable to finalize AES");
+	}
+	return result;
+}

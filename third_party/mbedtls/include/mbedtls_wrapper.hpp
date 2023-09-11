@@ -49,6 +49,7 @@ public:
 		void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		               duckdb::idx_t out_len);
+		size_t Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag, duckdb::idx_t tag_len);
 
 	public:
 		static constexpr size_t BLOCK_SIZE = 16;

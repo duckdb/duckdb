@@ -14,24 +14,27 @@ namespace duckdb {
 
 using duckdb_apache::thrift::protocol::TProtocol;
 using duckdb_apache::thrift::transport::TTransport;
-using GCMContext = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
+using AESGCMState = duckdb_mbedtls::MbedTlsWrapper::AESGCMState;
 using duckdb_apache::thrift::protocol::TCompactProtocolFactoryT;
 
 class ParquetCryptoWrapper {
+public:
+	//! Encrypted modules
+	static constexpr idx_t LENGTH_BYTES = 4;
+	static constexpr idx_t NONCE_BYTES = 12;
+	static constexpr idx_t TAG_BYTES = 16;
+
 private:
-	// Encrypt/decrypt wrapper for a transport protocol
-	class CryptoTransport : public TTransport {
+	//! Encrypt wrapper for a transport protocol
+	class EncryptionTransport : public TTransport {
+	private:
+		//! We encrypt this or less blocks per call
+		static constexpr idx_t ENCRYPTION_BLOCK_SIZE = 2048;
+
 	public:
-		explicit CryptoTransport(TProtocol &prot_p, const string &key)
-		    : prot(prot_p), trans(*prot.getTransport()), aes(key), rw_buffer_remaining(0) {
-		}
-
-		void InitializeEncryption(const uint8_t *buf, uint32_t len) {
-			aes.InitializeEncryption(buf, len);
-		}
-
-		void InitializeDecryption(const uint8_t *buf, uint32_t len) {
-			aes.InitializeDecryption(buf, len);
+		EncryptionTransport(TProtocol &prot_p, const string &key, Allocator &allocator_p)
+		    : prot(prot_p), trans(*prot.getTransport()), aes(key), allocator(allocator_p, ENCRYPTION_BLOCK_SIZE) {
+			allocator.Allocate(0);
 		}
 
 		bool isOpen() const override {
@@ -47,87 +50,132 @@ private:
 		}
 
 		void write_virt(const uint8_t *buf, uint32_t len) override {
-			// Fill up write buffer (if there is anything in there)
-			if (rw_buffer_remaining != 0) {
-				const auto copy_bytes = MinValue<idx_t>(GCMContext::BLOCK_SIZE - rw_buffer_remaining, len);
+			const auto &tail = *allocator.GetTail();
 
-				memcpy(rw_buffer + rw_buffer_remaining, buf, copy_bytes);
-				buf += copy_bytes;
-				len -= copy_bytes;
+			// Make sure we fill up the last block
+			const auto copy_bytes = MinValue<idx_t>(tail.maximum_size - tail.current_position, len);
+			memcpy(allocator.Allocate(copy_bytes), buf, copy_bytes);
+			buf += copy_bytes;
+			len -= copy_bytes;
 
-				rw_buffer_remaining += copy_bytes;
-				if (rw_buffer_remaining == GCMContext::BLOCK_SIZE) {
-					WriteBlock(rw_buffer);
-					rw_buffer_remaining = 0;
-				}
+			if (len != 0) {
+				memcpy(allocator.Allocate(copy_bytes), buf, len);
+			}
+		}
+
+		void Finalize() {
+			const auto ciphertext_length = allocator.SizeInBytes();
+
+			// Write length
+			const uint32_t total_length = NONCE_BYTES + ciphertext_length + TAG_BYTES;
+			trans.write(reinterpret_cast<const uint8_t *>(&total_length), LENGTH_BYTES);
+
+			// Generate and write nonce TODO actual nonce
+			data_t nonce[NONCE_BYTES];
+			for (idx_t i = 0; i < NONCE_BYTES; i++) {
+				nonce[i] = i;
+			}
+			trans.write(nonce, NONCE_BYTES);
+
+			// Encrypt and write data
+			data_t aes_buffer[ENCRYPTION_BLOCK_SIZE];
+			auto current = allocator.GetHead();
+			while (current != nullptr) {
+				const auto write_size =
+				    aes.Process(current->data.get(), current->current_position, aes_buffer, ENCRYPTION_BLOCK_SIZE);
+				trans.write(aes_buffer, write_size);
+				current = current->next.get();
 			}
 
-			// Process one block at a time
-			while (len >= GCMContext::BLOCK_SIZE) {
-				WriteBlock(buf);
-				buf += GCMContext::BLOCK_SIZE;
-				len -= GCMContext::BLOCK_SIZE;
-			}
+			// Finalize the last encrypted data and write tag
+			data_t tag[TAG_BYTES];
+			const auto write_size = aes.Finalize(aes_buffer, ENCRYPTION_BLOCK_SIZE, tag, TAG_BYTES);
+			trans.write(aes_buffer, write_size);
+			trans.write(tag, TAG_BYTES);
+		}
 
-			// Copy any remaining bytes to write buffer
-			D_ASSERT(rw_buffer_remaining + len < GCMContext::BLOCK_SIZE);
-			memcpy(rw_buffer + rw_buffer_remaining, buf, len);
-			rw_buffer_remaining += len;
+	private:
+		//! Protocol and corresponding transport that we're wrapping
+		TProtocol &prot;
+		TTransport &trans;
+
+		//! AES context
+		AESGCMState aes;
+
+		//! Arena Allocator to fully materialize in memory before encrypting
+		ArenaAllocator allocator;
+	};
+
+	//! Decrypt wrapper for a transport protocol TODO: implement a Finalize()
+	class DecryptionTransport : public TTransport {
+	public:
+		DecryptionTransport(TProtocol &prot_p, const string &key)
+		    : prot(prot_p), trans(*prot.getTransport()), aes(key), read_buffer_remaining(0) {
+		}
+
+		void Initialize(const uint8_t *buf, uint32_t len) {
+			aes.InitializeDecryption(buf, len);
 		}
 
 		uint32_t read_virt(uint8_t *buf, uint32_t len) override {
 			const uint32_t result = len;
 
 			// Get from read buffer first (if there is anything in there)
-			if (rw_buffer_remaining != 0) {
-				const auto copy_bytes = MinValue<idx_t>(rw_buffer_remaining, len);
-				const auto read_buffer_offset = GCMContext::BLOCK_SIZE - rw_buffer_remaining;
+			if (read_buffer_remaining != 0) {
+				const auto copy_bytes = MinValue<idx_t>(read_buffer_remaining, len);
+				const auto read_buffer_offset = AESGCMState::BLOCK_SIZE - read_buffer_remaining;
 
-				memcpy(buf, rw_buffer + read_buffer_offset, rw_buffer_remaining);
+				memcpy(buf, read_buffer + read_buffer_offset, read_buffer_remaining);
 				buf += copy_bytes;
 				len -= copy_bytes;
 
-				rw_buffer_remaining -= copy_bytes;
+				read_buffer_remaining -= copy_bytes;
 			}
 
 			// Process one block at a time
-			while (len >= GCMContext::BLOCK_SIZE) {
+			while (len >= AESGCMState::BLOCK_SIZE) {
 				ReadBlock(buf);
-				buf += GCMContext::BLOCK_SIZE;
-				len -= GCMContext::BLOCK_SIZE;
+				buf += AESGCMState::BLOCK_SIZE;
+				len -= AESGCMState::BLOCK_SIZE;
 			}
 
 			// Read last block into read buffer and copy just the bytes we need
 			if (len != 0) {
-				ReadBlock(rw_buffer);
-				memcpy(buf, rw_buffer, len);
-				rw_buffer_remaining = GCMContext::BLOCK_SIZE - len;
+				ReadBlock(read_buffer);
+				memcpy(buf, read_buffer, len);
+				read_buffer_remaining = AESGCMState::BLOCK_SIZE - len;
 			}
 
 			return result;
 		}
 
-	private:
-		void WriteBlock(const uint8_t *buf) {
-			// Encrypt into aes_buffer
-#ifdef DEBUG
-			auto size = aes.Process(buf, GCMContext::BLOCK_SIZE, aes_buffer, GCMContext::BLOCK_SIZE);
-			D_ASSERT(size == GCMContext::BLOCK_SIZE);
-#else
-			aes.Process(buf, GCMContext::BLOCK_SIZE, aes_buffer, GCMContext::BLOCK_SIZE);
-#endif
-			// Write to transport
-			trans.write(aes_buffer, GCMContext::BLOCK_SIZE);
+		void Finalize() {
+			if (read_buffer_remaining != 0) {
+				// TODO throw
+			}
+
+			data_t computed_tag[TAG_BYTES];
+			const auto read_size = aes.Finalize(read_buffer, AESGCMState::BLOCK_SIZE, computed_tag, TAG_BYTES);
+			if (read_size != 0) {
+				// TODO throw
+			}
+
+			data_t read_tag[TAG_BYTES];
+			trans.read(read_tag, TAG_BYTES);
+			if (memcmp(computed_tag, read_tag, TAG_BYTES) != 0) {
+				// TODO throw
+			}
 		}
 
+	private:
 		void ReadBlock(uint8_t *buf) {
 #ifdef DEBUG
 			// Read from transport into aes_buffer
-			auto size = trans.read(aes_buffer, GCMContext::BLOCK_SIZE);
-			D_ASSERT(size == GCMContext::BLOCK_SIZE);
+			auto size = trans.read(aes_buffer, AESGCMState::BLOCK_SIZE);
+			D_ASSERT(size == AESGCMState::BLOCK_SIZE);
 			// Decrypt from aes_buffer into buf
-			size = aes.Process(aes_buffer, GCMContext::BLOCK_SIZE, buf, GCMContext::BLOCK_SIZE);
-			D_ASSERT(size == GCMContext::BLOCK_SIZE);
+			size = aes.Process(aes_buffer, AESGCMState::BLOCK_SIZE, buf, AESGCMState::BLOCK_SIZE);
+			D_ASSERT(size == AESGCMState::BLOCK_SIZE);
 #else
 			// Read from transport into aes_buffer
 			trans.read(aes_buffer, GCMContext::BLOCK_SIZE);
@@ -142,34 +190,34 @@ private:
 		TTransport &trans;
 
 		//! AES context and buffers
-		GCMContext aes;
+		AESGCMState aes;
 
-		//! For buffering small AES reads/writes
-		data_t rw_buffer[GCMContext::BLOCK_SIZE];
-		idx_t rw_buffer_remaining;
+		//! For buffering small reads
+		data_t read_buffer[AESGCMState::BLOCK_SIZE];
+		idx_t read_buffer_remaining;
 
-		//! For encrypting/decrypting one block at a time
-		data_t aes_buffer[GCMContext::BLOCK_SIZE];
+		//! For decrypting one block at a time
+		data_t aes_buffer[AESGCMState::BLOCK_SIZE];
 	};
 
 public:
 	template <class T>
 	static unique_ptr<T> Read(TProtocol &iprot, const string &key) {
 		// Read IV
-		data_t iv_buf[GCMContext::BLOCK_SIZE];
-		const auto iv_read_size = iprot.getTransport()->read(iv_buf, GCMContext::BLOCK_SIZE);
-		if (iv_read_size != GCMContext::BLOCK_SIZE) {
+		data_t iv_buf[AESGCMState::BLOCK_SIZE];
+		const auto iv_read_size = iprot.getTransport()->read(iv_buf, AESGCMState::BLOCK_SIZE);
+		if (iv_read_size != AESGCMState::BLOCK_SIZE) {
 			// TODO throw
 		}
 
 		// Create crypto protocol
-		TCompactProtocolFactoryT<CryptoTransport> tproto_factory;
-		auto dprot = tproto_factory.getProtocol(make_shared<CryptoTransport>(iprot, key));
+		TCompactProtocolFactoryT<DecryptionTransport> tproto_factory;
+		auto dprot = tproto_factory.getProtocol(make_shared<DecryptionTransport>(iprot, key));
 
 		// Read encoded ciphertext length and initialize decryption using IV
 		const uint32_t ciphertext_length = Load<uint32_t>(iv_buf);
-		reinterpret_cast<CryptoTransport &>(*dprot->getTransport())
-		    .InitializeDecryption(iv_buf + sizeof(uint32_t), GCMContext::BLOCK_SIZE - sizeof(uint32_t));
+		reinterpret_cast<DecryptionTransport &>(*dprot->getTransport())
+		    .Initialize(iv_buf + sizeof(uint32_t), AESGCMState::BLOCK_SIZE - sizeof(uint32_t));
 
 		// Finally read the object
 		auto object = make_uniq<T>();
@@ -184,7 +232,7 @@ public:
 	template <class T>
 	static uint32_t Write(const T &object, TProtocol &oprot, const string &key) {
 		// Due to the impeccable design of Parquet, we cannot stream encrypted writes
-		// The length of the ciphertext must be known before we write anything to file
+		// The length of the ciphertext must be known before we write anything else to file
 	}
 
 private:
