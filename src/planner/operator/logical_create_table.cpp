@@ -14,16 +14,6 @@ LogicalCreateTable::LogicalCreateTable(ClientContext &context, const string &cat
 	info = binder->BindCreateTableInfo(unique_ptr_cast<CreateInfo, CreateTableInfo>(std::move(unbound_info)));
 }
 
-void LogicalCreateTable::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*info);
-}
-
-unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto info = reader.ReadRequiredSerializable<BoundCreateTableInfo>(state.gstate);
-	auto &schema = info->schema;
-	return make_uniq<LogicalCreateTable>(schema, std::move(info));
-}
-
 idx_t LogicalCreateTable::EstimateCardinality(ClientContext &context) {
 	return 1;
 }

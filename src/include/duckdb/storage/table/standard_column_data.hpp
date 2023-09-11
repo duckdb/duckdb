@@ -54,10 +54,10 @@ public:
 	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;
 
-	void DeserializeColumn(Deserializer &source) override;
-
 	void GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
 	                          vector<duckdb::ColumnSegmentInfo> &result) override;
+
+	void DeserializeColumn(Deserializer &deserializer) override;
 
 	void Verify(RowGroup &parent) override;
 };

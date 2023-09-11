@@ -41,7 +41,7 @@ public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
-	virtual void WriteDataPointers(RowGroupWriter &writer);
+	virtual void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer);
 
 	PartialBlockManager &GetPartialBlockManager() {
 		return partial_block_manager;
