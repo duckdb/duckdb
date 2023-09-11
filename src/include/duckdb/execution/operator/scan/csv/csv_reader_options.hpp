@@ -12,7 +12,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
@@ -45,9 +44,6 @@ struct CSVStateMachineOptions {
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
 	}
-
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
 };
 
 struct DialectOptions {
@@ -66,9 +62,6 @@ struct DialectOptions {
 	idx_t skip_rows = 0;
 	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
 	idx_t true_start = 0;
-
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
 };
 
 struct CSVReaderOptions {
@@ -173,10 +166,8 @@ struct CSVReaderOptions {
 	//! Whether or not a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static CSVReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static CSVReaderOptions Deserialize(Deserializer &deserializer);
 
 	void SetCompression(const string &compression);
 

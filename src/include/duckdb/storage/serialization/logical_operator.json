@@ -664,6 +664,11 @@
         "id": 218,
         "name": "source_columns",
         "type": "vector<column_t>"
+      },
+      {
+        "id": 219,
+        "name": "expressions",
+        "type": "vector<Expression*>"
       }
     ],
     "constructor": ["$ClientContext", "catalog&", "schema&", "table&"]
