@@ -1,0 +1,85 @@
+# This is a reusable workflow to be used by extensions for CI. It:
+#   - builds the extension using the CI workflow from the corresponding DuckDB version
+#   - runs the tests using `make test` in the extension repository
+#   - (optionally) deploys the binaries to S3
+
+name: Build and sign duckdb-wasm extensions
+on:
+  repository_dispatch:
+    inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb-wasm-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: true
+  workflow_dispatch:
+    inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb-wasm-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build_and_publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        duckdb_wasm_arch: [ 'mvp', 'eh' ]
+    env:
+      GEN: Ninja
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+    steps:
+            - uses: actions/checkout@v3
+              with:
+                  submodules: 'recursive'
+                  repository: 'carlopi/duckdb-wasm'
+                  ref: ${{ github.event.inputs.duckdb-wasm-ref }}
+                  fetch-depth: 0
+
+            - name: Prepare repository
+              run: |
+                  [ -f duckdb.patch ] && cd submodules/duckdb && git apply ../../duckdb.patch || echo "No patching needed"
+
+            - uses: mymindstorm/setup-emsdk@v12
+              with:
+                  version: 'latest'
+            - name: Setup vcpkg
+              uses: lukka/run-vcpkg@v11
+              with:
+                  vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+
+            - name: Setup Ccache
+              uses: hendrikmuhs/ccache-action@main
+              with:
+                  key: ${{ github.job }}
+
+            - name: Git submodule status
+              run: |
+                  brotli --version
+                  git submodule status > git_submodule_status.txt
+
+            - name: Build Wasm module
+              run: |
+                  cp .github/config/extension_config_wasm.cmake submodules/duckdb/extension/extension_config.cmake
+                  DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize ${{ matrix.duckdb_wasm_arch }}
+                  bash ./scripts/build_loadable.sh relsize ${{ matrix.duckdb_wasm_arch }}
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v3
+              with:
+                  name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
+                  path: loadable_extensions/
+                  retention-days: 1
