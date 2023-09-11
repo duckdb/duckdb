@@ -33,11 +33,7 @@ unique_ptr<ParsedExpression> BoundExpression::Copy() const {
 	throw SerializationException("Cannot copy or serialize bound expression");
 }
 
-void BoundExpression::Serialize(FieldWriter &writer) const {
-	throw SerializationException("Cannot copy or serialize bound expression");
-}
-
-void BoundExpression::FormatSerialize(FormatSerializer &serializer) const {
+void BoundExpression::Serialize(Serializer &serializer) const {
 	throw SerializationException("Cannot copy or serialize bound expression");
 }
 

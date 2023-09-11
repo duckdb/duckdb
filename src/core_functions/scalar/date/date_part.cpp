@@ -11,8 +11,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
-#include "duckdb/common/field_writer.hpp"
-
 namespace duckdb {
 
 DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType &type) {
@@ -1603,18 +1601,17 @@ struct StructDatePart {
 		result.Verify(count);
 	}
 
-	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
+	static void SerializeFunction(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                              const ScalarFunction &function) {
 		D_ASSERT(bind_data_p);
 		auto &info = bind_data_p->Cast<BindData>();
-		writer.WriteSerializable(info.stype);
-		writer.WriteList<DatePartSpecifier>(info.part_codes);
+		serializer.WriteProperty(100, "stype", info.stype);
+		serializer.WriteProperty(101, "part_codes", info.part_codes);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
-	                                                    ScalarFunction &bound_function) {
-		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
+	static unique_ptr<FunctionData> DeserializeFunction(Deserializer &deserializer, ScalarFunction &bound_function) {
+		auto stype = deserializer.ReadProperty<LogicalType>(100, "stype");
+		auto part_codes = deserializer.ReadProperty<vector<DatePartSpecifier>>(101, "part_codes");
 		return make_uniq<BindData>(std::move(stype), std::move(part_codes));
 	}
 

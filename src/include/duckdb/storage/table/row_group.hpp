@@ -124,8 +124,6 @@ public:
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	bool AllDeleted();
 	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
-	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
-	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
 
 	void InitializeAppend(RowGroupAppendState &append_state);
 	void Append(RowGroupAppendState &append_state, DataChunk &chunk, idx_t append_count);
@@ -148,8 +146,8 @@ public:
 	void NextVector(CollectionScanState &state);
 
 	// Serialization
-	static void FormatSerialize(RowGroupPointer &pointer, FormatSerializer &serializer);
-	static RowGroupPointer FormatDeserialize(FormatDeserializer &deserializer);
+	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
+	static RowGroupPointer Deserialize(Deserializer &deserializer);
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
@@ -159,9 +157,6 @@ private:
 
 	template <TableScanType TYPE>
 	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-
-	static void CheckpointDeletes(VersionNode *versions, Serializer &serializer);
-	static shared_ptr<VersionNode> DeserializeDeletes(Deserializer &source);
 
 private:
 	mutex row_group_lock;

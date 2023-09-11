@@ -118,6 +118,7 @@ static DefaultExtension internal_extensions[] = {
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"substrait", "Adds support for the Substrait integration", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
+    {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"visualizer", "Creates an HTML-based visualization of the query plan", false},
@@ -194,13 +195,30 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 	return base_error;
 }
 
-void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			ExtensionHelper::InstallExtension(context, extension_name, false,
 			                                  context.config.autoinstall_extension_repo);
 		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+	return false;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+#ifndef DUCKDB_WASM
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+#endif
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		throw AutoloadException(extension_name, e);

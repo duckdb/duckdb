@@ -10,7 +10,6 @@
 
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/planner/bound_parameter_map.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
@@ -37,24 +36,8 @@ public:
 		return value;
 	}
 
-	void Serialize(Serializer &serializer) const {
-		FieldWriter writer(serializer);
-		value.Serialize(writer.GetSerializer());
-		writer.WriteSerializable(return_type);
-		writer.Finalize();
-	}
-
-	static shared_ptr<BoundParameterData> Deserialize(Deserializer &source) {
-		FieldReader reader(source);
-		auto value = Value::Deserialize(reader.GetSource());
-		auto result = make_shared<BoundParameterData>(std::move(value));
-		result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		reader.Finalize();
-		return result;
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static shared_ptr<BoundParameterData> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static shared_ptr<BoundParameterData> Deserialize(Deserializer &deserializer);
 };
 
 struct BoundParameterMap {
