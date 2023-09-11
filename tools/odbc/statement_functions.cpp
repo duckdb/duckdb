@@ -223,9 +223,11 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 	memcpy((char *)target_value_ptr, val_str.c_str() + last_len, out_len);
 
 	if (out_len == (size_t)buffer_length) {
-		ret = duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
-		                                  "Not all the data for the specified column could be retrieved, the length of the data remaining in the specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.", duckdb::SQLStateType::ST_01004,
-		                                  hstmt->dbc->GetDataSourceName());
+		ret = duckdb::SetDiagnosticRecord(
+		    hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
+		    "Not all the data for the specified column could be retrieved, the length of the data remaining in the "
+		    "specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.",
+		    duckdb::SQLStateType::ST_01004, hstmt->dbc->GetDataSourceName());
 		out_len = buffer_length - 1;
 		last_len += out_len;
 	} else {
@@ -319,9 +321,11 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			if ((out_len % 2) != 0) {
 				out_len -= 1;
 			}
-			ret = duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
-			                            "Not all the data for the specified column could be retrieved, the length of the data remaining in the specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.", duckdb::SQLStateType::ST_01004,
-			                            hstmt->dbc->GetDataSourceName());
+			ret = duckdb::SetDiagnosticRecord(
+			    hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
+			    "Not all the data for the specified column could be retrieved, the length of the data remaining in the "
+			    "specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.",
+			    duckdb::SQLStateType::ST_01004, hstmt->dbc->GetDataSourceName());
 		}
 		memcpy((char *)target_value_ptr, (char *)utf16_str.c_str(), out_len);
 
@@ -852,8 +856,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 
 	if (ipd_record->SetSqlDataType(parameter_type) == SQL_ERROR ||
 	    apd_record->SetSqlDataType(value_type) == SQL_ERROR) {
-		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Invalid data type.",
-		                           SQLStateType::ST_HY004, hstmt->dbc->GetDataSourceName());
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLBindParameter", "Invalid data type.", SQLStateType::ST_HY004,
+		                           hstmt->dbc->GetDataSourceName());
 	}
 
 	apd_record->sql_desc_data_ptr = parameter_value_ptr;

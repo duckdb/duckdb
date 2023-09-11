@@ -21,8 +21,8 @@ SQLRETURN ReturnInvalidFieldIdentifier(bool is_readonly, OdbcHandleDesc *desc) {
 	if (is_readonly) {
 		msg += " (read-only field)";
 	}
-	return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLSetDescField", msg,
-	                                   duckdb::SQLStateType::ST_HY092, desc->dbc->GetDataSourceName());
+	return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLSetDescField", msg, duckdb::SQLStateType::ST_HY092,
+	                                   desc->dbc->GetDataSourceName());
 }
 
 SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLCHAR *name,
@@ -83,7 +83,8 @@ SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
 	}
 
 	if (desc->IsIRD()) {
-		return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLSetDescRec", "Cannot modify an implementation row descriptor",
+		return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLSetDescRec",
+		                                   "Cannot modify an implementation row descriptor",
 		                                   duckdb::SQLStateType::ST_HY016, desc->dbc->GetDataSourceName());
 	}
 	if (rec_number <= 0) {
@@ -136,7 +137,8 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	}
 
 	if (duckdb::ApiInfo::IsNumericDescriptorField(field_identifier) && value_ptr == nullptr) {
-		return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLGetDescField", "Invalid null value pointer for descriptor numeric field",
+		return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLGetDescField",
+		                                   "Invalid null value pointer for descriptor numeric field",
 		                                   duckdb::SQLStateType::ST_HY009, desc->dbc->GetDataSourceName());
 	}
 
@@ -149,7 +151,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_ARRAY_SIZE: {
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLULEN *)value_ptr = desc->header.sql_desc_array_size;
 		return SQL_SUCCESS;
@@ -161,7 +162,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_BIND_OFFSET_PTR: {
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLLEN **)value_ptr = desc->header.sql_desc_bind_offset_ptr;
 		return SQL_SUCCESS;
@@ -169,7 +169,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_BIND_TYPE: {
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLINTEGER *)value_ptr = desc->header.sql_desc_bind_type;
 		return SQL_SUCCESS;
@@ -181,7 +180,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_ROWS_PROCESSED_PTR: {
 		if (desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLULEN **)value_ptr = desc->header.sql_desc_rows_processed_ptr;
 		return SQL_SUCCESS;
@@ -192,7 +190,7 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 
 	if (rec_number <= 0 || rec_number > (SQLSMALLINT)desc->records.size()) {
 		return duckdb::SetDiagnosticRecord(desc, SQL_ERROR, "SQLGetDescField", "Invalid descriptor index",
-		                            duckdb::SQLStateType::ST_07009, desc->dbc->GetDataSourceName());
+		                                   duckdb::SQLStateType::ST_07009, desc->dbc->GetDataSourceName());
 	}
 	duckdb::idx_t rec_idx = rec_number - 1;
 
@@ -202,7 +200,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		// always false, DuckDB doesn't support auto-incrementing
 		*(SQLINTEGER *)value_ptr = SQL_FALSE;
@@ -212,7 +209,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_base_column_name, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -222,7 +218,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_base_table_name, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -232,7 +227,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLINTEGER *)value_ptr = desc->records[rec_idx].sql_desc_case_sensitive;
 		return SQL_SUCCESS;
@@ -241,7 +235,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_catalog_name, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -254,7 +247,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_DATA_PTR: {
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		value_ptr = desc->records[rec_idx].sql_desc_data_ptr;
 		return SQL_SUCCESS;
@@ -271,7 +263,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLLEN *)value_ptr = desc->records[rec_idx].sql_desc_display_size;
 		return SQL_SUCCESS;
@@ -280,7 +271,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_fixed_prec_scale;
 		return SQL_SUCCESS;
@@ -288,7 +278,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 	case SQL_DESC_INDICATOR_PTR: {
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLLEN **)value_ptr = desc->records[rec_idx].sql_desc_indicator_ptr;
 		return SQL_SUCCESS;
@@ -297,7 +286,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_label, (SQLCHAR *)value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -311,7 +299,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_literal_prefix, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -321,7 +308,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_literal_suffix, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -331,7 +317,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_local_type_name, (SQLCHAR *)value_ptr,
 		                               buffer_length, string_length_ptr);
@@ -341,7 +326,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_name, (SQLCHAR *)value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -351,7 +335,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (!desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_nullable;
 		return SQL_SUCCESS;
@@ -368,7 +351,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is ID
 		if (desc->IsID()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLLEN **)value_ptr = desc->records[rec_idx].sql_desc_octet_length_ptr;
 		return SQL_SUCCESS;
@@ -377,7 +359,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IPD
 		if (!desc->IsIPD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_parameter_type;
 		return SQL_SUCCESS;
@@ -390,7 +371,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (!desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_rowver;
 		return SQL_SUCCESS;
@@ -403,7 +383,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_schema_name, (SQLCHAR *)value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -413,7 +392,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_searchable;
 		return SQL_SUCCESS;
@@ -422,7 +400,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_table_name, (SQLCHAR *)value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -436,7 +413,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_type_name, (SQLCHAR *)value_ptr, buffer_length,
 		                               string_length_ptr);
@@ -446,7 +422,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (!desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_unnamed;
 		return SQL_SUCCESS;
@@ -455,7 +430,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// is AD
 		if (!desc->IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_unsigned;
 		return SQL_SUCCESS;
@@ -464,7 +438,6 @@ SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_nu
 		// not IRD
 		if (!desc->IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, desc);
-
 		}
 		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_updatable;
 		return SQL_SUCCESS;
@@ -495,14 +468,14 @@ SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_
 	for (auto stmt : source_desc->dbc->vec_stmt_ref) {
 		if (target_desc == stmt->row_desc->ird.get()) {
 			return duckdb::SetDiagnosticRecord(target_desc, SQL_ERROR, "SQLCopyDesc",
-			                                   "Cannot modify an implementation row descriptor.", duckdb::SQLStateType::ST_HY016,
-			                                   target_desc->dbc->GetDataSourceName());
+			                                   "Cannot modify an implementation row descriptor.",
+			                                   duckdb::SQLStateType::ST_HY016, target_desc->dbc->GetDataSourceName());
 		}
 		if (source_desc == stmt->row_desc->ird.get()) {
 			if (!stmt->IsPrepared()) {
-				return duckdb::SetDiagnosticRecord(source_desc, SQL_ERROR, "SQLCopyDesc",
-				                                   "Associated statement is not prepared.", duckdb::SQLStateType::ST_HY007,
-				                                   source_desc->dbc->GetDataSourceName());
+				return duckdb::SetDiagnosticRecord(
+				    source_desc, SQL_ERROR, "SQLCopyDesc", "Associated statement is not prepared.",
+				    duckdb::SQLStateType::ST_HY007, source_desc->dbc->GetDataSourceName());
 			}
 		}
 	}
@@ -589,7 +562,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_BIND_TYPE: {
 		if (IsID()) {
 			return ReturnInvalidFieldIdentifier(false, this);
-
 		}
 		header.sql_desc_bind_type = *(SQLINTEGER *)value_ptr;
 		return SQL_SUCCESS;
@@ -597,7 +569,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_COUNT: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(false, this);
-
 		}
 		header.sql_desc_count = *(SQLSMALLINT *)value_ptr;
 		return SQL_SUCCESS;
@@ -605,7 +576,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_ROWS_PROCESSED_PTR: {
 		if (IsAD()) {
 			return ReturnInvalidFieldIdentifier(false, this);
-
 		}
 		if (*(SQLULEN *)value_ptr < 0) {
 			return SetDiagnosticRecord(this, SQL_ERROR, "SQLSetDescField", "Invalid descriptor index.",
@@ -658,7 +628,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_DATA_PTR: {
 		if (IsID()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_data_ptr = value_ptr;
 		return SQL_SUCCESS;
@@ -666,7 +635,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_DATETIME_INTERVAL_CODE: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		if (desc_record->SetSqlDescType(desc_record->sql_desc_type)) {
 			return SetDiagnosticRecord(this, SQL_ERROR, "SQLSetDescField", "Inconsistent descriptor information.",
@@ -677,7 +645,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_DATETIME_INTERVAL_PRECISION: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_datetime_interval_precision = *(SQLINTEGER *)value_ptr;
 		return SQL_SUCCESS;
@@ -685,7 +652,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_INDICATOR_PTR: {
 		if (IsID()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_indicator_ptr = (SQLLEN *)value_ptr;
 		return SQL_SUCCESS;
@@ -693,7 +659,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_LENGTH: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_length = *(SQLULEN *)value_ptr;
 		return SQL_SUCCESS;
@@ -701,7 +666,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_NAME: {
 		if (!IsIPD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_name = duckdb::OdbcUtils::ReadString(value_ptr, buffer_length);
 		return SQL_SUCCESS;
@@ -709,7 +673,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_NUM_PREC_RADIX: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_num_prec_radix = *(SQLINTEGER *)value_ptr;
 		return SQL_SUCCESS;
@@ -717,7 +680,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_OCTET_LENGTH: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_octet_length = *(SQLLEN *)value_ptr;
 		return SQL_SUCCESS;
@@ -725,7 +687,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_OCTET_LENGTH_PTR: {
 		if (IsID()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_octet_length_ptr = (SQLLEN *)value_ptr;
 		return SQL_SUCCESS;
@@ -733,7 +694,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_PARAMETER_TYPE: {
 		if (!IsIPD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_parameter_type = *(SQLSMALLINT *)value_ptr;
 		return SQL_SUCCESS;
@@ -741,7 +701,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_PRECISION: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_precision = *(SQLSMALLINT *)value_ptr;
 		return SQL_SUCCESS;
@@ -749,7 +708,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_SCALE: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_scale = *(SQLSMALLINT *)value_ptr;
 		return SQL_SUCCESS;
@@ -757,7 +715,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_TYPE: {
 		if (IsIRD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		auto sql_type = *(SQLSMALLINT *)value_ptr;
 		if (desc_record->SetSqlDescType(sql_type)) {
@@ -769,7 +726,6 @@ SQLRETURN OdbcHandleDesc::SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field
 	case SQL_DESC_UNNAMED: {
 		if (!IsIPD()) {
 			return ReturnInvalidFieldIdentifier(true, this);
-
 		}
 		desc_record->sql_desc_unnamed = *(SQLSMALLINT *)value_ptr;
 		return SQL_SUCCESS;
@@ -848,7 +804,7 @@ DescRecord::DescRecord(const DescRecord &other) {
 	sql_desc_updatable = other.sql_desc_updatable;
 }
 
-//SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
+// SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
 //	sql_desc_type = value_type;
 //	if (OdbcInterval::IsIntervalType(value_type)) {
 //		sql_desc_type = SQL_INTERVAL;

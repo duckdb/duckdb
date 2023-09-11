@@ -152,8 +152,7 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 	}
 	case SQL_ATTR_CP_MATCH:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
-		                                   "Optional feature not implemented.",
-		                                   SQLStateType::ST_HY092, "");
+		                                   "Optional feature not implemented.", SQLStateType::ST_HY092, "");
 	case SQL_ATTR_OUTPUT_NTS: /* SQLINTEGER */ {
 		auto output_nts = static_cast<SQLINTEGER>(reinterpret_cast<intptr_t>(value_ptr));
 		if (output_nts == SQL_TRUE) {
@@ -161,12 +160,11 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 			return SQL_SUCCESS;
 		}
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
-										   "Optional feature not implemented.  SQL_ATTR_OUTPUT_NTS must be SQL_TRUE",
-										   SQLStateType::ST_HY092, "");
+		                                   "Optional feature not implemented.  SQL_ATTR_OUTPUT_NTS must be SQL_TRUE",
+		                                   SQLStateType::ST_HY092, "");
 	}
 	default:
-		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr",
-		                                   "Invalid attribute value",
+		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetEnvAttr", "Invalid attribute value",
 		                                   SQLStateType::ST_HY024, "");
 	}
 }
@@ -195,8 +193,7 @@ SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		break;
 	case SQL_ATTR_CP_MATCH:
 		return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLGetEnvAttr",
-		                                   "Optional feature not implemented.",
-		                                   SQLStateType::ST_HYC00, "");
+		                                   "Optional feature not implemented.", SQLStateType::ST_HYC00, "");
 	}
 	return SQL_SUCCESS;
 }
@@ -521,7 +518,8 @@ SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direct
 		return ret;
 	}
 
-	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDataSources", "Driver Manager only function", SQLStateType::ST_HY000, "");
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDataSources", "Driver Manager only function",
+	                                   SQLStateType::ST_HY000, "");
 }
 
 SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
@@ -534,5 +532,6 @@ SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction,
 		return ret;
 	}
 
-	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDrivers", "Driver Manager only function", SQLStateType::ST_HY000, "");
+	return duckdb::SetDiagnosticRecord(env, SQL_ERROR, "SQLDrivers", "Driver Manager only function",
+	                                   SQLStateType::ST_HY000, "");
 }

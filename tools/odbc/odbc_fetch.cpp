@@ -220,7 +220,9 @@ SQLRETURN OdbcFetch::SetFirstCurrentChunk(OdbcHandleStmt *hstmt) {
 
 SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *hstmt, SQLLEN fetch_offset) {
 	if (cursor_type == SQL_CURSOR_FORWARD_ONLY && fetch_orientation != SQL_FETCH_NEXT) {
-		return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNextChunk", "Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.", SQLStateType::ST_24000, hstmt->dbc->GetDataSourceName());
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNextChunk",
+		                           "Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.",
+		                           SQLStateType::ST_24000, hstmt->dbc->GetDataSourceName());
 	}
 
 	switch (fetch_orientation) {
@@ -357,8 +359,8 @@ SQLRETURN OdbcFetch::ColumnWise(OdbcHandleStmt *hstmt) {
 				target_len_addr += row_idx;
 			}
 
-			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr,
-			                                bound_col.len, target_len_addr);
+			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr, bound_col.len,
+			                                target_len_addr);
 			if (!SQL_SUCCEEDED(ret)) {
 				SetRowStatus(row_idx, SQL_ROW_ERROR);
 			}
@@ -398,8 +400,8 @@ SQLRETURN OdbcFetch::RowWise(OdbcHandleStmt *hstmt) {
 			uint8_t *target_val_addr = (uint8_t *)bound_col.ptr + row_offset;
 			uint8_t *target_len_addr = (uint8_t *)bound_col.strlen_or_ind + row_offset;
 
-			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr,
-			                                bound_col.len, (SQLLEN *)target_len_addr);
+			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr, bound_col.len,
+			                                (SQLLEN *)target_len_addr);
 			if (!SQL_SUCCEEDED(ret)) {
 				SetRowStatus(row_idx, SQL_ROW_ERROR);
 			}

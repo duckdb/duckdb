@@ -76,7 +76,9 @@ SQLRETURN ParameterDescriptor::GetParamValues(vector<Value> &values) {
 			return SQL_NEED_DATA;
 		}
 		if (ret != SQL_PARAM_SUCCESS) {
-			duckdb::SetDiagnosticRecord(this->stmt, SQL_SUCCESS_WITH_INFO, "GetParamValues", "Failed to set parameter value", SQLStateType::ST_01000, this->stmt->dbc->GetDataSourceName());
+			duckdb::SetDiagnosticRecord(this->stmt, SQL_SUCCESS_WITH_INFO, "GetParamValues",
+			                            "Failed to set parameter value", SQLStateType::ST_01000,
+			                            this->stmt->dbc->GetDataSourceName());
 			if (!ipd->header.sql_desc_array_status_ptr) {
 				return SQL_ERROR;
 			}
