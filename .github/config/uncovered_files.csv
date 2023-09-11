@@ -170,7 +170,8 @@ execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	2
 execution/index/art/node48.cpp	10
 execution/index/art/prefix.cpp	2
-execution/index/fixed_size_allocator.cpp	1
+execution/index/fixed_size_allocator.cpp	2
+execution/index/fixed_size_buffer.cpp	6
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
