@@ -27,9 +27,10 @@ class TestMap(object):
 
         # column type differs from bind
         def evil2(df):
-            if len(df) == 0:
-                df['col0'] = df['col0'].astype('int')
-            return df
+            result = df.copy(deep=True)
+            if len(result) == 0:
+                result['col0'] = result['col0'].astype('double')
+            return result
 
         # column name differs from bind
         def evil3(df):
@@ -43,7 +44,7 @@ class TestMap(object):
 
         # straight up throws exception
         def evil5(df):
-            this_makes_no_sense()
+            raise TypeError
 
         def return_dataframe(df):
             return pandas.DataFrame({'A': [1]})

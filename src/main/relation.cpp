@@ -47,6 +47,11 @@ shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
 	return Project(expressions, aliases);
 }
 
+shared_ptr<Relation> Relation::Project(vector<unique_ptr<ParsedExpression>> expressions,
+                                       const vector<string> &aliases) {
+	return make_shared<ProjectionRelation>(shared_from_this(), std::move(expressions), aliases);
+}
+
 static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(ClientContext &context,
                                                                        const vector<string> &expressions) {
 	if (expressions.empty()) {
@@ -73,7 +78,11 @@ shared_ptr<Relation> Relation::Filter(const string &expression) {
 	if (expression_list.size() != 1) {
 		throw ParserException("Expected a single expression as filter condition");
 	}
-	return make_shared<FilterRelation>(shared_from_this(), std::move(expression_list[0]));
+	return Filter(std::move(expression_list[0]));
+}
+
+shared_ptr<Relation> Relation::Filter(unique_ptr<ParsedExpression> expression) {
+	return make_shared<FilterRelation>(shared_from_this(), std::move(expression));
 }
 
 shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
@@ -95,6 +104,10 @@ shared_ptr<Relation> Relation::Limit(int64_t limit, int64_t offset) {
 
 shared_ptr<Relation> Relation::Order(const string &expression) {
 	auto order_list = Parser::ParseOrderList(expression, context.GetContext()->GetParserOptions());
+	return Order(std::move(order_list));
+}
+
+shared_ptr<Relation> Relation::Order(vector<OrderByNode> order_list) {
 	return make_shared<OrderRelation>(shared_from_this(), std::move(order_list));
 }
 
@@ -110,7 +123,7 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 		}
 		order_list.push_back(std::move(inner_list[0]));
 	}
-	return make_shared<OrderRelation>(shared_from_this(), std::move(order_list));
+	return Order(std::move(order_list));
 }
 
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type,
