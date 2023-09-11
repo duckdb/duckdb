@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 struct DataPointer {
 	DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
 	}
@@ -27,6 +30,9 @@ struct DataPointer {
 	CompressionType compression_type;
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
+
+	void Serialize(Serializer &serializer) const;
+	static DataPointer Deserialize(Deserializer &source);
 };
 
 struct RowGroupPointer {

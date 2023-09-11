@@ -24,7 +24,7 @@ create table t as select range a, range%10 b from range(100000);
 statement ok
 select first([a]) from t group by b%2;
 
-query II
+query II rowsort
 select min([a]), max([a]) from t group by b%2;
 ----
 [0]	[99998]

@@ -1,8 +1,8 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -20,22 +20,6 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
                                            bool error_unkown_key_p)
     : strict_cast(strict_cast_p), error_duplicate_key(error_duplicate_key_p), error_missing_key(error_missing_key_p),
       error_unknown_key(error_unkown_key_p) {
-}
-
-void JSONTransformOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField(strict_cast);
-	writer.WriteField(error_duplicate_key);
-	writer.WriteField(error_missing_key);
-	writer.WriteField(error_unknown_key);
-	writer.WriteField(delay_error);
-}
-
-void JSONTransformOptions::Deserialize(FieldReader &reader) {
-	strict_cast = reader.ReadRequired<bool>();
-	error_duplicate_key = reader.ReadRequired<bool>();
-	error_missing_key = reader.ReadRequired<bool>();
-	error_unknown_key = reader.ReadRequired<bool>();
-	delay_error = reader.ReadRequired<bool>();
 }
 
 //! Forward declaration for recursion
@@ -758,6 +742,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 	switch (result_type.id()) {
 	case LogicalTypeId::SQLNULL:
+		FlatVector::Validity(result).SetAllInvalid(count);
 		return true;
 	case LogicalTypeId::BOOLEAN:
 		return TransformNumerical<bool>(vals, result, count, options);

@@ -19,6 +19,11 @@ public:
 	template <class T>
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                         std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+		if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+			FlatVector::Validity(result).SetAllInvalid(args.size());
+			return;
+		}
+
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 
@@ -33,6 +38,11 @@ public:
 	template <class T>
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                          std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+		if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+			FlatVector::Validity(result).SetAllInvalid(args.size());
+			return;
+		}
+
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
@@ -112,6 +122,11 @@ public:
 	template <class T>
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
 	                        std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
+		if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+			FlatVector::Validity(result).SetAllInvalid(args.size());
+			return;
+		}
+
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);

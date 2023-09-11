@@ -7,7 +7,6 @@ before-build = 'pip install oldest-supported-numpy'
 before-test = 'pip install --prefer-binary pandas pytest-timeout mypy "psutil>=5.9.0" "requests>=2.26" fsspec   && (pip install --prefer-binary "pyarrow>=8.0" || true) && (pip install --prefer-binary "torch" || true) && (pip install --prefer-binary "polars" || true) && (pip install --prefer-binary "adbc_driver_manager" || true) && (pip install --prefer-binary "tensorflow" || true)'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests'
-manylinux-aarch64-image = "manylinux_2_24"
 
 # For musllinux we currently don't build extensions yet
 [[tool.cibuildwheel.overrides]]
@@ -19,7 +18,7 @@ test-command = "python -m pytest {project}/tests/fast"
 select = "*i686*"
 test-command = "python -m pytest {project}/tests/fast"
 
-# For aarch64 we don't build extensions inline, so can't test them yet
+# For aarch64 we don't build extensions
 [[tool.cibuildwheel.overrides]]
 select = "*aarch64*"
 test-command = "python -m pytest {project}/tests/fast"
