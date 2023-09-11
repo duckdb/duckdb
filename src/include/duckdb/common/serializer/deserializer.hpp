@@ -370,9 +370,10 @@ private:
 		return ReadHugeInt();
 	}
 
+	// Deserialize a uhugeint
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, uhugeint_t>::value, T>::type Read() {
-		return static_cast<uhugeint_t>(ReadHugeInt());
+		return ReadUhugeInt();
 	}
 
 	// Deserialize a LogicalIndex
@@ -415,6 +416,7 @@ protected:
 	virtual int64_t ReadSignedInt64() = 0;
 	virtual uint64_t ReadUnsignedInt64() = 0;
 	virtual hugeint_t ReadHugeInt() = 0;
+	virtual uhugeint_t ReadUhugeInt() = 0;
 	virtual float ReadFloat() = 0;
 	virtual double ReadDouble() = 0;
 	virtual string ReadString() = 0;
