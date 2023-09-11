@@ -985,10 +985,14 @@ BlockPointer ART::Serialize(MetadataWriter &writer) {
 	}
 
 	lock_guard<mutex> l(lock);
+	auto &block_manager = table_io_manager.GetIndexBlockManager();
+	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
+
 	vector<BlockPointer> allocator_pointers;
 	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator->Serialize(writer));
+		allocator_pointers.push_back(allocator->Serialize(partial_block_manager, writer));
 	}
+	partial_block_manager.FlushPartialBlocks();
 
 	root_block_pointer = writer.GetBlockPointer();
 	writer.Write(tree);
