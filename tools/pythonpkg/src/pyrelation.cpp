@@ -965,13 +965,13 @@ struct SupportedPythonJoinType {
 } // namespace
 
 static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
-	static const SupportedPythonJoinType supported_types[] = {
+	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {
 	    {.name = "left", .type = JoinType::LEFT},   {.name = "right", .type = JoinType::RIGHT},
 	    {.name = "outer", .type = JoinType::OUTER}, {.name = "semi", .type = JoinType::SEMI},
 	    {.name = "inner", .type = JoinType::INNER}, {.name = "anti", .type = JoinType::ANTI}};
-	static const auto supported_types_count = sizeof(supported_types) / sizeof(SupportedPythonJoinType);
-	length = supported_types_count;
-	return reinterpret_cast<const SupportedPythonJoinType *>(supported_types);
+	static const auto SUPPORTED_TYPES_COUNT = sizeof(SUPPORTED_TYPES) / sizeof(SupportedPythonJoinType);
+	length = SUPPORTED_TYPES_COUNT;
+	return reinterpret_cast<const SupportedPythonJoinType *>(SUPPORTED_TYPES);
 }
 
 static JoinType ParseJoinType(const string &type) {
