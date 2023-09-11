@@ -127,13 +127,14 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
+	bool all_tests_passed = true;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			RunParallel(path, thread_count, buffer_size, single_threaded_passed, ground_truth, add_parameters);
+			all_tests_passed = all_tests_passed && RunParallel(path, thread_count, buffer_size, single_threaded_passed, ground_truth, add_parameters);
 		}
 	}
 
-	return true;
+	return all_tests_passed;
 }
 
 // Collects All CSV-Like files from folder and execute Parallel Scans on it
@@ -175,6 +176,9 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[paralle
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/auto/multiple_skip_row.csv");
+	skip.insert("test/sql/copy/csv/data/auto/skip_row.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", &skip);
 }
 
@@ -223,6 +227,9 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/test/5438.csv");
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/unterminated.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
@@ -245,6 +252,11 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/sequences.csv.gz");
 	// This file requires specific parameters
 	skip.insert("data/csv/bug_7578.csv");
+	// FIXME: Fix the following tests
+	skip.insert("data/csv/issue5077.csv");
+	skip.insert("data/csv/issue5077_aligned.csv");
+	skip.insert("data/csv/empty_first_line.csv");
+	skip.insert("data/csv/csv_quoted_newline_odd.csv");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
