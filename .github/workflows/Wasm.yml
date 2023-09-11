@@ -3,20 +3,8 @@
 #   - runs the tests using `make test` in the extension repository
 #   - (optionally) deploys the binaries to S3
 
-name: Build and sign duckdb-wasm extensions
+name: DuckDB-Wasm extensions
 on:
-  repository_dispatch:
-    inputs:
-      # Git ref of the duckdb-wasm repo
-      duckdb-wasm-ref:
-        required: false
-        type: string
-        default: main
-      # Publish extensions on extensions.duckdb.org?
-      release_s3:
-        required: false
-        type: boolean
-        default: true
   workflow_dispatch:
     inputs:
       # Git ref of the duckdb-wasm repo
@@ -24,11 +12,15 @@ on:
         required: false
         type: string
         default: main
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: true
+        type: string
       # Publish extensions on extensions.duckdb.org?
       release_s3:
         required: false
         type: boolean
-        default: true
+        default: false
 
 jobs:
   build_and_publish:
@@ -40,12 +32,13 @@ jobs:
     env:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      DUCKDB_PLATFORM: "wasm_${{ github.event.inputs.duckdb_wasm_arch }}"
 
     steps:
             - uses: actions/checkout@v3
               with:
                   submodules: 'recursive'
-                  repository: 'carlopi/duckdb-wasm'
+                  repository: 'duckdb/duckdb-wasm'
                   ref: ${{ github.event.inputs.duckdb-wasm-ref }}
                   fetch-depth: 0
 
@@ -76,6 +69,11 @@ jobs:
                   cp .github/config/extension_config_wasm.cmake submodules/duckdb/extension/extension_config.cmake
                   DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize ${{ matrix.duckdb_wasm_arch }}
                   bash ./scripts/build_loadable.sh relsize ${{ matrix.duckdb_wasm_arch }}
+
+            - name: Sign and deploy Wasm extensions
+              if: ${{ github.event.inputs.release_s3 }}
+              run: |
+                  bash ./scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
 
             - name: Upload artifact
               uses: actions/upload-artifact@v3
