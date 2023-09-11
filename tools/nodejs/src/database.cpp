@@ -10,9 +10,7 @@
 
 namespace node_duckdb {
 
-Napi::FunctionReference Database::constructor;
-
-Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
+Napi::FunctionReference Database::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t = DefineClass(
@@ -22,11 +20,9 @@ Napi::Object Database::Init(Napi::Env env, Napi::Object exports) {
 	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
 	     InstanceMethod("registerReplacementScan", &Database::RegisterReplacementScan)});
 
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
-
 	exports.Set("Database", t);
-	return exports;
+
+	return Napi::Persistent(t);
 }
 
 struct OpenTask : public Task {
@@ -266,7 +262,8 @@ Napi::Value Database::Interrupt(const Napi::CallbackInfo &info) {
 }
 
 Napi::Value Database::Connect(const Napi::CallbackInfo &info) {
-	return Connection::constructor.New({Value()});
+	Napi::HandleScope scope(env);
+	return Connection::NewInstance(Value());
 }
 
 struct JSRSArgs {

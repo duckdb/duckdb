@@ -1,11 +1,10 @@
 #include "duckdb/storage/statistics/list_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/vector.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -69,35 +68,20 @@ void ListStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	child_stats.Merge(other_child_stats);
 }
 
-void ListStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
-	auto &child_stats = ListStats::GetChildStats(stats);
-	writer.WriteSerializable(child_stats);
-}
-
-BaseStatistics ListStats::Deserialize(FieldReader &reader, LogicalType type) {
-	D_ASSERT(type.InternalType() == PhysicalType::LIST);
-	auto &child_type = ListType::GetChildType(type);
-	BaseStatistics result(std::move(type));
-	result.child_stats[0].Copy(reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_type));
-	return result;
-}
-
-void ListStats::FormatSerialize(const BaseStatistics &stats, FormatSerializer &serializer) {
+void ListStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto &child_stats = ListStats::GetChildStats(stats);
 	serializer.WriteProperty(200, "child_stats", child_stats);
 }
 
-BaseStatistics ListStats::FormatDeserialize(FormatDeserializer &deserializer, LogicalType type) {
+void ListStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
+	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
-	BaseStatistics result(std::move(type));
 
 	// Push the logical type of the child type to the deserialization context
 	deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_type));
-	result.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
+	base.child_stats[0].Copy(deserializer.ReadProperty<BaseStatistics>(200, "child_stats"));
 	deserializer.Unset<LogicalType>();
-
-	return result;
 }
 
 string ListStats::ToString(const BaseStatistics &stats) {

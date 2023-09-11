@@ -14,8 +14,6 @@
 #include "duckdb/catalog/dependency_list.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 
 //! A type catalog entry
 class TypeCatalogEntry : public StandardEntry {
