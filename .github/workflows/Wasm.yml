@@ -85,6 +85,7 @@ jobs:
   trigger_github_pages_build:
     name: Trigger follow-up work
     runs-on: ubuntu-latest
+    needs: build_and_publish
     steps:
             - name: Move control to duckdb-wasm
               run: |
