@@ -1,4 +1,4 @@
-from .column import Column
+from .column import Column, _get_expr
 from typing import Any, Callable, overload, Union
 
 from duckdb import CaseExpression, ConstantExpression, ColumnExpression, FunctionExpression, Expression
@@ -56,7 +56,7 @@ def upper(col: "ColumnOrName") -> Column:
 def when(condition: "Column", value: Any) -> Column:
     if not isinstance(condition, Column):
         raise TypeError("condition should be a Column")
-    v = value.expr if isinstance(value, Column) else value
+    v = _get_expr(value)
     expr = CaseExpression(condition.expr, v)
     return Column(expr)
 
@@ -92,7 +92,9 @@ def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Colum
     >>> df.select(regexp_replace('str', r'(\d+)', '--').alias('d')).collect()
     [Row(d='-----')]
     """
-    return _invoke_function("regexp_replace", _to_column(str), pattern, replacement)
+    return _invoke_function(
+        "regexp_replace", _to_column(str), ConstantExpression(pattern), ConstantExpression(replacement)
+    )
 
 
 def array_contains(col: "ColumnOrName", value: Any) -> Column:
@@ -120,7 +122,7 @@ def array_contains(col: "ColumnOrName", value: Any) -> Column:
     >>> df.select(array_contains(df.data, lit("a"))).collect()
     [Row(array_contains(data, a)=True), Row(array_contains(data, a)=False)]
     """
-    value = value.expr if isinstance(value, Column) else value
+    value = _get_expr(value)
     return _invoke_function("array_contains", _to_column(col), value)
 
 

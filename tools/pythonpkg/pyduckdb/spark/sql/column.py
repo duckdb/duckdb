@@ -13,6 +13,10 @@ from duckdb.typing import DuckDBPyType
 __all__ = ["Column"]
 
 
+def _get_expr(x) -> Expression:
+    return x.expr if isinstance(x, Column) else ConstantExpression(x)
+
+
 def _func_op(name: str, doc: str = "") -> Callable[["Column"], "Column"]:
     def _(self: "Column") -> "Column":
         njc = getattr(self.expr, name)()
@@ -47,7 +51,7 @@ def _bin_op(
         self: "Column",
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
-        jc = other.expr if isinstance(other, Column) else other
+        jc = _get_expr(other)
         njc = getattr(self.expr, name)(jc)
         return Column(njc)
 
@@ -65,7 +69,7 @@ def _bin_func(
         self: "Column",
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
-        other = other.expr if isinstance(other, Column) else other
+        other = _get_expr(other)
         func = FunctionExpression(name, self.expr, other)
         return Column(func)
 
@@ -210,12 +214,12 @@ class Column:
     def when(self, condition: "Column", value: Any):
         if not isinstance(condition, Column):
             raise TypeError("condition should be a Column")
-        v = value.expr if isinstance(value, Column) else value
+        v = _get_expr(value)
         expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
     def otherwise(self, value: Any):
-        v = value.expr if isinstance(value, Column) else value
+        v = _get_expr(value)
         expr = self.expr.otherwise(v)
         return Column(expr)
 
@@ -234,7 +238,7 @@ class Column:
 
         cols = cast(
             Tuple,
-            [c.expr if isinstance(c, Column) else c for c in cols],
+            [_get_expr(c) for c in cols],
         )
         return self.expr.isin(*cols)
 
@@ -244,14 +248,14 @@ class Column:
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
         """binary function"""
-        return Column(self.expr == (other.expr if isinstance(other, Column) else other))
+        return Column(self.expr == (_get_expr(other)))
 
     def __ne__(  # type: ignore[override]
         self,
         other: Any,
     ) -> "Column":
         """binary function"""
-        return Column(self.expr != (other.expr if isinstance(other, Column) else other))
+        return Column(self.expr != (_get_expr(other)))
 
     __lt__ = _bin_op("__lt__")
 

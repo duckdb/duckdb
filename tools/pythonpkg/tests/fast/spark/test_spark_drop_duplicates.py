@@ -39,23 +39,24 @@ class TestDataFrameDropDuplicates(object):
         columns = ["employee_name", "department", "salary"]
         df = spark.createDataFrame(data=data, schema=columns)
 
-        distinctDF = df.distinct()
+        distinctDF = df.distinct().sort("salary")
         assert distinctDF.count() == 9
         res = distinctDF.collect()
         # James | Sales had a duplicate, has been removed
-        assert res == [
+        expected = [
+            Row(employee_name='Kumar', department='Marketing', salary=2000),
             Row(employee_name='James', department='Sales', salary=3000),
-            Row(employee_name='Michael', department='Sales', salary=4600),
-            Row(employee_name='Robert', department='Sales', salary=4100),
+            Row(employee_name='Jeff', department='Marketing', salary=3000),
             Row(employee_name='Maria', department='Finance', salary=3000),
             Row(employee_name='Scott', department='Finance', salary=3300),
             Row(employee_name='Jen', department='Finance', salary=3900),
-            Row(employee_name='Jeff', department='Marketing', salary=3000),
-            Row(employee_name='Kumar', department='Marketing', salary=2000),
             Row(employee_name='Saif', department='Sales', salary=4100),
+            Row(employee_name='Robert', department='Sales', salary=4100),
+            Row(employee_name='Michael', department='Sales', salary=4600),
         ]
+        assert res == expected
 
-        df2 = df.dropDuplicates()
+        df2 = df.dropDuplicates().sort("salary")
         assert df2.count() == 9
         res2 = df2.collect()
         assert res2 == res

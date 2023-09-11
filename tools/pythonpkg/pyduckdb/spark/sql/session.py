@@ -31,8 +31,8 @@ import duckdb
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     from pyduckdb import Value
 
-    # FIXME: this is not true
-    assert not isinstance(data, PandasDataFrame)
+    ## FIXME: this is not true
+    # assert not isinstance(data, PandasDataFrame)
 
     new_data = []
     for row in data:

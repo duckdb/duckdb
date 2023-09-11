@@ -18,6 +18,8 @@ class TestReplaceValue(object):
         # Replace string column value conditionally
         from pyduckdb.spark.sql.functions import when
 
+        res = df2.collect()
+        print(res)
         df2 = df.withColumn(
             'address',
             when(df.address.endswith('Rd'), regexp_replace(df.address, 'Rd', 'Road'))
@@ -26,8 +28,11 @@ class TestReplaceValue(object):
             .otherwise(df.address),
         )
         res = df2.collect()
-        assert res == [
+        print(res)
+        expected = [
             Row(id=1, address='14851 Jeffrey Road', state='DE'),
             Row(id=2, address='43421 Margarita Street', state='NY'),
             Row(id=3, address='13111 Siemon Avenue', state='CA'),
         ]
+        print(expected)
+        assert res == expected

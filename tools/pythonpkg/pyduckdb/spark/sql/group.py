@@ -36,11 +36,10 @@ def df_varargs_api(f: Callable[..., DataFrame]) -> Callable[..., DataFrame]:
         group_by = str(self._grouping)
         projections = self._grouping.get_columns()
         jdf = getattr(self._df.relation, "apply")(
-            name,  # aggregate function
-            expressions,  # inputs to aggregate
-            group_by,  # groups
-            "",  # window operators
-            projections,  # projections
+            function_name=name,  # aggregate function
+            function_aggr=expressions,  # inputs to aggregate
+            group_expr=group_by,  # groups
+            projected_columns=projections,  # projections
         )
         return DataFrame(jdf, self.session)
 
