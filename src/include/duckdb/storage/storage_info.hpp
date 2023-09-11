@@ -12,8 +12,6 @@
 #include "duckdb/common/vector_size.hpp"
 
 namespace duckdb {
-class Serializer;
-class Deserializer;
 struct FileHandle;
 
 #define STANDARD_ROW_GROUPS_SIZE 122880
@@ -53,8 +51,8 @@ struct MainHeader {
 
 	static void CheckMagicBytes(FileHandle &handle);
 
-	void Serialize(Serializer &ser);
-	static MainHeader Deserialize(Deserializer &source);
+	void Write(WriteStream &ser);
+	static MainHeader Read(ReadStream &source);
 };
 
 //! The DatabaseHeader contains information about the current state of the database. Every storage file has two
@@ -72,8 +70,8 @@ struct DatabaseHeader {
 	//! block_count any blocks appearing AFTER block_count are implicitly part of the free_list.
 	uint64_t block_count;
 
-	void Serialize(Serializer &ser);
-	static DatabaseHeader Deserialize(Deserializer &source);
+	void Write(WriteStream &ser);
+	static DatabaseHeader Read(ReadStream &source);
 };
 
 } // namespace duckdb

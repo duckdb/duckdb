@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/serializer/deserialization_data.hpp"
@@ -19,18 +17,21 @@
 
 namespace duckdb {
 
-class FormatDeserializer {
+class Deserializer {
 protected:
 	bool deserialize_enum_from_string = false;
 	DeserializationData data;
 
 public:
+	virtual ~Deserializer() {
+	}
+
 	class List {
-		friend FormatDeserializer;
+		friend Deserializer;
 
 	private:
-		FormatDeserializer &deserializer;
-		explicit List(FormatDeserializer &deserializer) : deserializer(deserializer) {
+		Deserializer &deserializer;
+		explicit List(Deserializer &deserializer) : deserializer(deserializer) {
 		}
 
 	public:
@@ -58,7 +59,6 @@ public:
 		OnPropertyBegin(field_id, tag);
 		auto ret = Read<T>();
 		OnPropertyEnd();
-		;
 		return ret;
 	}
 
@@ -134,11 +134,11 @@ public:
 	}
 
 private:
-	// Deserialize anything implementing a FormatDeserialize method
+	// Deserialize anything implementing a Deserialize method
 	template <typename T = void>
 	inline typename std::enable_if<has_deserialize<T>::value, T>::type Read() {
 		OnObjectBegin();
-		auto val = T::FormatDeserialize(*this);
+		auto val = T::Deserialize(*this);
 		OnObjectEnd();
 		return val;
 	}
@@ -150,7 +150,7 @@ private:
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
-			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			ptr = ELEMENT_TYPE::Deserialize(*this);
 			OnObjectEnd();
 		}
 		OnNullableEnd();
@@ -165,7 +165,7 @@ private:
 		auto is_present = OnNullableBegin();
 		if (is_present) {
 			OnObjectBegin();
-			ptr = ELEMENT_TYPE::FormatDeserialize(*this);
+			ptr = ELEMENT_TYPE::Deserialize(*this);
 			OnObjectEnd();
 		}
 		OnNullableEnd();
@@ -416,14 +416,14 @@ protected:
 };
 
 template <class FUNC>
-void FormatDeserializer::List::ReadObject(FUNC f) {
+void Deserializer::List::ReadObject(FUNC f) {
 	deserializer.OnObjectBegin();
 	f(deserializer);
 	deserializer.OnObjectEnd();
 }
 
 template <class T>
-T FormatDeserializer::List::ReadElement() {
+T Deserializer::List::ReadElement() {
 	return deserializer.Read<T>();
 }
 

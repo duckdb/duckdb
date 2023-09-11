@@ -7,10 +7,12 @@
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+
 namespace duckdb {
 
-class FormatSerializer;   // Forward declare
-class FormatDeserializer; // Forward declare
+class Serializer;   // Forward declare
+class Deserializer; // Forward declare
 
 typedef uint16_t field_id_t;
 const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
@@ -19,34 +21,34 @@ const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
 template <class...>
 using void_t = void;
 
-// Check for anything implementing a `void FormatSerialize(FormatSerializer &FormatSerializer)` method
+// Check for anything implementing a `void Serialize(Serializer &Serializer)` method
 template <typename T, typename = T>
 struct has_serialize : std::false_type {};
 template <typename T>
 struct has_serialize<
     T, typename std::enable_if<
-           std::is_same<decltype(std::declval<T>().FormatSerialize(std::declval<FormatSerializer &>())), void>::value,
-           T>::type> : std::true_type {};
+           std::is_same<decltype(std::declval<T>().Serialize(std::declval<Serializer &>())), void>::value, T>::type>
+    : std::true_type {};
 
 template <typename T, typename = T>
 struct has_deserialize : std::false_type {};
 
-// Accept `static unique_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static unique_ptr<T> Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), unique_ptr<T>(FormatDeserializer &)>::value,
-                               T>::type> : std::true_type {};
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), unique_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
 
-// Accept `static shared_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static shared_ptr<T> Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), shared_ptr<T>(FormatDeserializer &)>::value,
-                               T>::type> : std::true_type {};
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), shared_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
 
-// Accept `static T FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static T Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), T(FormatDeserializer &)>::value, T>::type>
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), T(Deserializer &)>::value, T>::type>
     : std::true_type {};
 
 // Check if T is a vector, and provide access to the inner type
