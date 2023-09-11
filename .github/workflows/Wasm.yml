@@ -81,3 +81,11 @@ jobs:
                   name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
                   path: loadable_extensions/
                   retention-days: 1
+
+  trigger_github_pages_build:
+    name: Trigger follow-up work
+    runs-on: ubuntu-latest
+    steps:
+            - name: Move control to duckdb-wasm
+              run: |
+                  curl -XPOST -u "${{secrets.PAT_USER}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" https://api.github.com/repos/duckdb/duckdb-wasm/actions/workflows/main.yml/dispatches --data '{"ref":"${{ github.event.inputs.duckdb-wasm-ref"}'
