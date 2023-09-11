@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -27,29 +26,6 @@ unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> con
 			result = std::move(conj);
 		}
 	}
-	return result;
-}
-
-//! Serializes a JoinCondition to a stand-alone binary blob
-void JoinCondition::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteOptional(left);
-	writer.WriteOptional(right);
-	writer.WriteField<ExpressionType>(comparison);
-	writer.Finalize();
-}
-
-//! Deserializes a blob back into a JoinCondition
-JoinCondition JoinCondition::Deserialize(Deserializer &source, PlanDeserializationState &state) {
-	auto result = JoinCondition();
-
-	FieldReader reader(source);
-	auto left = reader.ReadOptional<Expression>(nullptr, state);
-	auto right = reader.ReadOptional<Expression>(nullptr, state);
-	result.left = std::move(left);
-	result.right = std::move(right);
-	result.comparison = reader.ReadRequired<ExpressionType>();
-	reader.Finalize();
 	return result;
 }
 

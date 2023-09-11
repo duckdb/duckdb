@@ -2,7 +2,6 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -79,23 +78,6 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
-	return std::move(result);
-}
-
-void BoundParameterExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(identifier);
-	writer.WriteSerializable(return_type);
-	writer.WriteSerializable(*parameter_data);
-}
-
-unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto &global_parameter_set = state.gstate.parameter_data;
-	auto identifier = reader.ReadRequired<string>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();
-	auto result = unique_ptr<BoundParameterExpression>(new BoundParameterExpression(
-	    global_parameter_set, std::move(identifier), std::move(return_type), std::move(parameter_data)));
 	return std::move(result);
 }
 
