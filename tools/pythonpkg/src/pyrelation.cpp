@@ -334,6 +334,18 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vec
 	}
 	string ignore_nulls_str = ignore_nulls ? " ignore nulls" : "";
 
+	if (input.empty()) {
+		// string_agg(<col>
+		expr += function_name + "(";
+		if (!function_parameter.empty()) {
+			// string_agg(<col>, <sep>
+			expr += function_parameter;
+		}
+		expr += ignore_nulls_str;
+		// string_agg(<col, <sep>) OVER ()
+		expr += ") " + window_spec;
+		return expr;
+	}
 	for (idx_t i = 0; i < input.size(); i++) {
 		// string_agg(<col>
 		expr += function_name + "(" + input[i];
