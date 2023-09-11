@@ -130,7 +130,8 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 	bool all_tests_passed = true;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			all_tests_passed = all_tests_passed && RunParallel(path, thread_count, buffer_size, single_threaded_passed, ground_truth, add_parameters);
+			all_tests_passed = all_tests_passed && RunParallel(path, thread_count, buffer_size, single_threaded_passed,
+			                                                   ground_truth, add_parameters);
 		}
 	}
 
