@@ -151,11 +151,6 @@ static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, Aggrega
                        idx_t input_count, data_ptr_t state, const FrameBounds *frames, const FrameBounds *prevs,
                        Vector &result, idx_t rid, idx_t nframes) {
 
-	if (nframes != 1) {
-		throw NotImplementedException("LIST does not support EXCLUDE");
-	}
-	auto &frame = *frames;
-
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	LinkedList linked_list;
 
@@ -165,11 +160,16 @@ static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, Aggrega
 	auto &input = inputs[0];
 
 	// FIXME: we unify more values than necessary (count is frame.end)
-	RecursiveUnifiedVectorFormat input_data;
-	Vector::RecursiveToUnifiedFormat(input, frame.end, input_data);
+	const auto count = frames[nframes - 1].end;
 
-	for (idx_t i = frame.start; i < frame.end; i++) {
-		list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
+	RecursiveUnifiedVectorFormat input_data;
+	Vector::RecursiveToUnifiedFormat(input, count, input_data);
+
+	for (idx_t f = 0; f < nframes; ++f) {
+		const auto &frame = frames[f];
+		for (idx_t i = frame.start; i < frame.end; i++) {
+			list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
+		}
 	}
 
 	// FINALIZE step

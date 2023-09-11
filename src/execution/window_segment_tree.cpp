@@ -314,19 +314,13 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 	auto params = lcstate.inputs.data.data();
 	auto &rmask = FlatVector::Validity(result);
 	for (idx_t i = 0, cur_row = row_idx; i < count; ++i, ++cur_row) {
-		auto begin = begins[i];
-		auto end = ends[i];
-		if (begin >= end) {
-			rmask.SetInvalid(i);
-			continue;
-		}
-
-		// Frame boundaries
-		prevs.swap(frames);
-
 		idx_t nframes = 0;
+		idx_t non_empty = 0;
 		if (exclude_mode == WindowExclusion::NO_OTHER) {
-			frames[nframes++] = FrameBounds(begin, end);
+			auto begin = begins[i];
+			auto end = ends[i];
+			non_empty += (begin < end);
+			prevs[nframes++] = FrameBounds(begin, end);
 		} else {
 			//	The frame_exclusion option allows rows around the current row to be excluded from the frame,
 			//	even if they would be included according to the frame start and frame end options.
@@ -348,21 +342,35 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const DataC
 			//	and some are empty.
 
 			//	WindowSegmentTreePart::LEFT
-			begin = begins[i];
-			end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
-			frames[nframes++] = FrameBounds(begin, MaxValue(begin, end));
+			auto begin = begins[i];
+			auto end = (exclude_mode == WindowExclusion::CURRENT_ROW) ? cur_row : peer_begin[i];
+			end = MaxValue(begin, end);
+			non_empty += (begin < end);
+			prevs[nframes++] = FrameBounds(begin, end);
 
 			// with EXCLUDE TIES, in addition to the frame part right of the peer group's end,
 			// we also need to consider the current row
 			if (exclude_mode == WindowExclusion::TIES) {
-				frames[nframes++] = FrameBounds(cur_row, cur_row + 1);
+				++non_empty;
+				prevs[nframes++] = FrameBounds(cur_row, cur_row + 1);
 			}
 
 			//	WindowSegmentTreePart::RIGHT
-			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
 			end = ends[i];
-			frames[nframes++] = FrameBounds(MinValue(begin, end), end);
+			begin = (exclude_mode == WindowExclusion::CURRENT_ROW) ? (cur_row + 1) : peer_end[i];
+			begin = MinValue(begin, end);
+			non_empty += (begin < end);
+			prevs[nframes++] = FrameBounds(begin, end);
 		}
+
+		//	No data means NULL
+		if (!non_empty) {
+			rmask.SetInvalid(i);
+			continue;
+		}
+
+		// We defer updating the current frames until we know we have data
+		prevs.swap(frames);
 
 		// Extract the range
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
