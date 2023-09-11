@@ -4,6 +4,9 @@
 
 require json
 
+statement ok
+PRAGMA enable_verification
+
 query I
 SELECT from_json('{"duck": 42}', NULL::JSON)
 ----
