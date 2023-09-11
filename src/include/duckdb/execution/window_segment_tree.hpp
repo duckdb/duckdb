@@ -117,8 +117,6 @@ public:
 
 class WindowSegmentTree : public WindowAggregator {
 public:
-	using FrameBounds = std::pair<idx_t, idx_t>;
-
 	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count, WindowAggregationMode mode_p);
 	~WindowSegmentTree() override;
 

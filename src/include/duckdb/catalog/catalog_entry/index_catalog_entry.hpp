@@ -10,7 +10,7 @@
 
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/storage/metadata/metadata_writer.hpp"
 
 namespace duckdb {
 
@@ -31,6 +31,7 @@ public:
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
+	case_insensitive_map_t<Value> options;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

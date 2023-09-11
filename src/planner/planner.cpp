@@ -1,7 +1,8 @@
 #include "duckdb/planner/planner.hpp"
 
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -11,8 +12,6 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -83,15 +82,15 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
-		auto parameter_index = kv.first;
-		auto &parameter_data = kv.second;
+		auto &identifier = kv.first;
+		auto &param = kv.second;
 		// check if the type of the parameter could be resolved
-		if (!parameter_data->return_type.IsValid()) {
+		if (!param->return_type.IsValid()) {
 			properties.bound_all_parameters = false;
 			continue;
 		}
-		parameter_data->value = Value(parameter_data->return_type);
-		value_map[parameter_index] = parameter_data;
+		param->SetValue(Value(param->return_type));
+		value_map[identifier] = param;
 	}
 }
 
@@ -153,7 +152,8 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	return op.SupportSerialization();
 }
 
-void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op,
+                         optional_ptr<bound_parameter_map_t> map) {
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	// if alternate verification is enabled we run the original operator
 	return;
@@ -168,29 +168,21 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		auto blob = BinarySerializer::Serialize(*op);
+		MemoryStream stream;
+		BinarySerializer::Serialize(*op, stream, true);
+		stream.Rewind();
 		bound_parameter_map_t parameters;
-		auto result = BinaryDeserializer::Deserialize<LogicalOperator>(context, parameters, blob.data(), blob.size());
+		auto new_plan = BinaryDeserializer::Deserialize<LogicalOperator>(stream, context, parameters);
+
+		if (map) {
+			*map = std::move(parameters);
+		}
+		op = std::move(new_plan);
 	} catch (SerializationException &ex) {
 		// pass
-	}
-
-	BufferedSerializer serializer;
-	try {
-		op->Serialize(serializer);
 	} catch (NotImplementedException &ex) {
-		// ignore for now (FIXME)
-		return;
+		// pass
 	}
-	auto data = serializer.GetData();
-	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
-
-	PlanDeserializationState state(context);
-	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
-	if (map) {
-		*map = std::move(state.parameter_data);
-	}
-	op = std::move(new_plan);
 }
 
 } // namespace duckdb

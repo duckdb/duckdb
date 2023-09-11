@@ -200,7 +200,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
 
-	switch (bind_data.numpy_type) {
+	switch (bind_data.numpy_type.type) {
 	case NumpyNullableType::BOOL:
 		ScanNumpyMasked<bool>(bind_data, count, offset, out);
 		break;
@@ -234,11 +234,48 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	case NumpyNullableType::FLOAT_64:
 		ScanNumpyFpColumn<double>(reinterpret_cast<const double *>(array.data()), numpy_col.stride, count, offset, out);
 		break;
-	case NumpyNullableType::DATETIME:
-	case NumpyNullableType::DATETIME_TZ: {
+	case NumpyNullableType::DATETIME_NS:
+	case NumpyNullableType::DATETIME_MS:
+	case NumpyNullableType::DATETIME_US:
+	case NumpyNullableType::DATETIME_S: {
 		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
+
+		using timestamp_convert_func = std::function<timestamp_t(int64_t)>;
+		timestamp_convert_func convert_func;
+
+		switch (bind_data.numpy_type.type) {
+		case NumpyNullableType::DATETIME_NS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from NS to US
+				convert_func = Timestamp::FromEpochNanoSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_MS:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from MS to US
+				convert_func = Timestamp::FromEpochMs;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		case NumpyNullableType::DATETIME_US:
+			convert_func = Timestamp::FromEpochMicroSeconds;
+			break;
+		case NumpyNullableType::DATETIME_S:
+			if (bind_data.numpy_type.has_timezone) {
+				// Our timezone type is US, so we need to convert from S to US
+				convert_func = Timestamp::FromEpochSeconds;
+			} else {
+				convert_func = Timestamp::FromEpochMicroSeconds;
+			}
+			break;
+		default:
+			throw NotImplementedException("Scan for datetime of this type is not supported yet");
+		};
 
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
@@ -247,7 +284,8 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				mask.SetInvalid(row);
 				continue;
 			}
-			tgt_ptr[row] = Timestamp::FromEpochNanoSeconds(src_ptr[source_idx]);
+			// Direct conversion, we've already matched the numpy type with the equivalent duckdb type
+			tgt_ptr[row] = convert_func(src_ptr[source_idx]);
 		}
 		break;
 	}
@@ -297,7 +335,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 
 			// Get the pointer to the object
 			PyObject *val = src_ptr[source_idx];
-			if (bind_data.numpy_type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
+			if (bind_data.numpy_type.type == NumpyNullableType::OBJECT && !py::isinstance<py::str>(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;

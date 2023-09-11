@@ -1,7 +1,7 @@
 #include "duckdb_python/map.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
-#include "duckdb_python/numpy/array_wrapper.hpp"
+#include "duckdb_python/numpy/numpy_result_conversion.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
@@ -140,8 +140,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	if (explicit_schema != Py_None) {
 		return BindExplicitSchema(std::move(data_uptr), explicit_schema, return_types, names);
 	}
-
-	NumpyResultConversion conversion(data.in_types, 0);
+	NumpyResultConversion conversion(data.in_types, 0, context.GetClientProperties());
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	Pandas::Bind(context, df, pandas_bind_data, return_types, names);
@@ -169,7 +168,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	auto &data = data_p.bind_data->Cast<MapFunctionData>();
 
 	D_ASSERT(input.GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input.size());
+	NumpyResultConversion conversion(data.in_types, input.size(), context.client.GetClientProperties());
 	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);

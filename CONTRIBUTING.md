@@ -26,9 +26,9 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Pull Requests
 
-* Do not commit/push directly to the master branch. Instead, create a fork and file a pull request.
-* When maintaining a branch, merge frequently with the master.
-* When maintaining a branch, submit pull requests to the master frequently.
+* Do not commit/push directly to the main branch. Instead, create a fork and file a pull request.
+* When maintaining a branch, merge frequently with the main.
+* When maintaining a branch, submit pull requests to the main frequently.
 * If you are working on a bigger issue try to split it up into several smaller issues.
 * Please do not open "Draft" pull requests. Rather, use issues or discussion topics to discuss whatever needs discussing.
 * We reserve full and final discretion over whether or not we will merge a pull request. Adhering to these guidelines is not a complete guarantee that your pull request will be merged.
@@ -70,8 +70,8 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 11.0.1, installable through `python3 -m pip install clang-format==11.0.1`
-* `clang_format` enforces these rules automatically, use `make format-fix` to run the formatter.
+* To make sure the formatting is consistent, please use version 10.0.1, installable through `python3 -m pip install clang-format==10.0.1.1`
+* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
 ## C++ Guidelines

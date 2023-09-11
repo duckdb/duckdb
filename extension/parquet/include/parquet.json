@@ -6,14 +6,17 @@
     ],
     "members": [
       {
+        "id": 100,
         "name": "binary_as_string",
         "type": "bool"
       },
       {
+        "id": 101,
         "name": "file_row_number",
         "type": "bool"
       },
       {
+        "id": 102,
         "name": "file_options",
         "type": "MultiFileReaderOptions"
       }

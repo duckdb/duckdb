@@ -163,8 +163,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort
-	auto &groups = gstate.rhs_sink.grouping_data->GetPartitions();
-	if (groups.empty() && EmptyResultIfRHSIsEmpty()) {
+	if (!gstate.rhs_sink.HasMergeTasks() && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -433,6 +432,9 @@ void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 
 	left_hash = lhs_sink.hash_groups[left_group].get();
 	auto &left_sort = *(left_hash->global_sort);
+	if (left_sort.sorted_blocks.empty()) {
+		return;
+	}
 	lhs_scanner = make_uniq<PayloadScanner>(left_sort, false);
 	left_itr = make_uniq<SBIterator>(left_sort, iterator_comp);
 
@@ -681,14 +683,16 @@ class AsOfLocalSourceState : public LocalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
 
-	AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op);
+	AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op, ClientContext &client_p);
 
-	void CombineLeftPartitions();
-	void MergeLeftPartitions();
+	//	Return true if we were not interrupted (another thread died)
+	bool CombineLeftPartitions();
+	bool MergeLeftPartitions();
 
 	idx_t BeginRightScan(const idx_t hash_bin);
 
 	AsOfGlobalSourceState &gsource;
+	ClientContext &client;
 
 	//! The left side partition being probed
 	AsOfProbeBuffer probe_buffer;
@@ -702,38 +706,45 @@ public:
 	const bool *found_match = {};
 };
 
-AsOfLocalSourceState::AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op)
-    : gsource(gsource), probe_buffer(gsource.gsink.lhs_sink->context, op) {
+AsOfLocalSourceState::AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op,
+                                           ClientContext &client_p)
+    : gsource(gsource), client(client_p), probe_buffer(gsource.gsink.lhs_sink->context, op) {
 	gsource.mergers++;
 }
 
-void AsOfLocalSourceState::CombineLeftPartitions() {
+bool AsOfLocalSourceState::CombineLeftPartitions() {
 	const auto buffer_count = gsource.gsink.lhs_buffers.size();
-	while (gsource.combined < buffer_count) {
+	while (gsource.combined < buffer_count && !client.interrupted) {
 		const auto next_combine = gsource.next_combine++;
 		if (next_combine < buffer_count) {
 			gsource.gsink.lhs_buffers[next_combine]->Combine();
 			++gsource.combined;
 		} else {
-			std::this_thread::yield();
+			TaskScheduler::GetScheduler(client).YieldThread();
 		}
 	}
+
+	return !client.interrupted;
 }
 
-void AsOfLocalSourceState::MergeLeftPartitions() {
+bool AsOfLocalSourceState::MergeLeftPartitions() {
 	PartitionGlobalMergeStates::Callback local_callback;
-	PartitionLocalMergeState local_merge;
+	PartitionLocalMergeState local_merge(*gsource.gsink.lhs_sink);
 	gsource.GetMergeStates().ExecuteTask(local_merge, local_callback);
 	gsource.merged++;
-	while (gsource.merged < gsource.mergers) {
-		std::this_thread::yield();
+	while (gsource.merged < gsource.mergers && !client.interrupted) {
+		TaskScheduler::GetScheduler(client).YieldThread();
 	}
+	return !client.interrupted;
 }
 
 idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
 	hash_group = std::move(gsource.gsink.rhs_sink.hash_groups[hash_bin]);
+	if (hash_group->global_sort->sorted_blocks.empty()) {
+		return 0;
+	}
 	scanner = make_uniq<PayloadScanner>(*hash_group->global_sort);
 	found_match = gsource.gsink.right_outers[hash_bin].GetMatches();
 
@@ -743,7 +754,7 @@ idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
 	auto &gsource = gstate.Cast<AsOfGlobalSourceState>();
-	return make_uniq<AsOfLocalSourceState>(gsource, *this);
+	return make_uniq<AsOfLocalSourceState>(gsource, *this, context.client);
 }
 
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
@@ -751,17 +762,21 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
 	auto &rhs_sink = gsource.gsink.rhs_sink;
+	auto &client = context.client;
 
 	//	Step 1: Combine the partitions
-	lsource.CombineLeftPartitions();
+	if (!lsource.CombineLeftPartitions()) {
+		return SourceResultType::FINISHED;
+	}
 
 	//	Step 2: Sort on all threads
-	lsource.MergeLeftPartitions();
+	if (!lsource.MergeLeftPartitions()) {
+		return SourceResultType::FINISHED;
+	}
 
 	//	Step 3: Join the partitions
 	auto &lhs_sink = *gsource.gsink.lhs_sink;
-	auto &partitions = lhs_sink.grouping_data->GetPartitions();
-	const auto left_bins = partitions.size();
+	const auto left_bins = lhs_sink.grouping_data ? lhs_sink.grouping_data->GetPartitions().size() : 1;
 	while (gsource.flushed < left_bins) {
 		//	Make sure we have something to flush
 		if (!lsource.probe_buffer.Scanning()) {
@@ -769,13 +784,13 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 			if (left_bin < left_bins) {
 				//	More to flush
 				lsource.probe_buffer.BeginLeftScan(left_bin);
-			} else if (!IsRightOuterJoin(join_type)) {
+			} else if (!IsRightOuterJoin(join_type) || client.interrupted) {
 				return SourceResultType::FINISHED;
 			} else {
 				//	Wait for all threads to finish
 				//	TODO: How to implement a spin wait correctly?
 				//	Returning BLOCKED seems to hang the system.
-				std::this_thread::yield();
+				TaskScheduler::GetScheduler(client).YieldThread();
 				continue;
 			}
 		}

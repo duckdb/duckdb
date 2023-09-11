@@ -35,7 +35,9 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, (duckdb_arrow_schema *)&arrow_schema) == DuckDBSuccess);
 		REQUIRE(string(arrow_schema->name) == "duckdb_query_result");
 		// User need to release the data themselves
-		arrow_schema->release(arrow_schema);
+		if (arrow_schema->release) {
+			arrow_schema->release(arrow_schema);
+		}
 		delete arrow_schema;
 
 		// query array data
@@ -90,8 +92,14 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		REQUIRE(duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt) == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
 		REQUIRE(duckdb_bind_int64(stmt, 1, 42) == DuckDBSuccess);
+		ArrowSchema prepared_schema;
+		prepared_schema.release = nullptr;
+		auto prep_schema_p = &prepared_schema;
+		REQUIRE(duckdb_prepared_arrow_schema(stmt, (duckdb_arrow_schema *)&prep_schema_p) == DuckDBSuccess);
+		REQUIRE(string(prepared_schema.format) == "+s");
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, nullptr) == DuckDBError);
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
+		prepared_schema.release(&prepared_schema);
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, (duckdb_arrow_schema *)&arrow_schema) == DuckDBSuccess);
@@ -114,7 +122,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		const auto column_names = duckdb::vector<string> {"value"};
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
-		ArrowOptions options;
+
+		ClientProperties options = ((Connection *)tester.connection)->context->GetClientProperties();
 		duckdb::ArrowConverter::ToArrowSchema(arrow_schema, logical_types, column_names, options);
 
 		ArrowArray *arrow_array = new ArrowArray();
@@ -151,7 +160,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		SECTION("big array") {
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
-			ArrowOptions options;
 			ArrowAppender appender(logical_types, size, options);
 			Allocator allocator;
 
@@ -226,7 +234,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		arrow_schema->release(arrow_schema);
 		delete arrow_schema;
 
-		if (arrow_array->release != nullptr) {
+		if (arrow_array->release) {
 			arrow_array->release(arrow_array);
 		}
 
@@ -235,4 +243,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		duckdb_destroy_arrow(&arrow_result);
 		duckdb_destroy_prepare(&stmt);
 	}
+
+	// FIXME: needs test for scanning a fixed size list
+	// this likely requires nanoarrow to create the array to scan
 }

@@ -1,5 +1,5 @@
 # name: test/sql/window/test_window_clause.test
-# description: Most basic window function
+# description: Test window clauses and overrides
 # group: [window]
 
 statement ok
@@ -60,3 +60,11 @@ window w as (partition by x)
 order by x
 ----
 Cannot override PARTITION BY clause of window "w"
+
+statement error
+select i, sum(i) over (w) as smoothed 
+from integers 
+window w AS (order by i rows between 1 preceding and 1 following) 
+order by i;
+----
+frame clause

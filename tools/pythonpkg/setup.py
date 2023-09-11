@@ -139,6 +139,7 @@ for i in range(len(sys.argv)):
     elif sys.argv[i].startswith('--package_name='):
         lib_name = sys.argv[i].split('=', 1)[1]
     elif sys.argv[i].startswith("--compile-flags="):
+        # FIXME: this is overwriting the previously set toolchain_args ?
         toolchain_args = ['-std=c++11'] + [
             x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0
         ]
@@ -161,6 +162,8 @@ if 'BUILD_HTTPFS' in os.environ:
 
 for ext in extensions:
     toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
+
+toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
 
 
 class get_pybind_include(object):
@@ -200,7 +203,7 @@ if len(existing_duckdb_dir) == 0:
         import package_build
 
         (source_list, include_list, original_sources) = package_build.build_package(
-            os.path.join(script_path, lib_name), extensions, False, unity_build
+            os.path.join(script_path, "duckdb_build"), extensions, False, unity_build, "duckdb_build"
         )
 
         duckdb_sources = [
@@ -208,10 +211,10 @@ if len(existing_duckdb_dir) == 0:
         ]
         duckdb_sources.sort()
 
-        original_sources = [os.path.join(lib_name, x) for x in original_sources]
+        original_sources = [os.path.join("duckdb_build", x) for x in original_sources]
 
-        duckdb_includes = [os.path.join(lib_name, x) for x in include_list]
-        duckdb_includes += [lib_name]
+        duckdb_includes = [os.path.join("duckdb_build", x) for x in include_list]
+        duckdb_includes += ["duckdb_build"]
 
         # gather the include files
         import amalgamation
@@ -320,6 +323,7 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'adbc_driver_duckdb',
 ]
 
 spark_packages = ['pyduckdb.spark', 'pyduckdb.spark.sql']
@@ -334,8 +338,10 @@ setup(
     long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files=data_files,
+    # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
+    python_requires='>=3.7.0',
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
     use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
@@ -350,7 +356,7 @@ setup(
     cmdclass={"build_ext": build_ext},
     project_urls={
         "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/master/tools/pythonpkg",
+        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
         "Issues": "https://github.com/duckdb/duckdb/issues",
         "Changelog": "https://github.com/duckdb/duckdb/releases",
     },

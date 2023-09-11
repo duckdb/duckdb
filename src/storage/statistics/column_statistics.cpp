@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/column_statistics.hpp"
-#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
@@ -53,15 +54,17 @@ void ColumnStatistics::UpdateDistinctStatistics(Vector &v, idx_t count) {
 shared_ptr<ColumnStatistics> ColumnStatistics::Copy() const {
 	return make_shared<ColumnStatistics>(stats.Copy(), distinct_stats ? distinct_stats->Copy() : nullptr);
 }
+
 void ColumnStatistics::Serialize(Serializer &serializer) const {
-	stats.Serialize(serializer);
-	serializer.WriteOptional(distinct_stats);
+	serializer.WriteProperty(100, "statistics", stats);
+	serializer.WritePropertyWithDefault(101, "distinct", distinct_stats, unique_ptr<DistinctStatistics>());
 }
 
-shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &source, const LogicalType &type) {
-	auto stats = BaseStatistics::Deserialize(source, type);
-	auto distinct_stats = source.ReadOptional<DistinctStatistics>();
-	return make_shared<ColumnStatistics>(stats.Copy(), std::move(distinct_stats));
+shared_ptr<ColumnStatistics> ColumnStatistics::Deserialize(Deserializer &deserializer) {
+	auto stats = deserializer.ReadProperty<BaseStatistics>(100, "statistics");
+	auto distinct_stats = deserializer.ReadPropertyWithDefault<unique_ptr<DistinctStatistics>>(
+	    101, "distinct", unique_ptr<DistinctStatistics>());
+	return make_shared<ColumnStatistics>(std::move(stats), std::move(distinct_stats));
 }
 
 } // namespace duckdb

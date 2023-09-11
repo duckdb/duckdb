@@ -136,13 +136,14 @@ SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT param
 		return SQL_ERROR;
 	}
 
-	if (parameter_number < 0 || parameter_number > hstmt->stmt->n_param) {
+	if (parameter_number <= 0 || parameter_number > hstmt->stmt->n_param) {
 		return SQL_ERROR;
 	}
 	// TODO make global maps with type mappings for duckdb <> odbc
 	auto odbc_type = SQL_UNKNOWN_TYPE;
 	auto odbc_size = 0;
-	auto param_type_id = hstmt->stmt->data->GetType(parameter_number).id();
+	auto identifier = std::to_string(parameter_number);
+	auto param_type_id = hstmt->stmt->data->GetType(identifier).id();
 	switch (param_type_id) {
 	case duckdb::LogicalTypeId::VARCHAR:
 		odbc_type = SQL_VARCHAR;

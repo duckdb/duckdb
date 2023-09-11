@@ -1,0 +1,19 @@
+# name: benchmark/micro/csv/multiple_small_read_csv.benchmark
+# description: Run CSV reader on multiple small files
+# group: [csv]
+
+name CSV Multiple Small Reader Benchmark
+group csv
+
+load
+CREATE TABLE TEST (a integer, b varchar);
+INSERT INTO TEST VALUES (1, 'Pedro'), (2, 'Mark'), (3 , 'Thijs');
+COPY TEST TO '${BENCHMARK_DIR}/test_0.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY TEST TO '${BENCHMARK_DIR}/test_1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY TEST TO '${BENCHMARK_DIR}/test_2.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY TEST TO '${BENCHMARK_DIR}/test_3.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY TEST TO '${BENCHMARK_DIR}/test_4.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+COPY TEST TO '${BENCHMARK_DIR}/test_5.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+run
+SELECT * FROM '${BENCHMARK_DIR}/test_*.csv'

@@ -33,13 +33,13 @@ add_library_unity(
   exception.cpp
   exception_format_value.cpp
   extra_type_info.cpp
-  field_writer.cpp
   file_buffer.cpp
   file_system.cpp
   filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
+  http_state.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_reader.cpp
@@ -48,7 +48,6 @@ add_library_unity(
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
-  serializer.cpp
   string_util.cpp
   enum_util.cpp
   symbols.cpp
