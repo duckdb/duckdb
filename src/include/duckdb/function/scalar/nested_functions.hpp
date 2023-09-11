@@ -114,6 +114,11 @@ struct ListSelectFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListWhereFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StructExtractFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
