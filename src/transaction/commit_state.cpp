@@ -5,7 +5,6 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/storage/table/column_data.hpp"
@@ -17,6 +16,8 @@
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -45,18 +46,23 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto &table_entry = entry.Cast<DuckTableEntry>();
 			D_ASSERT(table_entry.IsDuckTable());
 			// ALTER TABLE statement, read the extra data after the entry
+
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 
-			BufferedDeserializer source(extra_data, extra_data_size);
-			string column_name = source.Read<string>();
+			MemoryStream source(extra_data, extra_data_size);
+			BinaryDeserializer deserializer(source);
+			deserializer.Begin();
+			auto column_name = deserializer.ReadProperty<string>(100, "column_name");
+			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
+			deserializer.End();
 
 			if (!column_name.empty()) {
 				// write the alter table in the log
 				table_entry.CommitAlter(column_name);
 			}
-
-			log->WriteAlter(source.ptr, source.endptr - source.ptr);
+			auto &alter_info = parse_info->Cast<AlterInfo>();
+			log->WriteAlter(alter_info);
 		} else {
 			// CREATE TABLE statement
 			log->WriteCreateTable(parent->Cast<TableCatalogEntry>());
@@ -75,10 +81,18 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			auto extra_data_size = Load<idx_t>(dataptr);
 			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 			// deserialize it
-			BufferedDeserializer source(extra_data, extra_data_size);
-			string column_name = source.Read<string>();
+			MemoryStream source(extra_data, extra_data_size);
+			BinaryDeserializer deserializer(source);
+			deserializer.Begin();
+			auto column_name = deserializer.ReadProperty<string>(100, "column_name");
+			auto parse_info = deserializer.ReadProperty<unique_ptr<ParseInfo>>(101, "alter_info");
+			deserializer.End();
+
+			(void)column_name;
+
 			// write the alter table in the log
-			log->WriteAlter(source.ptr, source.endptr - source.ptr);
+			auto &alter_info = parse_info->Cast<AlterInfo>();
+			log->WriteAlter(alter_info);
 		} else {
 			log->WriteCreateView(parent->Cast<ViewCatalogEntry>());
 		}

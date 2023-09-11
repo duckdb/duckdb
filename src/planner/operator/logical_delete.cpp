@@ -16,28 +16,6 @@ LogicalDelete::LogicalDelete(ClientContext &context, const string &catalog, cons
       table(Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table)) {
 }
 
-void LogicalDelete::Serialize(FieldWriter &writer) const {
-	table.Serialize(writer.GetSerializer());
-	writer.WriteField(table_index);
-	writer.WriteField(return_chunk);
-	writer.WriteSerializableList(this->expressions);
-}
-
-unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto &context = state.gstate.context;
-	auto info = TableCatalogEntry::Deserialize(reader.GetSource());
-	auto &table_info = info->Cast<CreateTableInfo>();
-
-	auto &table_catalog_entry =
-	    Catalog::GetEntry<TableCatalogEntry>(context, info->catalog, info->schema, table_info.table);
-
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
-	result->return_chunk = reader.ReadRequired<bool>();
-	result->expressions = reader.ReadRequiredSerializableList<duckdb::Expression>(state.gstate);
-	return std::move(result);
-}
-
 idx_t LogicalDelete::EstimateCardinality(ClientContext &context) {
 	return return_chunk ? LogicalOperator::EstimateCardinality(context) : 1;
 }

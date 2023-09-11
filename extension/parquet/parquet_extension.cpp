@@ -18,11 +18,8 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -37,7 +34,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -143,18 +141,6 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
-void ParquetOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField<bool>(binary_as_string);
-	writer.WriteField<bool>(file_row_number);
-	writer.WriteSerializable(file_options);
-}
-
-void ParquetOptions::Deserialize(FieldReader &reader) {
-	binary_as_string = reader.ReadRequired<bool>();
-	file_row_number = reader.ReadRequired<bool>();
-	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
-}
-
 BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	auto bind_info = BindInfo(ScanType::PARQUET);
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
@@ -186,8 +172,6 @@ public:
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
-		table_function.format_serialize = ParquetScanFormatSerialize;
-		table_function.format_deserialize = ParquetScanFormatDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
@@ -420,29 +404,8 @@ public:
 		return data.batch_index;
 	}
 
-	static void ParquetScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
-		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-		writer.WriteList<string>(bind_data.files);
-		writer.WriteRegularSerializableList(bind_data.types);
-		writer.WriteList<string>(bind_data.names);
-		bind_data.parquet_options.Serialize(writer);
-	}
-
-	static unique_ptr<FunctionData> ParquetScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                                       TableFunction &function) {
-		auto &context = state.context;
-		auto files = reader.ReadRequiredList<string>();
-		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-		auto names = reader.ReadRequiredList<string>();
-		ParquetOptions options(context);
-		options.Deserialize(reader);
-
-		return ParquetScanBindInternal(context, files, types, names, options);
-	}
-
-	static void ParquetScanFormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                                       const TableFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 		serializer.WriteProperty(100, "files", bind_data.files);
 		serializer.WriteProperty(101, "types", bind_data.types);
@@ -450,8 +413,7 @@ public:
 		serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanFormatDeserialize(FormatDeserializer &deserializer,
-	                                                             TableFunction &function) {
+	static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
 		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
@@ -892,23 +854,80 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 }
 
 // LCOV_EXCL_START
-static void ParquetCopySerialize(FieldWriter &writer, const FunctionData &bind_data_p, const CopyFunction &function) {
-	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
-	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
-	writer.WriteList<string>(bind_data.column_names);
-	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
-	writer.WriteField<idx_t>(bind_data.row_group_size);
+
+// FIXME: Have these be generated instead
+template <>
+const char *EnumUtil::ToChars<duckdb_parquet::format::CompressionCodec::type>(
+    duckdb_parquet::format::CompressionCodec::type value) {
+	switch (value) {
+	case CompressionCodec::UNCOMPRESSED:
+		return "UNCOMPRESSED";
+		break;
+	case CompressionCodec::SNAPPY:
+		return "SNAPPY";
+		break;
+	case CompressionCodec::GZIP:
+		return "GZIP";
+		break;
+	case CompressionCodec::LZO:
+		return "LZO";
+		break;
+	case CompressionCodec::BROTLI:
+		return "BROTLI";
+		break;
+	case CompressionCodec::LZ4:
+		return "LZ4";
+		break;
+	case CompressionCodec::ZSTD:
+		return "ZSTD";
+		break;
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
 }
 
-static unique_ptr<FunctionData> ParquetCopyDeserialize(ClientContext &context, FieldReader &reader,
-                                                       CopyFunction &function) {
-	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+template <>
+duckdb_parquet::format::CompressionCodec::type
+EnumUtil::FromString<duckdb_parquet::format::CompressionCodec::type>(const char *value) {
+	if (StringUtil::Equals(value, "UNCOMPRESSED")) {
+		return CompressionCodec::UNCOMPRESSED;
+	}
+	if (StringUtil::Equals(value, "SNAPPY")) {
+		return CompressionCodec::SNAPPY;
+	}
+	if (StringUtil::Equals(value, "GZIP")) {
+		return CompressionCodec::GZIP;
+	}
+	if (StringUtil::Equals(value, "LZO")) {
+		return CompressionCodec::LZO;
+	}
+	if (StringUtil::Equals(value, "BROTLI")) {
+		return CompressionCodec::BROTLI;
+	}
+	if (StringUtil::Equals(value, "LZ4")) {
+		return CompressionCodec::LZ4;
+	}
+	if (StringUtil::Equals(value, "ZSTD")) {
+		return CompressionCodec::ZSTD;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
 
-	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	data->column_names = reader.ReadRequiredList<string>();
-	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
-	data->row_group_size = reader.ReadRequired<idx_t>();
+static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bind_data_p,
+                                 const CopyFunction &function) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	serializer.WriteProperty(100, "sql_types", bind_data.sql_types);
+	serializer.WriteProperty(101, "column_names", bind_data.column_names);
+	serializer.WriteProperty(102, "codec", bind_data.codec);
+	serializer.WriteProperty(103, "row_group_size", bind_data.row_group_size);
+}
 
+static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
+	auto data = make_uniq<ParquetWriteBindData>();
+	data->sql_types = deserializer.ReadProperty<vector<LogicalType>>(100, "sql_types");
+	data->column_names = deserializer.ReadProperty<vector<string>>(101, "column_names");
+	data->codec = deserializer.ReadProperty<duckdb_parquet::format::CompressionCodec::type>(102, "codec");
+	data->row_group_size = deserializer.ReadProperty<idx_t>(103, "row_group_size");
 	return std::move(data);
 }
 // LCOV_EXCL_STOP

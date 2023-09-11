@@ -10,6 +10,11 @@ void BinarySerializer::OnPropertyBegin(const field_id_t field_id, const char *ta
 	// Just write the field id straight up
 	Write<field_id_t>(field_id);
 #ifdef DEBUG
+	// First of check that we are inside an object
+	if (debug_stack.empty()) {
+		throw InternalException("OnPropertyBegin called outside of object");
+	}
+
 	// Check that the tag is unique
 	auto &state = debug_stack.back();
 	auto &seen_field_ids = state.seen_field_ids;
@@ -142,24 +147,24 @@ void BinarySerializer::WriteValue(double value) {
 void BinarySerializer::WriteValue(const string &value) {
 	uint32_t len = value.length();
 	VarIntEncode(len);
-	WriteDataInternal(value.c_str(), len);
+	WriteData(value.c_str(), len);
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
 	uint32_t len = value.GetSize();
 	VarIntEncode(len);
-	WriteDataInternal(value.GetDataUnsafe(), len);
+	WriteData(value.GetDataUnsafe(), len);
 }
 
 void BinarySerializer::WriteValue(const char *value) {
 	uint32_t len = strlen(value);
 	VarIntEncode(len);
-	WriteDataInternal(value, len);
+	WriteData(value, len);
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
 	VarIntEncode(static_cast<uint64_t>(count));
-	WriteDataInternal(ptr, count);
+	WriteData(ptr, count);
 }
 
 } // namespace duckdb

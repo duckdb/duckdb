@@ -1,5 +1,7 @@
 #include "duckdb/common/bswap.hpp"
 #include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -186,16 +188,16 @@ static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &in
 	}
 }
 
-static void CMStringCompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+static void CMStringCompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                       const ScalarFunction &function) {
-	writer.WriteRegularSerializableList(function.arguments);
-	writer.WriteSerializable(function.return_type);
+	serializer.WriteProperty(100, "arguments", function.arguments);
+	serializer.WriteProperty(101, "return_type", function.return_type);
 }
 
-unique_ptr<FunctionData> CMStringCompressDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                     ScalarFunction &function) {
-	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	function.function = GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType, LogicalType>());
+unique_ptr<FunctionData> CMStringCompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
+	auto return_type = deserializer.ReadProperty<LogicalType>(101, "return_type");
+	function.function = GetStringCompressFunctionSwitch(return_type);
 	return nullptr;
 }
 
@@ -213,14 +215,13 @@ void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 }
 
-static void CMStringDecompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+static void CMStringDecompressSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                         const ScalarFunction &function) {
-	writer.WriteRegularSerializableList(function.arguments);
+	serializer.WriteProperty(100, "arguments", function.arguments);
 }
 
-unique_ptr<FunctionData> CMStringDecompressDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                                       ScalarFunction &function) {
-	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+unique_ptr<FunctionData> CMStringDecompressDeserialize(Deserializer &deserializer, ScalarFunction &function) {
+	function.arguments = deserializer.ReadProperty<vector<LogicalType>>(100, "arguments");
 	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
 	return nullptr;
 }

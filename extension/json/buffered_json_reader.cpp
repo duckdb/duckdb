@@ -1,27 +1,13 @@
 #include "buffered_json_reader.hpp"
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_opener.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <utility>
 
 namespace duckdb {
-
-void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) const {
-	writer.WriteField<JSONFormat>(format);
-	writer.WriteField<JSONRecordType>(record_type);
-	writer.WriteField<FileCompressionType>(compression);
-	writer.WriteSerializable(file_options);
-}
-
-void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
-	format = reader.ReadRequired<JSONFormat>();
-	record_type = reader.ReadRequired<JSONRecordType>();
-	compression = reader.ReadRequired<FileCompressionType>();
-	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
-}
 
 JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
     : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
