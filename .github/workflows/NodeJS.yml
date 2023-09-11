@@ -95,9 +95,6 @@ jobs:
             node: 19
             target_arch: x64
           - isRelease: false
-            node: 10
-            target_arch: arm64
-          - isRelease: false
             node: 12
             target_arch: arm64
           - isRelease: false
@@ -194,8 +191,6 @@ jobs:
             node: 17
           - isRelease: false
             node: 18
-          - target_arch: arm64
-            node: 10
           - target_arch: arm64
             node: 12
           - target_arch: arm64
