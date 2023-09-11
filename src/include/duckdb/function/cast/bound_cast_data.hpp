@@ -111,7 +111,6 @@ public:
 	static unique_ptr<BoundCastData> BindData(BindCastInput &input, const LogicalType &source,
 	                                          const LogicalType &target);
 	static BoundCastInfo Bind(BindCastInput &input, const LogicalType &source, const LogicalType &target);
-	static unique_ptr<FunctionLocalState> InitLocalState(CastLocalStateParameters &parameters);
 };
 
 } // namespace duckdb
