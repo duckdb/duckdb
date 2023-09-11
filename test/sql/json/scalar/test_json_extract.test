@@ -1,0 +1,310 @@
+# name: test/sql/json/scalar/test_json_extract.test
+# description: Test JSON extract
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+# should work within other functions (no conflict with list Lambda functions)
+query T
+SELECT json_structure('{"duck":"goose"}'->'duck');
+----
+"VARCHAR"
+
+# should go to our NULL
+query T
+select json_extract('{"foo": null}', '$.foo')
+----
+NULL
+
+query T
+select json_extract('{"foo": null}', '$.foo.bar')
+----
+NULL
+
+query T
+select json_extract('null', '$')
+----
+NULL
+
+query T
+select json_extract('[null]', '$[0]')
+----
+NULL
+
+query T
+select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+"duck"
+
+query T
+select json_extract_path('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+"duck"
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'/my_field/my_nested_field/1'
+----
+"duck"
+
+query T
+select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+duck
+
+query T
+select json_extract_path_text('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
+----
+duck
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->>'/my_field/my_nested_field/1'
+----
+duck
+
+query T
+select json_extract('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
+----
+"duckduckduckduck"
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->'/my_field/my_nested_field/1'
+----
+"duckduckduckduck"
+
+query T
+select json_extract_string('{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}', '/my_field/my_nested_field/1')
+----
+duckduckduckduck
+
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duckduckduckduck"]}}'::JSON->>'/my_field/my_nested_field/1'
+----
+duckduckduckduck
+
+query T
+select json_extract('[1, 2, 42]', 2)
+----
+42
+
+query T
+select json_extract_string('[1, 2, 42]', 2)
+----
+42
+
+# chained
+query T
+select '{"my_field": {"my_nested_field": ["goose", "duck"]}}'::JSON->'my_field'->'my_nested_field'->>1
+----
+duck
+
+# some sqlite tests
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$');
+----
+{"a":2,"c":[4,5,{"f":7}]}
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c');
+----
+[4,5,{"f":7}]
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2]');
+----
+{"f":7}
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.c[2].f');
+----
+7
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
+----
+NULL
+
+# list of paths must be constant
+statement error
+with tbl as (
+    select '{"a":2,"c":[4,5],"f":7}' j, ['$.c','$.a'] p
+)
+SELECT json_extract(j, p);
+----
+Binder Error
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
+----
+[[4,5], 2]
+
+query T
+SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);
+----
+[NULL, 2]
+
+query T
+SELECT json_extract(NULL, ['$.x', '$.a']);
+----
+NULL
+
+statement ok
+CREATE TABLE t1(j varchar);
+
+statement ok
+INSERT INTO t1(j) VALUES('{"a":1,"b":[1,[2,3],4],"c":99}');
+
+query T
+SELECT json_extract(j, '$.b[#]') FROM t1;
+----
+NULL
+
+# -0 is interpreted as just 0, just like in python
+query II
+SELECT json_extract(j, '$.b[#-0]') a, a = json_extract(j, '$.b[-0]') FROM t1;
+----
+1	true
+
+query II
+SELECT json_extract(j, '$.b[#-1]') a, a = json_extract(j, '$.b[-1]') FROM t1;
+----
+4	true
+
+query TT
+SELECT json_extract(j, '$.b[#-2]') a, a = json_extract(j, '$.b[-2]') FROM t1;
+----
+[2,3]	true
+
+query TT
+SELECT json_extract(j, '$.b[#-02]') a, a = json_extract(j, '$.b[-02]') FROM t1;
+----
+[2,3]	true
+
+query TT
+SELECT json_extract(j, '$.b[#-3]') a, a = json_extract(j, '$.b[-3]') FROM t1;
+----
+1	true
+
+query TT
+SELECT json_extract(j, '$.b[#-4]'), json_extract(j, '$.b[-4]') FROM t1;
+----
+NULL	NULL
+
+query TT
+SELECT json_extract(j, '$.b[#-2][#-1]') a, a = json_extract(j, '$.b[-2][-1]') FROM t1;
+----
+3	true
+
+query TT
+SELECT j::JSON->'$.b[#-2][#-1]' a, a = (j::JSON->'$.b[-2][-1]') FROM t1;
+----
+3	true
+
+query TT
+SELECT json_extract(j, ['$.b[0]', '$.b[#-1]']) a, a = json_extract(j, ['$.b[0]', '$.b[-1]']) FROM t1;
+----
+[1, 4]	true
+
+query TT
+SELECT j::JSON->['$.b[0]', '$.b[#-1]'] a, a = (j::JSON->['$.b[0]', '$.b[-1]']) FROM t1;
+----
+[1, 4]	true
+
+query TT
+SELECT json_extract(j, '$.a[#-1]'), json_extract(j, '$.a[-1]') FROM t1;
+----
+NULL	NULL
+
+query TT
+SELECT json_extract(j, '$.b[#-000001]') a, a = json_extract(j, '$.b[-000001]') FROM t1;
+----
+4	true
+
+query TT
+SELECT j::JSON->'$.b[#-000001]' a, a = (j::JSON->'$.b[-000001]') FROM t1;
+----
+4	true
+
+statement error
+SELECT json_extract(j, '$.b[#-]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[-]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#9]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#+2]') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#-1') FROM t1;
+
+statement error
+SELECT json_extract(j, '$.b[#-1x]') FROM t1;
+
+statement ok
+CREATE TABLE obj(x varchar);
+
+statement ok
+INSERT INTO obj VALUES('{"a":1,"b":2}');
+
+query T
+SELECT json_extract(x, '$.b') FROM obj;
+----
+2
+
+query T
+SELECT json_extract(x, '$."b"') FROM obj;
+----
+2
+
+statement ok
+CREATE TABLE t12(x varchar);
+
+statement ok
+INSERT INTO t12(x) VALUES(
+'{"settings":
+    {"layer2":
+       {"hapax.legomenon":
+          {"forceDisplay":true,
+           "transliterate":true,
+           "add.footnote":true,
+           "summary.report":true},
+        "dis.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":true},
+        "tris.legomenon":
+          {"forceDisplay":true,
+           "transliterate":false,
+           "add.footnote":false,
+           "summary.report":false}
+       }
+    }
+ }');
+
+query T
+SELECT json_extract(x, '$.settings.layer2."tris.legomenon"."summary.report"') FROM t12;
+----
+false
+
+query T
+SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
+----
+false
+
+# test issue #5063
+statement ok
+create table test5063 as select '{"a": 1, "b": 2}' js
+
+statement ok
+prepare q1 as SELECT js->CAST(? AS STRING) FROM test5063
+
+query T
+execute q1('a')
+----
+1

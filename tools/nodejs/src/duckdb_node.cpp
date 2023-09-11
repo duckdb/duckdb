@@ -4,15 +4,13 @@
 	Napi::PropertyDescriptor::Value(#name, Napi::Number::New(env, constant),                                           \
 	                                static_cast<napi_property_attributes>(napi_enumerable | napi_configurable)),
 
-namespace {
-
-Napi::Object RegisterModule(Napi::Env env, Napi::Object exports) {
+NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	node_duckdb::Database::Init(env, exports);
-	node_duckdb::Connection::Init(env, exports);
-	node_duckdb::Statement::Init(env, exports);
-	node_duckdb::QueryResult::Init(env, exports);
+	database_constructor = node_duckdb::Database::Init(env, exports);
+	connection_constructor = node_duckdb::Connection::Init(env, exports);
+	statement_constructor = node_duckdb::Statement::Init(env, exports);
+	query_result_constructor = node_duckdb::QueryResult::Init(env, exports);
 
 	exports.DefineProperties({
 	    DEFINE_CONSTANT_INTEGER(exports, node_duckdb::Database::DUCKDB_NODEJS_ERROR, ERROR) DEFINE_CONSTANT_INTEGER(
@@ -23,10 +21,6 @@ Napi::Object RegisterModule(Napi::Env env, Napi::Object exports) {
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_SHAREDCACHE)                      // ignored
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_PRIVATECACHE)                     // ignored
 	});
-
-	return exports;
 }
 
-} // namespace
-
-NODE_API_MODULE(node_duckdb, RegisterModule);
+NODE_API_ADDON(NodeDuckDB);

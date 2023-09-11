@@ -1,12 +1,11 @@
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -36,15 +35,6 @@ unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
 hash_t PositionalReferenceExpression::Hash() const {
 	hash_t result = ParsedExpression::Hash();
 	return CombineHash(duckdb::Hash(index), result);
-}
-
-void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField<idx_t>(index);
-}
-
-unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto expression = make_uniq<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
-	return std::move(expression);
 }
 
 } // namespace duckdb

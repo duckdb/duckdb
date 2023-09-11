@@ -13,13 +13,25 @@ from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
     ExplainType,
-    PythonExceptionHandling
+    PythonExceptionHandling,
+    Expression,
+    ConstantExpression,
+    ColumnExpression,
+    StarExpression,
+    FunctionExpression,
+    CaseExpression,
 )
 _exported_symbols.extend([
     "DuckDBPyRelation",
     "DuckDBPyConnection",
     "ExplainType",
-    "PythonExceptionHandling"
+    "PythonExceptionHandling",
+    "Expression",
+    "ConstantExpression",
+    "ColumnExpression",
+    "StarExpression",
+    "FunctionExpression",
+    "CaseExpression",
 ])
 
 # Enums

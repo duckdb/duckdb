@@ -9,17 +9,20 @@
 #pragma once
 
 #include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 
 namespace duckdb {
 
-class MetadataWriter : public Serializer {
+class MetadataWriter : public WriteStream {
 public:
+	MetadataWriter(const MetadataWriter &) = delete;
+	MetadataWriter &operator=(const MetadataWriter &) = delete;
+
 	explicit MetadataWriter(MetadataManager &manager);
 	~MetadataWriter() override;
 
 public:
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
-
 	void Flush();
 
 	BlockPointer GetBlockPointer();

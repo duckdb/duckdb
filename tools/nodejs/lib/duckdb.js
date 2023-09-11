@@ -1,6 +1,6 @@
 /**
  * @module duckdb
- * @summary these jsdoc annotations are still a work in progress - feedback and suggestions are welcome!
+ * @summary DuckDB is an embeddable SQL OLAP Database Management System
  */
 
 var duckdb = require('./duckdb-binding.js');
@@ -441,7 +441,7 @@ Database.prototype.close_internal;
 Database.prototype.wait;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}
@@ -449,7 +449,7 @@ Database.prototype.wait;
 Database.prototype.serialize;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}

@@ -124,6 +124,9 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
+option(ENABLE_EXTENSION_AUTOLOADING "Enable extension auto-loading by default." FALSE)
+option(ENABLE_EXTENSION_AUTOINSTAll "Enable extension auto-installing by default." FALSE)
+option(EXTENSION_TESTS_ONLY "Only load the tests for extensions, don't actually build them; useful for testing loadable extensions" FALSE)
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
@@ -133,7 +136,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_R OR BUILD_NODE OR CONFIGURE_R)
+if((BUILD_PYTHON OR BUILD_NODE)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
@@ -167,7 +170,6 @@ elseif(${ENABLE_SANITIZER})
     set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=address")
   endif()
 endif()
-
 
 if (${DISABLE_VPTR_SANITIZER})
 else()
@@ -208,6 +210,13 @@ endif()
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
 if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
+endif()
+
+if (ENABLE_EXTENSION_AUTOLOADING)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1)
+endif()
+if (ENABLE_EXTENSION_AUTOINSTALL)
+  add_definitions(-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=${ENABLE_EXTENSION_AUTOINSTALL})
 endif()
 
 option(OSX_BUILD_UNIVERSAL "Build both architectures on OSX and create a single binary containing both." FALSE)
@@ -725,15 +734,6 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
 
   set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
 
-  # Allows explicitly disabling extensions that may be specified in other configurations
-  if (NOT ${DONT_BUILD})
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
-  else()
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
-    return()
-  endif()
-
   if ("${LOAD_TESTS}")
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS TRUE PARENT_SCOPE)
   else()
@@ -743,6 +743,14 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
   if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
   else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  endif()
+
+  # Allows explicitly disabling extensions that may be specified in other configurations
+  if (NOT ${DONT_BUILD} AND NOT ${EXTENSION_TESTS_ONLY})
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
   endif()
 
@@ -803,6 +811,11 @@ function(duckdb_extension_load NAME)
 
   # If extension was set already, we ignore subsequent calls
   list (FIND DUCKDB_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
+  if (${_index} GREATER -1)
+    return()
+  endif()
+
+  list (FIND SKIP_EXTENSIONS ${EXTENSION_NAME_LOWERCASE} _index)
   if (${_index} GREATER -1)
     return()
   endif()
@@ -868,13 +881,6 @@ foreach(EXT IN LISTS DUCKDB_EXTENSION_NAMES)
 endforeach()
 
 # Load extensions passed through cmake config var
-foreach(EXT IN LISTS SKIP_EXTENSIONS)
-  if (NOT "${EXT}" STREQUAL "")
-    duckdb_extension_load(${EXT} DONT_BUILD)
-  endif()
-endforeach()
-
-# Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
   if(NOT "${EXT}" STREQUAL "")
     duckdb_extension_load(${EXT})
@@ -896,9 +902,6 @@ endif()
 # Load client specific config
 if(BUILD_PYTHON)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
-endif()
-if(BUILD_R OR CONFIGURE_R)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpkg/duckdb_extension_config.cmake)
 endif()
 if(BUILD_NODE)
   include(${CMAKE_CURRENT_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
@@ -1018,9 +1021,7 @@ if(${EXTENSION_CONFIG_BUILD})
 endif()
 
 if(BUILD_PYTHON
-        OR BUILD_R
-        OR BUILD_NODE
-        OR CONFIGURE_R)
+        OR BUILD_NODE)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -1057,32 +1058,6 @@ if(BUILD_PYTHON
     endif()
     add_extension_dependencies(duckdb_python)
   endif()
-  if(CONFIGURE_R)
-    add_custom_target(
-            duckdb_configure_r ALL
-            COMMAND
-            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
-            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
-            COMMENT Configure
-            R package)
-    add_extension_dependencies(duckdb_configure_r)
-  endif()
-  if(BUILD_R)
-    add_custom_target(
-            duckdb_r ALL
-            COMMAND
-            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
-            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-            DUCKDB_R_LIBS=\"${duckdb_libs}\" DUCKDB_R_DEBUG= R CMD INSTALL .
-            DEPENDS duckdb duckdb_static
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
-            COMMENT Build
-            R package)
-    add_extension_dependencies(duckdb_r)
-  endif()
   if(BUILD_NODE)
     add_custom_target(
             duckdb_node ALL
@@ -1110,6 +1085,22 @@ if(NOT CLANG_TIDY)
   if (NOT EXTENSION_CONFIG_BUILD)
     add_subdirectory(third_party)
   endif()
+endif()
+
+# Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
+if (NOT "${LOCAL_EXTENSION_REPO}" STREQUAL "")
+  add_custom_target(
+          duckdb_local_extension_repo ALL
+          COMMAND
+          python3 scripts/create_local_extension_repo.py $<TARGET_FILE:shell> "${CMAKE_CURRENT_BINARY_DIR}" "${LOCAL_EXTENSION_REPO}"
+          DEPENDS shell
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Create local extension repository)
+  add_extension_dependencies(duckdb_local_extension_repo)
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    add_dependencies(duckdb_local_extension_repo ${EXT_NAME}_loadable_extension)
+  endforeach()
+  message(STATUS "Extensions will be deployed to: ${LOCAL_EXTENSION_REPO}")
 endif()
 
 if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT EXTENSION_CONFIG_BUILD ) # this does not work with 2.8

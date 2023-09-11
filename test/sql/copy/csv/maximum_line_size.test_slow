@@ -1,0 +1,38 @@
+# name: test/sql/copy/csv/maximum_line_size.test_slow
+# description: Test maximum_line_size CSV option
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
+
+foreach parallel_option true false
+
+# Linesize exceeds maximum_line_size
+statement error
+insert into test select * from read_csv('test/sql/copy/csv/data/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0, parallel=${parallel_option}});
+
+# Single line too long
+# "a".repeat(2 * 1024 * 1024 + 10);
+statement error
+select * from read_csv_auto('data/csv/issue_8320_1.csv.gz', parallel=${parallel_option});
+----
+Maximum line size of 2097152 bytes exceeded
+
+# Single line too long, but with actual newline at the end
+# "a".repeat(2 * 1024 * 1024 + 10) + "\n";
+statement error
+select * from read_csv_auto('data/csv/issue_8320_2.csv.gz', parallel=${parallel_option});
+----
+Maximum line size of 2097152 bytes exceeded
+
+# Multiple lines too long
+# String value = "a".repeat(2 * 1024 * 1024 + 10) + "\n"; String data = value + value + value + value;
+statement error
+select * from read_csv_auto('data/csv/issue_8320_3.csv.gz', parallel=${parallel_option});
+----
+Maximum line size of 2097152 bytes exceeded
+
+endloop

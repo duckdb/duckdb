@@ -1,7 +1,9 @@
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/vector.hpp"
+
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -90,23 +92,26 @@ void StructStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 	}
 }
 
-void StructStats::Serialize(const BaseStatistics &stats, FieldWriter &writer) {
+void StructStats::Serialize(const BaseStatistics &stats, Serializer &serializer) {
 	auto child_stats = StructStats::GetChildStats(stats);
 	auto child_count = StructType::GetChildCount(stats.GetType());
-	for (idx_t i = 0; i < child_count; i++) {
-		writer.WriteSerializable(child_stats[i]);
-	}
+
+	serializer.WriteList(200, "child_stats", child_count,
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(child_stats[i]); });
 }
 
-BaseStatistics StructStats::Deserialize(FieldReader &reader, LogicalType type) {
+void StructStats::Deserialize(Deserializer &deserializer, BaseStatistics &base) {
+	auto &type = base.GetType();
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+
 	auto &child_types = StructType::GetChildTypes(type);
-	BaseStatistics result(std::move(type));
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		result.child_stats[i].Copy(
-		    reader.ReadRequiredSerializable<BaseStatistics, BaseStatistics>(child_types[i].second));
-	}
-	return result;
+
+	deserializer.ReadList(200, "child_stats", [&](Deserializer::List &list, idx_t i) {
+		deserializer.Set<LogicalType &>(const_cast<LogicalType &>(child_types[i].second));
+		auto stat = list.ReadElement<BaseStatistics>();
+		base.child_stats[i].Copy(stat);
+		deserializer.Unset<LogicalType>();
+	});
 }
 
 string StructStats::ToString(const BaseStatistics &stats) {

@@ -5,7 +5,6 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
-#include "duckdb/verification/deserialized_statement_verifier_v2.hpp"
 #include "duckdb/verification/external_statement_verifier.hpp"
 #include "duckdb/verification/parsed_statement_verifier.hpp"
 #include "duckdb/verification/prepared_statement_verifier.hpp"
@@ -33,8 +32,6 @@ unique_ptr<StatementVerifier> StatementVerifier::Create(VerificationType type, c
 		return CopiedStatementVerifier::Create(statement_p);
 	case VerificationType::DESERIALIZED:
 		return DeserializedStatementVerifier::Create(statement_p);
-	case VerificationType::DESERIALIZED_V2:
-		return DeserializedStatementVerifierV2::Create(statement_p);
 	case VerificationType::PARSED:
 		return ParsedStatementVerifier::Create(statement_p);
 	case VerificationType::UNOPTIMIZED:

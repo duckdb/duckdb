@@ -58,7 +58,8 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 #endif
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
-                                     ExtensionInitResult &result, string &error) {
+                                     ExtensionInitResult &result, string &error,
+                                     optional_ptr<const ClientConfig> client_config) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
@@ -69,6 +70,31 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
+		string extension_name = ApplyExtensionAlias(extension);
+#ifdef WASM_LOADABLE_EXTENSIONS
+		string url_template = ExtensionUrlTemplate(client_config, "");
+		string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
+
+		char *str = (char *)EM_ASM_PTR(
+		    {
+			    var jsString = ((typeof runtime == 'object') && runtime && (typeof runtime.whereToLoad == 'function') &&
+			                    runtime.whereToLoad)
+			                       ? runtime.whereToLoad(UTF8ToString($0))
+			                       : (UTF8ToString($1));
+			    var lengthBytes = lengthBytesUTF8(jsString) + 1;
+			    // 'jsString.length' would return the length of the string as UTF-16
+			    // units, but Emscripten C strings operate as UTF-8.
+			    var stringOnWasmHeap = _malloc(lengthBytes);
+			    stringToUTF8(jsString, stringOnWasmHeap, lengthBytes);
+			    return stringOnWasmHeap;
+		    },
+		    filename.c_str(), url.c_str());
+		std::string address(str);
+		free(str);
+
+		filename = address;
+#else
+
 		string local_path =
 		    !config.options.extension_directory.empty() ? config.options.extension_directory : fs.GetHomeDirectory();
 
@@ -80,8 +106,8 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
 		}
-		string extension_name = ApplyExtensionAlias(extension);
 		filename = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
+#endif
 	}
 	if (!fs.FileExists(filename)) {
 		string message;
@@ -216,17 +242,18 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 #endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+                                                 optional_ptr<const ClientConfig> client_config) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, fs, extension, result, error)) {
+	if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
 		ExtensionHelper::InstallExtension(config, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, fs, extension, result, error)) {
+		if (!TryInitialLoad(config, fs, extension, result, error, client_config)) {
 			throw IOException(error);
 		}
 	}
@@ -254,14 +281,15 @@ string ExtensionHelper::GetExtensionName(const string &original_name) {
 	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension,
+                                            optional_ptr<const ClientConfig> client_config) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Loading external extensions is disabled through a compile time flag");
 #else
-	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension, client_config);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -279,7 +307,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension,
+	                      &ClientConfig::GetConfig(context));
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {
