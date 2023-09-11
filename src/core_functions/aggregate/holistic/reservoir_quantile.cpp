@@ -3,9 +3,8 @@
 #include "duckdb/core_functions/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/queue.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 #include <algorithm>
 #include <stdlib.h>
@@ -70,28 +69,14 @@ struct ReservoirQuantileBindData : public FunctionData {
 		return quantiles == other.quantiles && sample_size == other.sample_size;
 	}
 
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
-		D_ASSERT(bind_data_p);
-		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
-		writer.WriteList<double>(bind_data.quantiles);
-		writer.WriteField<int32_t>(bind_data.sample_size);
-	}
-
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            AggregateFunction &bound_function) {
-		auto quantiles = reader.ReadRequiredList<double>();
-		auto sample_size = reader.ReadRequired<int32_t>();
-		return make_uniq<ReservoirQuantileBindData>(std::move(quantiles), sample_size);
-	}
-
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                            const AggregateFunction &function) {
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const AggregateFunction &function) {
 		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
 		serializer.WriteProperty(100, "quantiles", bind_data.quantiles);
 		serializer.WriteProperty(101, "sample_size", bind_data.sample_size);
 	}
 
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, AggregateFunction &function) {
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, AggregateFunction &function) {
 		auto result = make_uniq<ReservoirQuantileBindData>();
 		deserializer.ReadProperty(100, "quantiles", result->quantiles);
 		deserializer.ReadProperty(101, "sample_size", result->sample_size);
@@ -373,8 +358,6 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimal(ClientContext &context, Ag
 	function.name = "reservoir_quantile";
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
-	function.format_serialize = ReservoirQuantileBindData::FormatSerialize;
-	function.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	return bind_data;
 }
 
@@ -383,8 +366,6 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	fun.bind = BindReservoirQuantile;
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
-	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
-	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
@@ -396,8 +377,6 @@ unique_ptr<FunctionData> BindReservoirQuantileDecimalList(ClientContext &context
 	auto bind_data = BindReservoirQuantile(context, function, arguments);
 	function.serialize = ReservoirQuantileBindData::Serialize;
 	function.deserialize = ReservoirQuantileBindData::Deserialize;
-	function.format_serialize = ReservoirQuantileBindData::FormatSerialize;
-	function.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	function.name = "reservoir_quantile";
 	return bind_data;
 }
@@ -407,8 +386,6 @@ AggregateFunction GetReservoirQuantileListAggregate(const LogicalType &type) {
 	fun.bind = BindReservoirQuantile;
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
-	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
-	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	// temporarily push an argument so we can bind the actual quantile
 	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
 	fun.arguments.push_back(list_of_double);
@@ -437,8 +414,6 @@ static void GetReservoirQuantileDecimalFunction(AggregateFunctionSet &set, const
 	                      BindReservoirQuantileDecimal);
 	fun.serialize = ReservoirQuantileBindData::Serialize;
 	fun.deserialize = ReservoirQuantileBindData::Deserialize;
-	fun.format_serialize = ReservoirQuantileBindData::FormatSerialize;
-	fun.format_deserialize = ReservoirQuantileBindData::FormatDeserialize;
 	set.AddFunction(fun);
 
 	fun.arguments.emplace_back(LogicalType::INTEGER);

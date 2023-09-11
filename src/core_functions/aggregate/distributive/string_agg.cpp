@@ -5,7 +5,8 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -140,16 +141,14 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 	return make_uniq<StringAggBindData>(std::move(separator_string));
 }
 
-static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+static void StringAggSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const AggregateFunction &function) {
-	D_ASSERT(bind_data_p);
 	auto bind_data = bind_data_p->Cast<StringAggBindData>();
-	writer.WriteString(bind_data.sep);
+	serializer.WriteProperty(100, "separator", bind_data.sep);
 }
 
-unique_ptr<FunctionData> StringAggDeserialize(PlanDeserializationState &state, FieldReader &reader,
-                                              AggregateFunction &bound_function) {
-	auto sep = reader.ReadRequired<string>();
+unique_ptr<FunctionData> StringAggDeserialize(Deserializer &deserializer, AggregateFunction &bound_function) {
+	auto sep = deserializer.ReadProperty<string>(100, "separator");
 	return make_uniq<StringAggBindData>(std::move(sep));
 }
 

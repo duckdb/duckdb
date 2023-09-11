@@ -82,10 +82,10 @@ typedef void (*copy_to_combine_t)(ExecutionContext &context, FunctionData &bind_
                                   LocalFunctionData &lstate);
 typedef void (*copy_to_finalize_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate);
 
-typedef void (*copy_to_serialize_t)(FieldWriter &writer, const FunctionData &bind_data, const CopyFunction &function);
+typedef void (*copy_to_serialize_t)(Serializer &serializer, const FunctionData &bind_data,
+                                    const CopyFunction &function);
 
-typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(ClientContext &context, FieldReader &reader,
-                                                          CopyFunction &function);
+typedef unique_ptr<FunctionData> (*copy_to_deserialize_t)(Deserializer &deserializer, CopyFunction &function);
 
 typedef unique_ptr<FunctionData> (*copy_from_bind_t)(ClientContext &context, CopyInfo &info,
                                                      vector<string> &expected_names,
