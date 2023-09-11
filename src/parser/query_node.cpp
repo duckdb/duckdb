@@ -5,9 +5,8 @@
 #include "duckdb/parser/query_node/recursive_cte_node.hpp"
 #include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -160,65 +159,6 @@ void QueryNode::CopyProperties(QueryNode &other) const {
 		kv_info->materialized = kv.second->materialized;
 		other.cte_map.map[kv.first] = std::move(kv_info);
 	}
-}
-
-void QueryNode::Serialize(Serializer &main_serializer) const {
-	FieldWriter writer(main_serializer);
-	writer.WriteField<QueryNodeType>(type);
-	writer.WriteSerializableList(modifiers);
-	// cte_map
-
-	writer.WriteField<uint32_t>((uint32_t)cte_map.map.size());
-	auto &serializer = writer.GetSerializer();
-	for (auto &cte : cte_map.map) {
-		serializer.WriteString(cte.first);
-		serializer.WriteStringVector(cte.second->aliases);
-		cte.second->query->Serialize(serializer);
-		writer.WriteField<CTEMaterialize>(cte.second->materialized);
-	}
-	Serialize(writer);
-
-	writer.Finalize();
-}
-
-unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
-	FieldReader reader(main_source);
-
-	auto type = reader.ReadRequired<QueryNodeType>();
-	auto modifiers = reader.ReadRequiredSerializableList<ResultModifier>();
-	// cte_map
-	auto cte_count = reader.ReadRequired<uint32_t>();
-	auto &source = reader.GetSource();
-	case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>> new_map;
-	for (idx_t i = 0; i < cte_count; i++) {
-		auto name = source.Read<string>();
-		auto info = make_uniq<CommonTableExpressionInfo>();
-		source.ReadStringVector(info->aliases);
-		info->query = SelectStatement::Deserialize(source);
-		info->materialized = reader.ReadField<CTEMaterialize>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
-		new_map[name] = std::move(info);
-	}
-	unique_ptr<QueryNode> result;
-	switch (type) {
-	case QueryNodeType::SELECT_NODE:
-		result = SelectNode::Deserialize(reader);
-		break;
-	case QueryNodeType::SET_OPERATION_NODE:
-		result = SetOperationNode::Deserialize(reader);
-		break;
-	case QueryNodeType::RECURSIVE_CTE_NODE:
-		result = RecursiveCTENode::Deserialize(reader);
-		break;
-	case QueryNodeType::CTE_NODE:
-		result = CTENode::Deserialize(reader);
-		break;
-	default:
-		throw SerializationException("Could not deserialize Query Node: unknown type!");
-	}
-	result->modifiers = std::move(modifiers);
-	result->cte_map.map = std::move(new_map);
-	reader.Finalize();
-	return result;
 }
 
 void QueryNode::AddDistinct() {

@@ -32,7 +32,7 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 select current_setting('s3_region');
 ----
-Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
 Extension
 
 ### Autoloading with autoinstall and correct extension repo
