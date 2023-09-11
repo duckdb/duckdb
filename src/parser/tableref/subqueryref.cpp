@@ -1,9 +1,8 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -33,18 +32,6 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 	return std::move(copy);
-}
-
-void SubqueryRef::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*subquery);
-	writer.WriteList<string>(column_name_alias);
-}
-
-unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader) {
-	auto subquery = reader.ReadRequiredSerializable<SelectStatement>();
-	auto result = make_uniq<SubqueryRef>(std::move(subquery));
-	result->column_name_alias = reader.ReadRequiredList<string>();
-	return std::move(result);
 }
 
 } // namespace duckdb

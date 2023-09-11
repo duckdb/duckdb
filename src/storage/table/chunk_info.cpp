@@ -1,8 +1,7 @@
 #include "duckdb/storage/table/chunk_info.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -30,29 +29,15 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Deserializer &source) {
-	auto type = source.Read<ChunkInfoType>();
-	switch (type) {
-	case ChunkInfoType::EMPTY_INFO:
-		return nullptr;
-	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::Deserialize(source);
-	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::Deserialize(source);
-	default:
-		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
-	}
-}
-
-unique_ptr<ChunkInfo> ChunkInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ChunkInfoType>(100, "type");
 	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
 		return nullptr;
 	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::FormatDeserialize(deserializer);
+		return ChunkConstantInfo::Deserialize(deserializer);
 	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::FormatDeserialize(deserializer);
+		return ChunkVectorInfo::Deserialize(deserializer);
 	default:
 		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
 	}
@@ -94,31 +79,11 @@ void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t
 	insert_id = commit_id;
 }
 
-void ChunkConstantInfo::Serialize(Serializer &serializer) {
-	// we only need to write this node if any tuple deletions have been committed
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
-	if (!is_deleted) {
-		serializer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
-		return;
-	}
-	serializer.Write<ChunkInfoType>(type);
-	serializer.Write<idx_t>(start);
-}
-
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
-	auto start = source.Read<idx_t>();
-
-	auto info = make_uniq<ChunkConstantInfo>(start);
-	info->insert_id = 0;
-	info->delete_id = 0;
-	return std::move(info);
-}
-
-void ChunkConstantInfo::FormatSerialize(FormatSerializer &serializer) const {
+void ChunkConstantInfo::Serialize(Serializer &serializer) const {
 	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
 	if (!is_deleted) {
 		serializer.WriteProperty(100, "type", ChunkInfoType::EMPTY_INFO);
@@ -128,7 +93,7 @@ void ChunkConstantInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(200, "start", start);
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &deserializer) {
 	auto start = deserializer.ReadProperty<idx_t>(200, "start");
 	auto info = make_uniq<ChunkConstantInfo>(start);
 	info->insert_id = 0;
@@ -253,35 +218,6 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	}
 }
 
-void ChunkVectorInfo::Serialize(Serializer &serializer) {
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	transaction_t start_time = TRANSACTION_ID_START - 1;
-	transaction_t transaction_id = DConstants::INVALID_INDEX;
-	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
-	if (count == STANDARD_VECTOR_SIZE) {
-		// nothing is deleted: skip writing anything
-		serializer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
-		return;
-	}
-	if (count == 0) {
-		// everything is deleted: write a constant vector
-		serializer.Write<ChunkInfoType>(ChunkInfoType::CONSTANT_INFO);
-		serializer.Write<idx_t>(start);
-		return;
-	}
-	// write a boolean vector
-	serializer.Write<ChunkInfoType>(ChunkInfoType::VECTOR_INFO);
-	serializer.Write<idx_t>(start);
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		deleted_tuples[i] = true;
-	}
-	for (idx_t i = 0; i < count; i++) {
-		deleted_tuples[sel.get_index(i)] = false;
-	}
-	serializer.WriteData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
-}
-
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
 	if (!any_deleted) {
 		return 0;
@@ -295,22 +231,7 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_count;
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
-	auto start = source.Read<idx_t>();
-
-	auto result = make_uniq<ChunkVectorInfo>(start);
-	result->any_deleted = true;
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	source.ReadData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (deleted_tuples[i]) {
-			result->deleted[i] = 0;
-		}
-	}
-	return std::move(result);
-}
-
-void ChunkVectorInfo::FormatSerialize(FormatSerializer &serializer) const {
+void ChunkVectorInfo::Serialize(Serializer &serializer) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	transaction_t start_time = TRANSACTION_ID_START - 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
@@ -339,7 +260,7 @@ void ChunkVectorInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty(201, "deleted_tuples", data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &deserializer) {
 	auto start = deserializer.ReadProperty<idx_t>(200, "start");
 
 	auto result = make_uniq<ChunkVectorInfo>(start);

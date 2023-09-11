@@ -3,9 +3,7 @@
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -18,14 +16,12 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
-void MainHeader::Serialize(Serializer &ser) {
+void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
-	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		writer.WriteField<uint64_t>(flags[i]);
+		ser.Write<uint64_t>(flags[i]);
 	}
-	writer.Finalize();
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
@@ -39,7 +35,7 @@ void MainHeader::CheckMagicBytes(FileHandle &handle) {
 	}
 }
 
-MainHeader MainHeader::Deserialize(Deserializer &source) {
+MainHeader MainHeader::Read(ReadStream &source) {
 	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	MainHeader header;
 	source.ReadData(magic_bytes, MainHeader::MAGIC_BYTE_SIZE);
@@ -71,22 +67,20 @@ MainHeader MainHeader::Deserialize(Deserializer &source) {
 		    header.version_number, VERSION_NUMBER, version_text);
 	}
 	// read the flags
-	FieldReader reader(source);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
-		header.flags[i] = reader.ReadRequired<uint64_t>();
+		header.flags[i] = source.Read<uint64_t>();
 	}
-	reader.Finalize();
 	return header;
 }
 
-void DatabaseHeader::Serialize(Serializer &ser) {
+void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(iteration);
 	ser.Write<idx_t>(meta_block);
 	ser.Write<idx_t>(free_list);
 	ser.Write<uint64_t>(block_count);
 }
 
-DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
+DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 	DatabaseHeader header;
 	header.iteration = source.Read<uint64_t>();
 	header.meta_block = source.Read<idx_t>();
@@ -97,14 +91,14 @@ DatabaseHeader DatabaseHeader::Deserialize(Deserializer &source) {
 
 template <class T>
 void SerializeHeaderStructure(T header, data_ptr_t ptr) {
-	BufferedSerializer ser(ptr, Storage::FILE_HEADER_SIZE);
-	header.Serialize(ser);
+	MemoryStream ser(ptr, Storage::FILE_HEADER_SIZE);
+	header.Write(ser);
 }
 
 template <class T>
 T DeserializeHeaderStructure(data_ptr_t ptr) {
-	BufferedDeserializer source(ptr, Storage::FILE_HEADER_SIZE);
-	return T::Deserialize(source);
+	MemoryStream source(ptr, Storage::FILE_HEADER_SIZE);
+	return T::Read(source);
 }
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
@@ -246,6 +240,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		// no free list
 		return;
 	}
+
 	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
@@ -259,7 +254,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		auto usage_count = reader.Read<uint32_t>();
 		multi_use_blocks[block_id] = usage_count;
 	}
-	GetMetadataManager().Deserialize(reader);
+	GetMetadataManager().Read(reader);
 	GetMetadataManager().MarkBlocksAsModified();
 }
 
@@ -466,7 +461,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}
-		GetMetadataManager().Serialize(writer);
+		GetMetadataManager().Write(writer);
 		writer.Flush();
 	} else {
 		// no blocks in the free list
@@ -487,9 +482,9 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	// set the header inside the buffer
 	header_buffer.Clear();
-	BufferedSerializer serializer;
-	header.Serialize(serializer);
-	memcpy(header_buffer.buffer, serializer.blob.data.get(), serializer.blob.size);
+	MemoryStream serializer;
+	header.Write(serializer);
+	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
 	ChecksumAndWrite(header_buffer, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
