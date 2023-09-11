@@ -4,9 +4,9 @@
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
 #include "column_reader.hpp"
+#include "crypto_wrapper.hpp"
 #include "duckdb.hpp"
 #include "list_column_reader.hpp"
-#include "mbedtls_wrapper.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
@@ -100,12 +100,16 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
-		crypto_metadata->read(file_proto.get());
+		const auto crypto_len = crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		transport.InitializeDecryption(encryption_key);
+		footer_len -= crypto_len;
+		const auto encoded_len = transport.InitializeDecryption(encryption_key);
+		if (encoded_len != footer_len - sizeof(uint32_t)) {
+			// TODO throw
+		}
 	}
 
 	auto metadata = make_uniq<FileMetaData>();

@@ -1,15 +1,16 @@
 #include "parquet_writer.hpp"
 
 #include "duckdb.hpp"
+#include "mbedtls_wrapper.hpp"
 #include "parquet_timestamp.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #endif
@@ -24,6 +25,7 @@ using duckdb_parquet::format::CompressionCodec;
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::Encoding;
 using duckdb_parquet::format::FieldRepetitionType;
+using duckdb_parquet::format::FileCryptoMetaData;
 using duckdb_parquet::format::FileMetaData;
 using duckdb_parquet::format::PageHeader;
 using duckdb_parquet::format::PageType;
@@ -448,6 +450,13 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 void ParquetWriter::Finalize() {
 	auto start_offset = writer->GetTotalWritten();
+	if (!encryption_key.empty()) {
+		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
+		crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1 = true;
+		asdas
+		// TODO: cast protocol->getTransport() to MyTransport and initialize encryption
+		//  and finalize after writing (making sure to write length too)
+	}
 	file_meta_data.write(protocol.get());
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);

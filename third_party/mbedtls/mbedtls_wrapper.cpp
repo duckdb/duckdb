@@ -102,29 +102,35 @@ void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
 }
 
 MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
-	mbedtls_sha256_init((mbedtls_sha256_context *)sha_context);
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
 
-	if (mbedtls_sha256_starts((mbedtls_sha256_context *)sha_context, false)) {
+	mbedtls_sha256_init(context);
+
+	if (mbedtls_sha256_starts(context, false)) {
 		throw std::runtime_error("SHA256 Error");
 	}
 }
 
 MbedTlsWrapper::SHA256State::~SHA256State() {
-	mbedtls_sha256_free((mbedtls_sha256_context *)sha_context);
-	delete (mbedtls_sha256_context *)sha_context;
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	mbedtls_sha256_free(context);
+	delete context;
 }
 
 void MbedTlsWrapper::SHA256State::AddString(const std::string &str) {
-	if (mbedtls_sha256_update((mbedtls_sha256_context *)sha_context, (unsigned char *)str.data(), str.size())) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+	if (mbedtls_sha256_update(context, (unsigned char *)str.data(), str.size())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 }
 
 std::string MbedTlsWrapper::SHA256State::Finalize() {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 
-	if (mbedtls_sha256_finish((mbedtls_sha256_context *)sha_context, (unsigned char *)hash.data())) {
+	if (mbedtls_sha256_finish(context, (unsigned char *)hash.data())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 
@@ -132,26 +138,20 @@ std::string MbedTlsWrapper::SHA256State::Finalize() {
 }
 
 void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
+	auto context = reinterpret_cast<mbedtls_sha256_context *>(sha_context);
+
 	string hash;
 	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 
-	if (mbedtls_sha256_finish((mbedtls_sha256_context *)sha_context, (unsigned char *)hash.data())) {
+	if (mbedtls_sha256_finish(context, (unsigned char *)hash.data())) {
 		throw std::runtime_error("SHA256 Error");
 	}
 
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 }
 
-MbedTlsWrapper::MbedTlsGcmContext::MbedTlsGcmContext() {
-}
-
-MbedTlsWrapper::MbedTlsGcmContext::MbedTlsGcmContext(const std::string &key) {
-	Initialize(key);
-}
-
-void MbedTlsWrapper::MbedTlsGcmContext::Initialize(const std::string &key) {
-	context_ptr = reinterpret_cast<char *>(malloc(sizeof(mbedtls_gcm_context)));
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+MbedTlsWrapper::AESGCMState::AESGCMState(const std::string &key) : gcm_context(new mbedtls_gcm_context()) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	mbedtls_gcm_init(context);
 	if (mbedtls_gcm_setkey(context, MBEDTLS_CIPHER_ID_AES, reinterpret_cast<const unsigned char *>(key.c_str()),
 	                       key.length() * 8) != 0) {
@@ -159,25 +159,29 @@ void MbedTlsWrapper::MbedTlsGcmContext::Initialize(const std::string &key) {
 	}
 }
 
-MbedTlsWrapper::MbedTlsGcmContext::~MbedTlsGcmContext() {
-	if (!context_ptr) {
-		return;
-	}
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+MbedTlsWrapper::AESGCMState::~AESGCMState() {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	mbedtls_gcm_free(context);
-	free(context_ptr.get());
+	delete context;
 }
 
-void MbedTlsWrapper::MbedTlsGcmContext::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+void MbedTlsWrapper::AESGCMState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
+	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_ENCRYPT, iv, iv_len) != 0) {
+		throw runtime_error("Unable to initialize AES encryption");
+	}
+}
+
+void MbedTlsWrapper::AESGCMState::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	if (mbedtls_gcm_starts(context, MBEDTLS_GCM_DECRYPT, iv, iv_len) != 0) {
 		throw runtime_error("Unable to initialize AES decryption");
 	}
 }
 
-size_t MbedTlsWrapper::MbedTlsGcmContext::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len,
-                                                  duckdb::data_ptr_t out, duckdb::idx_t out_len) {
-	auto context = reinterpret_cast<mbedtls_gcm_context *>(context_ptr.get());
+size_t MbedTlsWrapper::AESGCMState::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
+                                            duckdb::idx_t out_len) {
+	auto context = reinterpret_cast<mbedtls_gcm_context *>(gcm_context);
 	size_t result;
 	if (mbedtls_gcm_update(context, in, in_len, out, out_len, &result) != 0) {
 		throw runtime_error("Unable to process using AES");

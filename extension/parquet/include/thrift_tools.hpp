@@ -212,13 +212,14 @@ public:
 		return handle.file_system.GetFileSize(handle);
 	}
 
-	void InitializeDecryption(const string &key) {
-		aes = make_uniq<duckdb_mbedtls::MbedTlsWrapper::MbedTlsGcmContext>(key);
+	uint32_t InitializeDecryption(const string &key) {
+		aes = make_uniq<duckdb_mbedtls::MbedTlsWrapper::AESGCMState>(key);
 		aes_iv_buffer = allocator.Allocate(16);
 		read(aes_iv_buffer.get(), 16);
-//		auto cipher_len = Load<uint32_t>(aes_iv_buffer.get());
-		aes->InitializeDecryption(aes_iv_buffer.get(), 16);
+		auto cipher_len = Load<uint32_t>(aes_iv_buffer.get());
+		aes->InitializeDecryption(aes_iv_buffer.get() + sizeof(uint32_t), 12);
 		is_decrypting = true;
+		return cipher_len;
 	}
 
 private:
@@ -237,7 +238,7 @@ private:
 	// Whether we are currently decrypting
 	bool is_decrypting;
 	// AES decryption context
-	unique_ptr<duckdb_mbedtls::MbedTlsWrapper::MbedTlsGcmContext> aes;
+	unique_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMState> aes;
 	// AES buffer that stores the IV
 	AllocatedData aes_iv_buffer;
 };

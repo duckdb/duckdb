@@ -39,21 +39,22 @@ public:
 		void *sha_context;
 	};
 
-	class MbedTlsGcmContext {
+	class AESGCMState {
 	public:
-		// trying to follow https://gist.github.com/unprovable/892a677d672990f46bca97194ae549bc
-		MbedTlsGcmContext();
-		MbedTlsGcmContext(const std::string &key);
-		void Initialize(const std::string &key);
-		~MbedTlsGcmContext();
+		AESGCMState(const std::string &key);
+		~AESGCMState();
 
 	public:
+		void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len);
 		size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
 		               duckdb::idx_t out_len);
 
+	public:
+		static constexpr size_t BLOCK_SIZE = 16;
+
 	private:
-		duckdb::optional_ptr<char> context_ptr;
+		void *gcm_context;
 	};
 };
 
