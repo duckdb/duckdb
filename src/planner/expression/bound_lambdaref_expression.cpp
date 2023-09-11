@@ -2,7 +2,6 @@
 
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -45,27 +44,4 @@ string BoundLambdaRefExpression::ToString() const {
 	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "." + to_string(lambda_idx) +
 	       "]";
 }
-
-void BoundLambdaRefExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteString(alias);
-	writer.WriteSerializable(return_type);
-	writer.WriteField(lambda_idx);
-	writer.WriteField(binding.table_index);
-	writer.WriteField(binding.column_index);
-	writer.WriteField(depth);
-}
-
-unique_ptr<Expression> BoundLambdaRefExpression::Deserialize(ExpressionDeserializationState &state,
-                                                             FieldReader &reader) {
-	auto alias = reader.ReadRequired<string>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto lambda_idx = reader.ReadRequired<idx_t>();
-	auto table_index = reader.ReadRequired<idx_t>();
-	auto column_index = reader.ReadRequired<idx_t>();
-	auto depth = reader.ReadRequired<idx_t>();
-
-	return make_uniq<BoundLambdaRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), lambda_idx,
-	                                           depth);
-}
-
 } // namespace duckdb

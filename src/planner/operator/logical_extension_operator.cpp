@@ -1,23 +1,10 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
-unique_ptr<LogicalExtensionOperator> LogicalExtensionOperator::Deserialize(LogicalDeserializationState &state,
-                                                                           FieldReader &reader) {
-	auto &config = DBConfig::GetConfig(state.gstate.context);
-
-	auto extension_name = reader.ReadRequired<std::string>();
-	for (auto &extension : config.operator_extensions) {
-		if (extension->GetName() == extension_name) {
-			return extension->Deserialize(state, reader);
-		}
-	}
-
-	throw SerializationException("No serialization method exists for extension: " + extension_name);
-}
 
 void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings) {
 	// general case
@@ -33,17 +20,17 @@ void LogicalExtensionOperator::ResolveColumnBindings(ColumnBindingResolver &res,
 	bindings = GetColumnBindings();
 }
 
-void LogicalExtensionOperator::FormatSerialize(FormatSerializer &serializer) const {
-	LogicalOperator::FormatSerialize(serializer);
+void LogicalExtensionOperator::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
 	serializer.WriteProperty(200, "extension_name", GetExtensionName());
 }
 
-unique_ptr<LogicalOperator> LogicalExtensionOperator::FormatDeserialize(FormatDeserializer &deserializer) {
+unique_ptr<LogicalOperator> LogicalExtensionOperator::Deserialize(Deserializer &deserializer) {
 	auto &config = DBConfig::GetConfig(deserializer.Get<ClientContext &>());
 	auto extension_name = deserializer.ReadProperty<string>(200, "extension_name");
 	for (auto &extension : config.operator_extensions) {
 		if (extension->GetName() == extension_name) {
-			return extension->FormatDeserialize(deserializer);
+			return extension->Deserialize(deserializer);
 		}
 	}
 	throw SerializationException("No deserialization method exists for extension: " + extension_name);

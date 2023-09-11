@@ -100,11 +100,30 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	}
 
 	if (!orders.empty()) {
-		auto types = payload_types;
-		types.push_back(LogicalType::HASH);
-		grouping_types.Initialize(types);
+		if (partitions.empty()) {
+			//	Sort early into a dedicated hash group if we only sort.
+			grouping_types.Initialize(payload_types);
+			auto new_group =
+			    make_uniq<PartitionGlobalHashGroup>(buffer_manager, partitions, orders, payload_types, external);
+			hash_groups.emplace_back(std::move(new_group));
+		} else {
+			auto types = payload_types;
+			types.push_back(LogicalType::HASH);
+			grouping_types.Initialize(types);
+			ResizeGroupingData(estimated_cardinality);
+		}
+	}
+}
 
-		ResizeGroupingData(estimated_cardinality);
+bool PartitionGlobalSinkState::HasMergeTasks() const {
+	if (grouping_data) {
+		auto &groups = grouping_data->GetPartitions();
+		return !groups.empty();
+	} else if (!hash_groups.empty()) {
+		D_ASSERT(hash_groups.size() == 1);
+		return hash_groups[0]->count > 0;
+	} else {
+		return false;
 	}
 }
 
@@ -206,6 +225,12 @@ PartitionLocalMergeState::PartitionLocalMergeState(PartitionGlobalSinkState &gst
 }
 
 void PartitionLocalMergeState::Scan() {
+	if (!merge_state->group_data) {
+		//	OVER(ORDER BY...)
+		//	Already sorted
+		return;
+	}
+
 	auto &group_data = *merge_state->group_data;
 	auto &hash_group = *merge_state->hash_group;
 	auto &chunk_state = merge_state->chunk_state;
@@ -243,13 +268,26 @@ PartitionLocalSinkState::PartitionLocalSinkState(ClientContext &context, Partiti
 	sort_cols = gstate.orders.size() + group_types.size();
 
 	if (sort_cols) {
+		auto payload_types = gstate.payload_types;
 		if (!group_types.empty()) {
 			// OVER(PARTITION BY...)
 			group_chunk.Initialize(allocator, group_types);
+			payload_types.emplace_back(LogicalType::HASH);
+		} else {
+			// OVER(ORDER BY...)
+			for (idx_t ord_idx = 0; ord_idx < gstate.orders.size(); ord_idx++) {
+				auto &pexpr = *gstate.orders[ord_idx].expression.get();
+				group_types.push_back(pexpr.return_type);
+				executor.AddExpression(pexpr);
+			}
+			group_chunk.Initialize(allocator, group_types);
+
+			//	Single partition
+			auto &global_sort = *gstate.hash_groups[0]->global_sort;
+			local_sort = make_uniq<LocalSortState>();
+			local_sort->Initialize(global_sort, global_sort.buffer_manager);
 		}
 		// OVER(...)
-		auto payload_types = gstate.payload_types;
-		payload_types.emplace_back(LogicalType::HASH);
 		payload_chunk.Initialize(allocator, payload_types);
 	} else {
 		// OVER()
@@ -259,20 +297,14 @@ PartitionLocalSinkState::PartitionLocalSinkState(ClientContext &context, Partiti
 
 void PartitionLocalSinkState::Hash(DataChunk &input_chunk, Vector &hash_vector) {
 	const auto count = input_chunk.size();
-	if (group_chunk.ColumnCount() > 0) {
-		// OVER(PARTITION BY...) (hash grouping)
-		group_chunk.Reset();
-		executor.Execute(input_chunk, group_chunk);
-		VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
-		for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
-			VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
-		}
-	} else {
-		// OVER(...) (sorting)
-		// Single partition => single hash value
-		hash_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto hashes = ConstantVector::GetData<hash_t>(hash_vector);
-		hashes[0] = 0;
+	D_ASSERT(group_chunk.ColumnCount() > 0);
+
+	// OVER(PARTITION BY...) (hash grouping)
+	group_chunk.Reset();
+	executor.Execute(input_chunk, group_chunk);
+	VectorOperations::Hash(group_chunk.data[0], hash_vector, count);
+	for (idx_t prt_idx = 1; prt_idx < group_chunk.ColumnCount(); ++prt_idx) {
+		VectorOperations::CombineHash(hash_vector, group_chunk.data[prt_idx], count);
 	}
 }
 
@@ -302,6 +334,22 @@ void PartitionLocalSinkState::Sink(DataChunk &input_chunk) {
 			for (size_t i = prev_rows_blocks; i < rows->blocks.size(); ++i) {
 				rows->blocks[i]->block->SetSwizzling("PartitionLocalSinkState::Sink");
 			}
+		}
+		return;
+	}
+
+	if (local_sort) {
+		//	OVER(ORDER BY...)
+		group_chunk.Reset();
+		executor.Execute(input_chunk, group_chunk);
+		local_sort->SinkChunk(group_chunk, input_chunk);
+
+		auto &hash_group = *gstate.hash_groups[0];
+		hash_group.count += input_chunk.size();
+
+		if (local_sort->SizeInBytes() > gstate.memory_per_thread) {
+			auto &global_sort = *hash_group.global_sort;
+			local_sort->Sort(global_sort, true);
 		}
 		return;
 	}
@@ -338,6 +386,15 @@ void PartitionLocalSinkState::Combine() {
 		return;
 	}
 
+	if (local_sort) {
+		//	OVER(ORDER BY...)
+		auto &hash_group = *gstate.hash_groups[0];
+		auto &global_sort = *hash_group.global_sort;
+		global_sort.AddLocalState(*local_sort);
+		local_sort.reset();
+		return;
+	}
+
 	// OVER(...)
 	gstate.CombineLocalPartition(local_partition, local_append);
 }
@@ -365,6 +422,19 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
 	group_data->InitializeScan(chunk_state, column_ids);
 }
 
+PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &sink)
+    : sink(sink), memory_per_thread(sink.memory_per_thread),
+      num_threads(TaskScheduler::GetScheduler(sink.context).NumberOfThreads()), stage(PartitionSortStage::INIT),
+      total_tasks(0), tasks_assigned(0), tasks_completed(0) {
+
+	const hash_t hash_bin = 0;
+	const size_t group_idx = 0;
+	hash_group = sink.hash_groups[group_idx].get();
+	global_sort = sink.hash_groups[group_idx]->global_sort.get();
+
+	sink.bin_groups[hash_bin] = group_idx;
+}
+
 void PartitionLocalMergeState::Prepare() {
 	merge_state->group_data.reset();
 
@@ -390,7 +460,7 @@ void PartitionLocalMergeState::ExecuteTask() {
 		Merge();
 		break;
 	default:
-		throw InternalException("Unexpected PartitionGlobalMergeState in ExecuteTask!");
+		throw InternalException("Unexpected PartitionSortStage in ExecuteTask!");
 	}
 
 	merge_state->CompleteTask();
@@ -471,15 +541,23 @@ bool PartitionGlobalMergeState::TryPrepareNextStage() {
 
 PartitionGlobalMergeStates::PartitionGlobalMergeStates(PartitionGlobalSinkState &sink) {
 	// Schedule all the sorts for maximum thread utilisation
-	auto &partitions = sink.grouping_data->GetPartitions();
-	sink.bin_groups.resize(partitions.size(), partitions.size());
-	for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
-		auto &group_data = partitions[hash_bin];
-		// Prepare for merge sort phase
-		if (group_data->Count()) {
-			auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data), hash_bin);
-			states.emplace_back(std::move(state));
+	if (sink.grouping_data) {
+		auto &partitions = sink.grouping_data->GetPartitions();
+		sink.bin_groups.resize(partitions.size(), partitions.size());
+		for (hash_t hash_bin = 0; hash_bin < partitions.size(); ++hash_bin) {
+			auto &group_data = partitions[hash_bin];
+			// Prepare for merge sort phase
+			if (group_data->Count()) {
+				auto state = make_uniq<PartitionGlobalMergeState>(sink, std::move(group_data), hash_bin);
+				states.emplace_back(std::move(state));
+			}
 		}
+	} else {
+		//	OVER(ORDER BY...)
+		//	Already sunk into the single global sort, so set up single merge with no data
+		sink.bin_groups.resize(1, 1);
+		auto state = make_uniq<PartitionGlobalMergeState>(sink);
+		states.emplace_back(std::move(state));
 	}
 }
 

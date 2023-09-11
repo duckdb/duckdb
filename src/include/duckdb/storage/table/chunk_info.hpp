@@ -18,8 +18,8 @@ struct SelectionVector;
 class Transaction;
 struct TransactionData;
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
@@ -46,11 +46,8 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
-	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	virtual void FormatSerialize(FormatSerializer &serializer) const = 0;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	virtual void Serialize(Serializer &serializer) const = 0;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 public:
 	template <class TARGET>
@@ -88,11 +85,8 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
@@ -136,11 +130,8 @@ public:
 	idx_t Delete(transaction_t transaction_id, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
-	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ChunkInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &deserializer);
 
 private:
 	template <class OP>
