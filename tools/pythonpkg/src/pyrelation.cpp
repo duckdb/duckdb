@@ -332,32 +332,20 @@ string DuckDBPyRelation::GenerateExpressionList(const string &function_name, vec
 	if (!projected_columns.empty()) {
 		expr = projected_columns + ", ";
 	}
-	string ignore_nulls_str = ignore_nulls ? " ignore nulls" : "";
 
-	if (input.empty()) {
-		// string_agg(<col>
-		expr += function_name + "(";
-		if (!function_parameter.empty()) {
-			// string_agg(<col>, <sep>
-			expr += function_parameter;
-		}
-		expr += ignore_nulls_str;
-		// string_agg(<col, <sep>) OVER ()
-		expr += ") " + window_spec;
-		return expr;
+	if (input.empty() && !function_parameter.empty()) {
+		return expr +=
+		       function_name + "(" + function_parameter + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 	}
 	for (idx_t i = 0; i < input.size(); i++) {
-		// string_agg(<col>
-		expr += function_name + "(" + input[i];
-		if (!function_parameter.empty()) {
-			// string_agg(<col>, <sep>
-			expr += "," + function_parameter;
+		if (function_parameter.empty()) {
+			expr += function_name + "(" + input[i] + ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
+		} else {
+			expr += function_name + "(" + input[i] + "," + function_parameter +
+			        ((ignore_nulls) ? " ignore nulls) " : ") ") + window_spec;
 		}
-		expr += ignore_nulls_str;
-		// string_agg(<col, <sep>) OVER ()
-		expr += ") " + window_spec;
 
-		if (i + 1 != input.size()) {
+		if (i < input.size() - 1) {
 			expr += ",";
 		}
 	}
