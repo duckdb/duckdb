@@ -38,7 +38,7 @@ jobs:
       DUCKDB_PLATFORM: "wasm_${{ matrix.duckdb_wasm_arch }}"
 
     steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   submodules: 'recursive'
                   repository: 'duckdb/duckdb-wasm'
@@ -73,7 +73,7 @@ jobs:
                   DUCKDB_WASM_LOADABLE_EXTENSIONS="signed" GEN=ninja ./scripts/wasm_build_lib.sh relsize ${{ matrix.duckdb_wasm_arch }}
                   bash ./scripts/build_loadable.sh relsize ${{ matrix.duckdb_wasm_arch }}
 
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
                   path: 'duckdb'
 
@@ -88,7 +88,7 @@ jobs:
                   bash ./duckdb/scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
                   path: loadable_extensions/

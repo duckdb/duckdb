@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
@@ -27,7 +27,7 @@ jobs:
           path: 'source-repo'
 
       - name: Checkout Target Repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.TARGET_REPO }}
           ref: ${{ env.TARGET_REF }}

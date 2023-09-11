@@ -30,7 +30,7 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
@@ -82,7 +82,7 @@ jobs:
       OSX_BUILD_UNIVERSAL: 1
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -126,7 +126,7 @@ jobs:
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
    steps:
-     - uses: actions/checkout@v3
+     - uses: actions/checkout@v4
        with:
          fetch-depth: 0
 
@@ -180,7 +180,7 @@ jobs:
         python3 -m pip install awscli
         aws --version
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
