@@ -30,3 +30,14 @@ NULL
 4932
 903
 4932
+
+restart
+
+query I
+SELECT strlen(val) FROM test
+----
+NULL
+903
+4932
+903
+4932

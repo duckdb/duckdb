@@ -37,41 +37,6 @@
     "constructor": ["block_id", "offset"]
   },
   {
-    "class": "DataPointer",
-    "includes": [
-      "duckdb/storage/data_pointer.hpp"
-    ],
-    "members": [
-      {
-        "id": 100,
-        "name": "row_start",
-        "type": "uint64_t"
-      },
-      {
-        "id": 101,
-        "name": "tuple_count",
-        "type": "uint64_t"
-      },
-      {
-        "id": 102,
-        "name": "block_pointer",
-        "type": "BlockPointer"
-      },
-      {
-        "id": 103,
-        "name": "compression_type",
-        "type": "CompressionType"
-      },
-      {
-        "id": 104,
-        "name": "statistics",
-        "type": "BaseStatistics"
-      }
-    ],
-    "pointer_type": "none",
-    "constructor": ["statistics"]
-  },
-  {
     "class": "DistinctStatistics",
     "includes": [
       "duckdb/storage/statistics/distinct_statistics.hpp"

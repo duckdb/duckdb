@@ -67,7 +67,6 @@ void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
 		auto &state = compressed_segment->GetSegmentState()->Cast<UncompressedStringSegmentState>();
 		state.overflow_writer = make_uniq<WriteOverflowStringsToDisk>(checkpointer.GetRowGroup().GetBlockManager());
 	}
-
 	current_segment = std::move(compressed_segment);
 	current_segment->InitializeAppend(append_state);
 }

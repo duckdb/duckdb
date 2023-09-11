@@ -3,6 +3,9 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "miniz_wrapper.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 namespace duckdb {
 
@@ -141,8 +144,20 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+struct SerializedStringSegmentState : public ColumnSegmentState {
+	SerializedStringSegmentState() {}
+	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) : blocks(std::move(blocks_p)) {}
+
+	vector<block_id_t> blocks;
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteProperty(1, "overflow_blocks", blocks);
+	}
+};
+
 unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
-                                                                                block_id_t block_id) {
+                                                                                block_id_t block_id,
+                                                                                optional_ptr<ColumnSegmentState> segment_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -151,7 +166,12 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 		dictionary.end = segment.SegmentSize();
 		SetDictionary(segment, handle, dictionary);
 	}
-	return make_uniq<UncompressedStringSegmentState>();
+	auto result = make_uniq<UncompressedStringSegmentState>();
+	if (segment_state) {
+		auto &serialized_state = segment_state->Cast<SerializedStringSegmentState>();
+		result->on_disk_blocks = std::move(serialized_state.blocks);
+	}
+	return std::move(result);
 }
 
 idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
@@ -179,6 +199,32 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 }
 
 //===--------------------------------------------------------------------===//
+// Serialization & Cleanup
+//===--------------------------------------------------------------------===//
+unique_ptr<ColumnSegmentState> UncompressedStringStorage::SerializeState(ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	if (state.on_disk_blocks.empty()) {
+		// no on-disk blocks - nothing to write
+		return nullptr;
+	}
+	return make_uniq<SerializedStringSegmentState>(state.on_disk_blocks);
+}
+
+unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deserializer &deserializer) {
+	auto result = make_uniq<SerializedStringSegmentState>();
+	deserializer.ReadProperty(1, "overflow_blocks", result->blocks);
+	return std::move(result);
+}
+
+void UncompressedStringStorage::CleanupState(ColumnData &column_data, ColumnSegment &segment) {
+	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
+	auto &block_manager = column_data.GetBlockManager();
+	for(auto &block_id : state.on_disk_blocks) {
+		block_manager.MarkBlockAsModified(block_id);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
@@ -191,7 +237,11 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
 	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
-	                           UncompressedStringStorage::FinalizeAppend);
+	                           UncompressedStringStorage::FinalizeAppend,
+	                           nullptr,
+	                           UncompressedStringStorage::SerializeState,
+	                           UncompressedStringStorage::DeserializeState,
+	                           UncompressedStringStorage::CleanupState);
 }
 
 //===--------------------------------------------------------------------===//

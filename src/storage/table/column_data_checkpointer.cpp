@@ -231,6 +231,9 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		pointer.row_start = segment->start;
 		pointer.tuple_count = segment->count;
 		pointer.compression_type = segment->function.get().type;
+		if (segment->function.get().serialize_state) {
+			pointer.segment_state = segment->function.get().serialize_state(*segment);
+		}
 
 		// merge the persistent stats into the global column stats
 		state.global_stats->Merge(segment->stats.statistics);

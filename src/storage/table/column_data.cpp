@@ -402,6 +402,9 @@ void ColumnData::CommitDropColumn() {
 			if (block_id != INVALID_BLOCK) {
 				block_manager.MarkBlockAsModified(block_id);
 			}
+			if (segment.function.get().cleanup_state) {
+				segment.function.get().cleanup_state(*this, segment);
+			}
 		}
 	}
 }
@@ -448,12 +451,18 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group,
 
 void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 	// load the data pointers for the column
-	this->count = 0;
+	deserializer.Set<DatabaseInstance &>(info.db.GetDatabase());
 	deserializer.Set<LogicalType &>(type);
 
-	deserializer.ReadList(100, "data_pointers", [&](Deserializer::List &list, idx_t i) {
-		auto data_pointer = list.ReadElement<DataPointer>();
+	vector<DataPointer> data_pointers;
+	deserializer.ReadProperty(100, "data_pointers", data_pointers);
 
+	deserializer.Unset<DatabaseInstance>();
+	deserializer.Unset<LogicalType>();
+
+	// construct the segments based on the data pointers
+	this->count = 0;
+	for(auto &data_pointer : data_pointers) {
 		// Update the count and statistics
 		this->count += data_pointer.tuple_count;
 		if (stats) {
@@ -464,12 +473,10 @@ void ColumnData::DeserializeColumn(Deserializer &deserializer) {
 		auto segment = ColumnSegment::CreatePersistentSegment(
 		    GetDatabase(), block_manager, data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
 		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
-		    std::move(data_pointer.statistics));
+		    std::move(data_pointer.statistics), std::move(data_pointer.segment_state));
 
 		data.AppendSegment(std::move(segment));
-	});
-
-	deserializer.Unset<LogicalType>();
+	 }
 }
 
 shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,

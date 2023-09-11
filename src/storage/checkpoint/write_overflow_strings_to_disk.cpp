@@ -34,6 +34,7 @@ void UncompressedStringSegmentState::RegisterBlock(BlockManager &manager, block_
 	}
 	auto result = manager.RegisterBlock(block_id);
 	handles.insert(make_pair(block_id, std::move(result)));
+	on_disk_blocks.push_back(block_id);
 }
 
 void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &state, string_t string,
