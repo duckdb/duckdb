@@ -47,6 +47,11 @@ query TT
 select * from person where current_mood > 'sad'
 ----
 
+query TT
+select * from person where current_mood < 'sad'
+----
+Moe	happy
+Pedro	ok
 
 statement ok
 CREATE TABLE pets (

@@ -133,45 +133,131 @@ Select * from t1, t2 where t1.a::VARCHAR = t2.a;
 ----
 
 statement ok
+drop table t1; 
+
+statement ok
+drop table t2; 
+
+foreach type varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint
+
+statement ok
+create type new_type as enum ('1', '2', '3', '4', '5');
+
+statement ok
+create table t1 as select range::${type} as a from range(8);
+
+statement ok
+create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(8);
+
+query I
+select a from t1, t2 where t1.a = t2.b;
+----
+1
+2
+3
+4
+1
+2
+3
+4
+
+query I
+select count(*) from t1, t2 where t1.a < t2.b;
+----
+20
+
+query I
+select count(*) from t1, t2 where t1.a <= t2.b;
+----
+28
+
+query I
+select count(*) from t1, t2 where t1.a > t2.b;
+----
+36
+
+query I
+select count(*) from t1, t2 where t1.a >= t2.b;
+----
+44
+
+statement ok
+drop type new_type;
+
+statement ok
+drop table t1; 
+
+statement ok
+drop table t2; 
+
+endloop
+
+
+statement ok
+create type new_type as enum ('294247-01-10 04:00:54.775806', '83 years 3 months 999 days 00:16:39.999999', '1677-09-21 00:12:43.145225', 'other enum type', 'another 1', '~~~');
+
+statement ok
+create table t1 as select date, time, timestamp, timestamp_s, timestamp_ms, timestamp_ns, time_tz, timestamp_tz, interval, blob, bool from test_all_types();
+
+statement ok
+create table t2 as select * from VALUES ('294247-01-10 04:00:54.775806'::new_type), ('83 years 3 months 999 days 00:16:39.999999'::new_type), ('1677-09-21 00:12:43.145225'::new_type), ('other enum type'::new_type), ('another 1'::new_type), ('~~~'::new_type) t(b);
+
+statement ok
+select count(*) from t1, t2 where t1.date = t2.b;
+
+statement ok
+select count(*) from t1, t2 where t1.time = t2.b;
+
+statement ok
+select count(*) from t1, t2 where t1.timestamp = t2.b;
+
+statement ok
+select count(*) from t1, t2 where t1.timestamp_s = t2.b;
+
+statement ok
+select count(*) from t1, t2 where t1.timestamp_ms = t2.b;
+
+statement ok
+select count(*) from t1, t2 where t1.timestamp_ns = t2.b;
+
+# in types.hpp logical type of timestamp_tz, time_tz, interval, and blob are all higher 
+# than varchar, causing a direct cast from varchar to the type to happen. 
+
+statement error
+select count(*) from t1, t2 where t1.time_tz = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.timestamp_tz = t2.b;
+----
+Conversion Error
+
+statement error
+select count(*) from t1, t2 where t1.interval = t2.b;
+----
+Conversion Error
+
+# enums can be cast to blobs
+statement ok
+select count(*) from t1, t2 where t1.blob = t2.b;
+
+statement ok
 drop table t1;
 
 statement ok
 drop table t2;
 
-# Bits compared with enum performs varchar comparisons 
-
 statement ok
-create type enum_bits as enum ('11001010110', '110', '0101001010101');
+create type enum_bits as enum ('11001010110', '110', '0101001010101', 'some enum val that cannot be cast to bit');
 
 statement ok
 create table t1 as select * from values ('110010'::BIT), ('110'::BIT), ('110110110011'::BIT) t(a);
 
 statement ok
-create table t2 as select * from values ('11001010110'::enum_bits), ('110'::enum_bits), ('0101001010101'::enum_bits) t(a);
+create table t2 as select * from values ('11001010110'::enum_bits), ('110'::enum_bits), ('0101001010101'::enum_bits), ('some enum val that cannot be cast to bit'::enum_bits) t(b);
 
-query I
-select count(*) from t1, t2 where t1.a = t2.a;
+statement error
+select count(*) from t1, t2 where t1.a = t2.b;
 ----
-1
-
-statement ok
-drop table t1;
-
-statement ok
-drop table t2;
-
-# Blobs compared with enums performs varchar comparison
-
-statement ok
-create type blobby_strings as enum ('29ksvbslu49823', 'KSDHSI()');
-
-statement ok
-create table t1 as select * from values ('29ksvbslu49823'::BLOB), ('b'::BLOB), ('c'::BLOB) t(a);
-
-statement ok
-create table t2 as select * from values ('29ksvbslu49823'::blobby_strings), ('KSDHSI()'::blobby_strings), (NULL) t(a);
-
-query I
-select count(*) from t1, t2 where t1.a = t2.a;
-----
-1
+Conversion Error
