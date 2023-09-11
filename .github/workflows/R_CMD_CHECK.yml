@@ -57,11 +57,13 @@ jobs:
           needs: check
 
       # needed so we can run git commit in vendor.sh
-      - name: setup github
+      - name: setup github and create parallel builds
         shell: bash
         run: |
           git config --global user.email "duck@duck.com"
           git config --global user.name "mr. duck"
+          mkdir -p ~/.R
+          echo 'MAKEFLAGS = -j2' >> ~/.R/Makevars
 
       # error is from git_dev_version() but does not affect this workflow
       - name: update duckdb-r src code with PR code
