@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/sort/sort.hpp"
+#include <regex>
 
 namespace duckdb {
 
@@ -113,6 +114,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListSortBindData>();
+	bool is_grade_up = std::regex_search(func_expr.function.name, std::regex("grade_up"));
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
@@ -120,18 +122,20 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 
+	auto copy_vec = is_grade_up ? Vector(input_lists.GetType()) : result;
+
 	// this ensures that we do not change the order of the entries in the input chunk
-	VectorOperations::Copy(input_lists, result, count, 0, 0);
+	VectorOperations::Copy(input_lists, copy_vec, count, 0, 0);
 
 	// get the child vector
-	auto lists_size = ListVector::GetListSize(result);
-	auto &child_vector = ListVector::GetEntry(result);
+	auto lists_size = ListVector::GetListSize(copy_vec);
+	auto &child_vector = ListVector::GetEntry(copy_vec);
 	UnifiedVectorFormat child_data;
 	child_vector.ToUnifiedFormat(lists_size, child_data);
 
 	// get the lists data
 	UnifiedVectorFormat lists_data;
-	result.ToUnifiedFormat(count, lists_data);
+	copy_vec.ToUnifiedFormat(count, lists_data);
 	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
@@ -224,8 +228,23 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 
 		D_ASSERT(sel_sorted_idx == incr_payload_count);
-		child_vector.Slice(sel_sorted, sel_sorted_idx);
-		child_vector.Flatten(sel_sorted_idx);
+		if (is_grade_up) {
+			auto &result_entry = ListVector::GetEntry(result);
+			auto result_data = ListVector::GetData(result);
+			auto list_data = ListVector::GetData(input_lists);
+			for (int i = 0; i < count; i++) {
+				result_data[i].length = list_data[i].length;
+				result_data[i].offset = list_data[i].offset;
+				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
+					auto b = sel_sorted.get_index(j) - result_data[i].offset;
+					result_entry.SetValue(j, Value::UINTEGER(b));
+				}
+			}
+			ListVector::SetListSize(result, sel_sorted_idx);
+		} else {
+			child_vector.Slice(sel_sorted, sel_sorted_idx);
+			child_vector.Flatten(sel_sorted_idx);
+		}
 	}
 
 	if (args.AllConstant()) {
@@ -239,7 +258,9 @@ static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunct
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
-
+	if (std::regex_search(bound_function.name, std::regex("grade_up"))) {
+		bound_function.return_type = LogicalType::LIST(LogicalTypeId::UINTEGER);
+	}
 	return make_uniq<ListSortBindData>(order, null_order, bound_function.return_type, child_type, context);
 }
 
@@ -315,6 +336,26 @@ ScalarFunctionSet ListSortFun::GetFunctions() {
 	list_sort.AddFunction(sort_order);
 	list_sort.AddFunction(sort_orders);
 	return list_sort;
+}
+
+ScalarFunctionSet ListGradeUpFun::GetFunctions() {
+	// one parameter: list
+	ScalarFunction sort({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY), ListSortFunction,
+	                    ListNormalSortBind);
+
+	// two parameters: list, order
+	ScalarFunction sort_order({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR},
+	                          LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+
+	// three parameters: list, order, null order
+	ScalarFunction sort_orders({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR, LogicalType::VARCHAR},
+	                           LogicalType::LIST(LogicalType::ANY), ListSortFunction, ListNormalSortBind);
+
+	ScalarFunctionSet list_GradeUp;
+	list_GradeUp.AddFunction(sort);
+	list_GradeUp.AddFunction(sort_order);
+	list_GradeUp.AddFunction(sort_orders);
+	return list_GradeUp;
 }
 
 ScalarFunctionSet ListReverseSortFun::GetFunctions() {
