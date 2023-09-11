@@ -35,6 +35,8 @@ AggregateRelation::AggregateRelation(shared_ptr<Relation> child_p,
 		}
 		groups.grouping_sets.push_back(std::move(grouping_set));
 	}
+	// bind the expressions
+	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {

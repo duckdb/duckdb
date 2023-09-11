@@ -8,6 +8,7 @@ echo $SCRIPTPATH
 rm -rf	$SCRIPTPATH/.eggs \
 		$SCRIPTPATH/.pytest_cache \
 		$SCRIPTPATH/build \
+		$SCRIPTPATH/duckdb_build \
 		$SCRIPTPATH/dist \
 		$SCRIPTPATH/duckdb.egg-info \
 		$SCRIPTPATH/duckdb.cpp \

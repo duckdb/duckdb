@@ -55,7 +55,7 @@ class DataFrame:
         True
 
         """
-        self.relation.to_view(name)
+        self.relation.create_view(name, True)
 
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError

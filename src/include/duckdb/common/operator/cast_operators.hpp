@@ -73,7 +73,7 @@ struct Cast {
 };
 
 struct HandleCastError {
-	static void AssignError(string error_message, string *error_message_ptr) {
+	static void AssignError(const string &error_message, string *error_message_ptr) {
 		if (!error_message_ptr) {
 			throw ConversionException(error_message);
 		}
@@ -470,6 +470,16 @@ DUCKDB_API bool TryCast::Operation(date_t input, timestamp_t &result, bool stric
 //===--------------------------------------------------------------------===//
 template <>
 DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_t input, dtime_tz_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
+// Time With Time Zone Casts (Offset)
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_tz_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(dtime_tz_t input, dtime_tz_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Timestamp Casts
@@ -478,6 +488,8 @@ template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, date_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict);
 
@@ -505,6 +517,15 @@ template <>
 DUCKDB_API bool TryCast::Operation(string_t input, dtime_t &result, bool strict);
 template <>
 dtime_t Cast::Operation(string_t input);
+//===--------------------------------------------------------------------===//
+// String -> TimeTZ Casts
+//===--------------------------------------------------------------------===//
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, dtime_tz_t &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(string_t input, dtime_tz_t &result, bool strict);
+template <>
+dtime_tz_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
 // String -> Timestamp Casts
 //===--------------------------------------------------------------------===//

@@ -154,10 +154,12 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
+	m.def(py::init<>([](const string &name) { return DuckDBPyExpression::ColumnExpression(name); }));
 	m.def(py::init<>([](const py::object &obj) {
 		auto val = TransformPythonValue(obj);
 		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
 	}));
+	py::implicitly_convertible<py::str, DuckDBPyExpression>();
 	py::implicitly_convertible<py::object, DuckDBPyExpression>();
 }
 

@@ -1,0 +1,99 @@
+[
+  {
+    "class": "MetaBlockPointer",
+    "includes": [
+      "duckdb/storage/block.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "block_pointer",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_pointer", "offset"]
+  },
+  {
+    "class": "BlockPointer",
+    "members": [
+      {
+        "id": 100,
+        "name": "block_id",
+        "type": "block_id_t"
+      },
+      {
+        "id": 101,
+        "name": "offset",
+        "type": "uint32_t"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["block_id", "offset"]
+  },
+  {
+    "class": "DataPointer",
+    "includes": [
+      "duckdb/storage/data_pointer.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "row_start",
+        "type": "uint64_t"
+      },
+      {
+        "id": 101,
+        "name": "tuple_count",
+        "type": "uint64_t"
+      },
+      {
+        "id": 102,
+        "name": "block_pointer",
+        "type": "BlockPointer"
+      },
+      {
+        "id": 103,
+        "name": "compression_type",
+        "type": "CompressionType"
+      },
+      {
+        "id": 104,
+        "name": "statistics",
+        "type": "BaseStatistics"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["statistics"]
+  },
+  {
+    "class": "DistinctStatistics",
+    "includes": [
+      "duckdb/storage/statistics/distinct_statistics.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "sample_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 101,
+        "name": "total_count",
+        "type": "idx_t"
+      },
+      {
+        "id": 102,
+        "name": "log",
+        "type": "unique_ptr<HyperLogLog>"
+      }
+    ],
+    "pointer_type": "unique_ptr",
+    "constructor": ["log", "sample_count", "total_count"]
+  }
+]

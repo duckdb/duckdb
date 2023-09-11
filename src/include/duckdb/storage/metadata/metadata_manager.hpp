@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/common/set.hpp"
@@ -23,8 +22,8 @@ struct MetadataBlock {
 	block_id_t block_id;
 	vector<uint8_t> free_blocks;
 
-	void Serialize(Serializer &serializer);
-	static MetadataBlock Deserialize(Deserializer &source);
+	void Write(WriteStream &sink);
+	static MetadataBlock Read(ReadStream &source);
 
 	idx_t FreeBlocksToInteger();
 	void FreeBlocksFromInteger(idx_t blocks);
@@ -68,8 +67,8 @@ public:
 
 	idx_t BlockCount();
 
-	void Serialize(Serializer &serializer);
-	void Deserialize(Deserializer &source);
+	void Write(WriteStream &sink);
+	void Read(ReadStream &source);
 
 protected:
 	BlockManager &block_manager;

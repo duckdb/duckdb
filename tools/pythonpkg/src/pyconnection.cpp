@@ -385,7 +385,7 @@ unique_ptr<QueryResult> DuckDBPyConnection::CompletePendingQuery(PendingQueryRes
 				throw std::runtime_error("Query interrupted");
 			}
 		}
-	} while (execution_result == PendingExecutionResult::RESULT_NOT_READY);
+	} while (!PendingQueryResult::IsFinished(execution_result));
 	if (execution_result == PendingExecutionResult::EXECUTION_ERROR) {
 		pending_query.ThrowError();
 	}
@@ -709,7 +709,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	auto path_like = GetPathLike(name_p);
 	auto &name = path_like.str;
 	auto file_like_object_wrapper = std::move(path_like.dependency);
@@ -752,7 +752,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	if (options.has_header) {
 		// 'options' is only used to initialize the ReadCSV relation
 		// we also need to set this in the arguments passed to the function
-		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.header));
+		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.dialect_options.header));
 	}
 
 	if (options.compression != FileCompressionType::AUTO_DETECT) {

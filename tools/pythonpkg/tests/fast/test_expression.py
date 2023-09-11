@@ -6,6 +6,23 @@ from pyduckdb.value.constant import Value, IntegerValue
 import datetime
 
 
+@pytest.fixture(scope='function')
+def filter_rel():
+    con = duckdb.connect()
+    rel = con.sql(
+        """
+        select * from (VALUES
+            (1, 'a'),
+            (2, 'b'),
+            (1, 'b'),
+            (3, 'c'),
+            (4, 'a')
+        ) tbl(a, b)
+    """
+    )
+    yield rel
+
+
 class TestExpression(object):
     def test_constant_expression(self):
         con = duckdb.connect()
@@ -46,6 +63,78 @@ class TestExpression(object):
         column = ColumnExpression('d')
         with pytest.raises(duckdb.BinderException, match='Referenced column "d" not found'):
             rel2 = rel.select(column)
+
+    def test_column_expression_explain(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+            select 'unused'
+        """
+        )
+        rel = rel.select(
+            ConstantExpression("a").alias('c0'),
+            ConstantExpression(42).alias('c1'),
+            ConstantExpression(None).alias('c2'),
+        )
+        res = rel.explain()
+        assert 'c0' in res
+        assert 'c1' in res
+        # 'c2' is not in the explain result because it shows NULL instead
+        assert 'NULL' in res
+        res = rel.fetchall()
+        assert res == [('a', 42, None)]
+
+    def test_column_expression_table(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """
+        )
+
+        rel = con.table('tbl')
+        rel2 = rel.select('c0', 'c1', 'c2')
+        res = rel2.fetchall()
+        assert res == [('a', 'b', 'c'), ('d', 'e', 'f'), ('g', 'h', 'i')]
+
+    def test_column_expression_view(self):
+        con = duckdb.connect()
+        con.execute(
+            """
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """
+        )
+        con.execute(
+            """
+            CREATE VIEW v1 as select c0 as c3, c2 as c4 from tbl;
+        """
+        )
+        rel = con.view('v1')
+        rel2 = rel.select('c3', 'c4')
+        res = rel2.fetchall()
+        assert res == [('a', 'c'), ('d', 'f'), ('g', 'i')]
+
+    def test_column_expression_replacement_scan(self):
+        con = duckdb.connect()
+
+        pd = pytest.importorskip("pandas")
+        df = pd.DataFrame({'a': [42, 43, 0], 'b': [True, False, True], 'c': [23.123, 623.213, 0.30234]})
+        rel = con.sql("select * from df")
+        rel2 = rel.select('a', 'b')
+        res = rel2.fetchall()
+        assert res == [(42, True), (43, False), (0, True)]
 
     def test_add_operator(self):
         con = duckdb.connect()
@@ -331,7 +420,7 @@ class TestExpression(object):
         res = rel.fetchall()
         assert res == [({'a': 1, 'b': 2},)]
 
-    def test_function_expression(self):
+    def test_function_expression_udf(self):
         con = duckdb.connect()
 
         def my_simple_func(a: int, b: int, c: int) -> int:
@@ -354,6 +443,61 @@ class TestExpression(object):
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(6,)]
+
+    def test_function_expression_basic(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+                FROM (VALUES
+                    (1, 'test', 3),
+                    (2, 'this is a long string', 7),
+                    (3, 'medium length', 4)
+                ) tbl(text, start, "end")
+            """
+        )
+        expr = FunctionExpression('array_slice', "start", "text", "end")
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [('tes',), ('his is',), ('di',)]
+
+    def test_column_expression_function_coverage(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            CREATE TABLE tbl as FROM (
+                VALUES
+                    ('a', 'b', 'c'),
+                    ('d', 'e', 'f'),
+                    ('g', 'h', 'i')
+            ) t(c0, c1, c2)
+        """
+        )
+
+        rel = con.table('tbl')
+        expr = FunctionExpression('||', FunctionExpression('||', 'c0', 'c1'), 'c2')
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [('abc',), ('def',), ('ghi',)]
+
+    def test_function_expression_aggregate(self):
+        con = duckdb.connect()
+
+        rel = con.sql(
+            """
+                FROM (VALUES
+                    ('test'),
+                    ('this is a long string'),
+                    ('medium length'),
+                ) tbl(text)
+            """
+        )
+        expr = FunctionExpression('first', 'text')
+        with pytest.raises(
+            duckdb.BinderException, match='Binder Error: Aggregates cannot be present in a Project relation!'
+        ):
+            rel2 = rel.select(expr)
 
     def test_case_expression(self):
         con = duckdb.connect()
@@ -443,68 +587,68 @@ class TestExpression(object):
         res = rel2.fetchall()
         assert res == [(33,)]
 
-    def test_filter(self):
-        con = duckdb.connect()
-        rel = con.sql(
-            """
-            select * from (VALUES
-                (1, 'a'),
-                (2, 'b'),
-                (1, 'b'),
-                (3, 'c'),
-                (4, 'a')
-            ) tbl(a, b)
-        """
-        )
-        assert len(rel.fetchall()) == 5
+    def test_filter_equality(self, filter_rel):
+        assert len(filter_rel.fetchall()) == 5
 
         expr = ColumnExpression("a") == 1
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(1, 'a'), (1, 'b')]
 
+    def test_filter_not(self, filter_rel):
+        expr = ColumnExpression("a") == 1
         # NOT operator
-
         expr = ~expr
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
         assert res == [(2, 'b'), (3, 'c'), (4, 'a')]
 
+    def test_filter_and(self, filter_rel):
+        expr = ColumnExpression("a") == 1
+        expr = ~expr
         # AND operator
 
-        expr = expr & (ColumnExpression("b") != 'b')
-        rel2 = rel.filter(expr)
+        expr = expr & ('b' != ConstantExpression('b'))
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(3, 'c'), (4, 'a')]
 
+    def test_filter_or(self, filter_rel):
         # OR operator
         expr = (ColumnExpression("a") == 1) | (ColumnExpression("a") == 4)
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
         assert res == [(1, 'a'), (1, 'b'), (4, 'a')]
 
+    def test_filter_mixed(self, filter_rel):
         # Mixed
-        expr = (ColumnExpression("b") == "a") & ((ColumnExpression("a") == 1) | (ColumnExpression("a") == 4))
-        rel2 = rel.filter(expr)
+        expr = (ColumnExpression("b") == ConstantExpression("a")) & (
+            (ColumnExpression("a") == 1) | (ColumnExpression("a") == 4)
+        )
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(1, 'a'), (4, 'a')]
 
+    def test_filter_in(self, filter_rel):
         # IN expression
         expr = ColumnExpression("a")
         expr = expr.isin(1, 2)
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 3
         assert res == [(1, 'a'), (1, 'b'), (2, 'b')]
 
+    def test_filter_not_in(self, filter_rel):
+        expr = ColumnExpression("a")
+        expr = expr.isin(1, 2)
         # NOT IN expression
         expr = ~expr
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(3, 'c'), (4, 'a')]
@@ -512,7 +656,7 @@ class TestExpression(object):
         # NOT IN expression
         expr = ColumnExpression("a")
         expr = expr.isnotin(1, 2)
-        rel2 = rel.filter(expr)
+        rel2 = filter_rel.filter(expr)
         res = rel2.fetchall()
         assert len(res) == 2
         assert res == [(3, 'c'), (4, 'a')]

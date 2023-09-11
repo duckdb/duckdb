@@ -1,4 +1,4 @@
-from typing import Optional, List, Tuple, Any, Union, Iterable, ForwardRef, TYPE_CHECKING
+from typing import Optional, List, Tuple, Any, Union, Iterable, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:

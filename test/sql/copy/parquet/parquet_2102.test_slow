@@ -7,10 +7,10 @@ require parquet
 require httpfs
 
 statement ok
-CREATE TABLE view_one AS SELECT * FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/issue2102_one.parquet';
+CREATE TABLE view_one AS SELECT * FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/issue2102_one.parquet';
 
 statement ok
-CREATE TABLE view_two AS SELECT * FROM 'https://github.com/cwida/duckdb-data/releases/download/v1.0/issue2102_two.parquet';
+CREATE TABLE view_two AS SELECT * FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/issue2102_two.parquet';
 
 query I
 SELECT COUNT(*) FROM view_one WHERE date IS NULL

@@ -352,9 +352,7 @@ GroupByNode Parser::ParseGroupByList(const string &group_by, ParserOptions optio
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw ParserException("Expected a single SELECT node");
-	}
+	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = select.node->Cast<SelectNode>();
 	return std::move(select_node.groups);
 }
@@ -370,9 +368,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 		throw ParserException("Expected a single SELECT statement");
 	}
 	auto &select = parser.statements[0]->Cast<SelectStatement>();
-	if (select.node->type != QueryNodeType::SELECT_NODE) {
-		throw ParserException("Expected a single SELECT node");
-	}
+	D_ASSERT(select.node->type == QueryNodeType::SELECT_NODE);
 	auto &select_node = select.node->Cast<SelectNode>();
 	if (select_node.modifiers.empty() || select_node.modifiers[0]->type != ResultModifierType::ORDER_MODIFIER ||
 	    select_node.modifiers.size() != 1) {

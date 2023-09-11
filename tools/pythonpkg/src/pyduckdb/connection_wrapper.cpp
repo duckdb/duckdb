@@ -317,8 +317,13 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, 
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const py::object &expr,
                                                             shared_ptr<DuckDBPyConnection> conn) {
+	// FIXME: if we want to support passing in DuckDBPyExpressions here
+	// we could also accept 'expr' as a List[DuckDBPyExpression], without changing the signature
+	if (!py::isinstance<py::str>(expr)) {
+		throw InvalidInputException("Please provide 'expr' as a string");
+	}
 	return conn->FromDF(df)->Project(expr);
 }
 
