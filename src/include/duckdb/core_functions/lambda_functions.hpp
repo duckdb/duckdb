@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/plan_serialization.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 
 namespace duckdb {
@@ -36,19 +35,11 @@ public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
 
-	//! Old (de)serialization functionality
-	static void Serialize(FieldWriter &, const FunctionData *, const ScalarFunction &) {
-		throw NotImplementedException("FIXME: list lambda serialize");
-	}
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &, FieldReader &, ScalarFunction &) {
-		throw NotImplementedException("FIXME: list lambda deserialize");
-	}
-
 	//! Serializes a lambda function's bind data
-	static void FormatSerialize(FormatSerializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-	                            const ScalarFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
+	                      const ScalarFunction &function);
 	//! Deserializes a lambda function's bind data
-	static unique_ptr<FunctionData> FormatDeserialize(FormatDeserializer &deserializer, ScalarFunction &);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, ScalarFunction &);
 };
 
 class LambdaFunctions {

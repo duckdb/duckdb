@@ -42,8 +42,6 @@ ScalarFunction ListTransformFun::GetFunction() {
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.serialize = ListLambdaBindData::Serialize;
 	fun.deserialize = ListLambdaBindData::Deserialize;
-	fun.format_serialize = ListLambdaBindData::FormatSerialize;
-	fun.format_deserialize = ListLambdaBindData::FormatDeserialize;
 	fun.bind_lambda = ListTransformBindLambda;
 
 	return fun;

@@ -131,18 +131,18 @@ bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 }
 
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
-                                         const ScalarFunction &) {
-//	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
-//	serializer.WriteProperty(100, "return_type", bind_data.return_type);
-//	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
+                                   const ScalarFunction &) {
+	//	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
+	//	serializer.WriteProperty(100, "return_type", bind_data.return_type);
+	//	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	throw NotImplementedException("FIXME: list lambda serialize");
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
-//	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
-//	auto lambda_expr =
-//	    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
-//	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr));
+	//	auto return_type = deserializer.ReadProperty<LogicalType>(100, "return_type");
+	//	auto lambda_expr =
+	//	    deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(101, "lambda_expr", unique_ptr<Expression>());
+	//	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr));
 	throw NotImplementedException("FIXME: list lambda deserialize");
 }
 
