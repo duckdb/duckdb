@@ -104,6 +104,11 @@ struct ListResizeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListZipFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct StructExtractFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);

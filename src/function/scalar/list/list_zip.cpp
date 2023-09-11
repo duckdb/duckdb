@@ -1,0 +1,148 @@
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_parameter_expression.hpp"
+
+namespace duckdb {
+
+static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	idx_t count = args.size();
+	idx_t args_size = args.ColumnCount();
+	auto *result_data = FlatVector::GetData<list_entry_t>(result);
+	auto &result_struct = ListVector::GetEntry(result);
+	auto &struct_entries = StructVector::GetEntries(result_struct);
+	bool flags_given = false;
+
+	// Check flag
+	if (args.data.back().GetType().id() == LogicalTypeId::BOOLEAN) {
+		flags_given = true;
+		args_size--;
+	}
+
+	vector<UnifiedVectorFormat> input_lists;
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		UnifiedVectorFormat curr;
+		args.data[i].ToUnifiedFormat(count, curr);
+		input_lists.push_back(curr);
+	}
+
+	// Handling output row for each input row
+	idx_t offset = 0;
+	for (idx_t j = 0; j < count; j++) {
+
+		// Is flag for current row set
+		bool is_flag = false;
+		if (flags_given) {
+			idx_t flag_idx = input_lists.back().sel->get_index(j);
+			auto flag_data = UnifiedVectorFormat::GetData<bool>(input_lists.back());
+			is_flag = flag_data[flag_idx];
+		}
+
+		// Calculation of the outgoing list size
+		idx_t len = is_flag ? INT_MAX : 0;
+		for (idx_t i = 0; i < args_size; i++) {
+			idx_t curr_size;
+			if (args.data[i].GetType() == LogicalType::SQLNULL || ListVector::GetListSize(args.data[i]) == 0) {
+				curr_size = 0;
+			} else {
+				idx_t sel_idx = input_lists[i].sel->get_index(j);
+				auto curr_data = UnifiedVectorFormat::GetData<list_entry_t>(input_lists[i]);
+				curr_size = input_lists[i].validity.RowIsValid(sel_idx) ? curr_data[sel_idx].length : 0;
+			}
+
+			// Dependent on flag using gt or lt
+			if (is_flag) {
+				len = len > curr_size ? curr_size : len;
+			} else {
+				len = len < curr_size ? curr_size : len;
+			}
+		}
+
+		for (idx_t i = 0; i < args_size; i++) {
+			UnifiedVectorFormat curr = input_lists[i];
+			idx_t sel_idx = curr.sel->get_index(j);
+			idx_t curr_off = 0;
+			idx_t curr_len = 0;
+
+			// Copying values from the given lists
+			if (curr.validity.RowIsValid(sel_idx)) {
+				auto input_lists_data = UnifiedVectorFormat::GetData<list_entry_t>(curr);
+				Vector &curr_entry = ListVector::GetEntry(args.data[i]);
+				curr_off = input_lists_data[sel_idx].offset;
+				curr_len = input_lists_data[sel_idx].length;
+				auto copy_len = len < curr_len ? len : curr_len;
+				VectorOperations::Copy(curr_entry, (*struct_entries[i]), copy_len + curr_off, curr_off, offset);
+			}
+
+			// Set NULL values for list that are shorter than the output list
+			if (len > curr_len) {
+				for (idx_t d = curr_len; d < len; d++) {
+					ValidityMask &entry_validity = FlatVector::Validity((*struct_entries[i]));
+					entry_validity.SetInvalid(d + offset);
+				}
+			}
+		}
+		result_data[j].length = len;
+		result_data[j].offset = offset;
+		result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
+		offset += len;
+	}
+	ListVector::SetListSize(result, offset);
+}
+
+static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
+                                            vector<unique_ptr<Expression>> &arguments) {
+	child_list_t<LogicalType> struct_children;
+
+	// The last argument could be a flag to be set if we want a minimal list or a maximal list
+	idx_t size = arguments.size();
+	if (arguments[size - 1]->return_type.id() == LogicalTypeId::BOOLEAN) {
+		size--;
+	}
+
+	for (idx_t i = 0; i < size; i++) {
+		auto &child = arguments[i];
+		if (child->alias.empty()) {
+			child->alias = "v" + std::to_string(i + 1);
+		}
+		switch (child->return_type.id()) {
+		case LogicalTypeId::LIST:
+			struct_children.push_back(make_pair(child->alias, ListType::GetChildType(child->return_type)));
+			break;
+		case LogicalTypeId::SQLNULL:
+			struct_children.push_back(make_pair(child->alias, LogicalTypeId::SQLNULL));
+			break;
+		default:
+			throw ParameterNotResolvedException();
+			break;
+		}
+	}
+	bound_function.return_type = LogicalType::LIST(LogicalType::STRUCT(struct_children));
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+}
+
+static unique_ptr<BaseStatistics> ListZipStats(ClientContext &context, FunctionStatisticsInput &input) {
+	auto &child_stats = input.child_stats;
+	auto stats = child_stats[0].ToUnique();
+	for (idx_t i = 1; i < child_stats.size(); i++) {
+		if (child_stats[i].GetType() == LogicalTypeId::LIST) {
+			stats->Merge(child_stats[i]);
+		}
+	}
+	return stats;
+}
+
+ScalarFunction ListZipFun::GetFunction() {
+
+	auto fun = ScalarFunction({}, LogicalType::LIST(LogicalTypeId::STRUCT), ListZipFunction, ListZipBind, nullptr,
+	                          ListZipStats);
+	fun.varargs = LogicalType::ANY;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING; // Special handling needed?
+	return fun;
+}
+
+void ListZipFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction({"list_zip"}, GetFunction());
+}
+} // namespace duckdb
