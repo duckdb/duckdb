@@ -11,6 +11,20 @@
 
 using duckdb::vector;
 
+class NodeDuckDB : public Napi::Addon<NodeDuckDB> {
+public:
+	NodeDuckDB(Napi::Env env, Napi::Object exports);
+
+	static NodeDuckDB *GetData(Napi::Env env) {
+		return env.GetInstanceData<NodeDuckDB>();
+	}
+
+	Napi::FunctionReference database_constructor;
+	Napi::FunctionReference connection_constructor;
+	Napi::FunctionReference statement_constructor;
+	Napi::FunctionReference query_result_constructor;
+};
+
 namespace node_duckdb {
 
 struct Task {
@@ -70,7 +84,7 @@ class Database : public Napi::ObjectWrap<Database> {
 public:
 	explicit Database(const Napi::CallbackInfo &info);
 	~Database() override;
-	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+	static Napi::FunctionReference Init(Napi::Env env, Napi::Object exports);
 	void Process(Napi::Env env);
 	void TaskComplete(Napi::Env env);
 
@@ -82,6 +96,7 @@ public:
 		if (!val.IsObject()) {
 			return false;
 		}
+		auto &constructor = NodeDuckDB::GetData(env)->database_constructor;
 		Napi::Object obj = val.As<Napi::Object>();
 		return obj.InstanceOf(constructor.Value());
 	}
@@ -105,7 +120,6 @@ private:
 	std::queue<duckdb::unique_ptr<Task>> task_queue;
 	std::mutex task_mutex;
 	bool task_inflight;
-	static Napi::FunctionReference constructor;
 	Napi::Env env;
 	int64_t bytes_allocated = 0;
 	int replacement_scan_count = 0;
@@ -120,7 +134,8 @@ class Connection : public Napi::ObjectWrap<Connection> {
 public:
 	explicit Connection(const Napi::CallbackInfo &info);
 	~Connection() override;
-	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+	static Napi::FunctionReference Init(Napi::Env env, Napi::Object exports);
+	static Napi::Object NewInstance(const Napi::Value &db);
 
 public:
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
@@ -136,12 +151,12 @@ public:
 		if (!val.IsObject()) {
 			return false;
 		}
+		auto &constructor = NodeDuckDB::GetData(env)->connection_constructor;
 		Napi::Object obj = val.As<Napi::Object>();
 		return obj.InstanceOf(constructor.Value());
 	}
 
 public:
-	static Napi::FunctionReference constructor;
 	duckdb::unique_ptr<duckdb::Connection> connection;
 	Database *database_ref;
 	std::unordered_map<std::string, duckdb_node_udf_function_t> udfs;
@@ -154,12 +169,13 @@ class Statement : public Napi::ObjectWrap<Statement> {
 public:
 	explicit Statement(const Napi::CallbackInfo &info);
 	~Statement() override;
-	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+	static Napi::FunctionReference Init(Napi::Env env, Napi::Object exports);
 	void SetProcessFirstParam() {
 		ignore_first_param = false;
 	}
 
 public:
+	static Napi::Object NewInstance(Napi::Env env, const vector<napi_value> &args);
 	Napi::Value All(const Napi::CallbackInfo &info);
 	Napi::Value ArrowIPCAll(const Napi::CallbackInfo &info);
 	Napi::Value Each(const Napi::CallbackInfo &info);
@@ -169,7 +185,6 @@ public:
 	Napi::Value Columns(const Napi::CallbackInfo &info);
 
 public:
-	static Napi::FunctionReference constructor;
 	duckdb::unique_ptr<duckdb::PreparedStatement> statement;
 	Connection *connection_ref;
 	bool ignore_first_param = true;
@@ -183,11 +198,11 @@ class QueryResult : public Napi::ObjectWrap<QueryResult> {
 public:
 	explicit QueryResult(const Napi::CallbackInfo &info);
 	~QueryResult() override;
-	static Napi::Object Init(Napi::Env env, Napi::Object exports);
+	static Napi::FunctionReference Init(Napi::Env env, Napi::Object exports);
+	static Napi::Object NewInstance(const Napi::Object &db);
 	duckdb::unique_ptr<duckdb::QueryResult> result;
 
 public:
-	static Napi::FunctionReference constructor;
 	Napi::Value NextChunk(const Napi::CallbackInfo &info);
 	Napi::Value NextIpcBuffer(const Napi::CallbackInfo &info);
 	duckdb::shared_ptr<ArrowSchema> cschema;
@@ -208,11 +223,6 @@ public:
 	static Napi::Object CreateError(Napi::Env env, std::string msg);
 	static bool OtherIsInt(Napi::Number source);
 
-	template <class T>
-	static T *NewUnwrap(vector<napi_value> args) {
-		auto obj = T::constructor.New(args);
-		return Napi::ObjectWrap<T>::Unwrap(obj);
-	}
 	static duckdb::Value BindParameter(const Napi::Value source);
 };
 

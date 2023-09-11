@@ -75,6 +75,23 @@ inline void DeserializationData::Unset<LogicalOperatorType>() {
 }
 
 template <>
+inline void DeserializationData::Set(CatalogType type) {
+	enums.push(idx_t(type));
+}
+
+template <>
+inline CatalogType DeserializationData::Get() {
+	AssertNotEmpty(enums);
+	return CatalogType(enums.top());
+}
+
+template <>
+inline void DeserializationData::Unset<CatalogType>() {
+	AssertNotEmpty(enums);
+	enums.pop();
+}
+
+template <>
 inline void DeserializationData::Set(ClientContext &context) {
 	contexts.push(context);
 }

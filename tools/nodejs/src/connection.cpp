@@ -9,9 +9,7 @@
 
 namespace node_duckdb {
 
-Napi::FunctionReference Connection::constructor;
-
-Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
+Napi::FunctionReference Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
 	Napi::Function t =
@@ -22,11 +20,9 @@ Napi::Object Connection::Init(Napi::Env env, Napi::Object exports) {
 	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf),
 	                 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
 
-	constructor = Napi::Persistent(t);
-	constructor.SuppressDestruct();
-
 	exports.Set("Connection", t);
-	return exports;
+
+	return Napi::Persistent(t);
 }
 
 struct ConnectTask : public Task {
@@ -103,7 +99,8 @@ Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
 	for (size_t i = 0; i < info.Length(); i++) {
 		args.push_back(info[i]);
 	}
-	auto res = Utils::NewUnwrap<Statement>(args);
+	auto obj = Statement::NewInstance(info.Env(), args);
+	auto res = Statement::Unwrap(obj);
 	res->SetProcessFirstParam();
 	return res->Value();
 }
@@ -513,6 +510,10 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	                       duckdb::make_uniq<ExecTaskWithCallback>(*this, final_query, callback, cpp_callback));
 
 	return Value();
+}
+
+Napi::Object Connection::NewInstance(const Napi::Value &db) {
+	return NodeDuckDB::GetData(db.Env())->connection_constructor.New({db});
 }
 
 } // namespace node_duckdb
