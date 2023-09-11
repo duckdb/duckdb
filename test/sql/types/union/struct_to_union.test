@@ -2,9 +2,6 @@
 # group: [union]
 
 statement ok
-create type my_tags as enum('a', 'b', 'c')
-
-statement ok
 create table union_tbl(
 	col UNION(
 		a BOOL,
