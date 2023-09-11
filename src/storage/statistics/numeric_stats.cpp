@@ -455,7 +455,7 @@ static void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnio
 		serializer.WriteProperty(101, "value", val.value_.hugeint);
 		break;
 	case PhysicalType::UINT128:
-		writer.WriteField<uhugeint_t>(val.value_.uhugeint);
+		serializer.WriteProperty(101, "value", val.value_.uhugeint);
 		break;
 	case PhysicalType::FLOAT:
 		serializer.WriteProperty(101, "value", val.value_.float_);
@@ -508,7 +508,7 @@ static void DeserializeNumericStatsValue(const LogicalType &type, NumericValueUn
 		result.value_.hugeint = deserializer.ReadProperty<hugeint_t>(101, "value");
 		break;
 	case PhysicalType::UINT128:
-		result.value_.uhugeint = reader.ReadRequired<uhugeint_t>();
+		result.value_.uhugeint = deserializer.ReadProperty<uhugeint_t>(101, "value");
 		break;
 	case PhysicalType::FLOAT:
 		result.value_.float_ = deserializer.ReadProperty<float>(101, "value");

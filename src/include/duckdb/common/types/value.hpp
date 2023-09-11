@@ -84,6 +84,7 @@ public:
 	//! Create a Numeric value of the specified type with the specified value
 	DUCKDB_API static Value Numeric(const LogicalType &type, int64_t value);
 	DUCKDB_API static Value Numeric(const LogicalType &type, hugeint_t value);
+	DUCKDB_API static Value Numeric(const LogicalType &type, uhugeint_t value);
 
 	//! Create a tinyint Value from a specified value
 	DUCKDB_API static Value BOOLEAN(int8_t value);
