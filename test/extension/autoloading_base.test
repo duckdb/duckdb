@@ -47,13 +47,13 @@ set autoinstall_extension_repository='/tmp/non-existent-repo';
 statement error
 SET s3_region='eu-west-1';
 ----
-Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
 Failed to copy local extension
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-Extension Autoloading Error: An error occured while trying to automatically install the required extension 'json':
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
 Failed to copy local extension
 
 # Now override with non-existent remote repo
@@ -64,13 +64,13 @@ set autoinstall_extension_repository='http://duckdb.org/what/are/the/odds/we/act
 statement error
 SET s3_region='eu-west-1';
 ----
-Extension Autoloading Error: An error occured while trying to automatically install the required extension 'httpfs':
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
 Failed to download extension "httpfs" at URL
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
-Extension Autoloading Error: An error occured while trying to automatically install the required extension 'json':
+Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
 Failed to download extension "json" at URL
 
 statement error

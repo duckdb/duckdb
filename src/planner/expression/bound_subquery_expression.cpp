@@ -26,8 +26,4 @@ bool BoundSubqueryExpression::PropagatesNullValues() const {
 	return false;
 }
 
-void BoundSubqueryExpression::Serialize(FieldWriter &writer) const {
-	throw NotImplementedException(ExpressionTypeToString(type));
-}
-
 } // namespace duckdb

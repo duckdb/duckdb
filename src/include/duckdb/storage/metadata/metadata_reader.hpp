@@ -9,12 +9,13 @@
 #pragma once
 
 #include "duckdb/storage/metadata/metadata_manager.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 
 enum class BlockReaderType { EXISTING_BLOCKS, REGISTER_BLOCKS };
 
-class MetadataReader : public Deserializer {
+class MetadataReader : public ReadStream {
 public:
 	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
 	               BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);

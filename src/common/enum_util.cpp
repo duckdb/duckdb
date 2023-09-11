@@ -6114,10 +6114,6 @@ const char* EnumUtil::ToChars<VerificationType>(VerificationType value) {
 		return "COPIED";
 	case VerificationType::DESERIALIZED:
 		return "DESERIALIZED";
-	case VerificationType::DESERIALIZED_V2:
-		return "DESERIALIZED_V2";
-	case VerificationType::DESERIALIZED_V2_NO_DEFAULT:
-		return "DESERIALIZED_V2_NO_DEFAULT";
 	case VerificationType::PARSED:
 		return "PARSED";
 	case VerificationType::UNOPTIMIZED:
@@ -6145,12 +6141,6 @@ VerificationType EnumUtil::FromString<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "DESERIALIZED")) {
 		return VerificationType::DESERIALIZED;
-	}
-	if (StringUtil::Equals(value, "DESERIALIZED_V2")) {
-		return VerificationType::DESERIALIZED_V2;
-	}
-	if (StringUtil::Equals(value, "DESERIALIZED_V2_NO_DEFAULT")) {
-		return VerificationType::DESERIALIZED_V2_NO_DEFAULT;
 	}
 	if (StringUtil::Equals(value, "PARSED")) {
 		return VerificationType::PARSED;
