@@ -4,7 +4,7 @@
 
 set -e
 
-#echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 
 FILES="loadable_extensions/*.duckdb_extension.wasm"
 for f in $FILES
