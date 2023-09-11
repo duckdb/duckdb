@@ -182,7 +182,7 @@ void SingleFileCheckpointReader::LoadFromStorage() {
 }
 
 void CheckpointWriter::WriteEntry(CatalogEntry &entry, Serializer &serializer) {
-	serializer.WriteProperty(99, "type", entry.type);
+	serializer.WriteProperty(99, "catalog_type", entry.type);
 
 	switch (entry.type) {
 	case CatalogType::SCHEMA_ENTRY: {
@@ -243,35 +243,35 @@ void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deseriali
 
 	switch (type) {
 	case CatalogType::SCHEMA_ENTRY: {
-		ReadSchema(context, reader);
+		ReadSchema(context, deserializer);
 		break;
 	}
 	case CatalogType::TYPE_ENTRY: {
-		ReadType(context, reader);
+		ReadType(context, deserializer);
 		break;
 	}
 	case CatalogType::SEQUENCE_ENTRY: {
-		ReadSequence(context, reader);
+		ReadSequence(context, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		ReadTable(context, reader);
+		ReadTable(context, deserializer);
 		break;
 	}
 	case CatalogType::VIEW_ENTRY: {
-		ReadView(context, reader);
+		ReadView(context, deserializer);
 		break;
 	}
 	case CatalogType::MACRO_ENTRY: {
-		ReadMacro(context, reader);
+		ReadMacro(context, deserializer);
 		break;
 	}
 	case CatalogType::TABLE_MACRO_ENTRY: {
-		ReadTableMacro(context, reader);
+		ReadTableMacro(context, deserializer);
 		break;
 	}
 	case CatalogType::INDEX_ENTRY: {
-		ReadIndex(context, reader);
+		ReadIndex(context, deserializer);
 		break;
 	}
 	default:
@@ -279,7 +279,7 @@ void CheckpointReader::ReadEntry(ClientContext &context, Deserializer &deseriali
 	}
 }
 
-void CheckpointReader::ReadSchema(ClientContext &context, MetadataReader &reader) {
+void CheckpointReader::ReadSchema(ClientContext &context, Deserializer &deserializer) {
 	// read the schema and create it in the catalog
 	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "schema");
 	auto &schema_info = info->Cast<CreateSchemaInfo>();

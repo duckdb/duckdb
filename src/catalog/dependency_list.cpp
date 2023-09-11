@@ -1,7 +1,7 @@
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/catalog/catalog_entry.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -75,14 +75,14 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	this->type = entry.type;
 }
 
-void LogicalDependency::FormatSerialize(FormatSerializer &serializer) const {
+void LogicalDependency::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(0, "name", name);
 	serializer.WriteProperty(1, "schema", schema);
 	serializer.WriteProperty(2, "catalog", catalog);
 	serializer.WriteProperty(3, "type", type);
 }
 
-LogicalDependency LogicalDependency::FormatDeserialize(FormatDeserializer &deserializer) {
+LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
 	LogicalDependency dependency;
 	dependency.name = deserializer.ReadProperty<string>(0, "name");
 	dependency.schema = deserializer.ReadProperty<string>(1, "schema");
@@ -113,35 +113,11 @@ PhysicalDependencyList LogicalDependencyList::GetPhysical(Catalog &catalog, opti
 	return dependencies;
 }
 
-void LogicalDependencyList::Serialize(Serializer &writer) const {
-	writer.Write<idx_t>(set.size());
-	for (auto &entry : set) {
-		writer.WriteString(entry.name);
-		writer.WriteString(entry.schema);
-		writer.WriteString(entry.catalog);
-		writer.Write(entry.type);
-	}
-}
-
-LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &source) {
-	LogicalDependencyList result;
-	auto size = source.Read<idx_t>();
-	for (idx_t i = 0; i < size; i++) {
-		LogicalDependency dependency;
-		dependency.name = source.Read<string>();
-		dependency.schema = source.Read<string>();
-		dependency.catalog = source.Read<string>();
-		dependency.type = source.Read<CatalogType>();
-		result.set.insert(dependency);
-	}
-	return result;
-}
-
-void LogicalDependencyList::FormatSerialize(FormatSerializer &serializer) const {
+void LogicalDependencyList::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(0, "logical_dependencies", set);
 }
 
-LogicalDependencyList LogicalDependencyList::FormatDeserialize(FormatDeserializer &deserializer) {
+LogicalDependencyList LogicalDependencyList::Deserialize(Deserializer &deserializer) {
 	LogicalDependencyList dependency;
 	dependency.set = deserializer.ReadProperty<create_info_set_t>(0, "logical_dependencies");
 	return dependency;

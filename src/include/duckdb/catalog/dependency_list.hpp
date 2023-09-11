@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/catalog/catalog_entry_map.hpp"
 #include "duckdb/common/types/hash.hpp"
 
@@ -51,8 +50,8 @@ public:
 	LogicalDependency();
 
 public:
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static LogicalDependency FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static LogicalDependency Deserialize(Deserializer &deserializer);
 };
 
 struct CreateInfoHashFunction {
@@ -73,9 +72,7 @@ public:
 
 public:
 	void Serialize(Serializer &serializer) const;
-	static LogicalDependencyList Deserialize(Deserializer &source);
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static LogicalDependencyList FormatDeserialize(FormatDeserializer &deserializer);
+	static LogicalDependencyList Deserialize(Deserializer &deserializer);
 
 private:
 	create_info_set_t set;
