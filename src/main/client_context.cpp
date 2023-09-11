@@ -334,17 +334,17 @@ ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &qu
 #ifdef DEBUG
 	plan->Verify(*this);
 #endif
-//	if (config.enable_optimizer && plan->RequireOptimizer()) {
-//		profiler.StartPhase("optimizer");
-//		Optimizer optimizer(*planner.binder, *this);
-//		plan = optimizer.Optimize(std::move(plan));
-//		D_ASSERT(plan);
-//		profiler.EndPhase();
-//
-//#ifdef DEBUG
-//		plan->Verify(*this);
-//#endif
-//	}
+	if (config.enable_optimizer && plan->RequireOptimizer()) {
+		profiler.StartPhase("optimizer");
+		Optimizer optimizer(*planner.binder, *this);
+		plan = optimizer.Optimize(std::move(plan));
+		D_ASSERT(plan);
+		profiler.EndPhase();
+
+#ifdef DEBUG
+		plan->Verify(*this);
+#endif
+	}
 
 	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
