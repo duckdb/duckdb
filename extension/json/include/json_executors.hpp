@@ -19,11 +19,6 @@ public:
 	template <class T>
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                         std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
-		if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-			FlatVector::Validity(result).SetAllInvalid(args.size());
-			return;
-		}
-
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYAlc();
 

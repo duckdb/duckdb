@@ -60,10 +60,14 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	string path = "";
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+	if (arguments[1]->IsFoldable()) {
 		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		path_type = CheckPath(path_val, path, len);
+		if (path_val.IsNull()) {
+			bound_function.return_type = LogicalTypeId::SQLNULL;
+		} else {
+			path_type = CheckPath(path_val, path, len);
+		}
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
