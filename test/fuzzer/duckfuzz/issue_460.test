@@ -1,5 +1,5 @@
 # name: test/fuzzer/duckfuzz/issue_460.test
-# description: replace windows with empty results if children are empty results
+# description: Json execute serialize cannot execute on NULL argument
 # group: [duckfuzz]
 
 require tpch
