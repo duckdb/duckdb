@@ -54,7 +54,11 @@ public:
 	void Reset();
 
 	//! Returns the in-memory usage in bytes
-	inline idx_t GetMemoryUsage() const;
+	idx_t GetInMemoryUsage() const;
+	//! Returns an estimate for the total memory usage of the allocator
+	inline idx_t GetEstimatedMemoryUsage() const {
+		return buffers.size() * Storage::BLOCK_SIZE;
+	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;

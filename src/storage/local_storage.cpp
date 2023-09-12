@@ -81,16 +81,29 @@ void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<
 }
 
 idx_t LocalTableStorage::EstimatedSize() {
+
+	// count the appended rows
 	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
 	if (appended_rows == 0) {
 		return 0;
 	}
+
+	// get the (estimated) size of a row (no compressions, etc.)
 	idx_t row_size = 0;
 	auto &types = row_groups->GetTypes();
 	for (auto &type : types) {
 		row_size += GetTypeIdSize(type.InternalType());
 	}
-	return appended_rows * row_size;
+
+	// get the index size
+	idx_t estimated_indexes_size = 0;
+	indexes.Scan([&](Index &index) {
+		    estimated_indexes_size += index.GetEstimatedMemoryUsage();
+		    return false;
+	});
+
+	// return the size of the appended rows and the index size
+	return appended_rows * row_size + estimated_indexes_size;
 }
 
 void LocalTableStorage::WriteNewRowGroup() {

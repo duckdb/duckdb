@@ -96,6 +96,9 @@ public:
 	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
 	void Vacuum(IndexLock &state) override;
 
+	//! Returns an estimate for the total memory usage of the index
+	idx_t GetEstimatedMemoryUsage(IndexLock &index_lock) override;
+
 	//! Generate ART keys for an input chunk
 	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, vector<ARTKey> &keys);
 

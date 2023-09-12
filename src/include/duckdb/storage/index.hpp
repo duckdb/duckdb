@@ -71,7 +71,7 @@ public:
 	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
-	virtual void InitializeLock(IndexLock &state);
+	void InitializeLock(IndexLock &state);
 	//! Called when data is appended to the index. The lock obtained from InitializeLock must be held
 	virtual PreservedError Append(IndexLock &state, DataChunk &entries, Vector &row_identifiers) = 0;
 	//! Obtains a lock and calls Append while holding that lock
@@ -105,6 +105,11 @@ public:
 	virtual void Vacuum(IndexLock &state) = 0;
 	//! Obtains a lock and calls Vacuum while holding that lock
 	void Vacuum();
+
+	//! Returns an estimate for the total memory usage of the index. The lock obtained from InitializeLock must be held
+	virtual idx_t GetEstimatedMemoryUsage(IndexLock &state) = 0;
+	//! Returns an estimate for the total memory usage of the index
+	idx_t GetEstimatedMemoryUsage();
 
 	//! Returns the string representation of an index, or only traverses and verifies the index
 	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;

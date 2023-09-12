@@ -1070,6 +1070,21 @@ void ART::Vacuum(IndexLock &state) {
 }
 
 //===--------------------------------------------------------------------===//
+// Size estimation
+//===--------------------------------------------------------------------===//
+
+idx_t ART::GetEstimatedMemoryUsage(IndexLock &index_lock) {
+
+	D_ASSERT(owns_data);
+
+	idx_t estimated_memory_usage = 0;
+	for (auto &allocator : *allocators) {
+		estimated_memory_usage += allocator->GetEstimatedMemoryUsage();
+	}
+	return estimated_memory_usage;
+}
+
+//===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
 
