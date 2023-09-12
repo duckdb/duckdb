@@ -385,12 +385,12 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// except the root block pointer
 	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
 
-	// obtain the expressions of the ART from the index metadata
-	vector<unique_ptr<Expression>> unbound_expressions;
+	// obtain the parsed expressions of the ART from the index metadata
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 	for (auto &parsed_expr : info.parsed_expressions) {
 		parsed_expressions.push_back(parsed_expr->Copy());
 	}
+	D_ASSERT(!parsed_expressions.empty());
 
 	// add the table to the bind context to bind the parsed expressions
 	auto binder = Binder::CreateBinder(context);
@@ -401,23 +401,16 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 		column_names.push_back(col.Name());
 	}
 
-	// create unbound expressions from the parsed expressions
+	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
 	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
 	IndexBinder idx_binder(*binder, context);
+
+	// bind the parsed expressions to create unbound expressions
+	vector<unique_ptr<Expression>> unbound_expressions;
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
 		unbound_expressions.push_back(idx_binder.Bind(expr));
-	}
-
-	// this is a PK/FK index: we create the necessary bound column ref expressions
-	if (parsed_expressions.empty()) {
-		unbound_expressions.reserve(info.column_ids.size());
-		for (idx_t key_nr = 0; key_nr < info.column_ids.size(); key_nr++) {
-			auto &col = table.GetColumn(LogicalIndex(info.column_ids[key_nr]));
-			unbound_expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
-		}
 	}
 
 	// create the index and add it to the storage
