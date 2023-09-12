@@ -517,6 +517,42 @@ class DataFrame:
         expr = StarExpression(exclude=exclude)
         return DataFrame(self.relation.select(expr), self.session)
 
+    def __repr__(self) -> str:
+        return str(self.relation)
+
+    def limit(self, num: int, offset: int = 0) -> "DataFrame":
+        """Limits the result count to the number specified.
+
+        Parameters
+        ----------
+        num : int
+            Number of records to return. Will return this number of records
+            or all records if the DataFrame contains less than this number of records.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Subset of the records
+
+        Examples
+        --------
+        >>> df = spark.createDataFrame(
+        ...     [(14, "Tom"), (23, "Alice"), (16, "Bob")], ["age", "name"])
+        >>> df.limit(1).show()
+        +---+----+
+        |age|name|
+        +---+----+
+        | 14| Tom|
+        +---+----+
+        >>> df.limit(0).show()
+        +---+----+
+        |age|name|
+        +---+----+
+        +---+----+
+        """
+        rel = self.relation.limit(num, offset)
+        return DataFrame(rel, self.session)
+
     def __contains__(self, item: str):
         """
         Check if the :class:`DataFrame` contains a column by the name of `item`
