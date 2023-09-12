@@ -339,7 +339,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
-		    MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
+		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			// merge the stats
@@ -393,7 +393,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
-		auto append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - row_group->count);
+		auto append_count = MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
 		row_group = row_groups->GetNextSegment(row_group);
