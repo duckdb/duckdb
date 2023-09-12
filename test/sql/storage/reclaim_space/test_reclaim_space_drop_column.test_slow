@@ -1,6 +1,6 @@
-# name: test/sql/storage/test_reclaim_space_drop_column.test_slow
+# name: test/sql/storage/reclaim_space/test_reclaim_space_drop_column.test_slow
 # description: Test that we reclaim space when dropping and adding columns
-# group: [storage]
+# group: [reclaim_space]
 
 load __TEST_DIR__/test_reclaim_space.db
 
