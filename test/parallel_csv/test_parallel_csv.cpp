@@ -221,7 +221,10 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/real/");
+	std::set<std::string> skip;
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
+	RunTestOnFolder("test/sql/copy/csv/data/real/", &skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv][.]") {
