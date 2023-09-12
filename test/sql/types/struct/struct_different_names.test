@@ -19,11 +19,10 @@ INSERT INTO foo VALUES ({'ignoreme': 3});
 ----
 Mismatch Type Error: Type STRUCT(ignoreme INTEGER) does not match with STRUCT(pip INTEGER). Cannot cast STRUCTs with different names
 
-statement ok
+statement error
 create table wrong as from (VALUES (ROW(3)));
-
-statement ok
-insert into foo select * from wrong;
+----
+Invalid Input Error: A table cannot be created from an unnamed struct
 
 statement ok
 INSERT INTO foo VALUES (ROW(42));
@@ -31,7 +30,6 @@ INSERT INTO foo VALUES (ROW(42));
 query I
 SELECT * FROM foo;
 ----
-{'pip': 3}
 {'pip': 42}
 
 statement ok
@@ -64,12 +62,10 @@ statement ok
 insert into tbl VALUES(ROW(5, 'hello'));
 
 # Can insert named struct into unnamed struct
-
-statement ok
+statement error
 create table tbl2 as select ROW(42, 'world') a;
-
-statement ok
-insert into tbl select * from tbl2;
+----
+Invalid Input Error: A table cannot be created from an unnamed struct
 
 statement error
 SELECT [{'foo': True}, {'bar': False}, {'foobar': NULL}];

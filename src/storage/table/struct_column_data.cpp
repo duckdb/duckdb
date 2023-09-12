@@ -13,6 +13,10 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
       validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+	if (!StructType::HasExplicitName(type)) {
+		throw InvalidInputException("A table cannot be created from an unnamed struct");
+	}
+
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
 	// the sub column index, starting at 1 (0 is the validity mask)
