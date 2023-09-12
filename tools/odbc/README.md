@@ -72,6 +72,11 @@ All functions in ODBC return a code which represents the success or failure of t
 A buffer is a block of memory used to store data.  Buffers are used to store data retrieved from the database, or to send data to the database.  Buffers are allocated by the application, and then bound to a column in a result set, or a parameter in a query, using the [`SQLBindCol`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function?view=sql-server-ver16) and [`SQLBindParameter`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindparameter-function?view=sql-server-ver16) functions.  When the application fetches a row from the result set, or executes a query, the data is stored in the buffer.  When the application sends a query to the database, the data in the buffer is sent to the database.
 
 ## Setting up an Application:
+
+The following is a step-by-step guide to setting up an application that uses ODBC to connect to a database, execute a query, and fetch the results in `c++`.
+
+_Note:_ To install the driver as well as anything else you might need follow the instructions [here](https://duckdb.org/docs/api/odbc/overview).
+
 1. [Include the SQL Header Files](#1-include-the-sql-header-files)
 2. [Define the ODBC Handles and Connect to the Database ](#2-define-the-odbc-handles-and-connect-to-the-database)
 3. [Adding a Query](#3-adding-a-query)
