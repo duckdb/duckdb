@@ -52,12 +52,6 @@ CreateThriftFileProtocol(Allocator &allocator, FileHandle &file_handle, bool pre
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftGenericProtocol(const char *const ptr,
-                                                                                          const idx_t len) {
-	auto transport = make_shared<ThriftGenericTransport>(ptr, len);
-	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftGenericTransport>>(std::move(transport));
-}
-
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
                                                          const string &encryption_key) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -98,42 +92,39 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(metadata_pos);
 	transport.Prefetch(metadata_pos, footer_len);
 
+	unique_ptr<FileMetaData> metadata;
 	if (footer_encrypted) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
-		const auto crypto_len = crypto_metadata->read(file_proto.get());
+		crypto_metadata->read(file_proto.get());
 		if (crypto_metadata->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
 			                            file_handle.path);
 		}
-		footer_len -= crypto_len;
-		const auto encoded_len = transport.InitializeDecryption(encryption_key);
-		if (encoded_len != footer_len - sizeof(uint32_t)) {
-			// TODO throw
-		}
+		metadata = ParquetCryptoWrapper::Read<FileMetaData>(*file_proto, encryption_key);
+	} else {
+		metadata = make_uniq<FileMetaData>();
+		metadata->read(file_proto.get());
 	}
 
-	auto metadata = make_uniq<FileMetaData>();
-	metadata->read(file_proto.get());
-
-	for (auto &row_group : metadata->row_groups) {
-		for (auto &column_chunk : row_group.columns) {
-			if (!column_chunk.__isset.encrypted_column_metadata) {
-				// || !column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_FOOTER_KEY
-				// We can only decrypt when everything is encrypted with footer key (for now)
-				continue;
-			}
-			if (!column_chunk.__isset.encrypted_column_metadata) {
-				continue; // Nothing to decrypt
-			}
-
-			auto &ecm = column_chunk.encrypted_column_metadata;
-
-			// TODO decrypt
-
-			auto string_proto = CreateThriftGenericProtocol(ecm.c_str(), ecm.length());
-			column_chunk.meta_data.statistics.read(string_proto.get());
-		}
-	}
+	//	for (auto &row_group : metadata->row_groups) {
+	//		for (auto &column_chunk : row_group.columns) {
+	//			if (!column_chunk.__isset.encrypted_column_metadata) {
+	//				// || !column_chunk.crypto_metadata.__isset.ENCRYPTION_WITH_FOOTER_KEY
+	//				// We can only decrypt when everything is encrypted with footer key (for now)
+	//				continue;
+	//			}
+	//			if (!column_chunk.__isset.encrypted_column_metadata) {
+	//				continue; // Nothing to decrypt
+	//			}
+	//
+	//			auto &ecm = column_chunk.encrypted_column_metadata;
+	//
+	//			// TODO decrypt
+	//
+	//			auto string_proto = CreateThriftGenericProtocol(ecm.c_str(), ecm.length());
+	//			column_chunk.meta_data.statistics.read(string_proto.get());
+	//		}
+	//	}
 
 	return make_shared<ParquetFileMetadataCache>(std::move(metadata), current_time);
 }

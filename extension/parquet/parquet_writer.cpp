@@ -1,5 +1,6 @@
 #include "parquet_writer.hpp"
 
+#include "crypto_wrapper.hpp"
 #include "duckdb.hpp"
 #include "mbedtls_wrapper.hpp"
 #include "parquet_timestamp.hpp"
@@ -453,11 +454,11 @@ void ParquetWriter::Finalize() {
 	if (!encryption_key.empty()) {
 		auto crypto_metadata = make_uniq<FileCryptoMetaData>();
 		crypto_metadata->encryption_algorithm.__isset.AES_GCM_V1 = true;
-		asdas
-		// TODO: cast protocol->getTransport() to MyTransport and initialize encryption
-		//  and finalize after writing (making sure to write length too)
+		crypto_metadata->write(protocol.get());
+		ParquetCryptoWrapper::Write(file_meta_data, *protocol, encryption_key);
+	} else {
+		file_meta_data.write(protocol.get());
 	}
-	file_meta_data.write(protocol.get());
 
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
