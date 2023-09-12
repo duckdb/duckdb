@@ -210,12 +210,7 @@ struct ModeFunction {
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
 	                   AggregateInputData &, STATE &state, const FrameBounds *frames, const FrameBounds *prevs,
 	                   Vector &result, idx_t rid, idx_t nframes) {
-		if (nframes != 1) {
-			throw NotImplementedException("MODE does not support EXCLUDE");
-		}
 
-		auto &frame = *frames;
-		auto &prev = *prevs;
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
@@ -225,37 +220,70 @@ struct ModeFunction {
 			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
-		if (state.nonzero <= tau * state.frequency_map->size() || prev.end <= frame.start || frame.end <= prev.start) {
+		if (state.nonzero <= tau * state.frequency_map->size()) {
 			state.Reset();
 			// for f ∈ F do
-			for (auto f = frame.start; f < frame.end; ++f) {
-				if (included(f)) {
-					state.ModeAdd(KEY_TYPE(data[f]), f);
+			for (idx_t f = 0; f < nframes; ++f) {
+				const auto &frame = frames[f];
+				for (auto i = frame.start; i < frame.end; ++i) {
+					if (included(i)) {
+						state.ModeAdd(KEY_TYPE(data[i]), i);
+					}
 				}
 			}
 		} else {
-			// for f ∈ P \ F do
-			for (auto p = prev.start; p < frame.start; ++p) {
-				if (included(p)) {
-					state.ModeRm(KEY_TYPE(data[p]), p);
-				}
-			}
-			for (auto p = frame.end; p < prev.end; ++p) {
-				if (included(p)) {
-					state.ModeRm(KEY_TYPE(data[p]), p);
-				}
-			}
+			//	Subframe indices
+			const auto union_start = MinValue(frames[0].start, prevs[0].start);
+			const auto union_end = MaxValue(frames[nframes - 1].end, prevs[nframes - 1].end);
+			idx_t p = 0;
+			idx_t f = 0;
+			for (auto i = union_start; i < union_end;) {
+				int overlap = 0;
 
-			// for f ∈ F \ P do
-			for (auto f = frame.start; f < prev.start; ++f) {
-				if (included(f)) {
-					state.ModeAdd(KEY_TYPE(data[f]), f);
+				//	Are we in the previous frame?
+				FrameBounds prev(union_end, union_end);
+				if (p < nframes) {
+					prev = prevs[p];
+					overlap |= int(prev.start <= i && i < prev.end) << 0;
 				}
-			}
-			for (auto f = prev.end; f < frame.end; ++f) {
-				if (included(f)) {
-					state.ModeAdd(KEY_TYPE(data[f]), f);
+
+				//	Are we in the current frame?
+				FrameBounds frame(union_end, union_end);
+				if (f < nframes) {
+					frame = frames[f];
+					overlap |= int(frame.start <= i && i < frame.end) << 1;
 				}
+
+				switch (overlap) {
+				case 0x00:
+					//    f ∉ F U P
+					i = MinValue(frame.start, prev.start);
+					break;
+				case 0x03:
+					//	f ∈ F ∩ P
+					i = MinValue(frame.end, prev.end);
+					break;
+				case 0x01:
+					// for f ∈ P \ F do
+					for (; i < MinValue(prev.end, frame.start); ++i) {
+						if (included(i)) {
+							state.ModeRm(KEY_TYPE(data[i]), i);
+						}
+					}
+					break;
+				case 0x02:
+					// for f ∈ F \ P do
+					for (; i < MinValue(frame.end, prev.start); ++i) {
+						if (included(i)) {
+							state.ModeAdd(KEY_TYPE(data[i]), i);
+						}
+					}
+					break;
+				}
+
+				//	Advance  the subframe indices
+				p += (i == prev.end);
+				f += (i == frame.end);
 			}
 		}
 
