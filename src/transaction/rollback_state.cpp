@@ -9,6 +9,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table/row_version_manager.hpp"
 
 namespace duckdb {
 
@@ -30,7 +31,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// reset the deleted flag on rollback
-		info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
+		info->version_info->CommitDelete(info->vector_idx, NOT_DELETED_ID, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
