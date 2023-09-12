@@ -60,6 +60,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			// When union_by_name=true we sample sample_size per file
 			remaining = bind_data.sample_size;
 		} else if (remaining == 0) {
+			// When union_by_name=false, we sample sample_size in total (across the first files)
 			break;
 		}
 	}
