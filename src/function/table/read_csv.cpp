@@ -299,7 +299,8 @@ public:
 	ParallelCSVGlobalState(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files_path_p,
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
-	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p), force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
+	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
+	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
@@ -550,7 +551,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
-	idx_t bytes_per_local_state = current_buffer->actual_size/MaxThreads() + 1;
+	idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
 	auto result = make_uniq<CSVBufferRead>(
 	    buffer_manager->GetBuffer(cur_buffer_idx), buffer_manager->GetBuffer(cur_buffer_idx + 1), next_byte,
 	    next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
