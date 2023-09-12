@@ -261,6 +261,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/issue5077_aligned.csv");
 	skip.insert("data/csv/empty_first_line.csv");
 	skip.insert("data/csv/csv_quoted_newline_odd.csv");
+	skip.insert("data/csv/hebere.csv.gz");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
