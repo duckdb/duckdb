@@ -283,17 +283,6 @@ void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value)
 	}
 }
 
-void CSVReaderOptions::SetTypeForColumn(const string &name, const LogicalType &type) {
-	// FIXME: this can currently introduce duplicates in the 'sql_type_list'
-	auto index = sql_type_list.size();
-	SetSQLType(type);
-	sql_types_per_column[name] = index;
-}
-void CSVReaderOptions::SetSQLType(const LogicalType &type) {
-	// This function is either called from SetTypeForColumn if a STRUCT is provided, or standalone if a LIST is provided
-	sql_type_list.push_back(type);
-}
-
 bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
 	// Make sure this function was only called after the option was turned into lowercase
 	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));

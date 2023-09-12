@@ -197,8 +197,6 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
-	void SetTypeForColumn(const string &name, const LogicalType &type);
-	void SetSQLType(const LogicalType &type);
 	void ToNamedParameters(named_parameter_map_t &out);
 	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context, vector<LogicalType> &return_types,
 	                         vector<string> &names);
