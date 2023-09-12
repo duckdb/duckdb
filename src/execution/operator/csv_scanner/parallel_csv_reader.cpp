@@ -143,12 +143,13 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+		auto pos_check = position_buffer == 0? position_buffer : position_buffer -1;
+		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[pos_check])) {
 			break;
 		}
 
 		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
-		    (*buffer)[position_buffer - 1] == '\n') {
+		    (*buffer)[pos_check] == '\n') {
 			break;
 		}
 		idx_t position_set = position_buffer;

@@ -550,7 +550,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
-	idx_t bytes_per_local_state = current_buffer->actual_size/MaxThreads();
+	idx_t bytes_per_local_state = current_buffer->actual_size/MaxThreads() + 1;
 	auto result = make_uniq<CSVBufferRead>(
 	    buffer_manager->GetBuffer(cur_buffer_idx), buffer_manager->GetBuffer(cur_buffer_idx + 1), next_byte,
 	    next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
