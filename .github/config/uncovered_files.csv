@@ -120,6 +120,7 @@ core_functions/aggregate/holistic/quantile.cpp	14
 core_functions/aggregate/holistic/reservoir_quantile.cpp	39
 core_functions/aggregate/nested/histogram.cpp	1
 core_functions/aggregate/nested/list.cpp	4
+core_functions/lambda_functions.cpp	1
 core_functions/scalar/bit/bitstring.cpp	3
 core_functions/scalar/date/date_diff.cpp	124
 core_functions/scalar/date/date_part.cpp	17
@@ -574,6 +575,7 @@ parser/expression/case_expression.cpp	3
 parser/expression/collate_expression.cpp	3
 parser/expression/default_expression.cpp	8
 parser/expression/function_expression.cpp	2
+parser/expression/lambdaref_expression.cpp	3
 parser/expression/star_expression.cpp	5
 parser/expression/subquery_expression.cpp	5
 parser/expression/window_expression.cpp	8

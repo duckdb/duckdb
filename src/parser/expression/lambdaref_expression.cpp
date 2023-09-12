@@ -4,14 +4,14 @@
 
 namespace duckdb {
 
-LambdaRefExpression::LambdaRefExpression(const idx_t lambda_idx, const string &column_name)
+LambdaRefExpression::LambdaRefExpression(idx_t lambda_idx, string column_name_p)
     : ParsedExpression(ExpressionType::LAMBDA_REF, ExpressionClass::LAMBDA_REF), lambda_idx(lambda_idx),
-      column_name(column_name) {
+      column_name(std::move(column_name_p)) {
 	alias = column_name;
 }
 
 bool LambdaRefExpression::IsScalar() const {
-	return false;
+	throw InternalException("lambda reference expressions are transient, IsScalar should never be called");
 }
 
 string LambdaRefExpression::GetName() const {
@@ -19,7 +19,7 @@ string LambdaRefExpression::GetName() const {
 }
 
 string LambdaRefExpression::ToString() const {
-	return KeywordHelper::WriteOptionallyQuoted(column_name);
+	throw InternalException("lambda reference expressions are transient, ToString should never be called");
 }
 
 hash_t LambdaRefExpression::Hash() const {
@@ -30,9 +30,7 @@ hash_t LambdaRefExpression::Hash() const {
 }
 
 unique_ptr<ParsedExpression> LambdaRefExpression::Copy() const {
-	auto copy = make_uniq<LambdaRefExpression>(lambda_idx, column_name);
-	copy->CopyProperties(*this);
-	return std::move(copy);
+	throw InternalException("lambda reference expressions are transient, Copy should never be called");
 }
 
 } // namespace duckdb
