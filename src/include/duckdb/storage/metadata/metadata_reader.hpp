@@ -18,6 +18,7 @@ enum class BlockReaderType { EXISTING_BLOCKS, REGISTER_BLOCKS };
 class MetadataReader : public ReadStream {
 public:
 	MetadataReader(MetadataManager &manager, MetaBlockPointer pointer,
+	               optional_ptr<vector<MetaBlockPointer>> read_pointers = nullptr,
 	               BlockReaderType type = BlockReaderType::EXISTING_BLOCKS);
 	MetadataReader(MetadataManager &manager, BlockPointer pointer);
 	~MetadataReader() override;
@@ -46,6 +47,7 @@ private:
 	MetadataHandle block;
 	MetadataPointer next_pointer;
 	bool has_next_block;
+	optional_ptr<vector<MetaBlockPointer>> read_pointers;
 	idx_t index;
 	idx_t offset;
 	idx_t next_offset;
