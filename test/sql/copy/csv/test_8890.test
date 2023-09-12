@@ -5,6 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+loop thr 1 8
+
+statement ok
+pragma threads=${thr}
+
 query IIII
 select
     field1,
@@ -31,3 +36,5 @@ limit 10;
 1190535873	1367352239003155038208	2020-12-31	2020-12-31
 1190535873	1367352239003188592640	2020-12-31	2020-12-31
 1190535873	1367352239003242856448	2020-12-31	2020-12-31
+
+endloop

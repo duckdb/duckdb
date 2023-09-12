@@ -68,17 +68,17 @@ SELECT SUM(COL1) FROM read_csv(
     parallel=${PARALLEL}
 );
 ----
-13475
+14799
 
 query IIIIIII rowsort
 SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
-1001	0	"COL1"	B	{'COL2': BAD2B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
 2058	0	"COL1"	B	{'COL2': BAD1B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part3.csv
-3001	0	"COL1"	C	{'COL2': BAD2C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
+2325	0	"COL1"	B	{'COL2': BAD2B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
 3137	0	"COL1"	B	{'COL2': BAD1B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part1.csv
 4058	0	"COL1"	C	{'COL2': BAD1C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part3.csv
+4325	0	"COL1"	C	{'COL2': BAD2C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv
 5137	0	"COL1"	C	{'COL2': BAD1C}	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part1.csv
 
 statement ok
