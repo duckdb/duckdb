@@ -15,10 +15,10 @@ namespace duckdb {
 
 class MetadataWriter : public WriteStream {
 public:
+	explicit MetadataWriter(MetadataManager &manager,
+	                        optional_ptr<vector<MetaBlockPointer>> written_pointers = nullptr);
 	MetadataWriter(const MetadataWriter &) = delete;
 	MetadataWriter &operator=(const MetadataWriter &) = delete;
-
-	explicit MetadataWriter(MetadataManager &manager);
 	~MetadataWriter() override;
 
 public:
@@ -27,6 +27,9 @@ public:
 
 	BlockPointer GetBlockPointer();
 	MetaBlockPointer GetMetaBlockPointer();
+	MetadataManager &GetManager() {
+		return manager;
+	}
 
 protected:
 	virtual MetadataHandle NextHandle();
@@ -41,6 +44,7 @@ private:
 	MetadataManager &manager;
 	MetadataHandle block;
 	MetadataPointer current_pointer;
+	optional_ptr<vector<MetaBlockPointer>> written_pointers;
 	idx_t capacity;
 	idx_t offset;
 };

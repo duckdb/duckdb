@@ -2,6 +2,8 @@
 # description: Test writing many compressible batches
 # group: [parallel]
 
+require vector_size 512
+
 load __TEST_DIR__/insert_many_compressible_batches.db
 
 require parquet
