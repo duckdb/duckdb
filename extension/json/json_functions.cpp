@@ -15,9 +15,6 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
-	if (path_val.IsNull()) {
-		throw InvalidInputException("JSON path cannot be NULL");
-	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
@@ -63,11 +60,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	if (arguments[1]->IsFoldable()) {
 		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		if (path_val.IsNull()) {
-			bound_function.return_type = LogicalTypeId::SQLNULL;
-		} else {
-			path_type = CheckPath(path_val, path, len);
-		}
+		path_type = CheckPath(path_val, path, len);
 	}
 	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
 		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
@@ -105,15 +98,11 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	vector<size_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 
-	if (paths_val.IsNull()) {
-		bound_function.return_type = LogicalTypeId::SQLNULL;
-	} else {
-		for (auto &path_val : ListValue::GetChildren(paths_val)) {
-			paths.emplace_back("");
-			lens.push_back(0);
-			if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
-				throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
-			}
+	for (auto &path_val : ListValue::GetChildren(paths_val)) {
+		paths.emplace_back("");
+		lens.push_back(0);
+		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
 		}
 	}
 
