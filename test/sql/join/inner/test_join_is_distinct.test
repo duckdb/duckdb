@@ -1,0 +1,80 @@
+# name: test/sql/join/inner/test_join_is_distinct.test
+# description: Test using two join predicates, of which one is IS DISTINCT
+# group: [inner]
+
+# issue #8328
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE tbl (col0 INTEGER, col1 INTEGER);
+
+statement ok
+INSERT INTO tbl VALUES (1, 0), (1, 1);
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 != y.col1)
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+statement ok
+INSERT INTO tbl VALUES (1, 0), (1, 1);
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	1
+0	1
+0	1
+0	1
+1	0
+1	0
+1	0
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
+ON x.col0 = y.col0 AND (x.col1 != y.col1)
+ORDER BY x.col1;
+----
+0	1
+0	1
+0	1
+0	1
+1	0
+1	0
+1	0
+1	0
+
+query IIII
+WITH abc AS (
+	SELECT * FROM (
+    	VALUES (1, 'x'), (1, 'x'), (1, '0'), (1, '0')
+    )
+)
+SELECT x.col0 AS c1, x.col1 AS c2, y.col0 AS c3, y.col1 AS c4
+FROM abc x JOIN abc y ON x.col0 = y.col0
+	AND (x.col1 IS DISTINCT FROM y.col1);
+----
+1	x	1	0
+1	x	1	0
+1	x	1	0
+1	x	1	0
+1	0	1	x
+1	0	1	x
+1	0	1	x
+1	0	1	x

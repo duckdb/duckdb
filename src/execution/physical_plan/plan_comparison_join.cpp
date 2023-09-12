@@ -271,7 +271,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// has_inequality = true;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison join");

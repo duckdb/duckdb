@@ -314,11 +314,11 @@ static void TemplatedMatch(DataChunk &columns, UnifiedVectorFormat col_data[], c
 		switch (predicates[col_no]) {
 		case ExpressionType::COMPARE_EQUAL:
 		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		case ExpressionType::COMPARE_DISTINCT_FROM:
 			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match, no_match_count,
 			                                       count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
+		case ExpressionType::COMPARE_DISTINCT_FROM:
 			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                          no_match_count, count);
 			break;

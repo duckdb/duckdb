@@ -19,15 +19,15 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager_p, const vector<JoinC
     : buffer_manager(buffer_manager_p), conditions(conditions_p), build_types(std::move(btypes)), entry_size(0),
       tuple_size(0), vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
       external(false), radix_bits(4), partition_start(0), partition_end(0) {
+
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
-		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		    condition.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
-			// all equality conditions should be at the front
-			// all other conditions at the back
-			// this assert checks that
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+
+			// ensure that all equality conditions are at the front,
+			// and that all other conditions are at the back
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
 		}
