@@ -874,7 +874,10 @@ class DataFrame:
         existing_columns = self.relation.columns
         types_count = len(types)
         assert types_count == len(existing_columns)
-        cast_expressions = [f'"{existing}"::{target_type}' for existing, target_type in zip(existing_columns, types)]
+
+        cast_expressions = [
+            f'{existing}::{target_type} as {existing}' for existing, target_type in zip(existing_columns, types)
+        ]
         cast_expressions = ', '.join(cast_expressions)
         new_rel = self.relation.project(cast_expressions)
         return DataFrame(new_rel, self.session)
@@ -883,9 +886,10 @@ class DataFrame:
         existing_columns = self.relation.columns
         column_count = len(cols)
         assert column_count == len(existing_columns)
-        projections = [f'"{existing}" as "{new}"' for existing, new in zip(existing_columns, cols)]
-        projections = ', '.join(projections)
-        new_rel = self.relation.project(projections)
+
+        existing_columns = [ColumnExpression(x) for x in existing_columns]
+        projections = [existing.alias(new) for existing, new in zip(existing_columns, cols)]
+        new_rel = self.relation.project(*projections)
         return DataFrame(new_rel, self.session)
 
     def collect(self) -> List[Row]:

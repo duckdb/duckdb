@@ -97,6 +97,17 @@ class SparkSession:
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
+    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
+        df = self._create_dataframe(data)
+
+        # Cast to types
+        if types:
+            df = df._cast_types(*types)
+        # Alias to names
+        if names:
+            df = df.toDF(*names)
+        return df
+
     def createDataFrame(
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
@@ -110,6 +121,7 @@ class SparkSession:
             raise NotImplementedError
         types = None
         names = None
+
         if schema:
             if isinstance(schema, StructType):
                 types, names = schema.extract_types_and_names()
@@ -124,15 +136,17 @@ class SparkSession:
             has_pandas = False
         # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
         # Then check if 'data' is None or []
+        if has_pandas and isinstance(data, pandas.DataFrame):
+            return self._createDataFrameFromPandas(data, types, names)
+
         # Finally check if a schema was provided
         is_empty = False
-        if (not has_pandas or (has_pandas and not isinstance(data, pandas.DataFrame))) and not data and names:
-            # Create NULLs for every type in our the dataframe
+        if not data and names:
+            # Create NULLs for every type in our dataframe
             is_empty = True
             data = [tuple(None for _ in names)]
 
         if schema and isinstance(schema, StructType):
-            # TODO: this can also transform pandas dataframes currently
             # Transform the data into Values to combine the data+schema
             data = _combine_data_and_schema(data, schema)
 
