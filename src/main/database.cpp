@@ -234,7 +234,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		if (!config.file_system) {
 			throw InternalException("No file system!?");
 		}
-		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type, nullptr);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {

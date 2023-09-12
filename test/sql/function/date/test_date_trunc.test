@@ -101,10 +101,14 @@ SELECT date_trunc(s, d) FROM dates;
 # Issue #4388: Verify DATE results for all timestamp types
 foreach temporal TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
 
+foreach datepart day doy dow isodow julian
+
 query I
-select date_trunc('day', '2022-08-15 07:52:55'::${temporal});
+select date_trunc('${datepart}', '2022-08-15 07:52:55'::${temporal});
 ----
 2022-08-15
+
+endloop
 
 query I
 select date_trunc('hour', '2022-08-15 07:52:55'::${temporal});
