@@ -2,6 +2,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 
@@ -29,15 +30,19 @@ static bool UseVersion(TransactionData transaction, transaction_t id) {
 	return TransactionVersionOperator::UseInsertedVersion(transaction.start_time, transaction.transaction_id, id);
 }
 
-unique_ptr<ChunkInfo> ChunkInfo::Deserialize(Deserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ChunkInfoType>(100, "type");
+void ChunkInfo::Write(WriteStream &writer) const {
+	writer.Write<ChunkInfoType>(type);
+}
+
+unique_ptr<ChunkInfo> ChunkInfo::Read(ReadStream &reader) {
+	auto type = reader.Read<ChunkInfoType>();
 	switch (type) {
 	case ChunkInfoType::EMPTY_INFO:
 		return nullptr;
 	case ChunkInfoType::CONSTANT_INFO:
-		return ChunkConstantInfo::Deserialize(deserializer);
+		return ChunkConstantInfo::Read(reader);
 	case ChunkInfoType::VECTOR_INFO:
-		return ChunkVectorInfo::Deserialize(deserializer);
+		return ChunkVectorInfo::Read(reader);
 	default:
 		throw SerializationException("Could not deserialize Chunk Info Type: unrecognized type");
 	}
@@ -79,22 +84,23 @@ void ChunkConstantInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t
 	insert_id = commit_id;
 }
 
+bool ChunkConstantInfo::HasDeletes() const {
+	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
+	return is_deleted;
+}
+
 idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_id < TRANSACTION_ID_START ? max_count : 0;
 }
 
-void ChunkConstantInfo::Serialize(Serializer &serializer) const {
-	bool is_deleted = insert_id >= TRANSACTION_ID_START || delete_id < TRANSACTION_ID_START;
-	if (!is_deleted) {
-		serializer.WriteProperty(100, "type", ChunkInfoType::EMPTY_INFO);
-		return;
-	}
-	serializer.WriteProperty(100, "type", type);
-	serializer.WriteProperty(200, "start", start);
+void ChunkConstantInfo::Write(WriteStream &writer) const {
+	D_ASSERT(HasDeletes());
+	ChunkInfo::Write(writer);
+	writer.Write<idx_t>(start);
 }
 
-unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &deserializer) {
-	auto start = deserializer.ReadProperty<idx_t>(200, "start");
+unique_ptr<ChunkInfo> ChunkConstantInfo::Read(ReadStream &reader) {
+	auto start = reader.Read<idx_t>();
 	auto info = make_uniq<ChunkConstantInfo>(start);
 	info->insert_id = 0;
 	info->delete_id = 0;
@@ -218,6 +224,10 @@ void ChunkVectorInfo::CommitAppend(transaction_t commit_id, idx_t start, idx_t e
 	}
 }
 
+bool ChunkVectorInfo::HasDeletes() const {
+	return any_deleted;
+}
+
 idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
 	if (!any_deleted) {
 		return 0;
@@ -231,45 +241,41 @@ idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
 	return delete_count;
 }
 
-void ChunkVectorInfo::Serialize(Serializer &serializer) const {
+void ChunkVectorInfo::Write(WriteStream &writer) const {
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	transaction_t start_time = TRANSACTION_ID_START - 1;
 	transaction_t transaction_id = DConstants::INVALID_INDEX;
 	idx_t count = GetSelVector(start_time, transaction_id, sel, STANDARD_VECTOR_SIZE);
 	if (count == STANDARD_VECTOR_SIZE) {
 		// nothing is deleted: skip writing anything
-		serializer.WriteProperty(100, "type", ChunkInfoType::EMPTY_INFO);
+		writer.Write<ChunkInfoType>(ChunkInfoType::EMPTY_INFO);
 		return;
 	}
 	if (count == 0) {
 		// everything is deleted: write a constant vector
-		serializer.WriteProperty(100, "type", ChunkInfoType::CONSTANT_INFO);
-		serializer.WriteProperty(200, "start", start);
+		writer.Write<ChunkInfoType>(ChunkInfoType::CONSTANT_INFO);
+		writer.Write<idx_t>(start);
 		return;
 	}
 	// write a boolean vector
-	serializer.WriteProperty(100, "type", ChunkInfoType::VECTOR_INFO);
-	serializer.WriteProperty(200, "start", start);
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		deleted_tuples[i] = true;
-	}
+	ChunkInfo::Write(writer);
+	writer.Write<idx_t>(start);
+	ValidityMask mask(STANDARD_VECTOR_SIZE);
+	mask.Initialize(STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < count; i++) {
-		deleted_tuples[sel.get_index(i)] = false;
+		mask.SetInvalid(sel.get_index(i));
 	}
-	serializer.WriteProperty(201, "deleted_tuples", data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
+	mask.Write(writer, STANDARD_VECTOR_SIZE);
 }
 
-unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &deserializer) {
-	auto start = deserializer.ReadProperty<idx_t>(200, "start");
-
+unique_ptr<ChunkInfo> ChunkVectorInfo::Read(ReadStream &reader) {
+	auto start = reader.Read<idx_t>();
 	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
-	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	deserializer.ReadProperty(201, "deleted_tuples", data_ptr_cast(deleted_tuples),
-	                          sizeof(bool) * STANDARD_VECTOR_SIZE);
+	ValidityMask mask;
+	mask.Read(reader, STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		if (deleted_tuples[i]) {
+		if (mask.RowIsValid(i)) {
 			result->deleted[i] = 0;
 		}
 	}

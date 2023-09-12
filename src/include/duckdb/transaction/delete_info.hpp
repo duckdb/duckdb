@@ -11,12 +11,13 @@
 #include "duckdb/common/constants.hpp"
 
 namespace duckdb {
-class ChunkVectorInfo;
 class DataTable;
+class RowVersionManager;
 
 struct DeleteInfo {
 	DataTable *table;
-	ChunkVectorInfo *vinfo;
+	RowVersionManager *version_info;
+	idx_t vector_idx;
 	idx_t count;
 	idx_t base_row;
 	row_t rows[1];

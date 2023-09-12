@@ -332,6 +332,9 @@ public:
 	DUCKDB_API string ToString(idx_t count) const;
 
 	DUCKDB_API static bool IsAligned(idx_t count);
+
+	void Write(WriteStream &writer, idx_t count);
+	void Read(ReadStream &reader, idx_t count);
 };
 
 } // namespace duckdb
