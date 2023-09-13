@@ -87,7 +87,7 @@ void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx)
 	state.last_offset = 0;
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining) {
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, bool has_updates) {
 	state.previous_states.clear();
 	if (state.version != version) {
 		InitializeScanWithOffset(state, state.row_index);
@@ -113,7 +113,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
 		if (scan_count > 0) {
-			state.current->Scan(state, scan_count, result, result_offset, scan_count == initial_remaining);
+			state.current->Scan(state, scan_count, result, result_offset,
+			                    !has_updates && scan_count == initial_remaining);
 
 			state.row_index += scan_count;
 			remaining -= scan_count;
@@ -138,10 +139,14 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 idx_t ColumnData::ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE);
-
-	lock_guard<mutex> update_guard(update_lock);
-	if (updates) {
+	bool has_updates;
+	{
+		lock_guard<mutex> update_guard(update_lock);
+		has_updates = updates ? true : false;
+	}
+	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE, has_updates);
+	if (has_updates) {
+		lock_guard<mutex> update_guard(update_lock);
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 			throw TransactionException("Cannot create index with outstanding updates");
 		}
@@ -179,7 +184,7 @@ idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vect
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
-	auto scan_count = ScanVector(child_state, result, count);
+	auto scan_count = ScanVector(child_state, result, count, updates ? true : false);
 	if (updates) {
 		result.Flatten(scan_count);
 		updates->FetchCommittedRange(offset_in_row_group, count, result);
@@ -192,7 +197,7 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 	}
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!updates);
-	return ScanVector(state, result, count);
+	return ScanVector(state, result, count, false);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -339,7 +344,7 @@ idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = data.GetSegment(state.row_index);
 	state.internal_index = state.current->start;
-	return ScanVector(state, result, STANDARD_VECTOR_SIZE);
+	return ScanVector(state, result, STANDARD_VECTOR_SIZE, false);
 }
 
 void ColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,

@@ -240,8 +240,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		// no free list
 		return;
 	}
-
-	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
+	MetadataReader reader(GetMetadataManager(), free_pointer, nullptr, BlockReaderType::REGISTER_BLOCKS);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
