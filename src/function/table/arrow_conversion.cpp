@@ -837,7 +837,15 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
+		if (scan_state.arrow_owned_data.find(idx) == scan_state.arrow_owned_data.end()) {
+			auto arrow_data = make_shared<ArrowArrayWrapper>();
+			arrow_data->arrow_array = scan_state.chunk->arrow_array;
+			scan_state.chunk->arrow_array.release = nullptr;
+			scan_state.arrow_owned_data[idx] = arrow_data;
+		}
+
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.arrow_owned_data[idx]));
+
 		D_ASSERT(arrow_convert_data.find(col_idx) != arrow_convert_data.end());
 		auto &arrow_type = *arrow_convert_data.at(col_idx);
 		if (array.dictionary) {
