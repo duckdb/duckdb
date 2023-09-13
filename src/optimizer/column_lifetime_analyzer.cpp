@@ -72,11 +72,15 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		for (auto &cond : comp_join.conditions) {
 			if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 				has_equality = true;
+				break;
 			}
 		}
 		if (!has_equality) {
 			break;
 		}
+		// visit current operator expressions so they are added to the referenced_columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+
 		// now, for each of the columns of the RHS, check which columns need to be projected
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
