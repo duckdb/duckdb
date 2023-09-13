@@ -102,6 +102,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
+
 	// general case
 	// first visit the children of this operator
 	VisitOperatorChildren(op);
@@ -109,6 +110,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 	// finally update the current set of bindings to the current set of column bindings
 	bindings = op.GetColumnBindings();
+
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,

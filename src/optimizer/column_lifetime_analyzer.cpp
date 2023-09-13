@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -46,6 +47,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection
@@ -61,6 +63,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
+
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
 		    comp_join.join_type == JoinType::ANTI) {
@@ -77,7 +80,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (!has_equality) {
 			break;
 		}
-		// now, for each of the columns of the RHS, check which columns need to be projected
+
+		// First visit the comparison expressions in the operator.
+		// Those expressions should be in the column_references binding set as well
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
+
+		// For each of the columns of the RHS, check which columns need to be projected
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
@@ -86,6 +94,12 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
+		auto new_new_col_bindings = op.children[1]->GetColumnBindings();
+		auto new_op_bindings = op.GetColumnBindings();
+		std::cout << "in lifetime analyzer, bindings are now " << std::endl;
+		for (auto &bind : new_op_bindings) {
+			std::cout << bind.table_index << ", " << bind.column_index << std::endl;
+		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:

@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -37,10 +38,18 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				// filter is always false or null, none of the join conditions matter
 				switch (join.join_type) {
 				case JoinType::SEMI:
-				case JoinType::INNER:
+				case JoinType::INNER: {
 					// semi or inner join on false; entire node can be pruned
+					auto bindings = join.GetColumnBindings();
+					for (auto &bin : bindings) {
+						if (bin.table_index == 31 && bin.column_index == 1) {
+							auto break_here = 1;
+						}
+					}
+					std::cout << "replacing a join with empty" << std::endl;
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
+				}
 				case JoinType::ANTI: {
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
@@ -198,23 +207,23 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 
 	// Check if the join can be completely eliminated
 	// left join with empty left table
-	if (join_type == JoinType::LEFT && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return std::move(node_stats);
-	}
-	// right join with empty right table
-	if (join_type == JoinType::RIGHT && join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return std::move(node_stats);
-	}
-	// join with some table that is empty
-	if (join_type == JoinType::INNER) {
-		if (join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT ||
-		    join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-			ReplaceWithEmptyResult(*node_ptr);
-			return std::move(node_stats);
-		}
-	}
+//	if (join_type == JoinType::LEFT && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+//		ReplaceWithEmptyResult(*node_ptr);
+//		return std::move(node_stats);
+//	}
+//	// right join with empty right table
+//	if (join_type == JoinType::RIGHT && join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+//		ReplaceWithEmptyResult(*node_ptr);
+//		return std::move(node_stats);
+//	}
+//	// join with some table that is empty
+//	if (join_type == JoinType::INNER) {
+//		if (join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT ||
+//		    join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+//			ReplaceWithEmptyResult(*node_ptr);
+//			return std::move(node_stats);
+//		}
+//	}
 
 	vector<ColumnBinding> left_bindings, right_bindings;
 	if (adds_null_on_left) {

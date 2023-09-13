@@ -10,8 +10,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 	node_stats = PropagateStatistics(window.children[0]);
 
 	if (window.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return std::move(node_stats);
+//		ReplaceWithEmptyResult(*node_ptr);
+//		return std::move(node_stats);
 	}
 
 	// then propagate to each of the order expressions
@@ -24,6 +24,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}
+	D_ASSERT(node_ptr->get()->GetColumnBindings() == window.GetColumnBindings());
 	return std::move(node_stats);
 }
 
