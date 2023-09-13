@@ -110,7 +110,6 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 	// finally update the current set of bindings to the current set of column bindings
 	bindings = op.GetColumnBindings();
-
 }
 
 unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpression &expr,
