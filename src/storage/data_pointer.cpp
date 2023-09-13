@@ -17,4 +17,4 @@ unique_ptr<ColumnSegmentState> ColumnSegmentState::Deserialize(Deserializer &des
 	return compression_function->deserialize_state(deserializer);
 }
 
-}
+} // namespace duckdb

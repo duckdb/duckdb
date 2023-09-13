@@ -63,6 +63,20 @@ public:
 
 	void RegisterBlock(BlockManager &manager, block_id_t block_id);
 
+	string GetSegmentInfo() const override {
+		if (on_disk_blocks.empty()) {
+			return "";
+		}
+		string result = "";
+		for (auto block : on_disk_blocks) {
+			if (!result.empty()) {
+				result += ", ";
+			}
+			result += to_string(block);
+		}
+		return "Overflow String Block Ids: " + result;
+	}
+
 private:
 	mutex block_lock;
 	unordered_map<block_id_t, shared_ptr<BlockHandle>> handles;

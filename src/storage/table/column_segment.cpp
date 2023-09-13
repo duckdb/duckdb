@@ -205,6 +205,22 @@ void ColumnSegment::MarkAsPersistent(shared_ptr<BlockHandle> block_p, uint32_t o
 }
 
 //===--------------------------------------------------------------------===//
+// Drop Segment
+//===--------------------------------------------------------------------===//
+void ColumnSegment::CommitDropSegment() {
+	if (segment_type != ColumnSegmentType::PERSISTENT) {
+		// not persistent
+		return;
+	}
+	if (block_id != INVALID_BLOCK) {
+		GetBlockManager().MarkBlockAsModified(block_id);
+	}
+	if (function.get().cleanup_state) {
+		function.get().cleanup_state(*this);
+	}
+}
+
+//===--------------------------------------------------------------------===//
 // Filter Selection
 //===--------------------------------------------------------------------===//
 template <class T, class OP, bool HAS_NULL>

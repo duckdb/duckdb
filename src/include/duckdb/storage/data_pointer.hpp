@@ -21,7 +21,8 @@ class Serializer;
 class Deserializer;
 
 struct ColumnSegmentState {
-	virtual ~ColumnSegmentState() {}
+	virtual ~ColumnSegmentState() {
+	}
 
 	virtual void Serialize(Serializer &serializer) const = 0;
 	static unique_ptr<ColumnSegmentState> Deserialize(Deserializer &deserializer);

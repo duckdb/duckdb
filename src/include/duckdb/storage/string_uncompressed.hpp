@@ -56,7 +56,8 @@ public:
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
-	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id, optional_ptr<ColumnSegmentState> segment_state);
+	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+	                                                            optional_ptr<ColumnSegmentState> segment_state);
 
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -197,7 +198,6 @@ public:
 
 	static unique_ptr<ColumnSegmentState> SerializeState(ColumnSegment &segment);
 	static unique_ptr<ColumnSegmentState> DeserializeState(Deserializer &deserializer);
-	static void CleanupState(ColumnData &column_data, ColumnSegment &segment);
-
+	static void CleanupState(ColumnSegment &segment);
 };
 } // namespace duckdb

@@ -1,14 +1,14 @@
-# name: test/sql/storage/reclaim_space/reclaim_space_drop_overflow_strings.test_slow
-# description: Test that we reclaim space when dropping tables containing overflow strings
-# group: [reclaim_space]
+# name: test/sql/storage/reclaim_space/reclaim_space_drop_column_overflow_strings.test_slow
+# description: Test that we reclaim space when dropping columns containing overflow strings
+# group: [storage]
 
-load __TEST_DIR__/reclaim_space_overflow_strings.db
+load __TEST_DIR__/reclaim_space_drop_column_overflow_strings.db
 
 statement ok
 PRAGMA force_checkpoint;
 
 statement ok
-CREATE TABLE strings AS SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,150000) tbl(i);
+CREATE TABLE strings AS SELECT i, repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,150000) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -24,10 +24,13 @@ SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1])
 loop i 0 10
 
 statement ok
-DROP TABLE strings;
+ALTER TABLE strings DROP COLUMN s;
 
 statement ok
-CREATE TABLE strings AS SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,150000) tbl(i);
+ALTER TABLE strings ADD COLUMN s VARCHAR;
+
+statement ok
+UPDATE strings SET s=repeat('X', case when i%17=0 then 5000 else i%7 end);
 
 query IIIIII
 SELECT AVG(STRLEN(s)), MIN(STRLEN(S)), MAX(STRLEN(S)), SUM(STRLEN(S)), MIN(S[1]), MAX(S[1]) FROM strings

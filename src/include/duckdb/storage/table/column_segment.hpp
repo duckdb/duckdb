@@ -123,6 +123,8 @@ public:
 		return segment_state.get();
 	}
 
+	void CommitDropSegment();
+
 public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
 	              idx_t start, idx_t count, CompressionFunction &function, BaseStatistics statistics,

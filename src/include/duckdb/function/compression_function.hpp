@@ -64,6 +64,11 @@ struct CompressedSegmentState {
 	virtual ~CompressedSegmentState() {
 	}
 
+	//! Display info for PRAGMA storage_info
+	virtual string GetSegmentInfo() const {
+		return "";
+	}
+
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
@@ -141,8 +146,8 @@ typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &stat
 //===--------------------------------------------------------------------===//
 // Append (optional)
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id,
-                                                                         optional_ptr<ColumnSegmentState> segment_state);
+typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(
+    ColumnSegment &segment, block_id_t block_id, optional_ptr<ColumnSegmentState> segment_state);
 typedef unique_ptr<CompressionAppendState> (*compression_init_append_t)(ColumnSegment &segment);
 typedef idx_t (*compression_append_t)(CompressionAppendState &append_state, ColumnSegment &segment,
                                       SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
@@ -157,7 +162,7 @@ typedef unique_ptr<ColumnSegmentState> (*compression_serialize_state_t)(ColumnSe
 //! Function prototype for deserializing the segment state
 typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deserializer &deserializer);
 //! Function prototype for cleaning up the segment state when the column data is dropped
-typedef void (*compression_cleanup_state_t)(ColumnData &column_data, ColumnSegment &segment);
+typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 
 class CompressionFunction {
 public:
@@ -179,7 +184,7 @@ public:
 	      init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
 	      init_segment(init_segment), init_append(init_append), append(append), finalize_append(finalize_append),
 	      revert_append(revert_append), serialize_state(serialize_state), deserialize_state(deserialize_state),
-		  cleanup_state(cleanup_state) {
+	      cleanup_state(cleanup_state) {
 	}
 
 	//! Compression type

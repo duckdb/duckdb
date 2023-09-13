@@ -145,8 +145,10 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 // Append
 //===--------------------------------------------------------------------===//
 struct SerializedStringSegmentState : public ColumnSegmentState {
-	SerializedStringSegmentState() {}
-	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) : blocks(std::move(blocks_p)) {}
+	SerializedStringSegmentState() {
+	}
+	explicit SerializedStringSegmentState(vector<block_id_t> blocks_p) : blocks(std::move(blocks_p)) {
+	}
 
 	vector<block_id_t> blocks;
 
@@ -155,9 +157,9 @@ struct SerializedStringSegmentState : public ColumnSegmentState {
 	}
 };
 
-unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
-                                                                                block_id_t block_id,
-                                                                                optional_ptr<ColumnSegmentState> segment_state) {
+unique_ptr<CompressedSegmentState>
+UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id,
+                                             optional_ptr<ColumnSegmentState> segment_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -216,10 +218,10 @@ unique_ptr<ColumnSegmentState> UncompressedStringStorage::DeserializeState(Deser
 	return std::move(result);
 }
 
-void UncompressedStringStorage::CleanupState(ColumnData &column_data, ColumnSegment &segment) {
+void UncompressedStringStorage::CleanupState(ColumnSegment &segment) {
 	auto &state = segment.GetSegmentState()->Cast<UncompressedStringSegmentState>();
-	auto &block_manager = column_data.GetBlockManager();
-	for(auto &block_id : state.on_disk_blocks) {
+	auto &block_manager = segment.GetBlockManager();
+	for (auto &block_id : state.on_disk_blocks) {
 		block_manager.MarkBlockAsModified(block_id);
 	}
 }
@@ -237,10 +239,8 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
 	                           UncompressedStringStorage::StringInitAppend, UncompressedStringStorage::StringAppend,
-	                           UncompressedStringStorage::FinalizeAppend,
-	                           nullptr,
-	                           UncompressedStringStorage::SerializeState,
-	                           UncompressedStringStorage::DeserializeState,
+	                           UncompressedStringStorage::FinalizeAppend, nullptr,
+	                           UncompressedStringStorage::SerializeState, UncompressedStringStorage::DeserializeState,
 	                           UncompressedStringStorage::CleanupState);
 }
 
