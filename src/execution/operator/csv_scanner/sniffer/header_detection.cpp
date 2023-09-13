@@ -148,12 +148,19 @@ void CSVSniffer::DetectHeader() {
 			names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
+		if (best_header_row.size() < best_candidate->dialect_options.num_cols && options.null_padding) {
+			for (idx_t col = best_header_row.size(); col < best_candidate->dialect_options.num_cols; col++) {
+				names.push_back(GenerateColumnName(best_candidate->dialect_options.num_cols, col));
+			}
+		} else if (best_header_row.size() < best_candidate->dialect_options.num_cols) {
+			throw InternalException("Potential Header was detected with number of columns inferior to dialect "
+			                        "detection and null padding is not set, this should not happen!");
+		}
 
 	} else {
 		best_candidate->dialect_options.header = false;
 		for (idx_t col = 0; col < best_candidate->dialect_options.num_cols; col++) {
-			string column_name = GenerateColumnName(best_candidate->dialect_options.num_cols, col);
-			names.push_back(column_name);
+			names.push_back(GenerateColumnName(best_candidate->dialect_options.num_cols, col));
 		}
 	}
 
