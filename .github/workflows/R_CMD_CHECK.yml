@@ -1,9 +1,25 @@
 # Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
-    branches: [main]
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/swift/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Swift.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
-    branches: [main]
     types: [ opened, reopened, ready_for_review ]
     paths-ignore:
       - '**.md'
