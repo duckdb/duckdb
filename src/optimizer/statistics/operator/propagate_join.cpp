@@ -15,25 +15,6 @@
 namespace duckdb {
 
 void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, unique_ptr<LogicalOperator> *node_ptr) {
-	auto join_type = join.join_type;
-	// Check if the join can be completely eliminated
-	// left join with empty left table
-	if (join_type == JoinType::LEFT && join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return;
-	}
-
-	if (join_type == JoinType::RIGHT && join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return;
-	}
-
-	if (join_type == JoinType::INNER && (join.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT ||
-	                                     join.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT)) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return;
-	}
-
 	for (idx_t i = 0; i < join.conditions.size(); i++) {
 		auto &condition = join.conditions[i];
 		const auto stats_left = PropagateExpression(condition.left);

@@ -9,12 +9,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCros
 	auto left_stats = PropagateStatistics(cp.children[0]);
 	auto right_stats = PropagateStatistics(cp.children[1]);
 
-	if (cp.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT ||
-	    cp.children[1]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
-		ReplaceWithEmptyResult(*node_ptr);
-		return nullptr;
-	}
-
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}
