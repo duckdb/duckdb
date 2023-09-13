@@ -1,0 +1,21 @@
+diff --git a/src/aws_extension.cpp b/src/aws_extension.cpp
+index e1467a2..6f78fca 100644
+--- a/src/aws_extension.cpp
++++ b/src/aws_extension.cpp
+@@ -3,6 +3,7 @@
+ #include "aws_extension.hpp"
+ #include "duckdb.hpp"
+ #include "duckdb/common/exception.hpp"
++#include "duckdb/catalog/catalog.hpp"
+ #include "duckdb/main/extension_util.hpp"
+ #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
+ #include <aws/core/Aws.h>
+@@ -104,7 +105,7 @@ static void LoadAWSCredentialsFun(ClientContext &context, TableFunctionInput &da
+ 		return;
+ 	}
+ 
+-	if (!context.db->ExtensionIsLoaded("httpfs")) {
++	if (!Catalog::TryAutoLoad(context, "httpfs")) {
+ 		throw MissingExtensionException("httpfs extension is required for load_aws_credentials");
+ 	}
+ 

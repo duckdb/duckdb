@@ -5,7 +5,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
-
+#include "duckdb/storage/storage_info.hpp"
 #include <cstring>
 
 namespace duckdb {

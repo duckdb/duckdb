@@ -2,6 +2,8 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
+require vector_size 512
+
 load __TEST_DIR__/insert_odd_sized_batches.db
 
 require parquet

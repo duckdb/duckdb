@@ -1,7 +1,7 @@
 #include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -101,35 +101,26 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 	}
 }
 
-void TableStatistics::Serialize(Serializer &serializer) {
-	for (auto &stats : column_stats) {
-		stats->Serialize(serializer);
-	}
-}
-
-void TableStatistics::Deserialize(Deserializer &source, ColumnList &columns) {
-	for (auto &col : columns.Physical()) {
-		auto stats = ColumnStatistics::Deserialize(source, col.GetType());
-		column_stats.push_back(std::move(stats));
-	}
-}
-
-void TableStatistics::FormatSerialize(FormatSerializer &serializer) {
+void TableStatistics::Serialize(Serializer &serializer) const {
 	auto column_count = column_stats.size();
 	serializer.WriteList(100, "column_stats", column_count,
-	                     [&](FormatSerializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
+	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
 }
 
-void TableStatistics::FormatDeserialize(FormatDeserializer &deserializer, ColumnList &columns) {
+void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
 	auto physical_columns = columns.Physical();
+
 	auto iter = physical_columns.begin();
-	deserializer.ReadList(100, "column_stats", [&](FormatDeserializer::List &list, idx_t i) {
-		auto &col = *iter.operator++();
+	deserializer.ReadList(100, "column_stats", [&](Deserializer::List &list, idx_t i) {
+		auto &col = *iter;
+		iter.operator++();
+
 		auto type = col.GetType();
 		deserializer.Set<LogicalType &>(type);
-		auto stats = ColumnStatistics::FormatDeserialize(deserializer);
+
+		column_stats.push_back(list.ReadElement<shared_ptr<ColumnStatistics>>());
+
 		deserializer.Unset<LogicalType>();
-		column_stats.push_back(std::move(stats));
 	});
 }
 

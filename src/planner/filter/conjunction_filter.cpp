@@ -1,5 +1,4 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -47,16 +46,6 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	return true;
 }
 
-void ConjunctionOrFilter::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializableList(child_filters);
-}
-
-unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(FieldReader &source) {
-	auto res = make_uniq<ConjunctionOrFilter>();
-	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
-	return std::move(res);
-}
-
 ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
@@ -100,16 +89,6 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 		}
 	}
 	return true;
-}
-
-void ConjunctionAndFilter::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializableList(child_filters);
-}
-
-unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(FieldReader &source) {
-	auto res = make_uniq<ConjunctionAndFilter>();
-	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
-	return std::move(res);
 }
 
 } // namespace duckdb

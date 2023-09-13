@@ -101,7 +101,7 @@ extern const std::map<int, const char*> _Encoding_VALUES_TO_NAMES;
 std::ostream& operator<<(std::ostream& out, const Encoding::type& val);
 
 struct CompressionCodec {
-  enum type {
+  enum type : uint8_t {
     UNCOMPRESSED = 0,
     SNAPPY = 1,
     GZIP = 2,

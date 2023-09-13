@@ -40,7 +40,7 @@ class TestResolveObjectColumns(object):
         data = [5, 0, 3]
         df_in = create_generic_dataframe(data, pandas)
         # These are float64 because pandas would force these to be float64 even if we set them to int8, int16, int32, int64 respectively
-        df_expected_res = pandas.DataFrame({'0': pandas.Series(data=data, dtype='int8')})
+        df_expected_res = pandas.DataFrame({'0': pandas.Series(data=data, dtype='int32')})
         df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         print(df_out)
         pandas.testing.assert_frame_equal(df_expected_res, df_out)

@@ -208,7 +208,7 @@ void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<col
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
-	idx_t parallel_scan_vector_count = RowGroup::ROW_GROUP_VECTOR_COUNT;
+	idx_t parallel_scan_vector_count = Storage::ROW_GROUP_VECTOR_COUNT;
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
@@ -429,13 +429,13 @@ void DataTable::VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk,
 	data_table.info->indexes.VerifyForeignKey(*dst_keys_ptr, dst_chunk, regular_conflicts);
 	regular_conflicts.Finalize();
 	auto &regular_matches = regular_conflicts.Conflicts();
-	// check whether or not the chunk can be inserted or deleted into the referenced table' transaction local storage
-	auto &local_storage = LocalStorage::Get(context, db);
 
+	// check if we can insert the chunk into the reference table's local storage
+	auto &local_storage = LocalStorage::Get(context, db);
 	bool error = IsForeignKeyConstraintError(is_append, count, regular_matches);
 	bool transaction_error = false;
-
 	bool transaction_check = local_storage.Find(data_table);
+
 	if (transaction_check) {
 		auto &transact_index = local_storage.GetIndexes(data_table);
 		transact_index.VerifyForeignKey(*dst_keys_ptr, dst_chunk, transaction_conflicts);
@@ -1282,7 +1282,7 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 //===--------------------------------------------------------------------===//
 // Checkpoint
 //===--------------------------------------------------------------------===//
-void DataTable::Checkpoint(TableDataWriter &writer) {
+void DataTable::Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	TableStatistics global_stats;
@@ -1295,7 +1295,7 @@ void DataTable::Checkpoint(TableDataWriter &writer) {
 	//   row-group pointers
 	//   table pointer
 	//   index data
-	writer.FinalizeTable(std::move(global_stats), info.get());
+	writer.FinalizeTable(std::move(global_stats), info.get(), metadata_serializer);
 }
 
 void DataTable::CommitDropColumn(idx_t index) {
