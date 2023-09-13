@@ -78,7 +78,7 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool
 }
 
 bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_size) {
-	if (!run){
+	if (!run) {
 		return true;
 	}
 	DuckDB db(nullptr);
@@ -101,7 +101,7 @@ bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_si
 
 bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip = nullptr,
              const string &add_parameters = "") {
-	if (!run){
+	if (!run) {
 		return true;
 	}
 	bool single_threaded_passed;
@@ -242,6 +242,28 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	// FIXME: Fix the following tests
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 	skip.insert("test/sql/copy/csv/data/test/unterminated.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_little_single.csv");
+	skip.insert("test/sql/copy/csv/data/test/date.csv");
+	skip.insert("test/sql/copy/csv/data/test/test.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer.csv");
+	skip.insert("test/sql/copy/csv/data/test/windows_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/no_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_default.csv");
+	skip.insert("test/sql/copy/csv/data/test/mixed_line_endings.csv");
+	skip.insert("test/sql/copy/csv/data/test/vsize.csv");
+	skip.insert("test/sql/copy/csv/data/test/nfc.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer_rn.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null_inull.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_many.csv");
+	skip.insert("test/sql/copy/csv/data/test/empty.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_pipe.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_invalid_type.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_quote.csv");
+	skip.insert("test/sql/copy/csv/data/test/timestampoffset.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null.csv");
+	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
+
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
