@@ -184,9 +184,7 @@ Napi::Array EncodeDataChunk(Napi::Env env, duckdb::DataChunk &chunk, bool with_t
 				break;
 			}
 			default:
-				Napi::TypeError::New(env, "Unsupported UDF argument type " + vec->GetType().ToString())
-				    .ThrowAsJavaScriptException();
-				break;
+				throw Napi::TypeError::New(env, "Unsupported UDF argument type " + vec->GetType().ToString());
 			}
 		}
 		col_descs.Set(col_idx, col_desc);
