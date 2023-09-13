@@ -28,5 +28,5 @@ class TestCursorDescription(object):
 
 
 class TestCursorRowcount(object):
-    def test_fetchall_date(self, duckdb_cursor):
+    def test_rowcount(self, duckdb_cursor):
         assert duckdb_cursor.rowcount == -1
