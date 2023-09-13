@@ -75,7 +75,7 @@ jobs:
     # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-latest
-    needs: xcode-debug
+#    needs: xcode-debug
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
       ENABLE_EXTENSION_AUTOLOADING: 1
