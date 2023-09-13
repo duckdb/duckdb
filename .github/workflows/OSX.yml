@@ -117,14 +117,14 @@ jobs:
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
 
-      - name: Unit Test
-        shell: bash
-        run: make allunit
-
       - name: Tools Tests
         shell: bash
         run: |
           python tools/shell/shell-test.py build/release/duckdb
+
+      - name: Unit Test
+        shell: bash
+        run: make allunit
 
       - name: Examples
         shell: bash
