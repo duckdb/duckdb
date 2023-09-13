@@ -36,7 +36,7 @@ private:
 		EncryptionTransport(TProtocol &prot_p, const string &key)
 		    : prot(prot_p), trans(*prot.getTransport()), aes(key),
 		      allocator(Allocator::DefaultAllocator(), ENCRYPTION_BLOCK_SIZE), finalized(false) {
-			allocator.Allocate(ENCRYPTION_BLOCK_SIZE);
+			Initialize();
 		}
 
 		bool isOpen() const override {
@@ -73,11 +73,7 @@ private:
 			const uint32_t total_length = NONCE_BYTES + ciphertext_length + TAG_BYTES;
 			trans.write(reinterpret_cast<const uint8_t *>(&total_length), LENGTH_BYTES);
 
-			// Generate and write nonce TODO actual nonce
-			data_t nonce[NONCE_BYTES];
-			for (idx_t i = 0; i < NONCE_BYTES; i++) {
-				nonce[i] = i;
-			}
+			// Write nonce TODO actual nonce
 			trans.write(nonce, NONCE_BYTES);
 
 			// Encrypt and write data
@@ -100,12 +96,27 @@ private:
 		}
 
 	private:
+		void Initialize() {
+			// Initialize allocator so we have at least 1 block
+			allocator.Allocate(0);
+
+			// Generate nonce and initialize AES TODO actual nonce
+			for (idx_t i = 0; i < NONCE_BYTES; i++) {
+				nonce[i] = i;
+			}
+			aes.InitializeEncryption(nonce, NONCE_BYTES);
+		}
+
+	private:
 		//! Protocol and corresponding transport that we're wrapping
 		TProtocol &prot;
 		TTransport &trans;
 
 		//! AES context
 		AESGCMState aes;
+
+		//! Nonce created by Initialize()
+		data_t nonce[NONCE_BYTES];
 
 		//! Arena Allocator to fully materialize in memory before encrypting
 		ArenaAllocator allocator;
