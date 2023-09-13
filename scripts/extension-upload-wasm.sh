@@ -35,7 +35,7 @@ do
         # compress extension binary
         brotli < $f.append > "$f.brotli"
         # upload compressed extension binary to S3
-        aws s3 cp $f.brotli s3://test-duckdb-wasm-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+        aws s3 cp $f.brotli s3://duckdb-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
 done
 
 rm private.pem
