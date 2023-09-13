@@ -335,7 +335,8 @@ static void RLEScanConstant(RLEScanState<T> &scan_state, rle_count_t *index_poin
 }
 
 template <class T, bool ENTIRE_VECTOR>
-void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                            idx_t result_offset) {
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -343,7 +344,8 @@ void RLEScanPartialInternal(ColumnSegment &segment, ColumnScanState &state, idx_
 	auto index_pointer = reinterpret_cast<rle_count_t *>(data + scan_state.rle_count_offset);
 
 	// If we are scanning an entire Vector and it contains only a single run
-	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], scan_count)) {
+	if (CanEmitConstantVector<ENTIRE_VECTOR>(scan_state.position_in_entry, index_pointer[scan_state.entry_pos],
+	                                         scan_count)) {
 		RLEScanConstant<T>(scan_state, index_pointer, data_pointer, scan_count, result);
 		return;
 	}
