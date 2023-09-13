@@ -23,7 +23,7 @@ ORDER BY x.col1;
 
 query II
 SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
-ON x.col0 = y.col0 AND (x.col1 != y.col1)
+ON x.col0 = y.col0 AND x.col1 != y.col1
 ORDER BY x.col1;
 ----
 0	1
@@ -48,7 +48,7 @@ ORDER BY x.col1;
 
 query II
 SELECT x.col1, y.col1 FROM tbl x JOIN tbl y
-ON x.col0 = y.col0 AND (x.col1 != y.col1)
+ON x.col0 = y.col0 AND x.col1 != y.col1
 ORDER BY x.col1;
 ----
 0	1
@@ -78,3 +78,49 @@ FROM abc x JOIN abc y ON x.col0 = y.col0
 1	0	1	x
 1	0	1	x
 1	0	1	x
+
+# tests with NULLs
+
+statement ok
+CREATE TABLE tbl_null (col0 INTEGER, col1 INTEGER);
+
+statement ok
+INSERT INTO tbl_null VALUES (1, 0), (1, 1), (1, NULL), (NULL, 1), (0, NULL), (NULL, 0), (NULL, NULL);
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND (x.col1 IS DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	1
+0	NULL
+1	NULL
+1	0
+NULL	1
+NULL	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND x.col1 != y.col1
+ORDER BY x.col1;
+----
+0	1
+1	0
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND (x.col1 IS NOT DISTINCT FROM y.col1)
+ORDER BY x.col1;
+----
+0	0
+1	1
+NULL	NULL
+NULL	NULL
+
+query II
+SELECT x.col1, y.col1 FROM tbl_null x JOIN tbl_null y
+ON x.col0 = y.col0 AND x.col1 = y.col1
+ORDER BY x.col1;
+----
+0	0
+1	1
