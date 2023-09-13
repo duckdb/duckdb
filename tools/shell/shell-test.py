@@ -417,7 +417,7 @@ create table p_duck(d INT, f DATE);
 .schema %p%''',
         out='''CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);
 CREATE TABLE p_duck(d INTEGER, f DATE);''',
-    )
+)
 
 
 test('''.clone''', err='Error: unknown command or invalid arguments:  "clone". Enter ".help" for help')
