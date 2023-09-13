@@ -19,6 +19,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}
+	D_ASSERT(node_ptr->get()->GetColumnBindings() == window.GetColumnBindings());
 	return std::move(node_stats);
 }
 

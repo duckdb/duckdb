@@ -46,6 +46,7 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
+
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection
@@ -61,6 +62,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
+
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
 		    comp_join.join_type == JoinType::ANTI) {
@@ -81,8 +83,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		// visit current operator expressions so they are added to the referenced_columns
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 
-		// now, for each of the columns of the RHS, check which columns need to be projected
 		column_binding_set_t unused_bindings;
+		auto old_op_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
@@ -122,6 +124,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
+		// first visit operator expressions to populate referenced columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);

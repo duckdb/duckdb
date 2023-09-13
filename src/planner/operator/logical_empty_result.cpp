@@ -1,5 +1,4 @@
 #include "duckdb/planner/operator/logical_empty_result.hpp"
-
 namespace duckdb {
 
 LogicalEmptyResult::LogicalEmptyResult(unique_ptr<LogicalOperator> op)

@@ -170,11 +170,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 		common_aggregate.VisitOperator(*plan);
 	});
 
-	// creates projection maps so unused columns are projected out early
-	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
-		ColumnLifetimeAnalyzer column_lifetime(true);
-		column_lifetime.VisitOperator(*plan);
-	});
+//	// creates projection maps so unused columns are projected out early
+//	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+//		ColumnLifetimeAnalyzer column_lifetime(true);
+//		column_lifetime.VisitOperator(*plan);
+//	});
 
 	// compress data based on statistics for materializing operators
 	RunOptimizer(OptimizerType::COMPRESSED_MATERIALIZATION, [&]() {
