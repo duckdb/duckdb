@@ -8,7 +8,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate to the child
 	node_stats = PropagateStatistics(window.children[0]);
-	
+
 	// then propagate to each of the order expressions
 	for (auto &window_expr : window.expressions) {
 		auto over_expr = reinterpret_cast<BoundWindowExpression *>(window_expr.get());

@@ -1,4 +1,4 @@
-# name: test/fuzzer/duckfuzz/issue_460.test
+# name: test/fuzzer/duckfuzz/json_execute_serialized_null.test
 # description: Json execute serialize cannot execute on NULL argument
 # group: [duckfuzz]
 
