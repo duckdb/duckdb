@@ -27,7 +27,7 @@ do
         # for a grand total of 2 bytes
         echo -n -e '\x80\x02' >> $f.append
         # the actual payload, 256 bytes, to be added later
-        openssl dgst -binary -sha256 $f.append > $f.hash
+        scripts/compute-extension-hash.sh $f.append > $f.hash
         # encrypt hash with extension signing private key to create signature
         openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
         # append signature to extension binary
