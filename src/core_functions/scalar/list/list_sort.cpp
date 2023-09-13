@@ -232,7 +232,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			auto &result_entry = ListVector::GetEntry(result);
 			auto result_data = ListVector::GetData(result);
 			auto list_data = ListVector::GetData(input_lists);
-			for (int i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				result_data[i].length = list_data[i].length;
 				result_data[i].offset = list_data[i].offset;
 				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
