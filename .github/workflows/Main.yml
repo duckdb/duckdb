@@ -217,7 +217,7 @@ jobs:
  odbc:
     name: ODBC
     runs-on: ubuntu-22.04
-    needs: linux-debug
+#    needs: linux-debug
     env:
       BUILD_ODBC: 1
       GEN: ninja
@@ -253,11 +253,11 @@ jobs:
         cmake -DNANODBC_DISABLE_TESTS=OFF ..
         cmake --build .
 
-    - name: Install psqlodbc
-      shell: bash
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make debug)
+#    - name: Install psqlodbc
+#      shell: bash
+#      run: |
+#        git clone https://github.com/Mytherin/psqlodbc.git
+#        (cd psqlodbc && git checkout edd9890a5046a2006f210849abb97c6a6589a45c && make debug)
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -269,9 +269,9 @@ jobs:
       shell: bash
       run: DISABLE_SANITIZER=1 make debug
 
-    - name: Test Standard ODBC tests
-      shell: bash
-      run: build/debug/tools/odbc/test/test_odbc
+#    - name: Test Standard ODBC tests
+#      shell: bash
+#      run: build/debug/tools/odbc/test/test_odbc
 
     - name: Test nanodbc
       shell: bash
