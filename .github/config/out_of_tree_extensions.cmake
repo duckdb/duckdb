@@ -56,7 +56,7 @@ duckdb_extension_load(postgres_scanner
 duckdb_extension_load(spatial
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
-        GIT_TAG a99134fdaa9472ad6c7830729a7536306b89d9cd
+        GIT_TAG 44c9e49bdf48d39c936c500b632ad3bd74825b04
         INCLUDE_DIR spatial/include
         TEST_DIR test/sql
         )
