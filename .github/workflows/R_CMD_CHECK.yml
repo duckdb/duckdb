@@ -4,6 +4,15 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [ opened, reopened, ready_for_review ]
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+      - '.github/config/uncovered_files.csv'
 
 name: R-CMD-check
 
