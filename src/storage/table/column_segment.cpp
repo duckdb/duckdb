@@ -83,22 +83,6 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	state.scan_state = function.get().init_scan(*this);
 }
 
-static bool ValidVectorType(Vector &result, idx_t offset, idx_t count) {
-	auto vector_type = result.GetVectorType();
-	if (vector_type == VectorType::FLAT_VECTOR) {
-		return true;
-	}
-	if (vector_type != VectorType::CONSTANT_VECTOR) {
-		return false;
-	}
-	// Constant Vectors can be emitted when the entire vector is filled
-	// because no further additions to the vector have to be made
-	if (count != STANDARD_VECTOR_SIZE) {
-		return false;
-	}
-	return true;
-}
-
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
                          bool entire_vector) {
 	if (entire_vector) {
@@ -107,7 +91,7 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		ScanPartial(state, scan_count, result, result_offset);
-		D_ASSERT(ValidVectorType(result));
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 }
 
