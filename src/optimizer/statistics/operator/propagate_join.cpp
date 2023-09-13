@@ -11,7 +11,6 @@
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -40,13 +39,6 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				case JoinType::SEMI:
 				case JoinType::INNER: {
 					// semi or inner join on false; entire node can be pruned
-					auto bindings = join.GetColumnBindings();
-					for (auto &bin : bindings) {
-						if (bin.table_index == 31 && bin.column_index == 1) {
-							auto break_here = 1;
-						}
-					}
-					std::cout << "replacing a join with empty" << std::endl;
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
 				}

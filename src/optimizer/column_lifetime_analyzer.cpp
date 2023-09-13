@@ -2,7 +2,6 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -87,6 +86,7 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// For each of the columns of the RHS, check which columns need to be projected
 		column_binding_set_t unused_bindings;
+		auto old_op_bindings = op.GetColumnBindings();
 		ExtractUnusedColumnBindings(op.children[1]->GetColumnBindings(), unused_bindings);
 
 		// now recurse into the filter and its children
@@ -94,12 +94,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 
 		// then generate the projection map
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), unused_bindings, comp_join.right_projection_map);
-		auto new_new_col_bindings = op.children[1]->GetColumnBindings();
-		auto new_op_bindings = op.GetColumnBindings();
-		std::cout << "in lifetime analyzer, bindings are now " << std::endl;
-		for (auto &bind : new_op_bindings) {
-			std::cout << bind.table_index << ", " << bind.column_index << std::endl;
-		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
@@ -132,6 +126,8 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
+		// first visit operator expressions to populate referenced columns
+		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		// filter, figure out which columns are not needed after the filter
 		column_binding_set_t unused_bindings;
 		ExtractUnusedColumnBindings(op.children[0]->GetColumnBindings(), unused_bindings);

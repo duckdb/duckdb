@@ -17,8 +17,6 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
 
-#include "iostream"
-
 namespace duckdb {
 
 StatisticsPropagator::StatisticsPropagator(Optimizer &optimizer_p)
