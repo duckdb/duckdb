@@ -222,16 +222,16 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	                    "Get a projection relation created from this relation, on the provided column name",
 	                    py::arg("name"));
 
-	relation_module
-	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
-	         py::arg("filter_expr"))
-	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
-	         py::arg("project_expr"));
+	relation_module.def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
+	                    py::arg("filter_expr"));
+	DefineMethod({"select", "project"}, relation_module, &DuckDBPyRelation::Project,
+	             "Project the relation object by the projection in project_expr");
 	DefineMethod({"select_types", "select_dtypes"}, relation_module, &DuckDBPyRelation::ProjectFromTypes,
 	             "Select columns from the relation, by filtering based on type(s)", py::arg("types"));
 	relation_module
 	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
+	    .def("sort", &DuckDBPyRelation::Sort, "Reorder the relation object by the provided expressions")
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
 	         py::arg("group_expr") = "")

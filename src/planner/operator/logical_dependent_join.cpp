@@ -19,8 +19,4 @@ unique_ptr<LogicalOperator> LogicalDependentJoin::Create(unique_ptr<LogicalOpera
 	                                       std::move(condition));
 }
 
-void LogicalDependentJoin::Serialize(FieldWriter &writer) const {
-	throw InternalException("LogicalDependentJoin should not exist in any plan");
-}
-
 } // namespace duckdb

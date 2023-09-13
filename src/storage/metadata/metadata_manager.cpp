@@ -1,6 +1,8 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
 
 namespace duckdb {
 
@@ -32,6 +34,12 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	MetadataPointer pointer;
 	pointer.block_index = free_block;
 	auto &block = blocks[free_block];
+	if (block.block->BlockId() < MAXIMUM_BLOCK) {
+		// this block is a disk-backed block, yet we are planning to write to it
+		// we need to convert it into a transient block before we can write to it
+		ConvertToTransient(block);
+		D_ASSERT(block.block->BlockId() >= MAXIMUM_BLOCK);
+	}
 	D_ASSERT(!block.free_blocks.empty());
 	pointer.index = block.free_blocks.back();
 	// mark the block as used
@@ -50,6 +58,23 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	handle.pointer.index = pointer.index;
 	handle.handle = buffer_manager.Pin(block.block);
 	return handle;
+}
+
+void MetadataManager::ConvertToTransient(MetadataBlock &block) {
+	// pin the old block
+	auto old_buffer = buffer_manager.Pin(block.block);
+
+	// allocate a new transient block to replace it
+	shared_ptr<BlockHandle> new_block;
+	auto new_buffer = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+
+	// copy the data to the transient block
+	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
+
+	block.block = std::move(new_block);
+
+	// unregister the old block
+	block_manager.UnregisterBlock(block.block_id, false);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {
@@ -89,11 +114,11 @@ MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32
 	return MetaBlockPointer(block_pointer, offset);
 }
 
-block_id_t MetaBlockPointer::GetBlockId() {
+block_id_t MetaBlockPointer::GetBlockId() const {
 	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));
 }
 
-uint32_t MetaBlockPointer::GetBlockIndex() {
+uint32_t MetaBlockPointer::GetBlockIndex() const {
 	return block_pointer >> 56ULL;
 }
 
@@ -170,17 +195,17 @@ void MetadataManager::Flush() {
 	}
 }
 
-void MetadataManager::Serialize(Serializer &serializer) {
-	serializer.Write<uint64_t>(blocks.size());
+void MetadataManager::Write(WriteStream &sink) {
+	sink.Write<uint64_t>(blocks.size());
 	for (auto &kv : blocks) {
-		kv.second.Serialize(serializer);
+		kv.second.Write(sink);
 	}
 }
 
-void MetadataManager::Deserialize(Deserializer &source) {
+void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
-		auto block = MetadataBlock::Deserialize(source);
+		auto block = MetadataBlock::Read(source);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
 			// block does not exist yet
@@ -192,12 +217,12 @@ void MetadataManager::Deserialize(Deserializer &source) {
 	}
 }
 
-void MetadataBlock::Serialize(Serializer &serializer) {
-	serializer.Write<block_id_t>(block_id);
-	serializer.Write<idx_t>(FreeBlocksToInteger());
+void MetadataBlock::Write(WriteStream &sink) {
+	sink.Write<block_id_t>(block_id);
+	sink.Write<idx_t>(FreeBlocksToInteger());
 }
 
-MetadataBlock MetadataBlock::Deserialize(Deserializer &source) {
+MetadataBlock MetadataBlock::Read(ReadStream &source) {
 	MetadataBlock result;
 	result.block_id = source.Read<block_id_t>();
 	auto free_list = source.Read<idx_t>();
@@ -257,6 +282,22 @@ void MetadataManager::MarkBlocksAsModified() {
 		idx_t free_list = block.FreeBlocksToInteger();
 		idx_t occupied_list = ~free_list;
 		modified_blocks[block.block_id] = occupied_list;
+	}
+}
+
+void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers) {
+	for (auto &pointer : pointers) {
+		auto block_id = pointer.GetBlockId();
+		auto block_index = pointer.GetBlockIndex();
+		auto entry = modified_blocks.find(block_id);
+		if (entry == modified_blocks.end()) {
+			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
+		}
+		auto &modified_list = entry->second;
+		// verify the block has been modified
+		D_ASSERT(modified_list && (1ULL << block_index));
+		// unset the bit
+		modified_list &= ~(1ULL << block_index);
 	}
 }
 

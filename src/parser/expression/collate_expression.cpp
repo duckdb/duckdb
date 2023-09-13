@@ -1,10 +1,9 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -35,17 +34,6 @@ unique_ptr<ParsedExpression> CollateExpression::Copy() const {
 	auto copy = make_uniq<CollateExpression>(collation, child->Copy());
 	copy->CopyProperties(*this);
 	return std::move(copy);
-}
-
-void CollateExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*child);
-	writer.WriteString(collation);
-}
-
-unique_ptr<ParsedExpression> CollateExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto child = reader.ReadRequiredSerializable<ParsedExpression>();
-	auto collation = reader.ReadRequired<string>();
-	return make_uniq_base<ParsedExpression, CollateExpression>(collation, std::move(child));
 }
 
 } // namespace duckdb

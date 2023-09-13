@@ -1,0 +1,29 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_mode.test
+# description: Test bitpacking mode
+# group: [bitpacking]
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+query I
+SELECT current_setting('force_bitpacking_mode')
+----
+auto
+
+statement error
+PRAGMA force_bitpacking_mode='xxx'
+----
+Unrecognized option
+
+
+foreach mode auto constant constant_delta delta_for for
+
+statement ok
+PRAGMA force_bitpacking_mode='${mode}'
+
+query I
+SELECT current_setting('force_bitpacking_mode')='${mode}'
+----
+true
+
+endloop

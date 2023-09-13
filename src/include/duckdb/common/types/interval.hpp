@@ -16,8 +16,8 @@ struct dtime_t;
 struct date_t;
 struct timestamp_t;
 
-class FormatSerializer;
-class FormatDeserializer;
+class Serializer;
+class Deserializer;
 
 struct interval_t {
 	int32_t months;
@@ -29,8 +29,8 @@ struct interval_t {
 	}
 
 	// Serialization
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static interval_t FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const;
+	static interval_t Deserialize(Deserializer &source);
 };
 
 //! The Interval class is a static class that holds helper functions for the Interval
