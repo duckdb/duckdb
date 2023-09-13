@@ -408,3 +408,19 @@ SELECT ts, ts::DATE FROM timeparts
 2021-05-02 05:11:49.5-07	2021-05-02
 2021-12-01 05:54:48.123456-08	2021-12-01
 NULL	NULL
+
+# Overflow
+statement error
+WITH all_types AS (
+	select * exclude(small_enum, medium_enum, large_enum) 
+	from test_all_types()
+)
+SELECT make_timestamptz(
+	CAST(century(CAST(a."interval" AS INTERVAL)) AS BIGINT), 
+	CAST(a."bigint" AS BIGINT), CAST(a."bigint" AS BIGINT), 
+	CAST(a."bigint" AS BIGINT), CAST(a."bigint" AS BIGINT), 
+	CAST(txid_current() AS BIGINT), 
+	CAST(CAST(COALESCE(a."bigint", a."bigint") AS BIGINT) AS BIGINT))
+FROM all_types a;
+----
+Overflow in subtraction

@@ -49,8 +49,6 @@ public:
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
 
-	unique_ptr<EstimatedProperties> estimated_props;
-
 public:
 	virtual vector<ColumnBinding> GetColumnBindings();
 	static vector<ColumnBinding> GenerateColumnBindings(idx_t table_idx, idx_t column_count);

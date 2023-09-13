@@ -130,7 +130,13 @@ jobs:
 
     - name: Deploy
       shell: bash
-      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
+      run: python scripts/asset-upload-gha.py tools/rpkg/duckdb_*.tar.gz
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: r-package-source
+        path: |
+          tools/rpkg/duckdb_*.tar.gz
 
   rstats-linux-debug:
     name: R Package Linux debug mode

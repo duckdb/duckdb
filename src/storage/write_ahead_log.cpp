@@ -48,9 +48,10 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 // Write Entries
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCheckpoint(block_id_t meta_block) {
+void WriteAheadLog::WriteCheckpoint(MetaBlockPointer meta_block) {
 	writer->Write<WALType>(WALType::CHECKPOINT);
-	writer->Write<block_id_t>(meta_block);
+	writer->Write<idx_t>(meta_block.block_pointer);
+	writer->Write<uint32_t>(meta_block.offset);
 }
 
 //===--------------------------------------------------------------------===//
