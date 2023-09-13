@@ -90,20 +90,20 @@ const correct_answer_map: Record<string, any[]> = {
   date_array: [
     [],
     [
-      '1970-01-01T00:00:00.000Z',
+      new Date(1970, 0, 1),
       null,
-      "0001-01-01T00:00:00.000Z",
-      "9999-12-31T00:00:00.000Z",
+      new Date("0001-01-01T00:00:00.000Z"),
+      new Date("9999-12-31T00:00:00.000Z"),
     ],
     [null],
   ],
   timestamp_array: [
     [],
     [
-      '1970-01-01T00:00:00.000Z',
+      new Date(1970, 0, 1),
       null,
-      "0001-01-01T00:00:00.000Z",
-      "9999-12-31T23:59:59.999Z",
+      new Date("0001-01-01T00:00:00.000Z"),
+      new Date("9999-12-31T23:59:59.999Z"),
     ],
     [null],
   ],
@@ -111,10 +111,10 @@ const correct_answer_map: Record<string, any[]> = {
   timestamptz_array: [
     [],
     [
-      '1970-01-01T00:00:00.000Z',
+      new Date(1970, 0, 1),
       null,
-      "0001-01-01T00:00:00.000Z",
-      "9999-12-31T23:59:59.999Z",
+      new Date("0001-01-01T00:00:00.000Z"),
+      new Date("9999-12-31T23:59:59.999Z"),
     ],
     [null],
   ],
@@ -171,11 +171,11 @@ const correct_answer_map: Record<string, any[]> = {
   ],
 
   timestamp: [
-    "1990-01-01T00:00:00.000Z",
-    "9999-12-31T23:59:59.000Z",
+    new Date("1990-01-01T00:00"),
+    new Date("9999-12-31T23:59:59.000Z"),
     null,
   ],
-  date: ["1990-01-01T00:00:00.000Z", "9999-12-31T00:00:00.000Z", null],
+  date: [new Date("1990-01-01"), new Date("9999-12-31"), null],
   timestamp_s: ["290309-12-22 (BC) 00:00:00", "294247-01-10 04:00:54", null],
 
   timestamp_ns: [
@@ -189,15 +189,11 @@ const correct_answer_map: Record<string, any[]> = {
     null,
   ],
   timestamp_tz: [
-    "1990-01-01T00:00:00.000Z",
-    "9999-12-31T23:59:59.999Z",
+    new Date("1990-01-01T00:00:00.000Z"),
+    new Date("9999-12-31T23:59:59.999Z"),
     null,
   ],
 };
-
-function stringifyDates(result: any[]) {
-  return result.map((cell: any): string => cell instanceof Date ? cell.toISOString() : cell instanceof Array ? stringifyDates(cell) : cell);
-}
 
 const suite = describe("test_all_types", () => {
   before(async function () {
@@ -225,7 +221,6 @@ const suite = describe("test_all_types", () => {
           );
 
           result = result.map((row) => row[cur_type]); // pluck values
-          result = stringifyDates(result);
 
           const correct_result = correct_answer_map[cur_type];
 
