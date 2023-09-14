@@ -1,0 +1,56 @@
+# name: test/sql/storage/buffer_manager/larger_than_memory_aggregate.test_slow
+# description: Test scanning a table and computing an aggregate over a table that exceeds buffer manager size
+# group: [buffer_manager]
+
+# load the DB from disk
+load __TEST_DIR__/larger_than_memory_aggregate.db
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+SET memory_limit='10000000b'
+
+statement ok
+SET threads=1
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21), (NULL, NULL)
+
+# insert until 16777216 rows
+loop i 0 22
+
+statement ok
+INSERT INTO test SELECT * FROM test
+
+endloop
+
+query I
+SELECT COUNT(*) FROM test
+----
+16777216
+
+query I
+SELECT SUM(a) + SUM(b) FROM test
+----
+423624704
+
+loop i 0 2
+
+restart
+
+statement ok
+SET memory_limit='10000000b'
+
+statement ok
+SET threads=1
+
+query I
+SELECT SUM(a) + SUM(b) FROM test
+----
+423624704
+
+endloop

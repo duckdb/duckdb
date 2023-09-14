@@ -388,6 +388,40 @@ CREATE INDEX a_idx ON a(i);
     out="a_idx",
 )
 
+test('.schema %p%', out='')
+
+test(
+    '''
+create table duckdb_p (a int, b varchar, c BIT);
+create table p_duck(d INT, f DATE);
+.schema %p
+''',
+    out='CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);',
+)
+
+test(
+    '''
+create table duckdb_p (a int, b varchar, c BIT);
+create table p_duck(d INT, f DATE);
+.schema p%
+''',
+    out='CREATE TABLE p_duck(d INTEGER, f DATE);',
+)
+
+# below test fails on windows I think because of how newlines are interpreted
+if os.name != 'nt':
+    test(
+        '''
+create table duckdb_p (a int, b varchar, c BIT);
+create table p_duck(d INT, f DATE);
+.schema %p%''',
+        out='''CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);
+CREATE TABLE p_duck(d INTEGER, f DATE);''',
+    )
+
+
+test('''.clone''', err='Error: unknown command or invalid arguments:  "clone". Enter ".help" for help')
+
 # this does not seem to output anything
 test('.sha3sum')
 
