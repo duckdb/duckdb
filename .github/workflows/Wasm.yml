@@ -5,6 +5,74 @@
 
 name: DuckDB-Wasm extensions
 on:
+  repository_dispatch:
+    inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb-wasm-ref:
+        required: false
+        type: string
+        default: main
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+  push:
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**'
+      - '!scripts/extension-upload-wasm.sh'
+      - '!scripts/compute-extension-hash.sh'
+      - '!.github/workflows/Wasm.yml'
+    inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb-wasm-ref:
+        required: false
+        type: string
+        default: main
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!scripts/extension-upload-wasm.sh'
+      - '!scripts/compute-extension-hash.sh'
+      - '!.github/workflows/Wasm.yml'
+    inputs:
+      # Git ref of the duckdb-wasm repo
+      duckdb-wasm-ref:
+        required: false
+        type: string
+        default: main
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       # Git ref of the duckdb-wasm repo
