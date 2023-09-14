@@ -28,7 +28,8 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 	}
 
 	// Handling output row for each input row
-	idx_t offset = 0;
+	idx_t result_size = 0;
+	vector<idx_t> lengths;
 	for (idx_t j = 0; j < count; j++) {
 
 		// Is flag for current row set
@@ -58,8 +59,16 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 				len = len < curr_size ? curr_size : len;
 			}
 		}
+		lengths.push_back(len);
+		result_size += len;
+	}
 
+	ListVector::SetListSize(result, result_size);
+	ListVector::Reserve(result, result_size);
 
+	idx_t offset = 0;
+	for (idx_t j = 0; j < count; j++) {
+		idx_t len = lengths[j];
 		for (idx_t i = 0; i < args_size; i++) {
 			UnifiedVectorFormat curr = input_lists[i];
 			idx_t sel_idx = curr.sel->get_index(j);
@@ -89,8 +98,6 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 		offset += len;
 	}
-	ListVector::SetListSize(result, offset);
-	ListVector::Reserve(result, offset);
 }
 
 static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
