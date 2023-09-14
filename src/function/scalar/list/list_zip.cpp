@@ -59,6 +59,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 			}
 		}
 
+
 		for (idx_t i = 0; i < args_size; i++) {
 			UnifiedVectorFormat curr = input_lists[i];
 			idx_t sel_idx = curr.sel->get_index(j);
@@ -89,6 +90,7 @@ static void ListZipFunction(DataChunk &args, ExpressionState &state, Vector &res
 		offset += len;
 	}
 	ListVector::SetListSize(result, offset);
+	ListVector::Reserve(result, offset);
 }
 
 static unique_ptr<FunctionData> ListZipBind(ClientContext &context, ScalarFunction &bound_function,
