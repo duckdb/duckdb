@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/array/array_cross_product.test
+# name: test/sql/function/array/array_cross_product.test
 # group: [array]
 
 # This tests the vector cross product
