@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/statistics/struct_stats.hpp
+// duckdb/storage/statistics/array_stats.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,6 +15,8 @@ namespace duckdb {
 class BaseStatistics;
 struct SelectionVector;
 class Vector;
+class Serializer;
+class Deserializer;
 
 struct ArrayStats {
 	DUCKDB_API static void Construct(BaseStatistics &stats);

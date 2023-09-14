@@ -24,22 +24,46 @@ struct ArrayValueFun {
 	static ScalarFunction GetFunction();
 };
 
+struct ArrayCrossProductFun {
+	static constexpr const char *Name = "array_cross_product";
+	static constexpr const char *Parameters = "array, array";
+	static constexpr const char *Description = "Compute the cross product of two arrays with length 3.";
+	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct ArrayCosineSimilarityFun {
 	static constexpr const char *Name = "array_cosine_similarity";
-	static constexpr const char *Parameters = "array, array";
+	static constexpr const char *Parameters = "array1,array2";
 	static constexpr const char *Description = "Compute the cosine similarity between two arrays.";
 	static constexpr const char *Example = "array_cosine_similarity([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct ArrayCrossProductFun {
-	static constexpr const char *Name = "array_cross_product";
-	static constexpr const char *Parameters = "array, array";
-	static constexpr const char *Description = "Compute the cross product of two 3d arrays.";
-	static constexpr const char *Example = "array_cross_product([1, 2, 3], [1, 2, 3])";
+struct ArrayDistanceFun {
+	static constexpr const char *Name = "array_distance";
+	static constexpr const char *Parameters = "array1,array2";
+	static constexpr const char *Description = "Compute the distance between two arrays.";
+	static constexpr const char *Example = "array_distance([1, 2, 3], [1, 2, 3])";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayInnerProductFun {
+	static constexpr const char *Name = "array_inner_product";
+	static constexpr const char *Parameters = "array1,array2";
+	static constexpr const char *Description = "Compute the inner product between two arrays.";
+	static constexpr const char *Example = "array_inner_product([1, 2, 3], [1, 2, 3])";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ArrayDotProductFun {
+	using ALIAS = ArrayInnerProductFun;
+
+	static constexpr const char *Name = "array_dot_product";
 };
 
 } // namespace duckdb
