@@ -27,7 +27,7 @@ do
         # for a grand total of 2 bytes
         echo -n -e '\x80\x02' >> $f.append
         # the actual payload, 256 bytes, to be added later
-        openssl dgst -binary -sha256 $f.append > $f.hash
+        scripts/compute-extension-hash.sh $f.append > $f.hash
         # encrypt hash with extension signing private key to create signature
         openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
         # append signature to extension binary
@@ -35,7 +35,7 @@ do
         # compress extension binary
         brotli < $f.append > "$f.brotli"
         # upload compressed extension binary to S3
-        aws s3 cp $f.brotli s3://test-duckdb-wasm-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+        aws s3 cp $f.brotli s3://duckdb-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
 done
 
 rm private.pem

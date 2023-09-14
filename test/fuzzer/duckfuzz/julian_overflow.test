@@ -1,0 +1,19 @@
+# name: test/fuzzer/duckfuzz/julian_overflow.test
+# description: Array slice underflow
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT julian(c1) 
+FROM test_vector_types(CAST(NULL AS DATE)) AS test_vector_types(c1);
+
+statement ok
+create table all_types as 
+	select * exclude(small_enum, medium_enum, large_enum) 
+	from test_all_types();
+
+statement ok
+SELECT julian(CAST(ref_0.date AS DATE)) AS c1 
+FROM main.all_types AS ref_0
