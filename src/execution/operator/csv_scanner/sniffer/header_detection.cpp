@@ -153,8 +153,7 @@ void CSVSniffer::DetectHeader() {
 				names.push_back(GenerateColumnName(best_candidate->dialect_options.num_cols, col));
 			}
 		} else if (best_header_row.size() < best_candidate->dialect_options.num_cols) {
-			throw InternalException("Potential Header was detected with number of columns inferior to dialect "
-			                        "detection and null padding is not set, this should not happen!");
+			throw InternalException("Detected header has number of columns inferior to dialect detection");
 		}
 
 	} else {
