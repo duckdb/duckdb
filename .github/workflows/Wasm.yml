@@ -153,6 +153,7 @@ jobs:
                   AWS_DEFAULT_REGION: us-east-1
                   DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
               run: |
+                  cd duckdb && make -j8 && cd ..
                   bash ./duckdb/scripts/extension-upload-wasm.sh ${{ env.DUCKDB_PLATFORM }} ${{ github.event.inputs.duckdb-ref }}
 
             - name: Upload artifact
