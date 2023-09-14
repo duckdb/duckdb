@@ -520,7 +520,7 @@ class DataFrame:
     def __repr__(self) -> str:
         return str(self.relation)
 
-    def limit(self, num: int, offset: int = 0) -> "DataFrame":
+    def limit(self, num: int) -> "DataFrame":
         """Limits the result count to the number specified.
 
         Parameters
@@ -550,7 +550,7 @@ class DataFrame:
         +---+----+
         +---+----+
         """
-        rel = self.relation.limit(num, offset)
+        rel = self.relation.limit(num)
         return DataFrame(rel, self.session)
 
     def __contains__(self, item: str):
