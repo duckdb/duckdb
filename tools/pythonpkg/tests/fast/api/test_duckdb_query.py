@@ -158,8 +158,8 @@ class TestDuckDBQuery(object):
         assert result == [([21, 22, 42],)]
 
         # If wrapped in a Value, it can convert to a struct
-        result = con.execute("select $1", [Value(('a', 21, True), {'v1': str, 'v2': int, 'v3': bool})]).fetchall()
-        assert result == [({'v1': 'a', 'v2': 21, 'v3': True},)]
+        result = con.execute("select $1", [Value(('a', 21, True), {'': str, '': int, '': bool})]).fetchall()
+        assert result == [({'': 'a', '': 21, '': True},)]
 
         # If the amount of items in the tuple and the children of the struct don't match
         # we throw an error
@@ -167,7 +167,7 @@ class TestDuckDBQuery(object):
             duckdb.InvalidInputException,
             match='Tried to create a STRUCT value from a tuple containing 3 elements, but the STRUCT consists of 2 children',
         ):
-            result = con.execute("select $1", [Value(('a', 21, True), {'v1': str, 'v2': int})]).fetchall()
+            result = con.execute("select $1", [Value(('a', 21, True), {'': str, '': int})]).fetchall()
 
         # If we try to create anything other than a STRUCT or a LIST out of the tuple, we throw an error
         with pytest.raises(duckdb.InvalidInputException, match="Can't convert tuple to a Value of type VARCHAR"):
