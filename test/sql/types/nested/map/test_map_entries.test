@@ -15,7 +15,7 @@ select map_entries(MAP())
 query I
 SELECT map_entries(map_from_entries([('a', 5)]));
 ----
-[{'k': a, 'v': 5}]
+[{'key': a, 'value': 5}]
 
 # Multiple elements
 query I
@@ -23,13 +23,13 @@ SELECT map_entries(map_from_entries([
 	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
 ]));
 ----
-[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
 
 # Value NULL
 query I
 SELECT map_entries(map([5], [NULL]))
 ----
-[{'k': 5, 'v': NULL}]
+[{'key': 5, 'value': NULL}]
 
 # Mixed NULLs
 query I
@@ -42,7 +42,7 @@ SELECT map_entries(map_from_entries(
 	]
 ));
 ----
-[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
 
 # Empty
 query I
@@ -54,7 +54,7 @@ select map_entries(MAP())
 query I
 SELECT map_entries(map_from_entries([('a', 5)]));
 ----
-[{'k': a, 'v': 5}]
+[{'key': a, 'value': 5}]
 
 # Multiple elements
 query I
@@ -62,13 +62,13 @@ SELECT map_entries(map_from_entries([
 	('a', 5), ('b', 6), ('x', 21), ('abc', 0)
 ]));
 ----
-[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]
 
 # Value NULL
 query I
 SELECT map_entries(map([5], [NULL]))
 ----
-[{'k': 5, 'v': NULL}]
+[{'key': 5, 'value': NULL}]
 
 # Mixed NULLs
 query I
@@ -81,4 +81,4 @@ SELECT map_entries(map_from_entries(
 	]
 ));
 ----
-[{'k': a, 'v': 5}, {'k': b, 'v': 6}, {'k': x, 'v': 21}, {'k': abc, 'v': 0}]
+[{'key': a, 'value': 5}, {'key': b, 'value': 6}, {'key': x, 'value': 21}, {'key': abc, 'value': 0}]

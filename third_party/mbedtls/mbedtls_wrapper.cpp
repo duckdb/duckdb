@@ -38,7 +38,7 @@ void MbedTlsWrapper::ComputeSha256Hash(const char* in, size_t in_len, char* out)
 
 string MbedTlsWrapper::ComputeSha256Hash(const string& file_content) {
 	string hash;
-	hash.resize(MbedTlsWrapper::SHA256_HASH_BYTES);
+	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 	ComputeSha256Hash(file_content.data(), file_content.size(), (char*)hash.data());
 	return hash;
 }
@@ -81,4 +81,56 @@ void MbedTlsWrapper::Hmac256(const char* key, size_t key_len, const char* messag
 		throw runtime_error("HMAC256 Error");
 	}
 	mbedtls_md_free(&hmac_ctx);
+}
+
+void MbedTlsWrapper::ToBase16(char *in, char *out, size_t len) {
+	static char const HEX_CODES[] = "0123456789abcdef";
+	size_t i, j;
+
+	for (j = i = 0; i < len; i++) {
+		int a = in[i];
+		out[j++] = HEX_CODES[(a >> 4) & 0xf];
+		out[j++] = HEX_CODES[a & 0xf];
+	}
+}
+
+MbedTlsWrapper::SHA256State::SHA256State() : sha_context(new mbedtls_sha256_context()) {
+	mbedtls_sha256_init((mbedtls_sha256_context*)sha_context);
+
+	if (mbedtls_sha256_starts((mbedtls_sha256_context*)sha_context, false)) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+MbedTlsWrapper::SHA256State::~SHA256State() {
+	mbedtls_sha256_free((mbedtls_sha256_context*)sha_context);
+	delete (mbedtls_sha256_context*)sha_context;
+}
+
+void MbedTlsWrapper::SHA256State::AddString(const std::string & str) {
+	if (mbedtls_sha256_update((mbedtls_sha256_context*)sha_context, (unsigned char*)str.data(), str.size())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+}
+
+std::string MbedTlsWrapper::SHA256State::Finalize() {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha256_finish((mbedtls_sha256_context*)sha_context, (unsigned char*)hash.data())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+
+	return hash;
+}
+
+void MbedTlsWrapper::SHA256State::FinishHex(char *out) {
+	string hash;
+	hash.resize(MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
+
+	if (mbedtls_sha256_finish((mbedtls_sha256_context *)sha_context, (unsigned char *)hash.data())) {
+		throw std::runtime_error("SHA256 Error");
+	}
+
+	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA256_HASH_LENGTH_BYTES);
 }

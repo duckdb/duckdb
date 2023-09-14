@@ -3,6 +3,12 @@
 
 namespace duckdb {
 
+ChunkScanState::ChunkScanState() {
+}
+
+ChunkScanState::~ChunkScanState() {
+}
+
 idx_t ChunkScanState::CurrentOffset() const {
 	return offset;
 }

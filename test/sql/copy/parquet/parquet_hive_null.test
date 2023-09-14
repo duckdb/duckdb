@@ -1,0 +1,31 @@
+# name: test/sql/copy/parquet/parquet_hive_null.test
+# description: Test NULL partitioning values
+# group: [parquet]
+
+require parquet
+
+statement ok
+create table test as select i%5 as a, i%2 as b from range(0,10) tbl(i);
+
+statement ok
+copy test to '__TEST_DIR__/null-parquet' (FORMAT 'parquet', PARTITION_BY (a,b));
+
+statement ok
+copy (select 'NULL' as a, 'NULL' as b) to '__TEST_DIR__/null-parquet' (PARTITION_BY (a,b), OVERWRITE_OR_IGNORE, FORMAT 'parquet');
+
+query II
+select * 
+from parquet_scan('__TEST_DIR__/null-parquet/**/*.parquet', hive_partitioning=1, hive_types={'a': INT})
+ORDER BY ALL
+----
+0	0
+0	1
+1	0
+1	1
+2	0
+2	1
+3	0
+3	1
+4	0
+4	1
+NULL	NULL

@@ -17,15 +17,12 @@
 
 namespace duckdb {
 
-class FormatSerializer;
-class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
-class FieldWriter;
 
 struct string_t;
 
@@ -283,14 +280,8 @@ struct LogicalType {
 		return !(*this == rhs);
 	}
 
-	//! Serializes a LogicalType to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-
-	//! Deserializes a blob back into an LogicalType
-	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
-
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
-	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
+	DUCKDB_API static LogicalType Deserialize(Deserializer &deserializer);
 
 
 	static bool TypeIsTimestamp(LogicalTypeId id) {

@@ -17,6 +17,9 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
 struct DataPointer {
 	DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
 	}
@@ -27,6 +30,9 @@ struct DataPointer {
 	CompressionType compression_type;
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
+
+	void Serialize(Serializer &serializer) const;
+	static DataPointer Deserialize(Deserializer &source);
 };
 
 struct RowGroupPointer {
@@ -34,8 +40,8 @@ struct RowGroupPointer {
 	uint64_t tuple_count;
 	//! The data pointers of the column segments stored in the row group
 	vector<MetaBlockPointer> data_pointers;
-	//! The versions information of the row group (if any)
-	shared_ptr<VersionNode> versions;
+	//! Data pointers to the delete information of the row group (if any)
+	vector<MetaBlockPointer> deletes_pointers;
 };
 
 } // namespace duckdb

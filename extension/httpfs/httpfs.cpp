@@ -489,6 +489,11 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
+idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.file_offset;
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
@@ -506,7 +511,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, H
 	} else {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared<HTTPMetadataCache>(true, false);
+			auto cache = make_shared<HTTPMetadataCache>(true, true);
 			client_context->registered_state["http_cache"] = cache;
 			return cache.get();
 		} else {

@@ -25,7 +25,6 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
 		auto &art = index.Cast<ART>();
-		;
 		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
@@ -103,7 +102,7 @@ void LocalTableStorage::WriteNewRowGroup() {
 }
 
 void LocalTableStorage::FlushBlocks() {
-	if (!merged_storage && row_groups->GetTotalRows() > RowGroup::ROW_GROUP_SIZE) {
+	if (!merged_storage && row_groups->GetTotalRows() > Storage::ROW_GROUP_SIZE) {
 		optimistic_writer.WriteLastRowGroup(*row_groups);
 	}
 	optimistic_writer.FinalFlush();
@@ -160,7 +159,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		    AppendToIndexes(transaction, *row_groups, table.info->indexes, table.GetTypes(), append_state.current_row);
 	}
 	if (error) {
-		// need to revert the append
+		// need to revert all appended row ids
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
@@ -185,6 +184,13 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		if (append_to_table) {
 			table.RevertAppendInternal(append_state.row_start, append_count);
 		}
+
+		// we need to vacuum the indexes to remove any buffers that are now empty
+		// due to reverting the appends
+		table.info->indexes.Scan([&](Index &index) {
+			index.Vacuum();
+			return false;
+		});
 		error.Throw();
 	}
 }

@@ -1,18 +1,18 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/common/exception.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
-#include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/catalog/dependency_manager.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/catalog/mapping_value.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/catalog/dependency_manager.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/catalog/mapping_value.hpp"
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -252,15 +252,17 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	PutEntry(std::move(entry_index), std::move(value));
 
 	// serialize the AlterInfo into a temporary buffer
-	BufferedSerializer serializer;
-	serializer.WriteString(alter_info.GetColumnName());
-	alter_info.Serialize(serializer);
-	BinaryData serialized_alter = serializer.GetData();
+	MemoryStream stream;
+	BinarySerializer serializer(stream);
+	serializer.Begin();
+	serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());
+	serializer.WriteProperty(101, "alter_info", &alter_info);
+	serializer.End();
 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
-		dtransaction.PushCatalogEntry(*new_entry->child, serialized_alter.data.get(), serialized_alter.size);
+		dtransaction.PushCatalogEntry(*new_entry->child, stream.GetData(), stream.GetPosition());
 	}
 
 	// Check the dependency manager to verify that there are no conflicting dependencies with this alter

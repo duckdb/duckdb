@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - '**'
-      - '!master'
+      - '!main'
       - '!feature'
     tags:
       - '**'
@@ -33,7 +33,7 @@ on:
       - '.github/config/uncovered_files.csv'
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{
-    github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha
+    github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha
     }}
   cancel-in-progress: true
 env:
@@ -47,6 +47,8 @@ jobs:
       image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
       BUILD_JSON: 1
@@ -91,6 +93,8 @@ jobs:
     env:
       GEN: ninja
       BUILD_JDBC: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
     steps:
@@ -140,14 +144,14 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1
 
           cmake --build . --config Release
       - name: Java Tests
@@ -174,6 +178,8 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       OSX_BUILD_UNIVERSAL: 1
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v3
         with:
@@ -185,7 +191,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' }}
+          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Build
         shell: bash
         run: make
@@ -250,7 +256,7 @@ jobs:
       - name: Combine JARs
         shell: bash
         run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           export XML='
             <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -307,7 +313,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
       - name: Build
         shell: bash

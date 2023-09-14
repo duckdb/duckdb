@@ -167,11 +167,11 @@ statement ok
 INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
 
 query II
-select count(*), current_alias from person group by current_alias
+select count(*), current_alias from person group by current_alias order by all
 ----
+1	happy
 1	ok
 2	sad
-1	happy
 
 query II
 select name, current_alias from person order by current_alias

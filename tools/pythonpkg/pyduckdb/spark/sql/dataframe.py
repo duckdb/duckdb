@@ -21,7 +21,7 @@ class DataFrame:
         self.relation.show()
 
     def createOrReplaceTempView(self, name: str) -> None:
-        raise NotImplementedError
+        self.relation.create_view(name, True)
 
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError
