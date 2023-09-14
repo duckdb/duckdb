@@ -40,8 +40,8 @@ struct RowGroupPointer {
 	uint64_t tuple_count;
 	//! The data pointers of the column segments stored in the row group
 	vector<MetaBlockPointer> data_pointers;
-	//! The versions information of the row group (if any)
-	shared_ptr<VersionNode> versions;
+	//! Data pointers to the delete information of the row group (if any)
+	vector<MetaBlockPointer> deletes_pointers;
 };
 
 } // namespace duckdb

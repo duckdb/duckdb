@@ -148,9 +148,6 @@ void FixedSizeBuffer::Pin() {
 
 uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 
-	// this function calls Get() on the buffer, so the buffer must already be in memory
-	D_ASSERT(InMemory());
-
 	// get the bitmask data
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
 	ValidityMask mask(bitmask_ptr);
@@ -200,7 +197,7 @@ uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
 
 uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 
-	// this function calls Get() on the buffer, so the buffer must already be in memory
+	// this function calls Get() on the buffer
 	D_ASSERT(InMemory());
 
 	// finds the maximum zero bit in a bitmask, and adds one to it,
@@ -259,17 +256,13 @@ uint32_t FixedSizeBuffer::GetMaxOffset(const idx_t available_segments) {
 	}
 
 	// there are no allocations in this buffer
-	// FIXME: put this line back in and then fix the missing vacuum bug in
-	// FIXME: test_index_large_aborted_append.test with force_restart
-	// FIXME: test if we still have non-dirty buffer to serialize after fixing this
-	//	throw InternalException("tried to serialize empty buffer");
-	return 0;
+	throw InternalException("tried to serialize empty buffer");
 }
 
 void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size,
                                               const idx_t offset, const idx_t bitmask_offset) {
 
-	// this function calls Get() on the buffer, so the buffer must already be in memory
+	// this function calls Get() on the buffer
 	D_ASSERT(InMemory());
 
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());

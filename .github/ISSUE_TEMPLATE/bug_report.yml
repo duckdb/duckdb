@@ -9,6 +9,7 @@ body:
         DuckDB has several repositories for different components, please make sure you're raising your issue in the correct one:
          * [Our docs/website](https://github.com/duckdb/duckdb-web/issues/new)
          * [DuckDB-Wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
+         * [DuckDB-R](https://github.com/duckdb/duckdb-r/issues/new)
          * [SQLite scanner](https://github.com/duckdblabs/sqlite_scanner/issues/new)
          * [Postgres scanner](https://github.com/duckdblabs/postgres_scanner/issues/new)
 
