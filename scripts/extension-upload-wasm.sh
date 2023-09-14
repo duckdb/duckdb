@@ -10,7 +10,13 @@ set -e
 # Ensure we do nothing on failed globs
 shopt -s nullglob
 
-echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+if [ -z "$DUCKDB_EXTENSION_SIGNING_PK" ]; then
+	# Use test signature
+	cp extension/test_signature.pem private.pem
+else
+	# Use provided signature
+	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
+fi
 
 FILES="loadable_extensions/*.duckdb_extension.wasm"
 for f in $FILES
@@ -41,7 +47,10 @@ do
         # compress extension binary
         brotli < $f.append > "$f.brotli"
         # upload compressed extension binary to S3
-        aws s3 cp $f.brotli s3://duckdb-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+        if [ ! -z "$DUCKDB_EXTENSION_SIGNING_PK" ]; then
+                aws s3 cp $f.brotli s3://duckdb-extensions/duckdb-wasm/$2/$1/$ext.duckdb_extension.wasm --acl public-read --content-encoding br --content-type="application/wasm"
+                echo "Extension $ext uploaded"
+        fi
 done
 
 rm private.pem
