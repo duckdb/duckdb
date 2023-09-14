@@ -44,10 +44,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		if (child->alias.empty() && bound_function.name == "struct_pack") {
 			throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 		}
-		if (child->alias.empty() && bound_function.name == "row") {
-			child->alias = "v" + std::to_string(i + 1);
-		}
-		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
+		if (!child->alias.empty() && name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
 		name_collision_set.insert(child->alias);

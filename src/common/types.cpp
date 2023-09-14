@@ -911,6 +911,15 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
+bool StructType::IsUnnamed(const LogicalType &type) {
+	auto child_types = GetChildTypes(type);
+	for (idx_t i = 0; i < child_types.size(); i++) {
+		if (child_types[i].first.empty()) {
+			return true;
+		}
+	}
+	return false;
+}
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
 	auto info = make_shared<StructTypeInfo>(std::move(children));
