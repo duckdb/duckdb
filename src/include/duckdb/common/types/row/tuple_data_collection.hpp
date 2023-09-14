@@ -21,7 +21,7 @@ struct RowOperationsState;
 
 typedef void (*tuple_data_scatter_function_t)(const Vector &source, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
-                                              const TupleDataLayout &layout, Vector &row_locations,
+                                              const TupleDataLayout &layout, const Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx,
                                               const UnifiedVectorFormat &list_format,
                                               const vector<TupleDataScatterFunction> &child_functions);
