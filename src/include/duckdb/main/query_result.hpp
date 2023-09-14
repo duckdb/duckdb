@@ -40,7 +40,7 @@ public:
 	vector<string> names;
 
 public:
-	DUCKDB_API void ThrowError(const string &prepended_message = "") const;
+	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;
 	DUCKDB_API void SetError(PreservedError error);
 	DUCKDB_API bool HasError() const;
 	DUCKDB_API const ExceptionType &GetErrorType() const;
