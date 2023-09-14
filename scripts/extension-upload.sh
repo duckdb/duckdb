@@ -24,6 +24,8 @@ else
 	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 fi
 
+DUCKDB=$script_dir/../build/release/duckdb
+
 FILES="$BASE_DIR/*.duckdb_extension"
 for f in $FILES
 do
@@ -35,6 +37,12 @@ do
 	# append signature to extension binary
 	cat $f.sign >> $f
 	# compress extension binary
+	if [ -f "$DUCKDB" ]; then
+		$DUCKDB -c "LOAD '$f'" 2> log_signed || true
+		$DUCKDB -unsigned -c "LOAD '$f'" 2> log_unsigned || true
+		diff -q log_unsigned log_signed
+		echo "Extension $ext signature verified"
+	fi
 	gzip < $f > "$f.gz"
 	# upload compressed extension binary to S3
 	if [ ! -z "$DUCKDB_EXTENSION_SIGNING_PK" ]; then
