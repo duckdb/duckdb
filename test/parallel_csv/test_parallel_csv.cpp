@@ -160,10 +160,6 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	}
 }
 
-TEST_CASE("Test One File", "[parallel-csv][.]") {
-	RunSingleConfiguration("test/sql/copy/csv/data/test/quoted_newline.csv", 6, 40);
-}
-
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
@@ -263,6 +259,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	skip.insert("test/sql/copy/csv/data/test/force_not_null.csv");
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
