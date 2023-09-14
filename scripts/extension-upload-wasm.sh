@@ -2,7 +2,13 @@
 
 # Usage: ./extension-upload-wasm.sh <architecture> <commithash or version_tag>
 
+# The directory that the script lives in, thanks @Tishj
+script_dir="$(dirname "$(readlink -f "$0")")"
+
 set -e
+
+# Ensure we do nothing on failed globs
+shopt -s nullglob
 
 echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 
@@ -27,7 +33,7 @@ do
         # for a grand total of 2 bytes
         echo -n -e '\x80\x02' >> $f.append
         # the actual payload, 256 bytes, to be added later
-        scripts/compute-extension-hash.sh $f.append > $f.hash
+        $script_dir/compute-extension-hash.sh $f.append > $f.hash
         # encrypt hash with extension signing private key to create signature
         openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
         # append signature to extension binary
