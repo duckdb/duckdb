@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/struct_column_data.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
-#include "duckdb/transaction/transaction.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
@@ -240,11 +241,13 @@ public:
 		return stats.ToUnique();
 	}
 
-	void WriteDataPointers(RowGroupWriter &writer) override {
-		validity_state->WriteDataPointers(writer);
-		for (auto &state : child_states) {
-			state->WriteDataPointers(writer);
-		}
+	void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer) override {
+		serializer.WriteObject(101, "validity",
+		                       [&](Serializer &serializer) { validity_state->WriteDataPointers(writer, serializer); });
+		serializer.WriteList(102, "sub_columns", child_states.size(), [&](Serializer::List &list, idx_t i) {
+			auto &state = child_states[i];
+			list.WriteObject([&](Serializer &serializer) { state->WriteDataPointers(writer, serializer); });
+		});
 	}
 };
 
@@ -265,11 +268,14 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return std::move(checkpoint_state);
 }
 
-void StructColumnData::DeserializeColumn(Deserializer &source) {
-	validity.DeserializeColumn(source);
-	for (auto &sub_column : sub_columns) {
-		sub_column->DeserializeColumn(source);
-	}
+void StructColumnData::DeserializeColumn(Deserializer &deserializer) {
+	deserializer.ReadObject(101, "validity",
+	                        [&](Deserializer &deserializer) { validity.DeserializeColumn(deserializer); });
+
+	deserializer.ReadList(102, "sub_columns", [&](Deserializer::List &list, idx_t i) {
+		list.ReadObject([&](Deserializer &item) { sub_columns[i]->DeserializeColumn(item); });
+	});
+
 	this->count = validity.count;
 }
 

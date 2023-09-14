@@ -12,7 +12,7 @@
 #include "parquet_types.h"
 
 namespace duckdb {
-class BufferedSerializer;
+class MemoryStream;
 class ParquetWriter;
 class ColumnWriterPageState;
 class BasicColumnWriterState;
@@ -113,7 +113,7 @@ protected:
 	                        uint16_t define_value, uint16_t null_value);
 	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat);
 
-	void CompressPage(BufferedSerializer &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
+	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
 	                  unique_ptr<data_t[]> &compressed_buf);
 };
 

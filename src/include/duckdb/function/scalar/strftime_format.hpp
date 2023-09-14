@@ -142,23 +142,23 @@ public:
 public:
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
 
-	DUCKDB_API bool Parse(string_t str, ParseResult &result);
+	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
 
-	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message);
-	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+	DUCKDB_API bool TryParseDate(string_t str, date_t &result, string &error_message) const;
+	DUCKDB_API bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message) const;
 
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static StrpTimeFormat FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static StrpTimeFormat Deserialize(Deserializer &deserializer);
 
 protected:
 	static string FormatStrpTimeError(const string &input, idx_t position);
 	DUCKDB_API void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
-	                           idx_t collection_count);
+	                           idx_t collection_count) const;
 
 private:
 	explicit StrpTimeFormat(const string &format_string);
