@@ -389,6 +389,19 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 }
 
 static vector<std::string> public_keys = {
+#ifdef TEST_SIGNING_EXTENSIONS
+R"(
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3nrK/tNd+dgVbU8xylbv
+MYK3gkdw0seHDw4N6AiJeWlEUTEA4Qrw9RsVkvTC5VmLucK1JPT5rPoCIDncc8HP
+PucNeOqai2jPD8df/tlJS6ruqlJXbL8bCYDdjBHDKD9TrkDs+CmOlGbMIsBZDXl0
+VpiyTUdmePYOEMCoQvwvHRrdhlKnnHtyKlbM+P+HII+yzvxRgcH0CzOxuKEyKFqC
+dWkMuWXTIedoKlQkNXmO/BAyJoySDNMI1QpAGZcbnOIARoKliygREAqFlZ5dG67i
+va2Xofp2hJ5p/5nqxkfghvB/3jJ9mvulS596u4fZ2r577zgUI2bVogD8T61ch5CZ
+NwIDAQAB
+-----END PUBLIC KEY-----
+)",
+#endif
     R"(
 -----BEGIN PUBLIC KEY-----
 MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6aZuHUa1cLR9YDDYaEfi
