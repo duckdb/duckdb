@@ -18,6 +18,8 @@ else
 	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 fi
 
+DUCKDB=$script_dir/../build/release/duckdb
+
 FILES="loadable_extensions/*.duckdb_extension.wasm"
 for f in $FILES
 do
@@ -44,6 +46,12 @@ do
         openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
         # append signature to extension binary
         cat $f.sign >> $f.append
+        if [ -f "$DUCKDB" ]; then
+                $DUCKDB -c "LOAD '$f.append'" 2> log_signed || true
+                $DUCKDB -unsigned -c "LOAD '$f.append'" 2> log_unsigned || true
+                diff -q log_unsigned log_signed
+                echo "Extension $ext signature verified"
+        fi
         # compress extension binary
         brotli < $f.append > "$f.brotli"
         # upload compressed extension binary to S3
