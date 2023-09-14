@@ -104,7 +104,9 @@ class TestArrowNested(object):
         # Unique Constants
         compare_results("SELECT a from (SELECT list_value(1) as a FROM range(10) tbl(i)) as t")
         # Nested Lists
-        compare_results("SELECT LIST(le order by le) FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t")
+        compare_results(
+            "SELECT LIST(le order by le) FROM (SELECT LIST(i order by i) le from range(100) tbl(i) group by i%10) as t"
+        )
 
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
