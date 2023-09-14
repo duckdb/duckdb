@@ -300,7 +300,7 @@ public:
 	                       const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files_path_p,
 	                       bool force_parallelism_p, vector<column_t> column_ids_p)
 	    : buffer_manager(std::move(buffer_manager_p)), system_threads(system_threads_p),
-	      buffer_size(options.buffer_size), force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
+	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
@@ -316,16 +316,6 @@ public:
 		first_file_size = file_size;
 		on_disk_file = file_handle_ptr->OnDiskFile();
 		bytes_read = 0;
-		if (buffer_size < file_size || file_size == 0) {
-			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
-		} else {
-			bytes_per_local_state = file_size / MaxThreads();
-		}
-		if (bytes_per_local_state == 0) {
-			// In practice, I think this won't happen, it only happens because we are mocking up test scenarios
-			// this boy needs to be at least one.
-			bytes_per_local_state = 1;
-		}
 		running_threads = MaxThreads();
 
 		// Initialize all the book-keeping variables
@@ -368,8 +358,6 @@ public:
 
 	void UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx);
 
-	void IncrementThread();
-
 	void DecrementThread();
 
 	bool Finished();
@@ -402,16 +390,12 @@ private:
 	mutex main_mutex;
 	//! Byte set from for last thread
 	idx_t next_byte = 0;
-	//! How many bytes we should execute per local state
-	idx_t bytes_per_local_state;
 	//! Size of first file
 	idx_t first_file_size = 0;
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
-	//! Size of the buffers
-	idx_t buffer_size;
 	//! Current batch index
 	idx_t batch_index = 0;
 	idx_t local_batch_index = 0;
@@ -452,11 +436,6 @@ idx_t ParallelCSVGlobalState::MaxThreads() const {
 	}
 
 	return system_threads;
-}
-
-void ParallelCSVGlobalState::IncrementThread() {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	running_threads++;
 }
 
 void ParallelCSVGlobalState::DecrementThread() {
@@ -572,6 +551,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	}
 	// set up the current buffer
 	line_info.current_batches[file_index - 1].insert(local_batch_index);
+	idx_t bytes_per_local_state = current_buffer->actual_size / MaxThreads() + 1;
 	auto result = make_uniq<CSVBufferRead>(
 	    buffer_manager->GetBuffer(cur_buffer_idx), buffer_manager->GetBuffer(cur_buffer_idx + 1), next_byte,
 	    next_byte + bytes_per_local_state, batch_index++, local_batch_index++, &line_info);
@@ -1135,6 +1115,9 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 	if (StringUtil::EndsWith(lower_name, ".gz")) {
 		lower_name = lower_name.substr(0, lower_name.size() - 3);
 	} else if (StringUtil::EndsWith(lower_name, ".zst")) {
+		if (!Catalog::TryAutoLoad(context, "parquet")) {
+			throw MissingExtensionException("parquet extension is required for reading zst compressed file");
+		}
 		lower_name = lower_name.substr(0, lower_name.size() - 4);
 	}
 	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::Contains(lower_name, ".csv?") &&

@@ -67,6 +67,9 @@ struct ArrowScanLocalState : public LocalTableFunctionState {
 
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	shared_ptr<ArrowArrayWrapper> chunk;
+	// This vector hold the Arrow Vectors owned by DuckDB to allow for zero-copy
+	// Note that only DuckDB can release these vectors
+	unordered_map<idx_t, shared_ptr<ArrowArrayWrapper>> arrow_owned_data;
 	idx_t chunk_offset = 0;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
