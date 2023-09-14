@@ -489,6 +489,11 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
+idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.file_offset;
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
