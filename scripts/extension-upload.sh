@@ -18,7 +18,7 @@ shopt -s nullglob
 
 if [ -z "$DUCKDB_EXTENSION_SIGNING_PK" ]; then
 	# Use test signature
-	cp extension/test_signature.pem private.pem
+	cp $script_dir/../extension/test_signature.pem private.pem
 else
 	# Use provided signature
 	echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
