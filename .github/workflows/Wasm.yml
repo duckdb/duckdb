@@ -171,6 +171,7 @@ jobs:
 
   trigger_github_pages_build:
     name: Trigger follow-up work
+    if: ${{ github.event.inputs.release_s3 }}
     runs-on: ubuntu-latest
     needs: build_and_publish
     steps:
