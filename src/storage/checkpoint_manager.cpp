@@ -363,63 +363,64 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, Serializer &
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
 
-	// Deserialize the index metadata
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
-	auto &index_info = info->Cast<CreateIndexInfo>();
+	// deserialize the index create info
+	auto create_info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(100, "index");
+	auto &info = create_info->Cast<CreateIndexInfo>();
 
-	// Create the index in the catalog
-	auto &schema_catalog = catalog.GetSchema(context, info->schema);
-	auto &table_catalog =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, index_info.table).Cast<DuckTableEntry>();
-	auto &index_catalog = schema_catalog.CreateIndex(context, index_info, table_catalog)->Cast<DuckIndexEntry>();
-	index_catalog.info = table_catalog.GetStorage().info;
+	// create the index in the catalog
+	auto &schema = catalog.GetSchema(context, create_info->schema);
+	auto &table =
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
 
-	// We deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block pointer
-	auto index_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
+	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
 
-	// obtain the expressions of the ART from the index metadata
-	vector<unique_ptr<Expression>> unbound_expressions;
-	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	for (auto &p_exp : index_info.parsed_expressions) {
-		parsed_expressions.push_back(p_exp->Copy());
+	index.info = table.GetStorage().info;
+	// insert the parsed expressions into the stored index so that we correctly (de)serialize it during consecutive
+	// checkpoints
+	for (auto &parsed_expr : info.parsed_expressions) {
+		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
-	// bind the parsed expressions
-	// add the table to the bind context
+	// we deserialize the index lazily, i.e., we do not need to load any node information
+	// except the root block pointer
+	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
+
+	// obtain the parsed expressions of the ART from the index metadata
+	vector<unique_ptr<ParsedExpression>> parsed_expressions;
+	for (auto &parsed_expr : info.parsed_expressions) {
+		parsed_expressions.push_back(parsed_expr->Copy());
+	}
+	D_ASSERT(!parsed_expressions.empty());
+
+	// add the table to the bind context to bind the parsed expressions
 	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> column_types;
 	vector<string> column_names;
-	for (auto &col : table_catalog.GetColumns().Logical()) {
+	for (auto &col : table.GetColumns().Logical()) {
 		column_types.push_back(col.Type());
 		column_names.push_back(col.Name());
 	}
+
+	// create a binder to bind the parsed expressions
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, index_info.table, column_names, column_types, column_ids, &table_catalog);
+	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
 	IndexBinder idx_binder(*binder, context);
+
+	// bind the parsed expressions to create unbound expressions
+	vector<unique_ptr<Expression>> unbound_expressions;
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
 		unbound_expressions.push_back(idx_binder.Bind(expr));
 	}
 
-	if (parsed_expressions.empty()) {
-		// this is a PK/FK index: we create the necessary bound column ref expressions
-		unbound_expressions.reserve(index_info.column_ids.size());
-		for (idx_t key_nr = 0; key_nr < index_info.column_ids.size(); key_nr++) {
-			auto &col = table_catalog.GetColumn(LogicalIndex(index_info.column_ids[key_nr]));
-			unbound_expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
-		}
-	}
-
 	// create the index and add it to the storage
-	switch (index_info.index_type) {
+	switch (info.index_type) {
 	case IndexType::ART: {
-		auto &storage = table_catalog.GetStorage();
-		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          index_info.constraint_type, storage.db, nullptr, index_block_pointer);
+		auto &storage = table.GetStorage();
+		auto art = make_uniq<ART>(info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                          info.constraint_type, storage.db, nullptr, root_block_pointer);
 
-		index_catalog.index = art.get();
+		index.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 	} break;
 	default:
