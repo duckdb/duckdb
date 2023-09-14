@@ -46,7 +46,6 @@ void ColumnLifetimeAnalyzer::StandardVisitOperator(LogicalOperator &op) {
 }
 
 void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
-
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		// FIXME: groups that are not referenced can be removed from projection
@@ -62,7 +61,6 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		if (everything_referenced) {
 			break;
 		}
-
 		auto &comp_join = op.Cast<LogicalComparisonJoin>();
 		if (comp_join.join_type == JoinType::MARK || comp_join.join_type == JoinType::SEMI ||
 		    comp_join.join_type == JoinType::ANTI) {

@@ -8,7 +8,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalCros
 	// first propagate statistics in the child node
 	auto left_stats = PropagateStatistics(cp.children[0]);
 	auto right_stats = PropagateStatistics(cp.children[1]);
-
 	if (!left_stats || !right_stats) {
 		return nullptr;
 	}

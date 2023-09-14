@@ -37,11 +37,10 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				// filter is always false or null, none of the join conditions matter
 				switch (join.join_type) {
 				case JoinType::SEMI:
-				case JoinType::INNER: {
+				case JoinType::INNER:
 					// semi or inner join on false; entire node can be pruned
 					ReplaceWithEmptyResult(*node_ptr);
 					return;
-				}
 				case JoinType::ANTI: {
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
