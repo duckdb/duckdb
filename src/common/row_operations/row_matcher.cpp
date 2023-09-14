@@ -13,7 +13,7 @@ struct RowMatchOperator {
 	static constexpr bool COMPARE_NULL = false;
 
 	template <class T>
-	static bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+	static bool Operation(const T &left, const T &right, bool, bool) {
 		return OP::template Operation<T>(left, right);
 	}
 };
@@ -39,10 +39,9 @@ struct RowMatchOperator<NotDistinctFrom> {
 };
 
 template <bool NO_MATCH_SEL, class T, class OP>
-static idx_t TemplatedMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
-                            const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                            const idx_t col_idx, const vector<MatchFunction> &child_functions,
-                            SelectionVector *no_match_sel, idx_t &no_match_count) {
+static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
+                            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                            const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
 	using MATCH_OP = RowMatchOperator<OP>;
 
 	// LHS
@@ -161,8 +160,8 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 }
 
 template <typename OP>
-static idx_t SelectComparison(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
-                              SelectionVector *true_sel, SelectionVector *false_sel) {
+static idx_t SelectComparison(Vector &, Vector &, const SelectionVector &, idx_t, SelectionVector *,
+                              SelectionVector *) {
 	throw NotImplementedException("Unsupported list comparison operand for RowMatcher::GetMatchFunction");
 }
 
@@ -203,10 +202,9 @@ idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const Select
 }
 
 template <bool NO_MATCH_SEL, class OP>
-static idx_t ListMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
-                       const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                       const idx_t col_idx, const vector<MatchFunction> &child_functions, SelectionVector *no_match_sel,
-                       idx_t &no_match_count) {
+static idx_t ListMatch(Vector &lhs_vector, const TupleDataVectorFormat &, SelectionVector &sel, const idx_t count,
+                       const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
+                       const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
 	const auto &type = rhs_layout.GetTypes()[col_idx];
 
 	// Gather a dense Vector containing the column values being matched
@@ -371,6 +369,8 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 	for (const auto &child_type : StructType::GetChildTypes(type)) {
 		result.child_functions.push_back(GetMatchFunction<NO_MATCH_SEL>(child_type.second, child_predicate));
 	}
+
+	return result;
 }
 
 template <bool NO_MATCH_SEL>
