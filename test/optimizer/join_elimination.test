@@ -2,14 +2,32 @@
 # description: Test whether the reduant join can be removed
 # group: [optimizer]
 
+require parquet
+
 statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+create table t(a int);
 
 statement ok
 create table t1(a int unique, b int, c int, d int, unique(b, c));
 
 statement ok
 create table t2(a int primary key, b int, c int, d int, unique(c, d));
+
+# generate the parquet for tests
+statement ok
+COPY t1 TO '__TEST_DIR__/t1.parquet';
+
+statement ok
+CREATE view tp1 AS SELECT * FROM read_parquet('__TEST_DIR__/t1.parquet');
+
+statement ok
+COPY t2 TO '__TEST_DIR__/t2.parquet';
+
+statement ok
+CREATE view tp2 AS SELECT * FROM read_parquet('__TEST_DIR__/t2.parquet');
 
 query II
 explain select t1.* from t1 left join t2 on t1.b = t2.a;
@@ -23,6 +41,11 @@ logical_opt	<!REGEX>:.*JOIN.*
 
 query II
 explain select t1.* from t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from t1 left join t2 on t1.d = t2.b and t1.b = t2.c and t1.c = t2.d;
 ----
 logical_opt	<!REGEX>:.*JOIN.*
 
@@ -55,12 +78,6 @@ explain select t2.a from t1 left join t2 on t1.b = t2.c;
 ----
 logical_opt	<REGEX>:.*JOIN.*
 
-# The keys in the inner side have not been fully covered by the unique index.
-query II
-explain select t1.* from t1 left join t2 on t1.b = t2.c and t1.d = t2.d and t1.a = t2.b;
-----
-logical_opt	<REGEX>:.*JOIN.*
-
 # There are non column reference in the join keys
 query II
 explain select t1.* from t1 left join t2 on t1.b = t2.a+1;
@@ -78,3 +95,46 @@ query II
 explain select t1.* from t1 left join t2 on t1.b > t2.a;
 ----
 logical_opt	<REGEX>:.*JOIN.*
+
+# inner table contains inner join
+query II
+explain select t.a from t left join (t1 join t2 on t1.b = t2.b) on t1.a=t.a and t2.a=t.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+# inner table contains left join
+query II
+explain select t.* from t left join (t1 left join t2 on t2.a=t1.b) on t1.a=t.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+# one side is parquet file
+query II
+explain select t1.* from t1 left join tp2 as t2 on t1.b = t2.a;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from t1 left join tp2 as t2 on t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from t1 left join tp2 as t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from tp1 as t1 left join t2 on t1.b = t2.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from tp1 as t1 left join t2 on t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+explain select t1.* from tp1 as t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
+----
+logical_opt	<!REGEX>:.*JOIN.*

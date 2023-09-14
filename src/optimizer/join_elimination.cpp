@@ -34,12 +34,13 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		idx_t inner_child_idx, outer_child_idx;
 		auto join_type = join.join_type;
-		// We only need to handle the left outer join here, because the right outer join will be covert to the left
-		// outer join.
+		// We only need to handle the left outer join here,
+		// because at this point in the plan, only left joins exist.
 		if (IsLeftOuterJoin(join_type)) {
 			inner_child_idx = 1;
 			outer_child_idx = 0;
 		} else {
+			D_ASSERT(!IsRightOuterJoin(join_type));
 			break;
 		}
 
@@ -94,10 +95,12 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			break;
 		}
 
-		// Check whether all of the inner keys have been covered by the unique constraints set.
-		column_binding_set_t unique_inner_keys_set;
+		// Check whether the inner keys are unique or not.
+		bool can_remove = false;
 		for (auto &unique_constraint_set : unique_constraints_set) {
 			bool all_covered = true;
+			D_ASSERT(!unique_constraint_set.empty());
+			// Only need to guarantee that the columns in the inner keys are the superset of one unique_constraint_set.
 			for (const auto &column_binding : unique_constraint_set) {
 				if (inner_keys_set.find(column_binding) == inner_keys_set.end()) {
 					all_covered = false;
@@ -105,13 +108,12 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 				}
 			}
 			if (all_covered) {
-				for (const auto &column_binding : unique_constraint_set) {
-					unique_inner_keys_set.insert(column_binding);
-				}
+				can_remove = true;
+				break;
 			}
 		}
 
-		if (unique_inner_keys_set.size() == inner_keys_set.size()) {
+		if (can_remove) {
 			// The outer join can be removed.
 			return Optimize(std::move(outer_child));
 		}
