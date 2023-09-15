@@ -55,7 +55,7 @@ class TestScalarUDF(object):
             (BOOLEAN, True),
             (
                 duckdb.struct_type(['BIGINT[]', 'VARCHAR[]']),
-                {'': [1, 2, 3], '': ['a', 'non-inlined string', 'duckdb']},
+                {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']},
             ),
             (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string']),
         ],

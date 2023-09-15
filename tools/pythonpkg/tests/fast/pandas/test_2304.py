@@ -22,7 +22,7 @@ class TestPandasMergeSameName(object):
             {
                 'id_1': [1, 1, 2],
                 'agedate': np.array(['2010-01-01', '2010-02-01', '2020-03-01']).astype('datetime64[D]'),
-                '': [11.1, 11.2, 21.2],
+                'v2': [11.1, 11.2, 21.2],
             }
         )
 
