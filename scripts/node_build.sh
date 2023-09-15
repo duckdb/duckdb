@@ -10,6 +10,12 @@ cd tools/nodejs
 make clean
 ./configure
 
+if [[ "$TARGET_ARCH" == "arm64" ]] ; then
+  apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf --yes
+  export CC=arm-linux-gnueabihf-gcc
+  export CXX=arm-linux-gnueabihf-g++
+fi
+
 npm install --build-from-source --target_arch="$TARGET_ARCH"
 
 ./node_modules/.bin/node-pre-gyp reveal --target_arch="$TARGET_ARCH"
