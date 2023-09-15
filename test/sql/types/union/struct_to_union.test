@@ -1,0 +1,103 @@
+# name: test/sql/types/union/struct_to_union.test
+# group: [union]
+
+statement ok
+create table union_tbl(
+	col UNION(
+		a BOOL,
+		b INTEGER,
+		c TINYINT
+	)
+)
+
+# tag can not be VARCHAR
+statement error
+insert into union_tbl VALUES
+	({tag: '0', a: true, b: null, c: null})
+----
+Conversion Error: Type STRUCT(tag VARCHAR, a BOOLEAN, b NULL, c NULL)
+
+
+# field names have to match
+statement error
+insert into union_tbl VALUES
+	({tag: 0::UINT8, a: true, b: null::INTEGER, d: null::TINYINT})
+----
+Conversion Error: Type STRUCT(tag UTINYINT, a BOOLEAN, b INTEGER, d TINYINT)
+
+# field types have to match
+statement error
+insert into union_tbl VALUES
+	({tag: 0::UINT8, a: 1, b: null::INTEGER, c: null::TINYINT})
+----
+Conversion Error: Type STRUCT(tag UTINYINT, a INTEGER, b INTEGER, c TINYINT)
+
+# tag value can not exceed number of members
+statement error
+insert into union_tbl VALUES
+	({tag: 4::UINT8, a: true, b: null::INTEGER, c: null::TINYINT})
+----
+Conversion Error: One or more of the tags do not point to a valid union member
+
+statement ok
+create table struct_tbl(
+	col STRUCT(
+		tag UINT8,
+		A BOOL,
+		B INTEGER,
+		C TINYINT
+	)
+)
+
+statement ok
+INSERT INTO struct_tbl VALUES
+	(ROW(0, True, NULL, NULL)),
+	(ROW(1, NULL, 23423, NULL)),
+	(ROW(0, True, NULL, NULL))
+
+# Verify case-insensitive
+statement ok
+insert into union_tbl select * from struct_tbl;
+
+statement ok
+delete from struct_tbl;
+
+# The tags have to be in line with the result set
+# The tag field of the last inserted row is invalid, should be '0' instead
+statement ok
+INSERT INTO struct_tbl VALUES
+	(ROW(0, True, NULL, NULL)),
+	(ROW(1, NULL, 23423, NULL)),
+	(ROW(2, True, NULL, NULL))
+
+statement error
+insert into union_tbl select * from struct_tbl;
+----
+Conversion Error: One or more rows in the produced UNION have tags that don't point to the valid member
+
+# From struct literal (needs casts because at bind time we can't verify that the values are NULL)
+statement ok
+insert into union_tbl VALUES(
+	{tag: 0::UINT8, a: False, b: NULL::INTEGER, c: NULL::TINYINT}
+)
+
+statement error
+insert into union_tbl VALUES(
+	{tag: 1::UINT8, a: NULL::BOOLEAN, b: 32412, c: 123::TINYINT}
+)
+----
+Conversion Error: One or more rows in the produced UNION have validity set for more than 1 member
+
+statement ok
+delete from struct_tbl;
+
+statement ok
+insert into struct_tbl VALUES
+	(ROW(1::UINT8, NULL, 1, NULL)),
+	(ROW(1::UINT8, NULL, 2, NULL)),
+	(ROW(1::UINT8, NULL, 3, 0))
+
+statement error
+insert into union_tbl select * from struct_tbl;
+----
+Conversion Error: One or more rows in the produced UNION have validity set for more than 1 member
