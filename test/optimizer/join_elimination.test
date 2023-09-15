@@ -8,6 +8,9 @@ statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
 statement ok
+pragma enable_verification
+
+statement ok
 create table t(a int);
 
 statement ok
@@ -15,6 +18,15 @@ create table t1(a int unique, b int, c int, d int, unique(b, c));
 
 statement ok
 create table t2(a int primary key, b int, c int, d int, unique(c, d));
+
+statement ok
+insert into t (select range as a from range(1000));
+
+statement ok
+insert into t1 (select range as a, a*2, a*3, a*4 from range(1000));
+
+statement ok
+insert into t2 (select range+100 as a, a*2+100, a*3+1000, a*4+1000 from range(1000));
 
 # generate the parquet for tests
 statement ok
@@ -138,3 +150,40 @@ query II
 explain select t1.* from tp1 as t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
 ----
 logical_opt	<!REGEX>:.*JOIN.*
+
+# check the output of the join
+statement ok
+select t1.* from t1 left join t2 on t1.b = t2.a;
+
+statement ok
+select t1.* from t1 left join t2 on t1.b = t2.c and t1.d = t2.d;
+
+statement ok
+select t1.* from t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
+
+statement ok
+select t1.* from t1 left join t2 on t1.d = t2.b and t1.b = t2.c and t1.c = t2.d;
+
+statement ok
+select t2.* from t1 right join t2 on t2.b = t1.a;
+
+statement ok
+select t2.* from t1 right join t2 on t1.b = t2.b and t2.c = t1.c;
+
+statement ok
+select t2.* from t1 right join t2 on t1.a = t2.a and t1.b = t2.c and t2.b = t1.c;
+
+statement ok
+select t.a from t left join (t1 join t2 on t1.b = t2.b) on t1.a=t.a and t2.a=t.a;
+
+statement ok
+select t.* from t left join (t1 left join t2 on t2.a=t1.b) on t1.a=t.a;
+
+statement ok
+select t1.* from tp1 as t1 left join t2 on t1.b = t2.a;
+
+statement ok
+select t1.* from tp1 as t1 left join t2 on t1.b = t2.c and t1.d = t2.d;
+
+statement ok
+select t1.* from tp1 as t1 left join t2 on t1.a = t2.a and t1.b = t2.c and t1.d = t2.d;
