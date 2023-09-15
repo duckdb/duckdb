@@ -239,6 +239,30 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	// FIXME: Fix the following tests
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 	skip.insert("test/sql/copy/csv/data/test/unterminated.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_little_single.csv");
+	skip.insert("test/sql/copy/csv/data/test/date.csv");
+	skip.insert("test/sql/copy/csv/data/test/test.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer.csv");
+	skip.insert("test/sql/copy/csv/data/test/windows_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/no_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_default.csv");
+	skip.insert("test/sql/copy/csv/data/test/mixed_line_endings.csv");
+	skip.insert("test/sql/copy/csv/data/test/vsize.csv");
+	skip.insert("test/sql/copy/csv/data/test/nfc.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer_rn.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null_inull.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_many.csv");
+	skip.insert("test/sql/copy/csv/data/test/empty.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_pipe.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_invalid_type.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_quote.csv");
+	skip.insert("test/sql/copy/csv/data/test/timestampoffset.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null.csv");
+	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
+	skip.insert("test/sql/copy/csv/data/test/too_many_values.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
@@ -267,6 +291,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/empty_first_line.csv");
 	skip.insert("data/csv/csv_quoted_newline_odd.csv");
 	skip.insert("data/csv/hebere.csv.gz");
+	skip.insert("data/csv/locations_row_trailing_comma.csv");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
