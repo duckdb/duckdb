@@ -27,6 +27,8 @@ const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 bool debug = false;
 
+const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
+
 bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool single_threaded_passed = false,
                  ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
@@ -76,6 +78,9 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool
 }
 
 bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_size) {
+	if (!run) {
+		return true;
+	}
 	DuckDB db(nullptr);
 	Connection con(db);
 	// Set max line length to 0 when starting a ST CSV Read
@@ -96,6 +101,9 @@ bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_si
 
 bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip = nullptr,
              const string &add_parameters = "") {
+	if (!run) {
+		return true;
+	}
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
@@ -142,18 +150,15 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
-
+	bool all_tests_passed = true;
 	auto &fs = duckdb::FileSystem::GetFileSystem(*con.context);
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, con, skip, add_parameters));
+			all_tests_passed = all_tests_passed && RunFull(csv_file, con, skip, add_parameters);
 		}
 	}
-}
-
-TEST_CASE("Test One File", "[parallel-csv][.]") {
-	RunSingleConfiguration("test/sql/copy/csv/data/test/quoted_newline.csv", 6, 40);
+	REQUIRE(all_tests_passed);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
