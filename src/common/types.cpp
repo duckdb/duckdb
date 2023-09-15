@@ -398,7 +398,7 @@ string LogicalType::ToString() const {
 			if (i > 0) {
 				ret += ", ";
 			}
-			ret += "'" + KeywordHelper::WriteOptionallyQuoted(EnumType::GetString(*this, i).GetString(), '\'') + "'";
+			ret += KeywordHelper::WriteQuoted(EnumType::GetString(*this, i).GetString(), '\'');
 		}
 		ret += ")";
 		return ret;

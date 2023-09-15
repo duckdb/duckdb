@@ -94,7 +94,7 @@ common/types/string_heap.cpp	11
 common/types/time.cpp	25
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
-common/types/validity_mask.cpp	12
+common/types/validity_mask.cpp	13
 common/types/value.cpp	180
 common/types/vector.cpp	153
 common/value_operations/comparison_operations.cpp	32
@@ -249,6 +249,7 @@ function/cast/string_cast.cpp	2
 function/cast/time_casts.cpp	8
 function/cast/union_casts.cpp	4
 function/cast/uuid_casts.cpp	2
+function/cast/union/from_struct.cpp	0
 function/cast/vector_cast_helpers.cpp	9
 function/cast_rules.cpp	18
 function/function.cpp	8
@@ -769,7 +770,7 @@ storage/checkpoint/row_group_writer.cpp	6
 storage/checkpoint/table_data_writer.cpp	3
 storage/checkpoint/write_overflow_strings_to_disk.cpp	5
 storage/checkpoint_manager.cpp	9
-storage/compression/bitpacking.cpp	19
+storage/compression/bitpacking.cpp	23
 storage/compression/dictionary_compression.cpp	2
 storage/compression/fsst.cpp	11
 storage/compression/numeric_constant.cpp	11
@@ -807,6 +808,7 @@ storage/table/column_segment.cpp	62
 storage/table/list_column_data.cpp	28
 storage/table/row_group.cpp	54
 storage/table/row_group_collection.cpp	7
+storage/table/row_version_manager.cpp	6
 storage/table/scan_state.cpp	7
 storage/table/standard_column_data.cpp	2
 storage/table/struct_column_data.cpp	24
