@@ -80,3 +80,22 @@ restart
 
 statement ok
 INSERT INTO tbl_deser_scan VALUES (1);
+
+# ensure that we correctly (de)serialize parsed expressions of the index
+
+statement ok
+CREATE MACRO m(x, y := 7) AS x + y;
+
+statement ok
+CREATE TABLE tbl_m (x integer, y varchar);
+
+statement ok
+CREATE UNIQUE INDEX idx_m on tbl_m (m(tbl_m.x));
+
+statement ok
+insert into tbl_m VALUES (10, 'hello');
+
+statement error
+insert into tbl_m VALUES (10, 'world');
+----
+Constraint Error: Duplicate key "(x + 7): 17" violates unique constraint.
