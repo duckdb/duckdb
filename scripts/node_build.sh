@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-set -e
+set -ex
 
 TARGET_ARCH=${TARGET_ARCH:=x64}
+echo targeting arch: $TARGET_ARCH
 
 source scripts/install_node.sh $1
 cd tools/nodejs
