@@ -234,7 +234,7 @@ execution/physical_plan/plan_sample.cpp	2
 execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
-execution/radix_partitioned_hashtable.cpp	11
+execution/radix_partitioned_hashtable.cpp	12
 execution/reservoir_sample.cpp	60
 execution/window_executor.cpp	29
 execution/window_segment_tree.cpp	12
