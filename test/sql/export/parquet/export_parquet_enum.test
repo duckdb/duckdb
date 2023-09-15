@@ -1,4 +1,4 @@
-# name: test/sql/export/parquet/export_parquet_union.test
+# name: test/sql/export/parquet/export_parquet_enum.test
 # description: Test EXPORT DATABASE with UNION columns
 # group: [parquet]
 
@@ -8,13 +8,20 @@ statement ok
 begin transaction;
 
 statement ok
-create table tbl as select "union" from test_all_types(), range(3);
+create type my_enum as enum ('1', '2', '3')
+
 
 statement ok
-create table tbl2 (a UNION(a bit, b bool));
+create table tbl (a my_enum);
 
 statement ok
-insert into tbl2 VALUES ('00101010'::BIT), (True::BOOL), (NULL::BIT);
+create table tbl2 as select 'hello''world'::enum('hello''world');
+
+statement ok
+insert into tbl VALUES
+	('1'),
+	(NULL),
+	('3');
 
 query I nosort result1
 select * from tbl;
