@@ -443,6 +443,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 	}
+	GetMetadataManager().MarkBlocksAsModified();
 	modified_blocks.clear();
 
 	auto &metadata_manager = GetMetadataManager();
