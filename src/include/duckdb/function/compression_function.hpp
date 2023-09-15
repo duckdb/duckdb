@@ -65,9 +65,9 @@ struct CompressedSegmentState {
 	}
 
 	//! Display info for PRAGMA storage_info
-	virtual string GetSegmentInfo() const {
+	virtual string GetSegmentInfo() const { // LCOV_EXCL_START
 		return "";
-	}
+	} // LCOV_EXCL_STOP
 
 	template <class TARGET>
 	TARGET &Cast() {
