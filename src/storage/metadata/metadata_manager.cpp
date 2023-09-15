@@ -3,6 +3,7 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
 
@@ -255,7 +256,6 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-
 	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
 	for (auto &kv : modified_blocks) {
 		auto block_id = kv.first;
@@ -299,6 +299,23 @@ void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointe
 		// unset the bit
 		modified_list &= ~(1ULL << block_index);
 	}
+}
+
+vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
+	vector<MetadataBlockInfo> result;
+	for (auto &block : blocks) {
+		MetadataBlockInfo block_info;
+		block_info.block_id = block.second.block_id;
+		block_info.total_blocks = MetadataManager::METADATA_BLOCK_COUNT;
+		for (auto free_block : block.second.free_blocks) {
+			block_info.free_list.push_back(free_block);
+		}
+		std::sort(block_info.free_list.begin(), block_info.free_list.end());
+		result.push_back(std::move(block_info));
+	}
+	std::sort(result.begin(), result.end(),
+	          [](const MetadataBlockInfo &a, const MetadataBlockInfo &b) { return a.block_id < b.block_id; });
+	return result;
 }
 
 block_id_t MetadataManager::GetNextBlockId() {

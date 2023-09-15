@@ -831,6 +831,10 @@ void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 	return lookup.schema->Alter(context, info);
 }
 
+vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
+	return vector<MetadataBlockInfo>();
+}
+
 void Catalog::Verify() {
 }
 
