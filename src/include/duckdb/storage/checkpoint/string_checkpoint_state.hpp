@@ -68,7 +68,7 @@ public:
 			return "";
 		}
 		string result = StringUtil::Join(on_disk_blocks, on_disk_blocks.size(), ", ",
-		                                 [&](block_id_t &block) { return to_string(block); });
+		                                 [&](block_id_t block) { return to_string(block); });
 		return "Overflow String Block Ids: " + result;
 	}
 
