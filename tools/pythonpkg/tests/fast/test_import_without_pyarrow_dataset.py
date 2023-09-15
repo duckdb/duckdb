@@ -13,6 +13,8 @@ class TestImportWithoutPyArrowDataset:
         con = duckdb.connect()
         rel = con.query('select 1')
         arrow_record_batch = rel.record_batch()
-        with pytest.raises(duckdb.InvalidInputException):
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Optional module 'pyarrow.dataset' is required to perform this action"
+        ):
             # The replacement scan functionality relies on pyarrow.dataset
             con.query('select * from arrow_record_batch')
