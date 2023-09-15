@@ -33,7 +33,7 @@ struct RowMatcher {
 public:
 	using Predicates = vector<ExpressionType>;
 	void Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates);
-	idx_t Match(DataChunk &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, idx_t count,
+	idx_t Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel, idx_t count,
 	            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, SelectionVector *no_match_sel,
 	            idx_t &no_match_count);
 

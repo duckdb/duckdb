@@ -85,6 +85,8 @@ public:
 	//! Initializes the Chunk state of an Append state
 	//! - Useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids = {});
+	//! Initializes the TupleDataVectorFormat for the give types
+	static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, const vector<LogicalType> &types);
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            idx_t append_count = DConstants::INVALID_INDEX);

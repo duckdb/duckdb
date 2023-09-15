@@ -45,9 +45,9 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 	using MATCH_OP = RowMatchOperator<OP>;
 
 	// LHS
-	const auto &lhs_sel = *lhs_format.data.sel;
-	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.data);
-	const auto &lhs_validity = lhs_format.data.validity;
+	const auto &lhs_sel = *lhs_format.unified.sel;
+	const auto lhs_data = UnifiedVectorFormat::GetData<T>(lhs_format.unified);
+	const auto &lhs_validity = lhs_format.unified.validity;
 
 	// RHS
 	const auto rhs_locations = FlatVector::GetData<data_ptr_t>(rhs_row_locations);
@@ -103,8 +103,8 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 	using MATCH_OP = RowMatchOperator<OP>;
 
 	// LHS
-	const auto &lhs_sel = *lhs_format.data.sel;
-	const auto &lhs_validity = lhs_format.data.validity;
+	const auto &lhs_sel = *lhs_format.unified.sel;
+	const auto &lhs_validity = lhs_format.unified.validity;
 
 	// RHS
 	const auto rhs_locations = FlatVector::GetData<data_ptr_t>(rhs_row_locations);
@@ -123,6 +123,12 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 			const auto &rhs_location = rhs_locations[idx];
 			const ValidityBytes rhs_mask(rhs_location);
 			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+
+			if (lhs_null || rhs_null) {
+				if (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<int32_t>(0, 0, lhs_null, rhs_null)) {
+					sel.set_index(match_count++, idx);
+				}
+			}
 
 			if (MATCH_OP::COMPARE_NULL && (lhs_null || rhs_null) &&
 			    MATCH_OP::template Operation<int32_t>(0, 0, lhs_null, rhs_null)) {
@@ -149,7 +155,7 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 
 	for (idx_t struct_col_idx = 0; struct_col_idx < rhs_struct_layout.ColumnCount(); struct_col_idx++) {
 		auto &lhs_struct_vector = *lhs_struct_vectors[struct_col_idx];
-		auto &lhs_struct_format = lhs_format.child_formats[struct_col_idx];
+		auto &lhs_struct_format = lhs_format.children[struct_col_idx];
 		const auto &child_function = child_functions[struct_col_idx];
 		match_count = child_function.function(lhs_struct_vector, lhs_struct_format, sel, count, rhs_struct_layout,
 		                                      rhs_struct_row_locations, struct_col_idx, child_function.child_functions,
@@ -233,13 +239,14 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 	}
 }
 
-idx_t RowMatcher::Match(DataChunk &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
+idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
                         idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
                         SelectionVector *no_match_sel, idx_t &no_match_count) {
 	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
 		const auto &match_function = match_functions[col_idx];
-		count = match_function.function(lhs_vector.data[col_idx], lhs_format, sel, count, rhs_layout, rhs_row_locations,
-		                                col_idx, match_function.child_functions, no_match_sel, no_match_count);
+		count =
+		    match_function.function(lhs.data[col_idx], lhs_formats[col_idx], sel, count, rhs_layout, rhs_row_locations,
+		                            col_idx, match_function.child_functions, no_match_sel, no_match_count);
 	}
 	return count;
 }
@@ -336,17 +343,17 @@ MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const 
 	switch (predicate) {
 	case ExpressionType::COMPARE_EQUAL:
 		result.function = StructMatch<NO_MATCH_SEL, Equals, Equals>;
+		child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
 		result.function = StructMatch<NO_MATCH_SEL, NotEquals, NotEquals>;
+		child_predicate = ExpressionType::COMPARE_DISTINCT_FROM;
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		result.function = StructMatch<NO_MATCH_SEL, DistinctFrom, NotEquals>;
-		child_predicate = ExpressionType::COMPARE_NOTEQUAL;
 		break;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		result.function = StructMatch<NO_MATCH_SEL, NotDistinctFrom, Equals>;
-		child_predicate = ExpressionType::COMPARE_EQUAL;
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
 		result.function = StructMatch<NO_MATCH_SEL, GreaterThan, GreaterThan>;

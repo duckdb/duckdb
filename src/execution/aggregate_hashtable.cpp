@@ -45,6 +45,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
+	row_matcher.Initialize(true, layout, predicates);
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
 
 	// Partitioned data and pointer table
@@ -414,9 +415,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 			}
 
 			// Perform group comparisons
-			RowOperations::Match(state.group_chunk, state.group_data.get(), layout, addresses_v, predicates,
-			                     state.group_compare_vector, need_compare_count, &state.no_match_vector,
-			                     no_match_count);
+			row_matcher.Match(state.group_chunk, chunk_state.vector_data, state.group_compare_vector,
+			                  need_compare_count, layout, addresses_v, &state.no_match_vector, no_match_count);
 		}
 
 		// Linear probing: each of the entries that do not match move to the next entry in the HT
