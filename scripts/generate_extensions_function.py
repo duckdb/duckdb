@@ -254,7 +254,10 @@ static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
     {".parquet", "parquet"},
     {".json", "json"},
     {".jsonl", "json"},
-    {".ndjson", "json"}
+    {".ndjson", "json"},
+    {".shp", "spatial"},
+    {".gpkg", "spatial"},
+    {".fgb", "spatial"}
 }; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py

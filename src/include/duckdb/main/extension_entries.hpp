@@ -227,10 +227,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {{".parquet", "parquet"},
-                                                              {".json", "json"},
-                                                              {".jsonl", "json"},
-                                                              {".ndjson", "json"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
+    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"}, {".ndjson", "json"},
+    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}}; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
