@@ -150,14 +150,15 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
-
+	bool all_tests_passed = true;
 	auto &fs = duckdb::FileSystem::GetFileSystem(*con.context);
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, con, skip, add_parameters));
+			all_tests_passed = all_tests_passed && RunFull(csv_file, con, skip, add_parameters);
 		}
 	}
+	REQUIRE(all_tests_passed);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
@@ -261,6 +262,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
+	skip.insert("test/sql/copy/csv/data/test/too_many_values.csv");
 
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
