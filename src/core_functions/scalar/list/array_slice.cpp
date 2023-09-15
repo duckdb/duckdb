@@ -308,7 +308,7 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 		                                         end_is_empty);
 	}
 #ifdef DEBUG
-//try to serialize the result vector
+	// try to serialize the result vector
 	vector<LogicalType> types;
 	types.push_back(result.GetType());
 	MemoryStream mem_stream;
