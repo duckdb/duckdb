@@ -7,6 +7,10 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+
 namespace duckdb {
 
 struct ListSliceBindData : public FunctionData {
@@ -191,9 +195,11 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 	}
 
 	auto sel_length = 0;
+	bool sel_valid = false;
 	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, step_valid);
 		sel.Initialize(sel_length);
+		sel_valid = true;
 	}
 
 	// Try to slice
@@ -205,8 +211,9 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 		result_data[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, str, begin, end, step, sel_idx);
 	}
 
-	if (step_vector && step != 0 && end - begin > 0) {
+	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
@@ -276,6 +283,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
@@ -299,6 +307,21 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 		                                         count, sel, sel_idx, result_child_vector, begin_is_empty,
 		                                         end_is_empty);
 	}
+#ifdef DEBUG
+//try to serialize the result vector
+	vector<LogicalType> types;
+	types.push_back(result.GetType());
+	MemoryStream mem_stream;
+	BinarySerializer serializer(mem_stream);
+
+	DataChunk verify_chunk;
+	verify_chunk.InitializeEmpty(types);
+	verify_chunk.data[0].Reference(result);
+
+	serializer.Begin();
+	verify_chunk.Serialize(serializer);
+	serializer.End();
+#endif
 	result.Verify(count);
 }
 
