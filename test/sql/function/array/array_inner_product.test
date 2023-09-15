@@ -1,6 +1,19 @@
 # name: test/sql/function/array/array_inner_product.test
 # group: [array]
 
+# Erorr message coverage test
+statement error
+SELECT array_inner_product('foo', 'bar');
+----
+'array_inner_product' requires both arguments to be of type array
+
+statement error
+SELECT array_inner_product([1,2,3]::INT[3], ['a','b','c']::VARCHAR[3]);
+----
+'array_inner_product' requires both arguments to be arrays of the same type (and length)
+
+
+# Tests for supported types
 foreach type FLOAT DOUBLE
 
 query I

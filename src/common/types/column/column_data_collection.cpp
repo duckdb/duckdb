@@ -644,8 +644,6 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 	// copy the NULL values for the main fixed size list vector (the same as for a struct vector)
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
-	// TODO: This function is sloppily implemented and probably not correct
-	// TODO: We need to get the ConsecutiveChildListInfo here, but for arrays basically.
 	auto &child_vector = ArrayVector::GetEntry(source);
 	auto &child_type = child_vector.GetType();
 	auto array_size = ArrayType::GetSize(source.GetType());
@@ -667,8 +665,20 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-
 	child_vector.ToUnifiedFormat(array_size * copy_count, child_vector_data);
+
+	// Broadcast the validity of the source vector to the child vector
+	if (source_data.validity.IsMaskSet()) {
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto source_idx = source_data.sel->get_index(offset + i);
+			if (!source_data.validity.RowIsValid(source_idx)) {
+				for (idx_t j = 0; j < array_size; j++) {
+					child_vector_data.validity.SetInvalid(source_idx * array_size + j);
+				}
+			}
+		}
+	}
+
 	child_function.function(child_meta_data, child_vector_data, child_vector, offset * array_size,
 	                        array_size * copy_count);
 }

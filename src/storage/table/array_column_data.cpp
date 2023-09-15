@@ -58,15 +58,13 @@ void ArrayColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row
 	// initialize the validity segment
 	validity.InitializeScanWithOffset(state.child_states[0], row_idx);
 
-	// TODO: Get the actual offset
 	auto array_size = ArrayType::GetSize(type);
-	auto child_offset = row_idx == start ? 0 : (row_idx * array_size);
-	D_ASSERT(child_offset <= child_column->GetMaxEntry());
+	auto child_offset = (row_idx - start) * array_size;
 
+	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
-	state.last_offset = child_offset;
 }
 
 idx_t ArrayColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {

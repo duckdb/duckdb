@@ -1341,17 +1341,30 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 		}
 
 		if (vtype == VectorType::CONSTANT_VECTOR) {
-			child.Verify(array_size);
-		} else {
-			auto child_count = count * array_size;
-			SelectionVector child_sel(child_count);
+			if (!ConstantVector::IsNull(*vector)) {
+				child.Verify(array_size);
+			}
+		} else if (vtype == VectorType::FLAT_VECTOR) {
+			// Flat vector case
+			auto &validity = FlatVector::Validity(*vector);
+			idx_t selected_child_count = 0;
 			for (idx_t i = 0; i < count; i++) {
 				auto oidx = sel->get_index(i);
-				for (idx_t j = 0; j < array_size; j++) {
-					child_sel.set_index(i * array_size + j, oidx * array_size + j);
+				if (validity.RowIsValid(oidx)) {
+					selected_child_count += array_size;
 				}
 			}
 
+			SelectionVector child_sel(selected_child_count);
+			idx_t child_count = 0;
+			for (idx_t i = 0; i < count; i++) {
+				auto oidx = sel->get_index(i);
+				if (validity.RowIsValid(oidx)) {
+					for (idx_t j = 0; j < array_size; j++) {
+						child_sel.set_index(child_count++, oidx * array_size + j);
+					}
+				}
+			}
 			Vector::Verify(child, child_sel, child_count);
 		}
 	}

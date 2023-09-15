@@ -382,7 +382,6 @@ void TupleDataCollection::CollectionWithinCollectionComputeHeapSizes(Vector &hea
 		}
 	}
 
-	// TODO: Template this
 	const auto child_list_child_count = MaxValue<idx_t>(
 	    sum_of_sizes, source_v.GetType().InternalType() == PhysicalType::LIST ? ListVector::GetListSize(source_v)
 	                                                                          : ArrayVector::GetTotalSize(source_v));
@@ -1322,54 +1321,52 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 
 template <class COLLECTION>
 struct CollectionVector {
-	static void Setup(Vector &collection) = delete;
-	static idx_t GetSize(Vector &collection) = delete;
-	static idx_t GetSizeBefore(Vector &collection) = delete;
-	static Vector &GetEntry(Vector &collection) = delete;
-	static void Reserve(Vector &collection, const idx_t new_capacity) = delete;
-	static void SetSize(Vector &collection, const idx_t new_size) = delete;
+	static inline void Setup(Vector &collection) = delete;
+	static inline idx_t GetSize(Vector &collection) = delete;
+	static inline idx_t GetSizeBefore(Vector &collection) = delete;
+	static inline Vector &GetEntry(Vector &collection) = delete;
+	static inline void Reserve(Vector &collection, const idx_t new_capacity) = delete;
+	static inline void SetSize(Vector &collection, const idx_t new_size) = delete;
 };
 
 template <>
 struct CollectionVector<ArrayVector> {
-	static void Setup(Vector &collection) {
+	static inline void Setup(Vector &collection) {
 		ArrayVector::AllocateFakeListEntries(collection);
 	}
-	static idx_t GetSize(Vector &collection) {
+	static inline idx_t GetSize(Vector &collection) {
 		return ArrayVector::GetTotalSize(collection);
 	}
-	static idx_t GetSizeBefore(Vector &collection) {
+	static inline idx_t GetSizeBefore(Vector &) {
 		return 0;
 	}
-	static Vector &GetEntry(Vector &collection) {
+	static inline Vector &GetEntry(Vector &collection) {
 		return ArrayVector::GetEntry(collection);
 	}
-	static void Reserve(Vector &collection, const idx_t new_capacity) {
-		// do nothing
+	static inline void Reserve(Vector &, const idx_t) {
 	}
-	static void SetSize(Vector &collection, const idx_t new_size) {
-		// do nothing
+	static inline void SetSize(Vector &, const idx_t) {
 	}
 };
 
 template <>
 struct CollectionVector<ListVector> {
-	static void Setup(Vector &collection) {
+	static inline void Setup(Vector &collection) {
 		// do nothing
 	}
-	static idx_t GetSize(Vector &collection) {
+	static inline idx_t GetSize(Vector &collection) {
 		return ListVector::GetListSize(collection);
 	}
-	static idx_t GetSizeBefore(Vector &collection) {
+	static inline idx_t GetSizeBefore(Vector &collection) {
 		return ListVector::GetListSize(collection);
 	}
-	static Vector &GetEntry(Vector &collection) {
+	static inline Vector &GetEntry(Vector &collection) {
 		return ListVector::GetEntry(collection);
 	}
-	static void Reserve(Vector &collection, const idx_t new_capacity) {
+	static inline void Reserve(Vector &collection, const idx_t new_capacity) {
 		ListVector::Reserve(collection, new_capacity);
 	}
-	static void SetSize(Vector &collection, const idx_t new_size) {
+	static inline void SetSize(Vector &collection, const idx_t new_size) {
 		ListVector::SetListSize(collection, new_size);
 	}
 };

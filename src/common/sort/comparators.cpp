@@ -227,6 +227,11 @@ int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 
 int Comparators::CompareArrayAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type,
                                         bool valid, idx_t array_size) {
+	if (!valid) {
+		return 0;
+	}
+
+	// Load array validity masks
 	ValidityBytes left_validity(left_ptr);
 	ValidityBytes right_validity(right_ptr);
 	left_ptr += (array_size + 7) / 8;
