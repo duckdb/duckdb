@@ -183,6 +183,10 @@ struct SniffValue {
 	}
 
 	inline static void Finalize(CSVStateMachine &machine, vector<TupleSniffing> &sniffed_values) {
+		if (machine.cur_rows < sniffed_values.size() && machine.state == CSVState::DELIMITER) {
+			// Started a new empty value
+			sniffed_values[machine.cur_rows].values.push_back(Value(machine.value));
+		}
 		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
 			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
@@ -300,7 +304,7 @@ void CSVSniffer::DetectTypes() {
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < tuples.size()) {
-			if (tuples[true_start].values.size() < max_columns_found) {
+			if (tuples[true_start].values.size() < max_columns_found && !options.null_padding) {
 				true_start = tuples[true_start].line_number;
 				values_start++;
 			} else {
