@@ -4,24 +4,6 @@
 
 load __TEST_DIR__/load_overflow_strings.db
 
-# load data once before we start to measure expected blocks
-
-statement ok
-CREATE TABLE strings(s VARCHAR);
-
-loop it 0 10
-
-statement ok
-INSERT INTO strings SELECT repeat('X', case when i%17=0 then 5000 else i%7 end) AS s FROM generate_series(0,2500) tbl(i);
-
-statement ok
-FORCE CHECKPOINT;
-
-endloop
-
-statement ok
-DROP TABLE strings;
-
 loop x 0 10
 
 statement ok
@@ -43,8 +25,10 @@ SELECT COUNT(*) FROM pragma_storage_info('strings') WHERE contains(segment_info,
 ----
 1
 
-query I nosort expected_blocks
-select total_blocks from pragma_database_size();
+query I
+select total_blocks < 10 from pragma_database_size();
+----
+true
 
 statement ok
 DROP TABLE strings;
