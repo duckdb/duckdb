@@ -89,17 +89,19 @@ bool ParallelCSVReader::SetPosition() {
 						position_buffer++;
 					}
 					if (position_buffer > end_buffer) {
+						VerifyLineLength(position_buffer, buffer->batch_index);
 						return false;
 					}
 					SkipEmptyLines();
 					if (verification_positions.beginning_of_first_line == 0) {
 						verification_positions.beginning_of_first_line = position_buffer;
 					}
-
+					VerifyLineLength(position_buffer, buffer->batch_index);
 					verification_positions.end_of_last_line = position_buffer;
 					return true;
 				}
 			}
+			VerifyLineLength(position_buffer, buffer->batch_index);
 			return false;
 		}
 		SkipEmptyLines();
@@ -143,12 +145,13 @@ bool ParallelCSVReader::SetPosition() {
 			break;
 		}
 
-		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[position_buffer - 1])) {
+		auto pos_check = position_buffer == 0 ? position_buffer : position_buffer - 1;
+		if (position_buffer >= end_buffer && !StringUtil::CharacterIsNewline((*buffer)[pos_check])) {
 			break;
 		}
 
 		if (position_buffer > end_buffer && options.dialect_options.new_line == NewLineIdentifier::CARRY_ON &&
-		    (*buffer)[position_buffer - 1] == '\n') {
+		    (*buffer)[pos_check] == '\n') {
 			break;
 		}
 		idx_t position_set = position_buffer;
