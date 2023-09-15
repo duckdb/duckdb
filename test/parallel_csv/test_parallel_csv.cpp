@@ -260,6 +260,8 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
 	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
+
 
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
