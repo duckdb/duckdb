@@ -1326,10 +1326,12 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 
 	if (type.InternalType() == PhysicalType::ARRAY) {
 		// Arrays have the following invariants
-		// 1. The child vector is either a FLAT_VECTOR or a CONSTANT_VECTOR
-		// 2. if the array vector is a CONSTANT_VECTOR, the child vector is a FLAT_VECTOR
-		// 3. if the array vector is a FLAT_VECTOR, the child vector is a FLAT_VECTOR with array_size * count length
-		// 4. if the child vector is a CONSTANT_VECTOR, it must be NULL, or array_size = 1.
+		// 1. if the array vector is a CONSTANT_VECTOR
+		//	1.1	The child vector is a FLAT_VECTOR with count = array_size
+		//	1.2 OR The child vector is a CONSTANT_VECTOR and must be NULL
+		//  1.3 OR The child vector is a CONSTANT_VECTOR and array_size = 1
+		// 2. if the array vector is a FLAT_VECTOR, the child vector is a FLAT_VECTOR
+		// 	2.2 the count of the child vector is array_size * (parent)count
 
 		auto &child = ArrayVector::GetEntry(*vector);
 		auto array_size = ArrayType::GetSize(type);
@@ -1482,11 +1484,24 @@ void Vector::Verify(idx_t count) {
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
-	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
-		// set all child entries to null as well
-		auto &entries = StructVector::GetEntries(vector);
-		for (auto &entry : entries) {
-			FlatVector::SetNull(*entry, idx, is_null);
+	if (is_null) {
+		auto type = vector.GetType();
+		auto internal_type = type.InternalType();
+		if (internal_type == PhysicalType::STRUCT) {
+			// set all child entries to null as well
+			auto &entries = StructVector::GetEntries(vector);
+			for (auto &entry : entries) {
+				FlatVector::SetNull(*entry, idx, is_null);
+			}
+		} else if (internal_type == PhysicalType::ARRAY) {
+			// set the child element in the array to null as well
+			auto &child = ArrayVector::GetEntry(vector);
+			D_ASSERT(child.GetVectorType() == VectorType::FLAT_VECTOR);
+			auto array_size = ArrayType::GetSize(type);
+			auto child_offset = idx * array_size;
+			for (idx_t i = 0; i < array_size; i++) {
+				FlatVector::SetNull(child, child_offset + i, is_null);
+			}
 		}
 	}
 }
@@ -1497,12 +1512,29 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	vector.validity.Set(0, !is_null);
-	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
-		// set all child entries to null as well
-		auto &entries = StructVector::GetEntries(vector);
-		for (auto &entry : entries) {
-			entry->SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(*entry, is_null);
+	if (is_null) {
+		auto &type = vector.GetType();
+		auto internal_type = type.InternalType();
+		if (internal_type == PhysicalType::STRUCT) {
+			// set all child entries to null as well
+			auto &entries = StructVector::GetEntries(vector);
+			for (auto &entry : entries) {
+				entry->SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(*entry, is_null);
+			}
+		} else if (internal_type == PhysicalType::ARRAY) {
+			auto &child = ArrayVector::GetEntry(vector);
+			D_ASSERT(child.GetVectorType() == VectorType::CONSTANT_VECTOR ||
+			         child.GetVectorType() == VectorType::FLAT_VECTOR);
+			auto array_size = ArrayType::GetSize(type);
+			if (child.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				D_ASSERT(array_size == 1);
+				ConstantVector::SetNull(child, is_null);
+			} else {
+				for (idx_t i = 0; i < array_size; i++) {
+					FlatVector::SetNull(child, i, is_null);
+				}
+			}
 		}
 	}
 }
@@ -1551,7 +1583,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		break;
 	}
 	case PhysicalType::ARRAY: {
-		// TODO: assert source and vector are the same type
 		UnifiedVectorFormat vdata;
 		source.ToUnifiedFormat(count, vdata);
 

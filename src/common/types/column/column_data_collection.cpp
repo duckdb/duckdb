@@ -641,7 +641,7 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	auto &segment = meta_data.segment;
 
-	// copy the NULL values for the main fixed size list vector (the same as for a struct vector)
+	// copy the NULL values for the main array vector (the same as for a struct vector)
 	TemplatedColumnDataCopy<StructValueCopy>(meta_data, source_data, source, offset, copy_count);
 
 	auto &child_vector = ArrayVector::GetEntry(source);
@@ -653,7 +653,6 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 		meta_data.GetVectorMetaData().child_index = meta_data.segment.AddChildIndex(child_index);
 	}
 
-	// Figure out the current list size by traversing the set of child entries
 	auto &child_function = meta_data.copy_function.child_functions[0];
 	auto child_index = segment.GetChildIndex(meta_data.GetVectorMetaData().child_index);
 
@@ -665,9 +664,9 @@ void ColumnDataCopyArray(ColumnDataMetaData &meta_data, const UnifiedVectorForma
 
 	UnifiedVectorFormat child_vector_data;
 	ColumnDataMetaData child_meta_data(child_function, meta_data, child_index);
-	child_vector.ToUnifiedFormat(array_size * copy_count, child_vector_data);
+	child_vector.ToUnifiedFormat(copy_count * array_size, child_vector_data);
 
-	// Broadcast the validity of the source vector to the child vector
+	// Broadcast and sync the validity of the array vector to the child vector
 	if (source_data.validity.IsMaskSet()) {
 		for (idx_t i = 0; i < copy_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);

@@ -144,13 +144,18 @@ static inline void ArrayGenericBinaryExecute(Vector &left, Vector &right, Vector
 	auto &left_child = ArrayVector::GetEntry(left);
 	auto &right_child = ArrayVector::GetEntry(right);
 
+	auto &left_child_validity = FlatVector::Validity(left_child);
+	auto &right_child_validity = FlatVector::Validity(right_child);
+
+	/*
 	if (!FlatVector::Validity(left_child).CheckAllValid(count * size)) {
-		throw InvalidInputException(StringUtil::Format("'%s' left argument can not contain NULL values", OP::NAME));
+	    throw InvalidInputException(StringUtil::Format("'%s' left argument can not contain NULL values", OP::NAME));
 	}
 
 	if (!FlatVector::Validity(right_child).CheckAllValid(count * size)) {
-		throw InvalidInputException(StringUtil::Format("'%s' right argument can not contain NULL values", OP::NAME));
+	    throw InvalidInputException(StringUtil::Format("'%s' right argument can not contain NULL values", OP::NAME));
 	}
+	*/
 
 	UnifiedVectorFormat left_format;
 	UnifiedVectorFormat right_format;
@@ -169,6 +174,17 @@ static inline void ArrayGenericBinaryExecute(Vector &left, Vector &right, Vector
 		if (!left_format.validity.RowIsValid(left_idx) || !right_format.validity.RowIsValid(right_idx)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
+		}
+
+		auto left_offset = left_idx * size;
+		if (!left_child_validity.CheckAllValid(left_offset + size, left_offset)) {
+			throw InvalidInputException(StringUtil::Format("'%s' left argument can not contain NULL values", OP::NAME));
+		}
+
+		auto right_offset = right_idx * size;
+		if (!right_child_validity.CheckAllValid(right_offset + size, right_offset)) {
+			throw InvalidInputException(
+			    StringUtil::Format("'%s' right argument can not contain NULL values", OP::NAME));
 		}
 
 		OP::template Operation<TYPE>(left_data, left_idx, right_data, right_idx, result_data, i, size);
