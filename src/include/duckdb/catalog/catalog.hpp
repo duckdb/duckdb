@@ -35,6 +35,7 @@ struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
+struct MetadataBlockInfo;
 
 class AttachedDatabase;
 class ClientContext;
@@ -278,6 +279,7 @@ public:
 	                                                    unique_ptr<LogicalOperator> plan) = 0;
 
 	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
+	virtual vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context);
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;

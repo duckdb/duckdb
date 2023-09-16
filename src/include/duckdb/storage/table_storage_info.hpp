@@ -28,6 +28,7 @@ struct ColumnSegmentInfo {
 	bool persistent;
 	block_id_t block_id;
 	idx_t block_offset;
+	string segment_info;
 };
 
 struct IndexInfo {

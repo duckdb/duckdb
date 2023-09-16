@@ -128,6 +128,10 @@ DatabaseSize DuckCatalog::GetDatabaseSize(ClientContext &context) {
 	return db.GetStorageManager().GetDatabaseSize();
 }
 
+vector<MetadataBlockInfo> DuckCatalog::GetMetadataInfo(ClientContext &context) {
+	return db.GetStorageManager().GetMetadataInfo();
+}
+
 bool DuckCatalog::InMemory() {
 	return db.GetStorageManager().InMemory();
 }
