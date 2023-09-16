@@ -112,9 +112,6 @@ jobs:
           - isRelease: false
             node: 19
             target_arch: arm64
-          - isRelease: false
-            node: 20
-            target_arch: arm64
 
     steps:
       - uses: actions/checkout@v3
