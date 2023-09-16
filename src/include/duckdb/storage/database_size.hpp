@@ -21,4 +21,10 @@ struct DatabaseSize {
 	idx_t wal_size = 0;
 };
 
+struct MetadataBlockInfo {
+	block_id_t block_id;
+	idx_t total_blocks;
+	vector<idx_t> free_list;
+};
+
 } // namespace duckdb

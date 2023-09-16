@@ -260,6 +260,11 @@ DatabaseSize SingleFileStorageManager::GetDatabaseSize() {
 	return ds;
 }
 
+vector<MetadataBlockInfo> SingleFileStorageManager::GetMetadataInfo() {
+	auto &metadata_manager = block_manager->GetMetadataManager();
+	return metadata_manager.GetMetadataInfo();
+}
+
 bool SingleFileStorageManager::AutomaticCheckpoint(idx_t estimated_wal_bytes) {
 	auto log = GetWriteAheadLog();
 	if (!log) {
