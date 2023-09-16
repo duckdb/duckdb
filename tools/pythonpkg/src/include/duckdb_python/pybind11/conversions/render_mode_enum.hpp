@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 using duckdb::InvalidInputException;
 using duckdb::RenderMode;
@@ -11,17 +12,6 @@ using duckdb::string;
 using duckdb::StringUtil;
 
 namespace py = pybind11;
-
-static RenderMode RenderModeFromString(const string &type) {
-	auto ltype = StringUtil::Lower(type);
-	if (ltype.empty() || ltype == "ROWS") {
-		return RenderMode::ROWS;
-	} else if (ltype == "COLUMNS") {
-		return RenderMode::COLUMNS;
-	} else {
-		throw InvalidInputException("Unrecognized type for 'render_mode'");
-	}
-}
 
 static RenderMode RenderModeFromInteger(int64_t value) {
 	if (value == 0) {
@@ -46,8 +36,10 @@ public:
 		if (base::load(src, convert)) {
 			return true;
 		} else if (py::isinstance<py::str>(src)) {
-			tmp = RenderModeFromString(py::str(src));
-			value = &tmp;
+			string render_mode_str = py::str(src);
+			auto render_mode =
+			    duckdb::EnumUtil::FromString<RenderMode>(render_mode_str.empty() ? "ROWS" : render_mode_str);
+			value = &render_mode;
 			return true;
 		} else if (py::isinstance<py::int_>(src)) {
 			tmp = RenderModeFromInteger(src.cast<int64_t>());

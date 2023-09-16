@@ -1195,7 +1195,7 @@ string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool 
 
 string DuckDBPyRelation::ToString() {
 	BoxRendererConfig config;
-	config.limit = 1000;
+	config.limit = 10000;
 	return ToStringInternal(config);
 }
 
@@ -1205,7 +1205,8 @@ static idx_t IndexFromPyInt(const py::object &object) {
 }
 
 void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional<py::int_> &max_rows,
-                             const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value) {
+                             const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value,
+                             const py::object &render_mode) {
 	BoxRendererConfig config;
 	config.limit = 10000;
 
@@ -1225,6 +1226,12 @@ void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional
 	if (!py::none().is(null_value)) {
 		invalidate_cache = true;
 		config.null_value = py::cast<std::string>(null_value);
+	}
+	if (!py::none().is(render_mode)) {
+		invalidate_cache = true;
+		if (!py::try_cast(render_mode, config.render_mode)) {
+			throw InvalidInputException("'render_mode' accepts either a string, RenderMode or int value");
+		}
 	}
 
 	py::print(py::str(ToStringInternal(config, invalidate_cache)));

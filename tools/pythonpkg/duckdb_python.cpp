@@ -278,6 +278,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
 	    .export_values();
 
+	py::enum_<duckdb::RenderMode>(m, "RenderMode")
+	    .value("ROWS", duckdb::RenderMode::ROWS)
+	    .value("COLUMNS", duckdb::RenderMode::COLUMNS)
+	    .export_values();
+
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
 	DuckDBPyExpression::Initialize(m);

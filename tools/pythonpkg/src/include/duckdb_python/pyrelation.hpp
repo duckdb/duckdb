@@ -17,6 +17,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/render_mode_enum.hpp"
 #include "duckdb_python/pybind11/conversions/null_handling_enum.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
 #include "duckdb_python/python_objects.hpp"
@@ -252,7 +253,8 @@ public:
 
 	string ToString();
 	void Print(const Optional<py::int_> &max_width, const Optional<py::int_> &max_rows,
-	           const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value);
+	           const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value,
+	           const py::object &render_mode);
 
 	string Explain(ExplainType type);
 

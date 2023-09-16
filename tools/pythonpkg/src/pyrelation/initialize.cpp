@@ -273,7 +273,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Calls the passed function on the relation")
 	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data", py::kw_only(),
 	         py::arg("max_width") = py::none(), py::arg("max_rows") = py::none(), py::arg("max_col_width") = py::none(),
-	         py::arg("null_value") = py::none())
+	         py::arg("null_value") = py::none(), py::arg("render_mode") = py::none())
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);
 
