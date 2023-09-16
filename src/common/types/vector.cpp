@@ -2235,6 +2235,9 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 					return UnionInvalidReason::VALIDITY_OVERLAP;
 				}
 				found_valid = true;
+				if (tag != static_cast<union_tag_t>(member_idx)) {
+					return UnionInvalidReason::TAG_MISMATCH;
+				}
 			}
 		}
 	}
