@@ -82,11 +82,13 @@ block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
+	auto handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
+	// zero-initialize the handle
+	memset(handle.Ptr(), 0, Storage::BLOCK_SIZE);
 	AddBlock(std::move(new_block));
 	return new_block_id;
 }
@@ -177,11 +179,6 @@ void MetadataManager::Flush() {
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
-		// zero-initialize any free blocks
-		for (auto free_block : block.free_blocks) {
-			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
-			       MetadataManager::METADATA_BLOCK_SIZE);
-		}
 		// there are a few bytes left-over at the end of the block, zero-initialize them
 		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
