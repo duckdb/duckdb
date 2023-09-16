@@ -14,10 +14,9 @@ make clean
 
 if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
   if [[ "$TARGET_ARCH" == "arm64" ]] ; then
-    # TODO: double check ABI
-    sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf --yes
-    export CC=arm-linux-gnueabihf-gcc
-    export CXX=arm-linux-gnueabihf-g++
+    sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu --yes
+    export CC=aarch64-linux-gnu-gcc
+    export CXX=aarch64-linux-gnu-g++
   fi
 fi
 
