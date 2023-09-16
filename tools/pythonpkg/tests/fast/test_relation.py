@@ -323,4 +323,4 @@ class TestRelation(object):
         rel1 = con.table('t1')
         text1 = str(rel1)
         assert '? rows' in text1
-        assert '>9999 rows' in text1
+        assert '>999 rows' in text1

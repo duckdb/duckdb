@@ -1204,8 +1204,8 @@ static idx_t IndexFromPyInt(const py::object &object) {
 	return index;
 }
 
-void DuckDBPyRelation::Print(Optional<py::int_> max_width, Optional<py::int_> max_rows,
-                             Optional<py::int_> max_col_width, Optional<py::str> null_value) {
+void DuckDBPyRelation::Print(const Optional<py::int_> &max_width, const Optional<py::int_> &max_rows,
+                             const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value) {
 	BoxRendererConfig config;
 	config.limit = 10000;
 
