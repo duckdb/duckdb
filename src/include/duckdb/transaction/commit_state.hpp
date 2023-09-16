@@ -23,7 +23,7 @@ struct UpdateInfo;
 
 class CommitState {
 public:
-	explicit CommitState(ClientContext &context, transaction_t commit_id, optional_ptr<WriteAheadLog> log = nullptr);
+	explicit CommitState(transaction_t commit_id, optional_ptr<WriteAheadLog> log = nullptr);
 
 	optional_ptr<WriteAheadLog> log;
 	transaction_t commit_id;
@@ -34,9 +34,6 @@ public:
 
 	unique_ptr<DataChunk> delete_chunk;
 	unique_ptr<DataChunk> update_chunk;
-
-private:
-	ClientContext &context;
 
 public:
 	template <bool HAS_LOG>
@@ -49,8 +46,6 @@ private:
 	void WriteCatalogEntry(CatalogEntry &entry, data_ptr_t extra_data);
 	void WriteDelete(DeleteInfo &info);
 	void WriteUpdate(UpdateInfo &info);
-
-	void AppendRowId(row_t rowid);
 };
 
 } // namespace duckdb

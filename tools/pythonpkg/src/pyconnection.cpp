@@ -245,6 +245,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("query"))
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names")
+	    .def_property_readonly("rowcount", &DuckDBPyConnection::GetRowcount, "Get result set row count")
 	    .def("install_extension", &DuckDBPyConnection::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false)
 	    .def("load_extension", &DuckDBPyConnection::LoadExtension, "Load an installed extension", py::arg("extension"));
@@ -1189,6 +1190,10 @@ Optional<py::list> DuckDBPyConnection::GetDescription() {
 		return py::none();
 	}
 	return result->Description();
+}
+
+int DuckDBPyConnection::GetRowcount() {
+	return -1;
 }
 
 void DuckDBPyConnection::Close() {

@@ -492,7 +492,7 @@ int32_t Date::ExtractDayOfTheYear(date_t date) {
 
 int64_t Date::ExtractJulianDay(date_t date) {
 	// Julian Day 0 is (-4713, 11, 24) in the proleptic Gregorian calendar.
-	static const auto JULIAN_EPOCH = -2440588;
+	static const int64_t JULIAN_EPOCH = -2440588;
 	return date.days - JULIAN_EPOCH;
 }
 

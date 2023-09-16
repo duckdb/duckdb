@@ -1,6 +1,6 @@
-# name: test/sql/storage/test_store_updates.test
+# name: test/sql/storage/update/test_store_updates.test
 # description: Test updates with storage
-# group: [storage]
+# group: [update]
 
 # load the DB from disk
 load __TEST_DIR__/test_store_updates.db

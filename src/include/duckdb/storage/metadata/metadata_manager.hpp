@@ -64,6 +64,7 @@ public:
 	void Flush();
 
 	void MarkBlocksAsModified();
+	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
 	idx_t BlockCount();
 
@@ -82,6 +83,7 @@ protected:
 
 	void AddBlock(MetadataBlock new_block, bool if_exists = false);
 	void AddAndRegisterBlock(MetadataBlock block);
+	void ConvertToTransient(MetadataBlock &block);
 };
 
 } // namespace duckdb
