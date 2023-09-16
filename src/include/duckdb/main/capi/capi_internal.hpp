@@ -13,7 +13,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/arrow/arrow_options.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 #include <cstring>
 #include <cassert>
@@ -31,8 +31,9 @@ struct DatabaseData {
 };
 
 struct PreparedStatementWrapper {
+	//! Map of name -> values
+	case_insensitive_map_t<Value> values;
 	unique_ptr<PreparedStatement> statement;
-	vector<Value> values;
 };
 
 struct ExtractStatementsWrapper {
@@ -48,7 +49,7 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ArrowOptions options;
+	ClientProperties options;
 };
 
 struct AppenderWrapper {

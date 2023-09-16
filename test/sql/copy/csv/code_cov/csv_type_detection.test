@@ -1,0 +1,26 @@
+# name: test/sql/copy/csv/code_cov/csv_type_detection.test
+# description: Tests to enforce codecov in csv type detection sniffing
+# group: [code_cov]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select * from read_csv_auto('data/csv/invalid_utf8.csv')
+----
+Invalid unicode (byte sequence mismatch) detected in CSV file.
+
+statement ok
+select * from read_csv_auto('data/csv/empty.csv')
+
+query II
+select * from read_csv_auto('data/csv/small_file.csv', sample_size=1)
+----
+1	2
+5	3
+
+query I
+select * from read_csv_auto('data/csv/date_format_percentage.csv')
+----
+test
+336%584%3205

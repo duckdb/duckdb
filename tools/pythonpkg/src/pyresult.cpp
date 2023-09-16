@@ -16,6 +16,7 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
+#include "duckdb/main/chunk_scan_state/query_result.hpp"
 
 namespace duckdb {
 
@@ -96,7 +97,7 @@ Optional<py::tuple> DuckDBPyResult::Fetchone() {
 			continue;
 		}
 		auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx]);
+		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx], result->client_properties);
 	}
 	chunk_offset++;
 	return res;
@@ -162,12 +163,11 @@ void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categor
 	}
 }
 
-py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
+unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool pandas) {
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
 
-	// iterate over the result to materialize the data needed for the NumPy arrays
 	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
@@ -175,7 +175,21 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		initial_capacity = materialized.RowCount();
 	}
 
-	NumpyResultConversion conversion(result->types, initial_capacity);
+	auto conversion =
+	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
+	return std::move(conversion);
+}
+
+py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
+                                            unique_ptr<NumpyResultConversion> conversion_p) {
+	if (!result) {
+		throw InvalidInputException("result closed");
+	}
+	if (!conversion_p) {
+		conversion_p = InitializeNumpyConversion();
+	}
+	auto &conversion = *conversion_p;
+
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = result->Cast<MaterializedQueryResult>();
 		for (auto &chunk : materialized.Collection().Chunks()) {
@@ -233,7 +247,7 @@ void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
 			auto utc_local = df[result->names[i].c_str()].attr("dt").attr("tz_localize")("UTC");
-			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(timezone_config);
+			df[result->names[i].c_str()] = utc_local.attr("dt").attr("tz_convert")(result->client_properties.time_zone);
 		}
 	}
 }
@@ -258,15 +272,13 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 }
 
 PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
-	timezone_config = QueryResult::GetConfigTimezone(*result);
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal());
+	auto conversion = InitializeNumpyConversion(true);
+	return FrameFromNumpy(date_as_object, FetchNumpyInternal(false, 1, std::move(conversion)));
 }
 
 PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
-	if (timezone_config.empty()) {
-		timezone_config = QueryResult::GetConfigTimezone(*result);
-	}
-	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors));
+	auto conversion = InitializeNumpyConversion(true);
+	return FrameFromNumpy(date_as_object, FetchNumpyInternal(true, num_of_vectors, std::move(conversion)));
 }
 
 py::dict DuckDBPyResult::FetchPyTorch() {
@@ -287,19 +299,20 @@ py::dict DuckDBPyResult::FetchTF() {
 	return result_dict;
 }
 
-bool DuckDBPyResult::FetchArrowChunk(QueryResult *query_result, py::list &batches, idx_t rows_per_batch) {
+bool DuckDBPyResult::FetchArrowChunk(ChunkScanState &scan_state, py::list &batches, idx_t rows_per_batch) {
 	ArrowArray data;
 	idx_t count;
+	auto &query_result = *result.get();
 	{
 		py::gil_scoped_release release;
-		count = ArrowUtil::FetchChunk(query_result, rows_per_batch, &data);
+		count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
 	}
 	if (count == 0) {
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result->types, query_result->names,
-	                              QueryResult::GetArrowOptions(*query_result));
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, query_result.names,
+	                              query_result.client_properties);
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
@@ -311,8 +324,8 @@ py::list DuckDBPyResult::FetchAllArrowChunks(idx_t rows_per_batch) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 
 	py::list batches;
-
-	while (FetchArrowChunk(result.get(), batches, rows_per_batch)) {
+	QueryResultChunkScanState scan_state(*result.get());
+	while (FetchArrowChunk(scan_state, batches, rows_per_batch)) {
 	}
 	return batches;
 }
@@ -322,7 +335,7 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 		throw InvalidInputException("There is no query result");
 	}
 	return pyarrow::ToArrowTable(result->types, result->names, FetchAllArrowChunks(rows_per_batch),
-	                             QueryResult::GetArrowOptions(*result));
+	                             result->client_properties);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
@@ -387,12 +400,8 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::UUID: {
 		return py::str("UUID");
 	}
-	case LogicalTypeId::USER:
-	case LogicalTypeId::ENUM: {
-		return py::str(type.ToString());
-	}
 	default:
-		throw NotImplementedException("Unsupported type: \"%s\"", type.ToString());
+		return py::str(type.ToString());
 	}
 }
 

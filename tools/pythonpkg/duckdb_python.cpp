@@ -7,6 +7,7 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
@@ -152,12 +153,6 @@ static void InitializeConnectionMethods(py::module_ &m) {
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
-	m.def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
-	m.def("query", &PyConnectionWrapper::RunQuery,
-	      "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise "
-	      "run the query as-is.",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
 	m.def("from_substrait", &PyConnectionWrapper::FromSubstrait, "Creates a query object from the substrait plan",
 	      py::arg("proto"), py::arg("connection") = py::none());
 	m.def("get_substrait", &PyConnectionWrapper::GetSubstrait, "Serialize a query object to protobuf", py::arg("query"),
@@ -225,14 +220,12 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("values"), py::arg("connection") = py::none())
 	    .def("table_function", &PyConnectionWrapper::TableFunction,
 	         "Create a relation object from the name'd table function with given parameters", py::arg("name"),
-	         py::arg("parameters") = py::none(), py::arg("connection") = py::none())
-	    .def("from_query", &PyConnectionWrapper::FromQuery, "Create a relation object from the given SQL query",
-	         py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	         py::arg("parameters") = py::none(), py::arg("connection") = py::none());
 
-	DefineMethod({"query", "sql"}, m, &PyConnectionWrapper::RunQuery,
+	DefineMethod({"sql", "query", "from_query"}, m, &PyConnectionWrapper::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = py::none());
+	             py::arg("query"), py::arg("alias") = "", py::arg("connection") = py::none());
 
 	DefineMethod({"from_parquet", "read_parquet"}, m, &PyConnectionWrapper::FromParquet,
 	             "Create a relation object from the Parquet files in file_glob", py::arg("file_glob"),
@@ -256,6 +249,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    .def("get_table_names", &PyConnectionWrapper::GetTableNames, "Extract the required table names from a query",
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
+	         py::arg("connection") = py::none())
+	    .def("rowcount", &PyConnectionWrapper::GetRowcount, "Get result set row count",
 	         py::arg("connection") = py::none())
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
@@ -285,6 +280,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
+	DuckDBPyExpression::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();

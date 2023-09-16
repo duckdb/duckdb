@@ -1,0 +1,89 @@
+# name: test/sql/index/art/scan/test_art_range_scan.test
+# description: Test ART range scan
+# group: [scan]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (x VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO test VALUES ('abc');
+
+statement ok
+INSERT INTO test VALUES ('def');
+
+query I
+SELECT * FROM test WHERE x > 'z';
+----
+
+statement ok
+INSERT INTO test VALUES ('abcd');
+
+query I
+SELECT x FROM test WHERE x > 'abce';
+----
+def
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test (x VARCHAR PRIMARY KEY);
+
+statement ok
+INSERT INTO test VALUES ('abcd'), ('abde');
+
+query I
+SELECT x FROM test WHERE x > 'abce';
+----
+abde
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test (x USMALLINT PRIMARY KEY);
+
+# node 48
+statement ok
+INSERT INTO test SELECT i FROM range(1, 20) tbl(i);
+
+query I
+SELECT x FROM test WHERE x > 20;
+----
+
+statement ok
+INSERT INTO test VALUES (256);
+
+query I
+SELECT x FROM test WHERE x > 20;
+----
+256
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test (x USMALLINT PRIMARY KEY);
+
+# node 256
+statement ok
+INSERT INTO test SELECT i FROM range(1, 135) tbl(i);
+
+query I
+SELECT x FROM test WHERE x > 135;
+----
+
+statement ok
+INSERT INTO test VALUES (256), (257);
+
+query I
+SELECT x FROM test WHERE x > 135;
+----
+256
+257
+
+statement ok
+DROP TABLE test;

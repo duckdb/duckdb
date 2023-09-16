@@ -1,0 +1,198 @@
+[
+  {
+    "class": "TableRef",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/tableref/list.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "TableReferenceType"
+      },
+      {
+        "id": 101,
+        "name": "alias",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "sample",
+        "type": "SampleOptions*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "BaseTableRef",
+    "base": "TableRef",
+    "enum": "BASE_TABLE",
+    "members": [
+      {
+        "id": 200,
+        "name": "schema_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "table_name",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "column_name_alias",
+        "type": "vector<string>"
+      },
+      {
+        "id": 203,
+        "name": "catalog_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "JoinRef",
+    "base": "TableRef",
+    "enum": "JOIN",
+    "members": [
+      {
+        "id": 200,
+        "name": "left",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "right",
+        "type": "TableRef*"
+      },
+      {
+        "id": 202,
+        "name": "condition",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "id": 203,
+        "name": "join_type",
+        "property": "type",
+        "type": "JoinType"
+      },
+      {
+        "id": 204,
+        "name": "ref_type",
+        "type": "JoinRefType"
+      },
+      {
+        "id": 205,
+        "name": "using_columns",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "SubqueryRef",
+    "base": "TableRef",
+    "enum": "SUBQUERY",
+    "members": [
+      {
+        "id": 200,
+        "name": "subquery",
+        "type": "SelectStatement*"
+      },
+      {
+        "id": 201,
+        "name": "column_name_alias",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "TableFunctionRef",
+    "base": "TableRef",
+    "enum": "TABLE_FUNCTION",
+    "members": [
+      {
+        "id": 200,
+        "name": "function",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 201,
+        "name": "column_name_alias",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "EmptyTableRef",
+    "base": "TableRef",
+    "enum": "EMPTY",
+    "members": [
+    ]
+  },
+  {
+    "class": "ExpressionListRef",
+    "base": "TableRef",
+    "enum": "EXPRESSION_LIST",
+    "members": [
+      {
+        "id": 200,
+        "name": "expected_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 201,
+        "name": "expected_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 202,
+        "name": "values",
+        "type": "vector<vector<ParsedExpression*>>"
+      }
+    ]
+  },
+  {
+    "class": "PivotRef",
+    "base": "TableRef",
+    "enum": "PIVOT",
+    "members": [
+      {
+        "id": 200,
+        "name": "source",
+        "type": "TableRef*"
+      },
+      {
+        "id": 201,
+        "name": "aggregates",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 202,
+        "name": "unpivot_names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 203,
+        "name": "pivots",
+        "type": "vector<PivotColumn>"
+      },
+      {
+        "id": 204,
+        "name": "groups",
+        "type": "vector<string>"
+      },
+      {
+        "id": 205,
+        "name": "column_name_alias",
+        "type": "vector<string>"
+      },
+      {
+        "id": 206,
+        "name": "include_nulls",
+        "type": "bool"
+      }
+    ]
+  }
+]

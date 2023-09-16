@@ -1,0 +1,49 @@
+# name: test/sql/index/art/storage/test_art_checkpoint.test
+# description: Test checkpointing an ART
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_index.db
+
+statement ok
+CREATE TABLE integers (i INTEGER PRIMARY KEY);
+
+# insert values and create index
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+statement ok
+CHECKPOINT;
+
+restart
+
+# insert values and create index
+statement error
+INSERT INTO integers VALUES (1);
+
+# now we want to ensure that we use partial blocks for serializing small ARTs
+
+statement ok
+DROP TABLE integers;
+
+statement ok
+CREATE TABLE integers (i INTEGER);
+
+statement ok
+CREATE INDEX idx ON integers(i);
+
+statement ok
+CHECKPOINT;
+
+# PREFIX, LEAF, NODE4, NODE256
+statement ok
+INSERT INTO integers (SELECT range FROM range(512) UNION ALL SELECT 55);
+
+statement ok
+CHECKPOINT;
+
+# we expect fewer than 4 additional blocks, because we combine partial blocks
+query I
+SELECT total_blocks < 5 FROM pragma_database_size();
+----
+1

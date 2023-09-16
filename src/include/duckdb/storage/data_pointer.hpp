@@ -17,8 +17,30 @@
 
 namespace duckdb {
 
+class Serializer;
+class Deserializer;
+
+struct ColumnSegmentState {
+	virtual ~ColumnSegmentState() {
+	}
+
+	virtual void Serialize(Serializer &serializer) const = 0;
+	static unique_ptr<ColumnSegmentState> Deserialize(Deserializer &deserializer);
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 struct DataPointer {
-	DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
+	explicit DataPointer(BaseStatistics stats) : statistics(std::move(stats)) {
 	}
 
 	uint64_t row_start;
@@ -27,15 +49,20 @@ struct DataPointer {
 	CompressionType compression_type;
 	//! Type-specific statistics of the segment
 	BaseStatistics statistics;
+	//! Serialized segment state
+	unique_ptr<ColumnSegmentState> segment_state;
+
+	void Serialize(Serializer &serializer) const;
+	static DataPointer Deserialize(Deserializer &source);
 };
 
 struct RowGroupPointer {
 	uint64_t row_start;
 	uint64_t tuple_count;
 	//! The data pointers of the column segments stored in the row group
-	vector<BlockPointer> data_pointers;
-	//! The versions information of the row group (if any)
-	shared_ptr<VersionNode> versions;
+	vector<MetaBlockPointer> data_pointers;
+	//! Data pointers to the delete information of the row group (if any)
+	vector<MetaBlockPointer> deletes_pointers;
 };
 
 } // namespace duckdb

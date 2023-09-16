@@ -16,7 +16,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pytype.hpp"
 #include "duckdb_python/path_like.hpp"
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
 #include "duckdb_python/pyfilesystem.hpp"
 #include "duckdb_python/pybind11/registered_py_object.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -119,8 +119,8 @@ public:
 
 	void LoadExtension(const string &extension);
 
-	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, string alias = "",
+	                                      const py::object &params = py::none());
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
@@ -171,6 +171,8 @@ public:
 
 	Optional<py::list> GetDescription();
 
+	int GetRowcount();
+
 	// these should be functions on the result but well
 	Optional<py::tuple> FetchOne();
 
@@ -194,6 +196,7 @@ public:
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 
 	static vector<Value> TransformPythonParamList(const py::handle &params);
+	static case_insensitive_map_t<Value> TransformPythonParamDict(const py::dict &params);
 
 	void RegisterFilesystem(AbstractFileSystem filesystem);
 	void UnregisterFilesystem(const py::str &name);

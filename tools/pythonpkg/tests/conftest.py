@@ -4,25 +4,28 @@ import shutil
 from os.path import abspath, join, dirname, normpath
 import glob
 import duckdb
-from packaging.version import Version
 
 try:
     import pandas
-    pyarrow_dtype = pandas.core.arrays.arrow.dtype.ArrowDtype
+
+    pyarrow_dtype = pandas.ArrowDtype
 except:
     pyarrow_dtype = None
 
 # Check if pandas has arrow dtypes enabled
 try:
     from pandas.compat import pa_version_under7p0
+
     pyarrow_dtypes_enabled = not pa_version_under7p0
 except:
     pyarrow_dtypes_enabled = False
+
 
 # https://docs.pytest.org/en/latest/example/simple.html#control-skipping-of-tests-according-to-command-line-option
 # https://stackoverflow.com/a/47700320
 def pytest_addoption(parser):
     parser.addoption("--skiplist", action="append", nargs="+", type=str, help="skip listed tests")
+
 
 def pytest_collection_modifyitems(config, items):
     tests_to_skip = config.getoption("--skiplist")
@@ -44,38 +47,52 @@ def pytest_collection_modifyitems(config, items):
             # the class is named specifically
             item.add_marker(skip_listed)
 
+
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
     connection = duckdb.connect('')
     cursor = connection.cursor()
     return cursor
 
+
+def pandas_2_or_higher():
+    from packaging.version import Version
+    import pandas as pd
+
+    return Version(pd.__version__) >= Version('2.0.0')
+
+
 def pandas_supports_arrow_backend():
     try:
         from pandas.compat import pa_version_under7p0
+
         if pa_version_under7p0 == True:
             return False
     except:
         return False
-    import pandas as pd
-    return Version(pd.__version__) >= Version('2.0.0')
+    return pandas_2_or_higher()
+
 
 def numpy_pandas_df(*args, **kwargs):
     pandas = pytest.importorskip("pandas")
     return pandas.DataFrame(*args, **kwargs)
 
+
 def arrow_pandas_df(*args, **kwargs):
-    df = numpy_pandas_df(*args, **kwargs);
+    df = numpy_pandas_df(*args, **kwargs)
     return df.convert_dtypes(dtype_backend="pyarrow")
+
 
 class NumpyPandas:
     def __init__(self):
         self.backend = 'numpy_nullable'
         self.DataFrame = numpy_pandas_df
         self.pandas = pytest.importorskip("pandas")
+
     def __getattr__(self, __name: str):
         item = eval(f'self.pandas.{__name}')
         return item
+
 
 def convert_arrow_to_numpy_backend(df):
     pandas = pytest.importorskip("pandas")
@@ -86,23 +103,32 @@ def convert_arrow_to_numpy_backend(df):
     # This should convert the pyarrow chunked arrays into numpy arrays
     return pandas.DataFrame(df_content)
 
+
 def convert_to_numpy(df):
-    if pyarrow_dtypes_enabled and pyarrow_dtype != None and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)]):
+    if (
+        pyarrow_dtypes_enabled
+        and pyarrow_dtype != None
+        and any([True for x in df.dtypes if isinstance(x, pyarrow_dtype)])
+    ):
         return convert_arrow_to_numpy_backend(df)
     return df
+
 
 def convert_and_equal(df1, df2, **kwargs):
     df1 = convert_to_numpy(df1)
     df2 = convert_to_numpy(df2)
     pytest.importorskip("pandas").testing.assert_frame_equal(df1, df2, **kwargs)
 
+
 class ArrowMockTesting:
     def __init__(self):
         self.testing = pytest.importorskip("pandas").testing
         self.assert_frame_equal = convert_and_equal
+
     def __getattr__(self, __name: str):
         item = eval(f'self.testing.{__name}')
         return item
+
 
 # This converts dataframes constructed with 'DataFrame(...)' to pyarrow backed dataframes
 # Assert equal does the opposite, turning all pyarrow backed dataframes into numpy backed ones
@@ -110,7 +136,7 @@ class ArrowMockTesting:
 class ArrowPandas:
     def __init__(self):
         self.pandas = pytest.importorskip("pandas")
-        if Version(self.pandas.__version__) >= Version('2.0.0') and pyarrow_dtypes_enabled:
+        if pandas_2_or_higher() and pyarrow_dtypes_enabled:
             self.backend = 'pyarrow'
             self.DataFrame = arrow_pandas_df
         else:
@@ -118,9 +144,11 @@ class ArrowPandas:
             self.backend = 'numpy_nullable'
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
+
     def __getattr__(self, __name: str):
         item = eval(f'self.pandas.{__name}')
         return item
+
 
 @pytest.fixture(scope="function")
 def require():
@@ -151,13 +179,24 @@ def require():
 
         for path in extension_paths_found:
             print(path)
-            if (path.endswith(extension_name + ".duckdb_extension")):
+            if path.endswith(extension_name + ".duckdb_extension"):
                 conn = duckdb.connect(db_name, config={'allow_unsigned_extensions': 'true'})
                 conn.execute(f"LOAD '{path}'")
                 return conn
         pytest.skip(f'could not load {extension_name}')
 
     return _require
+
+
+# By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
+@pytest.fixture(scope='function', autouse=True)
+def spark():
+    if not hasattr(spark, 'session'):
+        # Cache the import
+        from pyduckdb.spark.sql import SparkSession as session
+
+        spark.session = session
+    return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
 
 
 @pytest.fixture(scope='session', autouse=True)

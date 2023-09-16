@@ -1,15 +1,17 @@
 #include "duckdb/parser/tableref/subqueryref.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
 string SubqueryRef::ToString() const {
 	string result = "(" + subquery->ToString() + ")";
 	return BaseToString(result, column_name_alias);
+}
+
+SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {
 }
 
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
@@ -30,31 +32,6 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 	copy->column_name_alias = column_name_alias;
 	CopyProperties(*copy);
 	return std::move(copy);
-}
-
-void SubqueryRef::Serialize(FieldWriter &writer) const {
-	writer.WriteSerializable(*subquery);
-	writer.WriteList<string>(column_name_alias);
-}
-
-void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery", subquery);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-}
-
-unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto subquery = deserializer.ReadProperty<unique_ptr<SelectStatement>>("subquery");
-	auto result = make_uniq<SubqueryRef>(std::move(subquery));
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	return std::move(result);
-}
-
-unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader) {
-	auto subquery = reader.ReadRequiredSerializable<SelectStatement>();
-	auto result = make_uniq<SubqueryRef>(std::move(subquery));
-	result->column_name_alias = reader.ReadRequiredList<string>();
-	return std::move(result);
 }
 
 } // namespace duckdb

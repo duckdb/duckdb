@@ -1,8 +1,7 @@
 #include "duckdb/parser/tableref/expressionlistref.hpp"
 
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -62,46 +61,6 @@ unique_ptr<TableRef> ExpressionListRef::Copy() {
 	result->expected_names = expected_names;
 	result->expected_types = expected_types;
 	CopyProperties(*result);
-	return std::move(result);
-}
-
-void ExpressionListRef::Serialize(FieldWriter &writer) const {
-	writer.WriteList<string>(expected_names);
-	writer.WriteRegularSerializableList<LogicalType>(expected_types);
-	auto &serializer = writer.GetSerializer();
-	writer.WriteField<uint32_t>(values.size());
-	for (idx_t i = 0; i < values.size(); i++) {
-		serializer.WriteList(values[i]);
-	}
-}
-
-void ExpressionListRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("expected_names", expected_names);
-	serializer.WriteProperty("expected_types", expected_types);
-	serializer.WriteProperty("values", values);
-}
-
-unique_ptr<TableRef> ExpressionListRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_uniq<ExpressionListRef>();
-	source.ReadProperty("expected_names", result->expected_names);
-	source.ReadProperty("expected_types", result->expected_types);
-	source.ReadProperty("values", result->values);
-	return std::move(result);
-}
-
-unique_ptr<TableRef> ExpressionListRef::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<ExpressionListRef>();
-	// value list
-	result->expected_names = reader.ReadRequiredList<string>();
-	result->expected_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	idx_t value_list_size = reader.ReadRequired<uint32_t>();
-	auto &source = reader.GetSource();
-	for (idx_t i = 0; i < value_list_size; i++) {
-		vector<unique_ptr<ParsedExpression>> value_list;
-		source.ReadList<ParsedExpression>(value_list);
-		result->values.push_back(std::move(value_list));
-	}
 	return std::move(result);
 }
 

@@ -1,0 +1,269 @@
+[
+  {
+    "class": "CreateInfo",
+    "class_type": "type",
+    "set_parameters": [
+      "type"
+    ],
+    "includes": [
+      "duckdb/parser/parsed_data/create_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 100,
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "id": 101,
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "id": 102,
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "id": 103,
+        "name": "temporary",
+        "type": "bool"
+      },
+      {
+        "id": 104,
+        "name": "internal",
+        "type": "bool"
+      },
+      {
+        "id": 105,
+        "name": "on_conflict",
+        "type": "OnCreateConflict"
+      },
+      {
+        "id": 106,
+        "name": "sql",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "CreateIndexInfo",
+    "base": "CreateInfo",
+    "enum": "INDEX_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_index_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string",
+        "property": "index_name"
+      },
+      {
+        "id": 201,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 202,
+        "name": "index_type",
+        "type": "IndexType"
+      },
+      {
+        "id": 203,
+        "name": "constraint_type",
+        "type": "IndexConstraintType"
+      },
+      {
+        "id": 204,
+        "name": "parsed_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "id": 205,
+        "name": "scan_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 206,
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "id": 207,
+        "name": "column_ids",
+        "type": "vector<column_t>"
+      },
+      {
+        "id": 208,
+        "name": "options",
+        "type": "case_insensitive_map_t<Value>"
+      },
+      {
+        "id": 209,
+        "name": "index_type_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "CreateTableInfo",
+    "base": "CreateInfo",
+    "enum": "TABLE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_table_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "columns",
+        "type": "ColumnList"
+      },
+      {
+        "id": 202,
+        "name": "constraints",
+        "type": "vector<Constraint*>"
+      },
+      {
+        "id": 203,
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "CreateSchemaInfo",
+    "base": "CreateInfo",
+    "enum": "SCHEMA_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_schema_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "CreateViewInfo",
+    "base": "CreateInfo",
+    "enum": "VIEW_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_view_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "id": 203,
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "CreateTypeInfo",
+    "base": "CreateInfo",
+    "enum": "TYPE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_type_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "logical_type",
+        "property": "type",
+        "type": "LogicalType"
+      }
+    ]
+  },
+  {
+    "class": "CreateMacroInfo",
+    "base": "CreateInfo",
+    "enum": ["MACRO_ENTRY", "TABLE_MACRO_ENTRY"],
+    "includes": [
+      "duckdb/parser/parsed_data/create_macro_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "function",
+        "type": "MacroFunction*"
+      }
+    ],
+    "constructor": ["$CatalogType"]
+  },
+  {
+    "class": "CreateSequenceInfo",
+    "base": "CreateInfo",
+    "enum": "SEQUENCE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_sequence_info.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "usage_count",
+        "type": "uint64_t"
+      },
+      {
+        "id": 202,
+        "name": "increment",
+        "type": "int64_t"
+      },
+      {
+        "id": 203,
+        "name": "min_value",
+        "type": "int64_t"
+      },
+      {
+        "id": 204,
+        "name": "max_value",
+        "type": "int64_t"
+      },
+      {
+        "id": 205,
+        "name": "start_value",
+        "type": "int64_t"
+      },
+      {
+        "id": 206,
+        "name": "cycle",
+        "type": "bool"
+      }
+    ]
+  }
+]

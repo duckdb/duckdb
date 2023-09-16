@@ -9,6 +9,7 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
+#include "json_enums.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -18,16 +19,6 @@
 #include "json_transform.hpp"
 
 namespace duckdb {
-
-enum class JSONScanType : uint8_t {
-	INVALID = 0,
-	//! Read JSON straight to columnar data
-	READ_JSON = 1,
-	//! Read JSON values as strings
-	READ_JSON_OBJECTS = 2,
-	//! Sample run for schema detection
-	SAMPLE = 3,
-};
 
 struct JSONString {
 public:
@@ -101,8 +92,8 @@ public:
 	void InitializeFormats(bool auto_detect);
 	void SetCompression(const string &compression);
 
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(ClientContext &context, FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<JSONScanData> Deserialize(Deserializer &deserializer);
 
 public:
 	//! Scan type
@@ -144,6 +135,12 @@ public:
 
 	//! The inferred avg tuple size
 	idx_t avg_tuple_size = 420;
+
+private:
+	JSONScanData(ClientContext &context, vector<string> files, string date_format, string timestamp_format);
+
+	string GetDateFormat() const;
+	string GetTimestampFormat() const;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
@@ -182,11 +179,13 @@ public:
 	//! One JSON reader per file
 	vector<optional_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
-	idx_t file_index;
+	atomic<idx_t> file_index;
 	atomic<idx_t> batch_index;
 
 	//! Current number of threads active
 	idx_t system_threads;
+	//! Whether we enable parallel scans (only if less files than threads)
+	bool enable_parallel_scans;
 };
 
 struct JSONScanLocalState {
@@ -219,19 +218,20 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferInternal(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, optional_idx &buffer_index);
 	void SkipOverArrayStart();
 
-	bool ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index, const bool already_incremented_file_idx);
-	void ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ReadAndAutoDetect(JSONScanGlobalState &gstate, optional_idx &buffer_index);
+	void ReconstructFirstObject();
 	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
 private:
@@ -291,9 +291,9 @@ public:
 	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                  vector<unique_ptr<Expression>> &filters);
 
-	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
-	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
-	                                            TableFunction &function);
+	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
+	                      const TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };

@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/type_util.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -68,14 +69,16 @@ template <>
 bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result);
 template <>
 DUCKDB_API bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result);
+template <>
+bool TryAddOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 
 struct AddOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA left, TB right) {
 		TR result;
 		if (!TryAddOperator::Operation(left, right, result)) {
-			throw OutOfRangeException("Overflow in addition of %s (%d + %d)!", TypeIdToString(GetTypeId<TA>()), left,
-			                          right);
+			throw OutOfRangeException("Overflow in addition of %s (%s + %s)!", TypeIdToString(GetTypeId<TA>()),
+			                          NumericHelper::ToString(left), NumericHelper::ToString(right));
 		}
 		return result;
 	}

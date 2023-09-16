@@ -20,7 +20,7 @@ bool PythonImportCacheItem::IsLoaded() const {
 	return type.ptr() != nullptr;
 }
 
-PyObject *PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
+py::handle PythonImportCacheItem::AddCache(PythonImportCache &cache, py::object object) {
 	return cache.AddCache(std::move(object));
 }
 
@@ -59,7 +59,7 @@ PythonImportCache::~PythonImportCache() {
 	owned_objects.clear();
 }
 
-PyObject *PythonImportCache::AddCache(py::object item) {
+py::handle PythonImportCache::AddCache(py::object item) {
 	auto object_ptr = item.ptr();
 	owned_objects.push_back(std::move(item));
 	return object_ptr;

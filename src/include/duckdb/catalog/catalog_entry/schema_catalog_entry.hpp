@@ -19,8 +19,6 @@ class StandardEntry;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class SequenceCatalogEntry;
-class Serializer;
-class Deserializer;
 
 enum class OnCreateConflict : uint8_t;
 
@@ -49,16 +47,13 @@ public:
 	SchemaCatalogEntry(Catalog &catalog, string name, bool is_internal);
 
 public:
+	unique_ptr<CreateInfo> GetInfo() const override;
+
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	virtual void Scan(ClientContext &context, CatalogType type,
 	                  const std::function<void(CatalogEntry &)> &callback) = 0;
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
 	virtual void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) = 0;
-
-	//! Serialize the meta information of the SchemaCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer) const;
-	//! Deserializes to a CreateSchemaInfo
-	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &source);
 
 	string ToSQL() const override;
 

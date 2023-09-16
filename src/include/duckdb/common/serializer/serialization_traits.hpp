@@ -1,46 +1,54 @@
 #pragma once
 #include <type_traits>
+#include <cstdint>
+
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
-class FormatSerializer;   // Forward declare
-class FormatDeserializer; // Forward declare
+class Serializer;   // Forward declare
+class Deserializer; // Forward declare
+
+typedef uint16_t field_id_t;
+const field_id_t MESSAGE_TERMINATOR_FIELD_ID = 0xFFFF;
 
 // Backport to c++11
 template <class...>
 using void_t = void;
 
-// Check for anything implementing a `void FormatSerialize(FormatSerializer &FormatSerializer)` method
+// Check for anything implementing a `void Serialize(Serializer &Serializer)` method
 template <typename T, typename = T>
 struct has_serialize : std::false_type {};
 template <typename T>
 struct has_serialize<
     T, typename std::enable_if<
-           std::is_same<decltype(std::declval<T>().FormatSerialize(std::declval<FormatSerializer &>())), void>::value,
-           T>::type> : std::true_type {};
+           std::is_same<decltype(std::declval<T>().Serialize(std::declval<Serializer &>())), void>::value, T>::type>
+    : std::true_type {};
 
 template <typename T, typename = T>
 struct has_deserialize : std::false_type {};
 
-// Accept `static unique_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static unique_ptr<T> Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), unique_ptr<T>(FormatDeserializer &)>::value,
-                               T>::type> : std::true_type {};
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), unique_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
 
-// Accept `static shared_ptr<T> FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static shared_ptr<T> Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), shared_ptr<T>(FormatDeserializer &)>::value,
-                               T>::type> : std::true_type {};
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), shared_ptr<T>(Deserializer &)>::value, T>::type>
+    : std::true_type {};
 
-// Accept `static T FormatDeserialize(FormatDeserializer& deserializer)`
+// Accept `static T Deserialize(Deserializer& deserializer)`
 template <typename T>
 struct has_deserialize<
-    T, typename std::enable_if<std::is_same<decltype(T::FormatDeserialize), T(FormatDeserializer &)>::value, T>::type>
+    T, typename std::enable_if<std::is_same<decltype(T::Deserialize), T(Deserializer &)>::value, T>::type>
     : std::true_type {};
 
 // Check if T is a vector, and provide access to the inner type
@@ -51,11 +59,28 @@ struct is_vector<typename duckdb::vector<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
+template <typename T>
+struct is_unsafe_vector : std::false_type {};
+template <typename T>
+struct is_unsafe_vector<typename duckdb::unsafe_vector<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
 // Check if T is a unordered map, and provide access to the inner type
 template <typename T>
 struct is_unordered_map : std::false_type {};
 template <typename... Args>
-struct is_unordered_map<typename std::unordered_map<Args...>> : std::true_type {
+struct is_unordered_map<typename duckdb::unordered_map<Args...>> : std::true_type {
+	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
+	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
+	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
+	typedef typename std::tuple_element<3, std::tuple<Args...>>::type EQUAL_TYPE;
+};
+
+template <typename T>
+struct is_map : std::false_type {};
+template <typename... Args>
+struct is_map<typename duckdb::map<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type KEY_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type VALUE_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type HASH_TYPE;
@@ -90,7 +115,7 @@ struct is_pair<std::pair<T, U>> : std::true_type {
 template <typename T>
 struct is_unordered_set : std::false_type {};
 template <typename... Args>
-struct is_unordered_set<std::unordered_set<Args...>> : std::true_type {
+struct is_unordered_set<duckdb::unordered_set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
@@ -99,7 +124,7 @@ struct is_unordered_set<std::unordered_set<Args...>> : std::true_type {
 template <typename T>
 struct is_set : std::false_type {};
 template <typename... Args>
-struct is_set<std::set<Args...>> : std::true_type {
+struct is_set<duckdb::set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;

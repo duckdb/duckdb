@@ -171,9 +171,7 @@ PipelineExecuteResult PipelineExecutor::Execute(idx_t max_chunks) {
 		return PipelineExecuteResult::NOT_FINISHED;
 	}
 
-	PushFinalize();
-
-	return PipelineExecuteResult::FINISHED;
+	return PushFinalize();
 }
 
 PipelineExecuteResult PipelineExecutor::Execute() {
@@ -238,24 +236,45 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 	}
 }
 
-void PipelineExecutor::PushFinalize() {
+PipelineExecuteResult PipelineExecutor::PushFinalize() {
 	if (finalized) {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
 
 	D_ASSERT(local_sink_state);
 
+	// Run the combine for the sink
+	OperatorSinkCombineInput combine_input {*pipeline.sink->sink_state, *local_sink_state, interrupt_state};
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	if (debug_blocked_combine_count < debug_blocked_target_count) {
+		debug_blocked_combine_count++;
+
+		auto &callback_state = combine_input.interrupt_state;
+		std::thread rewake_thread([callback_state] {
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			callback_state.Callback();
+		});
+		rewake_thread.detach();
+
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+#endif
+	auto result = pipeline.sink->Combine(context, combine_input);
+
+	if (result == SinkCombineResultType::BLOCKED) {
+		return PipelineExecuteResult::INTERRUPTED;
+	}
+
 	finalized = true;
-
-	// run the combine for the sink
-	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
-
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {
 		intermediate_states[i]->Finalize(pipeline.operators[i].get(), context);
 	}
 	pipeline.executor.Flush(thread);
 	local_sink_state.reset();
+
+	return PipelineExecuteResult::FINISHED;
 }
 
 // TODO: Refactoring the StreamingQueryResult to use Push-based execution should eliminate the need for this code

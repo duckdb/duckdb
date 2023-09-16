@@ -1,0 +1,70 @@
+# name: test/sql/storage/mix/updates_deletes_big_table.test
+# description: Test update/deletes on big table
+# group: [mix]
+
+# load the DB from disk
+load __TEST_DIR__/updates_deletes_big_table.db
+
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT a FROM range(0, 1000) tbl1(a), repeat(0, 100) tbl2(b)
+
+statement ok
+UPDATE test SET a=2000 WHERE a=1
+
+statement ok
+DELETE FROM test WHERE a=2 OR a=17
+
+query II
+SELECT SUM(a), COUNT(a) FROM test
+----
+50148000	99800
+
+query I
+SELECT COUNT(a) FROM test WHERE a=0
+----
+100
+
+query I
+SELECT COUNT(a) FROM test WHERE a=1
+----
+0
+
+query I
+SELECT COUNT(a) FROM test WHERE a=2
+----
+0
+
+query I
+SELECT COUNT(a) FROM test WHERE a=17
+----
+0
+
+restart
+
+query II
+SELECT SUM(a), COUNT(a) FROM test
+----
+50148000	99800
+
+query I
+SELECT COUNT(a) FROM test WHERE a=0
+----
+100
+
+query I
+SELECT COUNT(a) FROM test WHERE a=1
+----
+0
+
+query I
+SELECT COUNT(a) FROM test WHERE a=2
+----
+0
+
+query I
+SELECT COUNT(a) FROM test WHERE a=17
+----
+0

@@ -74,8 +74,8 @@ struct ParquetOptions {
 	MultiFileReaderOptions file_options;
 
 public:
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static ParquetOptions Deserialize(Deserializer &deserializer);
 };
 
 class ParquetReader {
@@ -93,6 +93,7 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
+	unique_ptr<ColumnReader> root_reader;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);

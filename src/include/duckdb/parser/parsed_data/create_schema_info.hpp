@@ -23,15 +23,8 @@ public:
 		return std::move(result);
 	}
 
-	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &deserializer) {
-		auto result = make_uniq<CreateSchemaInfo>();
-		result->DeserializeBase(deserializer);
-		return result;
-	}
-
-protected:
-	void SerializeInternal(Serializer &) const override {
-	}
+	DUCKDB_API void Serialize(Serializer &serializer) const override;
+	DUCKDB_API static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

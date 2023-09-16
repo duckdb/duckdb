@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/create/create_art_sorted.benchmark
+# description: Create ART on 1M sorted integers
+# group: [create]
+
+name Create ART Sorted
+group art
+
+load
+CREATE TABLE art AS SELECT range::INT id FROM range(1000000);
+
+run
+CREATE INDEX idx ON art USING ART(id);
+
+cleanup
+DROP INDEX idx;

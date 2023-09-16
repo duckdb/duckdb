@@ -1,7 +1,7 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -309,12 +309,12 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	f.close();
 
 	// set up the CSV reader
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	options.auto_detect = false;
-	options.delimiter = "|";
-	options.header = has_header;
-	options.quote = "\"";
-	options.escape = "\"";
+	options.dialect_options.state_machine_options.delimiter = '|';
+	options.dialect_options.header = has_header;
+	options.dialect_options.state_machine_options.quote = '\"';
+	options.dialect_options.state_machine_options.escape = '\"';
 	options.file_path = csv_path;
 
 	// set up the intermediate result chunk

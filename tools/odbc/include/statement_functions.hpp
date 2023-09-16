@@ -10,12 +10,12 @@ namespace duckdb {
 SQLRETURN PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
 
 SQLRETURN BatchExecuteStmt(SQLHSTMT statement_handle);
-SQLRETURN SingleExecuteStmt(OdbcHandleStmt *stmt);
+SQLRETURN SingleExecuteStmt(OdbcHandleStmt *hstmt);
 
-SQLRETURN FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation = SQL_FETCH_NEXT,
+SQLRETURN FetchStmtResult(duckdb::OdbcHandleStmt *hstmt, SQLSMALLINT fetch_orientation = SQL_FETCH_NEXT,
                           SQLLEN fetch_offset = 0);
 
-SQLRETURN GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
+SQLRETURN GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                             SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
 
 SQLRETURN ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
@@ -27,7 +27,7 @@ SQLRETURN BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT parameter_nu
                             SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
                             SQLLEN *str_len_or_ind_ptr);
 
-SQLRETURN CloseStmt(duckdb::OdbcHandleStmt *stmt);
+SQLRETURN CloseStmt(duckdb::OdbcHandleStmt *hstmt);
 
 } // namespace duckdb
 #endif

@@ -41,7 +41,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
 		return;
 	}
 
-	D_ASSERT(set_expressions.size() == set_columns.size());
+	D_ASSERT(this->set_expressions.size() == this->set_columns.size());
 
 	// One or more columns are referenced from the existing table,
 	// we use the 'insert_types' to figure out which types these columns have
@@ -463,19 +463,17 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<InsertGlobalState>();
-	auto &lstate = lstate_p.Cast<InsertLocalState>();
+SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	auto &lstate = input.local_state.Cast<InsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
-	if (!parallel) {
-		return;
+	if (!parallel || !lstate.local_collection) {
+		return SinkCombineResultType::FINISHED;
 	}
-	if (!lstate.local_collection) {
-		return;
-	}
+
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
 	lstate.local_collection->FinalizeAppend(tdata, lstate.local_append_state);
@@ -484,7 +482,7 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
-	if (append_count < RowGroup::ROW_GROUP_SIZE) {
+	if (append_count < Storage::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
@@ -500,11 +498,13 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
 	}
+
+	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                          GlobalSinkState &state) const {
-	auto &gstate = state.Cast<InsertGlobalState>();
+                                          OperatorSinkFinalizeInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
 	if (!parallel && gstate.initialized) {
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();

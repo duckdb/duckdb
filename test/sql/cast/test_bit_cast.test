@@ -1,0 +1,403 @@
+# name: test/sql/cast/test_bit_cast.test
+# description: Test casting from and to BitString
+# group: [cast]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE bits (b bit);
+
+statement ok
+INSERT INTO bits VALUES('00001111');
+
+#                   cast to bool
+# ---------------------------------------------------
+statement error
+SELECT bitstring('1', 9)::BOOL;
+----
+Conversion Error: Bitstring doesn't fit inside of UINT8
+
+query I
+SELECT b::BOOLEAN FROM bits;
+----
+true
+
+query I
+SELECT '1'::BIT::BOOL;
+----
+true
+
+query I
+SELECT '0'::BIT::BOOL;
+----
+false
+
+#              casting to numerical types
+# ---------------------------------------------------
+query I
+SELECT b::TINYINT FROM bits;
+----
+15
+
+query I
+SELECT b::SMALLINT FROM bits;
+----
+15
+
+query I
+SELECT b::INTEGER FROM bits;
+----
+15
+
+query I
+SELECT b::BIGINT FROM bits;
+----
+15
+
+query I
+SELECT b::UTINYINT FROM bits;
+----
+15
+
+query I
+SELECT b::USMALLINT FROM bits;
+----
+15
+
+query I
+SELECT b::UINTEGER FROM bits;
+----
+15
+
+query I
+SELECT b::UBIGINT FROM bits;
+----
+15
+
+query I
+SELECT b::HUGEINT FROM bits;
+----
+15
+
+query I
+SELECT b::FLOAT FROM bits;
+----
+2.1e-44
+
+query I
+SELECT b::DOUBLE FROM bits;
+----
+7.4e-323
+
+query I
+SELECT '100001111000011110000111100001111'::BIT::BIGINT;
+----
+4547612431
+
+#                numeric to bitstring
+# ---------------------------------------------------
+query I
+SELECT 15::BOOLEAN::BIT;
+----
+00000001
+
+query I
+SELECT 15::TINYINT::BIT;
+----
+00001111
+
+query I
+SELECT 15::SMALLINT::BIT;
+----
+0000000000001111
+
+query I
+SELECT 15::BIT;
+----
+00000000000000000000000000001111
+
+query I
+SELECT 15::BIGINT::BIT;
+----
+0000000000000000000000000000000000000000000000000000000000001111
+
+query I
+SELECT 15::HUGEINT::BIT;
+----
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001111
+
+query I
+SELECT 2.1e-44::FLOAT::BIT;
+----
+00000000000000000000000000001111
+
+query I
+SELECT 7.4e-323::BIT;
+----
+0000000000000000000000000000000000000000000000000000000000001111
+
+#  bitstrings that are too large for casted-to type
+# ---------------------------------------------------
+statement error
+SELECT bitstring('1', 9)::TINYINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT8
+
+statement error
+SELECT bitstring('1', 17)::SMALLINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT16
+
+statement error
+SELECT bitstring('1', 33)::INT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT32
+
+statement error
+SELECT bitstring('1', 65)::BIGINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT64
+
+statement error
+SELECT bitstring('1', 33)::FLOAT;
+----
+Conversion Error: Bitstring doesn't fit inside of FLOAT
+
+statement error
+SELECT bitstring('1', 65)::DOUBLE;
+----
+Conversion Error: Bitstring doesn't fit inside of DOUBLE
+
+#               casting to BLOB type
+# ---------------------------------------------------
+query I
+SELECT b::BLOB FROM bits;
+----
+\x0F
+
+query I
+SELECT bitstring('1111', 32)::BLOB;
+----
+\x00\x00\x00\x0F
+
+query I
+SELECT '1111'::BIT::BLOB;
+----
+\x0F
+
+query I
+SELECT bitstring('1111', 33)::BLOB;
+----
+\x00\x00\x00\x00\x0F
+
+#             casting from BLOB type
+# ---------------------------------------------------
+query I
+SELECT 'AAAA'::BLOB::BIT;
+----
+01000001010000010100000101000001
+
+statement error
+SELECT ''::BLOB::BIT;
+----
+Conversion Error: Cannot cast empty BLOB to BIT
+
+#               negative numbers
+# ---------------------------------------------------
+query I
+SELECT (-15)::TINYINT::BIT;
+----
+11110001
+
+query I
+SELECT (-15)::HUGEINT::BIT;
+----
+11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111110001
+
+#            signed integer limits -> Bit
+# ---------------------------------------------------
+query I
+SELECT (127)::TINYINT::BIT;
+----
+01111111
+
+query I
+SELECT (-128)::TINYINT::BIT;
+----
+10000000
+
+query I
+SELECT (32767)::SMALLINT::BIT;
+----
+0111111111111111
+
+query I
+SELECT (-32768)::SMALLINT::BIT;
+----
+1000000000000000
+
+query I
+SELECT (2147483647)::INT::BIT;
+----
+01111111111111111111111111111111
+
+query I
+SELECT (-2147483648)::INT::BIT;
+----
+10000000000000000000000000000000
+
+query I
+SELECT (9223372036854775807)::BIGINT::BIT;
+----
+0111111111111111111111111111111111111111111111111111111111111111
+
+query I
+SELECT (-9223372036854775808)::BIGINT::BIT;
+----
+1000000000000000000000000000000000000000000000000000000000000000
+
+query I
+SELECT (170141183460469231731687303715884105727)::HUGEINT::BIT;
+----
+01111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111
+
+query I
+SELECT (-170141183460469231731687303715884105727)::HUGEINT::BIT;
+----
+10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001
+
+#            Bit -> signed integer limits
+# ---------------------------------------------------
+query I
+SELECT '01111111'::BIT::TINYINT;
+----
+127
+
+query I
+SELECT '10000000'::BIT::TINYINT;
+----
+-128
+
+query I
+SELECT '0111111111111111'::BIT::SMALLINT;
+----
+32767
+
+query I
+SELECT '1000000000000000'::BIT::SMALLINT;
+----
+-32768
+
+query I
+SELECT '01111111111111111111111111111111'::BIT::INT;
+----
+2147483647
+
+query I
+SELECT '10000000000000000000000000000000'::BIT::INT;
+----
+-2147483648
+
+query I
+SELECT '0111111111111111111111111111111111111111111111111111111111111111'::BIT::BIGINT;
+----
+9223372036854775807
+
+query I
+SELECT '1000000000000000000000000000000000000000000000000000000000000000'::BIT::BIGINT;
+----
+-9223372036854775808
+
+query I
+SELECT '01111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'::BIT::HUGEINT;
+----
+170141183460469231731687303715884105727
+
+# hugeint's negative limit "is not representable by the internal structure"
+statement error
+SELECT '10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'::BIT::HUGEINT;
+----
+Conversion Error: Minimum limit for HUGEINT is -170141183460469231731687303715884105727
+
+
+#            unsigned integer limits -> Bit
+# ---------------------------------------------------
+query I
+SELECT (255)::UTINYINT::BIT;
+----
+11111111
+
+query I
+SELECT (65535)::USMALLINT::BIT;
+----
+1111111111111111
+
+query I
+SELECT (4294967295)::UINTEGER::BIT;
+----
+11111111111111111111111111111111
+
+query I
+SELECT (18446744073709551615)::UBIGINT::BIT;
+----
+1111111111111111111111111111111111111111111111111111111111111111
+
+#            Bit -> unsigned integer limits
+# ---------------------------------------------------
+query I
+SELECT '11111111'::BIT::UTINYINT;
+----
+255
+
+query I
+SELECT '1111111111111111'::BIT::USMALLINT;
+----
+65535
+
+query I
+SELECT '11111111111111111111111111111111'::BIT::UINTEGER;
+----
+4294967295
+
+query I
+SELECT '1111111111111111111111111111111111111111111111111111111111111111'::BIT::UBIGINT;
+----
+18446744073709551615
+
+#                float limits -> Bit
+# ---------------------------------------------------
+query I
+SELECT (3.4028235e+38)::FLOAT::BIT;
+----
+01111111011111111111111111111111
+
+query I
+SELECT (1.7976931348623157e+308)::DOUBLE::BIT;
+----
+0111111111101111111111111111111111111111111111111111111111111111
+
+
+#                Bit -> float limits
+# ---------------------------------------------------
+query I
+SELECT '01111111011111111111111111111111'::BIT::FLOAT;
+----
+3.4028235e+38
+
+query I
+SELECT '0111111111101111111111111111111111111111111111111111111111111111'::BIT::DOUBLE;
+----
+1.7976931348623157e+308
+
+#                   NULL <-> Bit
+# ---------------------------------------------------
+query I
+SELECT NULL::BIT;
+----
+NULL
+
+query I
+SELECT NULL::BIT::INT;
+----
+NULL

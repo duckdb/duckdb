@@ -1,0 +1,30 @@
+# name: test/sql/index/art/storage/test_art_import.test
+# description: Test index creation when importing the ART
+# group: [storage]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TABLE tracking("nflId" VARCHAR , "frameId" INTEGER, "gameId" INTEGER, "playId" INTEGER);
+
+statement ok
+INSERT INTO tracking values ('a', 0,0,0);
+
+statement ok
+create index nflid_idx on tracking (nflid)
+
+statement ok
+create unique index tracking_key_idx on tracking (gameId, playId, frameId, nflId)
+
+statement ok
+EXPORT DATABASE '__TEST_DIR__/index';
+
+statement ok
+ROLLBACK
+
+statement ok
+IMPORT DATABASE '__TEST_DIR__/index'

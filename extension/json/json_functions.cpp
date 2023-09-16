@@ -209,7 +209,8 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		table_function->alias = FileSystem::ExtractBaseName(table_name);
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 
 	return std::move(table_function);

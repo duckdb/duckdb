@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
@@ -20,6 +19,7 @@ public:
 
 public:
 	DUCKDB_API ColumnList(bool allow_duplicate_names = false);
+	DUCKDB_API explicit ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names = false);
 
 	DUCKDB_API void AddColumn(ColumnDefinition column);
 	void Finalize();
@@ -50,8 +50,8 @@ public:
 	}
 
 	ColumnList Copy() const;
-	void Serialize(FieldWriter &writer) const;
-	static ColumnList Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const;
+	static ColumnList Deserialize(Deserializer &deserializer);
 
 	DUCKDB_API ColumnListIterator Logical() const;
 	DUCKDB_API ColumnListIterator Physical() const;

@@ -18,7 +18,7 @@ Binder Error
 
 # we can't do functions here
 statement error
-copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {j:42-1})
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42-1})
 ----
 Parser Error
 
@@ -31,7 +31,49 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
 ----
 42
 
-# this shouldn't
+# needs to be castable to integer, so this works
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:'42'})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# but this doesn't
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:'abc'})
+----
+Invalid Input Error
+
+# we can do casts
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42::hugeint})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# wrong casts should lead to ConversionException
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:1024::utinyint})
+----
+Conversion Error
+
+# we can't do functions inside of casts (this one is just for coverage)
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:cast(42-1 as hugeint)})
+----
+Parser Error
+
+# field id can't be a colref
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:i})
+----
+Parser Error
+
+# this shouldn't work
 statement error
 copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'oops')
 ----

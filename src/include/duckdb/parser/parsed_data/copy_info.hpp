@@ -17,7 +17,11 @@
 namespace duckdb {
 
 struct CopyInfo : public ParseInfo {
-	CopyInfo() : catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::COPY_INFO;
+
+public:
+	CopyInfo() : ParseInfo(TYPE), catalog(INVALID_CATALOG), schema(DEFAULT_SCHEMA) {
 	}
 
 	//! The catalog name to copy to/from
@@ -50,6 +54,9 @@ public:
 		result->options = options;
 		return result;
 	}
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 
 } // namespace duckdb

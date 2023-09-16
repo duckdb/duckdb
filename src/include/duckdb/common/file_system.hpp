@@ -185,21 +185,21 @@ public:
 	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
-	//! Path separator for the current file system
-	DUCKDB_API static string PathSeparator();
+	//! Path separator for path
+	DUCKDB_API virtual string PathSeparator(const string &path);
 	//! Checks if path is starts with separator (i.e., '/' on UNIX '\\' on Windows)
-	DUCKDB_API static bool IsPathAbsolute(const string &path);
+	DUCKDB_API bool IsPathAbsolute(const string &path);
 	//! Normalize an absolute path - the goal of normalizing is converting "\test.db" and "C:/test.db" into "C:\test.db"
 	//! so that the database system cache can correctly
-	DUCKDB_API static string NormalizeAbsolutePath(const string &path);
+	DUCKDB_API string NormalizeAbsolutePath(const string &path);
 	//! Join two paths together
-	DUCKDB_API static string JoinPath(const string &a, const string &path);
+	DUCKDB_API string JoinPath(const string &a, const string &path);
 	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
-	DUCKDB_API static string ConvertSeparators(const string &path);
+	DUCKDB_API string ConvertSeparators(const string &path);
 	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is 'example')
-	DUCKDB_API static string ExtractBaseName(const string &path);
+	DUCKDB_API string ExtractBaseName(const string &path);
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
-	DUCKDB_API static string ExtractName(const string &path);
+	DUCKDB_API string ExtractName(const string &path);
 
 	//! Returns the value of an environment variable - or the empty string if it is not set
 	DUCKDB_API static string GetEnvVariable(const string &name);
@@ -246,6 +246,8 @@ public:
 
 	//! Whether or not a file is remote or local, based only on file path
 	DUCKDB_API static bool IsRemoteFile(const string &path);
+
+	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 };
 
 } // namespace duckdb

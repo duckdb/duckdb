@@ -1,0 +1,58 @@
+# name: test/sql/json/scalar/test_json_keys.test
+# description: Test JSON keys function
+# group: [scalar]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query T
+select json_keys('{"duck": 42}');
+----
+[duck]
+
+query T
+select json_keys('{"duck": 42, "goose": 43}');
+----
+[duck, goose]
+
+query T
+select json_keys('["duck", "goose"]');
+----
+[]
+
+query T
+select json_keys(NULL)
+----
+NULL
+
+query T
+select json_keys('{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}', ['duck', 'goose'])
+----
+[[key1], [key1, key2]]
+
+statement ok
+create table t1 as
+select range, case when range % 2 = 0 then '{"duck": 42}' else '{"duck": 42, "goose": 43}' end j
+from range(10000)
+
+query TT
+select range % 2 g, sum(length(json_keys(j))) c
+from t1
+group by g
+order by all
+----
+0	5000
+1	10000
+
+statement ok
+create table t2 as
+select range, '{"duck": {"key1": 42}, "goose": {"key1": 42, "key2": 43}}' j
+from range(10000)
+
+query T
+select sum(list_sum([length(l) for l in json_keys(j, ['duck', 'goose'])])) s
+from t2
+----
+30000

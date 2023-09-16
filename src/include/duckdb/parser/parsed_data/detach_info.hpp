@@ -14,6 +14,10 @@
 namespace duckdb {
 
 struct DetachInfo : public ParseInfo {
+public:
+	static constexpr const ParseInfoType TYPE = ParseInfoType::DETACH_INFO;
+
+public:
 	DetachInfo();
 
 	//! The alias of the attached database
@@ -23,7 +27,8 @@ struct DetachInfo : public ParseInfo {
 
 public:
 	unique_ptr<DetachInfo> Copy() const;
-	void Serialize(Serializer &serializer) const;
+
+	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
 };
 } // namespace duckdb

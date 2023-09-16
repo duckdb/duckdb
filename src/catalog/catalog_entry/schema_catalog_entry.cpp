@@ -3,7 +3,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 
@@ -33,20 +32,10 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
-void SchemaCatalogEntry::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.Finalize();
-}
-
-unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_uniq<CreateSchemaInfo>();
-
-	FieldReader reader(source);
-	info->schema = reader.ReadRequired<string>();
-	reader.Finalize();
-
-	return info;
+unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateSchemaInfo>();
+	result->schema = name;
+	return std::move(result);
 }
 
 string SchemaCatalogEntry::ToSQL() const {

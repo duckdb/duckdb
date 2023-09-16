@@ -110,21 +110,21 @@
         "parameters": "temporal",
         "description": "Extract the epoch component in milliseconds from a temporal type",
         "example": "epoch_ms(timestamp '2021-08-03 11:59:44.123456')",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "epoch_us",
         "parameters": "temporal",
         "description": "Extract the epoch component in microseconds from a temporal type",
         "example": "epoch_us(timestamp '2021-08-03 11:59:44.123456')",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "epoch_ns",
         "parameters": "temporal",
         "description": "Extract the epoch component in nanoseconds from a temporal type",
         "example": "epoch_ns(timestamp '2021-08-03 11:59:44.123456')",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "era",
@@ -172,6 +172,14 @@
         "type": "scalar_function_set"
     },
     {
+        "struct": "JulianDayFun",
+        "name": "julian",
+        "parameters": "ts",
+        "description": "Extract the Julian Day number from a date or timestamp",
+        "example": "julian(timestamp '2006-01-01 12:00')",
+        "type": "scalar_function_set"
+    },
+    {
         "name": "last_day",
         "parameters": "ts",
         "description": "Returns the last day of the month",
@@ -197,7 +205,7 @@
         "parameters": "year,month,day,hour,minute,seconds",
         "description": "The timestamp for the given parts",
         "example": "make_timestamp(1992, 9, 20, 13, 34, 27.123456)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "struct": "MicrosecondsFun",
@@ -356,8 +364,8 @@
     {
         "name": "to_timestamp",
         "parameters": "sec",
-        "description": "Converts sec since epoch to a timestamp",
-        "example": "to_timestamp(701222400)",
+        "description": "Converts secs since epoch to a timestamp with time zone",
+        "example": "to_timestamp(1284352323.5)",
         "type": "scalar_function"
     },
     {
@@ -371,7 +379,7 @@
         "struct": "TryStrpTimeFun",
         "name": "try_strptime",
         "parameters": "text,format",
-        "description": "Converts string to timestamp with time zone according to the format string if %Z is specified. Returns NULL on failure.",
+        "description": "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure.",
         "example": "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')",
         "type": "scalar_function_set"
     },

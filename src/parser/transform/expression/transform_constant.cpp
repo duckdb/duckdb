@@ -1,8 +1,11 @@
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/transformer.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
 
@@ -74,6 +77,55 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 
 unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst &c) {
 	return TransformValue(c.val);
+}
+
+bool Transformer::ConstructConstantFromExpression(const ParsedExpression &expr, Value &value) {
+	// We have to construct it like this because we don't have the ClientContext for binding/executing the expr here
+	switch (expr.type) {
+	case ExpressionType::FUNCTION: {
+		auto &function = expr.Cast<FunctionExpression>();
+		if (function.function_name == "struct_pack") {
+			unordered_set<string> unique_names;
+			child_list_t<Value> values;
+			values.reserve(function.children.size());
+			for (const auto &child : function.children) {
+				if (!unique_names.insert(child->alias).second) {
+					throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
+				}
+				Value child_value;
+				if (!ConstructConstantFromExpression(*child, child_value)) {
+					return false;
+				}
+				values.emplace_back(child->alias, std::move(child_value));
+			}
+			value = Value::STRUCT(std::move(values));
+			return true;
+		} else {
+			return false;
+		}
+	}
+	case ExpressionType::VALUE_CONSTANT: {
+		auto &constant = expr.Cast<ConstantExpression>();
+		value = constant.value;
+		return true;
+	}
+	case ExpressionType::OPERATOR_CAST: {
+		auto &cast = expr.Cast<CastExpression>();
+		Value dummy_value;
+		if (!ConstructConstantFromExpression(*cast.child, dummy_value)) {
+			return false;
+		}
+
+		string error_message;
+		if (!dummy_value.DefaultTryCastAs(cast.cast_type, value, &error_message)) {
+			throw ConversionException("Unable to cast %s to %s", dummy_value.ToString(),
+			                          EnumUtil::ToString(cast.cast_type.id()));
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
 }
 
 } // namespace duckdb

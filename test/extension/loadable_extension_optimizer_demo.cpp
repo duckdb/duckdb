@@ -1,11 +1,12 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
 
 using namespace duckdb;
 
@@ -21,6 +22,11 @@ using namespace duckdb;
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
+#endif
 
 class WaggleExtension : public OptimizerExtension {
 public:
@@ -94,13 +100,16 @@ public:
 			throw IOException("Failed to connect socket %s", string(strerror(errno)));
 		}
 
-		BufferedSerializer serializer;
+		MemoryStream stream;
+		BinarySerializer serializer(stream);
+		serializer.Begin();
 		plan->Serialize(serializer);
-		auto data = serializer.GetData();
+		serializer.End();
+		auto data = stream.GetData();
+		idx_t len = stream.GetPosition();
 
-		idx_t len = data.size;
 		WriteChecked(sockfd, &len, sizeof(idx_t));
-		WriteChecked(sockfd, data.data.get(), len);
+		WriteChecked(sockfd, data, len);
 
 		auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
@@ -111,10 +120,15 @@ public:
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
 			ReadChecked(sockfd, buffer, chunk_len);
-			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
+
+			MemoryStream source(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
+			BinaryDeserializer deserializer(source);
+
+			deserializer.Begin();
 			chunk.Deserialize(deserializer);
+			deserializer.End();
 			chunk_collection->Initialize(chunk.GetTypes());
 			chunk_collection->Append(chunk);
 			free(buffer);

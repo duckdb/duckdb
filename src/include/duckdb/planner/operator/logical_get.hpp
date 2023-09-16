@@ -11,6 +11,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,9 @@ public:
 	vector<string> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
+	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
+	//! Stored so the can be included in explain output
+	ExtraOperatorInfo extra_info;
 
 	string GetName() const override;
 	string ParamsToString() const override;
@@ -59,15 +63,19 @@ public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	idx_t EstimateCardinality(ClientContext &context) override;
 
-	void Serialize(FieldWriter &writer) const override;
-	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	vector<idx_t> GetTableIndex() const override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
 		return function.verify_serialization;
-	};
+	}
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
 protected:
 	void ResolveTypes() override;
+
+private:
+	LogicalGet();
 };
 } // namespace duckdb

@@ -198,6 +198,21 @@ Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Prefer Range Joins
+//===--------------------------------------------------------------------===//
+void PreferRangeJoins::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).prefer_range_joins = ClientConfig().prefer_range_joins;
+}
+
+void PreferRangeJoins::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).prefer_range_joins = input.GetValue<bool>();
+}
+
+Value PreferRangeJoins::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).prefer_range_joins);
+}
+
+//===--------------------------------------------------------------------===//
 // Default Collation
 //===--------------------------------------------------------------------===//
 void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -298,6 +313,30 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	default:
 		throw InternalException("Unknown null order setting");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Disabled File Systems
+//===--------------------------------------------------------------------===//
+void DisabledFileSystemsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	auto list = StringUtil::Split(input.ToString(), ",");
+	fs.SetDisabledFileSystems(list);
+}
+
+void DisabledFileSystemsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	fs.SetDisabledFileSystems(vector<string>());
+}
+
+Value DisabledFileSystemsSetting::GetSetting(ClientContext &context) {
+	return Value("");
 }
 
 //===--------------------------------------------------------------------===//
@@ -488,6 +527,52 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Autoload Extension Repository
+//===--------------------------------------------------------------------===//
+void AutoloadExtensionRepository::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = ClientConfig().autoinstall_extension_repo;
+}
+
+void AutoloadExtensionRepository::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).autoinstall_extension_repo = StringUtil::Lower(input.ToString());
+}
+
+Value AutoloadExtensionRepository::GetSetting(ClientContext &context) {
+	return Value(ClientConfig::GetConfig(context).autoinstall_extension_repo);
+}
+
+//===--------------------------------------------------------------------===//
+// Autoinstall Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoinstallKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoinstall_known_extensions = input.GetValue<bool>();
+}
+
+void AutoinstallKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoinstall_known_extensions = DBConfig().options.autoinstall_known_extensions;
+}
+
+Value AutoinstallKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoinstall_known_extensions);
+}
+//===--------------------------------------------------------------------===//
+// Autoload Known Extensions
+//===--------------------------------------------------------------------===//
+void AutoloadKnownExtensions::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.autoload_known_extensions = input.GetValue<bool>();
+}
+
+void AutoloadKnownExtensions::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.autoload_known_extensions = DBConfig().options.autoload_known_extensions;
+}
+
+Value AutoloadKnownExtensions::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.autoload_known_extensions);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
@@ -523,21 +608,6 @@ void EnableProgressBarPrintSetting::ResetLocal(ClientContext &context) {
 
 Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 	return Value::BOOLEAN(ClientConfig::GetConfig(context).print_progress_bar);
-}
-
-//===--------------------------------------------------------------------===//
-// Experimental Parallel CSV
-//===--------------------------------------------------------------------===//
-void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	Printer::Print("experimental_parallel_csv is deprecated and will be removed with the next release - the parallel "
-	               "CSV reader is now standard and does not need to be manually enabled anymore 1");
-}
-
-void ExperimentalParallelCSVSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-}
-
-Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
-	return Value();
 }
 
 //===--------------------------------------------------------------------===//
@@ -656,17 +726,12 @@ Value ForceCompressionSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ForceBitpackingModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto mode_str = StringUtil::Lower(input.ToString());
-	if (mode_str == "none") {
-		config.options.force_bitpacking_mode = BitpackingMode::AUTO;
-	} else {
-		auto mode = BitpackingModeFromString(mode_str);
-		if (mode == BitpackingMode::AUTO) {
-			throw ParserException(
-			    "Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
-			    "delta_for, or for");
-		}
-		config.options.force_bitpacking_mode = mode;
+	auto mode = BitpackingModeFromString(mode_str);
+	if (mode == BitpackingMode::INVALID) {
+		throw ParserException("Unrecognized option for force_bitpacking_mode, expected none, constant, constant_delta, "
+		                      "delta_for, or for");
 	}
+	config.options.force_bitpacking_mode = mode;
 }
 
 void ForceBitpackingModeSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {

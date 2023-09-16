@@ -61,6 +61,9 @@ public:
 		return types.size();
 	}
 
+	//! The size (in bytes) of this ColumnDataCollection
+	idx_t SizeInBytes() const;
+
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
 
@@ -150,6 +153,9 @@ public:
 
 	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<ColumnDataCollection> Deserialize(Deserializer &deserializer);
 
 private:
 	//! Creates a new segment within the ColumnDataCollection

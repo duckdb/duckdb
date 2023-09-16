@@ -4,7 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -27,6 +29,9 @@ bool ExtensionHelper::IsRelease(const string &version_tag) {
 }
 
 const string ExtensionHelper::GetVersionDirectoryName() {
+#ifdef DUCKDB_WASM_VERSION
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_WASM_VERSION);
+#endif
 	if (IsRelease(DuckDB::LibraryVersion())) {
 		return NormalizeVersionTag(DuckDB::LibraryVersion());
 	} else {
@@ -40,7 +45,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 
 string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
-	static_assertion(0, "ExtensionDirectory functionality is not supported in duckdb-wasm");
+	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
 	string extension_directory;
 	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
@@ -51,7 +56,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 		// expand ~ in extension directory
 		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
-			auto sep = fs.PathSeparator();
+			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
 			D_ASSERT(!splits.empty());
 			string extension_directory_prefix;
@@ -112,16 +117,18 @@ bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &me
 	return false;
 }
 
-void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install) {
+void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install,
+                                       const string &repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
 #endif
 	string local_path = ExtensionDirectory(config, fs);
-	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
+	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install, repository);
 }
 
-void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install) {
+void ExtensionHelper::InstallExtension(ClientContext &context, const string &extension, bool force_install,
+                                       const string &repository) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	// Install is currently a no-op
 	return;
@@ -130,7 +137,7 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
 	auto &client_config = ClientConfig::GetConfig(context);
-	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
+	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install, repository);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -150,8 +157,40 @@ void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, id
 	target_file.reset();
 }
 
+string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const ClientConfig> client_config, const string &repository) {
+	string default_endpoint = "http://extensions.duckdb.org";
+	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
+#ifdef WASM_LOADABLE_EXTENSIONS
+	versioned_path = "/duckdb-wasm" + versioned_path + ".wasm";
+#else
+	versioned_path = versioned_path + ".gz";
+#endif
+	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
+	string endpoint;
+	if (!repository.empty()) {
+		endpoint = repository;
+	} else if (!custom_endpoint.empty()) {
+		endpoint = custom_endpoint;
+	} else {
+		endpoint = default_endpoint;
+	}
+	string url_template = endpoint + versioned_path;
+	return url_template;
+}
+
+string ExtensionHelper::ExtensionFinalizeUrlTemplate(const string &url_template, const string &extension_name) {
+	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
+	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
+	url = StringUtil::Replace(url, "${NAME}", extension_name);
+	return url;
+}
+
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
-                                               const string &local_path, const string &extension, bool force_install) {
+                                               const string &local_path, const string &extension, bool force_install,
+                                               const string &repository) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	throw PermissionException("Installing external extensions is disabled through a compile time flag");
+#else
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
@@ -173,6 +212,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
 		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
+		if (fs.FileExists(local_extension_path) && force_install) {
+			fs.RemoveFile(local_extension_path);
+		}
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
 	} else if (StringUtil::Contains(extension, "/") && !is_http_url) {
@@ -183,26 +225,42 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	throw BinderException("Remote extension installation is disabled through configuration");
 #else
 
-	string default_endpoint = "http://extensions.duckdb.org";
-	string versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
-	string custom_endpoint = client_config ? client_config->custom_extension_repo : string();
-	string &endpoint = !custom_endpoint.empty() ? custom_endpoint : default_endpoint;
-	string url_template = endpoint + versioned_path;
+	string url_template = ExtensionUrlTemplate(client_config, repository);
 
 	if (is_http_url) {
 		url_template = extension;
 		extension_name = "";
 	}
 
-	auto url = StringUtil::Replace(url_template, "${REVISION}", GetVersionDirectoryName());
-	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
-	url = StringUtil::Replace(url, "${NAME}", extension_name);
+	string url = ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
 	string no_http = StringUtil::Replace(url, "http://", "");
 
 	idx_t next = no_http.find('/', 0);
 	if (next == string::npos) {
 		throw IOException("No slash in URL template");
+	}
+
+	// Special case to install extension from a local file, useful for testing
+	if (!StringUtil::Contains(url_template, "http://")) {
+		string file = fs.ConvertSeparators(url);
+		if (!fs.FileExists(file)) {
+			// check for non-gzipped variant
+			file = file.substr(0, file.size() - 3);
+			if (!fs.FileExists(file)) {
+				throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			}
+		}
+		auto read_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
+		auto test_data = std::unique_ptr<unsigned char[]> {new unsigned char[read_handle->GetFileSize()]};
+		read_handle->Read(test_data.get(), read_handle->GetFileSize());
+		WriteExtensionFileToDisk(fs, temp_path, (void *)test_data.get(), read_handle->GetFileSize());
+
+		if (fs.FileExists(local_extension_path) && force_install) {
+			fs.RemoveFile(local_extension_path);
+		}
+		fs.MoveFile(temp_path, local_extension_path);
+		return;
 	}
 
 	// Push the substring [last, next) on to splits
@@ -235,7 +293,12 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
 	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
+
+	if (fs.FileExists(local_extension_path) && force_install) {
+		fs.RemoveFile(local_extension_path);
+	}
 	fs.MoveFile(temp_path, local_extension_path);
+#endif
 #endif
 }
 

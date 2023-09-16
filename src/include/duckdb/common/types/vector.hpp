@@ -35,6 +35,11 @@ struct UnifiedVectorFormat {
 	}
 };
 
+struct RecursiveUnifiedVectorFormat {
+	UnifiedVectorFormat unified;
+	vector<RecursiveUnifiedVectorFormat> children;
+};
+
 class VectorCache;
 class VectorStructBuffer;
 class VectorListBuffer;
@@ -96,14 +101,14 @@ public:
 	DUCKDB_API void Reference(const Value &value);
 	//! Causes this vector to reference the data held by the other vector.
 	//! The type of the "other" vector should match the type of this vector
-	DUCKDB_API void Reference(Vector &other);
+	DUCKDB_API void Reference(const Vector &other);
 	//! Reinterpret the data of the other vector as the type of this vector
 	//! Note that this takes the data of the other vector as-is and places it in this vector
 	//! Without changing the type of this vector
-	DUCKDB_API void Reinterpret(Vector &other);
+	DUCKDB_API void Reinterpret(const Vector &other);
 
 	//! Causes this vector to reference the data held by the other vector, changes the type if required.
-	DUCKDB_API void ReferenceAndSetType(Vector &other);
+	DUCKDB_API void ReferenceAndSetType(const Vector &other);
 
 	//! Resets a vector from a vector cache.
 	//! This turns the vector back into an empty FlatVector with STANDARD_VECTOR_SIZE entries.
@@ -140,6 +145,8 @@ public:
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
 	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
+	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
+	static void RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 
 	//! Turn the vector into a sequence vector
 	DUCKDB_API void Sequence(int64_t start, int64_t increment, idx_t count);
@@ -166,13 +173,8 @@ public:
 	//! This functions resizes the vector
 	DUCKDB_API void Resize(idx_t cur_size, idx_t new_size);
 
-	//! Serializes a Vector to a stand-alone binary blob
-	DUCKDB_API void Serialize(idx_t count, Serializer &serializer);
-	//! Deserializes a blob back into a Vector
-	DUCKDB_API void Deserialize(idx_t count, Deserializer &source);
-
-	DUCKDB_API void FormatSerialize(FormatSerializer &serializer, idx_t count);
-	DUCKDB_API void FormatDeserialize(FormatDeserializer &deserializer, idx_t count);
+	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
+	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	// Getters
 	inline VectorType GetVectorType() const {
@@ -445,7 +447,7 @@ struct StructVector {
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
 
-enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP };
+enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP, TAG_MISMATCH };
 
 struct UnionVector {
 	// Unions are stored as structs, but the first child is always the "tag"

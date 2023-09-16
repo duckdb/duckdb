@@ -1,0 +1,124 @@
+# name: test/sql/index/art/nodes/test_art_prefixes.test
+# description: Test different ART prefixes
+# group: [nodes]
+
+statement ok
+PRAGMA enable_verification
+
+# very mixed-length prefixes
+
+statement ok
+CREATE TABLE different_prefixes(str VARCHAR);
+
+statement ok
+INSERT INTO different_prefixes SELECT 'my first very long prefix that is really very long' || range FROM range(2048);
+
+statement ok
+INSERT INTO different_prefixes SELECT (range / 100)::VARCHAR || range::VARCHAR FROM range(2048);
+
+statement ok
+INSERT INTO different_prefixes SELECT 'my first very long prefix, the other not quite as long prefix that is still very long' || range FROM range(2048);
+
+statement ok
+INSERT INTO different_prefixes SELECT 'my first very long prefix, the other not quite as long prefix that is still very long and even longer omg!' || range FROM range(2048);
+
+statement ok
+INSERT INTO different_prefixes SELECT range::VARCHAR || (range + 1)::VARCHAR FROM range(2048);
+
+statement ok
+CREATE INDEX idx_different_prefixes ON different_prefixes(str);
+
+statement ok
+DELETE FROM different_prefixes
+WHERE rowid IN (SELECT rowid FROM different_prefixes LIMIT 1000);
+
+statement ok
+DELETE FROM different_prefixes
+WHERE rowid IN (SELECT rowid FROM different_prefixes LIMIT 3000);
+
+statement ok
+DROP INDEX idx_different_prefixes;
+
+# this time all prefixes are long
+
+statement ok
+CREATE TABLE longer_prefixes(str VARCHAR);
+
+statement ok
+INSERT INTO longer_prefixes
+SELECT 'my first very long prefix that is really very long' || range FROM range(2048);
+
+statement ok
+INSERT INTO longer_prefixes
+SELECT 'my first very long prefix, the other not quite as long prefix that is still very long' || range FROM range(2048);
+
+statement ok
+CREATE INDEX idx_longer_prefixes ON longer_prefixes(str);
+
+query I
+SELECT str FROM longer_prefixes
+WHERE str = 'my first very long prefix that is really very long77';
+----
+my first very long prefix that is really very long77
+
+statement ok
+DROP INDEX idx_longer_prefixes;
+
+# more distinct prefixes
+
+statement ok
+CREATE TABLE distinct_prefixes (str VARCHAR);
+
+statement ok
+INSERT INTO distinct_prefixes SELECT
+	'2022-01-01'::DATE + range::INTEGER * 1000 ||
+	'1004-02-01'::DATE + range::INTEGER * 100 ||
+	'.' || '6004-02-01'::DATE + range::INTEGER * 2000
+	FROM range(100000);
+
+statement ok
+CREATE INDEX idx_distinct_prefixes ON distinct_prefixes(str);
+
+statement ok
+DROP INDEX idx_distinct_prefixes;
+
+# more mixed-length distinct prefixes
+
+statement ok
+CREATE TABLE mixed_distinct_prefixes (str VARCHAR);
+
+statement ok
+INSERT INTO mixed_distinct_prefixes SELECT
+	'2022-01-01'::DATE + range::INTEGER * 1000
+	FROM range(100000);
+
+statement ok
+INSERT INTO mixed_distinct_prefixes SELECT
+	'2022-01-01'::DATE + range::INTEGER * 1000 ||
+	'1004-02-01'::DATE + range::INTEGER * 100
+	FROM range(100000);
+
+statement ok
+INSERT INTO mixed_distinct_prefixes SELECT
+	'2022-01-01'::DATE + range::INTEGER * 1000 ||
+	'1004-02-01'::DATE + range::INTEGER * 100 ||
+	'.' || '6004-02-01'::DATE + range::INTEGER * 2000
+	FROM range(100000);
+
+statement ok
+CREATE INDEX idx_mixed_distinct_prefixes ON mixed_distinct_prefixes(str);
+
+statement ok
+DELETE FROM mixed_distinct_prefixes
+WHERE rowid IN (SELECT rowid FROM mixed_distinct_prefixes LIMIT 1000);
+
+statement ok
+DELETE FROM mixed_distinct_prefixes
+WHERE rowid IN (SELECT rowid FROM mixed_distinct_prefixes LIMIT 1000);
+
+statement ok
+DELETE FROM mixed_distinct_prefixes
+WHERE rowid IN (SELECT rowid FROM mixed_distinct_prefixes LIMIT 1000);
+
+statement ok
+DROP INDEX idx_mixed_distinct_prefixes;

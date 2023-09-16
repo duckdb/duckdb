@@ -123,7 +123,8 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 	LEFT JOIN duckdb_columns cols 
 	ON cols.column_name = pragma_table_info.name 
 	AND cols.table_name='%table_name%'
-	AND cols.schema_name='%table_schema%';)";
+	AND cols.schema_name='%table_schema%'
+	ORDER BY column_index;)";
 	// clang-format on
 
 	sql = StringUtil::Replace(sql, "%func_param_table%", parameters.values[0].ToString());
@@ -134,6 +135,10 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 
 string PragmaVersion(ClientContext &context, const FunctionParameters &parameters) {
 	return "SELECT * FROM pragma_version();";
+}
+
+string PragmaPlatform(ClientContext &context, const FunctionParameters &parameters) {
+	return "SELECT * FROM pragma_platform();";
 }
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
@@ -192,6 +197,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
+	set.AddFunction(PragmaFunction::PragmaStatement("platform", PragmaPlatform));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));

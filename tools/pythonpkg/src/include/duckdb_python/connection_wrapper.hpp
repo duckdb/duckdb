@@ -65,9 +65,6 @@ public:
 
 	static void LoadExtension(const string &extension, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation",
-	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
-
 	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation",
 	                                             shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -118,6 +115,8 @@ public:
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
+	static int GetRowcount(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static Optional<py::tuple> FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
@@ -177,7 +176,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const py::object &expr,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> AliasDF(const PandasDataFrame &df, const string &expr,

@@ -107,7 +107,7 @@ loading when placed in the `extension_external` directory.
 
 ## Custom path
 When extensions are located in a  path or their project structure is different from that the
-[extension-template](https://github.customcom/duckdb/extension-template), the `SOURCE_DIR` and `INCLUDE_DIR` variables can
+[extension-template](https://github.com/duckdb/extension-template), the `SOURCE_DIR` and `INCLUDE_DIR` variables can
 be used to tell DuckDB how to load the extension:
 ```cmake
 duckdb_extension_load(<extension_name>
@@ -147,3 +147,38 @@ results in:
 -- Extensions explicitly skipped: parquet
 ...
 ```
+
+# VCPKG dependency management
+DuckDB extensions can use [VCPKG](https://vcpkg.io/en/) to manage their dependencies. Check out the [Extension Template](https://github.com/duckdb/extension-template) for an example
+on how to set up vcpkg in extensions. 
+
+## Building DuckDB with multiple extensions that use vcpkg
+To build duckdb with multiple extensions that all use vcpkg, some extra steps are required. This is due to the fact that each
+extension will specify their own vcpkg.json manifest for their dependencies, but vcpkg allows only a single manifest. The workaround here
+is to merge the dependencies from the manifests of all extensions being built. This repo contains a script to do automatically perform this merge.
+
+### Example build with 2 extensions using vcpkg
+For example, lets say we want to create a DuckDB binary which has two extensions statically linked that each use vcpkg. The first step is to add the two extensions
+to `extension/extension_config_local.cmake`:
+```cmake
+duckdb_extension_load(extension_1
+    GIT_URL https://github.com/example/extension_1
+    GIT_TAG some_git_hash
+)
+duckdb_extension_load(extension_2
+    GIT_URL https://github.com/example/extension_2
+    GIT_TAG some_git_hash
+)
+```
+Now to merge the vcpkg.json manifests from these two extension run:
+```shell   
+make extension_configuration
+```
+This will create a merged manifest in `./build/extension_configuration/vcpkg.json`.
+
+Next, run:
+```shell
+USE_MERGED_VCPKG_MANIFEST=1 VCPKG_TOOLCHAIN_PATH="/path/to/your/vcpkg/installation" make
+```
+which will use the merged manifest to install all required dependencies, build `extension_1` and `extension_2`, build DuckDB, 
+and finally link both extensions into DuckDB.

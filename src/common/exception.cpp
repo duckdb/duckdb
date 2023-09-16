@@ -62,11 +62,11 @@ string Exception::ConstructMessageRecursive(const string &msg, std::vector<Excep
 #ifdef DEBUG
 	// Verify that we have the required amount of values for the message
 	idx_t parameter_count = 0;
-	for (idx_t i = 0; i < msg.size(); i++) {
+	for (idx_t i = 0; i + 1 < msg.size(); i++) {
 		if (msg[i] != '%') {
 			continue;
 		}
-		if (i < msg.size() && msg[i + 1] == '%') {
+		if (msg[i + 1] == '%') {
 			i++;
 			continue;
 		}
@@ -158,8 +158,12 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Parameter Not Allowed";
 	case ExceptionType::DEPENDENCY:
 		return "Dependency";
+	case ExceptionType::MISSING_EXTENSION:
+		return "Missing Extension";
 	case ExceptionType::HTTP:
 		return "HTTP";
+	case ExceptionType::AUTOLOAD:
+		return "Extension Autoloading";
 	default:
 		return "Unknown";
 	}
@@ -225,6 +229,8 @@ void Exception::ThrowAsTypeWithMessage(ExceptionType type, const string &message
 	case ExceptionType::HTTP: {
 		original->AsHTTPException().Throw();
 	}
+	case ExceptionType::MISSING_EXTENSION:
+		throw MissingExtensionException(message);
 	default:
 		throw Exception(type, message);
 	}
@@ -345,6 +351,13 @@ IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) 
 
 MissingExtensionException::MissingExtensionException(const string &msg)
     : Exception(ExceptionType::MISSING_EXTENSION, msg) {
+}
+
+AutoloadException::AutoloadException(const string &extension_name, Exception &e)
+    : Exception(ExceptionType::AUTOLOAD,
+                "An error occurred while trying to automatically install the required extension '" + extension_name +
+                    "':\n" + e.RawMessage()),
+      wrapped_exception(e) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {

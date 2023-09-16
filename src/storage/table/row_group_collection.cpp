@@ -6,10 +6,11 @@
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 namespace duckdb {
 
@@ -27,8 +28,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 	current_row_group = 0;
 	max_row_group = data.row_group_count;
 	finished_loading = false;
-	reader = make_uniq<MetaBlockReader>(collection.GetBlockManager(), data.block_id);
-	reader->offset = data.offset;
+	reader = make_uniq<MetadataReader>(collection.GetMetadataManager(), data.block_pointer);
 }
 
 unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
@@ -36,7 +36,10 @@ unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 		finished_loading = true;
 		return nullptr;
 	}
-	auto row_group_pointer = RowGroup::Deserialize(*reader, collection.GetTypes());
+	BinaryDeserializer deserializer(*reader);
+	deserializer.Begin();
+	auto row_group_pointer = RowGroup::Deserialize(deserializer);
+	deserializer.End();
 	current_row_group++;
 	return make_uniq<RowGroup>(collection, std::move(row_group_pointer));
 }
@@ -65,6 +68,10 @@ Allocator &RowGroupCollection::GetAllocator() const {
 
 AttachedDatabase &RowGroupCollection::GetAttached() {
 	return GetTableInfo().db;
+}
+
+MetadataManager &RowGroupCollection::GetMetadataManager() {
+	return GetBlockManager().GetMetadataManager();
 }
 
 //===--------------------------------------------------------------------===//
@@ -332,7 +339,7 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		auto current_row_group = state.row_group_append_state.row_group;
 		// check how much we can fit into the current row_group
 		idx_t append_count =
-		    MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
+		    MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - state.row_group_append_state.offset_in_row_group);
 		if (append_count > 0) {
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			// merge the stats
@@ -386,7 +393,7 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	auto remaining = state.total_append_count;
 	auto row_group = state.start_row_group;
 	while (remaining > 0) {
-		auto append_count = MinValue<idx_t>(remaining, RowGroup::ROW_GROUP_SIZE - row_group->count);
+		auto append_count = MinValue<idx_t>(remaining, Storage::ROW_GROUP_SIZE - row_group->count);
 		row_group->AppendVersionInfo(transaction, append_count);
 		remaining -= append_count;
 		row_group = row_groups->GetNextSegment(row_group);

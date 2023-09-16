@@ -75,6 +75,8 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
+	//! Use range joins for inequalities, even if there are equality predicates
+	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;
@@ -89,6 +91,8 @@ struct ClientConfig {
 
 	//! Override for the default extension repository
 	string custom_extension_repo = "";
+	//! Override for the default autoload extensoin repository
+	string autoinstall_extension_repo = "";
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
@@ -112,8 +116,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	string ExtractTimezone() const;
 
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer;

@@ -67,21 +67,3 @@ ON p.ts >= e.begin AND p.ts >= e.value
 ORDER BY p.ts ASC
 ----
 Binder Error: Multiple ASOF JOIN inequalities
-
-# What if we invert the comparisons
-statement error
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON p.ts <= e.begin
-ORDER BY p.ts ASC
-----
-Binder Error: Invalid ASOF JOIN comparison
-
-# What if we have a different closed range
-statement error
-SELECT p.ts, e.value
-FROM range(0,10) p(ts) ASOF JOIN events0 e
-ON p.ts > e.begin
-ORDER BY p.ts ASC
-----
-Binder Error: Invalid ASOF JOIN comparison

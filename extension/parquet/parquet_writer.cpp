@@ -9,6 +9,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #endif
@@ -55,7 +56,7 @@ FieldID FieldID::Copy() const {
 
 class MyTransport : public TTransport {
 public:
-	explicit MyTransport(Serializer &serializer) : serializer(serializer) {
+	explicit MyTransport(WriteStream &serializer) : serializer(serializer) {
 	}
 
 	bool isOpen() const override {
@@ -73,30 +74,38 @@ public:
 	}
 
 private:
-	Serializer &serializer;
+	WriteStream &serializer;
 };
 
-Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
+CopyTypeSupport ParquetWriter::DuckDBTypeToParquetTypeInternal(const LogicalType &duckdb_type,
+                                                               Type::type &parquet_type) {
 	switch (duckdb_type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return Type::BOOLEAN;
+		parquet_type = Type::BOOLEAN;
+		break;
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return Type::INT32;
+		parquet_type = Type::INT32;
+		break;
 	case LogicalTypeId::BIGINT:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::FLOAT:
-		return Type::FLOAT;
+		parquet_type = Type::FLOAT;
+		break;
 	case LogicalTypeId::DOUBLE:
+		parquet_type = Type::DOUBLE;
+		break;
 	case LogicalTypeId::HUGEINT:
-		return Type::DOUBLE;
+		parquet_type = Type::DOUBLE;
+		return CopyTypeSupport::LOSSY;
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BIT:
-		return Type::BYTE_ARRAY;
+		parquet_type = Type::BYTE_ARRAY;
+		break;
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::TIMESTAMP:
@@ -104,31 +113,95 @@ Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
-		return Type::INT32;
+		parquet_type = Type::INT32;
+		break;
 	case LogicalTypeId::UBIGINT:
-		return Type::INT64;
+		parquet_type = Type::INT64;
+		break;
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::UUID:
-		return Type::FIXED_LEN_BYTE_ARRAY;
+		parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+		break;
 	case LogicalTypeId::DECIMAL:
 		switch (duckdb_type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
-			return Type::INT32;
+			parquet_type = Type::INT32;
+			break;
 		case PhysicalType::INT64:
-			return Type::INT64;
+			parquet_type = Type::INT64;
+			break;
 		case PhysicalType::INT128:
-			return Type::FIXED_LEN_BYTE_ARRAY;
+			parquet_type = Type::FIXED_LEN_BYTE_ARRAY;
+			break;
 		default:
 			throw InternalException("Unsupported internal decimal type");
 		}
+		break;
 	default:
+		// Anything that is not supported
+		return CopyTypeSupport::UNSUPPORTED;
+	}
+	return CopyTypeSupport::SUPPORTED;
+}
+
+Type::type ParquetWriter::DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
+	Type::type result;
+	auto type_supports = DuckDBTypeToParquetTypeInternal(duckdb_type, result);
+	if (type_supports == CopyTypeSupport::UNSUPPORTED) {
 		throw NotImplementedException("Unimplemented type for Parquet \"%s\"", duckdb_type.ToString());
 	}
+	return result;
+}
+
+CopyTypeSupport ParquetWriter::TypeIsSupported(const LogicalType &type) {
+	Type::type unused;
+	auto id = type.id();
+	if (id == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildType(type);
+		return TypeIsSupported(child_type);
+	}
+	if (id == LogicalTypeId::UNION) {
+		auto count = UnionType::GetMemberCount(type);
+		for (idx_t i = 0; i < count; i++) {
+			auto &member_type = UnionType::GetMemberType(type, i);
+			auto type_support = TypeIsSupported(member_type);
+			if (type_support != CopyTypeSupport::SUPPORTED) {
+				return type_support;
+			}
+		}
+		return CopyTypeSupport::SUPPORTED;
+	}
+	if (id == LogicalTypeId::STRUCT) {
+		auto &children = StructType::GetChildTypes(type);
+		for (auto &child : children) {
+			auto &child_type = child.second;
+			auto type_support = TypeIsSupported(child_type);
+			if (type_support != CopyTypeSupport::SUPPORTED) {
+				return type_support;
+			}
+		}
+		return CopyTypeSupport::SUPPORTED;
+	}
+	if (id == LogicalTypeId::MAP) {
+		auto &key_type = MapType::KeyType(type);
+		auto &value_type = MapType::ValueType(type);
+		auto key_type_support = TypeIsSupported(key_type);
+		if (key_type_support != CopyTypeSupport::SUPPORTED) {
+			return key_type_support;
+		}
+		auto value_type_support = TypeIsSupported(value_type);
+		if (value_type_support != CopyTypeSupport::SUPPORTED) {
+			return value_type_support;
+		}
+		return CopyTypeSupport::SUPPORTED;
+	}
+	return DuckDBTypeToParquetTypeInternal(type, unused);
 }
 
 void ParquetWriter::SetSchemaProperties(const LogicalType &duckdb_type,
@@ -297,6 +370,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
 	row_group.num_rows = buffer.Count();
+	row_group.total_byte_size = buffer.SizeInBytes();
 	row_group.__isset.file_offset = true;
 
 	auto &states = result.states;

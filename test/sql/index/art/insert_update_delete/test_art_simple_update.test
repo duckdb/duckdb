@@ -1,0 +1,45 @@
+# name: test/sql/index/art/insert_update_delete/test_art_simple_update.test
+# description: Test simple updates on the ART
+# group: [insert_update_delete]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+CREATE TABLE integers(i INTEGER)
+
+statement ok con1
+CREATE INDEX i_index ON integers using art(i)
+
+statement ok con1
+INSERT INTO integers VALUES (1)
+
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con1
+UPDATE integers SET i=10 WHERE i=1
+
+# con sees the new state
+query I con1
+SELECT * FROM integers WHERE i < 5
+----
+
+query I con1
+SELECT * FROM integers WHERE i > 0
+----
+10
+
+# con2 sees the old state
+query I con2
+SELECT * FROM integers WHERE i < 5
+----
+1
+
+query I con2
+SELECT * FROM integers WHERE i > 0
+----
+1
+
+statement ok con1
+ROLLBACK
