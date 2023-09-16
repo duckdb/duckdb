@@ -24,7 +24,7 @@ INSERT INTO all_types SELECT ${type} FROM all_types;
 statement ok
 checkpoint
 
-query IIIIIIIIIIIIII
+query IIIIIIIIIIIIIII
 SELECT * FROM pragma_storage_info('all_types') WHERE segment_type == '${type}' AND compression != 'Patas';
 ----
 
