@@ -1,6 +1,6 @@
-# name: test/sql/storage/updates_deletes_persistent_segments.test
+# name: test/sql/storage/mix/updates_deletes_persistent_segments.test
 # description: Test updates/deletes/insertions on persistent segments
-# group: [storage]
+# group: [mix]
 
 # load the DB from disk
 load __TEST_DIR__/updates_deletes_persistent_segments.db

@@ -1,0 +1,37 @@
+# name: test/sql/storage/delete/test_unchanged_deletes.test
+# description: Test reloading unchanged deletes
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/test_unchanged_deletes.db
+
+statement ok
+CREATE TABLE integers AS FROM range(4) t(i)
+
+query I
+DELETE FROM integers WHERE i%2=0
+----
+2
+
+query I
+SELECT COUNT(*) FROM integers
+----
+2
+
+statement ok
+CREATE TABLE integers2(i int);
+
+# repeatedly add elements and checkpoint
+loop i 0 10
+
+query I
+SELECT COUNT(*) FROM integers
+----
+2
+
+statement ok
+INSERT INTO integers2 VALUES (${i});
+
+restart
+
+endloop
