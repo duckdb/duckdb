@@ -304,7 +304,7 @@ string DuckDBPyRelation::ToSQL() {
 	}
 	try {
 		return rel->GetQueryNode()->ToString();
-	} catch (const std::exception &e) {
+	} catch (const std::exception &) {
 		return "";
 	}
 }
@@ -965,10 +965,9 @@ struct SupportedPythonJoinType {
 } // namespace
 
 static const SupportedPythonJoinType *GetSupportedJoinTypes(idx_t &length) {
-	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {
-	    {.name = "left", .type = JoinType::LEFT},   {.name = "right", .type = JoinType::RIGHT},
-	    {.name = "outer", .type = JoinType::OUTER}, {.name = "semi", .type = JoinType::SEMI},
-	    {.name = "inner", .type = JoinType::INNER}, {.name = "anti", .type = JoinType::ANTI}};
+	static const SupportedPythonJoinType SUPPORTED_TYPES[] = {{"left", JoinType::LEFT},   {"right", JoinType::RIGHT},
+	                                                          {"outer", JoinType::OUTER}, {"semi", JoinType::SEMI},
+	                                                          {"inner", JoinType::INNER}, {"anti", JoinType::ANTI}};
 	static const auto SUPPORTED_TYPES_COUNT = sizeof(SUPPORTED_TYPES) / sizeof(SupportedPythonJoinType);
 	length = SUPPORTED_TYPES_COUNT;
 	return reinterpret_cast<const SupportedPythonJoinType *>(SUPPORTED_TYPES);
