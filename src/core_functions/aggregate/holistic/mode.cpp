@@ -235,55 +235,57 @@ struct ModeFunction {
 			//	Subframe indices
 			const auto union_start = MinValue(frames[0].start, prevs[0].start);
 			const auto union_end = MaxValue(frames[nframes - 1].end, prevs[nframes - 1].end);
+			const FrameBounds last(union_end, union_end);
+
 			idx_t p = 0;
 			idx_t f = 0;
 			for (auto i = union_start; i < union_end;) {
 				int overlap = 0;
 
 				//	Are we in the previous frame?
-				FrameBounds prev(union_end, union_end);
+				auto prev = &last;
 				if (p < nframes) {
-					prev = prevs[p];
-					overlap |= int(prev.start <= i && i < prev.end) << 0;
+					prev = prevs + p;
+					overlap |= int(prev->start <= i && i < prev->end) << 0;
 				}
 
 				//	Are we in the current frame?
-				FrameBounds frame(union_end, union_end);
+				auto frame = &last;
 				if (f < nframes) {
-					frame = frames[f];
-					overlap |= int(frame.start <= i && i < frame.end) << 1;
+					frame = frames + f;
+					overlap |= int(frame->start <= i && i < frame->end) << 1;
 				}
 
 				switch (overlap) {
 				case 0x00:
 					//    f ∉ F U P
-					i = MinValue(frame.start, prev.start);
-					break;
-				case 0x03:
-					//	f ∈ F ∩ P
-					i = MinValue(frame.end, prev.end);
+					i = MinValue(frame->start, prev->start);
 					break;
 				case 0x01:
-					// for f ∈ P \ F do
-					for (; i < MinValue(prev.end, frame.start); ++i) {
+					// f ∈ P \ F
+					for (; i < MinValue(prev->end, frame->start); ++i) {
 						if (included(i)) {
 							state.ModeRm(KEY_TYPE(data[i]), i);
 						}
 					}
 					break;
 				case 0x02:
-					// for f ∈ F \ P do
-					for (; i < MinValue(frame.end, prev.start); ++i) {
+					// f ∈ F \ P
+					for (; i < MinValue(frame->end, prev->start); ++i) {
 						if (included(i)) {
 							state.ModeAdd(KEY_TYPE(data[i]), i);
 						}
 					}
 					break;
+				case 0x03:
+					//	f ∈ F ∩ P
+					i = MinValue(frame->end, prev->end);
+					break;
 				}
 
 				//	Advance  the subframe indices
-				p += (i == prev.end);
-				f += (i == frame.end);
+				p += (i == prev->end);
+				f += (i == frame->end);
 			}
 		}
 
