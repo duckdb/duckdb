@@ -11,12 +11,12 @@ make clean
 ./configure
 
 if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-if [[ "$TARGET_ARCH" == "arm64" ]] ; then
-  # TODO: double check ABI
-  apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf --yes
-  export CC=arm-linux-gnueabihf-gcc
-  export CXX=arm-linux-gnueabihf-g++
-fi
+  if [[ "$TARGET_ARCH" == "arm64" ]] ; then
+    # TODO: double check ABI
+    sudo apt-get install gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf --yes
+    export CC=arm-linux-gnueabihf-gcc
+    export CXX=arm-linux-gnueabihf-g++
+  fi
 fi
 
 npm install --build-from-source --target_arch="$TARGET_ARCH"
