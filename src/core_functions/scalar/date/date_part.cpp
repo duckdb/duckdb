@@ -1523,8 +1523,12 @@ struct StructDatePart {
 
 		const auto count = args.size();
 		Vector &input = args.data[0];
-		DatePart::StructOperator::bigint_vec bigint_values(size_t(DatePartSpecifier::BIGINT_COUNT), nullptr);
-		DatePart::StructOperator::double_vec double_values(size_t(DatePartSpecifier::DOUBLE_COUNT), nullptr);
+
+		//	Type counts
+		const auto BIGINT_COUNT = size_t(DatePartSpecifier::BEGIN_DOUBLE) - size_t(DatePartSpecifier::BEGIN_BIGINT);
+		const auto DOUBLE_COUNT = size_t(DatePartSpecifier::BEGIN_INVALID) - size_t(DatePartSpecifier::BEGIN_DOUBLE);
+		DatePart::StructOperator::bigint_vec bigint_values(BIGINT_COUNT, nullptr);
+		DatePart::StructOperator::double_vec double_values(DOUBLE_COUNT, nullptr);
 		const auto part_mask = DatePart::StructOperator::GetMask(info.part_codes);
 
 		auto &child_entries = StructVector::GetEntries(result);

@@ -48,10 +48,6 @@ enum class DatePartSpecifier : uint8_t {
 	BEGIN_BIGINT = YEAR,
 	BEGIN_DOUBLE = EPOCH,
 	BEGIN_INVALID = INVALID,
-
-	//	Type counts
-	BIGINT_COUNT = BEGIN_DOUBLE - BEGIN_BIGINT,
-	DOUBLE_COUNT = BEGIN_INVALID - BEGIN_DOUBLE,
 };
 
 inline bool IsBigintDatepart(DatePartSpecifier part_code) {
