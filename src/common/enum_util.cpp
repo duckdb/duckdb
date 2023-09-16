@@ -551,6 +551,8 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value) {
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 	switch(value) {
+	case BitpackingMode::INVALID:
+		return "INVALID";
 	case BitpackingMode::AUTO:
 		return "AUTO";
 	case BitpackingMode::CONSTANT:
@@ -568,6 +570,9 @@ const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
+	if (StringUtil::Equals(value, "INVALID")) {
+		return BitpackingMode::INVALID;
+	}
 	if (StringUtil::Equals(value, "AUTO")) {
 		return BitpackingMode::AUTO;
 	}
@@ -5969,6 +5974,8 @@ const char* EnumUtil::ToChars<UnionInvalidReason>(UnionInvalidReason value) {
 		return "NO_MEMBERS";
 	case UnionInvalidReason::VALIDITY_OVERLAP:
 		return "VALIDITY_OVERLAP";
+	case UnionInvalidReason::TAG_MISMATCH:
+		return "TAG_MISMATCH";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5987,6 +5994,9 @@ UnionInvalidReason EnumUtil::FromString<UnionInvalidReason>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "VALIDITY_OVERLAP")) {
 		return UnionInvalidReason::VALIDITY_OVERLAP;
+	}
+	if (StringUtil::Equals(value, "TAG_MISMATCH")) {
+		return UnionInvalidReason::TAG_MISMATCH;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

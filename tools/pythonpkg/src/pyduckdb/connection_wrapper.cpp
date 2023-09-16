@@ -227,6 +227,10 @@ Optional<py::list> PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnec
 	return conn->GetDescription();
 }
 
+int PyConnectionWrapper::GetRowcount(shared_ptr<DuckDBPyConnection> conn) {
+	return conn->GetRowcount();
+}
+
 Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }
@@ -317,8 +321,13 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, 
 	return conn->RunQuery(query, alias);
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const string &expr,
+unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ProjectDf(const PandasDataFrame &df, const py::object &expr,
                                                             shared_ptr<DuckDBPyConnection> conn) {
+	// FIXME: if we want to support passing in DuckDBPyExpressions here
+	// we could also accept 'expr' as a List[DuckDBPyExpression], without changing the signature
+	if (!py::isinstance<py::str>(expr)) {
+		throw InvalidInputException("Please provide 'expr' as a string");
+	}
 	return conn->FromDF(df)->Project(expr);
 }
 
@@ -329,7 +338,7 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::AliasDF(const PandasDataFrame 
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FilterDf(const PandasDataFrame &df, const string &expr,
                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromDF(df)->Filter(expr);
+	return conn->FromDF(df)->FilterFromExpression(expr);
 }
 
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::LimitDF(const PandasDataFrame &df, int64_t n,

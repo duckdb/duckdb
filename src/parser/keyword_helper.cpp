@@ -36,7 +36,7 @@ string KeywordHelper::EscapeQuotes(const string &text, char quote) {
 string KeywordHelper::WriteQuoted(const string &text, char quote) {
 	// 1. Escapes all occurences of 'quote' by doubling them (escape in SQL)
 	// 2. Adds quotes around the string
-	return string(1, quote) + EscapeQuotes(text) + string(1, quote);
+	return string(1, quote) + EscapeQuotes(text, quote) + string(1, quote);
 }
 
 string KeywordHelper::WriteOptionallyQuoted(const string &text, char quote, bool allow_caps) {

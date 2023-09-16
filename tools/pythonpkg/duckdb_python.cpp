@@ -7,6 +7,7 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
@@ -248,6 +249,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
 	         py::arg("connection") = py::none())
+	    .def("rowcount", &PyConnectionWrapper::GetRowcount, "Get result set row count",
+	         py::arg("connection") = py::none())
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
 	    .def("load_extension", &PyConnectionWrapper::LoadExtension, "Load an installed extension", py::arg("extension"),
@@ -276,6 +279,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
+	DuckDBPyExpression::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();

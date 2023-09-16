@@ -13,13 +13,25 @@ from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
     ExplainType,
-    PythonExceptionHandling
+    PythonExceptionHandling,
+    Expression,
+    ConstantExpression,
+    ColumnExpression,
+    StarExpression,
+    FunctionExpression,
+    CaseExpression,
 )
 _exported_symbols.extend([
     "DuckDBPyRelation",
     "DuckDBPyConnection",
     "ExplainType",
-    "PythonExceptionHandling"
+    "PythonExceptionHandling",
+    "Expression",
+    "ConstantExpression",
+    "ColumnExpression",
+    "StarExpression",
+    "FunctionExpression",
+    "CaseExpression",
 ])
 
 # Enums
@@ -168,6 +180,7 @@ from .duckdb import (
     remove_function,
     rollback,
     row_type,
+    rowcount,
     sql,
     sqltype,
     string_type,
@@ -236,6 +249,7 @@ _exported_symbols.extend([
     "remove_function",
     "rollback",
     "row_type",
+    "rowcount",
     "sql",
     "sqltype",
     "string_type",

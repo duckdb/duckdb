@@ -116,6 +116,8 @@ public:
 
 	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static int GetRowcount(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static Optional<py::tuple> FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -174,7 +176,7 @@ public:
 	static unique_ptr<DuckDBPyRelation> FromParquetDefault(const string &filename,
 	                                                       shared_ptr<DuckDBPyConnection> conn = nullptr);
 
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const string &expr,
+	static unique_ptr<DuckDBPyRelation> ProjectDf(const PandasDataFrame &df, const py::object &expr,
 	                                              shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> AliasDF(const PandasDataFrame &df, const string &expr,

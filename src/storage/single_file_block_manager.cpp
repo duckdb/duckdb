@@ -240,8 +240,7 @@ void SingleFileBlockManager::LoadFreeList() {
 		// no free list
 		return;
 	}
-
-	MetadataReader reader(GetMetadataManager(), free_pointer, BlockReaderType::REGISTER_BLOCKS);
+	MetadataReader reader(GetMetadataManager(), free_pointer, nullptr, BlockReaderType::REGISTER_BLOCKS);
 	auto free_list_count = reader.Read<uint64_t>();
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
@@ -392,18 +391,23 @@ void SingleFileBlockManager::Truncate() {
 vector<MetadataHandle> SingleFileBlockManager::GetFreeListBlocks() {
 	vector<MetadataHandle> free_list_blocks;
 
-	auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
-	auto multi_use_blocks_size = sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
-	auto metadata_blocks = sizeof(uint64_t) + (sizeof(idx_t) * 2) * GetMetadataManager().BlockCount();
-	auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
-
-	// reserve the blocks that we are going to write
+	// reserve all blocks that we are going to write the free list to
 	// since these blocks are no longer free we cannot just include them in the free list!
 	auto block_size = MetadataManager::METADATA_BLOCK_SIZE - sizeof(idx_t);
-	while (total_size > 0) {
+	idx_t allocated_size = 0;
+	while (true) {
+		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
+		auto multi_use_blocks_size =
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		auto metadata_blocks =
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(idx_t)) * GetMetadataManager().BlockCount();
+		auto total_size = free_list_size + multi_use_blocks_size + metadata_blocks;
+		if (total_size < allocated_size) {
+			break;
+		}
 		auto free_list_handle = GetMetadataManager().AllocateHandle();
 		free_list_blocks.push_back(std::move(free_list_handle));
-		total_size -= MinValue<idx_t>(total_size, block_size);
+		allocated_size += block_size;
 	}
 
 	return free_list_blocks;
