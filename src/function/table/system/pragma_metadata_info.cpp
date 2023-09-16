@@ -2,7 +2,8 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/storage/database_size.hpp"
-
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/function/function_set.hpp"
 namespace duckdb {
 
 struct PragmaMetadataFunctionData : public TableFunctionData {
