@@ -12,13 +12,13 @@ namespace node_duckdb {
 Napi::FunctionReference Connection::Init(Napi::Env env, Napi::Object exports) {
 	Napi::HandleScope scope(env);
 
-	Napi::Function t =
-	    DefineClass(env, "Connection",
-	                {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
-	                 InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
-	                 InstanceMethod("register_buffer", &Connection::RegisterBuffer),
-	                 InstanceMethod("unregister_udf", &Connection::UnregisterUdf),
-	                 InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
+	Napi::Function t = DefineClass(
+	    env, "Connection",
+	    {InstanceMethod("prepare", &Connection::Prepare), InstanceMethod("exec", &Connection::Exec),
+	     InstanceMethod("register_udf_bulk", &Connection::RegisterUdf),
+	     InstanceMethod("register_buffer", &Connection::RegisterBuffer),
+	     InstanceMethod("unregister_udf", &Connection::UnregisterUdf), InstanceMethod("close", &Connection::Close),
+	     InstanceMethod("unregister_buffer", &Connection::UnRegisterBuffer)});
 
 	exports.Set("Connection", t);
 
@@ -407,6 +407,36 @@ struct ExecTaskWithCallback : public ExecTask {
 	std::function<void(void)> cpp_callback;
 };
 
+struct CloseConnectionTask : public Task {
+	CloseConnectionTask(Connection &connection, Napi::Function callback) : Task(connection, callback) {
+	}
+
+	void DoWork() override {
+		auto &connection = Get<Connection>();
+		if (connection.connection) {
+			connection.connection.reset();
+			success = true;
+		} else {
+			success = false;
+		}
+	}
+
+	void Callback() override {
+		auto &connection = Get<Connection>();
+		auto env = connection.Env();
+		Napi::HandleScope scope(env);
+
+		auto cb = callback.Value();
+		if (!success) {
+			cb.MakeCallback(connection.Value(), {Utils::CreateError(env, "Connection was already closed")});
+			return;
+		}
+		cb.MakeCallback(connection.Value(), {env.Null(), connection.Value()});
+	}
+
+	bool success = false;
+};
+
 Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 
@@ -510,6 +540,17 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	                       duckdb::make_uniq<ExecTaskWithCallback>(*this, final_query, callback, cpp_callback));
 
 	return Value();
+}
+
+Napi::Value Connection::Close(const Napi::CallbackInfo &info) {
+	Napi::Function callback;
+	if (info.Length() > 0 && info[0].IsFunction()) {
+		callback = info[0].As<Napi::Function>();
+	}
+
+	database_ref->Schedule(info.Env(), duckdb::make_uniq<CloseConnectionTask>(*this, callback));
+
+	return info.Env().Undefined();
 }
 
 Napi::Object Connection::NewInstance(const Napi::Value &db) {
