@@ -5,7 +5,9 @@ set -ex
 TARGET_ARCH=${TARGET_ARCH:=x64}
 echo targeting arch: $TARGET_ARCH
 
+set +x
 source scripts/install_node.sh $1
+set -x
 cd tools/nodejs
 make clean
 ./configure
