@@ -45,6 +45,8 @@ public:
 	//! Get a new chain of leaf nodes, might cause new buffer allocations,
 	//! with the node parameter holding the tail of the chain
 	static void New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count);
+	//! Get a new leaf node without any data
+	static Leaf &New(ART &art, Node &node);
 	//! Free the leaf (chain)
 	static void Free(ART &art, Node &node);
 

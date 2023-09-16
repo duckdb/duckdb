@@ -1,5 +1,4 @@
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -24,30 +23,6 @@ ColumnDefinition ColumnDefinition::Copy() const {
 	copy.compression_type = compression_type;
 	copy.category = category;
 	return copy;
-}
-
-void ColumnDefinition::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.WriteSerializable(type);
-	writer.WriteOptional(expression);
-	writer.WriteField<TableColumnType>(category);
-	writer.WriteField<duckdb::CompressionType>(compression_type);
-	writer.Finalize();
-}
-
-ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto column_name = reader.ReadRequired<string>();
-	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
-	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
-	auto compression_type = reader.ReadField<duckdb::CompressionType>(duckdb::CompressionType::COMPRESSION_AUTO);
-	reader.Finalize();
-
-	ColumnDefinition result(column_name, column_type, std::move(expression), category);
-	result.compression_type = compression_type;
-	return result;
 }
 
 const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {

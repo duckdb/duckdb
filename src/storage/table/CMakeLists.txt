@@ -11,6 +11,7 @@ add_library_unity(
   persistent_table_data.cpp
   row_group.cpp
   row_group_collection.cpp
+  row_version_manager.cpp
   scan_state.cpp
   standard_column_data.cpp
   struct_column_data.cpp

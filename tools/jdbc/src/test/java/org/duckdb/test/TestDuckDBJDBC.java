@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
 import java.sql.Driver;
+import java.util.concurrent.Future;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -51,6 +52,7 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
@@ -63,9 +65,9 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Logger;
@@ -126,14 +128,17 @@ public class TestDuckDBJDBC {
     }
 
     private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
+        return assertThrows(exception, thrower).getMessage();
+    }
+
+    private static <T extends Throwable> Throwable assertThrows(Class<T> exception, Thrower thrower) throws Exception {
         try {
             thrower.run();
         } catch (Throwable e) {
             assertEquals(e.getClass(), exception);
-            return e.getMessage();
+            return e;
         }
-        fail("Expected to throw " + exception.getName());
-        return null;
+        throw new Exception("Expected to throw " + exception.getName());
     }
 
     static {
@@ -2723,7 +2728,7 @@ public class TestDuckDBJDBC {
             conn.getSchema();
             fail();
         } catch (SQLException e) {
-            assertEquals(e.getMessage(), "Invalid connection");
+            assertEquals(e.getMessage(), "Connection Error: Invalid connection");
         }
     }
 
@@ -3690,6 +3695,36 @@ public class TestDuckDBJDBC {
             try (PreparedStatement s = conn.prepareStatement("insert into test values (1)")) {
                 String msg = assertThrows(s::executeQuery, SQLException.class);
                 assertTrue(msg.contains("can only be used with queries that return a ResultSet"));
+            }
+        }
+    }
+
+    public static void test_race() throws Exception {
+        try (Connection connection = DriverManager.getConnection("jdbc:duckdb:")) {
+            ExecutorService executorService = Executors.newFixedThreadPool(10);
+
+            List<Callable<Object>> tasks = Collections.nCopies(1000, () -> {
+                try {
+                    try (PreparedStatement ps = connection.prepareStatement(
+                             "SELECT count(*) FROM information_schema.tables WHERE table_name = 'test' LIMIT 1;")) {
+                        ps.execute();
+                    }
+                } catch (SQLException e) {
+                    throw new RuntimeException(e);
+                }
+                return null;
+            });
+            List<Future<Object>> results = executorService.invokeAll(tasks);
+
+            try {
+                for (Future<Object> future : results) {
+                    future.get();
+                }
+                fail("Should have thrown an exception");
+            } catch (java.util.concurrent.ExecutionException ee) {
+                assertEquals(
+                    ee.getCause().getCause().getMessage(),
+                    "Invalid Input Error: Attempting to execute an unsuccessful or closed pending query result");
             }
         }
     }
