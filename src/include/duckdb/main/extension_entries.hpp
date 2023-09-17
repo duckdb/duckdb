@@ -243,6 +243,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     // "icu",
     "json",
     "parquet",
+    "postgres_scanner",
     "sqlsmith",
     "sqlite_scanner",
     "tpcds",
