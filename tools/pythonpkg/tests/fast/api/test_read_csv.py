@@ -542,3 +542,23 @@ class TestReadCSV(object):
                     'f': str,
                 },
             )
+
+    def test_read_csv_multi_file(self):
+        con = duckdb.connect()
+        file1 = StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
+        file2 = StringIO('one,two,three,four\n5,6,7,8\n5,6,7,8\n5,6,7,8')
+        file3 = StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12')
+        files = [file1, file2, file3]
+        rel = con.read_csv(files)
+        res = rel.fetchall()
+        assert res == [
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (1, 2, 3, 4),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (5, 6, 7, 8),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+            (9, 10, 11, 12),
+        ]
