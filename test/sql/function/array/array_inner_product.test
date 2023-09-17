@@ -12,6 +12,10 @@ SELECT array_inner_product([1,2,3]::INT[3], ['a','b','c']::VARCHAR[3]);
 ----
 'array_inner_product' requires both arguments to be arrays of the same type (and length)
 
+statement error
+SELECT array_distance(['a','b']::VARCHAR[2],['foo','bar']::VARCHAR[2]);
+----
+'array_distance' requires both arguments to be arrays of either FLOAT or DOUBLE
 
 # Tests for supported types
 foreach type FLOAT DOUBLE
