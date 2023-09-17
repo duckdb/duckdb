@@ -14,6 +14,7 @@ from .duckdb import (
     DuckDBPyConnection,
     ExplainType,
     PythonExceptionHandling,
+    RenderMode,
     Expression,
     ConstantExpression,
     ColumnExpression,
@@ -39,7 +40,9 @@ from .duckdb import (
     ANALYZE,
     DEFAULT,
     RETURN_NULL,
-    STANDARD
+    STANDARD,
+	COLUMNS,
+	ROWS
 )
 _exported_symbols.extend([
     "ANALYZE",
