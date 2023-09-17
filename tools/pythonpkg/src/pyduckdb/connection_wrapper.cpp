@@ -227,6 +227,10 @@ Optional<py::list> PyConnectionWrapper::GetDescription(shared_ptr<DuckDBPyConnec
 	return conn->GetDescription();
 }
 
+int PyConnectionWrapper::GetRowcount(shared_ptr<DuckDBPyConnection> conn) {
+	return conn->GetRowcount();
+}
+
 Optional<py::tuple> PyConnectionWrapper::FetchOne(shared_ptr<DuckDBPyConnection> conn) {
 	return conn->FetchOne();
 }

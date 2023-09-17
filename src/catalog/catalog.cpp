@@ -35,6 +35,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/storage/database_size.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -829,6 +830,10 @@ void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 		return;
 	}
 	return lookup.schema->Alter(context, info);
+}
+
+vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
+	return vector<MetadataBlockInfo>();
 }
 
 void Catalog::Verify() {

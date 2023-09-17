@@ -249,6 +249,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("query"), py::arg("connection") = py::none())
 	    .def("description", &PyConnectionWrapper::GetDescription, "Get result set attributes, mainly column names",
 	         py::arg("connection") = py::none())
+	    .def("rowcount", &PyConnectionWrapper::GetRowcount, "Get result set row count",
+	         py::arg("connection") = py::none())
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
 	    .def("load_extension", &PyConnectionWrapper::LoadExtension, "Load an installed extension", py::arg("extension"),
