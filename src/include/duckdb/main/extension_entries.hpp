@@ -244,6 +244,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "json",
     "parquet",
     "sqlsmith",
+    "sqlite_scanner",
     "tpcds",
     "tpch",
     "visualizer",
