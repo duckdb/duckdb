@@ -532,3 +532,62 @@ duckdb_result_type duckdb_result_return_type(duckdb_result result) {
 		return DUCKDB_RESULT_TYPE_INVALID;
 	}
 }
+
+#define SHORT(name)                                                                                                    \
+	case duckdb::StatementType::name##_STATEMENT:                                                                      \
+		return DUCKDB_STATEMENT_TYPE_##name;
+
+static duckdb_statement_type StatementTypeToC(duckdb::StatementType statement_type) {
+	switch (statement_type) {
+		SHORT(SELECT)
+		SHORT(INVALID)
+		SHORT(INSERT)
+		SHORT(UPDATE)
+		SHORT(EXPLAIN)
+		SHORT(DELETE)
+		SHORT(PREPARE)
+		SHORT(CREATE)
+		SHORT(EXECUTE)
+		SHORT(ALTER)
+		SHORT(TRANSACTION)
+		SHORT(COPY)
+		SHORT(ANALYZE)
+		SHORT(VARIABLE_SET)
+		SHORT(CREATE_FUNC)
+		SHORT(DROP)
+		SHORT(EXPORT)
+		SHORT(PRAGMA)
+		SHORT(SHOW)
+		SHORT(VACUUM)
+		SHORT(CALL)
+		SHORT(SET)
+		SHORT(LOAD)
+		SHORT(RELATION)
+		SHORT(EXTENSION)
+		SHORT(LOGICAL_PLAN)
+		SHORT(ATTACH)
+		SHORT(DETACH)
+		SHORT(MULTI)
+	default:
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+}
+#undef SHORT
+
+duckdb_statement_type duckdb_result_statement_type(duckdb_result result) {
+	if (!result.internal_data || duckdb_result_error(&result) != nullptr) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto &pres = *(reinterpret_cast<duckdb::DuckDBResultData *>(result.internal_data));
+
+	return StatementTypeToC(pres.result->statement_type);
+}
+
+duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement) {
+	if (!statement) {
+		return DUCKDB_STATEMENT_TYPE_INVALID;
+	}
+	auto &stmt = *(reinterpret_cast<PreparedStatementWrapper *>(statement));
+
+	return StatementTypeToC(stmt.statement->GetStatementType());
+}
