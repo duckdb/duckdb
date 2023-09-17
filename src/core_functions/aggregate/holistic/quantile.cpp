@@ -135,13 +135,13 @@ void ReuseIndexes(idx_t *index, const FrameBounds *currs, const FrameBounds *pre
 	//  Insert new indices
 	if (j > 0) {
 		//	Subframe indices
-		const auto currs_start = currs[0].start;
-		const auto currs_end = currs[nframes - 1].end;
-		const FrameBounds last(currs_end, currs_end);
+		const auto union_start = MinValue(currs[0].start, prevs[0].start);
+		const auto union_end = MaxValue(currs[nframes - 1].end, prevs[nframes - 1].end);
+		const FrameBounds last(union_end, union_end);
 
 		idx_t p = 0;
 		idx_t c = 0;
-		for (auto idx = currs_start; idx < currs_end;) {
+		for (auto idx = union_start; idx < union_end;) {
 			int overlap = 0;
 
 			//	Are we in the previous frame?

@@ -651,50 +651,57 @@ ORDER BY i;
 5	4
 5	5
 
-## MEDIAN and CURRENT ROW
-#query II
-#SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW) FROM generate_series(1,10) AS _(i) ORDER BY i;
-#----
-#1	2.5
-#2	3.0
-#3	4.0
-#4	5.0
-#5	6.0
-#6	7.0
-#7	8.0
-#8	9.0
-#9	9.0
-#10	9.0
-#
-## MEDIAN and GROUP
-#query II
-#SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE GROUP) FROM generate_series(1,5) AS _(i), generate_series(1,2) ORDER BY i;
-#----
-#1	2.0
-#1	2.0
-#2	2.0
-#2	3.0
-#3	3.0
-#3	4.0
-#4	4.0
-#4	5.0
-#5	4.0
-#5	NULL
-#
-## MEDIAN and TIES
-#query II
-#SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE TIES) FROM generate_series(1,5) AS _(i), generate_series(1,2) ORDER BY i;
-#----
-#1	
-#1	2.0
-#2	2.0
-#2	3.0
-#3	3.0
-#3	4.0
-#4	4.0
-#4	5.0
-#5	5.0
-#5	5.0
+# MEDIAN and CURRENT ROW
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE CURRENT ROW) 
+FROM generate_series(1,10) AS _(i) ORDER BY i;
+----
+1	2.5
+2	3.0
+3	4.0
+4	5.0
+5	6.0
+6	7.0
+7	8.0
+8	9.0
+9	9.0
+10	9.0
+
+# MEDIAN and GROUP
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE GROUP) 
+FROM generate_series(1,5) AS _(i), 
+	generate_series(1,2) 
+ORDER BY i;
+----
+1	2.0
+1	2.0
+2	2.0
+2	3.0
+3	3.0
+3	4.0
+4	4.0
+4	5.0
+5	4.0
+5	NULL
+
+# MEDIAN and TIES
+query II
+SELECT i, median(i) OVER (ORDER BY i ROWS BETWEEN 1 PRECEDING AND 2 FOLLOWING EXCLUDE TIES) 
+FROM generate_series(1,5) AS _(i), 
+	generate_series(1,2) 
+ORDER BY i;
+----
+1	1.5
+1	2.0
+2	2.0
+2	3.0
+3	3.0
+3	4.0
+4	4.0
+4	5.0
+5	4.5
+5	5.0
 
 
 
