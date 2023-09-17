@@ -1,6 +1,5 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
 
-#include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_sniffer.hpp"
@@ -8,6 +7,9 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/operator/scan/csv/csv_reader_options.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
@@ -34,8 +36,8 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
-ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
-                                 CSVReaderOptions options, string alias_p)
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+                                 named_parameter_map_t &&options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(true) {
 
@@ -43,12 +45,24 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		alias = StringUtil::Split(csv_file, ".")[0];
 	}
 
-	// Force auto_detect for this constructor
-	options.auto_detect = true;
-	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, options);
-	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), options);
+	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+	D_ASSERT(!files.empty());
+
+	auto &file_name = files[0];
+	options["auto_detect"] = Value::BOOLEAN(true);
+	CSVReaderOptions csv_options;
+	csv_options.file_path = file_name;
+	vector<string> empty;
+
+	vector<LogicalType> unused_types;
+	vector<string> unused_names;
+	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
+	// Run the auto-detect, populating the options with the detected settings
+
+	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, csv_options);
+	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), csv_options);
 	CSVStateMachineCache state_machine_cache;
-	CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+	CSVSniffer sniffer(csv_options, buffer_manager, state_machine_cache);
 	auto sniffer_result = sniffer.SniffCSV();
 	auto &types = sniffer_result.return_types;
 	auto &names = sniffer_result.names;
@@ -56,7 +70,12 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		columns.emplace_back(names[i], types[i]);
 	}
 
-	AddNamedParameter("auto_detect", Value::BOOLEAN(true));
+	//! Capture the options potentially set/altered by the auto detection phase
+	csv_options.ToNamedParameters(options);
+
+	// No need to auto-detect again
+	options["auto_detect"] = Value::BOOLEAN(false);
+	SetNamedParameters(std::move(options));
 }
 
 string ReadCSVRelation::GetAlias() {
