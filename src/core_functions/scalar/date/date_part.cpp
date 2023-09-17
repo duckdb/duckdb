@@ -576,7 +576,7 @@ struct DatePart {
 					mask |= ZONE;
 					break;
 				case DatePartSpecifier::INVALID:
-					break;
+					throw InternalException("Invalid DatePartSpecifier for STRUCT mask!");
 				}
 			}
 			return mask;
@@ -672,9 +672,9 @@ struct DatePart {
 			}
 
 			if (mask & EPOCH) {
-				bigint_data = HasPartValue(bigint_values, DatePartSpecifier::EPOCH);
-				if (bigint_data) {
-					bigint_data[idx] = Date::Epoch(input);
+				auto double_data = HasPartValue(double_values, DatePartSpecifier::EPOCH);
+				if (double_data) {
+					double_data[idx] = Date::Epoch(input);
 				}
 			}
 			if (mask & DOY) {
