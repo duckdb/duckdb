@@ -8,6 +8,36 @@ import duckdb.typing as typing
 import duckdb.functional as functional
 from duckdb.typing import DuckDBPyType
 from duckdb.functional import FunctionNullHandling, PythonUDFType
+from duckdb.value.constant import (
+    Value,
+    NullValue,
+    BooleanValue,
+    UnsignedBinaryValue,
+    UnsignedShortValue,
+    UnsignedIntegerValue,
+    UnsignedLongValue,
+    BinaryValue,
+    ShortValue,
+    IntegerValue,
+    LongValue,
+    HugeIntegerValue,
+    FloatValue,
+    DoubleValue,
+    DecimalValue,
+    StringValue,
+    UUIDValue,
+    BitValue,
+    BlobValue,
+    DateValue,
+    IntervalValue,
+    TimestampValue,
+    TimestampSecondValue,
+    TimestampMilisecondValue,
+    TimestampNanosecondValue,
+    TimestampTimeZoneValue,
+    TimeValue,
+    TimeTimeZoneValue,
+)
 
 # We also run this in python3.7, where this is needed
 from typing_extensions import Literal

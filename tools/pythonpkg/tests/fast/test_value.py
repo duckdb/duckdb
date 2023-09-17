@@ -1,7 +1,7 @@
 from xmlrpc.client import DateTime
 import duckdb
 import os
-from pyduckdb.value.constant import (
+from duckdb.value.constant import (
     Value,
     NullValue,
     BooleanValue,
