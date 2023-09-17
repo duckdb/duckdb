@@ -202,10 +202,10 @@ execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
 execution/operator/csv_scanner/base_csv_reader.cpp	31
 execution/operator/csv_scanner/buffered_csv_reader.cpp	47
+execution/operator/csv_scanner/csv_reader_options.cpp	41
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/csv_scanner/csv_file_handle.cpp	7
-execution/operator/csv_scanner/csv_reader_options.cpp	12
-execution/operator/csv_scanner/parallel_csv_reader.cpp	52
+execution/operator/csv_scanner/parallel_csv_reader.cpp	50
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
