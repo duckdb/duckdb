@@ -17,15 +17,28 @@
 
 namespace duckdb {
 
+void ReadCSVRelation::InitializeAlias(const Value &input) {
+	if (input.type().id() == LogicalTypeId::VARCHAR) {
+		auto csv_file = StringValue::Get(input);
+		alias = StringUtil::Split(csv_file, ".")[0];
+	} else if (input.type().id() == LogicalTypeId::LIST) {
+		auto &list = ListValue::GetChildren(input);
+		D_ASSERT(list.size() >= 1);
+		D_ASSERT(list[0].type().id() == LogicalTypeId::VARCHAR);
+		auto csv_file = StringValue::Get(list[0]);
+		alias = StringUtil::Split(csv_file, ".")[0];
+	} else {
+		throw InternalException("Unsupported type for ReadCSVRelation input Value");
+	}
+}
+
 ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
                                  vector<ColumnDefinition> columns_p, string alias_p)
     : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(false) {
 
-	if (alias.empty()) {
-		alias = StringUtil::Split(csv_file, ".")[0];
-	}
-
+	auto input = Value(csv_file);
+	InitializeAlias(input);
 	columns = std::move(columns_p);
 
 	child_list_t<Value> column_names;
@@ -36,16 +49,13 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const Value &input,
                                  named_parameter_map_t &&options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
+    : TableFunctionRelation(context, "read_csv_auto", {input}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(true) {
 
-	if (alias.empty()) {
-		alias = StringUtil::Split(csv_file, ".")[0];
-	}
-
-	auto files = MultiFileReader::GetFileList(*context, csv_file, "CSV");
+	InitializeAlias(input);
+	auto files = MultiFileReader::GetFileList(*context, input, "CSV");
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
