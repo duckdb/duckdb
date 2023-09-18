@@ -548,4 +548,136 @@ def test_scanstats(shell):
     out, err, status = test.run()
     assert_expected_err(out, 'scanstats', status, err)
 
+def test_trace(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(f".trace {random_filepath}")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'sqlite3_trace_v2', status, err)
+    
+def test_output_csv_mode(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement(f".output {random_filepath}")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    outstr = open(random_filepath, 'rb').read()
+    assert_expected_res(outstr, b'42', status, err)
+
+def test_issue_6204(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".output foo.txt")
+        .statement("select * from range(2049);")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "", status, err)
+
+def test_once(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(f".once {random_filepath}")
+        .statement("SELECT 43;")
+    )
+    out, err, status = test.run()
+    outstr = open(random_filepath, 'rb').read()
+    assert_expected_res(outstr, b'43', status, err)
+
+def test_log(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(f".log {random_filepath}")
+        .statement("SELECT 42;")
+        .statement(".log off")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '', status, err)
+
+def test_mode_ascii(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode ascii")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'fourty-two', status, err)
+
+def test_mode_csv(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, ',fourty-two,', status, err)
+
+def test_mode_column(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode column")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '  fourty-two  ', status, err)
+
+def test_mode_html(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode html")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '<TD>fourty-two</TD>', status, err)
+
+# Original comment: FIXME sqlite3_column_blob
+def test_mode_insert(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode insert")
+        .statement("SELECT NULL, 42, 'fourty-two', 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'fourty-two', status, err)
+
+def test_mode_line(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode line")
+        .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'x = fourty-two', status, err)
+
+def test_mode_list(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode list")
+        .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '|fourty-two|', status, err)
+
+# Original comment: FIXME sqlite3_column_blob and %! format specifier
+def test_mode_quote(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode quote")
+        .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'fourty-two', status, err)
+
+def test_mode_tabs(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode tabs")
+        .statement("SELECT NULL, 42, 'fourty-two' x, 42.0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'fourty-two', status, err)
+
 # fmt: on
