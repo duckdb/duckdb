@@ -17,7 +17,7 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		auto target_is_unnamed = StructType::IsUnnamed(target, i);
 		auto source_is_unnamed = StructType::IsUnnamed(source, i);
 		if (!target_is_unnamed && !source_is_unnamed &&
-		    StringUtil::CIEquals(source_child_types[i].first, result_child_types[i].first)) {
+		    !StringUtil::CIEquals(source_child_types[i].first, result_child_types[i].first)) {
 			throw TypeMismatchException(source, target, "Cannot cast STRUCTs with different names");
 		}
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
