@@ -29,7 +29,7 @@ def test_range(shell):
 
 
 @pytest.mark.parametrize('generated_file', ["col_1,col_2\n1,2\n10,20"], indirect=True)
-def test_shell_import(shell, generated_file):
+def test_import(shell, generated_file):
     test = (
         ShellTest(shell)
         .statement(".mode csv")
@@ -39,3 +39,16 @@ def test_shell_import(shell, generated_file):
 
     out, err, status = test.run()
     assert_expected_res(out, "col_1,col_2\n1,2\n10,20", status, err)
+
+def test_pragma(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement(".headers off")
+        .statement(".sep |")
+        .statement("CREATE TABLE t0(c0 INT);")
+        .statement("PRAGMA table_info('t0');")
+    )
+
+    out, err, status = test.run()
+    assert_expected_res(out, "0|c0|INTEGER|false||false", status, err)
