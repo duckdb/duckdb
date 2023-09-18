@@ -2,8 +2,7 @@
 # description: ensure max_queries is set
 # group: [duckfuzz]
 
-statement ok
-load sqlsmith;
+require sqlsmith
 
 statement error
 call fuzzyduck();
