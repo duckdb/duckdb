@@ -17,7 +17,6 @@ struct DescRecord {
 public:
 	DescRecord() {};
 	DescRecord(const DescRecord &other);
-	//	SQLRETURN SetValueType(SQLSMALLINT value_type);
 	SQLRETURN SetSqlDescType(SQLSMALLINT type);
 	SQLRETURN SetSqlDataType(SQLSMALLINT type);
 	void SetDescUnsignedField(const duckdb::LogicalType &type);

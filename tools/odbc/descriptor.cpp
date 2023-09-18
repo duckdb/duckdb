@@ -804,21 +804,6 @@ DescRecord::DescRecord(const DescRecord &other) {
 	sql_desc_updatable = other.sql_desc_updatable;
 }
 
-// SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
-//	sql_desc_type = value_type;
-//	if (OdbcInterval::IsIntervalType(value_type)) {
-//		sql_desc_type = SQL_INTERVAL;
-//		sql_desc_concise_type = value_type;
-//		auto interval_code = OdbcInterval::GetIntervalCode(value_type);
-//		if (interval_code == SQL_ERROR) {
-//			return interval_code;
-//		}
-//		sql_desc_datetime_interval_code = interval_code;
-//	}
-//
-//	return SQL_SUCCESS;
-//}
-
 SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 	sql_desc_type = sql_desc_concise_type = type;
 	if (OdbcInterval::IsIntervalType(type)) {
