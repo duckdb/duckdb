@@ -705,7 +705,7 @@ planner/expression/bound_lambdaref_expression.cpp	38
 planner/expression/bound_reference_expression.cpp	12
 planner/expression/bound_subquery_expression.cpp	5
 planner/expression/bound_window_expression.cpp	7
-planner/expression_binder.cpp	7
+planner/expression_binder.cpp	9
 planner/expression_binder/aggregate_binder.cpp	3
 planner/expression_binder/alter_binder.cpp	3
 planner/expression_binder/base_select_binder.cpp	3
