@@ -47,12 +47,13 @@ public class DuckDBArrayResultSet implements ResultSet {
 
     private <T> T getValue(int columnIndex, SqlValueGetter<T> getter) throws SQLException {
         if (columnIndex == 1) {
-            throw new IllegalArgumentException("The first element of Array-backed ResultSet can only be retrieved with getInt()");
+            throw new IllegalArgumentException(
+                    "The first element of Array-backed ResultSet can only be retrieved with getInt()");
         }
         if (columnIndex != 2) {
             throw new IllegalArgumentException("Array-backed ResultSet can only have two columns");
         }
-        T value = getter.getValue(currentValueIndex);
+        T value = getter.getValue(offset + currentValueIndex);
 
         wasNull = value == null;
         return value;
@@ -342,7 +343,7 @@ public class DuckDBArrayResultSet implements ResultSet {
             currentValueIndex = length + row;
         }
 
-       return checkBounds();
+        return checkBounds();
     }
 
     private boolean checkBounds() {
@@ -1040,5 +1041,5 @@ public class DuckDBArrayResultSet implements ResultSet {
  * @param <T> Type of value to extract
  */
 interface SqlValueGetter<T> {
-   T getValue(int index) throws SQLException;
+    T getValue(int index) throws SQLException;
 }

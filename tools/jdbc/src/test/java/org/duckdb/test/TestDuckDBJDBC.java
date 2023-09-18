@@ -3312,14 +3312,14 @@ public class TestDuckDBJDBC {
                 Array subArray = arrayResultSet.getArray(2);
                 assertNotNull(subArray);
                 ResultSet subArrayResultSet = subArray.getResultSet();
-                assertFalse(subArrayResultSet.next());  // empty array
+                assertFalse(subArrayResultSet.next()); // empty array
 
                 assertTrue(arrayResultSet.next());
                 assertEquals(arrayResultSet.getInt(1), 2);
                 Array subArray2 = arrayResultSet.getArray(2);
                 assertNotNull(subArray2);
                 ResultSet subArrayResultSet2 = subArray2.getResultSet();
-                assertTrue(subArrayResultSet2.next());  // empty array
+                assertTrue(subArrayResultSet2.next());
 
                 assertEquals(subArrayResultSet2.getInt(1), 1);
                 assertEquals(subArrayResultSet2.getInt(2), 69);
@@ -3376,10 +3376,7 @@ public class TestDuckDBJDBC {
 
                 arrayResultSet.relative(-1);
                 assertEquals(arrayResultSet.getString(2), "universe");
-
-
             }
-
         }
     }
 
