@@ -25,7 +25,7 @@ void ArrayColumnData::SetStart(idx_t new_start) {
 }
 
 bool ArrayColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	// TODO: There is nothing preventing us from supporting this, but it's not implemented yet.
+	// FIXME: There is nothing preventing us from supporting this, but it's not implemented yet.
 	// table filters are not supported yet for fixed size list columns
 	return false;
 }
@@ -159,7 +159,6 @@ void ArrayColumnData::CommitDropColumn() {
 	child_column->CommitDropColumn();
 }
 
-// TODO: Fix checkpointing, this probably does not work
 struct ArrayColumnCheckpointState : public ColumnCheckpointState {
 	ArrayColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, PartialBlockManager &partial_block_manager)
 	    : ColumnCheckpointState(row_group, column_data, partial_block_manager) {

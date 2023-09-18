@@ -170,7 +170,7 @@ static bool ArrayToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 static bool ArrayToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<ArrayBoundCastData>();
 
-	// TODO: dont flatten
+	// FIXME: dont flatten
 	source.Flatten(count);
 	if (count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -217,7 +217,6 @@ BoundCastInfo DefaultCasts::ArrayCastSwitch(BindCastInput &input, const LogicalT
 	case LogicalTypeId::ARRAY:
 		return BoundCastInfo(ArrayToArrayCast, BindArrayToArrayCast(input, source, target), InitArrayLocalState);
 	case LogicalTypeId::LIST:
-		// TODO: This works, but it doesnt seem like the list functions will invoke this?
 		return BoundCastInfo(ArrayToListCast, BindArrayToListCast(input, source, target), InitArrayLocalState);
 	default:
 		return DefaultCasts::TryVectorNullCast;

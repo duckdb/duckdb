@@ -147,16 +147,6 @@ static inline void ArrayGenericBinaryExecute(Vector &left, Vector &right, Vector
 	auto &left_child_validity = FlatVector::Validity(left_child);
 	auto &right_child_validity = FlatVector::Validity(right_child);
 
-	/*
-	if (!FlatVector::Validity(left_child).CheckAllValid(count * size)) {
-	    throw InvalidInputException(StringUtil::Format("'%s' left argument can not contain NULL values", OP::NAME));
-	}
-
-	if (!FlatVector::Validity(right_child).CheckAllValid(count * size)) {
-	    throw InvalidInputException(StringUtil::Format("'%s' right argument can not contain NULL values", OP::NAME));
-	}
-	*/
-
 	UnifiedVectorFormat left_format;
 	UnifiedVectorFormat right_format;
 

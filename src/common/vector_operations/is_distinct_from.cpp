@@ -688,7 +688,7 @@ static idx_t DistinctSelectArray(Vector &left, Vector &right, idx_t count, const
 		return count;
 	}
 
-	// TODO: This function can probably be optimized since we know the array size is fixed for every entry.
+	// FIXME: This function can probably be optimized since we know the array size is fixed for every entry.
 
 	D_ASSERT(ArrayType::GetSize(left.GetType()) == ArrayType::GetSize(right.GetType()));
 	auto array_size = ArrayType::GetSize(left.GetType());

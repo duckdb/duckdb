@@ -60,8 +60,6 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVector(const LogicalType &t
 		}
 		GetVectorData(index).child_index = base_child_index;
 	}
-
-	// TODO: add case for array here?
 	return index;
 }
 

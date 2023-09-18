@@ -209,7 +209,6 @@ static bool ListToArrayCast(Vector &source, Vector &result, idx_t count, CastPar
 		for (idx_t i = 0; i < count; i++) {
 			if (FlatVector::IsNull(source, i)) {
 				for (idx_t array_elem = 0; array_elem < array_size; array_elem++) {
-					// TODO: this doesnt seem to help, the index is still fuxcked
 					FlatVector::SetNull(payload_vector, i * array_size + array_elem, true);
 				}
 			}
