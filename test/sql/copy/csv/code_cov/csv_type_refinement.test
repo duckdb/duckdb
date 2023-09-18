@@ -13,4 +13,4 @@ select count(*) from read_csv_auto('data/csv/borked_date.csv')
 query I
 select count(*) from read_csv_auto('data/csv/big_not_bool.csv')
 ----
-2069
+2450
