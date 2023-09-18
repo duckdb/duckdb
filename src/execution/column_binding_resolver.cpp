@@ -102,6 +102,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	default:
 		break;
 	}
+
 	// general case
 	// first visit the children of this operator
 	VisitOperatorChildren(op);

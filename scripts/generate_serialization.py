@@ -515,7 +515,15 @@ def generate_class_code(class_entry):
             class_deserialize += get_deserialize_assignment(
                 entry.deserialize_property, entry.type, class_entry.pointer_type
             )
+        if entry.name in class_entry.set_parameter_names:
+            class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(
+                '${PROPERTY_NAME}', entry.name
+            )
 
+    for entry in class_entry.set_parameters:
+        class_deserialize += unset_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace(
+            '${PROPERTY_NAME}', entry.name
+        )
     class_deserialize += generate_return(class_entry)
     deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
