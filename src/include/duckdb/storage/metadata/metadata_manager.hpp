@@ -16,6 +16,7 @@
 
 namespace duckdb {
 class DatabaseInstance;
+struct MetadataBlockInfo;
 
 struct MetadataBlock {
 	shared_ptr<BlockHandle> block;
@@ -66,6 +67,7 @@ public:
 	void MarkBlocksAsModified();
 	void ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers);
 
+	vector<MetadataBlockInfo> GetMetadataInfo() const;
 	idx_t BlockCount();
 
 	void Write(WriteStream &sink);

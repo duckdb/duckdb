@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING, Optional, Union
-from pyduckdb.spark.sql.types import StructType
+from duckdb.spark.sql.types import StructType
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.dataframe import DataFrame
-    from pyduckdb.spark.sql.session import SparkSession
+    from duckdb.spark.sql.dataframe import DataFrame
+    from duckdb.spark.sql.session import SparkSession
 
 PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
@@ -29,7 +29,7 @@ class DataStreamReader:
         schema: Union[StructType, str, None] = None,
         **options: OptionalPrimitiveType
     ) -> "DataFrame":
-        from pyduckdb.spark.sql.dataframe import DataFrame
+        from duckdb.spark.sql.dataframe import DataFrame
 
         raise NotImplementedError
 

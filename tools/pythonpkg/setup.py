@@ -318,15 +318,14 @@ packages = [
     lib_name,
     'duckdb.typing',
     'duckdb.functional',
-    'pyduckdb',
-    'pyduckdb.value',
+    'duckdb.value',
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['pyduckdb.spark', 'pyduckdb.spark.sql']
+spark_packages = ['duckdb.spark', 'duckdb.spark.sql']
 
 packages.extend(spark_packages)
 

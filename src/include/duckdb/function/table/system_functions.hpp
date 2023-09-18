@@ -25,6 +25,10 @@ struct PragmaStorageInfo {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct PragmaMetadataInfo {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct PragmaLastProfilingOutput {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
