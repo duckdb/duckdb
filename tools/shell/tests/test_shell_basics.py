@@ -1,3 +1,5 @@
+# fmt: off
+
 import pytest
 import subprocess
 import sys
@@ -127,26 +129,25 @@ def test_invalid_backup(shell, random_filepath):
     out, err, status = test.run()
     assert_expected_err(out, "sqlite3_backup_init", status, err)
 
-
 def test_newline_in_value(shell):
-    test = ShellTest(shell).statement(
-        """select 'hello
-world' as a"""
+    test = (
+        ShellTest(shell)
+        .statement("""select 'hello
+world' as a""")
     )
 
     out, err, status = test.run()
     assert_expected_res(out, "hello\\nworld", status, err)
-
 
 def test_newline_in_column_name(shell):
-    test = ShellTest(shell).statement(
-        """select 42 as "hello
-world" """
+    test = (
+        ShellTest(shell)
+        .statement("""select 42 as "hello
+world" """)
     )
 
     out, err, status = test.run()
     assert_expected_res(out, "hello\\nworld", status, err)
-
 
 # FIXME: this test was underspecified, no expected result was provided
 def test_bailing_mechanism(shell):
@@ -163,16 +164,17 @@ def test_bailing_mechanism(shell):
     out, err, status = test.run()
     assert_expected_res(out, "42", status, err)
 
-
 # FIXME: no verification at all?
 def test_cd(shell, tmp_path):
     import os
-
     current_dir = os.getcwd()
 
-    test = ShellTest(shell).statement(f".cd {tmp_path}").statement(f".cd {current_dir}")
+    test = (
+        ShellTest(shell)
+        .statement(f".cd {tmp_path}")
+        .statement(f".cd {current_dir}")
+    )
     _, _, _ = test.run()
-
 
 def test_changes_on(shell):
     test = (
@@ -187,7 +189,6 @@ def test_changes_on(shell):
     out, err, status = test.run()
     assert_expected_res(out, "total_changes: 3", status, err)
 
-
 def test_changes_off(shell):
     test = (
         ShellTest(shell)
@@ -199,71 +200,79 @@ def test_changes_off(shell):
     out, err, status = test.run()
     assert_expected_res(out, "", status, err)
 
-
 def test_echo(shell):
-    test = ShellTest(shell).statement(".echo on").statement("SELECT 42;")
+    test = (
+        ShellTest(shell)
+        .statement(".echo on")
+        .statement("SELECT 42;")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "SELECT 42", status, err)
-
 
 @pytest.mark.parametrize("alias", ["exit", "quit"])
 def test_exit(shell, alias):
     test = ShellTest(shell).statement(f".{alias}")
     _, _, _ = test.run()
 
-
 def test_print(shell):
     test = ShellTest(shell).statement(".print asdf")
     out, err, status = test.run()
     assert_expected_res(out, "asdf", status, err)
 
-
 def test_headers(shell):
-    test = ShellTest(shell).statement(".headers on").statement("SELECT 42 as wilbur")
+    test = (
+        ShellTest(shell)
+        .statement(".headers on")
+        .statement("SELECT 42 as wilbur")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "wilbur", status, err)
-
 
 def test_like(shell):
     test = ShellTest(shell).statement("select 'yo' where 'abc' like 'a%c'")
     out, err, status = test.run()
     assert_expected_res(out, "yo", status, err)
 
-
 def test_regexp_matches(shell):
     test = ShellTest(shell).statement("select regexp_matches('abc','abc')")
     out, err, status = test.run()
     assert_expected_res(out, "true", status, err)
 
-
 def test_help(shell):
-    test = ShellTest(shell).statement(".help")
+    test = (
+        ShellTest(shell).
+        statement(".help")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "Show help text for PATTERN", status, err)
 
-
 def test_load_error(shell, random_filepath):
-    test = ShellTest(shell).statement(f".load {random_filepath}")
+    test = (
+        ShellTest(shell)
+        .statement(f".load {random_filepath}")
+    )
     out, err, status = test.run()
     assert_expected_err(out, "Error", status, err)
 
-
 def test_streaming_error(shell):
-    test = ShellTest(shell).statement(
-        "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);"
+    test = (
+        ShellTest(shell)
+        .statement("SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);")
     )
     out, err, status = test.run()
     assert_expected_err(out, "Could not convert string", status, err)
 
-
-@pytest.mark.parametrize(
-    "stmt", ["explain select sum(i) from range(1000) tbl(i)", "explain analyze select sum(i) from range(1000) tbl(i)"]
-)
+@pytest.mark.parametrize("stmt", [
+    "explain select sum(i) from range(1000) tbl(i)",
+    "explain analyze select sum(i) from range(1000) tbl(i)"
+])
 def test_explain(shell, stmt):
-    test = ShellTest(shell).statement(stmt)
+    test = (
+        ShellTest(shell)
+        .statement(stmt)
+    )
     out, err, status = test.run()
     assert_expected_res(out, "RANGE", status, err)
-
 
 def test_returning_insert(shell):
     test = (
@@ -275,7 +284,6 @@ def test_returning_insert(shell):
     out, err, status = test.run()
     assert_expected_res(out, "1", status, err)
 
-
 def test_pragma_display(shell):
     test = (
         ShellTest(shell)
@@ -285,34 +293,48 @@ def test_pragma_display(shell):
     out, err, status = test.run()
     assert_expected_res(out, "mylittlecolumn", status, err)
 
-
 def test_show_display(shell):
-    test = ShellTest(shell).statement("CREATE TABLE table1 (mylittlecolumn INTEGER);").statement("show table1;")
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE table1 (mylittlecolumn INTEGER);")
+        .statement("show table1;")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "mylittlecolumn", status, err)
 
-
 def test_call_display(shell):
-    test = ShellTest(shell).statement("CALL range(4);")
+    test = (
+        ShellTest(shell)
+        .statement("CALL range(4);")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "3", status, err)
 
-
 def test_execute_display(shell):
-    test = ShellTest(shell).statement("PREPARE v1 AS SELECT ?::INT;").statement("EXECUTE v1(42);")
+    test = (
+        ShellTest(shell)
+        .statement("PREPARE v1 AS SELECT ?::INT;")
+        .statement("EXECUTE v1(42);")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "42", status, err)
-
 
 # this should be fixed
 def test_selftest(shell):
-    test = ShellTest(shell).statement(".selftest")
+    test = (
+        ShellTest(shell)
+        .statement(".selftest")
+    )
     out, err, status = test.run()
     assert_expected_err(out, "sqlite3_table_column_metadata", status, err)
 
-
 @pytest.mark.parametrize('generated_file', ["select 42"], indirect=True)
 def test_read(shell, generated_file):
-    test = ShellTest(shell).statement(f".read {generated_file}")
+    test = (
+        ShellTest(shell)
+        .statement(f".read {generated_file}")
+    )
     out, err, status = test.run()
     assert_expected_res(out, "42", status, err)
+
+# fmt: on
