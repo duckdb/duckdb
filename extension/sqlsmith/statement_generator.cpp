@@ -1,19 +1,24 @@
 #include "statement_generator.hpp"
 
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/query_node/set_operation_node.hpp"
-#include "duckdb/parser/tableref/list.hpp"
-#include "duckdb/parser/parsed_expression_iterator.hpp"
-#include "duckdb/parser/expression/list.hpp"
-#include "duckdb/parser/statement/delete_statement.hpp"
-#include "duckdb/parser/statement/insert_statement.hpp"
-#include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
-#include "duckdb/parser/expression/list.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/statement/delete_statement.hpp"
+#include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/parser/statement/update_statement.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 
@@ -65,13 +70,15 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
-	return GenerateStatement(StatementType::SELECT_STATEMENT);
+	return GenerateStatement(StatementType::CREATE_STATEMENT);
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType type) {
 	switch (type) {
 	case StatementType::SELECT_STATEMENT:
 		return GenerateSelect();
+	case StatementType::CREATE_STATEMENT:
+		return GenerateCreate();
 	default:
 		throw InternalException("Unsupported type");
 	}
@@ -85,6 +92,64 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateSelect() {
 	select->node = GenerateQueryNode();
 	return std::move(select);
 }
+
+unique_ptr<SQLStatement> StatementGenerator::GenerateCreate() {
+	auto create = make_uniq<CreateStatement>();
+	create->info = GenerateCreateInfo();
+	return std::move(create);
+}
+
+//===--------------------------------------------------------------------===//
+// Create Info Node
+//===--------------------------------------------------------------------===//
+
+unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
+	switch (2) {
+	case 0: {
+		auto info = make_uniq<CreateTypeInfo>();
+		info->name = RandomString(5);
+		info->type = LogicalType(LogicalType::VARCHAR);
+
+		auto query = make_uniq<SelectStatement>();
+		auto node = make_uniq<SelectNode>();
+		for (idx_t i = 0; i < RandomValue(100000); i++ ) {
+			auto rand_val = RandomString(20);
+			auto value = make_uniq<ConstantExpression>(Value(rand_val));
+			node->select_list.push_back(std::move(value));
+		}
+		query->node = std::move(node);
+		info->query = std::move(query);
+		return std::move(info);
+	}
+	case 1: {
+		auto info = make_uniq<CreateTableInfo>();
+		info->catalog = INVALID_CATALOG;
+		info->schema = DEFAULT_SCHEMA;
+		info->table = RandomString(10);
+		return std::move(info);
+	}
+	case 2: {
+		auto info = make_uniq<CreateSchemaInfo>();
+		info->catalog = INVALID_CATALOG;
+		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+		info->schema = RandomString(10);
+		return std::move(info);
+	}
+	case 3: {
+		auto info = make_uniq<CreateViewInfo>();
+		info->view_name = RandomString(10);
+		info->aliases = vector<string>({RandomString(5), RandomString(5)});
+		auto select = make_uniq<SelectStatement>();
+		select->node = GenerateQueryNode();
+		info->query = std::move(select);
+		return std::move(info);
+	}
+	default:
+		break;
+	}
+	throw InternalException("Unsupported Create Info Type");
+}
+
 
 //===--------------------------------------------------------------------===//
 // Query Node
@@ -995,6 +1060,21 @@ idx_t StatementGenerator::RandomValue(idx_t max) {
 		return 0;
 	}
 	return RandomEngine::Get(context).NextRandomInteger() % max;
+}
+
+string StatementGenerator::RandomString(idx_t length) {
+
+	const string charset = "$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	string result = "";
+	for (int i = 0; i < length; ++i) {
+		// Generate a random index within the character set
+		int randomIndex = RandomValue(charset.length());
+
+		// Append a random character from the character set to the result string
+		result += charset[randomIndex];
+	}
+
+	return result;
 }
 
 bool StatementGenerator::RandomBoolean() {

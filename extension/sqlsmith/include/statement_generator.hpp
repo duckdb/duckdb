@@ -51,7 +51,10 @@ private:
 	unique_ptr<SQLStatement> GenerateStatement(StatementType type);
 
 	unique_ptr<SQLStatement> GenerateSelect();
+	unique_ptr<SQLStatement> GenerateCreate();
 	unique_ptr<QueryNode> GenerateQueryNode();
+
+	unique_ptr<CreateInfo> GenerateCreateInfo();
 
 	void GenerateCTEs(QueryNode &node);
 	unique_ptr<TableRef> GenerateTableRef();
@@ -94,6 +97,7 @@ private:
 	bool RandomBoolean();
 	//! Returns true with a percentage change (0-100)
 	bool RandomPercentage(idx_t percentage);
+	string RandomString(idx_t length);
 	unique_ptr<ParsedExpression> RandomExpression(idx_t percentage);
 
 	string GenerateIdentifier();

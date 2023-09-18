@@ -25,4 +25,5 @@ unique_ptr<AlterInfo> CreateInfo::GetAlterInfo() const {
 	throw NotImplementedException("GetAlterInfo not implemented for this type");
 }
 
+
 } // namespace duckdb
