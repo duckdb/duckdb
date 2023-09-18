@@ -66,7 +66,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 
 			const auto &rhs_location = rhs_locations[idx];
 			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 			if (MATCH_OP::template Operation<T>(lhs_data[lhs_sel.get_index(idx)],
 			                                    Load<T>(rhs_location + rhs_offset_in_row), false, rhs_null)) {
@@ -84,7 +84,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 
 			const auto &rhs_location = rhs_locations[idx];
 			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 			if (MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
 			                                    rhs_null)) {
@@ -121,7 +121,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 
 			const auto &rhs_location = rhs_locations[idx];
 			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 			// For structs there is no value to compare, here we match NULLs and let recursion do the rest
 			// So we use the comparison only if rhs is NULL (we know LHS is not NULL) and COMPARE_NULL is true
@@ -141,7 +141,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 
 			const auto &rhs_location = rhs_locations[idx];
 			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
 			// Same as above, except here we need to check whether either LHS or RHS are NULL
 			if (!(lhs_null || rhs_null) ||
