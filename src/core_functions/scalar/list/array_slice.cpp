@@ -7,10 +7,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 
-#include "duckdb/common/serializer/memory_stream.hpp"
-#include "duckdb/common/serializer/binary_serializer.hpp"
-#include "duckdb/common/serializer/binary_deserializer.hpp"
-
 namespace duckdb {
 
 struct ListSliceBindData : public FunctionData {
@@ -307,21 +303,6 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 		                                         count, sel, sel_idx, result_child_vector, begin_is_empty,
 		                                         end_is_empty);
 	}
-#ifdef DEBUG
-	// try to serialize the result vector
-	vector<LogicalType> types;
-	types.push_back(result.GetType());
-	MemoryStream mem_stream;
-	BinarySerializer serializer(mem_stream);
-
-	DataChunk verify_chunk;
-	verify_chunk.InitializeEmpty(types);
-	verify_chunk.data[0].Reference(result);
-
-	serializer.Begin();
-	verify_chunk.Serialize(serializer);
-	serializer.End();
-#endif
 	result.Verify(count);
 }
 

@@ -13,6 +13,10 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
 
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+
 namespace duckdb {
 
 DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
@@ -328,6 +332,13 @@ void DataChunk::Verify() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
 	}
+
+	MemoryStream mem_stream;
+	BinarySerializer serializer(mem_stream);
+
+	serializer.Begin();
+	Serialize(serializer);
+	serializer.End();
 #endif
 }
 
