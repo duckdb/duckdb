@@ -116,6 +116,8 @@ public:
 
 	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static int GetRowcount(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static Optional<py::tuple> FetchOne(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);

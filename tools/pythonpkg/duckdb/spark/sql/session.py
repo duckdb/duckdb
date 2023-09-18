@@ -2,19 +2,19 @@ from typing import Optional, List, Tuple, Any, Union, Iterable, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.catalog import Catalog
+    from duckdb.spark.sql.catalog import Catalog
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-from pyduckdb.spark.exception import ContributionsAcceptedError
+from duckdb.spark.exception import ContributionsAcceptedError
 
-from pyduckdb.spark.sql.types import StructType, AtomicType, DataType
-from pyduckdb.spark.conf import SparkConf
-from pyduckdb.spark.sql.dataframe import DataFrame
-from pyduckdb.spark.sql.conf import RuntimeConfig
-from pyduckdb.spark.sql.readwriter import DataFrameReader
-from pyduckdb.spark.context import SparkContext
-from pyduckdb.spark.sql.udf import UDFRegistration
-from pyduckdb.spark.sql.streaming import DataStreamReader
+from duckdb.spark.sql.types import StructType, AtomicType, DataType
+from duckdb.spark.conf import SparkConf
+from duckdb.spark.sql.dataframe import DataFrame
+from duckdb.spark.sql.conf import RuntimeConfig
+from duckdb.spark.sql.readwriter import DataFrameReader
+from duckdb.spark.context import SparkContext
+from duckdb.spark.sql.udf import UDFRegistration
+from duckdb.spark.sql.streaming import DataStreamReader
 import duckdb
 
 # In spark:
@@ -29,7 +29,7 @@ import duckdb
 # data is a List of rows
 # every value in each row needs to be turned into a Value
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
-    from pyduckdb import Value
+    from duckdb import Value
 
     new_data = []
     for row in data:
@@ -174,7 +174,7 @@ class SparkSession:
     @property
     def catalog(self) -> "Catalog":
         if not hasattr(self, "_catalog"):
-            from pyduckdb.spark.sql.catalog import Catalog
+            from duckdb.spark.sql.catalog import Catalog
 
             self._catalog = Catalog(self)
         return self._catalog
