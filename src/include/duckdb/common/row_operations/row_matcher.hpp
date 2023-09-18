@@ -14,6 +14,7 @@
 namespace duckdb {
 
 class Vector;
+class DataChunk;
 class TupleDataLayout;
 struct TupleDataVectorFormat;
 struct SelectionVector;
