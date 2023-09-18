@@ -10,9 +10,6 @@
   <a href="https://github.com/duckdb/duckdb/actions">
     <img src="https://github.com/duckdb/duckdb/actions/workflows/Main.yml/badge.svg?branch=main" alt="Github Actions Badge">
   </a>
-  <a href="https://app.codecov.io/gh/duckdb/duckdb">
-    <img src="https://codecov.io/gh/duckdb/duckdb/branch/main/graph/badge.svg?token=FaxjcfFghN" alt="codecov"/>
-  </a>
   <a href="https://discord.gg/tcvwpjfnZx">
     <img src="https://shields.io/discord/909674491309850675" alt="discord" />
   </a>
