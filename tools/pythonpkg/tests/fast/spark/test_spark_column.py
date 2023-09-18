@@ -1,10 +1,10 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
+_ = pytest.importorskip("duckdb.spark")
 
-from pyduckdb.spark.sql.column import Column
-from pyduckdb.spark.sql.functions import struct
-from pyduckdb.spark.sql.types import Row
+from duckdb.spark.sql.column import Column
+from duckdb.spark.sql.functions import struct
+from duckdb.spark.sql.types import Row
 
 import duckdb
 

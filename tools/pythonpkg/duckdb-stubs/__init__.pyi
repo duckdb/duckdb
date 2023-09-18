@@ -8,6 +8,36 @@ import duckdb.typing as typing
 import duckdb.functional as functional
 from duckdb.typing import DuckDBPyType
 from duckdb.functional import FunctionNullHandling, PythonUDFType
+from duckdb.value.constant import (
+    Value,
+    NullValue,
+    BooleanValue,
+    UnsignedBinaryValue,
+    UnsignedShortValue,
+    UnsignedIntegerValue,
+    UnsignedLongValue,
+    BinaryValue,
+    ShortValue,
+    IntegerValue,
+    LongValue,
+    HugeIntegerValue,
+    FloatValue,
+    DoubleValue,
+    DecimalValue,
+    StringValue,
+    UUIDValue,
+    BitValue,
+    BlobValue,
+    DateValue,
+    IntervalValue,
+    TimestampValue,
+    TimestampSecondValue,
+    TimestampMilisecondValue,
+    TimestampNanosecondValue,
+    TimestampTimeZoneValue,
+    TimeValue,
+    TimeTimeZoneValue,
+)
 
 # We also run this in python3.7, where this is needed
 from typing_extensions import Literal
@@ -38,6 +68,8 @@ STANDARD: ExplainType
 ANALYZE: ExplainType
 DEFAULT: PythonExceptionHandling
 RETURN_NULL: PythonExceptionHandling
+ROWS: RenderMode
+COLUMNS: RenderMode
 
 __version__: str
 
@@ -65,6 +97,18 @@ class ExplainType:
     def __index__(self) -> int: ...
     @property
     def __members__(self) -> Dict[str, ExplainType]: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def value(self) -> int: ...
+
+class RenderMode:
+    ROWS: RenderMode
+    COLUMNS: RenderMode
+    def __int__(self) -> int: ...
+    def __index__(self) -> int: ...
+    @property
+    def __members__(self) -> Dict[str, RenderMode]: ...
     @property
     def name(self) -> str: ...
     @property
@@ -125,7 +169,7 @@ class Expression:
     def __lt__(self, expr: "Expression") -> "Expression": ...
     def __le__(self, expr: "Expression") -> "Expression": ...
 
-    def show(self) -> None: ...
+    def show(self, max_width: Optional[int] = None, max_rows: Optional[int] = None, max_col_width: Optional[int] = None, null_value: Optional[str] = None, render_mode: Optional[RenderMode] = None) -> None: ...
     def __repr__(self) -> str: ...
     def alias(self, alias: str) -> None: ...
     def when(self, condition: "Expression", value: "Expression") -> "Expression": ...
@@ -195,10 +239,12 @@ class DuckDBPyConnection:
         all_varchar: Optional[bool] = None,
         normalize_names: Optional[bool] = None,
         filename: Optional[bool] = None,
+        null_padding: Optional[bool] = None,
+        names: Optional[List[str]] = None
     ) -> DuckDBPyRelation: ...
     def from_csv_auto(
         self,
-        name: str,
+        path_or_buffer: Union[str, StringIO, TextIOBase],
         header: Optional[bool | int] = None,
         compression: Optional[str] = None,
         sep: Optional[str] = None,
@@ -217,6 +263,7 @@ class DuckDBPyConnection:
         normalize_names: Optional[bool] = None,
         filename: Optional[bool] = None,
         null_padding: Optional[bool] = None,
+        names: Optional[List[str]] = None
     ) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload

@@ -17,8 +17,11 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/render_mode_enum.hpp"
 #include "duckdb_python/pybind11/conversions/null_handling_enum.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/python_objects.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -249,7 +252,9 @@ public:
 	py::list ColumnTypes();
 
 	string ToString();
-	void Print();
+	void Print(const Optional<py::int_> &max_width, const Optional<py::int_> &max_rows,
+	           const Optional<py::int_> &max_col_width, const Optional<py::str> &null_value,
+	           const py::object &render_mode);
 
 	string Explain(ExplainType type);
 
@@ -260,6 +265,7 @@ public:
 	bool ContainsColumnByName(const string &name) const;
 
 private:
+	string ToStringInternal(const BoxRendererConfig &config, bool invalidate_cache = false);
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              bool ignore_nulls = false, const string &projected_columns = "",

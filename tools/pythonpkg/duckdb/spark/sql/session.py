@@ -29,7 +29,7 @@ import duckdb
 # data is a List of rows
 # every value in each row needs to be turned into a Value
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
-    from pyduckdb import Value
+    from duckdb import Value
 
     ## FIXME: this is not true
     # assert not isinstance(data, PandasDataFrame)
@@ -192,7 +192,7 @@ class SparkSession:
     @property
     def catalog(self) -> "Catalog":
         if not hasattr(self, "_catalog"):
-            from pyduckdb.spark.sql.catalog import Catalog
+            from duckdb.spark.sql.catalog import Catalog
 
             self._catalog = Catalog(self)
         return self._catalog

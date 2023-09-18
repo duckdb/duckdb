@@ -1,7 +1,7 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql.types import Row
+_ = pytest.importorskip("duckdb.spark")
+from duckdb.spark.sql.types import Row
 
 
 # https://sparkbyexamples.com/pyspark/pyspark-replace-column-values/?expand_article=1
@@ -11,12 +11,12 @@ class TestReplaceValue(object):
         df = spark.createDataFrame(address, ["id", "address", "state"])
 
         # Replace part of string with another string
-        from pyduckdb.spark.sql.functions import regexp_replace
+        from duckdb.spark.sql.functions import regexp_replace
 
         df2 = df.withColumn('address', regexp_replace('address', 'Rd', 'Road'))
 
         # Replace string column value conditionally
-        from pyduckdb.spark.sql.functions import when
+        from duckdb.spark.sql.functions import when
 
         res = df2.collect()
         print(res)

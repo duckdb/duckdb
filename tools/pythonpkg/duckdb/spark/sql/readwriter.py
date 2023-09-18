@@ -6,8 +6,8 @@ PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.dataframe import DataFrame
-    from pyduckdb.spark.sql.session import SparkSession
+    from duckdb.spark.sql.dataframe import DataFrame
+    from duckdb.spark.sql.session import SparkSession
 
 
 class DataFrameWriter:
@@ -30,7 +30,7 @@ class DataFrameReader:
         schema: Optional[Union[StructType, str]] = None,
         **options: OptionalPrimitiveType,
     ) -> "DataFrame":
-        from pyduckdb.spark.sql.dataframe import DataFrame
+        from duckdb.spark.sql.dataframe import DataFrame
 
         if not isinstance(path, str):
             raise ImportError

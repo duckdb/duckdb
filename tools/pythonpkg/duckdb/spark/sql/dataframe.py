@@ -561,7 +561,7 @@ class DataFrame:
 
     @property
     def schema(self) -> StructType:
-        """Returns the schema of this :class:`DataFrame` as a :class:`pyduckdb.spark.sql.types.StructType`.
+        """Returns the schema of this :class:`DataFrame` as a :class:`duckdb.spark.sql.types.StructType`.
 
         Examples
         --------

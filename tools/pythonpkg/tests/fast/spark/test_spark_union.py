@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
+_ = pytest.importorskip("duckdb.spark")
 
-from pyduckdb.spark.sql.types import (
+from duckdb.spark.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +14,8 @@ from pyduckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from pyduckdb.spark.sql.functions import col, struct, when, lit, array_contains
-from pyduckdb.spark.sql.functions import sum, avg, max, min, mean, count
+from duckdb.spark.sql.functions import col, struct, when, lit, array_contains
+from duckdb.spark.sql.functions import sum, avg, max, min, mean, count
 
 
 @pytest.fixture

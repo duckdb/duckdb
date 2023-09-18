@@ -2,11 +2,11 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -558,10 +558,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			// If we performed the final read of this reader in the previous iteration, close it now
 			if (is_last) {
-				if (gstate.bind_data.type != JSONScanType::SAMPLE) {
-					TryIncrementFileIndex(gstate);
-					current_reader->CloseJSONFile();
-				}
+				TryIncrementFileIndex(gstate);
+				current_reader->CloseJSONFile();
 				current_reader = nullptr;
 				continue;
 			}

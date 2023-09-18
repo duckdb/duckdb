@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
+_ = pytest.importorskip("duckdb.spark")
 
-from pyduckdb.spark.sql.types import (
+from duckdb.spark.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +14,8 @@ from pyduckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from pyduckdb.spark.sql.functions import col, struct, when, lit, array_contains
-from pyduckdb.spark.sql.functions import sum, avg, max, min, mean, count
+from duckdb.spark.sql.functions import col, struct, when, lit, array_contains
+from duckdb.spark.sql.functions import sum, avg, max, min, mean, count
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ def df(spark):
 class TestDataFrameUnion(object):
     def test_transform(self, spark, df):
         # Custom transformation 1
-        from pyduckdb.spark.sql.functions import upper
+        from duckdb.spark.sql.functions import upper
 
         def to_upper_str_columns(df):
             return df.withColumn("CourseName", upper(df.CourseName))
@@ -72,6 +72,6 @@ class TestDataFrameUnion(object):
     # https://sparkbyexamples.com/pyspark/pyspark-transform-function/
     @pytest.mark.skip(reason='LambdaExpressions are currently under development, waiting til that is finished')
     def test_transform_function(self, spark, array_df):
-        from pyduckdb.spark.sql.functions import upper, transform
+        from duckdb.spark.sql.functions import upper, transform
 
         df.select(transform("Languages1", lambda x: upper(x)).alias("languages1")).show()
