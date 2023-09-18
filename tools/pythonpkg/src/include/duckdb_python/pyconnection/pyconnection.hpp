@@ -171,6 +171,8 @@ public:
 
 	Optional<py::list> GetDescription();
 
+	int GetRowcount();
+
 	// these should be functions on the result but well
 	Optional<py::tuple> FetchOne();
 

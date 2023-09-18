@@ -76,6 +76,9 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("block_offset");
 	return_types.emplace_back(LogicalType::BIGINT);
 
+	names.emplace_back("segment_info");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
@@ -133,6 +136,8 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 			output.SetValue(col_idx++, count, Value());
 			output.SetValue(col_idx++, count, Value());
 		}
+		// segment_info
+		output.SetValue(col_idx++, count, Value(entry.segment_info));
 		count++;
 	}
 	output.SetCardinality(count);
