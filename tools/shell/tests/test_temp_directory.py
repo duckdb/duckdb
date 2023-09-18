@@ -8,7 +8,7 @@ from conftest import ShellTest, assert_expected_res, assert_expected_err
 import os
 
 def test_temp_directory(shell, tmp_path):
-    temp_dir = tmp_path
+    temp_dir = tmp_path / 'random_dir'
     temp_dir.mkdir()
     temp_file = temp_dir / 'myfile'
     with open(temp_file, 'w+') as f:

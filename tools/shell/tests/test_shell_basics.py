@@ -5,6 +5,7 @@ import subprocess
 import sys
 from typing import List
 from conftest import ShellTest, assert_expected_err, assert_expected_res
+import os
 
 
 def test_basic(shell):
@@ -459,6 +460,7 @@ def test_schema_pattern(shell):
     out, err, status = test.run()
     assert_expected_res(out, "CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);", status, err)
 
+@pytest.mark.skipif(os.name == 'nt', reason="Windows treats newlines in a problematic manner")
 def test_schema_pattern_extended(shell):
     test = (
         ShellTest(shell)
