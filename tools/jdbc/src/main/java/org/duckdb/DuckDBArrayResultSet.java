@@ -48,7 +48,7 @@ public class DuckDBArrayResultSet implements ResultSet {
     private <T> T getValue(int columnIndex, SqlValueGetter<T> getter) throws SQLException {
         if (columnIndex == 1) {
             throw new IllegalArgumentException(
-                    "The first element of Array-backed ResultSet can only be retrieved with getInt()");
+                "The first element of Array-backed ResultSet can only be retrieved with getInt()");
         }
         if (columnIndex != 2) {
             throw new IllegalArgumentException("Array-backed ResultSet can only have two columns");
