@@ -8,6 +8,8 @@ from conftest import ShellTest
 
 
 def assert_expected_res(out, expected, status, err):
+    if isinstance(expected, list):
+        expected = '\n'.join(expected)
     if expected not in out:
         print("Exit code:", status)
         print("Captured stderr:", err)
@@ -336,5 +338,214 @@ def test_read(shell, generated_file):
     )
     out, err, status = test.run()
     assert_expected_res(out, "42", status, err)
+
+def test_show_basic(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".show")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "rowseparator", status, err)
+
+def test_limit_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".limit length 42")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "sqlite3_limit", status, err)
+
+def test_timeout(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".timeout")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "sqlite3_busy_timeout", status, err)
+
+
+def test_save(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(f".save {random_filepath}")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "sqlite3_backup_init", status, err)
+
+def test_restore(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement(f".restore {random_filepath}")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "sqlite3_backup_init", status, err)
+
+@pytest.mark.parametrize("cmd", [
+    ".vfsinfo",
+    ".vfsname",
+    ".vfslist"
+])
+def test_volatile_commands(shell, cmd):
+    # The original comment read: don't crash plz
+    test = (
+        ShellTest(shell)
+        .statement(f".{cmd}")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "", status, err)
+
+def test_stats_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".stats")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, "sqlite3_status64", status, err)
+
+@pytest.mark.parametrize("param", [
+    "off",
+    "on"
+])
+def test_stats(shell, param):
+    test = (
+        ShellTest(shell)
+        .statement(f".stats {param}")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "", status, err)
+
+@pytest.mark.parametrize("pattern", [
+    "test",
+    "tes%",
+    "tes*",
+    ""
+])
+def test_schema(shell, pattern):
+    test = (
+        ShellTest(shell)
+        .statement("create table test (a int, b varchar);")
+        .statement("insert into test values (1, 'hello');")
+        .statement(f".schema {pattern}")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "CREATE TABLE test(a INTEGER, b VARCHAR);", status, err)
+
+def test_tables(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE asda (i INTEGER);")
+        .statement("CREATE TABLE bsdf (i INTEGER);")
+        .statement("CREATE TABLE csda (i INTEGER);")
+        .statement(".tables")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "asda  bsdf  csda", status, err)
+
+def test_tables_pattern(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE asda (i INTEGER);")
+        .statement("CREATE TABLE bsdf (i INTEGER);")
+        .statement("CREATE TABLE csda (i INTEGER);")
+        .statement(".tables %da")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "asda  csda", status, err)
+
+def test_indexes(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (i INTEGER);")
+        .statement("CREATE INDEX a_idx ON a(i);")
+        .statement(".indexes a%")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "a_idx", status, err)
+
+def test_schema_pattern_no_result(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".schema %p%")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "", status, err)
+
+def test_schema_pattern(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table duckdb_p (a int, b varchar, c BIT);")
+        .statement("create table p_duck(d INT, f DATE);")
+        .statement(".schema %p")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, "CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);", status, err)
+
+def test_schema_pattern_extended(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table duckdb_p (a int, b varchar, c BIT);")
+        .statement("create table p_duck(d INT, f DATE);")
+        .statement(".schema %p%")
+    )
+    out, err, status = test.run()
+    expected = [
+        "CREATE TABLE duckdb_p(a INTEGER, b VARCHAR, c BIT);",
+        "CREATE TABLE p_duck(d INTEGER, f DATE);"
+    ]
+    assert_expected_res(out, expected, status, err)
+
+def test_clone_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".clone")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'Error: unknown command or invalid arguments:  "clone". Enter ".help" for help', status, err)
+
+def test_sha3sum(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".sha3sum")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, '', status, err)
+
+def test_jsonlines(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode jsonlines")
+        .statement("SELECT 42,43;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '{"42":42,"43":43}', status, err)
+
+def test_separator(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode csv")
+        .statement(".separator XX")
+        .statement("SELECT 42,43;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42XX43', status, err)
+
+def test_timer(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".timer on")
+        .statement("SELECT NULL;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'Run Time (s):', status, err)
+
+
+def test_scanstats(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".scanstats on")
+        .statement("SELECT NULL;")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'scanstats', status, err)
 
 # fmt: on

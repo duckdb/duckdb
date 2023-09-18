@@ -5,6 +5,19 @@ def pytest_addoption(parser):
     parser.addoption(
         "--shell-binary", action="store", default=None, help="Provide the shell binary to use for the tests"
     )
+    parser.addoption("--start-offset", action="store", type=int, help="Skip the first 'n' tests")
+
+
+def pytest_collection_modifyitems(config, items):
+    start_offset = config.getoption("--start-offset")
+    if not start_offset:
+        # --skiplist not given in cli, therefore move on
+        return
+
+    skipped = pytest.mark.skip(reason="included in --skiplist")
+    skipped_items = items[:start_offset]
+    for item in skipped_items:
+        item.add_marker(skipped)
 
 
 import subprocess
