@@ -57,7 +57,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				deserializer.End();
 			}
 		}
-	} catch (std::exception &ex) { // LCOV_EXCL_START
+	} catch (SerializationException &ex) { // LCOV_EXCL_START
+		                                   // serialization exception - torn WAL
+		                                   // continue reading
+	} catch (std::exception &ex) {
 		Printer::PrintF("Exception in WAL playback during initial read: %s\n", ex.what());
 		return false;
 	} catch (...) {
@@ -104,7 +107,10 @@ bool WriteAheadLog::Replay(AttachedDatabase &database, string &path) {
 				deserializer.End();
 			}
 		}
-	} catch (std::exception &ex) { // LCOV_EXCL_START
+	} catch (SerializationException &ex) { // LCOV_EXCL_START
+		// serialization error during WAL replay: rollback
+		con.Rollback();
+	} catch (std::exception &ex) {
 		// FIXME: this should report a proper warning in the connection
 		Printer::PrintF("Exception in WAL playback: %s\n", ex.what());
 		// exception thrown in WAL replay: rollback
