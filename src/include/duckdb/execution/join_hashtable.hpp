@@ -217,7 +217,7 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
 
-	idx_t PrepareKeys(DataChunk &keys, TupleDataChunkState &key_state, const SelectionVector *&current_sel,
+	idx_t PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
 	//! Lock for combining data_collection when merging HTs

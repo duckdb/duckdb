@@ -37,11 +37,15 @@ void TupleDataCollection::Initialize() {
 	}
 }
 
-void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
-	column_ids.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
+	column_ids.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		column_ids.emplace_back(col_idx);
 	}
+}
+
+void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
+	GetAllColumnIDsInternal(column_ids, layout.ColumnCount());
 }
 
 const TupleDataLayout &TupleDataCollection::GetLayout() const {
@@ -108,7 +112,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
                                            TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	InitializeAppend(append_state.pin_state, properties);
-	InitializeAppend(append_state.chunk_state, std::move(column_ids));
+	InitializeChunkState(append_state.chunk_state, std::move(column_ids));
 }
 
 void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
@@ -118,16 +122,7 @@ void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDa
 	}
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
-	if (column_ids.empty()) {
-		GetAllColumnIDs(column_ids);
-	}
-	InitializeVectorFormat(chunk_state.vector_data, layout.GetTypes());
-	chunk_state.column_ids = std::move(column_ids);
-}
-
-void TupleDataCollection::InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data,
-                                                 const vector<LogicalType> &types) {
+static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, const vector<LogicalType> &types) {
 	vector_data.resize(types.size());
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		const auto &type = types[col_idx];
@@ -149,6 +144,19 @@ void TupleDataCollection::InitializeVectorFormat(vector<TupleDataVectorFormat> &
 			break;
 		}
 	}
+}
+
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+	TupleDataCollection::InitializeChunkState(chunk_state, layout.GetTypes(), std::move(column_ids));
+}
+
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, const vector<LogicalType> &types,
+                                               vector<column_t> column_ids) {
+	if (column_ids.empty()) {
+		GetAllColumnIDsInternal(column_ids, types.size());
+	}
+	InitializeVectorFormat(chunk_state.vector_data, types);
+	chunk_state.column_ids = std::move(column_ids);
 }
 
 void TupleDataCollection::Append(DataChunk &new_chunk, const SelectionVector &append_sel, idx_t append_count) {

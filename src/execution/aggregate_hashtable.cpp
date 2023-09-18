@@ -45,7 +45,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
-	row_matcher.Initialize(true, layout, predicates);
+
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
 
 	// Partitioned data and pointer table
@@ -53,7 +53,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 	Resize(initial_capacity);
 
 	// Predicates
-	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
+	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_NOT_DISTINCT_FROM);
+	row_matcher.Initialize(true, layout, predicates);
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {

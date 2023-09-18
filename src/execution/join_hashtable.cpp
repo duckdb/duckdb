@@ -193,10 +193,13 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	source_chunk.data[col_offset].Reference(hash_values);
 	source_chunk.SetCardinality(keys);
 
+	// ToUnifiedFormat the source chunk
+	TupleDataCollection::ToUnifiedFormat(append_state.chunk_state, source_chunk);
+
 	// prepare the keys for processing
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, append_state.chunk_state, current_sel, sel, true);
+	idx_t added_count = PrepareKeys(keys, append_state.chunk_state.vector_data, current_sel, sel, true);
 	if (added_count < keys.size()) {
 		has_null = true;
 	}
@@ -212,10 +215,8 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	sink_collection->AppendUnified(append_state, source_chunk, *current_sel, added_count);
 }
 
-idx_t JoinHashTable::PrepareKeys(DataChunk &keys, TupleDataChunkState &key_state, const SelectionVector *&current_sel,
-                                 SelectionVector &sel, bool build_side) {
-	TupleDataCollection::ToUnifiedFormat(key_state, keys);
-
+idx_t JoinHashTable::PrepareKeys(DataChunk &keys, vector<TupleDataVectorFormat> &vector_data,
+                                 const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
 	// figure out which keys are NULL, and create a selection vector out of them
 	current_sel = FlatVector::IncrementalSelectionVector();
 	idx_t added_count = keys.size();
@@ -224,10 +225,9 @@ idx_t JoinHashTable::PrepareKeys(DataChunk &keys, TupleDataChunkState &key_state
 		return added_count;
 	}
 
-	auto &key_data = key_state.vector_data;
 	for (idx_t col_idx = 0; col_idx < keys.ColumnCount(); col_idx++) {
 		if (!null_values_are_equal[col_idx]) {
-			auto &col_key_data = key_data[col_idx].unified;
+			auto &col_key_data = vector_data[col_idx].unified;
 			if (col_key_data.validity.AllValid()) {
 				continue;
 			}
@@ -338,7 +338,8 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	}
 
 	// first prepare the keys for probing
-	ss->count = PrepareKeys(keys, key_state, current_sel, ss->sel_vector, false);
+	TupleDataCollection::ToUnifiedFormat(key_state, keys);
+	ss->count = PrepareKeys(keys, key_state.vector_data, current_sel, ss->sel_vector, false);
 	return ss;
 }
 

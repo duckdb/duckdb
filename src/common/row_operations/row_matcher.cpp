@@ -10,30 +10,33 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 template <class OP>
 struct RowMatchOperator {
-	static constexpr bool COMPARE_NULL = false;
+	static constexpr const bool COMPARE_NULL = false;
 
 	template <class T>
-	static bool Operation(const T &left, const T &right, bool, bool) {
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+		if (right_null || left_null) {
+			return false;
+		}
 		return OP::template Operation<T>(left, right);
 	}
 };
 
 template <>
 struct RowMatchOperator<DistinctFrom> {
-	static constexpr bool COMPARE_NULL = true;
+	static constexpr const bool COMPARE_NULL = true;
 
 	template <class T>
-	static bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return DistinctFrom::template Operation<T>(left, right, left_null, right_null);
 	}
 };
 
 template <>
 struct RowMatchOperator<NotDistinctFrom> {
-	static constexpr bool COMPARE_NULL = true;
+	static constexpr const bool COMPARE_NULL = true;
 
 	template <class T>
-	static bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
+	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
 		return NotDistinctFrom::template Operation<T>(left, right, left_null, right_null);
 	}
 };
@@ -65,8 +68,8 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 			const ValidityBytes rhs_mask(rhs_location);
 			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-			if (!rhs_null && MATCH_OP::template Operation<T>(lhs_data[lhs_sel.get_index(idx)],
-			                                                 Load<T>(rhs_location + rhs_offset_in_row), false, false)) {
+			if (MATCH_OP::template Operation<T>(lhs_data[lhs_sel.get_index(idx)],
+			                                    Load<T>(rhs_location + rhs_offset_in_row), false, rhs_null)) {
 				sel.set_index(match_count++, idx);
 			} else if (NO_MATCH_SEL) {
 				no_match_sel->set_index(no_match_count++, idx);
@@ -83,8 +86,7 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 			const ValidityBytes rhs_mask(rhs_location);
 			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-			if (MATCH_OP::COMPARE_NULL && (lhs_null || rhs_null) &&
-			    MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
+			if (MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
 			                                    rhs_null)) {
 				sel.set_index(match_count++, idx);
 			} else if (NO_MATCH_SEL) {
@@ -95,11 +97,11 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 	return match_count;
 }
 
-template <bool NO_MATCH_SEL, class OP, class NESTED_OP>
-static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
-                         const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
-                         const idx_t col_idx, const vector<MatchFunction> &child_functions,
-                         SelectionVector *no_match_sel, idx_t &no_match_count) {
+template <bool NO_MATCH_SEL, class OP>
+static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat &lhs_format, SelectionVector &sel,
+                                 const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                                 const idx_t col_idx, const vector<MatchFunction> &child_functions,
+                                 SelectionVector *no_match_sel, idx_t &no_match_count) {
 	using MATCH_OP = RowMatchOperator<OP>;
 
 	// LHS
@@ -113,7 +115,24 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	idx_t match_count = 0;
-	if (!lhs_validity.AllValid()) {
+	if (lhs_validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = sel.get_index(i);
+
+			const auto &rhs_location = rhs_locations[idx];
+			const ValidityBytes rhs_mask(rhs_location);
+			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
+
+			// For structs there is no value to compare, here we match NULLs and let recursion do the rest
+			// So we use the comparison only if rhs is NULL (we know LHS is not NULL) and COMPARE_NULL is true
+			if (!rhs_null ||
+			    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, false, rhs_null))) {
+				sel.set_index(match_count++, idx);
+			} else if (NO_MATCH_SEL) {
+				no_match_sel->set_index(no_match_count++, idx);
+			}
+		}
+	} else {
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = sel.get_index(i);
 
@@ -124,14 +143,9 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 			const ValidityBytes rhs_mask(rhs_location);
 			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntry(entry_idx), idx_in_entry);
 
-			if (lhs_null || rhs_null) {
-				if (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<int32_t>(0, 0, lhs_null, rhs_null)) {
-					sel.set_index(match_count++, idx);
-				}
-			}
-
-			if (MATCH_OP::COMPARE_NULL && (lhs_null || rhs_null) &&
-			    MATCH_OP::template Operation<int32_t>(0, 0, lhs_null, rhs_null)) {
+			// Same as above, except here we need to check whether either LHS or RHS are NULL
+			if (!(lhs_null || rhs_null) ||
+			    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
 				sel.set_index(match_count++, idx);
 			} else if (NO_MATCH_SEL) {
 				no_match_sel->set_index(no_match_count++, idx);
@@ -143,7 +157,7 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 	Vector rhs_struct_row_locations(LogicalType::POINTER);
 	const auto rhs_offset_in_row = rhs_layout.GetOffsets()[col_idx];
 	auto rhs_struct_locations = FlatVector::GetData<data_ptr_t>(rhs_struct_row_locations);
-	for (idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < match_count; i++) {
 		const auto idx = sel.get_index(i);
 		rhs_struct_locations[idx] = rhs_locations[idx] + rhs_offset_in_row;
 	}
@@ -157,7 +171,7 @@ static idx_t StructMatch(Vector &lhs_vector, const TupleDataVectorFormat &lhs_fo
 		auto &lhs_struct_vector = *lhs_struct_vectors[struct_col_idx];
 		auto &lhs_struct_format = lhs_format.children[struct_col_idx];
 		const auto &child_function = child_functions[struct_col_idx];
-		match_count = child_function.function(lhs_struct_vector, lhs_struct_format, sel, count, rhs_struct_layout,
+		match_count = child_function.function(lhs_struct_vector, lhs_struct_format, sel, match_count, rhs_struct_layout,
 		                                      rhs_struct_row_locations, struct_col_idx, child_function.child_functions,
 		                                      no_match_sel, no_match_count);
 	}
@@ -181,6 +195,18 @@ template <>
 idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedNotEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<DistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                     SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::DistinctFrom(left, right, &sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<NotDistinctFrom>(Vector &left, Vector &right, const SelectionVector &sel, idx_t count,
+                                        SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::NotDistinctFrom(left, right, &sel, count, true_sel, false_sel);
 }
 
 template <>
@@ -208,9 +234,10 @@ idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const Select
 }
 
 template <bool NO_MATCH_SEL, class OP>
-static idx_t ListMatch(Vector &lhs_vector, const TupleDataVectorFormat &, SelectionVector &sel, const idx_t count,
-                       const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
-                       const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
+static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat &, SelectionVector &sel,
+                                const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
+                                const idx_t col_idx, const vector<MatchFunction> &, SelectionVector *no_match_sel,
+                                idx_t &no_match_count) {
 	const auto &type = rhs_layout.GetTypes()[col_idx];
 
 	// Gather a dense Vector containing the column values being matched
@@ -234,7 +261,7 @@ static idx_t ListMatch(Vector &lhs_vector, const TupleDataVectorFormat &, Select
 
 void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates) {
 	match_functions.reserve(predicates.size());
-	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < predicates.size(); col_idx++) {
 		match_functions.push_back(GetMatchFunction(no_match_sel, layout.GetTypes()[col_idx], predicates[col_idx]));
 	}
 }
@@ -242,6 +269,7 @@ void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layo
 idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel,
                         idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
                         SelectionVector *no_match_sel, idx_t &no_match_count) {
+	D_ASSERT(!match_functions.empty());
 	for (idx_t col_idx = 0; col_idx < match_functions.size(); col_idx++) {
 		const auto &match_function = match_functions[col_idx];
 		count =
@@ -268,21 +296,21 @@ MatchFunction RowMatcher::GetMatchFunction(const LogicalType &type, const Expres
 	case PhysicalType::INT8:
 		return GetMatchFunction<NO_MATCH_SEL, int8_t>(predicate);
 	case PhysicalType::INT16:
-		return GetMatchFunction<NO_MATCH_SEL, int8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, int16_t>(predicate);
 	case PhysicalType::INT32:
-		return GetMatchFunction<NO_MATCH_SEL, int8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, int32_t>(predicate);
 	case PhysicalType::INT64:
-		return GetMatchFunction<NO_MATCH_SEL, int8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, int64_t>(predicate);
 	case PhysicalType::INT128:
 		return GetMatchFunction<NO_MATCH_SEL, hugeint_t>(predicate);
 	case PhysicalType::UINT8:
 		return GetMatchFunction<NO_MATCH_SEL, uint8_t>(predicate);
 	case PhysicalType::UINT16:
-		return GetMatchFunction<NO_MATCH_SEL, uint8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, uint16_t>(predicate);
 	case PhysicalType::UINT32:
-		return GetMatchFunction<NO_MATCH_SEL, uint8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, uint32_t>(predicate);
 	case PhysicalType::UINT64:
-		return GetMatchFunction<NO_MATCH_SEL, uint8_t>(predicate);
+		return GetMatchFunction<NO_MATCH_SEL, uint64_t>(predicate);
 	case PhysicalType::FLOAT:
 		return GetMatchFunction<NO_MATCH_SEL, float>(predicate);
 	case PhysicalType::DOUBLE:
@@ -338,35 +366,37 @@ MatchFunction RowMatcher::GetMatchFunction(const ExpressionType predicate) {
 
 template <bool NO_MATCH_SEL>
 MatchFunction RowMatcher::GetStructMatchFunction(const LogicalType &type, const ExpressionType predicate) {
+	// We perform equality conditions like it's just a row, but we cannot perform inequality conditions like a row,
+	// because for equality conditions we need to always loop through all columns, but for inequality conditions,
+	// we need to find the first inequality, so the loop looks very different
 	MatchFunction result;
 	ExpressionType child_predicate = predicate;
 	switch (predicate) {
 	case ExpressionType::COMPARE_EQUAL:
-		result.function = StructMatch<NO_MATCH_SEL, Equals, Equals>;
+		result.function = StructMatchEquality<NO_MATCH_SEL, Equals>;
 		child_predicate = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		result.function = StructMatch<NO_MATCH_SEL, NotEquals, NotEquals>;
-		child_predicate = ExpressionType::COMPARE_DISTINCT_FROM;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, NotEquals>;
+		return result;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		result.function = StructMatch<NO_MATCH_SEL, DistinctFrom, NotEquals>;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, DistinctFrom>;
+		return result;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		result.function = StructMatch<NO_MATCH_SEL, NotDistinctFrom, Equals>;
+		result.function = StructMatchEquality<NO_MATCH_SEL, NotDistinctFrom>;
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		result.function = StructMatch<NO_MATCH_SEL, GreaterThan, GreaterThan>;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThan>;
+		return result;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		result.function = StructMatch<NO_MATCH_SEL, GreaterThanEquals, GreaterThanEquals>;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThanEquals>;
+		return result;
 	case ExpressionType::COMPARE_LESSTHAN:
-		result.function = StructMatch<NO_MATCH_SEL, LessThan, LessThan>;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThan>;
+		return result;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		result.function = StructMatch<NO_MATCH_SEL, LessThanEquals, LessThanEquals>;
-		break;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThanEquals>;
+		return result;
 	default:
 		throw InternalException("Unsupported ExpressionType for RowMatcher::GetStructMatchFunction: %s",
 		                        EnumUtil::ToString(predicate));
@@ -385,28 +415,28 @@ MatchFunction RowMatcher::GetListMatchFunction(const ExpressionType predicate) {
 	MatchFunction result;
 	switch (predicate) {
 	case ExpressionType::COMPARE_EQUAL:
-		result.function = ListMatch<NO_MATCH_SEL, Equals>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, Equals>;
 		break;
 	case ExpressionType::COMPARE_NOTEQUAL:
-		result.function = ListMatch<NO_MATCH_SEL, NotEquals>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, NotEquals>;
 		break;
 	case ExpressionType::COMPARE_DISTINCT_FROM:
-		result.function = ListMatch<NO_MATCH_SEL, DistinctFrom>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, DistinctFrom>;
 		break;
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
-		result.function = ListMatch<NO_MATCH_SEL, NotDistinctFrom>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, NotDistinctFrom>;
 		break;
 	case ExpressionType::COMPARE_GREATERTHAN:
-		result.function = ListMatch<NO_MATCH_SEL, GreaterThan>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThan>;
 		break;
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		result.function = ListMatch<NO_MATCH_SEL, GreaterThanEquals>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, GreaterThanEquals>;
 		break;
 	case ExpressionType::COMPARE_LESSTHAN:
-		result.function = ListMatch<NO_MATCH_SEL, LessThan>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThan>;
 		break;
 	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		result.function = ListMatch<NO_MATCH_SEL, LessThanEquals>;
+		result.function = GenericNestedMatch<NO_MATCH_SEL, LessThanEquals>;
 		break;
 	default:
 		throw InternalException("Unsupported ExpressionType for RowMatcher::GetListMatchFunction: %s",

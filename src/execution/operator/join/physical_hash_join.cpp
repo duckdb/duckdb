@@ -448,7 +448,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}
-		TupleDataCollection::InitializeVectorFormat(state->join_key_state.vector_data, condition_types);
+		TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 	}
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
@@ -786,7 +786,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, A
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
-	TupleDataCollection::InitializeVectorFormat(join_key_state.vector_data, op.condition_types);
+	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
 	// Store the indices of the columns to reference them easily
 	idx_t col_idx = 0;
