@@ -20,6 +20,8 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -34,8 +36,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 #endif
 
 namespace duckdb {
@@ -168,6 +168,7 @@ public:
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+		table_function.named_parameters["schema"] = LogicalTypeId::STRUCT;
 		MultiFileReader::AddParameters(table_function);
 		table_function.get_batch_index = ParquetScanGetBatchIndex;
 		table_function.serialize = ParquetScanSerialize;
@@ -196,6 +197,21 @@ public:
 				parquet_options.binary_as_string = true;
 			} else if (loption == "file_row_number") {
 				parquet_options.file_row_number = true;
+			} else if (loption == "schema") {
+				// Argument is a struct that defines the schema
+				const auto &schema_value = option.second[0];
+				const auto &struct_type = schema_value.type();
+				auto &struct_children = StructValue::GetChildren(schema_value);
+				D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
+				
+				vector<ParquetColumnDefinition> columns;
+				for (idx_t i = 0; i < struct_children.size(); i++) {
+					auto &field_id_string = StructType::GetChildName(struct_type, i);
+					auto field_id = Value(field_id_string);
+					if (!field_id.DefaultTryCastAs(LogicalType::INTEGER)) {
+						throw BinderException("Unable to cast \"%s\" to INTEGER", field_id_string);
+					}
+				}
 			} else {
 				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
 			}

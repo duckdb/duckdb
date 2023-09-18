@@ -78,6 +78,14 @@ public:
 	static ParquetOptions Deserialize(Deserializer &deserializer);
 };
 
+struct ParquetColumnDefinition {
+	static ParquetColumnDefinition FromSchemaStructValue(const Value &schema_value, const idx_t col_idx);
+	int32_t field_id;
+	string name;
+	LogicalType type;
+	Value default_value;
+};
+
 class ParquetReader {
 public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options);
