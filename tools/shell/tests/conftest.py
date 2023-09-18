@@ -127,3 +127,49 @@ def generated_file(request, random_filepath):
     with open(tmp_file, 'w+') as f:
         f.write(param)
     return tmp_file
+
+
+def assert_expected_res(out, expected, status, err):
+    if isinstance(expected, list):
+        expected = '\n'.join(expected)
+    if expected not in out:
+        print("Exit code:", status)
+        print("Captured stderr:", err)
+        print("Actual result:", out)
+        assert False
+    assert status == 0
+    assert True
+
+
+def assert_expected_err(out, expected, status, err):
+    if expected not in err:
+        print("Exit code:", status)
+        print("Captured stdout:", out)
+        print("Actual error:", err)
+        assert False
+    assert True
+
+
+def check_load_status(shell, extension: str):
+    binary = ShellTest(shell)
+    binary.statement(f"select loaded from duckdb_extensions() where extension_name = '{extension}';")
+    out, _, _ = binary.run()
+    return out
+
+
+def assert_loaded(shell, extension: str):
+    # TODO: add a command line argument to fail instead of skip if the extension is not loaded
+    out = check_load_status(shell, extension)
+    if 'true' not in out:
+        pytest.skip(reason=f"'{extension}' extension is not loaded!")
+    return
+
+
+@pytest.fixture()
+def autocomplete_extension(shell):
+    assert_loaded(shell, 'autocomplete')
+
+
+@pytest.fixture()
+def json_extension(shell):
+    assert_loaded(shell, 'json')

@@ -4,28 +4,7 @@ import pytest
 import subprocess
 import sys
 from typing import List
-from conftest import ShellTest
-
-
-def assert_expected_res(out, expected, status, err):
-    if isinstance(expected, list):
-        expected = '\n'.join(expected)
-    if expected not in out:
-        print("Exit code:", status)
-        print("Captured stderr:", err)
-        print("Actual result:", out)
-        assert False
-    assert status == 0
-    assert True
-
-
-def assert_expected_err(out, expected, status, err):
-    if expected not in err:
-        print("Exit code:", status)
-        print("Captured stdout:", out)
-        print("Actual error:", err)
-        assert False
-    assert True
+from conftest import ShellTest, assert_expected_err, assert_expected_res
 
 
 def test_basic(shell):
@@ -679,5 +658,403 @@ def test_mode_tabs(shell):
     )
     out, err, status = test.run()
     assert_expected_res(out, 'fourty-two', status, err)
+
+def test_open(shell, tmp_path):
+    file_one = tmp_path / "file_one"
+    file_two = tmp_path / "file_two"
+    test = (
+        ShellTest(shell)
+        .statement(f".open {file_one}")
+        .statement("CREATE TABLE t1 (i INTEGER);")
+        .statement("INSERT INTO t1 VALUES (42);")
+        .statement(f".open {file_two}")
+        .statement("CREATE TABLE t2 (i INTEGER);")
+        .statement("INSERT INTO t2 VALUES (43);")
+        .statement(f".open {file_one}")
+        .statement("SELECT * FROM t1;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+@pytest.mark.parametrize('generated_file', ["blablabla"], indirect=True)
+def test_open_non_database(shell, generated_file):
+    test = (
+        ShellTest(shell)
+        .add_argument(generated_file)
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'not a valid DuckDB database file', status, err)
+
+def test_enable_profiling(shell):
+    test = (
+        ShellTest(shell)
+        .statement("PRAGMA enable_profiling")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, '', status, err)
+
+def test_profiling_select(shell):
+    test = (
+        ShellTest(shell)
+        .statement("PRAGMA enable_profiling")
+        .statement("select 42")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'Query Profiling Information', status, err)
+    assert_expected_res(out, '42', status, err)
+
+@pytest.mark.parametrize("command", [
+    "system",
+    "shell"
+])
+def test_echo_command(shell, command):
+    test = (
+        ShellTest(shell)
+        .statement(f".{command} echo 42")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+def test_profiling_optimizer(shell):
+    test = (
+        ShellTest(shell)
+        .statement("PRAGMA enable_profiling=query_tree_optimizer;")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'Optimizer', status, err)
+    assert_expected_res(out, '42', status, err)
+
+def test_profiling_optimizer_detailed(shell):
+    test = (
+        ShellTest(shell)
+        .statement("PRAGMA enable_profiling;")
+        .statement("PRAGMA profiling_mode=detailed;")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'Optimizer', status, err)
+    assert_expected_res(out, '42', status, err)
+
+def test_profiling_optimizer_json(shell):
+    test = (
+        ShellTest(shell)
+        .statement("PRAGMA enable_profiling=json;")
+        .statement("PRAGMA profiling_mode=detailed;")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'optimizer', status, err)
+    assert_expected_res(out, '42', status, err)
+
+
+# Original comment: this fails because db_config is missing
+@pytest.mark.skip(reason="db_config is not supported (yet?)")
+def test_eqp(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".eqp full")
+        .statement("SELECT 42;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'DUMMY_SCAN', status, err)
+
+def test_clone(shell, random_filepath):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (I INTEGER)")
+        .statement("INSERT INTO a VALUES (42)")
+        .statement(f".clone {random_filepath}")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'unknown command or invalid arguments', status, err)
+
+
+def test_databases(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".databases")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'memory', status, err)
+
+
+def test_dump_create(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (i INTEGER);")
+        .statement(".changes off")
+        .statement("INSERT INTO a VALUES (42);")
+        .statement(".dump")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'CREATE TABLE a(i INTEGER)', status, err)
+    assert_expected_res(out, 'COMMIT', status, err)
+
+@pytest.mark.parametrize("pattern", [
+    "a",
+    "a%"
+])
+def test_dump_specific(shell, pattern):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (i INTEGER);")
+        .statement(".changes off")
+        .statement("INSERT INTO a VALUES (42);")
+        .statement(f".dump {pattern}")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'CREATE TABLE a(i INTEGER)', status, err)
+
+# Original comment: more types, tables and views
+def test_dump_mixed(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (d DATE, k FLOAT, t TIMESTAMP);")
+        .statement("CREATE TABLE b (c INTEGER);")
+        .statement(".changes off")
+        .statement("INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());")
+        .statement("INSERT INTO b SELECT * FROM range(0,10);")
+        .statement(".dump")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'CREATE TABLE a(d DATE, k FLOAT, t TIMESTAMP);', status, err)
+
+def test_invalid_csv(shell, tmp_path):
+    file = tmp_path / 'nonsencsv.csv'
+    with open(file, 'wb+') as f:
+        f.write(b'\xFF\n')
+    test = (
+        ShellTest(shell)
+        .statement(".nullvalue NULL")
+        .statement("CREATE TABLE test(i INTEGER);")
+        .statement(f".import {file} test")
+        .statement("SELECT * FROM test;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'NULL', status, err)
+
+def test_mode_latex(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode latex")
+        .statement("CREATE TABLE a (I INTEGER);")
+        .statement(".changes off")
+        .statement("INSERT INTO a VALUES (42);")
+        .statement("SELECT * FROM a;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '\\begin{tabular}', status, err)
+
+def test_mode_trash(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode trash")
+        .statement("select 1")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '', status, err)
+
+@pytest.mark.skip(reason="Broken test, ported directly, was commented out")
+def test_dump_blobs(shell):
+    test = (
+        ShellTest(shell)
+        .statement("CREATE TABLE a (b BLOB);")
+        .statement(".changes off")
+        .statement("INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());")
+        .statement(".dump")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'COMMIT', status, err)
+
+def test_sqlite_comments(shell):
+    # Using /* <comment> */
+    test = (
+        ShellTest(shell)
+        .statement("""/*
+;
+*/""")
+        .statement("select 42")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+    # Using -- <comment>
+    test = (
+        ShellTest(shell)
+        .statement("""-- this is a comment ;
+select 42;
+""")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+    # More extreme: -- <comment>
+    test = (
+        ShellTest(shell)
+        .statement("""--;;;;;;
+select 42;
+""")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+    # More extreme: /* <comment> */
+    test = (
+        ShellTest(shell)
+        .statement('/* ;;;;;; */ select 42;')
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '42', status, err)
+
+def test_sqlite_udfs_error(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT writefile()")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'wrong number of arguments to function writefile', status, err)
+
+    test = (
+        ShellTest(shell)
+        .statement("SELECT writefile('hello')")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'wrong number of arguments to function writefile', status, err)
+
+def test_sqlite_udfs_correct(shell, random_filepath):
+    import os
+    test = (
+        ShellTest(shell)
+        .statement(f"SELECT writefile('{random_filepath}', 'hello');")
+    )
+    out, err, status = test.run()
+    if not os.path.exists(random_filepath):
+        raise Exception(f"Failed to write file {random_filepath}")
+    with open(random_filepath, 'r') as f:
+        text = f.read()
+    assert_expected_res(text, 'hello', status, err)
+
+def test_lsmode(shell):
+    test = (
+        ShellTest(shell)
+        .statement("SELECT lsmode(1) AS lsmode;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'lsmode', status, err)
+
+def test_duckbox(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".mode duckbox")
+        .statement("select 42 limit 0;")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '0 rows', status, err)
+
+# Original comment: #5411 - with maxrows=2, we still display all 4 rows (hiding them would take up more space)
+def test_maxrows(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".maxrows 2")
+        .statement("select * from range(4);")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '1', status, err)
+
+def test_maxrows_outfile(shell, random_filepath):
+    file = random_filepath
+    test = (
+        ShellTest(shell)
+        .statement(".maxrows 2")
+        .statement(f".output {file}")
+        .statement("SELECT * FROM range(100);")
+    )
+    out, err, status = test.run()
+    outstr = open(file, 'rb').read().decode('utf8')
+    assert_expected_res(outstr, '50', status, err)
+
+def test_columns_to_file(shell, random_filepath):
+    columns = ', '.join([str(x) for x in range(100)])
+    test = (
+        ShellTest(shell)
+        .statement(f".output {random_filepath}")
+        .statement(f"SELECT {columns}")
+    )
+    out, err, status = test.run()
+    outstr = open(random_filepath, 'rb').read().decode('utf8')
+    assert_expected_res(outstr, '99', status, err)
+
+def test_columnar_mode(shell):
+    test = (
+        ShellTest(shell)
+        .statement(".col")
+        .statement("select * from range(4);")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'Row 1', status, err)
+
+def test_columnar_mode_constant(shell):
+    columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
+    test = (
+        ShellTest(shell)
+        .statement(".col")
+        .statement(f"select {columns};")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'MyValue50', status, err)
+
+    test = (
+        ShellTest(shell)
+        .statement(".col")
+        .statement(f"select {columns} from range(1000);")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, '100 columns', status, err)
+
+def test_nullbyte_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select varchar from test_all_types();")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'goo\\0se', status, err)
+
+def test_nullbyte_error_rendering(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select chr(0)::int")
+    )
+    out, err, status = test.run()
+    assert_expected_err(out, 'INT32', status, err)
+
+@pytest.mark.parametrize("stmt", [
+	"select decimal_mul(NULL, NULL);",
+	"select decimal_mul(NULL, i) FROM range(3) t(i);",
+	"select sha3(NULL);"
+])
+def test_sqlite_udf_null(shell, stmt):
+    test = (
+        ShellTest(shell)
+        .statement(stmt)
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'NULL', status, err)
+
+def test_sqlite_udf_sha3_int(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select sha3(256)")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'A7', status, err)
+
+def test_sqlite_udf_sha3_non_inlined_string(shell):
+    test = (
+        ShellTest(shell)
+        .statement("select sha3('hello world this is a long string');")
+    )
+    out, err, status = test.run()
+    assert_expected_res(out, 'D4', status, err)
 
 # fmt: on

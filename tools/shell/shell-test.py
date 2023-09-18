@@ -1328,7 +1328,8 @@ read_csv('/dev/stdin',
   columns=STRUCT_PACK(foo := 'INTEGER', bar := 'INTEGER', baz := 'VARCHAR'),
   AUTO_DETECT='false'
 );
-select * from mytable limit 1;''',
+select * from mytable limit 1;
+''',
         extra_commands=['-csv', ':memory:'],
         input_file='test/sql/copy/csv/data/test/test.csv',
         out='''foo,bar,baz
@@ -1358,10 +1359,11 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
     )
 
     test(
-        '''create table mytable as select * from
+        '''
+create table mytable as select * from
 read_ndjson_objects('/dev/stdin');
 select * from mytable;
-          ''',
+''',
         extra_commands=['-list', ':memory:'],
         input_file='data/json/example_rn.ndjson',
         out='''json
@@ -1369,14 +1371,17 @@ select * from mytable;
 {"id":2,"name":"Home for the Holidays"}
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
-{"id":5,"name":"Raising Arizona"}''',
+{"id":5,"name":"Raising Arizona"}
+''',
     )
 
+    # FIXME: this is a duplicate???
     test(
-        '''create table mytable as select * from
+        '''
+create table mytable as select * from
 read_ndjson_objects('/dev/stdin');
 select * from mytable;
-          ''',
+''',
         extra_commands=['-list', ':memory:'],
         input_file='data/json/example_rn.ndjson',
         out='''json
@@ -1384,7 +1389,8 @@ select * from mytable;
 {"id":2,"name":"Home for the Holidays"}
 {"id":3,"name":"The Firm"}
 {"id":4,"name":"Broadcast News"}
-{"id":5,"name":"Raising Arizona"}''',
+{"id":5,"name":"Raising Arizona"}
+''',
     )
 
     test(
