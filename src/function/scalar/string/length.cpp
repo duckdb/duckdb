@@ -98,6 +98,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBind(ClientContext &context, Sc
 	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST) {
 		bound_function.function = ListLengthFunction;
 	} else {
+		// Unreachable
 		throw BinderException("length can only be used on arrays or lists");
 	}
 	bound_function.arguments[0] = arguments[0]->return_type;
@@ -189,6 +190,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		bound_function.arguments[0] = type;
 		return nullptr;
 	} else {
+		// Unreachable
 		throw BinderException("array_length can only be used on arrays or lists");
 	}
 }

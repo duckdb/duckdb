@@ -49,7 +49,7 @@ common/re2_regex.cpp	37
 common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
 common/row_operations/row_gather.cpp	11
-common/row_operations/row_match.cpp	6
+common/row_operations/row_match.cpp	7
 common/serializer/deserializer.cpp	13
 common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
@@ -268,6 +268,7 @@ function/scalar/operators/arithmetic.cpp	23
 function/scalar/operators/multiply.cpp	3
 function/scalar/operators/subtract.cpp	5
 function/scalar/strftime_format.cpp	31
+function/scalar/string/length.cpp	2
 function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
 function/scalar/string/substring.cpp	8
