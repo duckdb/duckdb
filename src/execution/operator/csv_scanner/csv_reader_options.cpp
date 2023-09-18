@@ -475,8 +475,6 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	if (skip_rows_set) {
 		named_params["skip"] = Value::BIGINT(GetSkipRows());
 	}
-	named_params["sample_chunks"] = Value::BIGINT(sample_chunks);
-	named_params["sample_chunk_size"] = Value::BIGINT(sample_chunk_size);
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	if (!date_format.at(LogicalType::DATE).format_specifier.empty()) {
 		named_params["dateformat"] = Value(date_format.at(LogicalType::DATE).format_specifier);
