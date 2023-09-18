@@ -832,6 +832,7 @@ void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
 void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	lock_guard<mutex> lock(append_lock);
 
+	// revert any appends to indexes
 	if (!info->indexes.Empty()) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
@@ -847,6 +848,15 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 			current_row_base += chunk.size();
 		});
 	}
+
+	// we need to vacuum the indexes to remove any buffers that are now empty
+	// due to reverting the appends
+	info->indexes.Scan([&](Index &index) {
+		index.Vacuum();
+		return false;
+	});
+
+	// revert the data table append
 	RevertAppendInternal(start_row, count);
 }
 
