@@ -3377,6 +3377,23 @@ public class TestDuckDBJDBC {
                 arrayResultSet.relative(-1);
                 assertEquals(arrayResultSet.getString(2), "universe");
             }
+
+            try (ResultSet rs = statement.executeQuery("select UNNEST([[42], [69]])")) {
+                assertTrue(rs.next());
+                ResultSet arrayResultSet = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet.next());
+
+                assertEquals(arrayResultSet.getInt(1), 1);
+                assertEquals(arrayResultSet.getInt(2), 42);
+                assertFalse(arrayResultSet.next());
+
+                assertTrue(rs.next());
+                ResultSet arrayResultSet2 = rs.getArray(1).getResultSet();
+                assertTrue(arrayResultSet2.next());
+                assertEquals(arrayResultSet2.getInt(1), 1);
+                assertEquals(arrayResultSet2.getInt(2), 69);
+                assertFalse(arrayResultSet2.next());
+            }
         }
     }
 
