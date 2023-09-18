@@ -1740,7 +1740,7 @@ DUCKDB_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, id
 /*!
 Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.
 
-* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`
+* validity: The validity mask, as obtained through `duckdb_vector_get_validity`
 * row: The row index
 * returns: true if the row is valid, false otherwise
 */
@@ -1749,10 +1749,10 @@ DUCKDB_API bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row);
 /*!
 In a validity mask, sets a specific row to either valid or invalid.
 
-Note that `duckdb_data_chunk_ensure_validity_writable` should be called before calling `duckdb_data_chunk_get_validity`,
+Note that `duckdb_vector_ensure_validity_writable` should be called before calling `duckdb_vector_get_validity`,
 to ensure that there is a validity mask to write to.
 
-* validity: The validity mask, as obtained through `duckdb_data_chunk_get_validity`.
+* validity: The validity mask, as obtained through `duckdb_vector_get_validity`.
 * row: The row index
 * valid: Whether or not to set the row to valid, or invalid
 */

@@ -138,6 +138,7 @@ public:
 	static Napi::Object NewInstance(const Napi::Value &db);
 
 public:
+	Napi::Value Close(const Napi::CallbackInfo &info);
 	Napi::Value Prepare(const Napi::CallbackInfo &info);
 	Napi::Value Exec(const Napi::CallbackInfo &info);
 	Napi::Value RegisterUdf(const Napi::CallbackInfo &info);

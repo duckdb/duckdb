@@ -398,7 +398,8 @@ static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segm
 	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
-unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {
+unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id,
+                                                       optional_ptr<ColumnSegmentState> segment_state) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);

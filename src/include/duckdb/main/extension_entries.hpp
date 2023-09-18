@@ -118,6 +118,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_dwithin_spheroid", "spatial"},
     {"st_envelope", "spatial"},
     {"st_equals", "spatial"},
+    {"st_extent", "spatial"},
     {"st_flipcoordinates", "spatial"},
     {"st_geometrytype", "spatial"},
     {"st_geomfromgeojson", "spatial"},
@@ -126,6 +127,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_geomfromtext", "spatial"},
     {"st_geomfromwkb", "spatial"},
     {"st_intersection", "spatial"},
+    {"st_intersection_agg", "spatial"},
     {"st_intersects", "spatial"},
     {"st_isclosed", "spatial"},
     {"st_isempty", "spatial"},
@@ -159,9 +161,14 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_touches", "spatial"},
     {"st_transform", "spatial"},
     {"st_union", "spatial"},
+    {"st_union_agg", "spatial"},
     {"st_within", "spatial"},
     {"st_x", "spatial"},
+    {"st_xmax", "spatial"},
+    {"st_xmin", "spatial"},
     {"st_y", "spatial"},
+    {"st_ymax", "spatial"},
+    {"st_ymin", "spatial"},
     {"stem", "fts"},
     {"text", "excel"},
     {"to_arrow_ipc", "arrow"},
@@ -220,10 +227,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {{".parquet", "parquet"},
-                                                              {".json", "json"},
-                                                              {".jsonl", "json"},
-                                                              {".ndjson", "json"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
+    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"}, {".ndjson", "json"},
+    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}}; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb

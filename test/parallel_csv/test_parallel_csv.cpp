@@ -263,6 +263,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
 	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
 	skip.insert("test/sql/copy/csv/data/test/too_many_values.csv");
+
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
@@ -292,6 +293,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/csv_quoted_newline_odd.csv");
 	skip.insert("data/csv/hebere.csv.gz");
 	skip.insert("data/csv/locations_row_trailing_comma.csv");
+
 	RunTestOnFolder("data/csv/", &skip);
 }
 

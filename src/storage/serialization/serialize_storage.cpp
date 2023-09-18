@@ -29,6 +29,7 @@ void DataPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(102, "block_pointer", block_pointer);
 	serializer.WriteProperty(103, "compression_type", compression_type);
 	serializer.WriteProperty(104, "statistics", statistics);
+	serializer.WriteProperty(105, "segment_state", segment_state);
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
@@ -42,6 +43,9 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 	result.tuple_count = tuple_count;
 	result.block_pointer = block_pointer;
 	result.compression_type = compression_type;
+	deserializer.Set<CompressionType>(compression_type);
+	deserializer.ReadProperty(105, "segment_state", result.segment_state);
+	deserializer.Unset<CompressionType>();
 	return result;
 }
 

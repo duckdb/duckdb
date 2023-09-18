@@ -136,8 +136,6 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the file
 	block_manager.Truncate();
-
-	metadata_manager.MarkBlocksAsModified();
 }
 
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {
