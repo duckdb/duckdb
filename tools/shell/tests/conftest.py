@@ -102,9 +102,15 @@ def shell(request):
 
 
 @pytest.fixture()
-def generated_file(request, tmp_path):
-    param = request.param
+def random_filepath(request, tmp_path):
     tmp_file = tmp_path / "random_import_file"
-    with open(tmp_file, 'w') as f:
+    return tmp_file
+
+
+@pytest.fixture()
+def generated_file(request, random_filepath):
+    param = request.param
+    tmp_file = random_filepath
+    with open(tmp_file, 'w+') as f:
         f.write(param)
     return tmp_file
