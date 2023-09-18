@@ -14,6 +14,7 @@
 #include "duckdb_python/functional.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 #include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
@@ -275,6 +276,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
 	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
 	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
+	    .export_values();
+
+	py::enum_<duckdb::RenderMode>(m, "RenderMode")
+	    .value("ROWS", duckdb::RenderMode::ROWS)
+	    .value("COLUMNS", duckdb::RenderMode::COLUMNS)
 	    .export_values();
 
 	DuckDBPyTyping::Initialize(m);

@@ -2,7 +2,7 @@ import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
 from duckdb import Expression, ConstantExpression, ColumnExpression, StarExpression, FunctionExpression, CaseExpression
-from pyduckdb.value.constant import Value, IntegerValue
+from duckdb.value.constant import Value, IntegerValue
 import datetime
 
 
@@ -572,9 +572,7 @@ class TestExpression(object):
         assert res == [(300_000,)]
 
         with pytest.raises(duckdb.OutOfRangeException, match="Overflow in multiplication of INT16"):
-            import pyduckdb
-
-            val = pyduckdb.Value(100, duckdb.typing.TINYINT)
+            val = duckdb.Value(100, duckdb.typing.TINYINT)
             expr = ColumnExpression("salary") * val
             rel2 = rel.select(expr)
             res = rel2.fetchall()
