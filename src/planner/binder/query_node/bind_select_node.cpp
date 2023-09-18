@@ -1,25 +1,28 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/conjunction_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
-#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/order_binder.hpp"
+#include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
-#include "duckdb/parser/expression/conjunction_expression.hpp"
 
 namespace duckdb {
 
@@ -379,6 +382,20 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			LogicalType group_type;
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
+
+			if (group_type.id() == LogicalTypeId::VARCHAR && !DBConfig::GetConfig(context).options.collation.empty()) {
+				// TODO If there is a collation on a group x, we should group by the collated expr,
+				//  but also push a first(x) aggregate)
+				info.implicit_collate[i] = result->aggregates.size();
+
+				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
+				vector<unique_ptr<Expression>> first_children;
+				first_children.push_back(bound_expr->Copy());
+
+				FunctionBinder function_binder(context);
+				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
+				result->aggregates.push_back(std::move(function));
+			}
 
 			// push a potential collation, if necessary
 			bound_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
