@@ -18,11 +18,16 @@ class ShellTest:
             raise ValueError("Please provide a shell binary")
         self.shell = shell
         self.arguments = [shell, '--batch', '--init', '/dev/null']
+        self.statements: List[str] = []
         self.input = None
         self.output = None
 
     def add_argument(self, arg):
         self.arguments.append(arg)
+        return self
+
+    def statement(self, stmt):
+        self.statements.append(stmt)
         return self
 
     def add_arguments(self, args: List):
@@ -58,6 +63,16 @@ class ShellTest:
             output_pipe = open(self.output, 'w+')
         return output_pipe
 
+    def get_statements(self):
+        result = ""
+        statements = []
+        for statement in self.statements:
+            if statement.startswith('.'):
+                statements.append(statement)
+            else:
+                statements.append(statement + ';')
+        return '\n'.join(statements)
+
     def get_output_data(self, res):
         if self.output:
             stdout = open(self.output, 'r').read()
@@ -66,9 +81,10 @@ class ShellTest:
         stderr = res.stderr.decode('utf8').strip()
         return stdout, stderr
 
-    def run(self, cmd: str):
-        command = self.get_command(cmd)
-        input_data = self.get_input_data(cmd)
+    def run(self):
+        statements = self.get_statements()
+        command = self.get_command(statements)
+        input_data = self.get_input_data(statements)
         output_pipe = self.get_output_pipe()
 
         res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE)
