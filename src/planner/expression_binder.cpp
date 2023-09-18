@@ -166,6 +166,8 @@ bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId targe
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return ContainsType(ListType::GetChildType(type), target);
+	case LogicalTypeId::ARRAY:
+		return ContainsType(ArrayType::GetChildType(type), target);
 	default:
 		return false;
 	}
@@ -195,6 +197,9 @@ LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeI
 		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
 	case LogicalTypeId::MAP:
 		return LogicalType::MAP(ExchangeType(ListType::GetChildType(type), target, new_type));
+	case LogicalTypeId::ARRAY:
+		return LogicalType::ARRAY(ExchangeType(ArrayType::GetChildType(type), target, new_type),
+		                          ArrayType::GetSize(type));
 	default:
 		return type;
 	}

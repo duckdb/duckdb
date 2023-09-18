@@ -1,0 +1,33 @@
+# name: test/sql/function/array/array_list_functions.test
+# group: [array]
+
+# Just test that arrays are propely cast to lists when calling some list functions with special binding logic
+# Aggregate example
+query I
+SELECT list_distinct(array_value(1,1,2,3,3)) = list_distinct([1,1,2,3,3]);
+----
+true
+
+# Sort example:
+query I
+SELECT list_sort(array_value(3,2,1)) = list_sort([3,2,1]);
+----
+true
+
+# Slice example:
+query I
+SELECT list_slice(array_value(1,2,3,4,5), 1, 3) = list_slice([1,2,3,4,5], 1, 3);
+----
+true
+
+# Transform example
+query I
+SELECT list_transform(array_value(3,2,1), x -> x + 1) = list_transform([3,2,1], x -> x + 1);
+----
+true
+
+# Filter example
+query I
+SELECT list_filter(array_value(3,2,1), x -> x > 1) = list_filter([3,2,1], x -> x > 1);
+----
+true

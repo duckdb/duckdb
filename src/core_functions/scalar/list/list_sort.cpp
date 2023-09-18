@@ -2,6 +2,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
@@ -236,6 +237,13 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 static unique_ptr<FunctionData> ListSortBind(ClientContext &context, ScalarFunction &bound_function,
                                              vector<unique_ptr<Expression>> &arguments, OrderType &order,
                                              OrderByNullType &null_order) {
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	}
+
 	bound_function.arguments[0] = arguments[0]->return_type;
 	bound_function.return_type = arguments[0]->return_type;
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);

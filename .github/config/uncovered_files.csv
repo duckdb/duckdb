@@ -134,7 +134,7 @@ core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
 core_functions/scalar/list/array_slice.cpp	2
 core_functions/scalar/list/flatten.cpp	6
-core_functions/scalar/list/list_aggregates.cpp	2
+core_functions/scalar/list/list_aggregates.cpp	6
 core_functions/scalar/list/list_lambdas.cpp	2
 core_functions/scalar/list/list_sort.cpp	7
 core_functions/scalar/list/range.cpp	6

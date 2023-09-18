@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/function_binder.hpp"
 
@@ -426,7 +427,21 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	}
 
 	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;
-	auto list_child_type = is_parameter ? LogicalTypeId::UNKNOWN : ListType::GetChildType(arguments[0]->return_type);
+	LogicalType child_type;
+	if (is_parameter) {
+		child_type = LogicalType::ANY;
+	} else if (arguments[0]->return_type.id() == LogicalTypeId::LIST ||
+	           arguments[0]->return_type.id() == LogicalTypeId::MAP) {
+		child_type = ListType::GetChildType(arguments[0]->return_type);
+	} else if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		// Insert cast to list from array
+		child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	} else {
+		// Unreachable
+		throw InvalidInputException("First argument of list aggregate must be a list, map or array");
+	}
 
 	string function_name = "histogram";
 	if (IS_AGGR) { // get the name of the aggregate function
@@ -453,7 +468,7 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	// find a matching aggregate function
 	string error;
 	vector<LogicalType> types;
-	types.push_back(list_child_type);
+	types.push_back(child_type);
 	// push any extra arguments into the type list
 	for (idx_t i = 2; i < arguments.size(); i++) {
 		types.push_back(arguments[i]->return_type);
@@ -468,14 +483,14 @@ static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, Scala
 	// found a matching function, bind it as an aggregate
 	auto best_function = func.functions.GetFunctionByOffset(best_function_idx);
 	if (IS_AGGR) {
-		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, best_function, arguments);
+		return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, best_function, arguments);
 	}
 
 	// create the unordered map histogram function
 	D_ASSERT(best_function.arguments.size() == 1);
 	auto key_type = best_function.arguments[0];
 	auto aggr_function = HistogramFun::GetHistogramUnorderedMap(key_type);
-	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, list_child_type, aggr_function, arguments);
+	return ListAggregatesBindFunction<IS_AGGR>(context, bound_function, child_type, aggr_function, arguments);
 }
 
 static unique_ptr<FunctionData> ListAggregateBind(ClientContext &context, ScalarFunction &bound_function,
@@ -493,7 +508,12 @@ static unique_ptr<FunctionData> ListDistinctBind(ClientContext &context, ScalarF
 
 	D_ASSERT(bound_function.arguments.size() == 1);
 	D_ASSERT(arguments.size() == 1);
-	bound_function.return_type = arguments[0]->return_type;
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		bound_function.return_type = LogicalType::LIST(ArrayType::GetChildType(arguments[0]->return_type));
+	} else {
+		bound_function.return_type = arguments[0]->return_type;
+	}
 
 	return ListAggregatesBind<>(context, bound_function, arguments);
 }

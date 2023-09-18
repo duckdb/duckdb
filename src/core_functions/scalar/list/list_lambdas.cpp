@@ -365,6 +365,12 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 		throw BinderException("Invalid lambda expression!");
 	}
 
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
+	}
+
 	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
 	return ListLambdaBind<1>(context, bound_function, arguments);
@@ -385,6 +391,12 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 		auto cast_lambda_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);
 		bound_lambda_expr.lambda_expr = std::move(cast_lambda_expr);
+	}
+
+	if (arguments[0]->return_type.id() == LogicalTypeId::ARRAY) {
+		auto child_type = ArrayType::GetChildType(arguments[0]->return_type);
+		arguments[0] =
+		    BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(child_type));
 	}
 
 	bound_function.return_type = arguments[0]->return_type;
