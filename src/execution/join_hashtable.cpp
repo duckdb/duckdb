@@ -211,7 +211,11 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// note that we only hash the keys used in the equality comparison
 	Hash(keys, *current_sel, added_count, hash_values);
 
-	// PrepareKeys calls TupleDataCollection::ToUnifiedFormat, so we can AppendUnified here
+	// Re-reference and ToUnifiedFormat the hash column after computing it
+	source_chunk.data[col_offset].Reference(hash_values);
+	hash_values.ToUnifiedFormat(source_chunk.size(), append_state.chunk_state.vector_data.back().unified);
+
+	// We already called TupleDataCollection::ToUnifiedFormat, so we can AppendUnified here
 	sink_collection->AppendUnified(append_state, source_chunk, *current_sel, added_count);
 }
 
