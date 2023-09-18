@@ -54,7 +54,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 
-	idx_t null_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		// Loop through all the maps per list
 		// we cant do better because all the entries of the child vector have to be contiguous
@@ -64,7 +63,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 		vector<Value> keys_list;
 		for (idx_t map_idx = 0; map_idx < map_count; map_idx++) {
 			if (args.data[map_idx].GetType().id() == LogicalTypeId::SQLNULL) {
-				null_count++;
 				continue;
 			}
 			auto &map_format = map_formats[map_idx];
@@ -99,7 +97,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 			auto &values = MapVector::GetValues(map);
 			values_list.push_back(values.GetValue(mapping.key_index));
 		}
-		idx_t entries_count = keys_list.size();
 		D_ASSERT(values_list.size() == keys_list.size());
 		result_entry.offset = ListVector::GetListSize(result);
 		result_entry.length = values_list.size();
@@ -107,11 +104,6 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 		for (auto &list_entry : list_entries) {
 			ListVector::PushBack(result, list_entry);
 		}
-//		if (!i) {
-//			ListVector::SetListSize(result, entries_count);
-//		} else {
-//			ListVector::SetListSize(result, ListVector::GetListSize(result) + entries_count);
-//		}
 	}
 
 	if (args.AllConstant()) {
