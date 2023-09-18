@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql.types import Row
-from pyduckdb.spark.sql.types import LongType, StructType, BooleanType, StructField, StringType, IntegerType
+_ = pytest.importorskip("duckdb.spark")
+from duckdb.spark.sql.types import Row
+from duckdb.spark.sql.types import LongType, StructType, BooleanType, StructField, StringType, IntegerType
 import duckdb
 import re
 
@@ -79,7 +79,7 @@ class TestDataFrame(object):
         assert res == [Row(a=42, b=True), Row(a=21, b=False)]
 
     def test_df_creation_coverage(self, spark):
-        from pyduckdb.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from duckdb.spark.sql.types import StructType, StructField, StringType, IntegerType
 
         data2 = [
             ("James", "", "Smith", "36636", "M", 3000),

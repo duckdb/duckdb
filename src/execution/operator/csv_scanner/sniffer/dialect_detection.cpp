@@ -55,6 +55,9 @@ struct SniffDialect {
 		if (machine.state == CSVState::INVALID) {
 			return;
 		}
+		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state == CSVState::DELIMITER) {
+			sniffed_column_counts[machine.cur_rows] = ++machine.column_count;
+		}
 		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
 		}
