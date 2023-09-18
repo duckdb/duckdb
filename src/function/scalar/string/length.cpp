@@ -130,7 +130,7 @@ struct ArrayLengthBinaryFunctionData : public FunctionData {
 	unique_ptr<FunctionData> Copy() const override {
 		auto copy = make_uniq<ArrayLengthBinaryFunctionData>();
 		copy->dimensions = dimensions;
-		return copy;
+		return std::move(copy);
 	}
 
 	bool Equals(const FunctionData &other) const override {
@@ -183,7 +183,7 @@ static unique_ptr<FunctionData> ArrayOrListLengthBinaryBind(ClientContext &conte
 		}
 		auto data = make_uniq<ArrayLengthBinaryFunctionData>();
 		data->dimensions = dimensions;
-		return data;
+		return std::move(data);
 
 	} else if (type.id() == LogicalTypeId::LIST) {
 		bound_function.function = ListLengthBinaryFunction;
