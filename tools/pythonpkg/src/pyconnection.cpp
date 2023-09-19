@@ -214,7 +214,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
 	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
-	             py::arg("null_padding") = py::none());
+	             py::arg("null_padding") = py::none(), py::arg("names") = py::none());
 
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
@@ -706,7 +706,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
     const py::object &all_varchar, const py::object &normalize_names, const py::object &filename,
-    const py::object &null_padding) {
+    const py::object &null_padding, const py::object &names_p) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -753,7 +753,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 				if (!py::try_cast(kv.second, sql_type)) {
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
-				struct_fields.emplace_back(py::str(kv.first), Value(py::str(kv.second)));
+				struct_fields.emplace_back(py::str(kv.first), Value(sql_type->ToString()));
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			bind_parameters["dtypes"] = std::move(dtype_struct);
@@ -765,7 +765,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 				if (!py::try_cast(child, sql_type)) {
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
-				list_values.push_back(std::string(py::str(child)));
+				list_values.push_back(sql_type->ToString());
 			}
 			bind_parameters["dtypes"] = Value::LIST(LogicalType::VARCHAR, std::move(list_values));
 		} else {
@@ -784,22 +784,20 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		bind_parameters["delim"] = Value(py::str(delimiter));
 	}
 
-	// We don't support overriding the names of the header yet
-	// 'names'
-	// if (keywords.count("names")) {
-	//	if (!py::isinstance<py::list>(kwargs["names"])) {
-	//		throw InvalidInputException("read_csv only accepts 'names' as a list of strings");
-	//	}
-	//	vector<string> names;
-	//	py::list names_list = kwargs["names"];
-	//	for (auto& elem : names_list) {
-	//		if (!py::isinstance<py::str>(elem)) {
-	//			throw InvalidInputException("read_csv 'names' list has to consist of only strings");
-	//		}
-	//		names.push_back(py::str(elem));
-	//	}
-	//	// FIXME: Check for uniqueness of 'names' ?
-	//}
+	if (!py::none().is(names_p)) {
+		if (!py::isinstance<py::list>(names_p)) {
+			throw InvalidInputException("read_csv only accepts 'names' as a list of strings");
+		}
+		vector<Value> names;
+		py::list names_list = names_p;
+		for (auto &elem : names_list) {
+			if (!py::isinstance<py::str>(elem)) {
+				throw InvalidInputException("read_csv 'names' list has to consist of only strings");
+			}
+			names.push_back(Value(std::string(py::str(elem))));
+		}
+		bind_parameters["names"] = Value::LIST(LogicalType::VARCHAR, std::move(names));
+	}
 
 	if (!py::none().is(na_values)) {
 		if (!py::isinstance<py::str>(na_values)) {
