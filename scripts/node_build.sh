@@ -12,12 +12,10 @@ cd tools/nodejs
 make clean
 ./configure
 
-if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ]; then
-  if [[ "$TARGET_ARCH" == "arm64" ]] ; then
-    sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu --yes
-    export CC=aarch64-linux-gnu-gcc
-    export CXX=aarch64-linux-gnu-g++
-  fi
+if [ "$(expr substr $(uname -s) 1 5)" == "Linux" ] && [[ "$TARGET_ARCH" == "arm64" ]] ; then
+  sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu --yes
+  export CC=aarch64-linux-gnu-gcc
+  export CXX=aarch64-linux-gnu-g++
 fi
 
 npm install --build-from-source --target_arch="$TARGET_ARCH"
