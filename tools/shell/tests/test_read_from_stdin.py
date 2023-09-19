@@ -21,10 +21,10 @@ def test_read_stdin_csv(shell):
             )
         """)
         .statement("select * from mytable limit 1;")
-        .add_arguments([
+        .add_argument(
             '-csv',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, "foo,bar,baz", status, err)
@@ -40,10 +40,10 @@ def test_read_stdin_csv_auto(shell):
             read_csv_auto('/dev/stdin')
         """)
         .statement("select * from mytable limit 1;")
-        .add_arguments([
+        .add_argument(
             '-csv',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, "column0,column1,column2", status, err)
@@ -59,10 +59,10 @@ def test_read_stdin_csv_auto_projection(shell):
             read_csv_auto('/dev/stdin')
         """)
         .statement("select channel,i_brand_id,sum_sales,number_sales from mytable;")
-        .add_arguments([
+        .add_argument(
             '-csv',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, "web,8006004,844.21,21", status, err)
@@ -77,10 +77,10 @@ def test_read_stdin_ndjson(shell, json_extension):
             read_ndjson_objects('/dev/stdin')
         """)
         .statement("select * from mytable;")
-        .add_arguments([
+        .add_argument(
             '-list',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, [
@@ -102,10 +102,10 @@ def test_read_stdin_json_auto(shell, json_extension):
             read_json_auto('/dev/stdin')
         """)
         .statement("select * from mytable;")
-        .add_arguments([
+        .add_argument(
             '-list',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, [
@@ -139,10 +139,10 @@ def test_copy_csv_to_stdout(shell, alias):
     test = (
         ShellTest(shell)
         .statement(f"COPY (SELECT 42) TO {alias} WITH (FORMAT 'csv');")
-        .add_arguments([
+        .add_argument(
             '-csv',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_res(out, '42', status, err)
@@ -156,10 +156,10 @@ def test_copy_csv_to_stderr(shell, alias):
     test = (
         ShellTest(shell)
         .statement(f"COPY (SELECT 42) TO {alias} WITH (FORMAT 'csv');")
-        .add_arguments([
+        .add_argument(
             '-csv',
             ':memory:'
-        ])
+        )
     )
     out, err, status = test.run()
     assert_expected_err(out, '42', status, err)

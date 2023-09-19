@@ -35,16 +35,16 @@ class ShellTest:
         self.input = None
         self.output = None
 
-    def add_argument(self, arg):
-        self.arguments.append(arg)
+    def add_argument(self, *args):
+        self.arguments.extend(args)
         return self
 
     def statement(self, stmt):
         self.statements.append(stmt)
         return self
 
-    def add_arguments(self, args: List):
-        self.arguments.extend(args)
+    def query(self, *stmts):
+        self.statements.extend(stmts)
         return self
 
     def input_file(self, file_path):
