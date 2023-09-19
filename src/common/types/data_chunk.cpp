@@ -256,21 +256,24 @@ void DataChunk::Serialize(Serializer &serializer) const {
 }
 
 void DataChunk::Deserialize(Deserializer &deserializer) {
-	// read the count
-	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
 
-	// Read the types
+	// read and set the row count
+	auto row_count = deserializer.ReadProperty<sel_t>(100, "rows");
+	SetCardinality(row_count);
+
+	// read the types
 	vector<LogicalType> types;
 	deserializer.ReadList(101, "types", [&](Deserializer::List &list, idx_t i) {
 		auto type = list.ReadElement<LogicalType>();
 		types.push_back(type);
 	});
-	Initialize(Allocator::DefaultAllocator(), types);
 
-	// now load the column data
-	SetCardinality(row_count);
+	// initialize the data chunk
+	if (!types.empty()) {
+		Initialize(Allocator::DefaultAllocator(), types);
+	}
 
-	// Read the data
+	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
 		list.ReadObject([&](Deserializer &object) { data[i].Deserialize(object, row_count); });
 	});
