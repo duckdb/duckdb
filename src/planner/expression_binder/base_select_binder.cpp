@@ -138,8 +138,8 @@ BindResult BaseSelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t 
 }
 
 BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
-	auto it = info.implicit_collate.find(group_index);
-	if (it != info.implicit_collate.end()) {
+	auto it = info.collated_groups.find(group_index);
+	if (it != info.collated_groups.end()) {
 		// This is an implicitly collated group, so we need to refer to the first() aggregate
 		const auto &aggr_index = it->second;
 		return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), node.aggregates[aggr_index]->return_type,

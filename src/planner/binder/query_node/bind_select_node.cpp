@@ -383,24 +383,23 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
-			if (group_type.id() == LogicalTypeId::VARCHAR && !DBConfig::GetConfig(context).options.collation.empty()) {
-				// TODO If there is a collation on a group x, we should group by the collated expr,
-				//  but also push a first(x) aggregate)
-				info.implicit_collate[i] = result->aggregates.size();
+			// push a potential collation, if necessary
+			auto collated_expr = ExpressionBinder::PushCollation(context, bound_expr->Copy(),
+			                                                     StringType::GetCollation(group_type), true);
+			if (!collated_expr->Equals(*bound_expr)) {
+				// If there is a collation on a group x, we should group by the collated expr,
+				// but also push a first(x) aggregate in case x is selected (uncollated)
+				info.collated_groups[i] = result->aggregates.size();
 
 				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
 				vector<unique_ptr<Expression>> first_children;
-				first_children.push_back(bound_expr->Copy());
+				first_children.push_back(std::move(bound_expr));
 
 				FunctionBinder function_binder(context);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
 				result->aggregates.push_back(std::move(function));
 			}
-
-			// push a potential collation, if necessary
-			bound_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
-			                                             StringType::GetCollation(group_type), true);
-			result->groups.group_expressions.push_back(std::move(bound_expr));
+			result->groups.group_expressions.push_back(std::move(collated_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
 			// we do this to make sure that "table.a" and "a" are treated the same
