@@ -113,9 +113,11 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		auto query = make_uniq<SelectStatement>();
 		auto node = make_uniq<SelectNode>();
 		for (idx_t i = 0; i < RandomValue(100000); i++ ) {
-			auto rand_val = RandomString(20);
-			auto value = make_uniq<ConstantExpression>(Value(rand_val));
-			node->select_list.push_back(std::move(value));
+//			auto rand_val = RandomString(20);
+//			auto value = make_uniq<ConstantExpression>(Value(rand_val));
+// TODO: does the below constant generation work?
+//  or does every select list value need to be the same type?
+			node->select_list.push_back(GenerateConstant());
 		}
 		query->node = std::move(node);
 		info->query = std::move(query);
@@ -126,6 +128,14 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		info->catalog = INVALID_CATALOG;
 		info->schema = DEFAULT_SCHEMA;
 		info->table = RandomString(10);
+		if (RandomPercentage(50)) {
+			auto select = make_uniq<SelectStatement>();
+			select->node = GenerateQueryNode();
+			info->query = std::move(select);
+		} else {
+			info->columns = GenerateColumnList();
+		}
+		// TODO: add constraints to the columns;
 		return std::move(info);
 	}
 	case 2: {
@@ -1236,6 +1246,18 @@ vector<string> StatementGenerator::GenerateAllFunctionCalls() {
 		}
 	}
 	return result;
+}
+
+ColumnList StatementGenerator::GenerateColumnList() {
+	vector<ColumnDefinition> columns;
+	auto num_columns = RandomValue(1000);
+	for (auto i = 0; i < num_columns; i++) {
+		auto name = RandomString(5);
+		auto type = GenerateLogicalType();
+		columns.push_back(ColumnDefinition(name, type));
+	}
+	// TODO: allow duplicate column names
+	return ColumnList(columns, false);
 }
 
 } // namespace duckdb

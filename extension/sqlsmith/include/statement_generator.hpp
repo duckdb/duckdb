@@ -100,16 +100,22 @@ private:
 	string RandomString(idx_t length);
 	unique_ptr<ParsedExpression> RandomExpression(idx_t percentage);
 
+	//! Generate identifier for a column or parent using "t" or "c" prefixes. ie. t0, or c0
 	string GenerateIdentifier();
 	string GenerateTableIdentifier();
 
+	//! using the parent generate a relation name. ie. t0
 	string GenerateRelationName();
+	//! using the parent, generate a valid column name. ie. c0
 	string GenerateColumnName();
 	idx_t GetIndex();
 
 	Value GenerateConstantValue();
 
 	ExpressionType GenerateComparisonType();
+
+	//! used to create columns when creating new tables;
+	ColumnList GenerateColumnList();
 
 private:
 	ClientContext &context;

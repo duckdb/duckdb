@@ -29,4 +29,26 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateTableInfo::ToString() const {
+	string ret = "";
+
+	ret += "CREATE TABLE " + table;
+	if (query != nullptr) {
+		ret += " AS " + query->ToString();
+	} else {
+		ret += " (";
+		auto column_names = columns.GetColumnNames();
+		auto column_types = columns.GetColumnTypes();
+		D_ASSERT(column_names.size() == column_types.size());
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			ret +=  column_names.at(i) + " " + LogicalTypeIdToString(column_types.at(i).id());
+			if (i < column_names.size() - 1) {
+				ret += ",";
+			}
+		}
+		ret += ")";
+	}
+	return ret;
+}
+
 } // namespace duckdb
