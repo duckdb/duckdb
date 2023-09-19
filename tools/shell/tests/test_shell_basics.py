@@ -829,7 +829,7 @@ def test_invalid_csv(shell, tmp_path):
         ShellTest(shell)
         .statement(".nullvalue NULL")
         .statement("CREATE TABLE test(i INTEGER);")
-        .statement(f".import {file} test")
+        .statement(f".import {file.as_posix()} test")
         .statement("SELECT * FROM test;")
     )
     out, err, status = test.run()
