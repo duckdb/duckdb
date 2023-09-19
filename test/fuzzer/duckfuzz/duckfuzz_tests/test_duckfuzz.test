@@ -6,5 +6,6 @@
 # To run these tests make change require not_available to require sqlsmith
 require sqlsmith
 
+
 statement ok
-call fuzzyduck(max_queries=1, seed=51, verbose_output=1);
+call fuzzyduck(max_queries=1, seed=55, verbose_output=1);

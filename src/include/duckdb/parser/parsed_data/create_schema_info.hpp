@@ -34,15 +34,15 @@ public:
 			throw InternalException("update schema alter on conflict does not yet support ToString");
 		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT: {
-			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS;";
+			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS";
 			break;
 		}
 		case OnCreateConflict::REPLACE_ON_CONFLICT: {
-			ret += "CREATE OR REPLACE SCHEMA " + schema + ";";
+			ret += "CREATE OR REPLACE SCHEMA " + schema;
 			break;
 		}
 		case OnCreateConflict::ERROR_ON_CONFLICT: {
-			ret += "CREATE SCHEMA " + schema + ";";
+			ret += "CREATE SCHEMA " + schema;
 			break;
 		}
 		}

@@ -104,7 +104,7 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateCreate() {
 //===--------------------------------------------------------------------===//
 
 unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
-	switch (2) {
+	switch (3) {
 	case 0: {
 		auto info = make_uniq<CreateTypeInfo>();
 		info->name = RandomString(5);
@@ -138,10 +138,10 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 	case 3: {
 		auto info = make_uniq<CreateViewInfo>();
 		info->view_name = RandomString(10);
-		info->aliases = vector<string>({RandomString(5), RandomString(5)});
 		auto select = make_uniq<SelectStatement>();
 		select->node = GenerateQueryNode();
 		info->query = std::move(select);
+		// TODO: add support for aliases in the view.
 		return std::move(info);
 	}
 	default:
