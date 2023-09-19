@@ -47,8 +47,7 @@ jobs:
       image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
+      EXTENSION_AUTOLOADING: 'full'
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
       BUILD_JSON: 1
@@ -93,8 +92,7 @@ jobs:
     env:
       GEN: ninja
       BUILD_JDBC: 1
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
+      EXTENSION_AUTOLOADING: 'full'
       OVERRIDE_JDBC_OS_ARCH: arm64
       JAVA_HOME: ../../jdk8u345-b01
     steps:
@@ -151,7 +149,7 @@ jobs:
         run: >
           python scripts/windows_ci.py
 
-          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DENABLE_EXTENSION_AUTOLOADING=1 -DENABLE_EXTENSION_AUTOINSTALL=1
+          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DJDBC_DRIVER=1 -DBUILD_EXTENSIONS=json -DEXTENSION_AUTOLOADING='full'
 
           cmake --build . --config Release
       - name: Java Tests
@@ -178,8 +176,7 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JSON: 1
       OSX_BUILD_UNIVERSAL: 1
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
+      EXTENSION_AUTOLOADING: 'full'
     steps:
       - uses: actions/checkout@v3
         with:

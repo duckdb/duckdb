@@ -43,8 +43,7 @@ jobs:
     container: quay.io/pypa/manylinux2014_x86_64
     env:
       EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
+      EXTENSION_AUTOLOADING: 'full'
       GEN: ninja
       BUILD_BENCHMARK: 1
       BUILD_ODBC: 1
@@ -120,8 +119,7 @@ jobs:
    container: ubuntu:18.04
    env:
      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-     ENABLE_EXTENSION_AUTOLOADING: 1
-     ENABLE_EXTENSION_AUTOINSTALL: 1
+     EXTENSION_AUTOLOADING: 'full'
      GEN: ninja
      BUILD_BENCHMARK: 1
      TREAT_WARNINGS_AS_ERRORS: 1

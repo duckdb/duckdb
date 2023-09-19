@@ -176,8 +176,7 @@ runs:
       shell: bash
       env:
         EXTENSION_TESTS_ONLY: 1
-        ENABLE_EXTENSION_AUTOLOADING: 1
-        ENABLE_EXTENSION_AUTOINSTALL: 1
+        EXTENSION_AUTOLOADING: 'full'
         GEN: ${{ inputs.ninja == 1 && 'ninja' || '' }}
         USE_MERGED_VCPKG_MANIFEST: 1
       run: |
