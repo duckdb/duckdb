@@ -12,7 +12,6 @@ using std::string;
 
 /*** ODBC API Functions ********************************/
 SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr) {
-
 	if (function_id == SQL_API_ODBC3_ALL_FUNCTIONS) {
 		return ApiInfo::GetFunctions30(connection_handle, function_id, supported_ptr);
 	} else {

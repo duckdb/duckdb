@@ -226,7 +226,7 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 		ret = duckdb::SetDiagnosticRecord(
 		    hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
 		    "Not all the data for the specified column could be retrieved, the length of the data remaining in the "
-		    "specific column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.",
+		    "specific column prior to the current call to SQLGetData is returned in *StrLen_or_IndPtr.",
 		    duckdb::SQLStateType::ST_01004, hstmt->dbc->GetDataSourceName());
 		out_len = buffer_length - 1;
 		last_len += out_len;
@@ -324,7 +324,7 @@ SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_p
 			ret = duckdb::SetDiagnosticRecord(
 			    hstmt, SQL_SUCCESS_WITH_INFO, "SQLGetData",
 			    "Not all the data for the specified column could be retrieved, the length of the data remaining in the "
-			    "specifief column prior to the current all to SQLGetData is returned in *StrLen_or_IndPtr.",
+			    "specifief column prior to the current call to SQLGetData is returned in *StrLen_or_IndPtr.",
 			    duckdb::SQLStateType::ST_01004, hstmt->dbc->GetDataSourceName());
 		}
 		memcpy((char *)target_value_ptr, (char *)utf16_str.c_str(), out_len);
