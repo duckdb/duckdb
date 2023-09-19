@@ -178,7 +178,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 		if (append_to_table) {
-			table.RevertAppendInternal(append_state.row_start, append_count);
+			table.RevertAppendInternal(append_state.row_start);
 		}
 
 		// we need to vacuum the indexes to remove any buffers that are now empty
@@ -353,7 +353,6 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 
 	//! Append the chunk to the local storage
 	auto new_row_group = storage->row_groups->Append(chunk, state.append_state);
-
 	//! Check if we should pre-emptively flush blocks to disk
 	if (new_row_group) {
 		storage->WriteNewRowGroup();

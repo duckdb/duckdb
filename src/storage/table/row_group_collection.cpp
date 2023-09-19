@@ -427,7 +427,7 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 	}
 }
 
-void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
+void RowGroupCollection::RevertAppendInternal(idx_t start_row) {
 	if (total_rows <= start_row) {
 		return;
 	}

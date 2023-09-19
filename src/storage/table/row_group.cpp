@@ -741,11 +741,6 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	// pointers all end up densely packed, and thus more cache-friendly.
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
 		auto &column = GetColumn(column_idx);
-		if (column.count != this->count) {
-			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
-			                        "group has %llu rows, column has %llu)",
-			                        column_idx, this->count.load(), column.count);
-		}
 		ColumnCheckpointInfo checkpoint_info {compression_types[column_idx]};
 		auto checkpoint_state = column.Checkpoint(*this, manager, checkpoint_info);
 		D_ASSERT(checkpoint_state);
@@ -787,6 +782,12 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 	vector<CompressionType> compression_types;
 	compression_types.reserve(columns.size());
 	for (idx_t column_idx = 0; column_idx < GetColumnCount(); column_idx++) {
+		auto &column = GetColumn(column_idx);
+		if (column.count != this->count) {
+			throw InternalException("Corrupted in-memory column - column with index %llu has misaligned count (row "
+			                        "group has %llu rows, column has %llu)",
+			                        column_idx, this->count.load(), column.count);
+		}
 		compression_types.push_back(writer.GetColumnCompressionType(column_idx));
 	}
 	auto result = WriteToDisk(writer.GetPartialBlockManager(), compression_types);
