@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression_binder/qualify_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/expression_binder/where_binder.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 
 namespace duckdb {
@@ -383,17 +384,25 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
+			// find out whether the expression contains a subquery, it can't be copied if so
+			auto &bound_expr_ref = *bound_expr;
+			bool contains_subquery = bound_expr_ref.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY;
+			ExpressionIterator::EnumerateChildren(bound_expr_ref, [&](const Expression &child) {
+				contains_subquery = contains_subquery || child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY;
+			});
+
 			// push a potential collation, if necessary
-			auto collated_expr = ExpressionBinder::PushCollation(context, bound_expr->Copy(),
+			auto collated_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
 			                                                     StringType::GetCollation(group_type), true);
-			if (!collated_expr->Equals(*bound_expr)) {
-				// If there is a collation on a group x, we should group by the collated expr,
+			if (!contains_subquery && !collated_expr->Equals(bound_expr_ref)) {
+				// if there is a collation on a group x, we should group by the collated expr,
 				// but also push a first(x) aggregate in case x is selected (uncollated)
 				info.collated_groups[i] = result->aggregates.size();
 
 				auto first_fun = FirstFun::GetFunction(LogicalType::VARCHAR);
 				vector<unique_ptr<Expression>> first_children;
-				first_children.push_back(std::move(bound_expr));
+				// FIXME: would be better to just refer to this expression, but for now we copy
+				first_children.push_back(bound_expr_ref.Copy());
 
 				FunctionBinder function_binder(context);
 				auto function = function_binder.BindAggregateFunction(first_fun, std::move(first_children));
