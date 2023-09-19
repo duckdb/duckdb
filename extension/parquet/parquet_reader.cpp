@@ -425,37 +425,23 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetColumnDefinition ParquetColumnDefinition::FromSchemaStructValue(const Value &schema_value, const idx_t col_idx) {
-	auto &field_id_string = StructType::GetChildName(schema_value.type(), col_idx);
-	auto field_id = Value(field_id_string);
-	if (!field_id.DefaultTryCastAs(LogicalType::INTEGER)) {
-		throw BinderException("Unable to cast \"%s\" to INTEGER", field_id_string);
+ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(const Value &column_value) {
+	ParquetColumnDefinition result;
+	result.field_id = IntegerValue::Get(StructValue::GetChildren(column_value)[0]);
+
+	const auto &column_def = StructValue::GetChildren(column_value)[1];
+	const auto &column_type = column_def.type();
+	if (column_type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException("Parquet schema column definition must be a STRUCT");
 	}
 
-	ParquetColumnDefinition result;
-	result.field_id = IntegerValue::Get(field_id);
-
-	const auto &column_value = StructValue::GetChildren(schema_value)[col_idx];
-	const auto &column_type = column_value.type();
-	for (idx_t child_idx = 0; child_idx < StructType::GetChildCount(column_type); child_idx++) {
-		const auto field_name = StringUtil::Lower(StructType::GetChildName(column_type, child_idx));
-		const auto &field_value = StructValue::GetChildren(column_value)[child_idx];
-		if (field_name == "name") {
-			if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-				throw BinderException("Parquet column definition field \"name\" must be of type VARCHAR");
-			}
-			result.name = StringValue::Get(field_value);
-		} else if (field_name == "type") {
-			if (field_value.type().id() != LogicalTypeId::VARCHAR) {
-				throw BinderException("Parquet column definition field \"type\" must be of type VARCHAR");
-			}
-			result.type = TransformStringToLogicalType(StringValue::Get(field_value));
-		} else if (field_name == "default") {
-			result.default_value = field_value;
-		} else {
-			throw BinderException("Parquet column definitions can have fields [name, type, default], not \"%s\"",
-			                      field_name);
-		}
+	const auto children = StructValue::GetChildren(column_def);
+	result.name = StringValue::Get(children[0]);
+	result.type = TransformStringToLogicalType(StringValue::Get(children[1]));
+	string error_message;
+	if (!children[2].DefaultTryCastAs(result.type, result.default_value, &error_message)) {
+		throw BinderException("Unable to cast Parquet schema default_value \"%s\" to %s", children[2].ToString(),
+		                      result.type.ToString());
 	}
 
 	return result;

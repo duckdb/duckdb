@@ -64,6 +64,14 @@ struct ParquetReaderScanState {
 	bool current_group_prefetched = false;
 };
 
+struct ParquetColumnDefinition {
+	static ParquetColumnDefinition FromSchemaValue(const Value &column_value);
+	int32_t field_id;
+	string name;
+	LogicalType type;
+	Value default_value;
+};
+
 struct ParquetOptions {
 	explicit ParquetOptions() {
 	}
@@ -72,18 +80,11 @@ struct ParquetOptions {
 	bool binary_as_string = false;
 	bool file_row_number = false;
 	MultiFileReaderOptions file_options;
+	vector<ParquetColumnDefinition> schema;
 
 public:
 	void Serialize(Serializer &serializer) const;
 	static ParquetOptions Deserialize(Deserializer &deserializer);
-};
-
-struct ParquetColumnDefinition {
-	static ParquetColumnDefinition FromSchemaStructValue(const Value &schema_value, const idx_t col_idx);
-	int32_t field_id;
-	string name;
-	LogicalType type;
-	Value default_value;
 };
 
 class ParquetReader {
