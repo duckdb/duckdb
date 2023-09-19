@@ -500,7 +500,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	}
 
 	named_params["normalize_names"] = Value::BOOLEAN(normalize_names);
-	if (!name_list.empty()) {
+	if (!name_list.empty() && !named_params.count("column_names") && !named_params.count("names")) {
 		named_params["column_names"] = StringVectorToValue(name_list);
 	}
 	named_params["all_varchar"] = Value::BOOLEAN(all_varchar);
