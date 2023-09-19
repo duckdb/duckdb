@@ -33,6 +33,7 @@ void RowGroupSegmentTree::Initialize(PersistentTableData &data) {
 
 unique_ptr<RowGroup> RowGroupSegmentTree::LoadSegment() {
 	if (current_row_group >= max_row_group) {
+		reader.reset();
 		finished_loading = true;
 		return nullptr;
 	}
@@ -427,8 +428,8 @@ void RowGroupCollection::CommitAppend(transaction_t commit_id, idx_t row_start, 
 }
 
 void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
-	if (total_rows != start_row + count) {
-		throw InternalException("Interleaved appends: this should no longer happen");
+	if (total_rows <= start_row) {
+		return;
 	}
 	total_rows = start_row;
 
