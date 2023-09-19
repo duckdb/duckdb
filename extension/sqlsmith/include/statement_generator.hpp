@@ -115,7 +115,6 @@ private:
 	ExpressionType GenerateComparisonType();
 
 	//! used to create columns when creating new tables;
-	ColumnList GenerateColumnList();
 
 private:
 	ClientContext &context;

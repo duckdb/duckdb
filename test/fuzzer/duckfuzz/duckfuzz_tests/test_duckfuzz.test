@@ -7,5 +7,11 @@
 require sqlsmith
 
 
+
+loop i 200 400
+
 statement ok
-call fuzzyduck(max_queries=1, seed=55, verbose_output=1);
+call fuzzyduck(max_queries=1, seed=${i}, verbose_output=1);
+
+endloop
+
