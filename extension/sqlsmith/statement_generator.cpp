@@ -34,6 +34,7 @@ StatementGenerator::StatementGenerator(ClientContext &context) : context(context
 	generator_context = GetDatabaseState(context);
 }
 
+
 StatementGenerator::StatementGenerator(StatementGenerator &parent_p)
     : context(parent_p.context), parent(&parent_p), generator_context(parent_p.generator_context),
       depth(parent_p.depth + 1) {
@@ -70,6 +71,9 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
+	if (RandomPercentage(80)) {
+		return GenerateStatement(StatementType::SELECT_STATEMENT);
+	}
 	return GenerateStatement(StatementType::CREATE_STATEMENT);
 }
 
@@ -87,13 +91,13 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 //===--------------------------------------------------------------------===//
 // Statements
 //===--------------------------------------------------------------------===//
-unique_ptr<SQLStatement> StatementGenerator::GenerateSelect() {
+unique_ptr<SelectStatement> StatementGenerator::GenerateSelect() {
 	auto select = make_uniq<SelectStatement>();
 	select->node = GenerateQueryNode();
 	return std::move(select);
 }
 
-unique_ptr<SQLStatement> StatementGenerator::GenerateCreate() {
+unique_ptr<CreateStatement> StatementGenerator::GenerateCreate() {
 	auto create = make_uniq<CreateStatement>();
 	create->info = GenerateCreateInfo();
 	return std::move(create);
@@ -122,9 +126,7 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		info->schema = DEFAULT_SCHEMA;
 		info->table = RandomString(10);
 		if (RandomPercentage(50)) {
-			auto select = make_uniq<SelectStatement>();
-			select->node = GenerateQueryNode();
-			info->query = std::move(select);
+			info->query = GenerateSelect();
 		} else {
 			idx_t num_cols = RandomValue(1000);
 			for (idx_t i = 0; i < num_cols; i++) {
@@ -144,9 +146,7 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 	case 3: {
 		auto info = make_uniq<CreateViewInfo>();
 		info->view_name = RandomString(10);
-		auto select = make_uniq<SelectStatement>();
-		select->node = GenerateQueryNode();
-		info->query = std::move(select);
+		info->query = GenerateSelect();
 		// TODO: add support for aliases in the view.
 		return std::move(info);
 	}
@@ -1072,10 +1072,7 @@ string StatementGenerator::RandomString(idx_t length) {
 	const string charset = "$_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	string result = "";
 	for (int i = 0; i < length; ++i) {
-		// Generate a random index within the character set
 		int randomIndex = RandomValue(charset.length());
-
-		// Append a random character from the character set to the result string
 		result += charset[randomIndex];
 	}
 

@@ -30,8 +30,7 @@ public:
 		string ret = "";
 		switch (on_conflict) {
 		case OnCreateConflict::ALTER_ON_CONFLICT: {
-			ret += "UPDATE SCHEMA " + schema + " ON CONFLICT;";
-			throw InternalException("update schema alter on conflict does not yet support ToString");
+			ret += "CREATE SCHEMA " + schema + " ON CONFLICT INSERT OR REPLACE";
 		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT: {
 			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS";
