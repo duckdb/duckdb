@@ -11,6 +11,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
+#include "duckdb/common/box_renderer.hpp"
 #include "duckdb/common/enums/access_mode.hpp"
 #include "duckdb/common/enums/aggregate_handling.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
@@ -4793,6 +4794,29 @@ RelationType EnumUtil::FromString<RelationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "QUERY_RELATION")) {
 		return RelationType::QUERY_RELATION;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value) {
+	switch(value) {
+	case RenderMode::ROWS:
+		return "ROWS";
+	case RenderMode::COLUMNS:
+		return "COLUMNS";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value) {
+	if (StringUtil::Equals(value, "ROWS")) {
+		return RenderMode::ROWS;
+	}
+	if (StringUtil::Equals(value, "COLUMNS")) {
+		return RenderMode::COLUMNS;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
