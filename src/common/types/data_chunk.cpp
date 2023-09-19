@@ -339,6 +339,17 @@ void DataChunk::Verify() {
 	serializer.Begin();
 	Serialize(serializer);
 	serializer.End();
+
+	mem_stream.Rewind();
+
+	BinaryDeserializer deserializer(mem_stream);
+	DataChunk new_chunk;
+
+	deserializer.Begin();
+	new_chunk.Deserialize(deserializer);
+	deserializer.End();
+
+	D_ASSERT(size() == new_chunk.size());
 #endif
 }
 
