@@ -131,7 +131,7 @@ public:
 
 	//! Reads CSV file
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file);
-	DUCKDB_API shared_ptr<Relation> ReadCSV(Value csv_input, named_parameter_map_t &&options);
+	DUCKDB_API shared_ptr<Relation> ReadCSV(const Value &csv_input, named_parameter_map_t &&options);
 	DUCKDB_API shared_ptr<Relation> ReadCSV(const string &csv_file, const vector<string> &columns);
 
 	//! Reads Parquet file
