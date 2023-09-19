@@ -3,14 +3,14 @@
         "name": "enum_first",
         "parameters": "enum",
         "description": "Returns the first value of the input enum type.",
-        "example": "enum_first(null::mood)",
+        "example": "enum_first(NULL::mood)",
         "type": "scalar_function"
     },
     {
         "name": "enum_last",
         "parameters": "enum",
         "description": "Returns the last value of the input enum type.",
-        "example": "enum_last(null::mood)",
+        "example": "enum_last(NULL::mood)",
         "type": "scalar_function"
     },
     {
@@ -24,7 +24,7 @@
         "name": "enum_range",
         "parameters": "enum",
         "description": "Returns all values of the input enum type as an array.",
-        "example": "enum_range(null::mood)",
+        "example": "enum_range(NULL::mood)",
         "type": "scalar_function"
     },
     {
