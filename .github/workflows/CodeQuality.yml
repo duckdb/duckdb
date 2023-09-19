@@ -124,6 +124,10 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Install pytest
+        run: |
+          python3 -m pip install pytest
+
       - name: Check Coverage
         shell: bash
         run: |
