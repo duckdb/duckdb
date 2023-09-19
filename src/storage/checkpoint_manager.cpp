@@ -131,11 +131,11 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 		throw FatalException("Checkpoint aborted before truncate because of PRAGMA checkpoint_abort flag");
 	}
 
-	// truncate the WAL
-	wal->Truncate(0);
-
 	// truncate the file
 	block_manager.Truncate();
+
+	// truncate the WAL
+	wal->Truncate(0);
 }
 
 void CheckpointReader::LoadCheckpoint(ClientContext &context, MetadataReader &reader) {

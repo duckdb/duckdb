@@ -102,9 +102,7 @@ void TableStatistics::CopyStats(TableStatistics &other) {
 }
 
 void TableStatistics::Serialize(Serializer &serializer) const {
-	auto column_count = column_stats.size();
-	serializer.WriteList(100, "column_stats", column_count,
-	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(column_stats[i]); });
+	serializer.WriteProperty(100, "column_stats", column_stats);
 }
 
 void TableStatistics::Deserialize(Deserializer &deserializer, ColumnList &columns) {
