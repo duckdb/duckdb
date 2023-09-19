@@ -254,7 +254,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	}
 
 	bool has_equality = false;
-	// bool has_inequality = false;
 	size_t has_range = 0;
 	for (size_t c = 0; c < op.conditions.size(); ++c) {
 		auto &cond = op.conditions[c];

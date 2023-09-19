@@ -33,12 +33,19 @@ struct MatchFunction {
 struct RowMatcher {
 public:
 	using Predicates = vector<ExpressionType>;
+
+	//! Initializes the RowMatcher, filling match_functions using layout and predicates
 	void Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates);
+	//! Given a DataChunk on the LHS, on which we've called TupleDataCollection::ToUnifiedFormat,
+	//! we match it with rows on the RHS, according to the given layout and locations.
+	//! Initially, 'sel' has 'count' entries which point to what needs to be compared.
+	//! After matching is done, this returns how many matching entries there are, which 'sel' is modified to point to
 	idx_t Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs_formats, SelectionVector &sel, idx_t count,
 	            const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, SelectionVector *no_match_sel,
 	            idx_t &no_match_count);
 
 private:
+	//! Gets the templated match function for a given column
 	MatchFunction GetMatchFunction(const bool no_match_sel, const LogicalType &type, const ExpressionType predicate);
 	template <bool NO_MATCH_SEL>
 	MatchFunction GetMatchFunction(const LogicalType &type, const ExpressionType predicate);

@@ -60,38 +60,21 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	idx_t match_count = 0;
-	if (lhs_validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index(i);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = sel.get_index(i);
 
-			const auto &rhs_location = rhs_locations[idx];
-			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		const auto lhs_idx = lhs_sel.get_index(idx);
+		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
-			if (MATCH_OP::template Operation<T>(lhs_data[lhs_sel.get_index(idx)],
-			                                    Load<T>(rhs_location + rhs_offset_in_row), false, rhs_null)) {
-				sel.set_index(match_count++, idx);
-			} else if (NO_MATCH_SEL) {
-				no_match_sel->set_index(no_match_count++, idx);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index(i);
+		const auto &rhs_location = rhs_locations[idx];
+		const ValidityBytes rhs_mask(rhs_location);
+		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
-			const auto lhs_idx = lhs_sel.get_index(idx);
-			const auto lhs_null = !lhs_validity.RowIsValid(lhs_idx);
-
-			const auto &rhs_location = rhs_locations[idx];
-			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
-
-			if (MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
-			                                    rhs_null)) {
-				sel.set_index(match_count++, idx);
-			} else if (NO_MATCH_SEL) {
-				no_match_sel->set_index(no_match_count++, idx);
-			}
+		if (MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
+		                                    rhs_null)) {
+			sel.set_index(match_count++, idx);
+		} else if (NO_MATCH_SEL) {
+			no_match_sel->set_index(no_match_count++, idx);
 		}
 	}
 	return match_count;
@@ -115,41 +98,23 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 
 	idx_t match_count = 0;
-	if (lhs_validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index(i);
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = sel.get_index(i);
 
-			const auto &rhs_location = rhs_locations[idx];
-			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
+		const auto lhs_idx = lhs_sel.get_index(idx);
+		const auto lhs_null = lhs_validity.AllValid() ? false : !lhs_validity.RowIsValid(lhs_idx);
 
-			// For structs there is no value to compare, here we match NULLs and let recursion do the rest
-			// So we use the comparison only if rhs is NULL (we know LHS is not NULL) and COMPARE_NULL is true
-			if (!rhs_null ||
-			    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, false, rhs_null))) {
-				sel.set_index(match_count++, idx);
-			} else if (NO_MATCH_SEL) {
-				no_match_sel->set_index(no_match_count++, idx);
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			const auto idx = sel.get_index(i);
+		const auto &rhs_location = rhs_locations[idx];
+		const ValidityBytes rhs_mask(rhs_location);
+		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
-			const auto lhs_idx = lhs_sel.get_index(idx);
-			const auto lhs_null = !lhs_validity.RowIsValid(lhs_idx);
-
-			const auto &rhs_location = rhs_locations[idx];
-			const ValidityBytes rhs_mask(rhs_location);
-			const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
-
-			// Same as above, except here we need to check whether either LHS or RHS are NULL
-			if (!(lhs_null || rhs_null) ||
-			    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
-				sel.set_index(match_count++, idx);
-			} else if (NO_MATCH_SEL) {
-				no_match_sel->set_index(no_match_count++, idx);
-			}
+		// For structs there is no value to compare, here we match NULLs and let recursion do the rest
+		// So we use the comparison only if rhs or LHS is NULL and COMPARE_NULL is true
+		if (!(lhs_null || rhs_null) ||
+		    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
+			sel.set_index(match_count++, idx);
+		} else if (NO_MATCH_SEL) {
+			no_match_sel->set_index(no_match_count++, idx);
 		}
 	}
 
@@ -254,9 +219,8 @@ static idx_t GenericNestedMatch(Vector &lhs_vector, const TupleDataVectorFormat 
 		auto match_count = SelectComparison<OP>(sliced, key, sel, count, &sel, &no_match_sel_offset);
 		no_match_count += count - match_count;
 		return match_count;
-	} else {
-		return SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
 	}
+	return SelectComparison<OP>(sliced, key, sel, count, &sel, nullptr);
 }
 
 void RowMatcher::Initialize(const bool no_match_sel, const TupleDataLayout &layout, const Predicates &predicates) {
@@ -281,11 +245,7 @@ idx_t RowMatcher::Match(DataChunk &lhs, const vector<TupleDataVectorFormat> &lhs
 
 MatchFunction RowMatcher::GetMatchFunction(const bool no_match_sel, const LogicalType &type,
                                            const ExpressionType predicate) {
-	if (no_match_sel) {
-		return GetMatchFunction<true>(type, predicate);
-	} else {
-		return GetMatchFunction<false>(type, predicate);
-	}
+	return no_match_sel ? GetMatchFunction<true>(type, predicate) : GetMatchFunction<false>(type, predicate);
 }
 
 template <bool NO_MATCH_SEL>
