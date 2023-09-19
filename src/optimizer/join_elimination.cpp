@@ -85,9 +85,6 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			if (inner_bindings_set.find(right_column_binding) != inner_bindings_set.end() &&
 			    outer_bindings_set.find(left_column_binding) != outer_bindings_set.end()) {
 				inner_keys_set.insert(right_column_binding);
-			} else {
-				join_conditions_valid = false;
-				break;
 			}
 		}
 
