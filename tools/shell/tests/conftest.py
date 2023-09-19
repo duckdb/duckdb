@@ -132,22 +132,12 @@ def generated_file(request, random_filepath):
 def assert_expected_res(out, expected, status, err):
     if isinstance(expected, list):
         expected = '\n'.join(expected)
-    if expected not in out:
-        print("Exit code:", status)
-        print("Captured stderr:", err)
-        print("Actual result:", out)
-        assert False
     assert status == 0
-    assert True
+    assert expected in out
 
 
 def assert_expected_err(out, expected, status, err):
-    if expected not in err:
-        print("Exit code:", status)
-        print("Captured stdout:", out)
-        print("Actual error:", err)
-        assert False
-    assert True
+    assert expected in err
 
 
 def check_load_status(shell, extension: str):
