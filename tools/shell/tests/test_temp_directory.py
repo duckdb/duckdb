@@ -4,7 +4,7 @@ import pytest
 import subprocess
 import sys
 from typing import List
-from conftest import ShellTest, assert_expected_res, assert_expected_err
+from conftest import ShellTest
 import os
 
 def test_temp_directory(shell, tmp_path):
@@ -19,7 +19,7 @@ def test_temp_directory(shell, tmp_path):
         .statement("PRAGMA memory_limit='2MB';")
         .statement("CREATE TABLE t1 AS SELECT * FROM range(1000000);")
     )
-    out, err, status = test.run()
+    result = test.run()
 
     # make sure the temp directory or existing files are not deleted
     assert os.path.isdir(temp_dir)
@@ -38,7 +38,7 @@ def test_temp_directory(shell, tmp_path):
         .statement("PRAGMA memory_limit='2MB';")
         .statement("CREATE TABLE t1 AS SELECT * FROM range(1000000);")
     )
-    out, err, status = test.run()
+    result = test.run()
 
     # make sure the temp directory is deleted
     assert not os.path.exists(temp_dir)

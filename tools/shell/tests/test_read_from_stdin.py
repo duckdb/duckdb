@@ -4,7 +4,7 @@ import pytest
 import subprocess
 import sys
 from typing import List
-from conftest import ShellTest, assert_expected_res, assert_expected_err
+from conftest import ShellTest
 from conftest import json_extension
 import os
 
@@ -26,9 +26,9 @@ def test_read_stdin_csv(shell):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, "foo,bar,baz", status, err)
-    assert_expected_res(out, '0,0," test"', status, err)
+    result = test.run()
+    result.check_stdout("foo,bar,baz")
+    result.check_stdout('0,0," test"')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_read_stdin_csv_auto(shell):
@@ -45,9 +45,9 @@ def test_read_stdin_csv_auto(shell):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, "column0,column1,column2", status, err)
-    assert_expected_res(out, '0,0," test"', status, err)
+    result = test.run()
+    result.check_stdout("column0,column1,column2")
+    result.check_stdout('0,0," test"')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_read_stdin_csv_auto_projection(shell):
@@ -64,8 +64,8 @@ def test_read_stdin_csv_auto_projection(shell):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, "web,8006004,844.21,21", status, err)
+    result = test.run()
+    result.check_stdout("web,8006004,844.21,21")
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_read_stdin_ndjson(shell, json_extension):
@@ -82,15 +82,15 @@ def test_read_stdin_ndjson(shell, json_extension):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, [
+    result = test.run()
+    result.check_stdout([
         "json",
         '{"id":1,"name":"O Brother, Where Art Thou?"}',
         '{"id":2,"name":"Home for the Holidays"}',
         '{"id":3,"name":"The Firm"}',
         '{"id":4,"name":"Broadcast News"}',
         '{"id":5,"name":"Raising Arizona"}'
-    ], status, err)
+    ])
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_read_stdin_json_auto(shell, json_extension):
@@ -107,15 +107,15 @@ def test_read_stdin_json_auto(shell, json_extension):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, [
+    result = test.run()
+    result.check_stdout([
         'id|name',
         '1|O Brother, Where Art Thou?',
         '2|Home for the Holidays',
         '3|The Firm',
         '4|Broadcast News',
         '5|Raising Arizona'
-    ], status, err)
+    ])
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 @pytest.mark.parametrize("alias", [
@@ -127,8 +127,8 @@ def test_copy_to_stdout(shell, alias):
         ShellTest(shell)
         .statement(f"COPY (SELECT 42) TO {alias};")
     )
-    out, err, status = test.run()
-    assert_expected_res(out, '42', status, err)
+    result = test.run()
+    result.check_stdout('42')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 @pytest.mark.parametrize("alias", [
@@ -144,8 +144,8 @@ def test_copy_csv_to_stdout(shell, alias):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_res(out, '42', status, err)
+    result = test.run()
+    result.check_stdout('42')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 @pytest.mark.parametrize("alias", [
@@ -161,8 +161,8 @@ def test_copy_csv_to_stderr(shell, alias):
             ':memory:'
         )
     )
-    out, err, status = test.run()
-    assert_expected_err(out, '42', status, err)
+    result = test.run()
+    result.check_stderr('42')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_copy_non_inlined_string(shell):
@@ -170,8 +170,8 @@ def test_copy_non_inlined_string(shell):
         ShellTest(shell)
         .statement("select list(concat('thisisalongstring', range::VARCHAR)) i from range(10000)")
     )
-    out, err, status = test.run()
-    assert_expected_res(out, 'thisisalongstring', status, err)
+    result = test.run()
+    result.check_stdout('thisisalongstring')
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")
 def test_write_to_stdout_piped_to_file(shell, random_filepath):
@@ -180,7 +180,7 @@ def test_write_to_stdout_piped_to_file(shell, random_filepath):
         .statement("copy (select * from range(10000) tbl(i)) to '/dev/stdout' (format csv)")
         .output_file(random_filepath.as_posix())
     )
-    out, err, status = test.run()
-    assert_expected_res(out, '9999', status, err)
+    result = test.run()
+    result.check_stdout('9999')
 
 # fmt: on

@@ -4,7 +4,7 @@ import pytest
 import subprocess
 import sys
 from typing import List
-from conftest import ShellTest, assert_expected_res, assert_expected_err
+from conftest import ShellTest
 
 
 def test_profiling_json(shell, tmp_path):
@@ -23,7 +23,7 @@ def test_profiling_json(shell, tmp_path):
         .statement(f"IMPORT DATABASE '{target_dir.as_posix()}';")
         .statement("SELECT SUM(i)*MAX(i) FROM integers JOIN integers2 USING (i);")
     )
-    out, err, status = test.run()
-    assert_expected_res(out, '10197', status, err)
+    result = test.run()
+    result.check_stdout('10197')
 
 # fmt: on

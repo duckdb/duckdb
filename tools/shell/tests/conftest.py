@@ -22,7 +22,23 @@ def pytest_collection_modifyitems(config, items):
 
 import subprocess
 import sys
-from typing import List
+from typing import List, NamedTuple, Union
+
+
+class TestResult:
+    def __init__(self, stdout, stderr, status_code):
+        self.stdout: Union[str, bytes] = stdout
+        self.stderr: Union[str, bytes] = stderr
+        self.status_code: int = status_code
+
+    def check_stdout(self, expected: Union[str, List[str], bytes]):
+        if isinstance(expected, list):
+            expected = '\n'.join(expected)
+        assert self.status_code == 0
+        assert expected in self.stdout
+
+    def check_stderr(self, expected: str):
+        assert expected in self.stderr
 
 
 class ShellTest:
@@ -103,7 +119,7 @@ class ShellTest:
         res = subprocess.run(command, input=input_data, stdout=output_pipe, stderr=subprocess.PIPE)
 
         stdout, stderr = self.get_output_data(res)
-        return stdout, stderr, res.returncode
+        return TestResult(stdout, stderr, res.returncode)
 
 
 @pytest.fixture()
@@ -129,22 +145,11 @@ def generated_file(request, random_filepath):
     return tmp_file
 
 
-def assert_expected_res(out, expected, status, err):
-    if isinstance(expected, list):
-        expected = '\n'.join(expected)
-    assert status == 0
-    assert expected in out
-
-
-def assert_expected_err(out, expected, status, err):
-    assert expected in err
-
-
 def check_load_status(shell, extension: str):
     binary = ShellTest(shell)
     binary.statement(f"select loaded from duckdb_extensions() where extension_name = '{extension}';")
-    out, _, _ = binary.run()
-    return out
+    result = binary.run()
+    return result.stdout
 
 
 def assert_loaded(shell, extension: str):

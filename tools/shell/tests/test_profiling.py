@@ -4,7 +4,7 @@ import pytest
 import subprocess
 import sys
 from typing import List
-from conftest import ShellTest, assert_expected_res, assert_expected_err
+from conftest import ShellTest
 
 
 def test_profiling_json(shell):
@@ -14,8 +14,8 @@ def test_profiling_json(shell):
         .statement('CREATE TABLE "foo"("hello world" INT);')
         .statement("""SELECT "hello world", '\r\t\n\b\f\\' FROM "foo";""")
     )
-    out, err, status = test.run()
+    result = test.run()
     expected = """SELECT \\"hello world\\", '\\r\\t\\n\\b\\f\\\\' FROM \\"foo"""
-    assert_expected_err(out, expected, status, err)
+    result.check_stderr(expected)
 
 # fmt: on
