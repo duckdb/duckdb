@@ -433,6 +433,13 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	return true;
 }
 
+bool TupleDataCollection::ScanComplete(const TupleDataScanState &state) const {
+	if (Count() == 0) {
+		return true;
+	}
+	return state.segment_index == segments.size() - 1 && state.chunk_index == segments.back().ChunkCount();
+}
+
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment) {
 	segment.allocator->ReleaseOrStoreHandles(pin_state, segment);
 }

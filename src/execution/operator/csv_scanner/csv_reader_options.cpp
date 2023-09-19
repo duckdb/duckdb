@@ -168,38 +168,24 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 	if (loption == "auto_detect") {
 		auto_detect = ParseBoolean(value, loption);
 	} else if (loption == "sample_size") {
-		int64_t sample_size = ParseInteger(value, loption);
-		if (sample_size < 1 && sample_size != -1) {
+		int64_t sample_size_option = ParseInteger(value, loption);
+		if (sample_size_option < 1 && sample_size_option != -1) {
 			throw BinderException("Unsupported parameter for SAMPLE_SIZE: cannot be smaller than 1");
 		}
-		if (sample_size == -1) {
-			sample_chunks = std::numeric_limits<uint64_t>::max();
-			sample_chunk_size = STANDARD_VECTOR_SIZE;
-		} else if (sample_size <= STANDARD_VECTOR_SIZE) {
-			sample_chunk_size = sample_size;
-			sample_chunks = 1;
+		if (sample_size_option == -1) {
+			// If -1, we basically read the whole thing
+			sample_size_chunks = NumericLimits<idx_t>().Maximum();
 		} else {
-			sample_chunk_size = STANDARD_VECTOR_SIZE;
-			sample_chunks = sample_size / STANDARD_VECTOR_SIZE + 1;
+			sample_size_chunks = sample_size_option / STANDARD_VECTOR_SIZE;
+			if (sample_size_option % STANDARD_VECTOR_SIZE != 0) {
+				sample_size_chunks++;
+			}
 		}
+
 	} else if (loption == "skip") {
 		SetSkipRows(ParseInteger(value, loption));
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
-	} else if (loption == "sample_chunk_size") {
-		sample_chunk_size = ParseInteger(value, loption);
-		if (sample_chunk_size > STANDARD_VECTOR_SIZE) {
-			throw BinderException(
-			    "Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be bigger than STANDARD_VECTOR_SIZE %d",
-			    STANDARD_VECTOR_SIZE);
-		} else if (sample_chunk_size < 1) {
-			throw BinderException("Unsupported parameter for SAMPLE_CHUNK_SIZE: cannot be smaller than 1");
-		}
-	} else if (loption == "sample_chunks") {
-		sample_chunks = ParseInteger(value, loption);
-		if (sample_chunks < 1) {
-			throw BinderException("Unsupported parameter for SAMPLE_CHUNKS: cannot be smaller than 1");
-		}
 	} else if (loption == "force_not_null") {
 		force_not_null = ParseColumnList(value, expected_names, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
@@ -322,7 +308,7 @@ string CSVReaderOptions::ToString() const {
 	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
 	       "\n  header=" + std::to_string(dialect_options.header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-	       "\n  sample_size=" + std::to_string(sample_chunk_size * sample_chunks) +
+	       "\n  sample_size=" + std::to_string(sample_size_chunks * STANDARD_VECTOR_SIZE) +
 	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
 }
 
@@ -489,8 +475,6 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) {
 	if (skip_rows_set) {
 		named_params["skip"] = Value::BIGINT(GetSkipRows());
 	}
-	named_params["sample_chunks"] = Value::BIGINT(sample_chunks);
-	named_params["sample_chunk_size"] = Value::BIGINT(sample_chunk_size);
 	named_params["null_padding"] = Value::BOOLEAN(null_padding);
 	if (!date_format.at(LogicalType::DATE).format_specifier.empty()) {
 		named_params["dateformat"] = Value(date_format.at(LogicalType::DATE).format_specifier);
