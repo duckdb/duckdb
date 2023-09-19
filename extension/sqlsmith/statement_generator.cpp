@@ -104,23 +104,16 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateCreate() {
 //===--------------------------------------------------------------------===//
 
 unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
-	switch (1) {
+	switch (RandomValue(4)) {
 	case 0: {
 		auto info = make_uniq<CreateTypeInfo>();
 		info->name = RandomString(5);
-		info->type = LogicalType(LogicalType::VARCHAR);
-
-		auto query = make_uniq<SelectStatement>();
-		auto node = make_uniq<SelectNode>();
-		for (idx_t i = 0; i < RandomValue(100000); i++ ) {
-//			auto rand_val = RandomString(20);
-//			auto value = make_uniq<ConstantExpression>(Value(rand_val));
-			// TODO: does the below constant generation work?
-			//  or does every select list value need to be the same type?
-			node->select_list.push_back(GenerateConstant());
+		idx_t num_enums = RandomValue(10);
+		auto Enum_Vector = Vector(LogicalType::VARCHAR, num_enums);
+		for (idx_t i = 0; i < num_enums; i++) {
+			Enum_Vector.SetValue(i, Value(RandomString(10)));
 		}
-		query->node = std::move(node);
-		info->query = std::move(query);
+		info->type = LogicalType::ENUM("My_enum", Enum_Vector, num_enums);
 		return std::move(info);
 	}
 	case 1: {
@@ -138,7 +131,7 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 				info->columns.AddColumn(ColumnDefinition(RandomString(10), GenerateLogicalType()));
 			}
 		}
-		// TODO: add constraints to the columns;
+		// TODO: add constraints to the columns (primary keys etc.);
 		return std::move(info);
 	}
 	case 2: {
@@ -162,7 +155,6 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 	}
 	throw InternalException("Unsupported Create Info Type");
 }
-
 
 //===--------------------------------------------------------------------===//
 // Query Node

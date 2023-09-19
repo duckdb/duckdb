@@ -22,4 +22,15 @@ unique_ptr<CreateInfo> CreateTypeInfo::Copy() const {
 	return std::move(result);
 }
 
+string CreateTypeInfo::ToString() const {
+	string ret = "CREATE TYPE ";
+	ret += name + " AS ";
+	if (!query && type.id() == LogicalTypeId::ENUM) {
+		ret += type.ToString();
+		return ret;
+	}
+	ret += "ENUM (" + query->ToString() + ")";
+	return ret;
+}
+
 } // namespace duckdb

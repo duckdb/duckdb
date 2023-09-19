@@ -1,17 +1,10 @@
 # name: test/fuzzer/duckfuzz/duckfuzz_tests/test_duckfuzz.test
 # description: Invalid make time
-# group: [duckfuzz]
-
+# group: [duckfuzz_tests]
 
 # To run these tests make change require not_available to require sqlsmith
-require sqlsmith
-
-
-
-loop i 200 400
+require not_available
 
 statement ok
 call fuzzyduck(max_queries=1, seed=${i}, verbose_output=1);
-
-endloop
 

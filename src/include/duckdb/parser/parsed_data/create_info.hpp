@@ -63,8 +63,8 @@ public:
 	DUCKDB_API virtual unique_ptr<AlterInfo> GetAlterInfo() const;
 
 	virtual string ToString() const {
-	    throw InternalException("ToString not supported for this create catalog type statement: '%s'",
-	                            CatalogTypeToString(type));
+		throw InternalException("ToString not supported for this create catalog type statement: '%s'",
+		                        CatalogTypeToString(type));
 	};
 };
 
