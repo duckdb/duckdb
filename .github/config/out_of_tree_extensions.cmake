@@ -18,8 +18,7 @@ endif()
 duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
-        GIT_TAG a1f65419dfbc23e8099fbdd1a8a13bfda425165d
-	APPLY_PATCHES
+        GIT_TAG 348ae2625de86ab760f80a43eb76e4441cd01354
         )
 
 ################# AZURE
@@ -56,7 +55,7 @@ duckdb_extension_load(postgres_scanner
 duckdb_extension_load(spatial
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_spatial.git
-        GIT_TAG 2f55d5d64bad9b5fc7ce67e4bcf52617ee31b865
+        GIT_TAG 44c9e49bdf48d39c936c500b632ad3bd74825b04
         INCLUDE_DIR spatial/include
         TEST_DIR test/sql
         )
