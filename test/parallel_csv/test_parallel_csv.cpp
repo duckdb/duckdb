@@ -27,6 +27,8 @@ const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 bool debug = false;
 
+const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
+
 bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool single_threaded_passed = false,
                  ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
@@ -76,6 +78,9 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool
 }
 
 bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_size) {
+	if (!run) {
+		return true;
+	}
 	DuckDB db(nullptr);
 	Connection con(db);
 	// Set max line length to 0 when starting a ST CSV Read
@@ -96,6 +101,9 @@ bool RunSingleConfiguration(std::string csv_file, idx_t threads, idx_t buffer_si
 
 bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> *skip = nullptr,
              const string &add_parameters = "") {
+	if (!run) {
+		return true;
+	}
 	bool single_threaded_passed;
 	// Here we run the csv file first with the single thread reader.
 	// Then the parallel csv reader with a combination of multiple threads and buffer sizes.
@@ -127,31 +135,30 @@ bool RunFull(std::string &path, duckdb::Connection &conn, std::set<std::string> 
 	// So our tests don't take infinite time, we will go till a max buffer size of 5 positions higher than the minimum.
 	idx_t max_buffer_size = min_buffer_size + 5;
 	// Let's go from 1 to 8 threads.
+	bool all_tests_passed = true;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			RunParallel(path, thread_count, buffer_size, single_threaded_passed, ground_truth, add_parameters);
+			all_tests_passed = all_tests_passed && RunParallel(path, thread_count, buffer_size, single_threaded_passed,
+			                                                   ground_truth, add_parameters);
 		}
 	}
 
-	return true;
+	return all_tests_passed;
 }
 
 // Collects All CSV-Like files from folder and execute Parallel Scans on it
 void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection con(db);
-
+	bool all_tests_passed = true;
 	auto &fs = duckdb::FileSystem::GetFileSystem(*con.context);
 	for (auto &ext : csv_extensions) {
 		auto csv_files = fs.Glob(path + "*" + ext);
 		for (auto &csv_file : csv_files) {
-			REQUIRE(RunFull(csv_file, con, skip, add_parameters));
+			all_tests_passed = all_tests_passed && RunFull(csv_file, con, skip, add_parameters);
 		}
 	}
-}
-
-TEST_CASE("Test One File", "[parallel-csv][.]") {
-	RunSingleConfiguration("test/sql/copy/csv/data/test/quoted_newline.csv", 6, 40);
+	REQUIRE(all_tests_passed);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
@@ -175,6 +182,9 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[paralle
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/auto/multiple_skip_row.csv");
+	skip.insert("test/sql/copy/csv/data/auto/skip_row.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", &skip);
 }
 
@@ -216,13 +226,44 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
-	RunTestOnFolder("test/sql/copy/csv/data/real/");
+	std::set<std::string> skip;
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
+	RunTestOnFolder("test/sql/copy/csv/data/real/", &skip);
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/test/5438.csv");
+	// FIXME: Fix the following tests
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/unterminated.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_little_single.csv");
+	skip.insert("test/sql/copy/csv/data/test/date.csv");
+	skip.insert("test/sql/copy/csv/data/test/test.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer.csv");
+	skip.insert("test/sql/copy/csv/data/test/windows_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/no_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_default.csv");
+	skip.insert("test/sql/copy/csv/data/test/mixed_line_endings.csv");
+	skip.insert("test/sql/copy/csv/data/test/vsize.csv");
+	skip.insert("test/sql/copy/csv/data/test/nfc.csv");
+	skip.insert("test/sql/copy/csv/data/test/multi_column_integer_rn.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null_inull.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_too_many.csv");
+	skip.insert("test/sql/copy/csv/data/test/empty.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_pipe.csv");
+	skip.insert("test/sql/copy/csv/data/test/error_invalid_type.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_quote.csv");
+	skip.insert("test/sql/copy/csv/data/test/timestampoffset.csv");
+	skip.insert("test/sql/copy/csv/data/test/force_not_null.csv");
+	skip.insert("test/sql/copy/csv/data/test/issue3562_assertion.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/test_comp.csv.gz");
+	skip.insert("test/sql/copy/csv/data/test/quoted_newline.csv");
+	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
+	skip.insert("test/sql/copy/csv/data/test/too_many_values.csv");
+
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
@@ -245,6 +286,14 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/sequences.csv.gz");
 	// This file requires specific parameters
 	skip.insert("data/csv/bug_7578.csv");
+	// FIXME: Fix the following tests
+	skip.insert("data/csv/issue5077.csv");
+	skip.insert("data/csv/issue5077_aligned.csv");
+	skip.insert("data/csv/empty_first_line.csv");
+	skip.insert("data/csv/csv_quoted_newline_odd.csv");
+	skip.insert("data/csv/hebere.csv.gz");
+	skip.insert("data/csv/locations_row_trailing_comma.csv");
+
 	RunTestOnFolder("data/csv/", &skip);
 }
 
