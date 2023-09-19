@@ -287,7 +287,6 @@ def test_autocomplete_disambiguation_table(shell, autocomplete_extension):
     out, err, status = test.run()
     assert_expected_res(out, 'MyTable', status, err)
 
-@pytest.mark.skipif(os.name == 'nt', reason="On Windows this test is skipped")
 def test_autocomplete_directory(shell, autocomplete_extension, tmp_path):
     shell_test_dir = tmp_path / 'shell_test_dir'
     extra_path = tmp_path / 'shell_test_dir' / 'extra_path'
@@ -301,28 +300,31 @@ def test_autocomplete_directory(shell, autocomplete_extension, tmp_path):
             f.write('')
 
     # Complete the directory
+    partial_directory = tmp_path / 'shell_test'
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE MyTable(MyColumn Varchar);")
-        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{tmp_path}/shell_test') LIMIT 1;")
+        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{partial_directory.as_posix()}') LIMIT 1;")
     )
     out, err, status = test.run()
-    assert_expected_res(out, "shell_test_dir/", status, err)
+    assert_expected_res(out, "shell_test_dir", status, err)
 
     # Complete the sub directory as well
+    partial_subdirectory = tmp_path / 'shell_test_dir' / 'extra'
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE MyTable(MyColumn Varchar);")
-        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{tmp_path}/shell_test_dir/extra') LIMIT 1;")
+        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{partial_subdirectory.as_posix()}') LIMIT 1;")
     )
     out, err, status = test.run()
-    assert_expected_res(out, "extra_path/", status, err)
+    assert_expected_res(out, "extra_path", status, err)
 
     # Complete the parquet file in the sub directory
+    partial_parquet = tmp_path / 'shell_test_dir' / 'extra.par'
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE MyTable(MyColumn Varchar);")
-        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{tmp_path}/shell_test_dir/extra.par') LIMIT 1;")
+        .statement(f"SELECT * FROM sql_auto_complete('SELECT * FROM ''{partial_parquet.as_posix()}') LIMIT 1;")
     )
     out, err, status = test.run()
     assert_expected_res(out, "extra.parquet", status, err)

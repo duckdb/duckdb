@@ -15,7 +15,7 @@ def test_temp_directory(shell, tmp_path):
         f.write('hello world')
     test = (
         ShellTest(shell)
-        .statement(f"SET temp_directory='{temp_dir}';")
+        .statement(f"SET temp_directory='{temp_dir.as_posix()}';")
         .statement("PRAGMA memory_limit='2MB';")
         .statement("CREATE TABLE t1 AS SELECT * FROM range(1000000);")
     )
@@ -34,7 +34,7 @@ def test_temp_directory(shell, tmp_path):
 
     test = (
         ShellTest(shell)
-        .statement(f"SET temp_directory='{temp_dir}';")
+        .statement(f"SET temp_directory='{temp_dir.as_posix()}';")
         .statement("PRAGMA memory_limit='2MB';")
         .statement("CREATE TABLE t1 AS SELECT * FROM range(1000000);")
     )

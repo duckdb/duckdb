@@ -178,7 +178,7 @@ def test_write_to_stdout_piped_to_file(shell, random_filepath):
     test = (
         ShellTest(shell)
         .statement("copy (select * from range(10000) tbl(i)) to '/dev/stdout' (format csv)")
-        .output_file(random_filepath)
+        .output_file(random_filepath.as_posix())
     )
     out, err, status = test.run()
     assert_expected_res(out, '9999', status, err)

@@ -6,6 +6,7 @@ import sys
 from typing import List
 from conftest import ShellTest, assert_expected_err, assert_expected_res
 import os
+from pathlib import Path
 
 
 def test_basic(shell):
@@ -25,7 +26,7 @@ def test_import(shell, generated_file):
     test = (
         ShellTest(shell)
         .statement(".mode csv")
-        .statement(f'.import "{generated_file}" test_table')
+        .statement(f'.import "{generated_file.as_posix()}" test_table')
         .statement("select * FROM test_table")
     )
 
@@ -38,7 +39,7 @@ def test_import_sum(shell, generated_file):
     test = (
         ShellTest(shell)
         .statement("CREATE TABLE a (i INTEGER)")
-        .statement(f'.import "{generated_file}" a')
+        .statement(f'.import "{generated_file.as_posix()}" a')
         .statement("SELECT SUM(i) FROM a")
     )
 
@@ -106,8 +107,7 @@ def test_invalid_shell_commands(shell, input, error):
 
 
 def test_invalid_backup(shell, random_filepath):
-    random_filepath = str(random_filepath).replace('\\', '/')
-    test = ShellTest(shell).statement(f'.backup {random_filepath}')
+    test = ShellTest(shell).statement(f'.backup {random_filepath.as_posix()}')
     out, err, status = test.run()
     assert_expected_err(out, "sqlite3_backup_init", status, err)
 
@@ -148,13 +148,12 @@ def test_bailing_mechanism(shell):
 
 # FIXME: no verification at all?
 def test_cd(shell, tmp_path):
-    import os
-    current_dir = os.getcwd()
+    current_dir = Path(os.getcwd())
 
     test = (
         ShellTest(shell)
-        .statement(f".cd {tmp_path}")
-        .statement(f".cd {current_dir}")
+        .statement(f".cd {tmp_path.as_posix()}")
+        .statement(f".cd {current_dir.as_posix()}")
     )
     _, _, _ = test.run()
 
@@ -231,7 +230,7 @@ def test_help(shell):
 def test_load_error(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".load {random_filepath}")
+        .statement(f".load {random_filepath.as_posix()}")
     )
     out, err, status = test.run()
     assert_expected_err(out, "Error", status, err)
@@ -314,7 +313,7 @@ def test_selftest(shell):
 def test_read(shell, generated_file):
     test = (
         ShellTest(shell)
-        .statement(f".read {generated_file}")
+        .statement(f".read {generated_file.as_posix()}")
     )
     out, err, status = test.run()
     assert_expected_res(out, "42", status, err)
@@ -347,7 +346,7 @@ def test_timeout(shell):
 def test_save(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".save {random_filepath}")
+        .statement(f".save {random_filepath.as_posix()}")
     )
     out, err, status = test.run()
     assert_expected_err(out, "sqlite3_backup_init", status, err)
@@ -355,7 +354,7 @@ def test_save(shell, random_filepath):
 def test_restore(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".restore {random_filepath}")
+        .statement(f".restore {random_filepath.as_posix()}")
     )
     out, err, status = test.run()
     assert_expected_err(out, "sqlite3_backup_init", status, err)
@@ -532,7 +531,7 @@ def test_scanstats(shell):
 def test_trace(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".trace {random_filepath}")
+        .statement(f".trace {random_filepath.as_posix()}")
         .statement("SELECT 42;")
     )
     out, err, status = test.run()
@@ -542,7 +541,7 @@ def test_output_csv_mode(shell, random_filepath):
     test = (
         ShellTest(shell)
         .statement(".mode csv")
-        .statement(f".output {random_filepath}")
+        .statement(f".output {random_filepath.as_posix()}")
         .statement("SELECT 42;")
     )
     out, err, status = test.run()
@@ -561,7 +560,7 @@ def test_issue_6204(shell):
 def test_once(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".once {random_filepath}")
+        .statement(f".once {random_filepath.as_posix()}")
         .statement("SELECT 43;")
     )
     out, err, status = test.run()
@@ -571,7 +570,7 @@ def test_once(shell, random_filepath):
 def test_log(shell, random_filepath):
     test = (
         ShellTest(shell)
-        .statement(f".log {random_filepath}")
+        .statement(f".log {random_filepath.as_posix()}")
         .statement("SELECT 42;")
         .statement(".log off")
     )
@@ -666,13 +665,13 @@ def test_open(shell, tmp_path):
     file_two = tmp_path / "file_two"
     test = (
         ShellTest(shell)
-        .statement(f".open {file_one}")
+        .statement(f".open {file_one.as_posix()}")
         .statement("CREATE TABLE t1 (i INTEGER);")
         .statement("INSERT INTO t1 VALUES (42);")
-        .statement(f".open {file_two}")
+        .statement(f".open {file_two.as_posix()}")
         .statement("CREATE TABLE t2 (i INTEGER);")
         .statement("INSERT INTO t2 VALUES (43);")
-        .statement(f".open {file_one}")
+        .statement(f".open {file_one.as_posix()}")
         .statement("SELECT * FROM t1;")
     )
     out, err, status = test.run()
@@ -682,7 +681,7 @@ def test_open(shell, tmp_path):
 def test_open_non_database(shell, generated_file):
     test = (
         ShellTest(shell)
-        .add_argument(generated_file)
+        .add_argument(generated_file.as_posix())
     )
     out, err, status = test.run()
     assert_expected_err(out, 'not a valid DuckDB database file', status, err)
@@ -766,7 +765,7 @@ def test_clone(shell, random_filepath):
         ShellTest(shell)
         .statement("CREATE TABLE a (I INTEGER)")
         .statement("INSERT INTO a VALUES (42)")
-        .statement(f".clone {random_filepath}")
+        .statement(f".clone {random_filepath.as_posix()}")
     )
     out, err, status = test.run()
     assert_expected_err(out, 'unknown command or invalid arguments', status, err)
@@ -928,11 +927,11 @@ def test_sqlite_udfs_correct(shell, random_filepath):
     import os
     test = (
         ShellTest(shell)
-        .statement(f"SELECT writefile('{random_filepath}', 'hello');")
+        .statement(f"SELECT writefile('{random_filepath.as_posix()}', 'hello');")
     )
     out, err, status = test.run()
     if not os.path.exists(random_filepath):
-        raise Exception(f"Failed to write file {random_filepath}")
+        raise Exception(f"Failed to write file {random_filepath.as_posix()}")
     with open(random_filepath, 'r') as f:
         text = f.read()
     assert_expected_res(text, 'hello', status, err)
@@ -969,7 +968,7 @@ def test_maxrows_outfile(shell, random_filepath):
     test = (
         ShellTest(shell)
         .statement(".maxrows 2")
-        .statement(f".output {file}")
+        .statement(f".output {file.as_posix()}")
         .statement("SELECT * FROM range(100);")
     )
     out, err, status = test.run()
@@ -980,7 +979,7 @@ def test_columns_to_file(shell, random_filepath):
     columns = ', '.join([str(x) for x in range(100)])
     test = (
         ShellTest(shell)
-        .statement(f".output {random_filepath}")
+        .statement(f".output {random_filepath.as_posix()}")
         .statement(f"SELECT {columns}")
     )
     out, err, status = test.run()
