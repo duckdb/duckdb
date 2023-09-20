@@ -31,6 +31,7 @@ public:
 		switch (on_conflict) {
 		case OnCreateConflict::ALTER_ON_CONFLICT: {
 			ret += "CREATE SCHEMA " + schema + " ON CONFLICT INSERT OR REPLACE";
+			break;
 		}
 		case OnCreateConflict::IGNORE_ON_CONFLICT: {
 			ret += "CREATE SCHEMA " + schema + " IF NOT EXISTS";

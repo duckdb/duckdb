@@ -34,7 +34,6 @@ StatementGenerator::StatementGenerator(ClientContext &context) : context(context
 	generator_context = GetDatabaseState(context);
 }
 
-
 StatementGenerator::StatementGenerator(StatementGenerator &parent_p)
     : context(parent_p.context), parent(&parent_p), generator_context(parent_p.generator_context),
       depth(parent_p.depth + 1) {
