@@ -252,6 +252,7 @@ endif
 
 clean:
 	rm -rf build
+	rm -rf build_emscripten
 
 clean-python:
 	tools/pythonpkg/clean.sh
@@ -405,3 +406,15 @@ generate-files:
 	python3 scripts/generate_functions.py
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
+
+wasm-extensions-mvp:
+	mkdir -p build_emscripten/wasm_mvp
+	emcmake cmake -DDUCKDB_CUSTOM_PLATFORM=wasm_mvp -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_mvp
+	emmake make -j8 -Cbuild_emscripten/wasm_mvp
+	cd build_emscripten/wasm_mvp && bash ../../scripts/duckdb-wasm-build-loadable.sh
+
+wasm-extensions-eh:
+	mkdir -p build_emscripten/wasm_eh
+	emcmake cmake -DWITH_WASM_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_eh
+	emmake make -j8 -Cbuild_emscripten/wasm_eh
+	cd build_emscripten/wasm_eh && bash ../../scripts/duckdb-wasm-build-loadable.sh
