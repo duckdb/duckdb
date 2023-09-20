@@ -386,10 +386,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 			// find out whether the expression contains a subquery, it can't be copied if so
 			auto &bound_expr_ref = *bound_expr;
-			bool contains_subquery = bound_expr_ref.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY;
-			ExpressionIterator::EnumerateChildren(bound_expr_ref, [&](const Expression &child) {
-				contains_subquery = contains_subquery || child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY;
-			});
+			bool contains_subquery = bound_expr_ref.HasSubquery();
 
 			// push a potential collation, if necessary
 			auto collated_expr = ExpressionBinder::PushCollation(context, std::move(bound_expr),
