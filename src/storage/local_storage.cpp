@@ -74,8 +74,7 @@ LocalTableStorage::~LocalTableStorage() {
 
 void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
 	if (row_groups->GetTotalRows() == 0) {
-		// nothing to scan
-		return;
+		throw InternalException("No rows in LocalTableStorage row group for scan");
 	}
 	row_groups->InitializeScan(state, state.GetColumnIds(), table_filters.get());
 }
@@ -84,9 +83,6 @@ idx_t LocalTableStorage::EstimatedSize() {
 
 	// count the appended rows
 	idx_t appended_rows = row_groups->GetTotalRows() - deleted_rows;
-	if (appended_rows == 0) {
-		return 0;
-	}
 
 	// get the (estimated) size of a row (no compressions, etc.)
 	idx_t row_size = 0;
@@ -182,10 +178,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			} catch (Exception &ex) {
 				error = PreservedError(ex);
 				return false;
-			} catch (std::exception &ex) {
+			} catch (std::exception &ex) { // LCOV_EXCL_START
 				error = PreservedError(ex);
 				return false;
-			}
+			} // LCOV_EXCL_STOP
 
 			current_row += chunk.size();
 			if (current_row >= append_state.current_row) {

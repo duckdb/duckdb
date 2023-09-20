@@ -537,12 +537,14 @@ ORDER BY 1;
 
 # Invalid parts
 
-foreach hour minute second millisecond microsecond timezone timezone_hour timezone_minute
+foreach datepart hour minute second millisecond microsecond timezone timezone_hour timezone_minute
 
 statement error
 SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM dates
 ORDER BY 1;
+----
+not recognized
 
 endloop
 
@@ -576,3 +578,13 @@ endloop
 endloop
 
 endloop
+
+query T
+WITH cte AS (
+    SELECT NULL::VARCHAR part
+    FROM range(1)
+)
+SELECT date_part(part, TIMESTAMP '2019-01-06 04:03:02')
+FROM cte
+----
+NULL

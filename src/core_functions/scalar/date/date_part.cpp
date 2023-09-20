@@ -1317,9 +1317,6 @@ static unique_ptr<FunctionData> DatePartBind(ClientContext &context, ScalarFunct
 	}
 
 	Value part_value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
-	if (part_value.IsNull()) {
-		return nullptr;
-	}
 	const auto part_name = part_value.ToString();
 	switch (GetDatePartSpecifier(part_name)) {
 	case DatePartSpecifier::JULIAN_DAY:
