@@ -78,6 +78,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<Value>
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
+	// allow stream result default to true.
 	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
@@ -111,6 +112,8 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 
 	D_ASSERT(data);
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
+	std::cout << "allow stream result = " << data->properties.allow_stream_result << std::endl;
+	// parameters.allow_stream_result = false if result returns data.
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;
