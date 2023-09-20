@@ -10,6 +10,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/statement/export_statement.hpp"
+#include <stdexcept>
 
 namespace duckdb {
 
@@ -132,7 +133,7 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 	sql = StringUtil::Replace(sql, "%table_name%", table.name);
 	sql = StringUtil::Replace(sql, "%table_schema%", table.schema.empty() ? DEFAULT_SCHEMA : table.schema);
 	sql = StringUtil::Replace(sql, "%table_database%",
-	                          table.catalog.empty() ? Catalog::GetSystemCatalog(context).GetName() : table.catalog);
+	                          table.catalog.empty() ? DatabaseManager::GetDefaultDatabase(context): table.catalog);
 	return sql;
 }
 
