@@ -23,7 +23,7 @@
 namespace duckdb {
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vector<PhysicalIndex> &keys,
-                       IndexConstraintType constraint_type, pair<string, BlockPointer> index_p) {
+                       IndexConstraintType constraint_type, const pair<string, BlockPointer> &index_p) {
 	// fetch types and create expressions for the index from the columns
 	vector<column_t> column_ids;
 	vector<unique_ptr<Expression>> unbound_expressions;
@@ -45,18 +45,18 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 		art = make_uniq<ART>(index_p.first, constraint_type, column_ids, TableIOManager::Get(storage),
 		                     std::move(unbound_expressions), storage.db, nullptr, index_p.second);
 	} else {
-		//		art = make_uniq<ART>(constraint_type, column_ids, TableIOManager::Get(storage),
-		//std::move(unbound_expressions), 		                     storage.db); 		if (!storage.IsRoot()) { 			throw TransactionException("Transaction
-		//conflict: cannot add an index to a table that has been altered!");
-		//		}
-		// TODO
-		D_ASSERT(false);
+		art = make_uniq<ART>(index_p.first, constraint_type, column_ids, TableIOManager::Get(storage),
+		                     std::move(unbound_expressions), storage.db);
+
+		if (!storage.IsRoot()) {
+			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
+		}
 	}
 	storage.info->indexes.AddIndex(std::move(art));
 }
 
 void AddDataTableIndex(DataTable &storage, const ColumnList &columns, vector<LogicalIndex> &keys,
-                       IndexConstraintType constraint_type, pair<string, BlockPointer> index_p) {
+                       IndexConstraintType constraint_type, const pair<string, BlockPointer> &index_p) {
 	vector<PhysicalIndex> new_keys;
 	new_keys.reserve(keys.size());
 	for (auto &logical_key : keys) {
@@ -91,8 +91,13 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 					constraint_type = IndexConstraintType::PRIMARY;
 				}
 				if (info.indexes.empty()) {
-					// TODO
-					D_ASSERT(false);
+					pair<string, BlockPointer> index_p;
+					if (unique.is_primary_key) {
+						index_p.first = "pk_" + to_string(i);
+					} else {
+						index_p.first = "unique_" + to_string(i);
+					}
+					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, index_p);
 				} else {
 					AddDataTableIndex(*storage, columns, unique.keys, constraint_type, info.indexes[indexes_idx++]);
 				}
@@ -102,8 +107,8 @@ DuckTableEntry::DuckTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Bou
 				if (bfk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 				    bfk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 					if (info.indexes.empty()) {
-						// TODO
-						D_ASSERT(false);
+						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
+						                  make_pair("fk_" + to_string(i), BlockPointer()));
 					} else {
 						AddDataTableIndex(*storage, columns, bfk.info.fk_keys, IndexConstraintType::FOREIGN,
 						                  info.indexes[indexes_idx++]);
