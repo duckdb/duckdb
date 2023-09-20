@@ -76,30 +76,28 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 
 void CreateIndexInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
-	serializer.WriteProperty(200, "name", index_name);
+	serializer.WriteProperty(200, "name", name);
 	serializer.WriteProperty(201, "table", table);
 	serializer.WriteProperty(202, "index_type", index_type);
-	serializer.WriteProperty(203, "constraint_type", constraint_type);
+	serializer.WriteProperty(203, "index_constraint_type", index_constraint_type);
 	serializer.WriteProperty(204, "parsed_expressions", parsed_expressions);
 	serializer.WriteProperty(205, "scan_types", scan_types);
 	serializer.WriteProperty(206, "names", names);
 	serializer.WriteProperty(207, "column_ids", column_ids);
 	serializer.WriteProperty(208, "options", options);
-	serializer.WriteProperty(209, "index_type_name", index_type_name);
 }
 
 unique_ptr<CreateInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateIndexInfo>(new CreateIndexInfo());
-	deserializer.ReadProperty(200, "name", result->index_name);
+	deserializer.ReadProperty(200, "name", result->name);
 	deserializer.ReadProperty(201, "table", result->table);
 	deserializer.ReadProperty(202, "index_type", result->index_type);
-	deserializer.ReadProperty(203, "constraint_type", result->constraint_type);
+	deserializer.ReadProperty(203, "index_constraint_type", result->index_constraint_type);
 	deserializer.ReadProperty(204, "parsed_expressions", result->parsed_expressions);
 	deserializer.ReadProperty(205, "scan_types", result->scan_types);
 	deserializer.ReadProperty(206, "names", result->names);
 	deserializer.ReadProperty(207, "column_ids", result->column_ids);
 	deserializer.ReadProperty(208, "options", result->options);
-	deserializer.ReadProperty(209, "index_type_name", result->index_type_name);
 	return std::move(result);
 }
 

@@ -38,11 +38,11 @@ public:
 
 public:
 	//! Constructs an ART
-	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+	    TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
 	    AttachedDatabase &db,
 	    const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr = nullptr,
-	    const BlockPointer &block = BlockPointer());
+	    const BlockPointer &block_pointer = BlockPointer());
 
 	//! Root of the tree
 	Node tree = Node();

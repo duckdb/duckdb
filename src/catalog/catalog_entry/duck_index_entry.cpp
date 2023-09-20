@@ -10,10 +10,10 @@ DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
 
 DuckIndexEntry::~DuckIndexEntry() {
 	// remove the associated index from the info
-	if (!info || !index) {
+	if (!info) {
 		return;
 	}
-	info->indexes.RemoveIndex(*index);
+	info->indexes.RemoveIndex(name);
 }
 
 string DuckIndexEntry::GetSchemaName() const {
@@ -25,8 +25,8 @@ string DuckIndexEntry::GetTableName() const {
 }
 
 void DuckIndexEntry::CommitDrop() {
-	D_ASSERT(info && index);
-	index->CommitDrop();
+	D_ASSERT(info);
+	info->indexes.CommitDrop(name);
 }
 
 } // namespace duckdb

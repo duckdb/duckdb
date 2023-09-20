@@ -53,8 +53,8 @@ unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientCon
 
 	// create the global index
 	auto &storage = table.GetStorage();
-	state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-	                                     info->constraint_type, storage.db);
+	state->global_index = make_uniq<ART>(info->name, info->index_constraint_type, storage_ids,
+	                                     TableIOManager::Get(storage), unbound_expressions, storage.db);
 
 	return (std::move(state));
 }
@@ -65,8 +65,8 @@ unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionCo
 	// create the local index
 
 	auto &storage = table.GetStorage();
-	state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-	                                    info->constraint_type, storage.db);
+	state->local_index = make_uniq<ART>(info->name, info->index_constraint_type, storage_ids,
+	                                    TableIOManager::Get(storage), unbound_expressions, storage.db);
 
 	state->keys = vector<ARTKey>(STANDARD_VECTOR_SIZE);
 	state->key_chunk.Initialize(Allocator::Get(context.client), state->local_index->logical_types);
@@ -104,8 +104,9 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, Opera
 	auto &l_index = l_state.local_index;
 
 	// create an ART from the chunk
-	auto art = make_uniq<ART>(l_index->column_ids, l_index->table_io_manager, l_index->unbound_expressions,
-	                          l_index->constraint_type, storage.db, l_index->Cast<ART>().allocators);
+	auto art =
+	    make_uniq<ART>(info->name, l_index->index_constraint_type, l_index->column_ids, l_index->table_io_manager,
+	                   l_index->unbound_expressions, storage.db, l_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(l_state.key_chunk.size(), l_state.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
@@ -174,8 +175,8 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 		return SinkFinalizeType::READY;
 	}
 	auto &index = index_entry->Cast<DuckIndexEntry>();
+	index.initial_index_size = state.global_index->GetEstimatedMemoryUsage();
 
-	index.index = state.global_index.get();
 	index.info = storage.info;
 	for (auto &parsed_expr : info->parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());

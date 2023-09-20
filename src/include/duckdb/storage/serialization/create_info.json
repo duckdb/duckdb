@@ -58,7 +58,7 @@
         "id": 200,
         "name": "name",
         "type": "string",
-        "property": "index_name"
+        "property": "name"
       },
       {
         "id": 201,
@@ -72,7 +72,7 @@
       },
       {
         "id": 203,
-        "name": "constraint_type",
+        "name": "index_constraint_type",
         "type": "IndexConstraintType"
       },
       {
@@ -99,11 +99,6 @@
         "id": 208,
         "name": "options",
         "type": "case_insensitive_map_t<Value>"
-      },
-      {
-        "id": 209,
-        "name": "index_type_name",
-        "type": "string"
       }
     ]
   },

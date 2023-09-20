@@ -36,24 +36,14 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateIndexInfo>();
 	if (stmt.unique) {
-		info->constraint_type = IndexConstraintType::UNIQUE;
+		info->index_constraint_type = IndexConstraintType::UNIQUE;
 	} else {
-		info->constraint_type = IndexConstraintType::NONE;
+		info->index_constraint_type = IndexConstraintType::NONE;
 	}
 
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
-
 	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
-
-	auto index_type_name = StringUtil::Upper(string(stmt.accessMethod));
-
-	if (index_type_name == "ART") {
-		info->index_type = IndexType::ART;
-	} else {
-		info->index_type = IndexType::EXTENSION;
-	}
-
-	info->index_type_name = index_type_name;
+	info->index_type = StringUtil::Upper(string(stmt.accessMethod));
 
 	if (stmt.relation->schemaname) {
 		info->schema = stmt.relation->schemaname;
@@ -63,7 +53,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	}
 	info->table = stmt.relation->relname;
 	if (stmt.idxname) {
-		info->index_name = stmt.idxname;
+		info->name = stmt.idxname;
 	} else {
 		throw NotImplementedException("Index without a name not supported yet!");
 	}

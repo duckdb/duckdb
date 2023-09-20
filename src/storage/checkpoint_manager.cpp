@@ -352,11 +352,9 @@ void CheckpointReader::ReadSequence(ClientContext &context, Deserializer &deseri
 // Indexes
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog, Serializer &serializer) {
-	// The index data is written as part of WriteTableData.
-	// Here, we need only serialize the pointer to that data.
-	auto root_block_pointer = index_catalog.index->GetRootBlockPointer();
+	// The index data is written as part of WriteTableData
+	// Here, we only serialize the index metadata
 	serializer.WriteProperty(100, "index", &index_catalog);
-	serializer.WriteProperty(101, "root_block_pointer", root_block_pointer);
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deserializer) {
@@ -373,15 +371,10 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
 
 	index.info = table.GetStorage().info;
-	// insert the parsed expressions into the stored index so that we correctly (de)serialize it during consecutive
-	// checkpoints
+	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// we deserialize the index lazily, i.e., we do not need to load any node information
-	// except the root block pointer
-	auto root_block_pointer = deserializer.ReadProperty<BlockPointer>(101, "root_block_pointer");
 
 	// obtain the parsed expressions of the ART from the index metadata
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
@@ -412,18 +405,20 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	// create the index and add it to the storage
-	switch (info.index_type) {
-	case IndexType::ART: {
-		auto &storage = table.GetStorage();
-		auto art = make_uniq<ART>(info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          info.constraint_type, storage.db, nullptr, root_block_pointer);
+	auto &data_table = table.GetStorage();
 
-		index.index = art.get();
-		storage.info->indexes.AddIndex(std::move(art));
-	} break;
-	default:
-		throw InternalException("Unknown index type for ReadIndex");
+	// get the matching root block pointer
+	BlockPointer root_block_pointer;
+	for (auto const &index_p : data_table.info->index_pointers) {
+		if (index_p.first == info.name) {
+			root_block_pointer = index_p.second;
+			break;
+		}
 	}
+
+	auto art = make_uniq<ART>(info.name, info.index_constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	                          std::move(unbound_expressions), data_table.db, nullptr, root_block_pointer);
+	data_table.info->indexes.AddIndex(std::move(art));
 }
 
 //===--------------------------------------------------------------------===//
@@ -466,7 +461,7 @@ void CheckpointReader::ReadTableMacro(ClientContext &context, Deserializer &dese
 // Table Metadata
 //===--------------------------------------------------------------------===//
 void CheckpointWriter::WriteTable(TableCatalogEntry &table, Serializer &serializer) {
-	// Write the table meta data
+	// Write the table metadata
 	serializer.WriteProperty(100, "table", &table);
 
 	// Write the table data
@@ -482,7 +477,7 @@ void CheckpointReader::ReadTable(ClientContext &context, Deserializer &deseriali
 	auto &schema = catalog.GetSchema(context, info->schema);
 	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
-	// now read the actual table data and place it into the create table info
+	// now read the actual table data and place it into the CreateTableInfo
 	ReadTableData(context, deserializer, *bound_info);
 
 	// finally create the table in the catalog
@@ -495,7 +490,7 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	// This is written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
-	auto index_pointers = deserializer.ReadProperty<vector<BlockPointer>>(103, "index_pointers");
+	auto index_pointers = deserializer.ReadProperty<vector<pair<string, BlockPointer>>>(103, "index_pointers");
 
 	// FIXME: icky downcast to get the underlying MetadataReader
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);

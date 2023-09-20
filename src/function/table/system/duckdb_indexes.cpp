@@ -107,15 +107,10 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
-		if (index.index) {
-			// is_unique, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));
-			// is_primary, BOOLEAN
-			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsPrimary()));
-		} else {
-			output.SetValue(col++, count, Value());
-			output.SetValue(col++, count, Value());
-		}
+		// is_unique, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsUnique()));
+		// is_primary, BOOLEAN
+		output.SetValue(col++, count, Value::BOOLEAN(index.IsPrimary()));
 		// expressions, VARCHAR
 		output.SetValue(col++, count, Value());
 		// sql, VARCHAR

@@ -29,6 +29,8 @@ public:
 	                       unique_ptr<CreateIndexInfo> info, vector<unique_ptr<Expression>> unbound_expressions,
 	                       idx_t estimated_cardinality, const bool sorted);
 
+	//! The name of the index
+	string name;
 	//! The table to create the index for
 	DuckTableEntry &table;
 	//! The list of column IDs required for the index

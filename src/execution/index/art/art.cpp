@@ -33,12 +33,13 @@ struct ARTIndexScanState : public IndexScanState {
 	Iterator iterator;
 };
 
-ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
-         const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
+ART::ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
+         TableIOManager &table_io_manager, const vector<unique_ptr<Expression>> &unbound_expressions,
          AttachedDatabase &db, const shared_ptr<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
-         const BlockPointer &pointer)
-    : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type),
+         const BlockPointer &block_pointer)
+    : Index("ART", name, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
       allocators(allocators_ptr), owns_data(false) {
+
 	if (!Radix::IsLittleEndian()) {
 		throw NotImplementedException("ART indexes are not supported on big endian architectures");
 	}
@@ -58,8 +59,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 		allocators = make_shared<array<unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>>(std::move(allocator_array));
 	}
 
-	if (pointer.IsValid()) {
-		Deserialize(pointer);
+	if (block_pointer.IsValid()) {
+		Deserialize(block_pointer);
 	}
 
 	// validate the types of the key columns

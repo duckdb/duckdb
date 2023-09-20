@@ -424,19 +424,12 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 
 	// create the empty index
 	unique_ptr<Index> index;
-	switch (index_info.index_type) {
-	case IndexType::ART: {
-		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions,
-		                       index_info.constraint_type, data_table.db);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented index type");
-	}
+	D_ASSERT(index_info.index_type == "ART");
+	index = make_uniq<ART>(index_info.name, index_info.index_constraint_type, index_info.column_ids,
+	                       TableIOManager::Get(data_table), expressions, data_table.db);
 
 	// add the index to the catalog
 	auto &index_entry = catalog.CreateIndex(context, index_info)->Cast<DuckIndexEntry>();
-	index_entry.index = index.get();
 	index_entry.info = data_table.info;
 	for (auto &parsed_expr : index_info.parsed_expressions) {
 		index_entry.parsed_expressions.push_back(parsed_expr->Copy());

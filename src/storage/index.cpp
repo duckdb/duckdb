@@ -7,12 +7,12 @@
 
 namespace duckdb {
 
-Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager,
-             const vector<column_t> &column_ids_p, const vector<unique_ptr<Expression>> &unbound_expressions,
-             IndexConstraintType constraint_type_p)
+Index::Index(const string &index_type, const string &name, IndexConstraintType index_constraint_type,
+             const vector<column_t> &column_ids, TableIOManager &table_io_manager,
+             const vector<unique_ptr<Expression>> &unbound_expressions, AttachedDatabase &db)
 
-    : type(type), table_io_manager(table_io_manager), column_ids(column_ids_p), constraint_type(constraint_type_p),
-      db(db) {
+    : name(name), index_type(index_type), index_constraint_type(index_constraint_type), column_ids(column_ids),
+      table_io_manager(table_io_manager), db(db) {
 
 	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());

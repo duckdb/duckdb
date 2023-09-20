@@ -32,6 +32,8 @@ struct DataTableInfo {
 	string table;
 
 	TableIndexList indexes;
+	//! Indexes created by this table <Block_ID, Offset>
+	vector<pair<string, BlockPointer>> index_pointers;
 
 	bool IsTemporary() const;
 };

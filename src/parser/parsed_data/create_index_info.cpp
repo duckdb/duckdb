@@ -6,10 +6,15 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	auto result = make_uniq<CreateIndexInfo>();
 	CopyProperties(*result);
 
-	result->index_type = index_type;
-	result->index_name = index_name;
-	result->constraint_type = constraint_type;
 	result->table = table;
+	result->name = name;
+
+	result->options = options;
+
+	result->index_type = index_type;
+	result->index_constraint_type = index_constraint_type;
+	result->column_ids = column_ids;
+
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}
@@ -19,8 +24,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 
 	result->scan_types = scan_types;
 	result->names = names;
-	result->column_ids = column_ids;
-	result->options = options;
+
 	return std::move(result);
 }
 

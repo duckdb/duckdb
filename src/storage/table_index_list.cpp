@@ -10,13 +10,25 @@ void TableIndexList::AddIndex(unique_ptr<Index> index) {
 	indexes.push_back(std::move(index));
 }
 
-void TableIndexList::RemoveIndex(Index &index) {
+void TableIndexList::RemoveIndex(const string &name) {
 	lock_guard<mutex> lock(indexes_lock);
 
 	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
 		auto &index_entry = indexes[index_idx];
-		if (index_entry.get() == &index) {
+		if (index_entry->name == name) {
 			indexes.erase(indexes.begin() + index_idx);
+			break;
+		}
+	}
+}
+
+void TableIndexList::CommitDrop(const string &name) {
+	lock_guard<mutex> lock(indexes_lock);
+
+	for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
+		auto &index_entry = indexes[index_idx];
+		if (index_entry->name == name) {
+			index_entry->CommitDrop();
 			break;
 		}
 	}
@@ -79,10 +91,10 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<BlockPointer> TableIndexList::SerializeIndexes(duckdb::MetadataWriter &writer) {
-	vector<BlockPointer> blocks_info;
+vector<pair<string, BlockPointer>> TableIndexList::SerializeIndexes(duckdb::MetadataWriter &writer) {
+	vector<pair<string, BlockPointer>> blocks_info;
 	for (auto &index : indexes) {
-		blocks_info.emplace_back(index->Serialize(writer));
+		blocks_info.emplace_back(index->name, index->Serialize(writer));
 	}
 	return blocks_info;
 }

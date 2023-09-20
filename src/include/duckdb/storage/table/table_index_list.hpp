@@ -35,7 +35,8 @@ public:
 
 	void AddIndex(unique_ptr<Index> index);
 
-	void RemoveIndex(Index &index);
+	void RemoveIndex(const string &name);
+	void CommitDrop(const string &name);
 
 	bool Empty();
 
@@ -47,7 +48,7 @@ public:
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
-	vector<BlockPointer> SerializeIndexes(duckdb::MetadataWriter &writer);
+	vector<pair<string, BlockPointer>> SerializeIndexes(MetadataWriter &writer);
 
 	vector<column_t> GetRequiredColumns();
 

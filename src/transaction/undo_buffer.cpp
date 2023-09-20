@@ -117,7 +117,7 @@ idx_t UndoBuffer::EstimatedSize() {
 			auto catalog_entry = Load<CatalogEntry *>(data);
 			if (catalog_entry->parent->type == CatalogType::INDEX_ENTRY) {
 				auto &index = catalog_entry->parent->Cast<IndexCatalogEntry>();
-				estimated_size += index.index->GetEstimatedMemoryUsage();
+				estimated_size += index.initial_index_size;
 			}
 		}
 	});
