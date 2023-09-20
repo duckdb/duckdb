@@ -285,7 +285,7 @@ struct RepeatFun {
 	static constexpr const char *Description = "Repeats the string count number of times";
 	static constexpr const char *Example = "repeat('A', 5)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ReplaceFun {
@@ -340,6 +340,15 @@ struct RtrimFun {
 	static constexpr const char *Example = "rtrim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
+};
+
+struct SHA256Fun {
+	static constexpr const char *Name = "sha256";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns the SHA256 hash of the value";
+	static constexpr const char *Example = "sha256('hello')";
+
+	static ScalarFunction GetFunction();
 };
 
 struct StringSplitFun {

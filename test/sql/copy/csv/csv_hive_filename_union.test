@@ -56,7 +56,7 @@ xxx	42
 statement error
 select * from read_csv_auto(['data/csv/hive-partitioning/mismatching_contents/part=1/test.csv', 'data/csv/hive-partitioning/mismatching_contents/part=2/test.csv'], HEADER=1)  order by 1
 ----
-field value out of range
+date field value out of range
 
 query III
 select a, b, c from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', HEADER=1, UNION_BY_NAME=1)  order by 2 NULLS LAST

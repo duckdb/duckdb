@@ -1,7 +1,7 @@
 import pytest
 
-_ = pytest.importorskip("pyduckdb.spark")
-from pyduckdb.spark.sql.catalog import Table, Database, Column
+_ = pytest.importorskip("duckdb.spark")
+from duckdb.spark.sql.catalog import Table, Database, Column
 
 
 class TestSparkCatalog(object):

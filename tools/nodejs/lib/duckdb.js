@@ -1,6 +1,6 @@
 /**
  * @module duckdb
- * @summary these jsdoc annotations are still a work in progress - feedback and suggestions are welcome!
+ * @summary DuckDB is an embeddable SQL OLAP Database Management System
  */
 
 var duckdb = require('./duckdb-binding.js');
@@ -412,6 +412,13 @@ Connection.prototype.register_buffer;
  */
 Connection.prototype.unregister_buffer;
 
+/**
+ * Closes connection
+ * @method
+ * @param callback
+ * @return {void}
+ */
+Connection.prototype.close;
 
 /**
  * Closes database instance
@@ -420,7 +427,10 @@ Connection.prototype.unregister_buffer;
  * @return {void}
  */
 Database.prototype.close = function() {
-    this.default_connection = null
+    if (this.default_connection) {
+        this.default_connection.close(); // this queues up a job in the internals, which blocks the below close call
+        this.default_connection = null;
+    }
     this.close_internal.apply(this, arguments);
 };
 
@@ -441,7 +451,7 @@ Database.prototype.close_internal;
 Database.prototype.wait;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}
@@ -449,7 +459,7 @@ Database.prototype.wait;
 Database.prototype.serialize;
 
 /**
- * TODO: what does this do?
+ * Currently a no-op. Provided for SQLite compatibility
  * @method
  * @param callback
  * @return {void}

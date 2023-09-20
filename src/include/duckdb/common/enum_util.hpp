@@ -66,6 +66,8 @@ enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
 
+enum class CSVState : uint8_t;
+
 enum class CTEMaterialize : uint8_t;
 
 enum class CatalogType : uint8_t;
@@ -129,6 +131,8 @@ enum class ForeignKeyType : uint8_t;
 enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
+
+enum class HLLStorageType : uint8_t;
 
 enum class IndexConstraintType : uint8_t;
 
@@ -208,7 +212,11 @@ enum class QueryNodeType : uint8_t;
 
 enum class QueryResultType : uint8_t;
 
+enum class QuoteRule : uint8_t;
+
 enum class RelationType : uint8_t;
+
+enum class RenderMode : uint8_t;
 
 enum class ResultModifierType : uint8_t;
 
@@ -335,6 +343,9 @@ template<>
 const char* EnumUtil::ToChars<CAPIResultSetType>(CAPIResultSetType value);
 
 template<>
+const char* EnumUtil::ToChars<CSVState>(CSVState value);
+
+template<>
 const char* EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template<>
@@ -429,6 +440,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
+
+template<>
+const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
@@ -548,7 +562,13 @@ template<>
 const char* EnumUtil::ToChars<QueryResultType>(QueryResultType value);
 
 template<>
+const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value);
+
+template<>
 const char* EnumUtil::ToChars<RelationType>(RelationType value);
+
+template<>
+const char* EnumUtil::ToChars<RenderMode>(RenderMode value);
 
 template<>
 const char* EnumUtil::ToChars<ResultModifierType>(ResultModifierType value);
@@ -711,6 +731,9 @@ template<>
 CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value);
 
 template<>
+CSVState EnumUtil::FromString<CSVState>(const char *value);
+
+template<>
 CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template<>
@@ -805,6 +828,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
+
+template<>
+HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
@@ -924,7 +950,13 @@ template<>
 QueryResultType EnumUtil::FromString<QueryResultType>(const char *value);
 
 template<>
+QuoteRule EnumUtil::FromString<QuoteRule>(const char *value);
+
+template<>
 RelationType EnumUtil::FromString<RelationType>(const char *value);
+
+template<>
+RenderMode EnumUtil::FromString<RenderMode>(const char *value);
 
 template<>
 ResultModifierType EnumUtil::FromString<ResultModifierType>(const char *value);

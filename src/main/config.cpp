@@ -70,12 +70,14 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(EnableFSSTVectors),
                                                  DUCKDB_GLOBAL(AllowUnsignedExtensionsSetting),
                                                  DUCKDB_LOCAL(CustomExtensionRepository),
+                                                 DUCKDB_LOCAL(AutoloadExtensionRepository),
+                                                 DUCKDB_GLOBAL(AutoinstallKnownExtensions),
+                                                 DUCKDB_GLOBAL(AutoloadKnownExtensions),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarSetting),
                                                  DUCKDB_LOCAL(EnableProgressBarPrintSetting),
-                                                 DUCKDB_GLOBAL(ExperimentalParallelCSVSetting),
                                                  DUCKDB_LOCAL(ExplainOutputSetting),
                                                  DUCKDB_GLOBAL(ExtensionDirectorySetting),
                                                  DUCKDB_GLOBAL(ExternalThreadsSetting),
@@ -175,7 +177,7 @@ void DBConfig::SetOptionByName(const string &name, const Value &value) {
 void DBConfig::SetOption(DatabaseInstance *db, const ConfigurationOption &option, const Value &value) {
 	lock_guard<mutex> l(config_lock);
 	if (!option.set_global) {
-		throw InternalException("Could not set option \"%s\" as a global option", option.name);
+		throw InvalidInputException("Could not set option \"%s\" as a global option", option.name);
 	}
 	D_ASSERT(option.reset_global);
 	Value input = value.DefaultCastAs(option.parameter_type);
@@ -283,7 +285,7 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 	}
 }
 
-idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
+idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 #ifndef DUCKDB_NO_THREADS
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
@@ -299,7 +301,7 @@ idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
 
 void DBConfig::SetDefaultMaxThreads() {
 #ifndef DUCKDB_NO_THREADS
-	options.maximum_threads = GetSystemMaxThreadsInternal(*file_system);
+	options.maximum_threads = GetSystemMaxThreads(*file_system);
 #else
 	options.maximum_threads = 1;
 #endif

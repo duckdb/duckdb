@@ -77,3 +77,8 @@ SELECT * FROM strings ORDER BY s COLLATE ja.NOCASE
 # test icu_sort_key function
 statement ok
 select icu_sort_key('Ş', 'ro');
+
+statement error
+SELECT icu_sort_key('goose', 'DUCK_DUCK_ENUM');
+----
+Invalid Input Error

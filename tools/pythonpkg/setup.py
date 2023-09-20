@@ -163,6 +163,8 @@ if 'BUILD_HTTPFS' in os.environ:
 for ext in extensions:
     toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
 
+toolchain_args.extend(['-DDUCKDB_EXTENSION_AUTOLOAD_DEFAULT=1', '-DDUCKDB_EXTENSION_AUTOINSTALL_DEFAULT=1'])
+
 
 class get_pybind_include(object):
     def __init__(self, user=False):
@@ -316,15 +318,14 @@ packages = [
     lib_name,
     'duckdb.typing',
     'duckdb.functional',
-    'pyduckdb',
-    'pyduckdb.value',
+    'duckdb.value',
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['pyduckdb.spark', 'pyduckdb.spark.sql']
+spark_packages = ['duckdb.spark', 'duckdb.spark.sql']
 
 packages.extend(spark_packages)
 

@@ -329,6 +329,15 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, 
 				    hfs.state->total_bytes_received += data_length;
 			    }
 			    if (buffer_out != nullptr) {
+				    if (data_length + out_offset > buffer_out_len) {
+					    // As of v0.8.2-dev4424 we might end up here when very big files are served from servers
+					    // that returns more data than requested via range header. This is an uncommon but legal
+					    // behaviour, so we have to improve logic elsewhere to properly handle this case.
+
+					    // To avoid corruption of memory, we bail out.
+					    throw IOException("Server sent back more data than expected, `SET force_download=true` might "
+					                      "help in this case");
+				    }
 				    memcpy(buffer_out + out_offset, data, data_length);
 				    out_offset += data_length;
 			    }
@@ -489,6 +498,11 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
+idx_t HTTPFileSystem::SeekPosition(FileHandle &handle) {
+	auto &sfh = (HTTPFileHandle &)handle;
+	return sfh.file_offset;
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
@@ -506,7 +520,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, H
 	} else {
 		auto lookup = client_context->registered_state.find("http_cache");
 		if (lookup == client_context->registered_state.end()) {
-			auto cache = make_shared<HTTPMetadataCache>(true, false);
+			auto cache = make_shared<HTTPMetadataCache>(true, true);
 			client_context->registered_state["http_cache"] = cache;
 			return cache.get();
 		} else {

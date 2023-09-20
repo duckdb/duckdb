@@ -652,7 +652,16 @@ describe('prepare', function() {
             });
             it("should aggregate kurtosis(num)", function (done) {
                 db.all("SELECT kurtosis(num) as kurtosis FROM foo", function (err: null | Error, res: TableData) {
-                    assert.equal(res[0].kurtosis, -1.1999999999999997);
+                    // The `num` column of table `foo` contains each integer from 0 to 999,999 exactly once.
+                    // This is a uniform distribution. The excess kurtosis for a uniform distribution is exactly -1.2.
+                    // See https://en.wikipedia.org/wiki/Kurtosis#Other_well-known_distributions
+                    const expected = -1.2;
+                    
+                    // The calculated value can differ from the exact answer by small amounts on different platforms due
+                    // to floating-point errors. This tolerance was determined experimentally.
+                    const tolerance = Number.EPSILON * 10;
+
+                    assert.ok(Math.abs(res[0].kurtosis - expected) < tolerance);
                     done(err);
                 });
             });

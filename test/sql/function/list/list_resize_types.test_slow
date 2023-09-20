@@ -2,6 +2,8 @@
 # description: test for list_resize() that take a long time
 # group: [list]
 
+require vector_size 512
+
 statement ok
 PRAGMA enable_verification;
 
