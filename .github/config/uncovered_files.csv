@@ -126,6 +126,7 @@ core_functions/scalar/date/date_part.cpp	17
 core_functions/scalar/date/date_sub.cpp	209
 core_functions/scalar/date/date_trunc.cpp	23
 core_functions/scalar/date/strftime.cpp	10
+core_functions/scalar/date/time_bucket.cpp	3
 core_functions/scalar/enum/enum_functions.cpp	10
 core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
@@ -543,6 +544,7 @@ optimizer/pushdown/pushdown_inner_join.cpp	2
 optimizer/pushdown/pushdown_set_operation.cpp	2
 optimizer/regex_range_filter.cpp	2
 optimizer/remove_unused_columns.cpp	2
+optimizer/rule/arithmetic_simplification.cpp	1
 optimizer/rule/date_part_simplification.cpp	2
 optimizer/rule/distributivity.cpp	3
 optimizer/rule/empty_needle_removal.cpp	2
