@@ -109,6 +109,19 @@ idx_t UndoBuffer::EstimatedSize() {
 		estimated_size += node->current_position;
 		node = node->next.get();
 	}
+
+	// we need to search for any index creation entries
+	IteratorState iterator_state;
+	IterateEntries(iterator_state, [&](UndoFlags entry_type, data_ptr_t data) {
+		if (entry_type == UndoFlags::CATALOG_ENTRY) {
+			auto catalog_entry = Load<CatalogEntry *>(data);
+			if (catalog_entry->parent->type == CatalogType::INDEX_ENTRY) {
+				auto &index = catalog_entry->parent->Cast<IndexCatalogEntry>();
+				estimated_size += index.index->GetEstimatedMemoryUsage();
+			}
+		}
+	});
+
 	return estimated_size;
 }
 

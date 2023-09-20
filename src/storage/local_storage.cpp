@@ -94,8 +94,8 @@ idx_t LocalTableStorage::EstimatedSize() {
 	// get the index size
 	idx_t estimated_indexes_size = 0;
 	indexes.Scan([&](Index &index) {
-		    estimated_indexes_size += index.GetEstimatedMemoryUsage();
-		    return false;
+		estimated_indexes_size += index.GetEstimatedMemoryUsage();
+		return false;
 	});
 
 	// return the size of the appended rows and the index size
