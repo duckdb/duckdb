@@ -17,19 +17,10 @@
 
 namespace duckdb {
 
-void ReadCSVRelation::InitializeAlias(const Value &input) {
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		auto csv_file = StringValue::Get(input);
-		alias = StringUtil::Split(csv_file, ".")[0];
-	} else if (input.type().id() == LogicalTypeId::LIST) {
-		auto &list = ListValue::GetChildren(input);
-		D_ASSERT(list.size() >= 1);
-		D_ASSERT(list[0].type().id() == LogicalTypeId::VARCHAR);
-		auto csv_file = StringValue::Get(list[0]);
-		alias = StringUtil::Split(csv_file, ".")[0];
-	} else {
-		throw InternalException("Unsupported type for ReadCSVRelation input Value");
-	}
+void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
+	D_ASSERT(input.size() >= 1);
+	auto csv_file = input[0];
+	alias = StringUtil::Split(csv_file, ".")[0];
 }
 
 ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const string &csv_file,
@@ -37,8 +28,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
     : TableFunctionRelation(context, "read_csv", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(false) {
 
-	auto input = Value(csv_file);
-	InitializeAlias(input);
+	InitializeAlias({csv_file});
 	columns = std::move(columns_p);
 
 	child_list_t<Value> column_names;
@@ -49,13 +39,23 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 	AddNamedParameter("columns", Value::STRUCT(std::move(column_names)));
 }
 
-ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const Value &input,
+static Value CreateValueFromFileList(const vector<string> &file_list) {
+	vector<Value> files;
+	for (auto &file : file_list) {
+		files.push_back(file);
+	}
+	return Value::LIST(std::move(files));
+}
+
+ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const vector<string> &input,
                                  named_parameter_map_t &&options, string alias_p)
-    : TableFunctionRelation(context, "read_csv_auto", {input}, nullptr, false), alias(std::move(alias_p)),
-      auto_detect(true) {
+    : TableFunctionRelation(context, "read_csv_auto", {CreateValueFromFileList(input)}, nullptr, false),
+      alias(std::move(alias_p)), auto_detect(true) {
 
 	InitializeAlias(input);
-	auto files = MultiFileReader::GetFileList(*context, input, "CSV");
+
+	auto file_list = CreateValueFromFileList(input);
+	auto files = MultiFileReader::GetFileList(*context, file_list, "CSV");
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];

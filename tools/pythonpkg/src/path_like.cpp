@@ -31,9 +31,9 @@ public:
 	optional_ptr<ModifiedMemoryFileSystem> object_store;
 	PythonImportCache &import_cache;
 	// The list containing every file
-	vector<Value> all_files;
+	vector<string> all_files;
 	// The list of files that are registered in the object_store;
-	vector<Value> fs_files;
+	vector<string> fs_files;
 };
 
 void PathLikeProcessor::AddFile(const py::object &object) {
@@ -61,7 +61,7 @@ PathLike PathLikeProcessor::Finalize() {
 	if (all_files.empty()) {
 		throw InvalidInputException("Please provide a non-empty list of paths or file-like objects");
 	}
-	result.files = Value::LIST(std::move(all_files));
+	result.files = std::move(all_files);
 
 	if (fs_files.empty()) {
 		// No file-like objects were registered in the filesystem
@@ -70,9 +70,8 @@ PathLike PathLikeProcessor::Finalize() {
 	}
 
 	// Create the dependency, which contains the logic to clean up the files in its destructor
-	auto fs_items = Value::LIST(std::move(fs_files));
 	auto &fs = GetFS();
-	result.dependency = make_uniq<PythonDependencies>(make_uniq<FileSystemObject>(fs, std::move(fs_items)));
+	result.dependency = make_uniq<PythonDependencies>(make_uniq<FileSystemObject>(fs, std::move(fs_files)));
 	return result;
 }
 

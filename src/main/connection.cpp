@@ -223,8 +223,12 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	return ReadCSV(csv_file, std::move(options));
 }
 
-shared_ptr<Relation> Connection::ReadCSV(const Value &csv_input, named_parameter_map_t &&options) {
+shared_ptr<Relation> Connection::ReadCSV(const vector<string> &csv_input, named_parameter_map_t &&options) {
 	return make_shared<ReadCSVRelation>(context, csv_input, std::move(options));
+}
+
+shared_ptr<Relation> Connection::ReadCSV(const string &csv_input, named_parameter_map_t &&options) {
+	return ReadCSV({csv_input}, std::move(options));
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<string> &columns) {

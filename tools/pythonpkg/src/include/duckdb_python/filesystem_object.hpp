@@ -14,23 +14,20 @@ namespace duckdb {
 
 class FileSystemObject : public RegisteredObject {
 public:
-	explicit FileSystemObject(py::object fs, Value filenames_p)
+	explicit FileSystemObject(py::object fs, vector<string> filenames_p)
 	    : RegisteredObject(std::move(fs)), filenames(std::move(filenames_p)) {
-		D_ASSERT(filenames.type().id() == LogicalTypeId::LIST);
 	}
 	virtual ~FileSystemObject() {
 		py::gil_scoped_acquire acquire;
 		// Assert that the 'obj' is a filesystem
 		D_ASSERT(
 		    py::isinstance(obj, DuckDBPyConnection::ImportCache()->pyduckdb().filesystem.modified_memory_filesystem()));
-		auto &files = ListValue::GetChildren(filenames);
-		for (auto &file : files) {
-			auto name = StringValue::Get(file);
-			obj.attr("delete")(name);
+		for (auto &file : filenames) {
+			obj.attr("delete")(file);
 		}
 	}
 
-	Value filenames;
+	vector<string> filenames;
 };
 
 } // namespace duckdb
