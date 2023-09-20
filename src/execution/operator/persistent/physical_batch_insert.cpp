@@ -194,7 +194,7 @@ public:
 		}
 		auto new_count = current_collection->GetTotalRows();
 		auto batch_type =
-		    new_count < RowGroup::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
+		    new_count < Storage::ROW_GROUP_SIZE ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 		if (batch_type == RowGroupBatchType::FLUSHED && writer) {
 			writer->WriteLastRowGroup(*current_collection);
 		}

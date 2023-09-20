@@ -19,8 +19,6 @@ class StandardEntry;
 class TableCatalogEntry;
 class TableFunctionCatalogEntry;
 class SequenceCatalogEntry;
-class Serializer;
-class Deserializer;
 
 enum class OnCreateConflict : uint8_t;
 

@@ -4,10 +4,8 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -24,9 +22,9 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include <cmath>
 
@@ -1063,22 +1061,6 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 
 // the destructor needs to know about the extra type info
 LogicalType::~LogicalType() {
-}
-
-void LogicalType::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteField<LogicalTypeId>(id_);
-	ExtraTypeInfo::Serialize(type_info_.get(), writer);
-	writer.Finalize();
-}
-
-LogicalType LogicalType::Deserialize(Deserializer &source) {
-	FieldReader reader(source);
-	auto id = reader.ReadRequired<LogicalTypeId>();
-	auto info = ExtraTypeInfo::Deserialize(reader);
-	reader.Finalize();
-
-	return LogicalType(id, std::move(info));
 }
 
 bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {

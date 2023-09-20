@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-class FieldReader;
-
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,
@@ -38,15 +36,9 @@ struct ExtraTypeInfo {
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) const;
-	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const;
-	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
-	//! Deserializes a blob back into an ExtraTypeInfo
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
 
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	virtual void Serialize(Serializer &serializer) const;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 	template <class TARGET>
 	TARGET &Cast() {
@@ -70,11 +62,8 @@ struct DecimalTypeInfo : public ExtraTypeInfo {
 	uint8_t scale;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -89,11 +78,8 @@ struct StringTypeInfo : public ExtraTypeInfo {
 	string collation;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -108,11 +94,8 @@ struct ListTypeInfo : public ExtraTypeInfo {
 	LogicalType child_type;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -127,12 +110,8 @@ struct StructTypeInfo : public ExtraTypeInfo {
 	child_list_t<LogicalType> child_types;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &deserializer);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -147,11 +126,8 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 	aggregate_state_t state_type;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -166,11 +142,8 @@ struct UserTypeInfo : public ExtraTypeInfo {
 	string user_type_name;
 
 public:
-	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override;
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
@@ -195,11 +168,8 @@ public:
 
 	static LogicalType CreateType(Vector &ordered_data, idx_t size);
 
-	void Serialize(FieldWriter &writer) const override;
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-
-	void FormatSerialize(FormatSerializer &serializer) const override;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+	void Serialize(Serializer &serializer) const override;
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source);
 
 protected:
 	// Equalities are only used in enums with different catalog entries

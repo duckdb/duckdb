@@ -1,4 +1,3 @@
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 
 namespace duckdb {
@@ -37,14 +36,4 @@ void LogicalSample::ResolveTypes() {
 	types = children[0]->types;
 }
 
-void LogicalSample::Serialize(FieldWriter &writer) const {
-	sample_options->Serialize(writer.GetSerializer());
-}
-
-unique_ptr<LogicalOperator> LogicalSample::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto sample_options = SampleOptions::Deserialize(reader.GetSource());
-	// TODO(stephwang): review how to pass child LogicalOperator
-	auto result = make_uniq<LogicalSample>(std::move(sample_options), nullptr);
-	return std::move(result);
-}
 } // namespace duckdb
