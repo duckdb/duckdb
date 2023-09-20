@@ -954,7 +954,6 @@ string StatementGenerator::GenerateViewIdentifier() {
 	return identifier;
 }
 
-
 idx_t StatementGenerator::GetIndex() {
 	if (parent) {
 		return parent->GetIndex();
