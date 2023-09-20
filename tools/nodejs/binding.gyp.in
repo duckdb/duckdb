@@ -16,7 +16,6 @@
                 "${INCLUDE_FILES}"
             ],
             "defines": [
-                "NAPI_DISABLE_CPP_EXCEPTIONS=1",
                 "NAPI_VERSION=6",
                 "${DEFINES}"
             ],

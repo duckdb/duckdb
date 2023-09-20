@@ -15,9 +15,6 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
-	if (path_val.IsNull()) {
-		throw InvalidInputException("JSON path cannot be NULL");
-	}
 	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
@@ -49,7 +46,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
 }
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadFunctionData &)other_p;
+	auto &other = other_p.Cast<JSONReadFunctionData>();
 	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
@@ -60,7 +57,7 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	string path = "";
 	size_t len = 0;
 	JSONPathType path_type = JSONPathType::REGULAR;
-	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
+	if (arguments[1]->IsFoldable()) {
 		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		path_type = CheckPath(path_val, path, len);
@@ -83,7 +80,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
 }
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
-	auto &other = (const JSONReadManyFunctionData &)other_p;
+	auto &other = other_p.Cast<JSONReadManyFunctionData>();
 	return paths == other.paths && lens == other.lens;
 }
 
@@ -100,6 +97,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	vector<string> paths;
 	vector<size_t> lens;
 	auto paths_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
