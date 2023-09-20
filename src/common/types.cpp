@@ -434,7 +434,15 @@ LogicalType TransformStringToLogicalType(const string &str) {
 
 LogicalType GetUserTypeRecursive(const LogicalType &type, ClientContext &context) {
 	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
-		return Catalog::GetSystemCatalog(context).GetType(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, type.GetAlias());
+	}
+	if (type.id() == LogicalTypeId::USER && type.HasAlias()) {
+		auto catalog_type = Catalog::GetSystemCatalog(context).GetType(context, DEFAULT_SCHEMA, type.GetAlias(),
+		                                                               OnEntryNotFound::RETURN_NULL);
+		if (catalog_type != LogicalType::INVALID) {
+			return catalog_type;
+		}
+		return Catalog::GetSystemCatalog(context).GetType(
+		    context, DatabaseManager::Get(context).GetDefaultDatabase(context), DEFAULT_SCHEMA, type.GetAlias());
 	}
 	// Look for LogicalTypeId::USER in nested types
 	if (type.id() == LogicalTypeId::STRUCT) {
