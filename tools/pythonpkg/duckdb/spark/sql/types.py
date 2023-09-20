@@ -882,6 +882,9 @@ class StructType(DataType):
     def __repr__(self) -> str:
         return "StructType([%s])" % ", ".join(str(field) for field in self)
 
+    def __contains__(self, item: Any) -> bool:
+        return item in self.names
+
     def extract_types_and_names(self) -> Tuple[List[str], List[str]]:
         names = []
         types = []

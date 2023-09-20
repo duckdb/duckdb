@@ -43,9 +43,7 @@ struct OpenTask : public Task {
 				try {
 					duckdb_config.SetOptionByName(key, duckdb::Value(val));
 				} catch (std::exception &e) {
-					Napi::TypeError::New(env, "Failed to set configuration option " + key + ": " + e.what())
-					    .ThrowAsJavaScriptException();
-					return;
+					throw Napi::TypeError::New(env, "Failed to set configuration option " + key + ": " + e.what());
 				}
 			}
 		}
@@ -90,8 +88,7 @@ Database::Database(const Napi::CallbackInfo &info)
 	auto env = info.Env();
 
 	if (info.Length() < 1 || !info[0].IsString()) {
-		Napi::TypeError::New(env, "Database location expected").ThrowAsJavaScriptException();
-		return;
+		throw Napi::TypeError::New(env, "Database location expected");
 	}
 	std::string filename = info[0].As<Napi::String>();
 	unsigned int pos = 1;
@@ -193,8 +190,7 @@ Napi::Value Database::Serialize(const Napi::CallbackInfo &info) {
 		return info.This();
 	}
 	if (info.Length() < 1 || !info[0].IsFunction()) {
-		Napi::TypeError::New(env, "Callback expected").ThrowAsJavaScriptException();
-		return env.Null();
+		throw Napi::TypeError::New(env, "Callback expected");
 	}
 	Napi::HandleScope scope(env);
 	info[0].As<Napi::Function>().MakeCallback(info.This(), {});
@@ -355,8 +351,7 @@ Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 	auto env = info.Env();
 	auto deferred = Napi::Promise::Deferred::New(info.Env());
 	if (info.Length() < 1) {
-		Napi::TypeError::New(env, "Replacement scan callback expected").ThrowAsJavaScriptException();
-		return env.Null();
+		throw Napi::TypeError::New(env, "Replacement scan callback expected");
 	}
 	Napi::Function rs_callback = info[0].As<Napi::Function>();
 	auto rs =
