@@ -132,7 +132,7 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 	sql = StringUtil::Replace(sql, "%table_name%", table.name);
 	sql = StringUtil::Replace(sql, "%table_schema%", table.schema.empty() ? DEFAULT_SCHEMA : table.schema);
 	sql = StringUtil::Replace(sql, "%table_database%",
-	                          table.catalog.empty() ? DatabaseManager::GetDefaultDatabase(context): table.catalog);
+	                          table.catalog.empty() ? DatabaseManager::GetDefaultDatabase(context) : table.catalog);
 	return sql;
 }
 
