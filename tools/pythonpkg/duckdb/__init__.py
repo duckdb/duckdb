@@ -14,6 +14,7 @@ from .duckdb import (
     DuckDBPyConnection,
     ExplainType,
     PythonExceptionHandling,
+    RenderMode,
     Expression,
     ConstantExpression,
     ColumnExpression,
@@ -39,7 +40,9 @@ from .duckdb import (
     ANALYZE,
     DEFAULT,
     RETURN_NULL,
-    STANDARD
+    STANDARD,
+	COLUMNS,
+	ROWS
 )
 _exported_symbols.extend([
     "ANALYZE",
@@ -336,6 +339,69 @@ _exported_symbols.extend([
     "SequenceException",
     "StandardException",
     "Warning"
+])
+
+# Value
+from .value.constant import (
+    Value,
+    NullValue,
+    BooleanValue,
+    UnsignedBinaryValue,
+    UnsignedShortValue,
+    UnsignedIntegerValue,
+    UnsignedLongValue,
+    BinaryValue,
+    ShortValue,
+    IntegerValue,
+    LongValue,
+    HugeIntegerValue,
+    FloatValue,
+    DoubleValue,
+    DecimalValue,
+    StringValue,
+    UUIDValue,
+    BitValue,
+    BlobValue,
+    DateValue,
+    IntervalValue,
+    TimestampValue,
+    TimestampSecondValue,
+    TimestampMilisecondValue,
+    TimestampNanosecondValue,
+    TimestampTimeZoneValue,
+    TimeValue,
+    TimeTimeZoneValue,
+)
+
+_exported_symbols.extend([
+    "Value",
+    "NullValue",
+    "BooleanValue",
+    "UnsignedBinaryValue",
+    "UnsignedShortValue",
+    "UnsignedIntegerValue",
+    "UnsignedLongValue",
+    "BinaryValue",
+    "ShortValue",
+    "IntegerValue",
+    "LongValue",
+    "HugeIntegerValue",
+    "FloatValue",
+    "DoubleValue",
+    "DecimalValue",
+    "StringValue",
+    "UUIDValue",
+    "BitValue",
+    "BlobValue",
+    "DateValue",
+    "IntervalValue",
+    "TimestampValue",
+    "TimestampSecondValue",
+    "TimestampMilisecondValue",
+    "TimestampNanosecondValue",
+    "TimestampTimeZoneValue",
+    "TimeValue",
+    "TimeTimeZoneValue",
 ])
 
 __all__ = _exported_symbols

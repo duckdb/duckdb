@@ -439,13 +439,14 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	auto free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
+	auto &metadata_manager = GetMetadataManager();
 	// add all modified blocks to the free list: they can now be written to again
+	metadata_manager.MarkBlocksAsModified();
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
 	}
 	modified_blocks.clear();
 
-	auto &metadata_manager = GetMetadataManager();
 	if (!free_list_blocks.empty()) {
 		// there are blocks to write, either in the free_list or in the modified_blocks
 		// we write these blocks specifically to the free_list_blocks

@@ -13,7 +13,7 @@
 #include "duckdb/execution/operator/scan/csv/quote_rules.hpp"
 
 namespace duckdb {
-static constexpr uint32_t NUM_STATES = 8;
+static constexpr uint32_t NUM_STATES = 9;
 static constexpr uint32_t NUM_TRANSITIONS = 256;
 typedef uint8_t state_machine_t[NUM_STATES][NUM_TRANSITIONS];
 
