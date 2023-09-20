@@ -5,6 +5,7 @@
 #   EXTENSION_CONFIGS=.github/config/out_of_tree_extensions.cmake make
 #
 
+if (NOT EMSCRIPTEN)
 ################# ARROW
 if (NOT WIN32)
     duckdb_extension_load(arrow
@@ -59,7 +60,7 @@ duckdb_extension_load(spatial
         INCLUDE_DIR spatial/include
         TEST_DIR test/sql
         )
-
+endif()
 ################# SQLITE_SCANNER
 # Static linking on windows does not properly work due to symbol collision
 if (WIN32)
