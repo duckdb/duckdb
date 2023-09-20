@@ -1,7 +1,7 @@
 import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
-from pyduckdb import Value
+from duckdb import Value
 
 
 class TestDuckDBQuery(object):

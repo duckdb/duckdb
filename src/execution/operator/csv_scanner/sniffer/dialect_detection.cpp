@@ -15,7 +15,7 @@ struct SniffDialect {
 	inline static bool Process(CSVStateMachine &machine, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
 
-		D_ASSERT(sniffed_column_counts.size() == machine.options.sample_chunk_size);
+		D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
 
 		if (machine.state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
@@ -45,7 +45,7 @@ struct SniffDialect {
 		machine.single_record_separator = ((machine.state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 		                                   (machine.state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
 		                                  machine.single_record_separator;
-		if (machine.cur_rows >= machine.options.sample_chunk_size) {
+		if (machine.cur_rows >= STANDARD_VECTOR_SIZE) {
 			// We sniffed enough rows
 			return true;
 		}
@@ -55,10 +55,10 @@ struct SniffDialect {
 		if (machine.state == CSVState::INVALID) {
 			return;
 		}
-		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state == CSVState::DELIMITER) {
+		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state == CSVState::DELIMITER) {
 			sniffed_column_counts[machine.cur_rows] = ++machine.column_count;
 		}
-		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state != CSVState::EMPTY_LINE) {
+		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state != CSVState::EMPTY_LINE) {
 			sniffed_column_counts[machine.cur_rows++] = machine.column_count;
 		}
 		NewLineIdentifier suggested_newline;
@@ -145,7 +145,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machine, idx_t &rows_read,
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count) {
 	// The sniffed_column_counts variable keeps track of the number of columns found for each row
-	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
+	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 
 	state_machine->csv_buffer_iterator.Process<SniffDialect>(*state_machine, sniffed_column_counts);
 	idx_t start_row = options.dialect_options.skip_rows;
@@ -244,7 +244,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machi
 }
 
 bool CSVSniffer::RefineCandidateNextChunk(CSVStateMachine &candidate) {
-	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
+	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	candidate.csv_buffer_iterator.Process<SniffDialect>(candidate, sniffed_column_counts);
 	bool allow_padding = options.null_padding;
 
@@ -268,9 +268,9 @@ void CSVSniffer::RefineCandidates() {
 		return;
 	}
 	for (auto &cur_candidate : candidates) {
-		for (idx_t i = 1; i <= options.sample_chunks; i++) {
+		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
 			bool finished_file = cur_candidate->csv_buffer_iterator.Finished();
-			if (finished_file || i == options.sample_chunks) {
+			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully: stop
 				auto successful_candidate = std::move(cur_candidate);
 				candidates.clear();

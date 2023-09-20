@@ -782,13 +782,13 @@ public:
 		}
 
 		auto &ht_state = op.sink_state->Cast<HashAggregateGlobalSinkState>();
-		idx_t count = 0;
+		idx_t partitions = 0;
 		for (size_t sidx = 0; sidx < op.groupings.size(); ++sidx) {
 			auto &grouping = op.groupings[sidx];
 			auto &grouping_gstate = ht_state.grouping_states[sidx];
-			count += grouping.table_data.Count(*grouping_gstate.table_state);
+			partitions += grouping.table_data.NumberOfPartitions(*grouping_gstate.table_state);
 		}
-		return MaxValue<idx_t>(1, count / STANDARD_VECTOR_SIZE);
+		return MaxValue<idx_t>(1, partitions);
 	}
 };
 

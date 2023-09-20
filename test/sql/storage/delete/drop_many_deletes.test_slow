@@ -1,0 +1,38 @@
+# name: test/sql/storage/delete/drop_many_deletes.test_slow
+# description: Test dropping a table that has many deletes
+# group: [delete]
+
+# load the DB from disk
+load __TEST_DIR__/drop_many_deletes.db
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0,10000000) t(i);
+
+query I
+DELETE FROM integers WHERE i%2=0
+----
+5000000
+
+restart
+
+query I
+SELECT COUNT(*) FROM integers
+----
+5000000
+
+# check how many blocks are used by the metadata manager
+query I
+SELECT COUNT(*) FROM pragma_metadata_info()
+----
+7
+
+statement ok
+DROP TABLE integers
+
+restart
+
+# verify that the blocks are returned to the system and the metadata blocks are freed
+query I
+SELECT COUNT(*) FROM pragma_metadata_info()
+----
+1
