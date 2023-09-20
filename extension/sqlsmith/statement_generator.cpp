@@ -123,13 +123,13 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		auto info = make_uniq<CreateTableInfo>();
 		info->catalog = INVALID_CATALOG;
 		info->schema = DEFAULT_SCHEMA;
-		info->table = RandomString(10);
+		info->table = GenerateTableIdentifier();
 		if (RandomPercentage(50)) {
 			info->query = GenerateSelect();
 		} else {
 			idx_t num_cols = RandomValue(1000);
 			for (idx_t i = 0; i < num_cols; i++) {
-				info->columns.AddColumn(ColumnDefinition(RandomString(10), GenerateLogicalType()));
+				info->columns.AddColumn(ColumnDefinition(GenerateIdentifier(), GenerateLogicalType()));
 			}
 		}
 		// TODO: add constraints to the columns (primary keys etc.);
@@ -139,12 +139,12 @@ unique_ptr<CreateInfo> StatementGenerator::GenerateCreateInfo() {
 		auto info = make_uniq<CreateSchemaInfo>();
 		info->catalog = INVALID_CATALOG;
 		info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-		info->schema = RandomString(10);
+		info->schema = GenerateSchemaIdentifier();
 		return std::move(info);
 	}
 	case 3: {
 		auto info = make_uniq<CreateViewInfo>();
-		info->view_name = RandomString(10);
+		info->view_name = GenerateViewIdentifier();
 		info->query = GenerateSelect();
 		// TODO: add support for aliases in the view.
 		return std::move(info);
@@ -941,6 +941,19 @@ string StatementGenerator::GenerateIdentifier() {
 	current_column_names.push_back(identifier);
 	return identifier;
 }
+
+string StatementGenerator::GenerateSchemaIdentifier() {
+	auto identifier = "s" + to_string(GetIndex());
+	// TODO: add support for current_schema_names
+	return identifier;
+}
+
+string StatementGenerator::GenerateViewIdentifier() {
+	auto identifier = "v" + to_string(GetIndex());
+	current_relation_names.push_back(identifier);
+	return identifier;
+}
+
 
 idx_t StatementGenerator::GetIndex() {
 	if (parent) {
