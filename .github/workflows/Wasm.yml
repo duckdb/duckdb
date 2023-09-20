@@ -1,5 +1,60 @@
 name: DuckDB-Wasm extensions
 on:
+  repository_dispatch:
+    inputs:
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+  push:
+    inputs:
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+    branches:
+      - '**'
+      - '!main'
+      - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Wasm.yml'
+      - '.github/config/uncovered_files.csv'
+  pull_request:
+    inputs:
+      # Git ref of the duckdb repo
+      duckdb-ref:
+        required: false
+        type: string
+        default: main
+      # Publish extensions on extensions.duckdb.org?
+      release_s3:
+        required: false
+        type: boolean
+        default: false
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Wasm.yml'
+      - '.github/config/uncovered_files.csv'
   workflow_dispatch:
     inputs:
       # Git ref of the duckdb repo
@@ -26,6 +81,7 @@ jobs:
       GEN: Ninja
       VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
       DUCKDB_PLATFORM: "wasm_${{ matrix.duckdb_wasm_arch }}"
+      EXTENSION_CONFIGS: "${GITHUB_WORKSPACE}/.github/config/in_tree_extensions.cmake;${GITHUB_WORKSPACE}/.github/config/out_of_tree_extensions.cmake"
 
     steps:
             - uses: actions/checkout@v3
@@ -63,12 +119,13 @@ jobs:
               uses: actions/upload-artifact@v3
               with:
                   name: duckdb-wasm-${{ matrix.duckdb_wasm_arch }}
-                  path: loadable_extensions/
+                  path: build_emscripten/wasm_${{ matrix.duckdb_wasm_arch }}/built_extensions
                   retention-days: 1
 
   trigger_github_pages_build:
     name: Trigger follow-up work
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.release_s3 }}
     needs: build_and_publish
     steps:
             - name: Move control to duckdb-wasm

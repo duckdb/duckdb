@@ -407,14 +407,14 @@ generate-files:
 	python3 scripts/generate_serialization.py
 	python3 scripts/generate_enum_util.py
 
-wasm-extensions-mvp:
+wasm-extensions-mvp: ${EXTENSION_CONFIG_STEP}
 	mkdir -p build_emscripten/wasm_mvp
-	emcmake cmake -DDUCKDB_CUSTOM_PLATFORM=wasm_mvp -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_mvp
+	emcmake cmake -DDUCKDB_CUSTOM_PLATFORM=wasm_mvp -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_mvp ${CMAKE_VARS}
 	emmake make -j8 -Cbuild_emscripten/wasm_mvp
 	cd build_emscripten/wasm_mvp && bash ../../scripts/duckdb-wasm-build-loadable.sh
 
-wasm-extensions-eh:
+wasm-extensions-eh: ${EXTENSION_CONFIG_STEP}
 	mkdir -p build_emscripten/wasm_eh
-	emcmake cmake -DWITH_WASM_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_eh
+	emcmake cmake -DWITH_WASM_EXCEPTIONS=1 -DDUCKDB_CUSTOM_PLATFORM=wasm_eh -DBUILD_EXTENSIONS_ONLY=1 -Bbuild_emscripten/wasm_eh ${CMAKE_VARS}
 	emmake make -j8 -Cbuild_emscripten/wasm_eh
 	cd build_emscripten/wasm_eh && bash ../../scripts/duckdb-wasm-build-loadable.sh
