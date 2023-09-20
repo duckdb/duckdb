@@ -15,12 +15,12 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
+	if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type)) {
+		throw InvalidInputException("A table cannot be created from an unnamed struct");
+	}
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
 	for (auto &child_type : child_types) {
-		if (type.id() != LogicalTypeId::UNION && StructType::IsUnnamed(type, sub_column_index - 1)) {
-			throw InvalidInputException("A table cannot be created from an unnamed struct");
-		}
 		sub_columns.push_back(
 		    ColumnData::CreateColumnUnique(block_manager, info, sub_column_index, start_row, child_type.second, this));
 		sub_column_index++;

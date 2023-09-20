@@ -911,10 +911,10 @@ const string &StructType::GetChildName(const LogicalType &type, idx_t index) {
 idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
-bool StructType::IsUnnamed(const LogicalType &type, idx_t index) {
+bool StructType::IsUnnamed(const LogicalType &type) {
 	auto &child_types = StructType::GetChildTypes(type);
-	D_ASSERT(index < child_types.size());
-	return child_types[index].first.empty();
+	D_ASSERT(child_types.size() > 0);
+	return child_types[0].first.empty();
 }
 
 LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
