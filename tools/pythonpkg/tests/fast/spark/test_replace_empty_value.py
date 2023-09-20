@@ -8,7 +8,12 @@ from duckdb.experimental.spark.sql.types import Row
 class TestReplaceEmpty(object):
     def test_replace_empty(self, spark):
         # Create the dataframe
-        data = [("", "CA"), ("Julia", ""), ("Robert", ""), ("", "NJ")]
+        data = [
+			("", "CA"),
+			("Julia", ""),
+			("Robert", ""),
+			("", "NJ")
+		]
         df = spark.createDataFrame(data, ["name", "state"])
         res = df.select('name').collect()
         assert res == [Row(name=''), Row(name='Julia'), Row(name='Robert'), Row(name='')]

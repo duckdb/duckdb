@@ -4,10 +4,14 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 from duckdb.experimental.spark.sql.types import Row
 
 
-# https://sparkbyexamples.com/pyspark/pyspark-replace-column-values/?expand_article=1
 class TestReplaceValue(object):
+    # https://sparkbyexamples.com/pyspark/pyspark-replace-column-values/?expand_article=1
     def test_replace_value(self, spark):
-        address = [(1, "14851 Jeffrey Rd", "DE"), (2, "43421 Margarita St", "NY"), (3, "13111 Siemon Ave", "CA")]
+        address = [
+            (1, "14851 Jeffrey Rd", "DE"),
+            (2, "43421 Margarita St", "NY"),
+            (3, "13111 Siemon Ave", "CA")
+        ]
         df = spark.createDataFrame(address, ["id", "address", "state"])
 
         # Replace part of string with another string

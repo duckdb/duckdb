@@ -15,3 +15,8 @@ class TestSparkColumn(object):
 
         df = df.withColumn('struct', struct(df.col0, df.col1))
         assert 'struct' in df
+        new_col = df.schema['struct']
+        assert 'col0' in new_col.dataType
+        assert 'col1' in new_col.dataType
+
+        df = df.withColumn('struct', 'yes')
