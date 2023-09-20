@@ -25,10 +25,10 @@ npm install --build-from-source --target_arch="$TARGET_ARCH"
 if [[ "$TARGET_ARCH" != "arm64" ]] ; then
   npm test
 else
-  ARCH=$(file lib/binding/duckdb.node)
-  if [[ "${$ARCH,,}" != *"arm"* ]] ; then
-    echo no arch $ARCH
-    exit -1
+  ARCH=$(file lib/binding/duckdb.node | tr '[:upper:]' '[:lower:]')
+  if [[ "$ARCH" != *"arm"* ]] ; then
+    echo "no arch $ARCH"
+    exit 1
   fi
 fi
 
