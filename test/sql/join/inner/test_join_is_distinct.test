@@ -4,8 +4,6 @@
 
 # issue #8328
 
-mode skip
-
 statement ok
 PRAGMA enable_verification;
 
@@ -357,8 +355,6 @@ ORDER BY x.col1;
 [0]	[0]
 [1]	[1]
 [NULL]	[NULL]
-
-mode unskip
 
 # duckdb-r issue 8
 
