@@ -173,6 +173,19 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		return false;
 	}
 
+	// remove all empty buffers
+	auto buffer_it = buffers.begin();
+	while (buffer_it != buffers.end()) {
+		if (!buffer_it->second.segment_count) {
+			buffers_with_free_space.erase(buffer_it->first);
+			buffer_it->second.Destroy();
+			buffer_it = buffers.erase(buffer_it);
+		} else {
+			buffer_it++;
+		}
+	}
+
+	// determine if a vacuum is necessary
 	multimap<idx_t, idx_t> temporary_vacuum_buffers;
 	D_ASSERT(vacuum_buffers.empty());
 	idx_t available_segments_in_memory = 0;

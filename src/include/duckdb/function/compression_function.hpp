@@ -14,6 +14,7 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/storage/data_pointer.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -21,6 +22,7 @@ class ColumnData;
 class ColumnDataCheckpointer;
 class ColumnSegment;
 class SegmentStatistics;
+struct ColumnSegmentState;
 
 struct ColumnFetchState;
 struct ColumnScanState;
@@ -62,6 +64,11 @@ struct CompressedSegmentState {
 	virtual ~CompressedSegmentState() {
 	}
 
+	//! Display info for PRAGMA storage_info
+	virtual string GetSegmentInfo() const { // LCOV_EXCL_START
+		return "";
+	} // LCOV_EXCL_STOP
+
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
@@ -75,7 +82,7 @@ struct CompressedSegmentState {
 };
 
 struct CompressionAppendState {
-	CompressionAppendState(BufferHandle handle_p) : handle(std::move(handle_p)) {
+	explicit CompressionAppendState(BufferHandle handle_p) : handle(std::move(handle_p)) {
 	}
 	virtual ~CompressionAppendState() {
 	}
@@ -139,12 +146,23 @@ typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &stat
 //===--------------------------------------------------------------------===//
 // Append (optional)
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id);
+typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(
+    ColumnSegment &segment, block_id_t block_id, optional_ptr<ColumnSegmentState> segment_state);
 typedef unique_ptr<CompressionAppendState> (*compression_init_append_t)(ColumnSegment &segment);
 typedef idx_t (*compression_append_t)(CompressionAppendState &append_state, ColumnSegment &segment,
                                       SegmentStatistics &stats, UnifiedVectorFormat &data, idx_t offset, idx_t count);
 typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
+
+//===--------------------------------------------------------------------===//
+// Serialization (optional)
+//===--------------------------------------------------------------------===//
+//! Function prototype for serializing the segment state
+typedef unique_ptr<ColumnSegmentState> (*compression_serialize_state_t)(ColumnSegment &segment);
+//! Function prototype for deserializing the segment state
+typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deserializer &deserializer);
+//! Function prototype for cleaning up the segment state when the column data is dropped
+typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 
 class CompressionFunction {
 public:
@@ -157,12 +175,16 @@ public:
 	                    compression_init_segment_t init_segment = nullptr,
 	                    compression_init_append_t init_append = nullptr, compression_append_t append = nullptr,
 	                    compression_finalize_append_t finalize_append = nullptr,
-	                    compression_revert_append_t revert_append = nullptr)
+	                    compression_revert_append_t revert_append = nullptr,
+	                    compression_serialize_state_t serialize_state = nullptr,
+	                    compression_deserialize_state_t deserialize_state = nullptr,
+	                    compression_cleanup_state_t cleanup_state = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
 	      init_compression(init_compression), compress(compress), compress_finalize(compress_finalize),
 	      init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
 	      init_segment(init_segment), init_append(init_append), append(append), finalize_append(finalize_append),
-	      revert_append(revert_append) {
+	      revert_append(revert_append), serialize_state(serialize_state), deserialize_state(deserialize_state),
+	      cleanup_state(cleanup_state) {
 	}
 
 	//! Compression type
@@ -218,6 +240,16 @@ public:
 	compression_finalize_append_t finalize_append;
 	//! Revert append (optional)
 	compression_revert_append_t revert_append;
+
+	// State serialize functions
+	//! This is only necessary if the segment state has information that must be written to disk in the metadata
+
+	//! Serialize the segment state to the metadata (optional)
+	compression_serialize_state_t serialize_state;
+	//! Deserialize the segment state to the metadata (optional)
+	compression_deserialize_state_t deserialize_state;
+	//! Cleanup the segment state (optional)
+	compression_cleanup_state_t cleanup_state;
 };
 
 //! The set of compression functions

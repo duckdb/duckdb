@@ -185,7 +185,7 @@
         "parameters": "string,count",
         "description": "Repeats the string count number of times",
         "example": "repeat('A', 5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "replace",

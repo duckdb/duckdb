@@ -134,6 +134,7 @@ public:
 	void ParseCSV(DataChunk &insert_chunk);
 
 	idx_t GetLineError(idx_t line_error, idx_t buffer_idx, bool stop_at_first = true) override;
+	void Increment(idx_t buffer_idx) override;
 
 private:
 	//! Initialize Parser
