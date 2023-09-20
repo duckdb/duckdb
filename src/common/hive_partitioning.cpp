@@ -12,6 +12,18 @@
 
 namespace duckdb {
 
+std::map<string, string> ParseInternal(const string &filename, duckdb_re2::RE2 &regex) {
+	std::map<string, string> result;
+	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
+
+	string var;
+	string value;
+	while (RE2::FindAndConsume(&input, regex, &var, &value)) {
+		result.insert(std::pair<string, string>(var, value));
+	}
+	return result;
+}
+
 static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
                                                             unordered_map<string, column_t> &column_map,
                                                             duckdb_re2::RE2 &compiled_regex, bool filename_col,
@@ -26,7 +38,7 @@ static unordered_map<column_t, string> GetKnownColumnValues(string &filename,
 	}
 
 	if (hive_partition_cols) {
-		auto partitions = HivePartitioning::Parse(filename, compiled_regex);
+		auto partitions = ParseInternal(filename, compiled_regex);
 		for (auto &partition : partitions) {
 			auto lookup_column_id = column_map.find(partition.first);
 			if (lookup_column_id != column_map.end()) {
@@ -66,21 +78,9 @@ static void ConvertKnownColRefToConstants(unique_ptr<Expression> &expr,
 //  - folder/folder/folder/../var1=value1/etc/.//var2=value2
 const string HivePartitioning::REGEX_STRING = "[\\/\\\\]([^\\/\\?\\\\]+)=([^\\/\\n\\?\\\\]+)";
 
-std::map<string, string> HivePartitioning::Parse(const string &filename, duckdb_re2::RE2 &regex) {
-	std::map<string, string> result;
-	duckdb_re2::StringPiece input(filename); // Wrap a StringPiece around it
-
-	string var;
-	string value;
-	while (RE2::FindAndConsume(&input, regex, &var, &value)) {
-		result.insert(std::pair<string, string>(var, value));
-	}
-	return result;
-}
-
 std::map<string, string> HivePartitioning::Parse(const string &filename) {
 	duckdb_re2::RE2 regex(REGEX_STRING);
-	return Parse(filename, regex);
+	return ParseInternal(filename, regex);
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.

@@ -14,7 +14,6 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "re2/re2.h"
 
 #include <iostream>
 #include <sstream>
@@ -25,7 +24,6 @@ class HivePartitioning {
 public:
 	//! Parse a filename that follows the hive partitioning scheme
 	DUCKDB_API static std::map<string, string> Parse(const string &filename);
-	DUCKDB_API static std::map<string, string> Parse(const string &filename, duckdb_re2::RE2 &regex);
 	//! Prunes a list of filenames based on a set of filters, can be used by TableFunctions in the
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
