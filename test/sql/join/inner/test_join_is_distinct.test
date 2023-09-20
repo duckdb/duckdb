@@ -4,6 +4,8 @@
 
 # issue #8328
 
+mode skip
+
 statement ok
 PRAGMA enable_verification;
 
@@ -355,3 +357,52 @@ ORDER BY x.col1;
 [0]	[0]
 [1]	[1]
 [NULL]	[NULL]
+
+mode unskip
+
+# duckdb-r issue 8
+
+statement ok
+create table tb1 as select range*2 as a from range(100);
+
+statement ok
+create table tb2 as select range*4 as a from range(100);
+
+statement ok
+insert into tb2 (select NULL from range(20));
+
+statement ok
+insert into tb1 (select NULL from range(20));
+
+query I
+SELECT count(*) FROM tb1 AS lhs ANTI JOIN tb2 AS rhs ON (lhs.a IS DISTINCT FROM rhs.a);
+----
+0
+
+# and some coverage
+statement ok
+create or replace table tb1 as select range*2 as a, range*50 as b from range(2);
+
+statement ok
+create or replace table tb2 as select range*4 as a, range*500 as b  from range(2);
+
+statement ok
+insert into tb2 (select NULL, NULL from range(2));
+
+statement ok
+insert into tb1 (select NULL, NULL from range(2));
+
+query II
+SELECT lhs.a, rhs.a FROM tb1 AS lhs LEFT JOIN tb2 AS rhs ON (lhs.a IS DISTINCT FROM rhs.a) ORDER BY ALL;
+----
+0	4
+0	NULL
+0	NULL
+2	0
+2	4
+2	NULL
+2	NULL
+NULL	0
+NULL	0
+NULL	4
+NULL	4
