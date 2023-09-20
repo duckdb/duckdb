@@ -36,119 +36,218 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 	const char *docs;
 
 	docs = R"(
-		Add two expressions.
+		Add expr to self
 
 		Parameters:
 			expr: The expression to add together with
 
 		Returns:
-			FunctionExpression: A '+' on the two input expressions.
+			FunctionExpression: self '+' expr
 	)";
 
 	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
 	m.def("__radd__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
 
 	docs = R"(
-		TODO: add docs
+		Negate the expression.
+
+		Returns:
+			FunctionExpression: -self
 	)";
 	m.def("__neg__", &DuckDBPyExpression::Negate, docs);
 
 	docs = R"(
-		TODO: add docs
+		Subtract expr from self
+
+		Parameters:
+			expr: The expression to subtract from
+
+		Returns:
+			FunctionExpression: self '-' expr
 	)";
 	m.def("__sub__", &DuckDBPyExpression::Subtract, docs);
 	m.def("__rsub__", &DuckDBPyExpression::Subtract, docs);
 
 	docs = R"(
-		TODO: add docs
+		Multiply self by expr
+
+		Parameters:
+			expr: The expression to multiply by
+
+		Returns:
+			FunctionExpression: self '*' expr
 	)";
 	m.def("__mul__", &DuckDBPyExpression::Multiply, docs);
 	m.def("__rmul__", &DuckDBPyExpression::Multiply, docs);
 
 	docs = R"(
-		TODO: add docs
+		Divide self by expr
+
+		Parameters:
+			expr: The expression to divide by
+
+		Returns:
+			FunctionExpression: self '/' expr
 	)";
 	m.def("__div__", &DuckDBPyExpression::Division, docs);
 	m.def("__rdiv__", &DuckDBPyExpression::Division, docs);
 
-	docs = R"(
-		TODO: add docs
-	)";
 	m.def("__truediv__", &DuckDBPyExpression::Division, docs);
 	m.def("__rtruediv__", &DuckDBPyExpression::Division, docs);
 
 	docs = R"(
-		TODO: add docs
+		(Floor) Divide self by expr
+
+		Parameters:
+			expr: The expression to (floor) divide by
+
+		Returns:
+			FunctionExpression: self '//' expr
 	)";
 	m.def("__floordiv__", &DuckDBPyExpression::FloorDivision, docs);
 	m.def("__rfloordiv__", &DuckDBPyExpression::FloorDivision, docs);
 
 	docs = R"(
-		TODO: add docs
+		Modulo self by expr
+
+		Parameters:
+			expr: The expression to modulo by
+
+		Returns:
+			FunctionExpression: self '%' expr
 	)";
 	m.def("__mod__", &DuckDBPyExpression::Modulo, docs);
 	m.def("__rmod__", &DuckDBPyExpression::Modulo, docs);
 
 	docs = R"(
-		TODO: add docs
+		Power self by expr
+
+		Parameters:
+			expr: The expression to power by
+
+		Returns:
+			FunctionExpression: self '**' expr
 	)";
 	m.def("__pow__", &DuckDBPyExpression::Power, docs);
 	m.def("__rpow__", &DuckDBPyExpression::Power, docs);
 
 	docs = R"(
 		Create an equality expression between two expressions
+
+		Parameters:
+			expr: The expression to check equality with
+
+		Returns:
+			FunctionExpression: self '=' expr
 	)";
 	m.def("__eq__", &DuckDBPyExpression::Equality, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create an inequality expression between two expressions
+
+		Parameters:
+			expr: The expression to check inequality with
+
+		Returns:
+			FunctionExpression: self '!=' expr
 	)";
 	m.def("__ne__", &DuckDBPyExpression::Inequality, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create a greater than expression between two expressions
+
+		Parameters:
+			expr: The expression to check
+
+		Returns:
+			FunctionExpression: self '>' expr
 	)";
 	m.def("__gt__", &DuckDBPyExpression::GreaterThan, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create a greater than or equal expression between two expressions
+
+		Parameters:
+			expr: The expression to check
+
+		Returns:
+			FunctionExpression: self '>=' expr
 	)";
 	m.def("__ge__", &DuckDBPyExpression::GreaterThanOrEqual, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create a less than expression between two expressions
+
+		Parameters:
+			expr: The expression to check
+
+		Returns:
+			FunctionExpression: self '<' expr
 	)";
 	m.def("__lt__", &DuckDBPyExpression::LessThan, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create a less than or equal expression between two expressions
+
+		Parameters:
+			expr: The expression to check
+
+		Returns:
+			FunctionExpression: self '<=' expr
 	)";
 	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs);
 
 	// AND, NOT and OR
 
 	docs = R"(
-		TODO: add docs
+		Binary-and self together with expr
+
+		Parameters:
+			expr: The expression to AND together with self
+
+		Returns:
+			FunctionExpression: self '&' expr
 	)";
 	m.def("__and__", &DuckDBPyExpression::And, docs);
 
 	docs = R"(
-		TODO: add docs
+		Binary-or self together with expr
+
+		Parameters:
+			expr: The expression to OR together with self
+
+		Returns:
+			FunctionExpression: self '|' expr
 	)";
 	m.def("__or__", &DuckDBPyExpression::Or, docs);
 
 	docs = R"(
-		TODO: add docs
+		Create a binary-not expression from self
+
+		Returns:
+			FunctionExpression: ~self
 	)";
 	m.def("__invert__", &DuckDBPyExpression::Not, docs);
 
 	docs = R"(
-		TODO: add docs
+		Binary-and self together with expr
+
+		Parameters:
+			expr: The expression to AND together with self
+
+		Returns:
+			FunctionExpression: expr '&' self
 	)";
 	m.def("__rand__", &DuckDBPyExpression::And, docs);
 
 	docs = R"(
-		TODO: add docs
+		Binary-or self together with expr
+
+		Parameters:
+			expr: The expression to OR together with self
+
+		Returns:
+			FunctionExpression: expr '|' self
 	)";
 	m.def("__ror__", &DuckDBPyExpression::Or, docs);
 }
@@ -224,21 +323,46 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 
 	docs = R"(
 		Create a copy of this expression with the given alias.
+
+		Parameters:
+			name: The alias to use for the expression, this will affect how it can be referenced.
+
+		Returns:
+			Expression: self with an alias.
 	)";
 	expression.def("alias", &DuckDBPyExpression::SetAlias, docs);
 
 	docs = R"(
-		TODO: add docs.
+		Add an additional WHEN <condition> THEN <value> clause to the CaseExpression.
+
+		Parameters:
+			condition: The condition that must be met.
+			value: The value to use if the condition is met.
+
+		Returns:
+			CaseExpression: self with an additional WHEN clause.
 	)";
 	expression.def("when", &DuckDBPyExpression::When, py::arg("condition"), py::arg("value"), docs);
 
 	docs = R"(
-		TODO: add docs.
+		Add an ELSE <value> clause to the CaseExpression.
+
+		Parameters:
+			value: The value to use if none of the WHEN conditions are met.
+
+		Returns:
+			CaseExpression: self with an ELSE clause.
 	)";
 	expression.def("otherwise", &DuckDBPyExpression::Else, py::arg("value"), docs);
 
 	docs = R"(
-		TODO: add docs.
+		Create a CastExpression to type from self
+
+		Parameters:
+			type: The type to cast to
+
+		Returns:
+			CastExpression: self::type
 	)";
 	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
 }
