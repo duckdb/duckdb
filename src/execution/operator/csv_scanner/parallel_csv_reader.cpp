@@ -647,6 +647,10 @@ idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, bool s
 	}
 }
 
+void ParallelCSVReader::Increment(idx_t buffer_idx) {
+	return buffer->line_info->Increment(file_idx, buffer_idx);
+}
+
 bool ParallelCSVReader::TryParseCSV(ParserMode mode) {
 	DataChunk dummy_chunk;
 	string error_message;

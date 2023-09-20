@@ -159,6 +159,8 @@ public:
 	bool Scan(TupleDataScanState &state, DataChunk &result);
 	//! Scans a DataChunk from the TupleDataCollection
 	bool Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
+	//! Whether the last scan has been completed on this TupleDataCollection
+	bool ScanComplete(const TupleDataScanState &state) const;
 
 	//! Gathers a DataChunk from the TupleDataCollection, given the specific row locations (requires full pin)
 	void Gather(Vector &row_locations, const SelectionVector &scan_sel, const idx_t scan_count, DataChunk &result,

@@ -1,6 +1,8 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
@@ -8,8 +10,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
-#include "duckdb/common/serializer/serializer.hpp"
-#include "duckdb/common/serializer/deserializer.hpp"
 
 namespace duckdb {
 
@@ -72,12 +72,13 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (arguments[1]->return_type == LogicalTypeId::SQLNULL) {
-		bound_function.return_type = LogicalTypeId::SQLNULL;
-	} else if (!arguments[1]->IsFoldable()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("JSON structure must be a constant!");
+	}
+	auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	if (structure_val.IsNull() || arguments[1]->return_type == LogicalTypeId::SQLNULL) {
+		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else {
-		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
 			throw BinderException("Cannot cast JSON structure to string");
 		}
@@ -741,6 +742,7 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 
 	switch (result_type.id()) {
 	case LogicalTypeId::SQLNULL:
+		FlatVector::Validity(result).SetAllInvalid(count);
 		return true;
 	case LogicalTypeId::BOOLEAN:
 		return TransformNumerical<bool>(vals, result, count, options);
