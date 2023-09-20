@@ -58,6 +58,9 @@ void PathLikeProcessor::AddFile(const py::object &object) {
 PathLike PathLikeProcessor::Finalize() {
 	PathLike result;
 
+	if (all_files.empty()) {
+		throw InvalidInputException("Please provide a non-empty list of paths or file-like objects");
+	}
 	result.files = Value::LIST(std::move(all_files));
 
 	if (fs_files.empty()) {

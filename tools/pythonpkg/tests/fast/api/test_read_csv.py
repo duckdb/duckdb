@@ -564,3 +564,23 @@ class TestReadCSV(object):
             (9, 10, 11, 12),
             (9, 10, 11, 12),
         ]
+
+    def test_read_csv_empty_list(self):
+        con = duckdb.connect()
+        files = []
+        with pytest.raises(
+            duckdb.InvalidInputException, match='Please provide a non-empty list of paths or file-like objects'
+        ):
+            rel = con.read_csv(files)
+            res = rel.fetchall()
+
+    def test_read_csv_list_invalid_path(self):
+        con = duckdb.connect()
+        files = [
+            StringIO('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4'),
+            'not_valid_path',
+            StringIO('one,two,three,four\n9,10,11,12\n9,10,11,12\n9,10,11,12'),
+        ]
+        with pytest.raises(duckdb.IOException, match='No files found that match the pattern "not_valid_path"'):
+            rel = con.read_csv(files)
+            res = rel.fetchall()
