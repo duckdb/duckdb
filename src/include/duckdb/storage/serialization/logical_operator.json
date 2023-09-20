@@ -777,24 +777,12 @@
     "members": [
       {
         "id": 200,
-        "name": "catalog",
-        "type": "string",
-        "serialize_property": "schema.ParentCatalog().GetName()"
-      },
-      {
-        "id": 201,
-        "name": "schema",
-        "type": "string",
-        "serialize_property": "schema.name"
-      },
-      {
-        "id": 202,
         "name": "info",
         "type": "CreateInfo*",
         "serialize_property": "info->base"
       }
     ],
-    "constructor": ["$ClientContext", "catalog&", "schema&", "info"]
+    "constructor": ["$ClientContext", "info"]
   },
   {
     "class": "LogicalCreate",

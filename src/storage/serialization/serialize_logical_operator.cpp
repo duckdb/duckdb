@@ -314,16 +314,12 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(Deserializer &deseri
 
 void LogicalCreateTable::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WriteProperty(200, "catalog", schema.ParentCatalog().GetName());
-	serializer.WriteProperty(201, "schema", schema.name);
-	serializer.WriteProperty(202, "info", info->base);
+	serializer.WriteProperty(200, "info", info->base);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateTable::Deserialize(Deserializer &deserializer) {
-	auto catalog = deserializer.ReadProperty<string>(200, "catalog");
-	auto schema = deserializer.ReadProperty<string>(201, "schema");
-	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(202, "info");
-	auto result = duckdb::unique_ptr<LogicalCreateTable>(new LogicalCreateTable(deserializer.Get<ClientContext &>(), catalog, schema, std::move(info)));
+	auto info = deserializer.ReadProperty<unique_ptr<CreateInfo>>(200, "info");
+	auto result = duckdb::unique_ptr<LogicalCreateTable>(new LogicalCreateTable(deserializer.Get<ClientContext &>(), std::move(info)));
 	return std::move(result);
 }
 
