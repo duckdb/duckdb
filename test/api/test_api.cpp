@@ -10,6 +10,21 @@
 using namespace duckdb;
 using namespace std;
 
+TEST_CASE("Test insert returning in CPP API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.Query("CREATE TABLE test(val VARCHAR);");
+
+//	con.Query("INSERT INTO test(val) VALUES ('query') RETURNING *");
+//	con.Query("INSERT INTO test(val) VALUES (?) RETURNING *;", "query_arg");
+	con.Prepare("INSERT INTO test(val) VALUES (?) returning *;")->Execute("prepared");
+	con.Prepare("INSERT INTO test(val) VALUES (?) returning *;")->Execute("prepared_arg");
+
+	auto result = con.Query("SELECT * FROM test;");
+	REQUIRE(CHECK_COLUMN(result, 0, {"prepared", "prepared_arg"}));
+}
+
+
 TEST_CASE("Test comment in CPP API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
