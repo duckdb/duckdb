@@ -1,5 +1,76 @@
 cmake_minimum_required(VERSION 2.8.12)
 
+if(EMSCRIPTEN)
+  set(DUCKDB_PLATFORM "wasm_mvp")
+  # Release build
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DNDEBUG")
+    # ... with min size
+    if(WASM_MIN_SIZE)
+      set(CMAKE_CXX_FLAGS_RELEASE "-Oz")
+      set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -Oz")
+    else()
+      # ... with max performance
+      set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+      set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -O3")
+    endif()
+  # Release build with debug symbols
+  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    # ... with fast linking
+    if(WASM_FAST_LINKING)
+      set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -O0")
+    endif()
+  # Debug build
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} \
+      --profiling \
+      -gsource-map \
+      --source-map-base=file://${CMAKE_BINARY_DIR}/")
+    set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} \
+      -sASSERTIONS=1 \
+      -sSAFE_HEAP=1 \
+      -gsource-map \
+      --source-map-base=file://${CMAKE_BINARY_DIR}/ \
+      -sSEPARATE_DWARF_URL=file://${CMAKE_BINARY_DIR}/duckdb.wasm")
+    # ... with fast linking
+    if(WASM_FAST_LINKING)
+      set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -O0")
+    endif()
+  endif()
+
+  if(WITH_WASM_EXCEPTIONS)
+    set(DUCKDB_PLATFORM "wasm_eh")
+    set(CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} -fwasm-exceptions -DWEBDB_FAST_EXCEPTIONS=1")
+  else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sDISABLE_EXCEPTION_CATCHING=0")
+  endif()
+
+  if(WITH_WASM_SIMD)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msimd128 -DWEBDB_SIMD=1")
+  endif()
+
+  if(WITH_WASM_BULK_MEMORY)
+    set(CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} -mbulk-memory -DWEBDB_BULK_MEMORY=1")
+  endif()
+
+  if(WITH_WASM_THREADS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_PTHREADS=1 -DWEBDB_THREADS=1")
+    set(DUCKDB_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sUSE_PTHREADS=1")
+    set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -sUSE_PTHREADS=1 -sPTHREAD_POOL_SIZE=4")
+    set(DUCKDB_PLATFORM "wasm_threads")
+  else()
+    set(CMAKE_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} -sUSE_PTHREADS=0 -DDUCKDB_NO_THREADS=1")
+    set(DUCKDB_CXX_FLAGS
+        "${CMAKE_CXX_FLAGS} -sUSE_PTHREADS=0 -DDUCKDB_NO_THREADS=1")
+    set(WASM_LINK_FLAGS "${WASM_LINK_FLAGS} -sUSE_PTHREADS=0")
+    set(THREAD_LIBS)
+  endif()
+  set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -DDUCKDB_CUSTOM_PLATFORM=${DUCKDB_PLATFORM}")
+endif()
+
 if(POLICY CMP0026)
   cmake_policy(SET CMP0026 NEW)
 endif()
