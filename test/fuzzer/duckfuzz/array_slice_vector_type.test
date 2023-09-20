@@ -1,0 +1,18 @@
+# name: test/fuzzer/duckfuzz/array_slice_vector_type.test
+# description: Fuzzyduck issue #1228
+# group: [duckfuzz]
+
+query I
+SELECT array_pop_front(x) FROM test_vector_types('x') AS t1(x);
+----
+🦆🦆🦆🦆🦆
+oo\0se
+NULL
+🦆🦆🦆🦆🦆
+🦆🦆🦆🦆🦆
+🦆🦆🦆🦆🦆
+oo\0se
+NULL
+🦆🦆🦆🦆🦆
+oo\0se
+NULL
