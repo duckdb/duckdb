@@ -1,0 +1,34 @@
+diff --git a/arrow/arrow_extension.cpp b/arrow/arrow_extension.cpp
+index 34a4021..9330c79 100644
+--- a/arrow/arrow_extension.cpp
++++ b/arrow/arrow_extension.cpp
+@@ -10,6 +10,7 @@
+ #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
+ #include "duckdb/common/arrow/arrow_appender.hpp"
+ #include "duckdb/common/arrow/arrow_converter.hpp"
++#include "duckdb/main/extension_util.hpp"
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+ #include "duckdb/function/table/arrow.hpp"
+ #endif
+@@ -17,19 +18,11 @@
+ namespace duckdb {
+ 
+ static void LoadInternal(DatabaseInstance &instance) {
+-	Connection con(instance);
+-	con.BeginTransaction();
+-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+-
+ 	auto to_arrow_fun = ToArrowIPCFunction::GetFunction();
+-	CreateTableFunctionInfo to_arrow_ipc_info(to_arrow_fun);
+-	catalog.CreateTableFunction(*con.context, &to_arrow_ipc_info);
++	ExtensionUtil::RegisterFunction(db, to_arrow_fun);
+ 
+ 	auto scan_arrow_fun = ArrowIPCTableFunction::GetFunction();
+-	CreateTableFunctionInfo scan_arrow_ipc_info(scan_arrow_fun);
+-	catalog.CreateTableFunction(*con.context, &scan_arrow_ipc_info);
+-
+-	con.Commit();
++	ExtensionUtil::RegisterFunction(db, scan_arrow_fun);
+ }
+ 
+ void ArrowExtension::Load(DuckDB &db) {

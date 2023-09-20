@@ -138,10 +138,10 @@ statement ok
 insert into t values (1,1),(2,2)
 
 query II
-select mode(a), mode(b) from t group by b%2;
+select mode(a), mode(b) from t group by b%2 order by all;
 ----
-2	2
 1	1
+2	2
 
 query I
 select histogram(b) from t;

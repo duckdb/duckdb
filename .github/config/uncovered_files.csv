@@ -1,4 +1,4 @@
-catalog/catalog.cpp	39
+catalog/catalog.cpp	41
 catalog/catalog_entry.cpp	11
 catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
@@ -126,6 +126,7 @@ core_functions/scalar/date/date_part.cpp	17
 core_functions/scalar/date/date_sub.cpp	209
 core_functions/scalar/date/date_trunc.cpp	23
 core_functions/scalar/date/strftime.cpp	10
+core_functions/scalar/date/time_bucket.cpp	3
 core_functions/scalar/enum/enum_functions.cpp	10
 core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
@@ -200,10 +201,10 @@ execution/operator/join/physical_range_join.cpp	62
 execution/operator/order/physical_top_n.cpp	5
 execution/operator/csv_scanner/base_csv_reader.cpp	31
 execution/operator/csv_scanner/buffered_csv_reader.cpp	47
+execution/operator/csv_scanner/csv_reader_options.cpp	41
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/csv_scanner/csv_file_handle.cpp	7
-execution/operator/csv_scanner/csv_reader_options.cpp	12
-execution/operator/csv_scanner/parallel_csv_reader.cpp	52
+execution/operator/csv_scanner/parallel_csv_reader.cpp	50
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
@@ -234,7 +235,7 @@ execution/physical_plan/plan_sample.cpp	2
 execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
-execution/radix_partitioned_hashtable.cpp	11
+execution/radix_partitioned_hashtable.cpp	12
 execution/reservoir_sample.cpp	60
 execution/window_executor.cpp	29
 execution/window_segment_tree.cpp	12
@@ -543,6 +544,7 @@ optimizer/pushdown/pushdown_inner_join.cpp	2
 optimizer/pushdown/pushdown_set_operation.cpp	2
 optimizer/regex_range_filter.cpp	2
 optimizer/remove_unused_columns.cpp	2
+optimizer/rule/arithmetic_simplification.cpp	1
 optimizer/rule/date_part_simplification.cpp	2
 optimizer/rule/distributivity.cpp	3
 optimizer/rule/empty_needle_removal.cpp	2
@@ -799,7 +801,7 @@ storage/serialization/serialize_logical_operator.cpp	23
 storage/serialization/serialize_parse_info.cpp	61
 storage/serialization/serialize_table_filter.cpp	20
 storage/serialization/serialize_types.cpp	2
-storage/metadata/metadata_manager.cpp	4
+storage/metadata/metadata_manager.cpp	7
 storage/table/chunk_info.cpp	62
 storage/table/column_checkpoint_state.cpp	20
 storage/table/column_data.cpp	16
