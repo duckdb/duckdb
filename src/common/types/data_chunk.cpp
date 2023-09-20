@@ -235,16 +235,20 @@ string DataChunk::ToString() const {
 }
 
 void DataChunk::Serialize(Serializer &serializer) const {
+
 	// write the count
 	auto row_count = size();
 	serializer.WriteProperty<sel_t>(100, "rows", row_count);
-	auto column_count = ColumnCount();
 
-	// Write the types
+	// we should never try to serialize empty data chunks
+	auto column_count = ColumnCount();
+	D_ASSERT(column_count);
+
+	// write the types
 	serializer.WriteList(101, "types", column_count,
 	                     [&](Serializer::List &list, idx_t i) { list.WriteElement(data[i].GetType()); });
 
-	// Write the data
+	// write the data
 	serializer.WriteList(102, "columns", column_count, [&](Serializer::List &list, idx_t i) {
 		list.WriteObject([&](Serializer &object) {
 			// Reference the vector to avoid potentially mutating it during serialization
@@ -269,9 +273,8 @@ void DataChunk::Deserialize(Deserializer &deserializer) {
 	});
 
 	// initialize the data chunk
-	if (!types.empty()) {
-		Initialize(Allocator::DefaultAllocator(), types);
-	}
+	D_ASSERT(!types.empty());
+	Initialize(Allocator::DefaultAllocator(), types);
 
 	// read the data
 	deserializer.ReadList(102, "columns", [&](Deserializer::List &list, idx_t i) {
@@ -303,11 +306,11 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 }
 
 unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
-	auto orrified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
+	auto unified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
+		data[col_idx].ToUnifiedFormat(size(), unified_data[col_idx]);
 	}
-	return orrified_data;
+	return unified_data;
 }
 
 void DataChunk::Hash(Vector &result) {
@@ -331,11 +334,20 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 void DataChunk::Verify() {
 #ifdef DEBUG
 	D_ASSERT(size() <= capacity);
+
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
 	}
 
+	if (!ColumnCount()) {
+		// don't try to round-trip dummy data chunks with no data
+		// e.g., these exist in queries like 'SELECT distinct(col0, col1) FROM tbl', where we have groups, but no
+		// payload so the payload will be such an empty data chunk
+		return;
+	}
+
+	// verify that we can round-trip chunk serialization
 	MemoryStream mem_stream;
 	BinarySerializer serializer(mem_stream);
 
