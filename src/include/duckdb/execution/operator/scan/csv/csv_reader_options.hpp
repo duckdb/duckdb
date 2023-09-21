@@ -126,12 +126,10 @@ struct CSVReaderOptions {
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Number of sample chunks used in auto-detection
+	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
-	//! Size of sample chunk used for dialect and type detection
-	idx_t sample_chunk_size = STANDARD_VECTOR_SIZE;
-	//! Number of sample chunks used for type detection
-	idx_t sample_chunks = 10;
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! The file path of the CSV file to read

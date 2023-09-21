@@ -449,11 +449,10 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 	if (start_bit % 8 != 0) {
 		// handle sub-bit stuff (yay)
 		idx_t byte_pos = start_bit / 8;
-		idx_t bit_start = byte_pos * 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr() + byte_pos));
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr()));
 		for (idx_t i = start_bit; i < bit_end; i++) {
-			mask.SetValid(i - bit_start);
+			mask.SetValid(i);
 		}
 		revert_start = bit_end / 8;
 	} else {

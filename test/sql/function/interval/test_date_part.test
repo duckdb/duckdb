@@ -158,10 +158,10 @@ SELECT i, DATE_PART(['hour', 'minute', 'second', 'epoch'], i) AS parts
 FROM intervals
 ORDER BY 1;
 ----
-00:34:26.3434	{'hour': 0, 'minute': 34, 'second': 26, 'epoch': 2066}
-42 days	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 3628800}
-1 year 4 months	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 41925600}
-2 years	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 63115200}
+00:34:26.3434	{'hour': 0, 'minute': 34, 'second': 26, 'epoch': 2066.3434}
+42 days	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 3628800.0}
+1 year 4 months	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 41925600.0}
+2 years	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 63115200.0}
 
 # Function-only parts
 query II
