@@ -58,7 +58,7 @@
     {
         "name": "list_grade_up",
         "parameters": "list",
-        "description": "Sorts the elements of the list and return index.",
+        "description": "Returns the index of their sorted position.",
         "example": "list_grade_up([3, 6, 1, 2])",
         "type": "scalar_function_set",
         "aliases": ["array_grade_up", "grade_up"]
