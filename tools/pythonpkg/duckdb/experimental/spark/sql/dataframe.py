@@ -73,6 +73,8 @@ class DataFrame:
         return DataFrame(rel, self.session)
 
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
+        if not isinstance(col, Column):
+            raise TypeError("argument 'col' should be of type Column")
         if columnName in self.relation:
             # We want to replace the existing column with this new expression
             cols = []
@@ -561,7 +563,7 @@ class DataFrame:
 
     @property
     def schema(self) -> StructType:
-        """Returns the schema of this :class:`DataFrame` as a :class:`duckdb.spark.sql.types.StructType`.
+        """Returns the schema of this :class:`DataFrame` as a :class:`duckdb.experimental.spark.sql.types.StructType`.
 
         Examples
         --------
