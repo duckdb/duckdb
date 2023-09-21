@@ -194,7 +194,7 @@ execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
 execution/operator/join/physical_hash_join.cpp	8
 execution/operator/join/physical_iejoin.cpp	32
-execution/operator/join/physical_index_join.cpp	2
+execution/operator/join/physical_index_join.cpp	3
 execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62
