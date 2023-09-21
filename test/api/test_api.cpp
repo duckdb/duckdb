@@ -5,7 +5,6 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/common/types/value.hpp"
 
-#include "iostream"
 #include <chrono>
 #include <thread>
 
