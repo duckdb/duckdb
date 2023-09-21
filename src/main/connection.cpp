@@ -132,7 +132,7 @@ unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, ve
 	if (statement->HasError()) {
 		return make_uniq<MaterializedQueryResult>(statement->error);
 	}
-	return statement->Execute(values, false);
+	return statement->Execute(values);
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &table_name) {

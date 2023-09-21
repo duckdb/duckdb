@@ -68,31 +68,29 @@ case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes
 	return expected_types;
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<Value> &named_values,
-                                                   bool allow_stream_result) {
-	auto pending = PendingQuery(named_values, allow_stream_result);
+unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<Value> &named_values) {
+	auto pending = PendingQuery(named_values);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->Execute();
 }
 
-unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	// allow stream result default to true.
-	auto pending = PendingQuery(values, allow_stream_result);
+unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values) {
+	auto pending = PendingQuery(values);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
 	return pending->Execute();
 }
 
-unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values, bool allow_stream_result) {
+unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &values,  bool allow_stream_result) {
 	case_insensitive_map_t<Value> named_values;
 	for (idx_t i = 0; i < values.size(); i++) {
 		auto &val = values[i];
 		named_values[std::to_string(i + 1)] = val;
 	}
-	return PendingQuery(named_values, allow_stream_result);
+	return PendingQuery(named_values);
 }
 
 unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_map_t<Value> &named_values,
@@ -112,7 +110,6 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 
 	D_ASSERT(data);
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
-	std::cout << "allow stream result = " << data->properties.allow_stream_result << std::endl;
 	// parameters.allow_stream_result = false if result returns data.
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'

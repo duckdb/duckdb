@@ -241,7 +241,7 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_wid
 		pStmt->db->last_error = PreservedError("Statement has already been executed");
 		return nullptr;
 	}
-	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
+	pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
 	if (pStmt->result->HasError()) {
 		// error in execute: clear prepared statement
 		pStmt->db->last_error = pStmt->result->GetErrorObject();
@@ -291,7 +291,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 	pStmt->current_text = nullptr;
 	if (!pStmt->result) {
 		// no result yet! call Execute()
-		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, true);
+		pStmt->result = pStmt->prepared->Execute(pStmt->bound_values);
 		if (pStmt->result->HasError()) {
 			// error in execute: clear prepared statement
 			pStmt->db->last_error = pStmt->result->GetErrorObject();
