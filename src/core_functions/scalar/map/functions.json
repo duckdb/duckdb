@@ -2,7 +2,7 @@
     {
         "name": "cardinality",
         "parameters": "map",
-        "description": "Return the size of the map (or the number of entries in the map)",
+        "description": "Returns the size of the map (or the number of entries in the map)",
         "example": "cardinality( map([4, 2], ['a', 'b']) );",
         "type": "scalar_function"
     },
@@ -23,7 +23,7 @@
     {
         "name": "map_extract",
         "parameters": "map,key",
-        "description": "Return a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned",
+        "description": "Returns a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned",
         "example": "map_extract(map(['key'], ['val']), 'key')",
         "type": "scalar_function",
         "aliases": ["element_at"]

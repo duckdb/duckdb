@@ -100,7 +100,7 @@
     {
         "name": "even",
         "parameters": "x",
-        "description": "Round to next even number by rounding away from zero",
+        "description": "Rounds x to next even number by rounding away from zero",
         "example": "even(2.9)",
         "type": "scalar_function"
     },
@@ -198,7 +198,7 @@
     {
         "name": "nextafter",
         "parameters": "x, y",
-        "description": "Return the next floating point value after x in the direction of y",
+        "description": "Returns the next floating point value after x in the direction of y",
         "example": "nextafter(1::float, 2::float)",
         "type": "scalar_function_set",
         "struct": "NextAfterFun"
@@ -219,7 +219,7 @@
     {
         "name": "round",
         "parameters": "x,precision",
-        "description": "Round to s decimal places",
+        "description": "Rounds x to s decimal places",
         "example": "round(42.4332, 2)",
         "type": "scalar_function_set"
     },

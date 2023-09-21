@@ -9,7 +9,7 @@
     {
         "name": "current_setting",
         "parameters": "setting_name",
-        "description": "Return the current value of the configuration setting",
+        "description": "Returns the current value of the configuration setting",
         "example": "current_setting('access_mode')",
         "type": "scalar_function"
     },
@@ -66,21 +66,21 @@
     {
         "name": "current_schema",
         "parameters": "",
-        "description": "Return the name of the currently active schema. Default is main",
+        "description": "Returns the name of the currently active schema. Default is main",
         "example": "current_schema()",
         "type": "scalar_function"
     },
     {
         "name": "current_schemas",
         "parameters": "include_implicit",
-        "description": "Return list of schemas. Pass a parameter of True to include implicit schemas",
+        "description": "Returns list of schemas. Pass a parameter of True to include implicit schemas",
         "example": "current_schemas(true)",
         "type": "scalar_function"
     },
     {
         "name": "current_database",
         "parameters": "",
-        "description": "Return the name of the currently active database",
+        "description": "Returns the name of the currently active database",
         "example": "current_database()",
         "type": "scalar_function"
     },
@@ -102,7 +102,7 @@
     {
         "name": "version",
         "parameters": "",
-        "description": "Return the currently active version of DuckDB in this format: v0.3.2\t",
+        "description": "Returns the currently active version of DuckDB in this format: v0.3.2\t",
         "example": "version()",
         "type": "scalar_function"
     }

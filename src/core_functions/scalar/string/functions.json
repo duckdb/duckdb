@@ -2,7 +2,7 @@
     {
         "name": "^@",
         "parameters": "string,search_string",
-        "description": "Return true if string begins with search_string",
+        "description": "Returns true if string begins with search_string",
         "example": "starts_with('abc','a')",
         "type": "scalar_function",
         "struct": "StartsWithOperatorFun",
@@ -19,7 +19,7 @@
     {
         "name": "bar",
         "parameters": "x,min,max,width",
-        "description": "Draw a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80",
+        "description": "Draws a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80",
         "example": "bar(5, 0, 20, 10)",
         "type": "scalar_function_set"
     },
@@ -79,7 +79,7 @@
     {
         "name": "instr",
         "parameters": "haystack,needle",
-        "description": "Return location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found",
+        "description": "Returns location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found",
         "example": "instr('test test','es')",
         "type": "scalar_function",
         "aliases": ["strpos", "position"]
