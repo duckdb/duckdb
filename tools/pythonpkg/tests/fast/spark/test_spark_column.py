@@ -19,4 +19,5 @@ class TestSparkColumn(object):
         assert 'col0' in new_col.dataType
         assert 'col1' in new_col.dataType
 
-        df = df.withColumn('struct', 'yes')
+        with pytest.raises(TypeError, match="argument 'col' should be of type Column"):
+            df = df.withColumn('struct', 'yes')
