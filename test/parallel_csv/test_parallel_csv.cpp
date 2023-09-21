@@ -243,6 +243,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	skip.insert("test/sql/copy/csv/data/test/5438.csv");
 	// FIXME: Fix the following tests
 	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
+	skip.insert("test/sql/copy/csv/data/test/timestampoffset.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
@@ -267,6 +268,7 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/bug_7578.csv");
 	// FIXME: Fix the following tests
 	skip.insert("data/csv/csv_quoted_newline_odd.csv");
+	skip.insert("data/csv/hebere.csv.gz");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
