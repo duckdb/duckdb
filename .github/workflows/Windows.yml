@@ -55,6 +55,10 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install pytest
+      run: |
+        python -m pip install pytest
+
     - name: Build
       shell: bash
       run: |
@@ -71,7 +75,7 @@ jobs:
     - name: Tools Test
       shell: bash
       run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
+        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
@@ -154,6 +158,10 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
 
+    - name: Install pytest
+      run: |
+        python -m pip install pytest
+
     - name: Build
       shell: bash
       run: |
@@ -167,7 +175,7 @@ jobs:
     - name: Tools Test
       shell: bash
       run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
+        python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
  mingw:

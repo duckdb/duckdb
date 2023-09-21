@@ -109,6 +109,10 @@ jobs:
           brew remove --ignore-dependencies unixodbc
           CFLAGS="-arch x86_64 -arch arm64" ./scripts/install_unixodbc.sh
 
+      - name: Install pytest
+        run: |
+          python -m pip install pytest
+
       - name: Build
         shell: bash
         run: make
@@ -124,7 +128,7 @@ jobs:
       - name: Tools Tests
         shell: bash
         run: |
-          python tools/shell/shell-test.py build/release/duckdb
+          python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
