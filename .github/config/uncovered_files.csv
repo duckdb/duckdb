@@ -2,7 +2,7 @@ catalog/catalog.cpp	41
 catalog/catalog_entry.cpp	11
 catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
-catalog/catalog_entry/index_catalog_entry.cpp	2
+catalog/catalog_entry/index_catalog_entry.cpp	4
 catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
 catalog/catalog_entry/schema_catalog_entry.cpp	10
 catalog/catalog_entry/table_catalog_entry.cpp	4
