@@ -1295,14 +1295,6 @@ void DataTable::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> d
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void DataTable::Checkpoint(TableDataWriter &writer, Serializer &metadata_serializer) {
-	//
-	//	// first, we write all index block pointers
-	//	vector<BlockPointer> root_block_pointers;
-	//	info->indexes.Scan([&](Index &index) {
-	//		root_block_pointers.push_back( index.GetRootBlockPointer());
-	//		return false;
-	//	});
-	//	metadata_serializer.WriteProperty(1001, "root_block_pointers", root_block_pointers);
 
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
