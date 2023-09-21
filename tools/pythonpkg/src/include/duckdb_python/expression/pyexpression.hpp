@@ -89,7 +89,7 @@ public:
 
 public:
 	static shared_ptr<DuckDBPyExpression> StarExpression(const py::list &exclude = py::none());
-	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
+	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &column_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const py::object &value);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
 	                                                     const DuckDBPyExpression &value);

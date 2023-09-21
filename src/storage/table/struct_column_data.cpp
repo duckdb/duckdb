@@ -128,6 +128,7 @@ void StructColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, V
 		sub_columns[i]->Append(StructStats::GetChildStats(stats, i), state.child_appends[i + 1], *child_entries[i],
 		                       count);
 	}
+	this->count += count;
 }
 
 void StructColumnData::RevertAppend(row_t start_row) {
@@ -135,6 +136,7 @@ void StructColumnData::RevertAppend(row_t start_row) {
 	for (auto &sub_column : sub_columns) {
 		sub_column->RevertAppend(start_row);
 	}
+	this->count = start_row - this->start;
 }
 
 idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {

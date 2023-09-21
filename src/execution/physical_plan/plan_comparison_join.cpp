@@ -254,7 +254,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 	}
 
 	bool has_equality = false;
-	// bool has_inequality = false;
 	size_t has_range = 0;
 	for (size_t c = 0; c < op.conditions.size(); ++c) {
 		auto &cond = op.conditions[c];
@@ -271,7 +270,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanComparisonJoin(LogicalCo
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
 		case ExpressionType::COMPARE_DISTINCT_FROM:
-			// has_inequality = true;
 			break;
 		default:
 			throw NotImplementedException("Unimplemented comparison join");
