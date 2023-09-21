@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
+_ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.spark.sql.types import (
+from duckdb.experimental.spark.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +14,8 @@ from duckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.spark.sql.functions import sum, avg, max, min, mean, count
+from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
+from duckdb.experimental.spark.sql.functions import sum, avg, max, min, mean, count
 
 
 class TestDataFrameGroupBy(object):
@@ -75,11 +75,11 @@ class TestDataFrameGroupBy(object):
             == "[Row(department='Finance', mean(salary)=87750.0), Row(department='Marketing', mean(salary)=85500.0), Row(department='Sales', mean(salary)=85666.66666666667)]"
         )
 
-        df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department")
+        df2 = df.groupBy("department", "state").sum("salary", "bonus").sort("department", "state")
         res = df2.collect()
         assert (
             str(res)
-            == "[Row(department='Finance', state='NY', sum(salary)=162000, sum(bonus)=34000), Row(department='Finance', state='CA', sum(salary)=189000, sum(bonus)=47000), Row(department='Marketing', state='CA', sum(salary)=80000, sum(bonus)=18000), Row(department='Marketing', state='NY', sum(salary)=91000, sum(bonus)=21000), Row(department='Sales', state='NY', sum(salary)=176000, sum(bonus)=30000), Row(department='Sales', state='CA', sum(salary)=81000, sum(bonus)=23000)]"
+            == "[Row(department='Finance', state='CA', sum(salary)=189000, sum(bonus)=47000), Row(department='Finance', state='NY', sum(salary)=162000, sum(bonus)=34000), Row(department='Marketing', state='CA', sum(salary)=80000, sum(bonus)=18000), Row(department='Marketing', state='NY', sum(salary)=91000, sum(bonus)=21000), Row(department='Sales', state='CA', sum(salary)=81000, sum(bonus)=23000), Row(department='Sales', state='NY', sum(salary)=176000, sum(bonus)=30000)]"
         )
 
         df2 = (

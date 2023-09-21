@@ -343,8 +343,8 @@ void PhysicalHashAggregate::SinkDistinct(ExecutionContext &context, DataChunk &c
 
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSinkInput &input) const {
-	auto &llstate = input.local_state.Cast<HashAggregateLocalSinkState>();
-	auto &gstate = input.global_state.Cast<HashAggregateGlobalSinkState>();
+	auto &local_state = input.local_state.Cast<HashAggregateLocalSinkState>();
+	auto &global_state = input.global_state.Cast<HashAggregateGlobalSinkState>();
 
 	if (distinct_collection_info) {
 		SinkDistinct(context, chunk, input);
@@ -354,8 +354,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
-
+	DataChunk &aggregate_input_chunk = local_state.aggregate_input_chunk;
 	auto &aggregates = grouped_aggregate_data.aggregates;
 	idx_t aggregate_input_idx = 0;
 
@@ -385,10 +384,11 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 
 	// For every grouping set there is one radix_table
 	for (idx_t i = 0; i < groupings.size(); i++) {
-		auto &grouping_gstate = gstate.grouping_states[i];
-		auto &grouping_lstate = llstate.grouping_states[i];
+		auto &grouping_local_state = global_state.grouping_states[i];
+		auto &grouping_global_state = local_state.grouping_states[i];
 		InterruptState interrupt_state;
-		OperatorSinkInput sink_input {*grouping_gstate.table_state, *grouping_lstate.table_state, interrupt_state};
+		OperatorSinkInput sink_input {*grouping_local_state.table_state, *grouping_global_state.table_state,
+		                              interrupt_state};
 
 		auto &grouping = groupings[i];
 		auto &table = grouping.table_data;

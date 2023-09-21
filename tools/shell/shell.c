@@ -13646,7 +13646,7 @@ static const char *(azHelp[]) = {
   ".load FILE ?ENTRY?       Load an extension library",
 #endif
   ".log FILE|off            Turn logging on or off.  FILE can be stderr/stdout",
-  ".maxrows COUNT           Sets the maximum number of rows for display. Only for duckbox mode.",
+  ".maxrows COUNT           Sets the maximum number of rows for display (default: 40). Only for duckbox mode.",
   ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.",
   ".mode MODE ?TABLE?       Set output mode",
   "   MODE is one of:",

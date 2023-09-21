@@ -1,9 +1,9 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
+_ = pytest.importorskip("duckdb.experimental.spark")
 pd = pytest.importorskip("pandas")
 
-from duckdb.spark.sql.types import (
+from duckdb.experimental.spark.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -15,7 +15,7 @@ from duckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.spark.sql.functions import col, struct, when
+from duckdb.experimental.spark.sql.functions import col, struct, when
 import duckdb
 import re
 

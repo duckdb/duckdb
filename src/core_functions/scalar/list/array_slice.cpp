@@ -191,9 +191,11 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 	}
 
 	auto sel_length = 0;
+	bool sel_valid = false;
 	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, step_valid);
 		sel.Initialize(sel_length);
+		sel_valid = true;
 	}
 
 	// Try to slice
@@ -205,8 +207,9 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 		result_data[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, str, begin, end, step, sel_idx);
 	}
 
-	if (step_vector && step != 0 && end - begin > 0) {
+	if (sel_valid) {
 		result_child_vector->Slice(sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
@@ -276,6 +279,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			new_sel.set_index(i, sel.get_index(i));
 		}
 		result_child_vector->Slice(new_sel, sel_length);
+		ListVector::SetListSize(result, sel_length);
 	}
 }
 
