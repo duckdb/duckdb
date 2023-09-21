@@ -2,19 +2,19 @@ from typing import Optional, List, Tuple, Any, Union, Iterable, TYPE_CHECKING
 import uuid
 
 if TYPE_CHECKING:
-    from duckdb.spark.sql.catalog import Catalog
+    from .catalog import Catalog
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-from duckdb.spark.exception import ContributionsAcceptedError
+from ..exception import ContributionsAcceptedError
 
-from duckdb.spark.sql.types import StructType, AtomicType, DataType
-from duckdb.spark.conf import SparkConf
-from duckdb.spark.sql.dataframe import DataFrame
-from duckdb.spark.sql.conf import RuntimeConfig
-from duckdb.spark.sql.readwriter import DataFrameReader
-from duckdb.spark.context import SparkContext
-from duckdb.spark.sql.udf import UDFRegistration
-from duckdb.spark.sql.streaming import DataStreamReader
+from .types import StructType, AtomicType, DataType
+from ..conf import SparkConf
+from .dataframe import DataFrame
+from .conf import RuntimeConfig
+from .readwriter import DataFrameReader
+from ..context import SparkContext
+from .udf import UDFRegistration
+from .streaming import DataStreamReader
 import duckdb
 
 # In spark:
@@ -30,6 +30,9 @@ import duckdb
 # every value in each row needs to be turned into a Value
 def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
     from duckdb import Value
+
+    ## FIXME: this is not true
+    # assert not isinstance(data, PandasDataFrame)
 
     new_data = []
     for row in data:
@@ -94,6 +97,17 @@ class SparkSession:
         rel = self.conn.sql(query, params=parameters)
         return DataFrame(rel, self)
 
+    def _createDataFrameFromPandas(self, data: "PandasDataFrame", types, names) -> DataFrame:
+        df = self._create_dataframe(data)
+
+        # Cast to types
+        if types:
+            df = df._cast_types(*types)
+        # Alias to names
+        if names:
+            df = df.toDF(*names)
+        return df
+
     def createDataFrame(
         self,
         data: Union["PandasDataFrame", Iterable[Any]],
@@ -107,6 +121,7 @@ class SparkSession:
             raise NotImplementedError
         types = None
         names = None
+
         if schema:
             if isinstance(schema, StructType):
                 types, names = schema.extract_types_and_names()
@@ -121,10 +136,13 @@ class SparkSession:
             has_pandas = False
         # Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
         # Then check if 'data' is None or []
+        if has_pandas and isinstance(data, pandas.DataFrame):
+            return self._createDataFrameFromPandas(data, types, names)
+
         # Finally check if a schema was provided
         is_empty = False
-        if (not has_pandas or (has_pandas and not isinstance(data, pandas.DataFrame))) and not data and names:
-            # Create NULLs for every type in our the dataframe
+        if not data and names:
+            # Create NULLs for every type in our dataframe
             is_empty = True
             data = [tuple(None for _ in names)]
 
@@ -209,12 +227,10 @@ class SparkSession:
 
     class Builder:
         def __init__(self):
-            self.name = "builder"
-            self._master = ':memory:'
-            self._config = {}
+            pass
 
         def master(self, name: str) -> "SparkSession.Builder":
-            self._master = name
+            # no-op
             return self
 
         def appName(self, name: str) -> "SparkSession.Builder":
@@ -226,17 +242,12 @@ class SparkSession:
             return self
 
         def getOrCreate(self) -> "SparkSession":
-            # TODO: use the config to pass in methods to 'connect'
-            context = SparkContext(self._master)
+            context = SparkContext("__ignored__")
             return SparkSession(context)
 
         def config(
             self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None
         ) -> "SparkSession.Builder":
-            if conf:
-                raise NotImplementedError
-            if key and value:
-                self._config[key] = value
             return self
 
         def enableHiveSupport(self) -> "SparkSession.Builder":

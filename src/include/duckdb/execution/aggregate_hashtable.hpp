@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/row_operations/row_matcher.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
@@ -143,6 +144,9 @@ public:
 	void UnpinData();
 
 private:
+	//! Efficiently matches groups
+	RowMatcher row_matcher;
+
 	//! Append state
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();

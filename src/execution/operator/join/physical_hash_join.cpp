@@ -420,6 +420,8 @@ public:
 	}
 
 	DataChunk join_keys;
+	TupleDataChunkState join_key_state;
+
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 	unique_ptr<OperatorState> perfect_hash_join_state;
@@ -446,6 +448,7 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &c
 		for (auto &cond : conditions) {
 			state->probe_executor.AddExpression(*cond.left);
 		}
+		TupleDataCollection::InitializeChunkState(state->join_key_state, condition_types);
 	}
 	if (sink.external) {
 		state->spill_chunk.Initialize(allocator, sink.probe_types);
@@ -502,10 +505,10 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 	// perform the actual probe
 	if (sink.external) {
-		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, input, *sink.probe_spill,
-		                                                      state.spill_state, state.spill_chunk);
+		state.scan_structure = sink.hash_table->ProbeAndSpill(state.join_keys, state.join_key_state, input,
+		                                                      *sink.probe_spill, state.spill_state, state.spill_chunk);
 	} else {
-		state.scan_structure = sink.hash_table->Probe(state.join_keys);
+		state.scan_structure = sink.hash_table->Probe(state.join_keys, state.join_key_state);
 	}
 	state.scan_structure->Next(state.join_keys, input, chunk);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
@@ -605,6 +608,7 @@ public:
 	DataChunk probe_chunk;
 	DataChunk join_keys;
 	DataChunk payload;
+	TupleDataChunkState join_key_state;
 	//! Column indices to easily reference the join keys/payload columns in probe_chunk
 	vector<idx_t> join_key_indices;
 	vector<idx_t> payload_indices;
@@ -782,6 +786,7 @@ HashJoinLocalSourceState::HashJoinLocalSourceState(const PhysicalHashJoin &op, A
 	probe_chunk.Initialize(allocator, sink.probe_types);
 	join_keys.Initialize(allocator, op.condition_types);
 	payload.Initialize(allocator, op.children[0]->types);
+	TupleDataCollection::InitializeChunkState(join_key_state, op.condition_types);
 
 	// Store the indices of the columns to reference them easily
 	idx_t col_idx = 0;
@@ -871,7 +876,7 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
-	scan_structure = sink.hash_table->Probe(join_keys, precomputed_hashes);
+	scan_structure = sink.hash_table->Probe(join_keys, join_key_state, precomputed_hashes);
 	scan_structure->Next(join_keys, payload, chunk);
 }
 

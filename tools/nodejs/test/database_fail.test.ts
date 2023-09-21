@@ -2,6 +2,7 @@ import * as sqlite3 from '..';
 import * as assert from 'assert';
 import {DuckDbError, RowData} from "..";
 import {Worker} from 'worker_threads';
+import {expect} from 'chai';
 
 describe('error handling', function() {
     var db: sqlite3.Database;
@@ -163,4 +164,9 @@ describe('error handling', function() {
       await run_worker(); // first should always succeed
       await run_worker(); // second fails without thread safety
     })
+
+    it("shouldn't crash on an exception", () => {
+        expect(() => new sqlite3.Database(':memory:', {file_search_path: '/'})).to.throw('Could not set option "file_search_path" as a global option');
+    });
 });
+
