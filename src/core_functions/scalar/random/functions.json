@@ -1,13 +1,13 @@
 [
     {
         "name": "random",
-        "description": "returns a random number between 0 and 1",
+        "description": "Returns a random number between 0 and 1",
         "example": "random()",
         "type": "scalar_function"
     },
     {
         "name": "setseed",
-        "description": "sets the seed to be used for the random function",
+        "description": "Sets the seed to be used for the random function",
         "example": "setseed(0.42)",
         "type": "scalar_function"
     },
