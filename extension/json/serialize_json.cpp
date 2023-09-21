@@ -31,32 +31,32 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "json_type", type);
 	serializer.WriteProperty(101, "options", options);
 	serializer.WriteProperty(102, "reader_bind", reader_bind);
-	serializer.WriteProperty(103, "files", files);
+	serializer.WritePropertyWithDefault(103, "files", files);
 	serializer.WriteProperty(104, "ignore_errors", ignore_errors);
 	serializer.WriteProperty(105, "maximum_object_size", maximum_object_size);
 	serializer.WriteProperty(106, "auto_detect", auto_detect);
 	serializer.WriteProperty(107, "sample_size", sample_size);
 	serializer.WriteProperty(108, "max_depth", max_depth);
 	serializer.WriteProperty(109, "transform_options", transform_options);
-	serializer.WriteProperty(110, "names", names);
-	serializer.WriteProperty(111, "date_format", GetDateFormat());
-	serializer.WriteProperty(112, "timestamp_format", GetTimestampFormat());
+	serializer.WritePropertyWithDefault(110, "names", names);
+	serializer.WritePropertyWithDefault(111, "date_format", GetDateFormat());
+	serializer.WritePropertyWithDefault(112, "timestamp_format", GetTimestampFormat());
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<JSONScanType>(100, "json_type");
 	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(101, "options");
 	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(102, "reader_bind");
-	auto files = deserializer.ReadProperty<vector<string>>(103, "files");
+	auto files = deserializer.ReadPropertyWithDefault<vector<string>>(103, "files");
 	auto ignore_errors = deserializer.ReadProperty<bool>(104, "ignore_errors");
 	auto maximum_object_size = deserializer.ReadProperty<idx_t>(105, "maximum_object_size");
 	auto auto_detect = deserializer.ReadProperty<bool>(106, "auto_detect");
 	auto sample_size = deserializer.ReadProperty<idx_t>(107, "sample_size");
 	auto max_depth = deserializer.ReadProperty<idx_t>(108, "max_depth");
 	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(109, "transform_options");
-	auto names = deserializer.ReadProperty<vector<string>>(110, "names");
-	auto date_format = deserializer.ReadProperty<string>(111, "date_format");
-	auto timestamp_format = deserializer.ReadProperty<string>(112, "timestamp_format");
+	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(110, "names");
+	auto date_format = deserializer.ReadPropertyWithDefault<string>(111, "date_format");
+	auto timestamp_format = deserializer.ReadPropertyWithDefault<string>(112, "timestamp_format");
 	auto result = duckdb::unique_ptr<JSONScanData>(new JSONScanData(deserializer.Get<ClientContext &>(), std::move(files), std::move(date_format), std::move(timestamp_format)));
 	result->type = type;
 	result->options = options;

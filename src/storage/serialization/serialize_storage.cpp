@@ -29,7 +29,7 @@ void DataPointer::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(102, "block_pointer", block_pointer);
 	serializer.WriteProperty(103, "compression_type", compression_type);
 	serializer.WriteProperty(104, "statistics", statistics);
-	serializer.WriteProperty(105, "segment_state", segment_state);
+	serializer.WritePropertyWithDefault(105, "segment_state", segment_state);
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
@@ -44,7 +44,7 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 	result.block_pointer = block_pointer;
 	result.compression_type = compression_type;
 	deserializer.Set<CompressionType>(compression_type);
-	deserializer.ReadProperty(105, "segment_state", result.segment_state);
+	deserializer.ReadPropertyWithDefault(105, "segment_state", result.segment_state);
 	deserializer.Unset<CompressionType>();
 	return result;
 }
@@ -52,13 +52,13 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 void DistinctStatistics::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "sample_count", sample_count);
 	serializer.WriteProperty(101, "total_count", total_count);
-	serializer.WriteProperty(102, "log", log);
+	serializer.WritePropertyWithDefault(102, "log", log);
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &deserializer) {
 	auto sample_count = deserializer.ReadProperty<idx_t>(100, "sample_count");
 	auto total_count = deserializer.ReadProperty<idx_t>(101, "total_count");
-	auto log = deserializer.ReadProperty<unique_ptr<HyperLogLog>>(102, "log");
+	auto log = deserializer.ReadPropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log");
 	auto result = duckdb::unique_ptr<DistinctStatistics>(new DistinctStatistics(std::move(log), sample_count, total_count));
 	return result;
 }

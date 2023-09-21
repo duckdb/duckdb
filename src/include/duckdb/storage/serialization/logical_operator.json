@@ -591,7 +591,7 @@
       {
         "id": 204,
         "name": "column_index_map",
-        "type": "vector<idx_t>"
+        "type": "IndexVector<idx_t>"
       },
       {
         "id": 205,

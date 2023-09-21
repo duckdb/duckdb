@@ -43,23 +43,23 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 
 void ConjunctionAndFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WriteProperty(200, "child_filters", child_filters);
+	serializer.WritePropertyWithDefault(200, "child_filters", child_filters);
 }
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionAndFilter>(new ConjunctionAndFilter());
-	deserializer.ReadProperty(200, "child_filters", result->child_filters);
+	deserializer.ReadPropertyWithDefault(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
 void ConjunctionOrFilter::Serialize(Serializer &serializer) const {
 	TableFilter::Serialize(serializer);
-	serializer.WriteProperty(200, "child_filters", child_filters);
+	serializer.WritePropertyWithDefault(200, "child_filters", child_filters);
 }
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ConjunctionOrFilter>(new ConjunctionOrFilter());
-	deserializer.ReadProperty(200, "child_filters", result->child_filters);
+	deserializer.ReadPropertyWithDefault(200, "child_filters", result->child_filters);
 	return std::move(result);
 }
 
