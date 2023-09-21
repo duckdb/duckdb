@@ -76,7 +76,7 @@ class TestWithColumnRenamed(object):
         assert 'full name' in df2
         assert 'firstname' in df2.schema['full name'].dataType
 
-        df2 = df.select (
+        df2 = df.select(
             col("name").alias("full name"),
             col("dob"),
             col("gender"),
