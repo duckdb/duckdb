@@ -960,7 +960,6 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 			break;
 		}
 		case PhysicalType::STRUCT: {
-			Flatten(count);
 			auto &entries = StructVector::GetEntries(*this);
 
 			// Serialize entries as a list
