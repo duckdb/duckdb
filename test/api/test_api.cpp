@@ -3,7 +3,6 @@
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/main/connection_manager.hpp"
-#include "duckdb/common/types/value.hpp"
 
 #include <chrono>
 #include <thread>

@@ -70,7 +70,7 @@ case_insensitive_map_t<LogicalType> PreparedStatement::GetExpectedParameterTypes
 
 unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<Value> &named_values,
                                                    bool allow_stream_result) {
-	auto pending = PendingQuery(named_values);
+	auto pending = PendingQuery(named_values, allow_stream_result);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
@@ -78,7 +78,7 @@ unique_ptr<QueryResult> PreparedStatement::Execute(case_insensitive_map_t<Value>
 }
 
 unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool allow_stream_result) {
-	auto pending = PendingQuery(values);
+	auto pending = PendingQuery(values, allow_stream_result);
 	if (pending->HasError()) {
 		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
@@ -91,7 +91,7 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(vector<Value> &va
 		auto &val = values[i];
 		named_values[std::to_string(i + 1)] = val;
 	}
-	return PendingQuery(named_values);
+	return PendingQuery(named_values, allow_stream_result);
 }
 
 unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_map_t<Value> &named_values,
