@@ -285,7 +285,7 @@ struct RepeatFun {
 	static constexpr const char *Description = "Repeats the string count number of times";
 	static constexpr const char *Example = "repeat('A', 5)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct ReplaceFun {
