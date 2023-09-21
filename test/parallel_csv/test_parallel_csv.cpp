@@ -161,6 +161,13 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	REQUIRE(all_tests_passed);
 }
 
+TEST_CASE("Test One File", "[parallel-csv][.]") {
+	string path = "test/sql/copy/csv/data/auto/multiple_skip_row.csv";
+	DuckDB db(nullptr);
+	Connection con(db);
+	RunFull(path,con);
+}
+
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
@@ -183,7 +190,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/auto", "[paralle
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/auto/titlebasicsdebug.tsv");
 	// FIXME: Fix the following tests
-	skip.insert("test/sql/copy/csv/data/auto/multiple_skip_row.csv");
 	skip.insert("test/sql/copy/csv/data/auto/skip_row.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/auto/", &skip);
 }

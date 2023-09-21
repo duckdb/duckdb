@@ -287,11 +287,15 @@ void CSVSniffer::DetectTypes() {
 		candidate->csv_buffer_iterator.Process<SniffValue>(*candidate, tuples);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
+		idx_t true_pos = 0;
 		idx_t values_start = 0;
 		while (true_start < tuples.size()) {
 			if (tuples[true_start].values.empty() ||
 			    (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
 				true_start = tuples[true_start].line_number;
+				if (true_start < tuples.size()){
+					true_pos = tuples[true_start].position;
+				}
 				values_start++;
 			} else {
 				break;
@@ -301,7 +305,11 @@ void CSVSniffer::DetectTypes() {
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < tuples.size()) {
 			if (tuples[true_start].values.size() < max_columns_found && !options.null_padding) {
+
 				true_start = tuples[true_start].line_number;
+				if (true_start < tuples.size()){
+					true_pos = tuples[true_start].position;
+				}
 				values_start++;
 			} else {
 				break;
@@ -317,7 +325,7 @@ void CSVSniffer::DetectTypes() {
 			row_idx = 1;
 		}
 		if (!tuples.empty()) {
-			best_start_without_header = tuples[0].position;
+			best_start_without_header = tuples[0].position - true_pos;
 		}
 
 		// First line where we start our type detection
@@ -387,7 +395,7 @@ void CSVSniffer::DetectTypes() {
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
 			best_header_row = tuples[0].values;
-			best_start_with_header = tuples[0].position;
+			best_start_with_header = tuples[0].position - true_pos;
 		}
 	}
 	// Assert that it's all good at this point.
