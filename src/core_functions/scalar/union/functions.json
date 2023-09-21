@@ -9,7 +9,7 @@
     {
         "name": "union_tag",
         "parameters": "union",
-        "description": "Retrieve the currently selected tag of the union as an Enum",
+        "description": "Retrieve the currently selected tag of the union as an ENUM",
         "example": "union_tag(union_value(k := 'foo'))",
         "type": "scalar_function"
     },
