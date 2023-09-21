@@ -37,7 +37,7 @@ public:
 
 private:
 	shared_ptr<BoundParameterData> CreateOrGetData(const string &identifier);
-	void CreateNewParameter(const string &id, shared_ptr<BoundParameterData> param_data);
+	void CreateNewParameter(const string &id, const shared_ptr<BoundParameterData> &param_data);
 
 private:
 	bound_parameter_map_t parameters;

@@ -59,7 +59,7 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	return bound_expr;
 }
 
-void BoundParameterMap::CreateNewParameter(const string &id, shared_ptr<BoundParameterData> param_data) {
+void BoundParameterMap::CreateNewParameter(const string &id, const shared_ptr<BoundParameterData> &param_data) {
 	D_ASSERT(!parameters.count(id));
 	parameters.emplace(std::make_pair(id, param_data));
 }

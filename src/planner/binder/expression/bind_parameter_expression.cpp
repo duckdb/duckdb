@@ -21,6 +21,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		auto &data = param_data_it->second;
 		auto constant = make_uniq<BoundConstantExpression>(data.GetValue());
 		constant->alias = expr.alias;
+		constant->return_type = binder.parameters->GetReturnType(parameter_id);
 		return BindResult(std::move(constant));
 	}
 
