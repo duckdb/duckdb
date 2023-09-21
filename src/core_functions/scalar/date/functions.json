@@ -287,7 +287,7 @@
     {
         "name": "time_bucket",
         "parameters": "bucket_width,timestamp,origin",
-        "description": "Truncate timestamptz by the specified interval bucket_width. Buckets are aligned relative to origin timestamptz. origin defaults to 2000-01-03 00:00:00+00 for buckets that don\u2019t include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets",
+        "description": "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets",
         "example": "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')",
         "type": "scalar_function_set"
     },
