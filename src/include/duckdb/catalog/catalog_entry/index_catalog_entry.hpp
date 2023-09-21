@@ -38,7 +38,7 @@ public:
 	string index_type;
 	//! The index constraint type
 	IndexConstraintType index_constraint_type;
-	//! The logical column ids of the indexed table
+	//! The column ids of the indexed table
 	vector<column_t> column_ids;
 	//! The set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;

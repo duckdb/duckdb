@@ -23,7 +23,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The table name of the underlying table
 	string table;
 	//! The name of the index
-	string name;
+	string index_name;
 
 	//! Options values (WITH ...)
 	case_insensitive_map_t<Value> options;
@@ -31,8 +31,8 @@ struct CreateIndexInfo : public CreateInfo {
 	//! The index type (ART, B+-tree, Skip-List, ...)
 	string index_type;
 	//! The index constraint type
-	IndexConstraintType index_constraint_type;
-	//! The logical column ids of the indexed table
+	IndexConstraintType constraint_type;
+	//! The column ids of the indexed table
 	vector<column_t> column_ids;
 	//! The set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;

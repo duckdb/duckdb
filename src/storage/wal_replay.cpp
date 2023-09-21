@@ -425,7 +425,7 @@ void ReplayState::ReplayCreateIndex(BinaryDeserializer &deserializer) {
 	// create the empty index
 	unique_ptr<Index> index;
 	D_ASSERT(index_info.index_type == "ART");
-	index = make_uniq<ART>(index_info.name, index_info.index_constraint_type, index_info.column_ids,
+	index = make_uniq<ART>(index_info.index_name, index_info.constraint_type, index_info.column_ids,
 	                       TableIOManager::Get(data_table), expressions, data_table.db);
 
 	// add the index to the catalog

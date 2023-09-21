@@ -56,9 +56,8 @@
     "members": [
       {
         "id": 200,
-        "name": "name",
-        "type": "string",
-        "property": "name"
+        "name": "index_name",
+        "type": "string"
       },
       {
         "id": 201,
@@ -72,7 +71,7 @@
       },
       {
         "id": 203,
-        "name": "index_constraint_type",
+        "name": "constraint_type",
         "type": "IndexConstraintType"
       },
       {

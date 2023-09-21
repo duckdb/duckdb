@@ -410,13 +410,13 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	// get the matching root block pointer
 	BlockPointer root_block_pointer;
 	for (auto const &index_p : data_table.info->index_pointers) {
-		if (index_p.first == info.name) {
+		if (index_p.first == info.index_name) {
 			root_block_pointer = index_p.second;
 			break;
 		}
 	}
 
-	auto art = make_uniq<ART>(info.name, info.index_constraint_type, info.column_ids, TableIOManager::Get(data_table),
+	auto art = make_uniq<ART>(info.index_name, info.constraint_type, info.column_ids, TableIOManager::Get(data_table),
 	                          std::move(unbound_expressions), data_table.db, nullptr, root_block_pointer);
 	data_table.info->indexes.AddIndex(std::move(art));
 }

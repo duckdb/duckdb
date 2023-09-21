@@ -53,7 +53,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientCon
 
 	// create the global index
 	auto &storage = table.GetStorage();
-	state->global_index = make_uniq<ART>(info->name, info->index_constraint_type, storage_ids,
+	state->global_index = make_uniq<ART>(info->index_name, info->constraint_type, storage_ids,
 	                                     TableIOManager::Get(storage), unbound_expressions, storage.db);
 
 	return (std::move(state));
@@ -65,7 +65,7 @@ unique_ptr<LocalSinkState> PhysicalCreateARTIndex::GetLocalSinkState(ExecutionCo
 	// create the local index
 
 	auto &storage = table.GetStorage();
-	state->local_index = make_uniq<ART>(info->name, info->index_constraint_type, storage_ids,
+	state->local_index = make_uniq<ART>(info->index_name, info->constraint_type, storage_ids,
 	                                    TableIOManager::Get(storage), unbound_expressions, storage.db);
 
 	state->keys = vector<ARTKey>(STANDARD_VECTOR_SIZE);
@@ -105,7 +105,7 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(Vector &row_identifiers, Opera
 
 	// create an ART from the chunk
 	auto art =
-	    make_uniq<ART>(info->name, l_index->index_constraint_type, l_index->column_ids, l_index->table_io_manager,
+	    make_uniq<ART>(info->index_name, l_index->index_constraint_type, l_index->column_ids, l_index->table_io_manager,
 	                   l_index->unbound_expressions, storage.db, l_index->Cast<ART>().allocators);
 	if (!art->ConstructFromSorted(l_state.key_chunk.size(), l_state.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
@@ -168,6 +168,7 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	}
 
 	auto &schema = table.schema;
+	info->column_ids = storage_ids;
 	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
 		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);

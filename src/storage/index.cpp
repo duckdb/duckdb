@@ -89,8 +89,8 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
-	for (auto &column : column_ids) {
+bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids_p) const {
+	for (auto &column : column_ids_p) {
 		if (column_id_set.find(column.index) != column_id_set.end()) {
 			return true;
 		}

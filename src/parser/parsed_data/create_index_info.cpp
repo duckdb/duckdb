@@ -7,12 +7,12 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	CopyProperties(*result);
 
 	result->table = table;
-	result->name = name;
+	result->index_name = index_name;
 
 	result->options = options;
 
 	result->index_type = index_type;
-	result->index_constraint_type = index_constraint_type;
+	result->constraint_type = constraint_type;
 	result->column_ids = column_ids;
 
 	for (auto &expr : expressions) {
