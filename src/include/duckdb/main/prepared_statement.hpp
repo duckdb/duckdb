@@ -72,29 +72,19 @@ public:
 		return PendingQueryRecursive(values, args...);
 	}
 
-	//! pending query has default allow stream result of false because context::Query(sql,...) calls Query with allow stream result false.
-	//! I think this has to do with APIs? I'm not sure. It can be set to true if the statement allows for a streaming result.
-
-	//! So why isn't the data getting stored?
-	//! Query, with returning -> allow_stream_result = false?, data stored = YES
-	//! Query, no returning -> allow_stream_result = false?, data stored = YES
-	//! prepared statement, no returning -> allow_stream_result = false , data_stored = YES
-	//! prepared statement, with returning -> allow_stream_result = true, data stored = NO
-
-
-	//! this gets set to
 	//! Create a pending query result of the prepared statement with the given set of arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = false);
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Create a pending query result of the prepared statement with the given set named arguments
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(case_insensitive_map_t<Value> &named_values,
-	                                                       bool allow_stream_result = false);
+	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values);
+	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<Value> &named_values);
+	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<Value> &named_values,
+	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
 	template <typename... Args>
