@@ -3,6 +3,7 @@
 #include "api_info.hpp"
 #include "row_descriptor.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 
 #include <sql.h>
 #include <sqltypes.h>
@@ -67,8 +68,8 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *hstmt) {
 			auto chunk = hstmt->res->Fetch();
 			if (hstmt->res->HasError()) {
 				hstmt->open = false;
-				hstmt->error_messages.emplace_back(hstmt->res->GetError());
-				return SQL_ERROR;
+				return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNext", hstmt->res->GetError(),
+				                           duckdb::SQLStateType::ST_HY000, hstmt->dbc->GetDataSourceName());
 			}
 			if (!chunk || chunk->size() == 0) {
 				resultset_end = true;
@@ -87,8 +88,8 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *hstmt) {
 			// TODO this is quite dirty, we should have separate error holder
 			hstmt->res->SetError(PreservedError(e));
 			hstmt->open = false;
-			hstmt->error_messages.emplace_back(std::string(e.what()));
-			return SQL_ERROR;
+			return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNext", hstmt->res->GetError(),
+			                           duckdb::SQLStateType::ST_HY000, hstmt->dbc->GetDataSourceName());
 		}
 	}
 
@@ -219,8 +220,9 @@ SQLRETURN OdbcFetch::SetFirstCurrentChunk(OdbcHandleStmt *hstmt) {
 
 SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *hstmt, SQLLEN fetch_offset) {
 	if (cursor_type == SQL_CURSOR_FORWARD_ONLY && fetch_orientation != SQL_FETCH_NEXT) {
-		hstmt->error_messages.emplace_back("Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.");
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "FetchNextChunk",
+		                           "Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.",
+		                           SQLStateType::ST_24000, hstmt->dbc->GetDataSourceName());
 	}
 
 	switch (fetch_orientation) {
@@ -301,15 +303,14 @@ SQLRETURN OdbcFetch::Fetch(OdbcHandleStmt *hstmt, SQLULEN fetch_orientation, SQL
 	if (hstmt_ref->row_desc->ard->header.sql_desc_bind_type == SQL_BIND_BY_COLUMN) {
 		ret = OdbcFetch::ColumnWise(hstmt);
 		if (!SQL_SUCCEEDED(ret)) {
-			hstmt->error_messages.emplace_back("Column-wise fetching failed.");
-			return SQL_ERROR;
+			return ret;
 		}
 	} else {
 		// sql_desc_bind_type should be greater than 0 because it contains the length of the row to be fetched
 		D_ASSERT(hstmt->row_desc->ard->header.sql_desc_bind_type > 0);
-		if (!SQL_SUCCEEDED(duckdb::OdbcFetch::RowWise(hstmt))) {
-			hstmt->error_messages.emplace_back("Row-wise fetching failed.");
-			return SQL_ERROR;
+		ret = OdbcFetch::RowWise(hstmt);
+		if (!SQL_SUCCEEDED(ret)) {
+			return ret;
 		}
 	}
 	IncreaseRowCount();
@@ -358,12 +359,10 @@ SQLRETURN OdbcFetch::ColumnWise(OdbcHandleStmt *hstmt) {
 				target_len_addr += row_idx;
 			}
 
-			if (!SQL_SUCCEEDED(duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr,
-			                                             bound_col.len, target_len_addr))) {
+			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr, bound_col.len,
+			                                target_len_addr);
+			if (!SQL_SUCCEEDED(ret)) {
 				SetRowStatus(row_idx, SQL_ROW_ERROR);
-				hstmt->error_messages.emplace_back("Error retrieving #row: " + std::to_string(row_idx) +
-				                                   " and column: " + hstmt->stmt->GetNames()[col_idx]);
-				ret = SQL_SUCCESS_WITH_INFO;
 			}
 		}
 	}
@@ -401,12 +400,10 @@ SQLRETURN OdbcFetch::RowWise(OdbcHandleStmt *hstmt) {
 			uint8_t *target_val_addr = (uint8_t *)bound_col.ptr + row_offset;
 			uint8_t *target_len_addr = (uint8_t *)bound_col.strlen_or_ind + row_offset;
 
-			if (!SQL_SUCCEEDED(duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr,
-			                                             bound_col.len, (SQLLEN *)target_len_addr))) {
+			ret = duckdb::GetDataStmtResult(hstmt, col_idx + 1, bound_col.type, target_val_addr, bound_col.len,
+			                                (SQLLEN *)target_len_addr);
+			if (!SQL_SUCCEEDED(ret)) {
 				SetRowStatus(row_idx, SQL_ROW_ERROR);
-				hstmt->error_messages.emplace_back("Error retriving #row: " + std::to_string(row_idx) +
-				                                   " and column: " + hstmt->stmt->GetNames()[col_idx]);
-				ret = SQL_SUCCESS_WITH_INFO;
 			}
 		}
 	}

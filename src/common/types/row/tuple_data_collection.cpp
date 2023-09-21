@@ -37,11 +37,15 @@ void TupleDataCollection::Initialize() {
 	}
 }
 
-void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
-	column_ids.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
+	column_ids.reserve(column_count);
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		column_ids.emplace_back(col_idx);
 	}
+}
+
+void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
+	GetAllColumnIDsInternal(column_ids, layout.ColumnCount());
 }
 
 const TupleDataLayout &TupleDataCollection::GetLayout() const {
@@ -108,7 +112,7 @@ void TupleDataCollection::InitializeAppend(TupleDataAppendState &append_state, v
                                            TupleDataPinProperties properties) {
 	VerifyAppendColumns(layout, column_ids);
 	InitializeAppend(append_state.pin_state, properties);
-	InitializeAppend(append_state.chunk_state, std::move(column_ids));
+	InitializeChunkState(append_state.chunk_state, std::move(column_ids));
 }
 
 void TupleDataCollection::InitializeAppend(TupleDataPinState &pin_state, TupleDataPinProperties properties) {
@@ -130,11 +134,11 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 			for (const auto &child_entry : child_list) {
 				child_types.emplace_back(child_entry.second);
 			}
-			InitializeVectorFormat(vector_data[col_idx].child_formats, child_types);
+			InitializeVectorFormat(vector_data[col_idx].children, child_types);
 			break;
 		}
 		case PhysicalType::LIST:
-			InitializeVectorFormat(vector_data[col_idx].child_formats, {ListType::GetChildType(type)});
+			InitializeVectorFormat(vector_data[col_idx].children, {ListType::GetChildType(type)});
 			break;
 		default:
 			break;
@@ -142,11 +146,16 @@ static void InitializeVectorFormat(vector<TupleDataVectorFormat> &vector_data, c
 	}
 }
 
-void TupleDataCollection::InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, vector<column_t> column_ids) {
+	TupleDataCollection::InitializeChunkState(chunk_state, layout.GetTypes(), std::move(column_ids));
+}
+
+void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state, const vector<LogicalType> &types,
+                                               vector<column_t> column_ids) {
 	if (column_ids.empty()) {
-		GetAllColumnIDs(column_ids);
+		GetAllColumnIDsInternal(column_ids, types.size());
 	}
-	InitializeVectorFormat(chunk_state.vector_data, layout.GetTypes());
+	InitializeVectorFormat(chunk_state.vector_data, types);
 	chunk_state.column_ids = std::move(column_ids);
 }
 
@@ -211,21 +220,23 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 }
 
 static inline void ToUnifiedFormatInternal(TupleDataVectorFormat &format, Vector &vector, const idx_t count) {
-	vector.ToUnifiedFormat(count, format.data);
-	format.original_sel = format.data.sel;
-	format.original_owned_sel.Initialize(format.data.owned_sel);
+	vector.ToUnifiedFormat(count, format.unified);
+	format.original_sel = format.unified.sel;
+	format.original_owned_sel.Initialize(format.unified.owned_sel);
 	switch (vector.GetType().InternalType()) {
 	case PhysicalType::STRUCT: {
 		auto &entries = StructVector::GetEntries(vector);
-		D_ASSERT(format.child_formats.size() == entries.size());
+		D_ASSERT(format.children.size() == entries.size());
 		for (idx_t struct_col_idx = 0; struct_col_idx < entries.size(); struct_col_idx++) {
-			ToUnifiedFormatInternal(format.child_formats[struct_col_idx], *entries[struct_col_idx], count);
+			ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[struct_col_idx]),
+			                        *entries[struct_col_idx], count);
 		}
 		break;
 	}
 	case PhysicalType::LIST:
-		D_ASSERT(format.child_formats.size() == 1);
-		ToUnifiedFormatInternal(format.child_formats[0], ListVector::GetEntry(vector), ListVector::GetListSize(vector));
+		D_ASSERT(format.children.size() == 1);
+		ToUnifiedFormatInternal(reinterpret_cast<TupleDataVectorFormat &>(format.children[0]),
+		                        ListVector::GetEntry(vector), ListVector::GetListSize(vector));
 		break;
 	default:
 		break;
@@ -242,7 +253,7 @@ void TupleDataCollection::ToUnifiedFormat(TupleDataChunkState &chunk_state, Data
 void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]) {
 	const auto &vector_data = chunk_state.vector_data;
 	for (idx_t i = 0; i < vector_data.size(); i++) {
-		const auto &source = vector_data[i].data;
+		const auto &source = vector_data[i].unified;
 		auto &target = result[i];
 		target.sel = source.sel;
 		target.data = source.data;

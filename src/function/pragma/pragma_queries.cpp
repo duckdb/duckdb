@@ -124,12 +124,15 @@ string PragmaShow(ClientContext &context, const FunctionParameters &parameters) 
 	ON cols.column_name = pragma_table_info.name 
 	AND cols.table_name='%table_name%'
 	AND cols.schema_name='%table_schema%'
+	AND cols.database_name = '%table_database%'
 	ORDER BY column_index;)";
 	// clang-format on
 
 	sql = StringUtil::Replace(sql, "%func_param_table%", parameters.values[0].ToString());
 	sql = StringUtil::Replace(sql, "%table_name%", table.name);
 	sql = StringUtil::Replace(sql, "%table_schema%", table.schema.empty() ? DEFAULT_SCHEMA : table.schema);
+	sql = StringUtil::Replace(sql, "%table_database%",
+	                          table.catalog.empty() ? DatabaseManager::GetDefaultDatabase(context) : table.catalog);
 	return sql;
 }
 
