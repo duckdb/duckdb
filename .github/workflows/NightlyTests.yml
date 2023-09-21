@@ -683,7 +683,7 @@ jobs:
   codecov:
     name: Code Coverage
     runs-on: ubuntu-20.04
-    needs: format-check
+    needs: linux-memory-leaks
     strategy:
       fail-fast: false
     env:
