@@ -1452,3 +1452,11 @@ select * from mytable;
     )
 
     test("copy (select * from range(10000) tbl(i)) to '/dev/stdout' (format csv)", out='9999', output_file=tf())
+
+    test(
+        "SELECT * FROM read_csv_auto('data/csv/bug_9005/teste*.csv',header=TRUE,filename=true,union_by_name=True) where filename='data/csv/bug_9005/teste1.csv'",
+        extra_commands=['-csv', ':memory:'],
+        out='''id,name,factor,filename
+1,Ricardo,1.5,data/csv/bug_9005/teste1.csv
+2,Jose,2.0,data/csv/bug_9005/teste1.csv''',
+    )
