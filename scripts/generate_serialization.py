@@ -505,7 +505,6 @@ def generate_class_code(class_entry):
         deserialize_template_str = deserialize_element_class
         default_value = entry.default
         if entry.base:
-            write_property_name = f"optional_ptr<{entry.base}>(" + write_property_name + ".get())"
             deserialize_template_str = deserialize_element_class_base.replace(
                 '${BASE_PROPERTY}', entry.base.replace('*', '')
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))

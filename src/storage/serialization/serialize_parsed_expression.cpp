@@ -198,7 +198,7 @@ void FunctionExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(201, "schema", schema);
 	serializer.WritePropertyWithDefault(202, "children", children);
 	serializer.WritePropertyWithDefault(203, "filter", filter);
-	serializer.WritePropertyWithDefault(204, "order_bys", optional_ptr<ResultModifier>(order_bys.get()));
+	serializer.WritePropertyWithDefault(204, "order_bys", order_bys);
 	serializer.WriteProperty(205, "distinct", distinct);
 	serializer.WriteProperty(206, "is_operator", is_operator);
 	serializer.WriteProperty(207, "export_state", export_state);
