@@ -103,6 +103,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	Vector child_hashes(LogicalType::HASH, child_count);
 	if (child_count > 0) {
 		VectorOperations::Hash(child, child_hashes, child_count);
+		child_hashes.Flatten(child_count);
 	}
 	auto chdata = FlatVector::GetData<hash_t>(child_hashes);
 
