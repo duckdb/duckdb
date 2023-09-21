@@ -8,44 +8,11 @@ namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
-template <class OP>
-struct RowMatchOperator {
-	static constexpr const bool COMPARE_NULL = false;
-
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		if (right_null || left_null) {
-			return false;
-		}
-		return OP::template Operation<T>(left, right);
-	}
-};
-
-template <>
-struct RowMatchOperator<DistinctFrom> {
-	static constexpr const bool COMPARE_NULL = true;
-
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return DistinctFrom::template Operation<T>(left, right, left_null, right_null);
-	}
-};
-
-template <>
-struct RowMatchOperator<NotDistinctFrom> {
-	static constexpr const bool COMPARE_NULL = true;
-
-	template <class T>
-	static inline bool Operation(const T &left, const T &right, bool left_null, bool right_null) {
-		return NotDistinctFrom::template Operation<T>(left, right, left_null, right_null);
-	}
-};
-
 template <bool NO_MATCH_SEL, class T, class OP>
 static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, SelectionVector &sel, const idx_t count,
                             const TupleDataLayout &rhs_layout, Vector &rhs_row_locations, const idx_t col_idx,
                             const vector<MatchFunction> &, SelectionVector *no_match_sel, idx_t &no_match_count) {
-	using MATCH_OP = RowMatchOperator<OP>;
+	using COMPARISON_OP = ComparisonOperationWrapper<OP>;
 
 	// LHS
 	const auto &lhs_sel = *lhs_format.unified.sel;
@@ -70,8 +37,8 @@ static idx_t TemplatedMatch(Vector &, const TupleDataVectorFormat &lhs_format, S
 		const ValidityBytes rhs_mask(rhs_location);
 		const auto rhs_null = !rhs_mask.RowIsValid(rhs_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry);
 
-		if (MATCH_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
-		                                    rhs_null)) {
+		if (COMPARISON_OP::template Operation<T>(lhs_data[lhs_idx], Load<T>(rhs_location + rhs_offset_in_row), lhs_null,
+		                                         rhs_null)) {
 			sel.set_index(match_count++, idx);
 		} else if (NO_MATCH_SEL) {
 			no_match_sel->set_index(no_match_count++, idx);
@@ -85,7 +52,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
                                  const idx_t count, const TupleDataLayout &rhs_layout, Vector &rhs_row_locations,
                                  const idx_t col_idx, const vector<MatchFunction> &child_functions,
                                  SelectionVector *no_match_sel, idx_t &no_match_count) {
-	using MATCH_OP = RowMatchOperator<OP>;
+	using COMPARISON_OP = ComparisonOperationWrapper<OP>;
 
 	// LHS
 	const auto &lhs_sel = *lhs_format.unified.sel;
@@ -111,7 +78,7 @@ static idx_t StructMatchEquality(Vector &lhs_vector, const TupleDataVectorFormat
 		// For structs there is no value to compare, here we match NULLs and let recursion do the rest
 		// So we use the comparison only if rhs or LHS is NULL and COMPARE_NULL is true
 		if (!(lhs_null || rhs_null) ||
-		    (MATCH_OP::COMPARE_NULL && MATCH_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
+		    (COMPARISON_OP::COMPARE_NULL && COMPARISON_OP::template Operation<uint32_t>(0, 0, lhs_null, rhs_null))) {
 			sel.set_index(match_count++, idx);
 		} else if (NO_MATCH_SEL) {
 			no_match_sel->set_index(no_match_count++, idx);
