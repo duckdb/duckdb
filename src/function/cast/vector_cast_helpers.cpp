@@ -20,10 +20,16 @@ inline static void SkipWhitespace(const char *buf, idx_t &pos, idx_t len) {
 static bool SkipToCloseQuotes(idx_t &pos, const char *buf, idx_t &len) {
 	char quote = buf[pos];
 	pos++;
+	bool escaped = false;
 
 	while (pos < len) {
-		if (buf[pos] == quote) {
-			return true;
+		if (buf[pos] == '\\') {
+			escaped = !escaped;
+		} else {
+			if (buf[pos] == quote && !escaped) {
+				return true;
+			}
+			escaped = false;
 		}
 		pos++;
 	}

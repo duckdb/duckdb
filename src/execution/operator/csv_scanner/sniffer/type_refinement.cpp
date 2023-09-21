@@ -46,7 +46,8 @@ struct Parse {
 				validity_mask.SetInvalid(machine.cur_rows);
 			}
 		}
-		if (machine.state == CSVState::STANDARD) {
+		if (machine.state == CSVState::STANDARD ||
+		    (machine.state == CSVState::QUOTED && machine.previous_state == CSVState::QUOTED)) {
 			machine.value += current_char;
 		}
 		machine.cur_rows +=
@@ -57,7 +58,7 @@ struct Parse {
 		machine.cur_rows += machine.state != CSVState::RECORD_SEPARATOR && carriage_return;
 		machine.column_count -= machine.column_count * (machine.state != CSVState::RECORD_SEPARATOR && carriage_return);
 
-		if (machine.cur_rows >= machine.options.sample_chunk_size) {
+		if (machine.cur_rows >= STANDARD_VECTOR_SIZE) {
 			// We sniffed enough rows
 			return true;
 		}
@@ -65,11 +66,22 @@ struct Parse {
 	}
 
 	inline static void Finalize(CSVStateMachine &machine, DataChunk &parse_chunk) {
-		if (machine.cur_rows < machine.options.sample_chunk_size && machine.state != CSVState::EMPTY_LINE) {
+		if (machine.cur_rows < STANDARD_VECTOR_SIZE && machine.state != CSVState::EMPTY_LINE) {
 			machine.VerifyUTF8();
 			auto &v = parse_chunk.data[machine.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			if (machine.value.empty()) {
+				auto &validity_mask = FlatVector::Validity(v);
+				validity_mask.SetInvalid(machine.cur_rows);
+			} else {
+				parse_data[machine.cur_rows] = StringVector::AddStringOrBlob(v, string_t(machine.value));
+			}
+			while (machine.column_count < parse_chunk.ColumnCount()) {
+				auto &v_pad = parse_chunk.data[machine.column_count++];
+				auto &validity_mask = FlatVector::Validity(v_pad);
+				validity_mask.SetInvalid(machine.cur_rows);
+			}
+			machine.cur_rows++;
 		}
 		parse_chunk.SetCardinality(machine.cur_rows);
 	}
@@ -104,8 +116,8 @@ void CSVSniffer::RefineTypes() {
 		return;
 	}
 	DataChunk parse_chunk;
-	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, options.sample_chunk_size);
-	for (idx_t i = 1; i < best_candidate->options.sample_chunks; i++) {
+	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
+	for (idx_t i = 1; i < best_candidate->options.sample_size_chunks; i++) {
 		bool finished_file = best_candidate->csv_buffer_iterator.Finished();
 		if (finished_file) {
 			// we finished the file: stop
@@ -124,6 +136,7 @@ void CSVSniffer::RefineTypes() {
 		best_candidate->csv_buffer_iterator.Process<Parse>(*best_candidate, parse_chunk);
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];
+			bool is_bool_type = col_type_candidates.back() == LogicalType::BOOLEAN;
 			while (col_type_candidates.size() > 1) {
 				const auto &sql_type = col_type_candidates.back();
 				//	narrow down the date formats
@@ -154,6 +167,14 @@ void CSVSniffer::RefineTypes() {
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
 				} else {
+					if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
+						// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+						// immediately pop to varchar.
+						while (col_type_candidates.back() != LogicalType::VARCHAR) {
+							col_type_candidates.pop_back();
+						}
+						break;
+					}
 					col_type_candidates.pop_back();
 				}
 			}

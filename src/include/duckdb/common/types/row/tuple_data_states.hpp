@@ -42,8 +42,8 @@ struct TupleDataVectorFormat {
 	const SelectionVector *original_sel;
 	SelectionVector original_owned_sel;
 
-	UnifiedVectorFormat data;
-	vector<TupleDataVectorFormat> child_formats;
+	UnifiedVectorFormat unified;
+	vector<TupleDataVectorFormat> children;
 	unique_ptr<CombinedListData> combined_list_data;
 };
 
