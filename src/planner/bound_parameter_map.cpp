@@ -46,9 +46,11 @@ unique_ptr<BoundParameterExpression> BoundParameterMap::BindParameterExpression(
 	auto &identifier = expr.identifier;
 	auto return_type = GetReturnType(identifier);
 
+	D_ASSERT(!parameter_data.count(identifier));
+
 	// No value has been supplied yet,
-	// Get the shared pointer to the object that will later get populated with the
-	// Value necessary to bind it in the future
+	// We return a shared pointer to an object that will get populated wtih a Value later
+	// When the BoundParameterExpression get executed, this will be used to get the corresponding value
 	auto param_data = CreateOrGetData(identifier);
 	auto bound_expr = make_uniq<BoundParameterExpression>(identifier);
 	bound_expr->parameter_data = param_data;

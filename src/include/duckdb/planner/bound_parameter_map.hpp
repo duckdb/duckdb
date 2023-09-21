@@ -41,8 +41,7 @@ private:
 
 private:
 	bound_parameter_map_t parameters;
-	// A reference to the map that owns the BoundParameterData
-	// the object that should get populated with the Value to bind the prepared parameter
+	// Pre-provided parameter data if populated
 	case_insensitive_map_t<BoundParameterData> &parameter_data;
 };
 

@@ -13,7 +13,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	auto parameter_id = expr.identifier;
 
 	D_ASSERT(binder.parameters);
-	// check if a parameter value has already been supplied
+	// Check if a parameter value has already been supplied
 	auto &parameter_data = binder.parameters->GetParameterData();
 	auto param_data_it = parameter_data.find(parameter_id);
 	if (param_data_it != parameter_data.end()) {
