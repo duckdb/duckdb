@@ -100,7 +100,7 @@
     {
         "name": "even",
         "parameters": "x",
-        "description": "round to next even number by rounding away from zero.",
+        "description": "round to next even number by rounding away from zero",
         "example": "even(2.9)",
         "type": "scalar_function"
     },
@@ -168,7 +168,7 @@
     {
         "name": "lgamma",
         "parameters": "x",
-        "description": "computes the log of the gamma function.",
+        "description": "computes the log of the gamma function",
         "example": "lgamma(2)",
         "type": "scalar_function",
         "struct": "LogGammaFun"

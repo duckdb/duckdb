@@ -2,14 +2,14 @@
     {
         "name": "get_bit",
         "parameters": "bitstring,index",
-        "description": "Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0.",
+        "description": "Extracts the nth bit from bitstring; the first (leftmost) bit is indexed 0",
         "example": "get_bit('0110010'::BIT, 2)",
         "type": "scalar_function"
     },
     {
         "name": "set_bit",
         "parameters": "bitstring,index,new_value",
-        "description": "Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed 0. Returns a new bitstring.",
+        "description": "Sets the nth bit in bitstring to newvalue; the first (leftmost) bit is indexed 0. Returns a new bitstring",
         "example": "set_bit('0110010'::BIT, 2, 0)",
         "type": "scalar_function"
     },
@@ -23,7 +23,7 @@
     {
         "name": "bitstring",
         "parameters": "bitstring,length",
-        "description": "Pads the bitstring until the specified length.",
+        "description": "Pads the bitstring until the specified length",
         "example": "bitstring('1010'::BIT, 7)",
         "struct": "BitStringFun",
         "type": "scalar_function"
