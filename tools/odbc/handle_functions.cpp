@@ -22,7 +22,7 @@ SQLRETURN duckdb::ConvertHandle(SQLHANDLE &handle, OdbcHandle *&hdl) {
 
 	hdl = static_cast<OdbcHandle *>(handle);
 	if (!hdl->odbc_diagnostic) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	return SQL_SUCCESS;
@@ -30,14 +30,14 @@ SQLRETURN duckdb::ConvertHandle(SQLHANDLE &handle, OdbcHandle *&hdl) {
 
 SQLRETURN duckdb::ConvertEnvironment(SQLHANDLE &environment_handle, OdbcHandleEnv *&env) {
 	if (!environment_handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	env = static_cast<OdbcHandleEnv *>(environment_handle);
 	if (env->type != OdbcHandleType::ENV) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	if (!env->db) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(env, SQL_ERROR, "env", "No database connection found", SQLStateType::ST_HY000, "");
 	}
 
 	return SQL_SUCCESS;
@@ -45,14 +45,14 @@ SQLRETURN duckdb::ConvertEnvironment(SQLHANDLE &environment_handle, OdbcHandleEn
 
 SQLRETURN duckdb::ConvertConnection(SQLHANDLE &connection_handle, OdbcHandleDbc *&dbc) {
 	if (!connection_handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	dbc = static_cast<OdbcHandleDbc *>(connection_handle);
 	if (dbc->type != OdbcHandleType::DBC) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	if (!dbc->conn) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(dbc, SQL_ERROR, "dbc", "No database connection found", SQLStateType::ST_08003, "");
 	}
 
 	// ODBC requires to clean up the diagnostic for every ODBC function call
@@ -63,14 +63,14 @@ SQLRETURN duckdb::ConvertConnection(SQLHANDLE &connection_handle, OdbcHandleDbc 
 
 SQLRETURN duckdb::ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
 	if (!statement_handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	hstmt = static_cast<OdbcHandleStmt *>(statement_handle);
 	if (hstmt->type != OdbcHandleType::STMT) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	if (!hstmt->dbc || !hstmt->dbc->conn) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "dbc", "No database connection found", SQLStateType::ST_08003, "");
 	}
 
 	// ODBC requires to clean up the diagnostic for every ODBC function call
@@ -80,39 +80,44 @@ SQLRETURN duckdb::ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hst
 }
 
 SQLRETURN duckdb::ConvertHSTMTPrepared(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 	if (!hstmt->stmt) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "stmt", "No statement found", SQLStateType::ST_HY000, "");
 	}
 	if (hstmt->stmt->HasError()) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "stmt", hstmt->stmt->GetError(), SQLStateType::ST_HY000,
+		                           hstmt->dbc->GetDataSourceName());
 	}
 	return SQL_SUCCESS;
 }
 
 SQLRETURN duckdb::ConvertHSTMTResult(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret = ConvertHSTMT(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 	if (!hstmt->res) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "stmt", "No result set found", SQLStateType::ST_HY000,
+		                           hstmt->dbc->GetDataSourceName());
 	}
 	if (hstmt->res->HasError()) {
-		return SQL_ERROR;
+		return SetDiagnosticRecord(hstmt, SQL_ERROR, "stmt", hstmt->stmt->GetError(), SQLStateType::ST_HY000,
+		                           hstmt->dbc->GetDataSourceName());
 	}
 	return SQL_SUCCESS;
 }
 
 SQLRETURN duckdb::ConvertDescriptor(SQLHANDLE &descriptor_handle, duckdb::OdbcHandleDesc *&desc) {
 	if (!descriptor_handle) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 
 	desc = static_cast<OdbcHandleDesc *>(descriptor_handle);
 	if (desc->type != OdbcHandleType::DESC) {
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 	return SQL_SUCCESS;
 }

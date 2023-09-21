@@ -183,10 +183,10 @@ SELECT d, DATE_PART(['epoch', 'second', 'timezone', 'timezone_hour', 'timezone_m
 FROM times
 ORDER BY 1;
 ----
-00:01:20	{'epoch': 80, 'second': 20, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-20:08:10.001	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-20:08:10.33	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
-20:08:10.998	{'epoch': 72490, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+00:01:20	{'epoch': 80.0, 'second': 20, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.001	{'epoch': 72490.001, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.33	{'epoch': 72490.33, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
+20:08:10.998	{'epoch': 72490.998, 'second': 10, 'timezone': 0, 'timezone_hour': 0, 'timezone_minute': 0}
 
 # Function-only parts
 query II

@@ -107,25 +107,19 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 			if (append_to_next_sample > 0) {
 				// we need to also add to the next sample
 				DataChunk new_chunk;
-				new_chunk.Initialize(allocator, input.GetTypes());
-				SelectionVector sel(append_to_current_sample_count);
-				for (idx_t r = 0; r < append_to_current_sample_count; r++) {
-					sel.set_index(r, r);
-				}
-				new_chunk.Slice(sel, append_to_current_sample_count);
+				new_chunk.InitializeEmpty(input.GetTypes());
+				new_chunk.Slice(input, *FlatVector::IncrementalSelectionVector(), append_to_current_sample_count);
 				new_chunk.Flatten();
-
 				current_sample->AddToReservoir(new_chunk);
 			} else {
 				input.Flatten();
-
 				input.SetCardinality(append_to_current_sample_count);
 				current_sample->AddToReservoir(input);
 			}
 		}
 		if (append_to_next_sample > 0) {
 			// slice the input for the remainder
-			SelectionVector sel(STANDARD_VECTOR_SIZE);
+			SelectionVector sel(append_to_next_sample);
 			for (idx_t i = 0; i < append_to_next_sample; i++) {
 				sel.set_index(i, append_to_current_sample_count + i);
 			}

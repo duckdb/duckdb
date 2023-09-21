@@ -240,6 +240,7 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",
+    "arrow",
     "aws",
     "autocomplete",
     "excel",
@@ -249,7 +250,9 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     // "icu",
     "json",
     "parquet",
+    "postgres_scanner",
     "sqlsmith",
+    "sqlite_scanner",
     "tpcds",
     "tpch",
     "visualizer",
