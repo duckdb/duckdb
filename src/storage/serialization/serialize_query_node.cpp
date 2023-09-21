@@ -61,7 +61,7 @@ unique_ptr<QueryNode> CTENode::Deserialize(Deserializer &deserializer) {
 void RecursiveCTENode::Serialize(Serializer &serializer) const {
 	QueryNode::Serialize(serializer);
 	serializer.WriteProperty(200, "cte_name", ctename);
-	serializer.WriteProperty(201, "union_all", union_all);
+	serializer.WritePropertyWithDefault(201, "union_all", union_all, false);
 	serializer.WriteProperty(202, "left", left);
 	serializer.WriteProperty(203, "right", right);
 	serializer.WriteProperty(204, "aliases", aliases);
@@ -70,7 +70,7 @@ void RecursiveCTENode::Serialize(Serializer &serializer) const {
 unique_ptr<QueryNode> RecursiveCTENode::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RecursiveCTENode>(new RecursiveCTENode());
 	deserializer.ReadProperty(200, "cte_name", result->ctename);
-	deserializer.ReadProperty(201, "union_all", result->union_all);
+	deserializer.ReadPropertyWithDefault(201, "union_all", result->union_all, false);
 	deserializer.ReadProperty(202, "left", result->left);
 	deserializer.ReadProperty(203, "right", result->right);
 	deserializer.ReadProperty(204, "aliases", result->aliases);

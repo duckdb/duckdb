@@ -122,13 +122,13 @@ def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 
-def get_serialize_element(property_name, property_id, property_key, property_type, is_optional, pointer_type):
+def get_serialize_element(property_name, property_id, property_key, property_type, default_value, pointer_type):
     write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = ''
-    if is_optional:
+    if default_value is not None:
         write_method = 'WritePropertyWithDefault'
-        default_argument = f', {property_type}()'  # TODO: allow this to be passed
+        default_argument = f', {default_value}'
     return (
         serialize_element.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_ID}', str(property_id))
@@ -140,14 +140,14 @@ def get_serialize_element(property_name, property_id, property_key, property_typ
 
 
 def get_deserialize_element_template(
-    template, property_name, property_key, property_id, property_type, is_optional, pointer_type
+    template, property_name, property_key, property_id, property_type, default_value, pointer_type
 ):
     read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = ''
-    if is_optional:
+    if default_value is not None:
         read_method = 'ReadPropertyWithDefault'
-        default_argument = f', {property_type}()'  # TODO: allow this to be passed
+        default_argument = f', {default_value}'  # TODO: allow this to be passed
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
@@ -202,6 +202,7 @@ supported_member_entries = [
     'deserialize_property',
     'optional',
     'base',
+    'default'
 ]
 
 
@@ -211,7 +212,7 @@ class MemberVariable:
         self.name = entry['name']
         self.type = entry['type']
         self.base = None
-        self.optional = False
+        self.default = None
         if 'property' in entry:
             self.serialize_property = entry['property']
             self.deserialize_property = entry['property']
@@ -223,7 +224,9 @@ class MemberVariable:
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
         if 'optional' in entry:
-            self.optional = entry['optional']
+            self.default = replace_pointer(self.type) + '()'
+        if 'default' in entry:
+            self.default = entry['default']
         if 'base' in entry:
             self.base = entry['base']
         for key in entry.keys():
@@ -320,12 +323,12 @@ def generate_base_class_code(base_class):
         type_name = replace_pointer(entry.type)
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
-        is_optional = entry.optional
+        default = entry.default
         base_class_serialize += get_serialize_element(
-            entry.serialize_property, entry.id, entry.name, type_name, is_optional, base_class.pointer_type
+            entry.serialize_property, entry.id, entry.name, type_name, default, base_class.pointer_type
         )
         base_class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, entry.id, type_name, is_optional, base_class.pointer_type
+            entry.deserialize_property, entry.name, entry.id, type_name, default, base_class.pointer_type
         )
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
@@ -468,7 +471,7 @@ def generate_class_code(class_entry):
         entry = class_entry.members[entry_idx]
         type_name = replace_pointer(entry.type)
         class_deserialize += get_deserialize_element(
-            entry.deserialize_property, entry.name, entry.id, type_name, entry.optional, 'unique_ptr'
+            entry.deserialize_property, entry.name, entry.id, type_name, entry.default, 'unique_ptr'
         )
 
     class_deserialize += generate_constructor(
@@ -481,17 +484,8 @@ def generate_class_code(class_entry):
         property_id = entry.id
         property_key = entry.name
         write_property_name = entry.serialize_property
-        is_optional = entry.optional
-        if is_pointer(entry.type):
-            if not is_optional:
-                # TODO: At ome point we should maybe add checks for non-optional pointers
-                # for now nullable pointers are implicitly handled by providing default values
-                pass
-        elif is_optional:
-            raise Exception(
-                f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})"
-            )
         deserialize_template_str = deserialize_element_class
+        default_value = entry.default
         if entry.base:
             write_property_name = f"({entry.base} *)" + write_property_name + ".get()"
             deserialize_template_str = deserialize_element_class_base.replace(
@@ -499,7 +493,7 @@ def generate_class_code(class_entry):
             ).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
         type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(
-            write_property_name, property_id, property_key, type_name, is_optional, class_entry.pointer_type
+            write_property_name, property_id, property_key, type_name, default_value, class_entry.pointer_type
         )
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
@@ -508,7 +502,7 @@ def generate_class_code(class_entry):
                 property_key,
                 property_id,
                 type_name,
-                is_optional,
+                default_value,
                 class_entry.pointer_type,
             )
         elif entry.name not in constructor_entries:

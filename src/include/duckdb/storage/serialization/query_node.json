@@ -118,7 +118,8 @@
       {
         "id": 201,
         "name": "union_all",
-        "type": "bool"
+        "type": "bool",
+        "default": "false"
       },
       {
         "id": 202,
