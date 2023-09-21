@@ -58,15 +58,33 @@ class TestWithColumnRenamed(object):
 
         schema2 = StructType(
             [
-                StructField("fname", StringType()),
-                StructField("middlename", StringType()),
-                StructField("lname", StringType()),
+                StructField(
+                    'full name',
+                    StructType(
+                        [
+                            StructField('fname', StringType(), True),
+                            StructField('mname', StringType(), True),
+                            StructField('lname', StringType(), True),
+                        ]
+                    ),
+                ),
             ]
         )
 
-        df2 = df.select(col("name").cast(schema2).alias("name"), col("dob"), col("gender"), col("salary"))
-        assert 'firstname' not in df2.schema['name'].dataType
-        assert 'fname' in df2.schema['name'].dataType
+        df2 = df.withColumnRenamed("name", "full name")
+        assert 'name' not in df2
+        assert 'full name' in df2
+        assert 'firstname' in df2.schema['full name'].dataType
+
+        df2 = df.select (
+            col("name").alias("full name"),
+            col("dob"),
+            col("gender"),
+            col("salary"),
+        )
+        assert 'name' not in df2
+        assert 'full name' in df2
+        assert 'firstname' in df2.schema['full name'].dataType
 
         df2 = df.select(
             col("name.firstname").alias("fname"),
