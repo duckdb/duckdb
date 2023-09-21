@@ -18,7 +18,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [ opened, reopened, ready_for_review ]
     paths-ignore:
@@ -28,7 +28,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 name: R-CMD-check
 
