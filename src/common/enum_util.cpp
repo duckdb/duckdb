@@ -1197,8 +1197,6 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "MINUTE";
 	case DatePartSpecifier::HOUR:
 		return "HOUR";
-	case DatePartSpecifier::EPOCH:
-		return "EPOCH";
 	case DatePartSpecifier::DOW:
 		return "DOW";
 	case DatePartSpecifier::ISODOW:
@@ -1221,8 +1219,12 @@ const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value) {
 		return "TIMEZONE_HOUR";
 	case DatePartSpecifier::TIMEZONE_MINUTE:
 		return "TIMEZONE_MINUTE";
+	case DatePartSpecifier::EPOCH:
+		return "EPOCH";
 	case DatePartSpecifier::JULIAN_DAY:
 		return "JULIAN_DAY";
+	case DatePartSpecifier::INVALID:
+		return "INVALID";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -1263,9 +1265,6 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "HOUR")) {
 		return DatePartSpecifier::HOUR;
 	}
-	if (StringUtil::Equals(value, "EPOCH")) {
-		return DatePartSpecifier::EPOCH;
-	}
 	if (StringUtil::Equals(value, "DOW")) {
 		return DatePartSpecifier::DOW;
 	}
@@ -1299,8 +1298,14 @@ DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value) {
 	if (StringUtil::Equals(value, "TIMEZONE_MINUTE")) {
 		return DatePartSpecifier::TIMEZONE_MINUTE;
 	}
+	if (StringUtil::Equals(value, "EPOCH")) {
+		return DatePartSpecifier::EPOCH;
+	}
 	if (StringUtil::Equals(value, "JULIAN_DAY")) {
 		return DatePartSpecifier::JULIAN_DAY;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return DatePartSpecifier::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

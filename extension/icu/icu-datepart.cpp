@@ -108,10 +108,11 @@ struct ICUDatePart : public ICUDateFunc {
 		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
 	}
 
-	static int64_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
+	static double ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
 		UErrorCode status = U_ZERO_ERROR;
-		//	Truncate
-		return calendar->getTime(status) / Interval::MSECS_PER_SEC;
+		auto result = calendar->getTime(status) / Interval::MSECS_PER_SEC;
+		result += micros / double(Interval::MICROS_PER_SEC);
+		return result;
 	}
 
 	static int64_t ExtractTimezone(icu::Calendar *calendar, const uint64_t micros) {
@@ -187,8 +188,6 @@ struct ICUDatePart : public ICUDateFunc {
 			return ExtractQuarter;
 		case DatePartSpecifier::YEARWEEK:
 			return ExtractYearWeek;
-		case DatePartSpecifier::EPOCH:
-			return ExtractEpoch;
 		case DatePartSpecifier::ERA:
 			return ExtractEra;
 		case DatePartSpecifier::TIMEZONE:
@@ -204,6 +203,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 	static part_double_t PartCodeDoubleFactory(DatePartSpecifier part) {
 		switch (part) {
+		case DatePartSpecifier::EPOCH:
+			return ExtractEpoch;
 		case DatePartSpecifier::JULIAN_DAY:
 			return ExtractJulianDay;
 		default:
@@ -262,7 +263,7 @@ struct ICUDatePart : public ICUDateFunc {
 		adapters_t adapters;
 
 		bool Equals(const FunctionData &other_p) const override {
-			const auto &other = (BindAdapterData &)other_p;
+			const auto &other = other_p.Cast<BindAdapterData>();
 			return BindData::Equals(other_p) && adapters == other.adapters;
 		}
 
@@ -278,7 +279,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &date_arg = args.data[0];
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BIND_TYPE &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BIND_TYPE>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -655,6 +656,8 @@ struct ICUDatePart : public ICUDateFunc {
 
 void RegisterICUDatePartFunctions(ClientContext &context) {
 	// register the individual operators
+
+	//	BIGINTs
 	ICUDatePart::AddUnaryPartCodeFunctions("era", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("year", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("month", context);
@@ -672,12 +675,13 @@ void RegisterICUDatePartFunctions(ClientContext &context) {
 	ICUDatePart::AddUnaryPartCodeFunctions("week", context); //  Note that WeekOperator is ISO-8601, not US
 	ICUDatePart::AddUnaryPartCodeFunctions("dayofyear", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("quarter", context);
-	ICUDatePart::AddUnaryPartCodeFunctions("epoch", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("isoyear", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_hour", context);
 	ICUDatePart::AddUnaryPartCodeFunctions("timezone_minute", context);
 
+	//	DOUBLEs
+	ICUDatePart::AddUnaryPartCodeFunctions<double>("epoch", context, LogicalType::DOUBLE);
 	ICUDatePart::AddUnaryPartCodeFunctions<double>("julian", context, LogicalType::DOUBLE);
 
 	//  register combinations

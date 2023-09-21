@@ -474,14 +474,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-idx_t RadixPartitionedHashTable::Count(GlobalSinkState &sink_p) const {
-	const auto count = CountInternal(sink_p);
-	return count == 0 && grouping_set.empty() ? 1 : count;
-}
-
-idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
+idx_t RadixPartitionedHashTable::NumberOfPartitions(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	return sink.count_before_combining;
+	return sink.partitions.size();
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -570,8 +565,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	D_ASSERT(lstate.scan_status != RadixHTScanStatus::IN_PROGRESS);
 
 	const auto n_partitions = sink.partitions.size();
-	if (scan_done == n_partitions) {
-		finished = true;
+	if (finished) {
 		return false;
 	}
 	// We first try to assign a Scan task, then a Finalize task if that didn't work, without using any locks
@@ -595,6 +589,11 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 		return true;
 	}
 
+	// We didn't assign a Scan task
+	if (sink.finalize_idx >= n_partitions) {
+		return false; // No finalize tasks left
+	}
+
 	// We can just increment the atomic here, much simpler than assigning the scan task
 	lstate.task_idx = sink.finalize_idx++;
 	if (lstate.task_idx < n_partitions) {
@@ -603,7 +602,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 		return true;
 	}
 
-	// We didn't manage to assign a finalize task
+	// We didn't manage to assign a Finalize task
 	return false;
 }
 
@@ -693,13 +692,16 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
 		scan_status = RadixHTScanStatus::DONE;
-		if (++gstate.scan_done == sink.partitions.size()) {
-			gstate.finished = true;
-		}
 		if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
 			data_collection.Reset();
 		}
 		return;
+	}
+
+	if (data_collection.ScanComplete(scan_state)) {
+		if (++gstate.scan_done == sink.partitions.size()) {
+			gstate.finished = true;
+		}
 	}
 
 	RowOperationsState row_state(aggregate_allocator);
@@ -758,36 +760,38 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		return SourceResultType::FINISHED;
 	}
 
-	// Special case hack to sort out aggregating from empty intermediates for aggregations without groups
-	if (CountInternal(sink_p) == 0 && grouping_set.empty()) {
-		D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
-		// For each column in the aggregates, set to initial state
-		chunk.SetCardinality(1);
-		for (auto null_group : null_groups) {
-			chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(chunk.data[null_group], true);
-		}
-		ArenaAllocator allocator(BufferAllocator::Get(context.client));
-		for (idx_t i = 0; i < op.aggregates.size(); i++) {
-			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
-			auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-			auto aggr_state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
-			aggr.function.initialize(aggr_state.get());
+	if (sink.count_before_combining == 0) {
+		if (grouping_set.empty()) {
+			// Special case hack to sort out aggregating from empty intermediates for aggregations without groups
+			D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
+			// For each column in the aggregates, set to initial state
+			chunk.SetCardinality(1);
+			for (auto null_group : null_groups) {
+				chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(chunk.data[null_group], true);
+			}
+			ArenaAllocator allocator(BufferAllocator::Get(context.client));
+			for (idx_t i = 0; i < op.aggregates.size(); i++) {
+				D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+				auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
+				auto aggr_state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
+				aggr.function.initialize(aggr_state.get());
 
-			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
-			Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
-			aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
-			if (aggr.function.destructor) {
-				aggr.function.destructor(state_vector, aggr_input_data, 1);
+				AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
+				Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
+				aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
+				if (aggr.function.destructor) {
+					aggr.function.destructor(state_vector, aggr_input_data, 1);
+				}
+			}
+			// Place the grouping values (all the groups of the grouping_set condensed into a single value)
+			// Behind the null groups + aggregates
+			for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
+				chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 			}
 		}
-		// Place the grouping values (all the groups of the grouping_set condensed into a single value)
-		// Behind the null groups + aggregates
-		for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
-			chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
-		}
 		gstate.finished = true;
-		return SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
 	while (!gstate.finished && chunk.size() == 0) {
@@ -796,7 +800,11 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		}
 	}
 
-	return SourceResultType::HAVE_MORE_OUTPUT;
+	if (chunk.size() != 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	} else {
+		return SourceResultType::FINISHED;
+	}
 }
 
 } // namespace duckdb

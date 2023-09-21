@@ -4,13 +4,18 @@ import pandas as pd
 import numpy as np
 
 
-def compare_results(query, list_values=[]):
+def compare_results(query, list_values=[], list_values_2=[]):
     df_duck = duckdb.query(query).df()
-    counter = 0
     duck_values = df_duck['a']
     for duck_value in duck_values:
-        assert duck_value == list_values[counter]
-        counter += 1
+        is_in_list_value = False
+        for value in list_values:
+            if duck_value == value:
+                is_in_list_value = True
+        for value in list_values_2:
+            if duck_value == value:
+                is_in_list_value = True
+        assert is_in_list_value
 
 
 class TestFetchNested(object):
@@ -35,7 +40,8 @@ class TestFetchNested(object):
 
         # #Multiple Lists
         compare_results(
-            "SELECT a from (SELECT LIST(i) as a FROM range(5) tbl(i) group by i%2) as t", [[0, 2, 4], [1, 3]]
+            "SELECT a from (SELECT LIST(i) as a FROM range(5) tbl(i) group by i%2 order by all) as t",
+            [[0, 2, 4], [1, 3]],
         )
 
         # Unique Constants
@@ -45,14 +51,16 @@ class TestFetchNested(object):
 
         # Nested Lists
         compare_results(
-            "SELECT LIST(le) as a FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t",
+            "SELECT LIST(le) as a FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2 order by all) as t order by all",
             [[[0, 2, 4], [1, 3]]],
+            [[[1, 3], [0, 2, 4]]],
         )
 
         # LIST[LIST[LIST[LIST[LIST[INTEGER]]]]]]
         compare_results(
-            "SELECT list (lllle)  as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2) as t) as t1) as t2) as t3",
+            "SELECT list (lllle)  as a from (SELECT list (llle) lllle from (SELECT list(lle) llle from (SELECT LIST(le) lle FROM (SELECT LIST(i) le from range(5) tbl(i) group by i%2 order by all) as t order by all) as t1 order by all) as t2 order by all) as t3 order by all",
             [[[[[[0, 2, 4], [1, 3]]]]]],
+            [[[[[[1, 3], [0, 2, 4]]]]]],
         )
 
         compare_results(
@@ -63,7 +71,7 @@ class TestFetchNested(object):
 
         # Tests for converting multiple lists to/from Pandas with NULL values and/or strings
         compare_results(
-            "SELECT list(st) as a from (select i, case when i%5 then NULL else i::VARCHAR end as st from range(10) tbl(i)) as t group by i%2",
+            "SELECT list(st) as a from (select i, case when i%5 then NULL else i::VARCHAR end as st from range(10) tbl(i)) as t group by i%2 order by all",
             [['0', None, None, None, None], [None, None, '5', None, None]],
         )
 

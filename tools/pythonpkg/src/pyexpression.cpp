@@ -334,7 +334,8 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const stri
 	for (auto arg : args) {
 		shared_ptr<DuckDBPyExpression> py_expr;
 		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
-			throw InvalidInputException("Please provide arguments of type Expression!");
+			string actual_type = py::str(arg.get_type());
+			throw InvalidInputException("Expected argument of type Expression, received '%s' instead", actual_type);
 		}
 		auto expr = py_expr->GetExpression().Copy();
 		expressions.push_back(std::move(expr));
