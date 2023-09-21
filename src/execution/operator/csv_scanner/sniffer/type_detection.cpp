@@ -141,6 +141,10 @@ struct SniffValue {
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			machine.rows_read++;
+		}
+
+		if ((machine.previous_state == CSVState::RECORD_SEPARATOR && machine.state != CSVState::EMPTY_LINE) ||
+		    (machine.state != CSVState::RECORD_SEPARATOR && machine.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[machine.cur_rows].position = machine.line_start_pos;
 			sniffed_values[machine.cur_rows].set = true;
 			machine.line_start_pos = current_pos;
@@ -293,7 +297,7 @@ void CSVSniffer::DetectTypes() {
 			if (tuples[true_start].values.empty() ||
 			    (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
 				true_start = tuples[true_start].line_number;
-				if (true_start < tuples.size()){
+				if (true_start < tuples.size()) {
 					true_pos = tuples[true_start].position;
 				}
 				values_start++;
@@ -307,7 +311,7 @@ void CSVSniffer::DetectTypes() {
 			if (tuples[true_start].values.size() < max_columns_found && !options.null_padding) {
 
 				true_start = tuples[true_start].line_number;
-				if (true_start < tuples.size()){
+				if (true_start < tuples.size()) {
 					true_pos = tuples[true_start].position;
 				}
 				values_start++;
