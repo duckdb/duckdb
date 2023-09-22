@@ -463,10 +463,12 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
                                  SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {
 
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
+//	TODO: SQL_DESC_TYPE and SQL_DESC_OCTET_LENGTH should return values if column_number is 0, otherwise they should return undefined values
 	if (column_number < 1 || column_number > hstmt->stmt->GetTypes().size()) {
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Column number out of range",
 		                                   SQLStateType::ST_07009, hstmt->dbc->GetDataSourceName());
@@ -632,9 +634,11 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		}
 		return SQL_SUCCESS;
 	}
-	default:
+	default: {
+
 		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Unsupported attribute type",
 		                                   SQLStateType::ST_HY092, hstmt->dbc->GetDataSourceName());
+	}
 	}
 }
 
@@ -645,6 +649,18 @@ SQLRETURN SQL_API SQLColAttributes(SQLHSTMT statement_handle, SQLUSMALLINT colum
 	                       string_length_ptr, numeric_attribute_ptr);
 }
 
+/**
+ * @brief Returns description of a column in a result set
+ * https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlcolattribute-function?view=sql-server-ver16
+ * @param statement_handle
+ * @param column_number [INPUT] The column number for which to return information. Column numbers start at 1.
+ * @param field_identifier [INPUT] The description field to return.
+ * @param character_attribute_ptr [OUTPUT] A pointer to a buffer in which to return the value of the requested descriptor field, if the field is a string. If the ptr is NULL, string_length_ptr return the total number of characters available to return.
+ * @param buffer_length [OUTPUT] Optional parameter that specifies the length of the character_attribute_ptr buffer. If the field is a string, the buffer_length parameter must be large enough to hold the entire string, including the null-termination character.
+ * @param string_length_ptr [OUTPUT] A pointer to a buffer in which to return the number of characters (excluding the null-termination character) available to return in character_attribute_ptr.
+ * @param numeric_attribute_ptr [OUTPUT] A pointer to a buffer in which to return the value of the requested descriptor field, if the field is a numeric value.
+ * @return
+ */
 SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
                                   SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length,
                                   SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {

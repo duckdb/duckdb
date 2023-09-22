@@ -60,8 +60,9 @@ SQLRETURN SQL_API SQLExecute(SQLHSTMT statement_handle) {
  */
 SQLRETURN SQL_API SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (!column_count_ptr) {
@@ -77,8 +78,9 @@ SQLRETURN SQL_API SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *colum
 
 SQLRETURN SQL_API SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (!parameter_count_ptr) {
@@ -132,8 +134,9 @@ SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT param
                                    SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr,
                                    SQLSMALLINT *nullable_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (parameter_number <= 0 || parameter_number > hstmt->stmt->n_param) {
@@ -186,8 +189,9 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
                                  SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
                                  SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	if (column_number > hstmt->stmt->ColumnCount()) {
@@ -230,8 +234,9 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
  */
 SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	auto ret = hstmt->param_desc->GetNextParam(value_ptr_ptr);
@@ -253,8 +258,9 @@ SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_
  */
 SQLRETURN SQL_API SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
+	SQLRETURN ret= ConvertHSTMTPrepared(statement_handle, hstmt);
+	if (ret != SQL_SUCCESS) {
+		return ret;
 	}
 
 	auto ret = hstmt->param_desc->PutData(data_ptr, str_len_or_ind_ptr);
