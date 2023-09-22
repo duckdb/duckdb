@@ -106,8 +106,6 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &map_key_vector = MapVector::GetKeys(result);
 	auto &map_value_vector = MapVector::GetValues(result);
 	auto result_data = ListVector::GetData(result);
-	auto &key_vector = args.data[0];
-	auto &value_vector = args.data[1];
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	if (args.data.empty()) {
@@ -118,9 +116,13 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		return;
 	}
 
+	D_ASSERT(args.ColumnCount() == 2);
+	auto &key_vector = args.data[0];
+	auto &value_vector = args.data[1];
+
 	if (args.AllConstant()) {
 		auto key_data = ListVector::GetData(key_vector);
-		auto value_data = ListVector::GetData(args.data[1]);
+		auto value_data = ListVector::GetData(value_vector);
 		auto key_entry = key_data[0];
 		auto value_entry = value_data[0];
 		if (key_entry != value_entry) {
