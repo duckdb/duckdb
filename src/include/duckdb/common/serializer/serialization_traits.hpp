@@ -137,6 +137,11 @@ struct is_set<duckdb::set<Args...>> : std::true_type {
 
 struct SerializationDefaultValue {
 	template <typename T = void>
+	static inline typename std::enable_if<std::is_arithmetic<T>::value, T>::type GetDefault() {
+		return 0;
+	}
+
+	template <typename T = void>
 	static inline typename std::enable_if<is_unique_ptr<T>::value, T>::type GetDefault() {
 		return T();
 	}
@@ -226,7 +231,5 @@ struct SerializationDefaultValue {
 		return value.empty();
 	}
 };
-
-
 
 } // namespace duckdb

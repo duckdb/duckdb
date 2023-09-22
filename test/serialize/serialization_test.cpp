@@ -78,4 +78,176 @@ TEST_CASE("Test default values", "[serialization]") {
 	REQUIRE(pos1 > pos2);
 }
 
+//------------------------------------------------------
+// Test deleted properties
+//------------------------------------------------------
+
+struct Complex {
+	int c1;
+	string c2;
+	Complex(int c1, string c2) : c1(c1), c2(c2) {
+	}
+	Complex() : c1(0), c2("") {
+	}
+
+	void Serialize(Serializer &serializer) const {
+		serializer.WriteProperty<int>(1, "c1", c1);
+		serializer.WriteProperty<string>(2, "c2", c2);
+	}
+
+	static unique_ptr<Complex> Deserialize(Deserializer &deserializer) {
+		auto result = make_uniq<Complex>();
+		deserializer.ReadProperty<int>(1, "c1", result->c1);
+		deserializer.ReadProperty<string>(2, "c2", result->c2);
+		return result;
+	}
+};
+
+struct FooV1 {
+	int p1;
+	vector<unique_ptr<Complex>> p2;
+	int p3;
+	unique_ptr<Complex> p4;
+
+	void Serialize(Serializer &serializer) const {
+		serializer.WriteProperty<int>(1, "p1", p1);
+		serializer.WriteProperty<vector<unique_ptr<Complex>>>(2, "p2", p2);
+		serializer.WriteProperty<int>(3, "p3", p3);
+		serializer.WriteProperty<unique_ptr<Complex>>(4, "p4", p4);
+	}
+
+	static unique_ptr<FooV1> Deserialize(Deserializer &deserializer) {
+		auto result = make_uniq<FooV1>();
+		deserializer.ReadProperty<int>(1, "p1", result->p1);
+		deserializer.ReadProperty<vector<unique_ptr<Complex>>>(2, "p2", result->p2);
+		deserializer.ReadProperty<int>(3, "p3", result->p3);
+		deserializer.ReadProperty<unique_ptr<Complex>>(4, "p4", result->p4);
+		return result;
+	}
+};
+
+struct FooV2 {
+	int p1;
+	/*vector<unique_ptr<Complex>> p2;*/ // In v2, this is deleted
+	int p3;
+	unique_ptr<Complex> p4;
+	unique_ptr<Complex> p5; // In v2, this is added
+
+	void Serialize(Serializer &serializer) const {
+		serializer.WriteProperty<int>(1, "p1", p1);
+		// This field is deleted, so we write a default value to remain backwards compatible
+		serializer.WriteDeletedProperty<vector<unique_ptr<Complex>>>(2, "p2");
+		serializer.WriteProperty<int>(3, "p3", p3);
+		serializer.WriteProperty<unique_ptr<Complex>>(4, "p4", p4);
+
+		// Because this is a new field, we have to provide a default value
+		// to try to preserve backwards compatability (in best case)
+		serializer.WritePropertyWithDefault<unique_ptr<Complex>>(5, "p5", p5, (unique_ptr<Complex>)nullptr);
+	}
+
+	static unique_ptr<FooV2> Deserialize(Deserializer &deserializer) {
+		auto result = make_uniq<FooV2>();
+		deserializer.ReadProperty(1, "p1", result->p1);
+		deserializer.ReadDeletedProperty<vector<unique_ptr<Complex>>>(2, "p2");
+		deserializer.ReadProperty(3, "p3", result->p3);
+		deserializer.ReadProperty(4, "p4", result->p4);
+		deserializer.ReadPropertyWithDefault(5, "p5", result->p5, (unique_ptr<Complex>)nullptr);
+		return result;
+	}
+};
+
+TEST_CASE("Test deleted values", "[serialization]") {
+	FooV1 v1_in = {1, {}, 6, make_uniq<Complex>(1, "foo")};
+	v1_in.p2.push_back(make_uniq<Complex>(2, "3"));
+	v1_in.p2.push_back(make_uniq<Complex>(4, "5"));
+
+	FooV2 v2_in = {1, 3, make_uniq<Complex>(1, "foo"), nullptr};
+
+	MemoryStream stream;
+	// First of, sanity check that foov1 <-> foov1 works
+	BinarySerializer::Serialize(v1_in, stream, false);
+	{
+		stream.Rewind();
+		auto v1_out_ptr = BinaryDeserializer::Deserialize<FooV1>(stream);
+		auto &v1_out = *v1_out_ptr.get();
+		REQUIRE(v1_in.p1 == v1_out.p1);
+		REQUIRE(v1_in.p2.size() == v1_out.p2.size());
+		REQUIRE(v1_in.p2[0]->c1 == v1_out.p2[0]->c1);
+		REQUIRE(v1_in.p2[0]->c2 == v1_out.p2[0]->c2);
+		REQUIRE(v1_in.p2[1]->c1 == v1_out.p2[1]->c1);
+		REQUIRE(v1_in.p2[1]->c2 == v1_out.p2[1]->c2);
+		REQUIRE(v1_in.p3 == v1_out.p3);
+		REQUIRE(v1_in.p4->c1 == v1_out.p4->c1);
+		REQUIRE(v1_in.p4->c2 == v1_out.p4->c2);
+	}
+
+	stream.Rewind();
+
+	// Also check that foov2 <-> foov2 works
+	BinarySerializer::Serialize(v2_in, stream, false);
+	{
+		stream.Rewind();
+		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);
+		auto &v2_out = *v2_out_ptr.get();
+		REQUIRE(v2_in.p1 == v2_out.p1);
+		REQUIRE(v2_in.p3 == v2_out.p3);
+		REQUIRE(v2_in.p4->c1 == v2_out.p4->c1);
+		REQUIRE(v2_in.p4->c2 == v2_out.p4->c2);
+		REQUIRE(v2_in.p5 == v2_out.p5);
+	}
+
+	// Check that foov1 -> foov2 works (forward compatible)
+	stream.Rewind();
+	BinarySerializer::Serialize(v1_in, stream, false);
+	{
+		stream.Rewind();
+		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);
+		auto &v2_out = *v2_out_ptr.get();
+		REQUIRE(v1_in.p1 == v2_out.p1);
+		REQUIRE(v1_in.p3 == v2_out.p3);
+		REQUIRE(v1_in.p4->c1 == v2_out.p4->c1);
+		REQUIRE(v1_in.p4->c2 == v2_out.p4->c2);
+		REQUIRE(v2_out.p5 == nullptr);
+	}
+
+	// Check that foov2 -> foov1 works (backward compatible)
+	stream.Rewind();
+	BinarySerializer::Serialize(v2_in, stream, false);
+	{
+		stream.Rewind();
+		auto v1_out_ptr = BinaryDeserializer::Deserialize<FooV1>(stream);
+		auto &v1_out = *v1_out_ptr.get();
+		REQUIRE(v2_in.p1 == v1_out.p1);
+		REQUIRE(v2_in.p3 == v1_out.p3);
+		REQUIRE(v2_in.p4->c1 == v1_out.p4->c1);
+		REQUIRE(v2_in.p4->c2 == v1_out.p4->c2);
+		REQUIRE(v1_out.p2.empty());
+	}
+
+	// If we change the new value in foov2 to something thats not the default, we break forwards compatibility.
+	// But thats life. Tough shit.
+	stream.Rewind();
+	v2_in.p5 = make_uniq<Complex>(2, "foo");
+	BinarySerializer::Serialize(v2_in, stream, false);
+	{
+		stream.Rewind();
+		REQUIRE_THROWS(BinaryDeserializer::Deserialize<FooV1>(stream));
+	}
+
+	// However, the new value should be read correctly!
+	stream.Rewind();
+	BinarySerializer::Serialize(v2_in, stream, false);
+	{
+		stream.Rewind();
+		auto v2_out_ptr = BinaryDeserializer::Deserialize<FooV2>(stream);
+		auto &v2_out = *v2_out_ptr.get();
+		REQUIRE(v2_in.p1 == v2_out.p1);
+		REQUIRE(v2_in.p3 == v2_out.p3);
+		REQUIRE(v2_in.p4->c1 == v2_out.p4->c1);
+		REQUIRE(v2_in.p4->c2 == v2_out.p4->c2);
+		REQUIRE(v2_out.p5->c1 == 2);
+		REQUIRE(v2_out.p5->c2 == "foo");
+	}
+}
+
 } // namespace duckdb
