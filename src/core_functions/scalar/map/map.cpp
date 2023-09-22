@@ -130,6 +130,7 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		ListVector::SetListSize(result, ListVector::GetListSize(key_vector));
 		map_key_vector.Reference(ListVector::GetEntry(key_vector));
 		map_value_vector.Reference(ListVector::GetEntry(value_vector));
+		MapVector::MapConversionVerify(result, count);
 		result.Verify(count);
 		return;
 	}
