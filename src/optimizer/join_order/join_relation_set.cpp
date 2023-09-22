@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 
@@ -138,5 +139,24 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 // 	}
 // 	return GetJoinRelation(std::move(relations), count);
 // }
+
+static string JoinRelationTreeNodeToString(const JoinRelationTreeNode *node) {
+	string result = "";
+	if (node->relation) {
+		result += node->relation.get()->ToString() + "\n";
+	}
+	for (auto &child : node->children) {
+		result += JoinRelationTreeNodeToString(child.second.get());
+	}
+	return result;
+}
+
+string JoinRelationSetManager::ToString() const {
+	return JoinRelationTreeNodeToString(&root);
+}
+
+void JoinRelationSetManager::Print() {
+	Printer::Print(ToString());
+}
 
 } // namespace duckdb
