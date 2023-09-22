@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/catalog_entry/dtable_catalog_entry.hpp
+// duckdb/catalog/catalog_entry/duck_table_entry.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,8 +9,18 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/storage/block.hpp"
 
 namespace duckdb {
+
+struct IndexStorageInfo {
+	IndexStorageInfo() {};
+	IndexStorageInfo(const string &name, const BlockPointer &root_block_pointer)
+	    : name(name), root_block_pointer(root_block_pointer) {};
+
+	string name;
+	BlockPointer root_block_pointer;
+};
 
 //! A table catalog entry
 class DuckTableEntry : public TableCatalogEntry {

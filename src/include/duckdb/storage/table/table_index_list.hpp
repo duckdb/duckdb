@@ -10,6 +10,7 @@
 
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/storage/index.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
@@ -48,7 +49,7 @@ public:
 	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
 
 	//! Serialize all indexes owned by this table, returns a vector of block info of all indexes
-	vector<pair<string, BlockPointer>> SerializeIndexes(MetadataWriter &writer);
+	vector<IndexStorageInfo> SerializeIndexes(MetadataWriter &writer);
 
 	vector<column_t> GetRequiredColumns();
 

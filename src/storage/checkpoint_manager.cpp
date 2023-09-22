@@ -409,9 +409,9 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 
 	// get the matching root block pointer
 	BlockPointer root_block_pointer;
-	for (auto const &index_p : data_table.info->index_pointers) {
-		if (index_p.first == info.index_name) {
-			root_block_pointer = index_p.second;
+	for (auto const &index_storage_info : data_table.info->index_pointers) {
+		if (index_storage_info.name == info.index_name) {
+			root_block_pointer = index_storage_info.root_block_pointer;
 			break;
 		}
 	}
@@ -490,7 +490,13 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	// This is written in "SingleFileTableDataWriter::FinalizeTable"
 	auto table_pointer = deserializer.ReadProperty<MetaBlockPointer>(101, "table_pointer");
 	auto total_rows = deserializer.ReadProperty<idx_t>(102, "total_rows");
-	auto index_pointers = deserializer.ReadProperty<vector<pair<string, BlockPointer>>>(103, "index_pointers");
+
+	vector<IndexStorageInfo> index_storage_info;
+	deserializer.ReadList(103, "index_storage_info", [&](Deserializer::List &list, idx_t i) {
+		auto name = list.ReadElement<string>();
+		auto block_pointer = list.ReadElement<BlockPointer>();
+		index_storage_info.emplace_back(name, block_pointer);
+	});
 
 	// FIXME: icky downcast to get the underlying MetadataReader
 	auto &binary_deserializer = dynamic_cast<BinaryDeserializer &>(deserializer);
@@ -501,7 +507,7 @@ void CheckpointReader::ReadTableData(ClientContext &context, Deserializer &deser
 	data_reader.ReadTableData();
 
 	bound_info.data->total_rows = total_rows;
-	bound_info.indexes = index_pointers;
+	bound_info.indexes = index_storage_info;
 }
 
 } // namespace duckdb

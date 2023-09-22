@@ -18,6 +18,7 @@
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/catalog/dependency_list.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -47,7 +48,7 @@ struct BoundCreateTableInfo {
 	//! CREATE TABLE from QUERY
 	unique_ptr<LogicalOperator> query;
 	//! Indexes created by this table <Block_ID, Offset>
-	vector<pair<string, BlockPointer>> indexes;
+	vector<IndexStorageInfo> indexes;
 
 	CreateTableInfo &Base() {
 		D_ASSERT(base);

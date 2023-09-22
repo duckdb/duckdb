@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -33,7 +34,7 @@ struct DataTableInfo {
 
 	TableIndexList indexes;
 	//! Indexes created by this table <Block_ID, Offset>
-	vector<pair<string, BlockPointer>> index_pointers;
+	vector<IndexStorageInfo> index_pointers;
 
 	bool IsTemporary() const;
 };

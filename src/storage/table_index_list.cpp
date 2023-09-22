@@ -91,8 +91,8 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<pair<string, BlockPointer>> TableIndexList::SerializeIndexes(duckdb::MetadataWriter &writer) {
-	vector<pair<string, BlockPointer>> blocks_info;
+vector<IndexStorageInfo> TableIndexList::SerializeIndexes(MetadataWriter &writer) {
+	vector<IndexStorageInfo> blocks_info;
 	for (auto &index : indexes) {
 		blocks_info.emplace_back(index->name, index->Serialize(writer));
 	}
