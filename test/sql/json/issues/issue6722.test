@@ -14,7 +14,7 @@ FROM 'data/json/duplicate_column_names.json'
 42	43	44	45
 
 # due to case-insensitivity these column names would cause an error, but we add a number to de-duplicate them
-query IIII
+query IIIIII
 DESCRIBE FROM 'data/json/duplicate_column_names.json'
 ----
 id	BIGINT	YES	NULL	NULL	NULL
