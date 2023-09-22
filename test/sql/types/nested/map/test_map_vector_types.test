@@ -1,0 +1,53 @@
+# name: test/sql/types/nested/map/test_map_vector_types.test
+# group: [map]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create macro input() as table
+	select *
+	from test_vector_types(NULL::INTEGER[]) t(i) where [x for x in i if x IS NOT NULL] != [] offset 3;
+
+query I
+select map(input, input) from input() t(input);
+----
+{-2147483648=-2147483648, 2147483647=2147483647}
+{3=3, 5=5}
+{7=7}
+
+statement ok
+create table tbl (
+	not_filtered bool,
+	keys INTEGER[],
+	vals VARCHAR[]
+);
+
+statement ok
+insert into tbl select
+	case when
+		random() >= 0.5
+	then
+		true
+	else
+		false
+	end as not_filtered,
+	[i + x for x in range(length)] keys,
+	['a' || i + x for x in range(length)] vals
+	from (
+		select 1 + (random() * 5)::BIGINT as length, i from range(1000) t(i)
+	)
+
+# Because of the CONJUNCTION AND, this causes `v` to be constructed in the WHERE clause with a dictionary vector
+# only some of the tuples pass the 'not_filtered' condition
+# v[1] != val should never be true, by definition they're the same
+query IIII
+select
+	vals[1] as val,
+	keys[1] as key,
+	map(keys, vals)[key] as first_map_entry,
+	keys[1] as c
+		from tbl
+	where
+		not_filtered and first_map_entry[1] != val;
+----

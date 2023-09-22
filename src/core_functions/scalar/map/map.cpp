@@ -165,11 +165,6 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 		map_key_vector.Reference(ListVector::GetEntry(key_vector));
 	}
 
-	auto key_data = ListVector::GetData(key_vector);
-
-	auto key_count = ListVector::GetListSize(key_vector);
-	auto value_count = ListVector::GetListSize(value_vector);
-
 	idx_t list_size;
 	auto src_data = GetBiggestList(key_vector, value_vector, list_size);
 	ListVector::SetListSize(result, list_size);
