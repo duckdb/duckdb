@@ -316,7 +316,7 @@ void CSVSniffer::DetectTypes() {
 				break;
 			}
 		}
-		if (tuple_true_start < tuples.size()){
+		if (tuple_true_start < tuples.size()) {
 			true_pos = tuples[tuple_true_start].position;
 		}
 		if (tuple_true_start > 0) {
