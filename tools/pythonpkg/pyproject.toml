@@ -1,4 +1,12 @@
-# Config for cibuildwheel, some values are overridden by env variables of specific jobs
+[build-system]
+requires = ["setuptools>=60", "setuptools_scm>=8.0", "pybind11>=2.6.0", "wheel>=0.38.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+root = "../.."
+local_scheme = {env = "SETUPTOOLS_SCM_LOCAL_SCHEME", default = "no-local-version"}
+
+### CI Builwheel configurations ###
 
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]

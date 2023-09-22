@@ -322,10 +322,12 @@ packages = [
     'duckdb-stubs',
     'duckdb-stubs.functional',
     'duckdb-stubs.typing',
+    'duckdb-stubs.value',
+    'duckdb-stubs.value.constant',
     'adbc_driver_duckdb',
 ]
 
-spark_packages = ['duckdb.experimental.spark', 'duckdb.experimental.spark.sql']
+spark_packages = ['duckdb.experimental', 'duckdb.experimental.spark', 'duckdb.experimental.spark.sql']
 
 packages.extend(spark_packages)
 
@@ -341,8 +343,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
-    use_scm_version=setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',

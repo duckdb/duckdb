@@ -177,7 +177,7 @@ unique_ptr<NumpyResultConversion> DuckDBPyResult::InitializeNumpyConversion(bool
 
 	auto conversion =
 	    make_uniq<NumpyResultConversion>(result->types, initial_capacity, result->client_properties, pandas);
-	return std::move(conversion);
+	return conversion;
 }
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk,
