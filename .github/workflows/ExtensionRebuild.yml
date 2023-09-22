@@ -99,7 +99,7 @@ jobs:
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: '3.8'
 
       - uses: ./.github/actions/build_extensions
         with:
@@ -143,7 +143,7 @@ jobs:
 
      - uses: actions/setup-python@v4
        with:
-         python-version: '3.7'
+         python-version: '3.8'
 
      - uses: ./.github/actions/build_extensions
        with:

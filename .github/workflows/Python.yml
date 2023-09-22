@@ -166,7 +166,7 @@ jobs:
 
     - uses: actions/setup-python@v4
       with:
-        python-version: '3.7'
+        python-version: '3.8'
 
     - name: Install
       shell: bash
@@ -235,7 +235,7 @@ jobs:
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: '3.8'
 
       - name: Install
         shell: bash
@@ -300,7 +300,7 @@ jobs:
 
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.7'
+          python-version: '3.8'
 
       - name: Install
         shell: bash
@@ -349,7 +349,7 @@ jobs:
 
      - uses: actions/setup-python@v4
        with:
-         python-version: '3.7'
+         python-version: '3.8'
 
      - name: Install Packages
        shell: bash
