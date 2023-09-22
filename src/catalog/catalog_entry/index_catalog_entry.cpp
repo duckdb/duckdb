@@ -8,13 +8,6 @@ IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schem
       index_type(info.index_type), index_constraint_type(info.constraint_type), column_ids(info.column_ids) {
 
 	this->temporary = info.temporary;
-
-	for (auto &expr : expressions) {
-		info.expressions.push_back(expr->Copy());
-	}
-	for (auto &expr : parsed_expressions) {
-		info.parsed_expressions.push_back(expr->Copy());
-	}
 }
 
 unique_ptr<CreateInfo> IndexCatalogEntry::GetInfo() const {
