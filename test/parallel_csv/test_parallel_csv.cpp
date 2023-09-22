@@ -27,14 +27,15 @@ const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
 const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
 
-bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size,
+bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool set_temp_dir,
                  ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection multi_conn(db);
 
 	multi_conn.Query("PRAGMA verify_parallelism");
-	multi_conn.Query("PRAGMA temp_directory='offload.tmp'");
-
+	if (set_temp_dir) {
+		multi_conn.Query("PRAGMA temp_directory='offload.tmp'");
+	}
 	multi_conn.Query("SET preserve_insertion_order=false;");
 	multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
 	duckdb::unique_ptr<MaterializedQueryResult> multi_threaded_result =
@@ -73,7 +74,8 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size,
 	return true;
 }
 
-bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
+bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
+             bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);
 	if (!run) {
@@ -105,8 +107,8 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
 	bool all_tests_passed = true;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			all_tests_passed =
-			    all_tests_passed && RunParallel(path, thread_count, buffer_size, ground_truth, add_parameters);
+			all_tests_passed = all_tests_passed &&
+			                   RunParallel(path, thread_count, buffer_size, set_temp_dir, ground_truth, add_parameters);
 		}
 	}
 
@@ -186,6 +188,8 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
 	std::set<std::string> skip;
+	// This file requires a temp_dir for offloading
+	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", &skip);
 }
 
@@ -213,6 +217,8 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	skip.insert("data/csv/sequences.csv.gz");
 	// This file requires specific parameters
 	skip.insert("data/csv/bug_7578.csv");
+	// This file requires a temp_dir for offloading
+	skip.insert("data/csv/hebere.csv.gz");
 	RunTestOnFolder("data/csv/", &skip);
 }
 
@@ -250,4 +256,13 @@ TEST_CASE("Test Parallel CSV All Files - test/sqlserver/data/Person.csv.gz", "[p
 	string add_parameters = ", delim=\'|\', quote=\'*\'";
 	string file = "test/sqlserver/data/Person.csv.gz";
 	REQUIRE(RunFull(file, nullptr, add_parameters));
+}
+
+//! Test case with specific files that require a temp_dir for offloading
+TEST_CASE("Test Parallel CSV All Files - Temp Dir for Offloading", "[parallel-csv][.]") {
+	string file = "test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz";
+	REQUIRE(RunFull(file, nullptr, "", true));
+
+	file = "data/csv/hebere.csv.gz";
+	REQUIRE(RunFull(file, nullptr, "", true));
 }
