@@ -33,6 +33,7 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size,
 	Connection multi_conn(db);
 
 	multi_conn.Query("PRAGMA verify_parallelism");
+	multi_conn.Query("SET memory_limit='1GB'");
 	multi_conn.Query("SET preserve_insertion_order=false;");
 	multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
 	duckdb::unique_ptr<MaterializedQueryResult> multi_threaded_result =
@@ -126,6 +127,11 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 	REQUIRE(all_tests_passed);
 }
 
+TEST_CASE("Test One File", "[parallel-csv][.]") {
+	string path = "test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz";
+	REQUIRE(RunFull(path));
+}
+
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
@@ -216,7 +222,6 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	// This file requires specific parameters
 	skip.insert("data/csv/bug_7578.csv");
 	// FIXME: Fix the following tests
-	skip.insert("data/csv/csv_quoted_newline_odd.csv");
 	skip.insert("data/csv/hebere.csv.gz");
 	RunTestOnFolder("data/csv/", &skip);
 }
