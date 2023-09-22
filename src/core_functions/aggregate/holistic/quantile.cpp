@@ -10,6 +10,8 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
+#include "SkipList.h"
+
 #include <algorithm>
 #include <stdlib.h>
 #include <utility>
@@ -36,34 +38,6 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
 
-template <typename SAVE_TYPE>
-struct QuantileState {
-	using SaveType = SAVE_TYPE;
-
-	// Regular aggregation
-	vector<SaveType> v;
-
-	// Windowed Quantile indirection
-	vector<idx_t> w;
-	idx_t pos;
-
-	// Windowed MAD indirection
-	vector<idx_t> m;
-
-	QuantileState() : pos(0) {
-	}
-
-	~QuantileState() {
-	}
-
-	inline void SetPos(size_t pos_p) {
-		pos = pos_p;
-		if (pos >= w.size()) {
-			w.resize(pos);
-		}
-	}
-};
-
 struct QuantileIncluded {
 	inline explicit QuantileIncluded(const ValidityMask &fmask_p, const ValidityMask &dmask_p, idx_t bias_p)
 	    : fmask(fmask_p), dmask(dmask_p), bias(bias_p) {
@@ -80,6 +54,93 @@ struct QuantileIncluded {
 	const ValidityMask &fmask;
 	const ValidityMask &dmask;
 	const idx_t bias;
+};
+
+template <class T>
+struct PointerLess {
+	inline bool operator()(const T &lhi, const T &rhi) const {
+		return *lhi < *rhi;
+	}
+};
+
+template <typename INPUT_TYPE, typename SAVE_TYPE>
+struct QuantileState {
+	using SaveType = SAVE_TYPE;
+	using InputType = INPUT_TYPE;
+	using PointerType = const InputType *;
+	using SkipListType = duckdb_skiplistlib::skip_list::HeadNode<PointerType, PointerLess<PointerType>>;
+
+	// Regular aggregation
+	vector<SaveType> v;
+
+	// Windowed Quantile indirection
+	vector<idx_t> w;
+	idx_t pos;
+	unique_ptr<SkipListType> s;
+	vector<PointerType> dest;
+
+	// Windowed MAD indirection
+	vector<idx_t> m;
+
+	QuantileState() : pos(0) {
+	}
+
+	~QuantileState() {
+	}
+
+	inline void SetPos(size_t pos_p) {
+		pos = pos_p;
+		if (pos >= w.size()) {
+			w.resize(pos);
+		}
+	}
+
+	inline SkipListType &GetSkipList(bool reset = false) {
+		if (reset || !s) {
+			s.reset();
+			s = make_uniq<SkipListType>();
+		}
+		return *s;
+	}
+
+	const SkipListType &Window(const INPUT_TYPE *data, const FrameBounds &frame, const FrameBounds &prev,
+	                           const QuantileIncluded &included) {
+		//	No overlap, or no data
+		if (!s || prev.end <= frame.start || frame.end <= prev.start) {
+			auto &skip = GetSkipList(true);
+			for (auto i = frame.start; i < frame.end; ++i) {
+				if (included(i)) {
+					skip.insert(data + i);
+				}
+			}
+		} else {
+			auto &skip = GetSkipList();
+			//	Remove old data
+			for (auto i = prev.start; i < frame.start; ++i) {
+				if (included(i)) {
+					skip.remove(data + i);
+				}
+			}
+			for (auto i = frame.end; i < prev.end; ++i) {
+				if (included(i)) {
+					skip.remove(data + i);
+				}
+			}
+			//	Add new data
+			for (auto i = frame.start; i < prev.start; ++i) {
+				if (included(i)) {
+					skip.insert(data + i);
+				}
+			}
+			for (auto i = prev.end; i < frame.end; ++i) {
+				if (included(i)) {
+					skip.insert(data + i);
+				}
+			}
+		}
+
+		return *s;
+	}
 };
 
 void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
@@ -324,6 +385,17 @@ struct Interpolator {
 		}
 	}
 
+	template <class INPUT_TYPE, class TARGET_TYPE>
+	inline TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
+		if (CRN == FRN) {
+			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
+		} else {
+			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
+			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[1], result);
+			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
+		}
+	}
+
 	const bool desc;
 	const double RN;
 	const idx_t FRN;
@@ -374,6 +446,11 @@ struct Interpolator<true> {
 	TARGET_TYPE Replace(const INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
+	}
+
+	template <class INPUT_TYPE, class TARGET_TYPE>
+	TARGET_TYPE Extract(const INPUT_TYPE **dest, Vector &result) const {
+		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(*dest[0], result);
 	}
 
 	const bool desc;
@@ -553,48 +630,19 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
+		//	Update the skip list
 		QuantileIncluded included(fmask, dmask, bias);
+		auto &skip = state.Window(data, frame, prev, included);
 
-		//  Lazily initialise frame state
-		auto prev_pos = state.pos;
-		state.SetPos(frame.end - frame.start);
+		if (skip.size()) {
+			// Find the position(s) needed
+			D_ASSERT(aggr_input_data.bind_data);
+			auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
+			const auto q = bind_data.quantiles[0];
 
-		auto index = state.w.data();
-		D_ASSERT(index);
-
-		D_ASSERT(aggr_input_data.bind_data);
-		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-
-		// Find the two positions needed
-		const auto q = bind_data.quantiles[0];
-
-		bool replace = false;
-		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
-			//  Fixed frame size
-			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.start) == included(prev.end)) {
-				Interpolator<DISCRETE> interp(q, prev_pos, false);
-				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
-				if (replace) {
-					state.pos = prev_pos;
-				}
-			}
-		} else {
-			ReuseIndexes(index, frame, prev);
-		}
-
-		if (!replace && !included.AllValid()) {
-			// Remove the NULLs
-			state.pos = std::partition(index, index + state.pos, included) - index;
-		}
-		if (state.pos) {
-			Interpolator<DISCRETE> interp(q, state.pos, false);
-
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
-			rdata[ridx] = replace ? interp.template Replace<idx_t, RESULT_TYPE, ID>(index, result, indirect)
-			                      : interp.template Operation<idx_t, RESULT_TYPE, ID>(index, result, indirect);
+			Interpolator<DISCRETE> interp(q, skip.size(), false);
+			skip.at(interp.FRN, interp.CRN - interp.FRN + 1, state.dest);
+			rdata[ridx] = interp.template Extract<INPUT_TYPE, RESULT_TYPE>(state.dest.data(), result);
 		} else {
 			rmask.Set(ridx, false);
 		}
@@ -603,7 +651,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 template <typename INPUT_TYPE, typename SAVED_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<SAVED_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, SAVED_TYPE>;
 	using OP = QuantileScalarOperation<true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
@@ -701,8 +749,6 @@ struct QuantileListOperation : public QuantileOperation {
 		D_ASSERT(aggr_input_data.bind_data);
 		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
-		QuantileIncluded included(fmask, dmask, bias);
-
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
 		auto &lmask = FlatVector::Validity(list);
@@ -715,73 +761,16 @@ struct QuantileListOperation : public QuantileOperation {
 		auto &result = ListVector::GetEntry(list);
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
-		//  Lazily initialise frame state
-		auto prev_pos = state.pos;
-		state.SetPos(frame.end - frame.start);
+		//	Update the skip list
+		QuantileIncluded included(fmask, dmask, bias);
+		auto &skip = state.Window(data, frame, prev, included);
 
-		auto index = state.w.data();
-
-		// We can generalise replacement for quantile lists by observing that when a replacement is
-		// valid for a single quantile, it is valid for all quantiles greater/less than that quantile
-		// based on whether the insertion is below/above the quantile location.
-		// So if a replaced index in an IQR is located between Q25 and Q50, but has a value below Q25,
-		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
-		// For a single element list, this reduces to the scalar case.
-		std::pair<idx_t, idx_t> replaceable {state.pos, 0};
-		if (frame.start == prev.start + 1 && frame.end == prev.end + 1) {
-			//  Fixed frame size
-			const auto j = ReplaceIndex(index, frame, prev);
-			//	We can only replace if the number of NULLs has not changed
-			if (included.AllValid() || included(prev.start) == included(prev.end)) {
-				for (const auto &q : bind_data.order) {
-					const auto &quantile = bind_data.quantiles[q];
-					Interpolator<DISCRETE> interp(quantile, prev_pos, false);
-					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
-					if (replace < 0) {
-						//	Replacement is before this quantile, so the rest will be replaceable too.
-						replaceable.first = MinValue(replaceable.first, interp.FRN);
-						replaceable.second = prev_pos;
-						break;
-					} else if (replace > 0) {
-						//	Replacement is after this quantile, so everything before it is replaceable too.
-						replaceable.first = 0;
-						replaceable.second = MaxValue(replaceable.second, interp.CRN);
-					}
-				}
-				if (replaceable.first < replaceable.second) {
-					state.pos = prev_pos;
-				}
-			}
-		} else {
-			ReuseIndexes(index, frame, prev);
-		}
-
-		if (replaceable.first >= replaceable.second && !included.AllValid()) {
-			// Remove the NULLs
-			state.pos = std::partition(index, index + state.pos, included) - index;
-		}
-
-		if (state.pos) {
-			using ID = QuantileIndirect<INPUT_TYPE>;
-			ID indirect(data);
+		if (skip.size()) {
 			for (const auto &q : bind_data.order) {
 				const auto &quantile = bind_data.quantiles[q];
-				Interpolator<DISCRETE> interp(quantile, state.pos, false);
-				if (replaceable.first <= interp.FRN && interp.CRN <= replaceable.second) {
-					rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);
-				} else {
-					// Make sure we don't disturb any replacements
-					if (replaceable.first < replaceable.second) {
-						if (interp.FRN < replaceable.first) {
-							interp.end = replaceable.first;
-						}
-						if (replaceable.second < interp.CRN) {
-							interp.begin = replaceable.second;
-						}
-					}
-					rdata[lentry.offset + q] =
-					    interp.template Operation<idx_t, CHILD_TYPE, ID>(index, result, indirect);
-				}
+				Interpolator<DISCRETE> interp(quantile, skip.size(), false);
+				skip.at(interp.FRN, interp.CRN - interp.FRN + 1, state.dest);
+				rdata[lentry.offset + q] = interp.template Extract<INPUT_TYPE, CHILD_TYPE>(state.dest.data(), result);
 			}
 		} else {
 			lmask.Set(lidx, false);
@@ -791,7 +780,7 @@ struct QuantileListOperation : public QuantileOperation {
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<SAVE_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, SAVE_TYPE>;
 	using OP = QuantileListOperation<INPUT_TYPE, true>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -848,7 +837,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, INPUT_TYPE>;
 	using OP = QuantileScalarOperation<false>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -902,7 +891,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 template <typename INPUT_TYPE, typename CHILD_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &result_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, INPUT_TYPE>;
 	using OP = QuantileListOperation<CHILD_TYPE, false>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
@@ -1127,7 +1116,7 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 template <typename INPUT_TYPE, typename MEDIAN_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const LogicalType &input_type,
                                                                    const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState<INPUT_TYPE, INPUT_TYPE>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
