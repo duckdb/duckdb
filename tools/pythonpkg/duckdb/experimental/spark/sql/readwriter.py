@@ -1,13 +1,13 @@
 from typing import TYPE_CHECKING, Iterable, Union, List, Optional, cast
-from duckdb.spark.sql.types import StructType
+from .types import StructType
 from ..exception import ContributionsAcceptedError
 
 PrimitiveType = Union[bool, float, int, str]
 OptionalPrimitiveType = Optional[PrimitiveType]
 
 if TYPE_CHECKING:
-    from duckdb.spark.sql.dataframe import DataFrame
-    from duckdb.spark.sql.session import SparkSession
+    from duckdb.experimental.spark.sql.dataframe import DataFrame
+    from duckdb.experimental.spark.sql.session import SparkSession
 
 
 class DataFrameWriter:
@@ -30,7 +30,7 @@ class DataFrameReader:
         schema: Optional[Union[StructType, str]] = None,
         **options: OptionalPrimitiveType,
     ) -> "DataFrame":
-        from duckdb.spark.sql.dataframe import DataFrame
+        from duckdb.experimental.spark.sql.dataframe import DataFrame
 
         if not isinstance(path, str):
             raise ImportError

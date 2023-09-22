@@ -487,3 +487,28 @@ query III
 SELECT * FROM assorted_lists;
 ----
 [8, 7, 6]	[hello, Duck'DB]	[2022-12-02, 1929-01-25]
+
+#              Escape tests
+#---------------------------------------------------
+
+# regular escape
+query I
+select '[{"bar":"\""}]'::VARCHAR[];
+----
+[{"bar":"\""}]
+
+# escaped '\', does not count as an escape for "
+statement error
+select '[{"bar":"\\""}]'::VARCHAR[];
+
+# uneven amount of escapes does escape the "
+query I
+select '[{"bar":"\\\""}]'::VARCHAR[];
+----
+[{"bar":"\\\""}]
+
+# all are escaped except for the last one
+query I
+select '[{"bar":"\"\"\\\"\"\"\\"}]'::VARCHAR[];
+----
+[{"bar":"\"\"\\\"\"\"\\"}]

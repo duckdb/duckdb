@@ -16,7 +16,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -26,7 +26,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -64,6 +64,10 @@ jobs:
         odbc: 1
         python_alias: 1
 
+    - name: Install pytest
+      run: |
+        python3.7 -m pip install pytest
+
     - name: Build
       shell: bash
       run: make
@@ -79,7 +83,7 @@ jobs:
     - name: Tools Tests
       shell: bash
       run: |
-        python3.7 tools/shell/shell-test.py build/release/duckdb
+        python3.7 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash

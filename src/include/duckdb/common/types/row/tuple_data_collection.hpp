@@ -21,7 +21,7 @@ struct RowOperationsState;
 
 typedef void (*tuple_data_scatter_function_t)(const Vector &source, const TupleDataVectorFormat &source_format,
                                               const SelectionVector &append_sel, const idx_t append_count,
-                                              const TupleDataLayout &layout, Vector &row_locations,
+                                              const TupleDataLayout &layout, const Vector &row_locations,
                                               Vector &heap_locations, const idx_t col_idx,
                                               const UnifiedVectorFormat &list_format,
                                               const vector<TupleDataScatterFunction> &child_functions);
@@ -84,7 +84,11 @@ public:
 	                      TupleDataPinProperties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Initializes the Chunk state of an Append state
 	//! - Useful for optimizing many appends made to the same tuple data collection
-	void InitializeAppend(TupleDataChunkState &chunk_state, vector<column_t> column_ids = {});
+	void InitializeChunkState(TupleDataChunkState &chunk_state, vector<column_t> column_ids = {});
+	//! Initializes the Chunk state of an Append state
+	//! - Useful for optimizing many appends made to the same tuple data collection
+	static void InitializeChunkState(TupleDataChunkState &chunk_state, const vector<LogicalType> &types,
+	                                 vector<column_t> column_ids = {});
 	//! Append a DataChunk directly to this TupleDataCollection - calls InitializeAppend and Append internally
 	void Append(DataChunk &new_chunk, const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
 	            idx_t append_count = DConstants::INVALID_INDEX);

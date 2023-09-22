@@ -49,7 +49,7 @@ common/re2_regex.cpp	37
 common/row_operations/row_aggregate.cpp	2
 common/row_operations/row_external.cpp	26
 common/row_operations/row_gather.cpp	11
-common/row_operations/row_match.cpp	4
+common/row_operations/row_matcher.cpp	13
 common/serializer/deserializer.cpp	13
 common/serializer/serializer.cpp	21
 common/serializer/buffered_file_reader.cpp	11
@@ -204,7 +204,7 @@ execution/operator/csv_scanner/buffered_csv_reader.cpp	48
 execution/operator/csv_scanner/csv_reader_options.cpp	41
 execution/operator/persistent/csv_buffer.cpp	2
 execution/operator/csv_scanner/csv_file_handle.cpp	7
-execution/operator/csv_scanner/parallel_csv_reader.cpp	50
+execution/operator/csv_scanner/parallel_csv_reader.cpp	54
 execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
@@ -514,7 +514,7 @@ main/prepared_statement.cpp	16
 main/prepared_statement_data.cpp	8
 main/query_profiler.cpp	32
 main/query_result.cpp	20
-main/relation.cpp	29
+main/relation.cpp	31
 main/relation/create_view_relation.cpp	7
 main/relation/cross_product_relation.cpp	2
 main/relation/read_json_relation.cpp	10
