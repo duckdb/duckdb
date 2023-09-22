@@ -26,13 +26,13 @@ create table tbl (
 statement ok
 insert into tbl select
 	case when
-		random() >= 0.5
+		i >= 500
 	then
 		true
 	else
 		false
 	end as not_filtered,
-	[i + x for x in range(length)] keys,
+	[x for x in range(length)] keys,
 	['a' || i + x for x in range(length)] vals
 	from (
 		select 1 + (random() * 5)::BIGINT as length, i from range(1000) t(i)
@@ -41,12 +41,11 @@ insert into tbl select
 # Because of the CONJUNCTION AND, this causes `v` to be constructed in the WHERE clause with a dictionary vector
 # only some of the tuples pass the 'not_filtered' condition
 # v[1] != val should never be true, by definition they're the same
-query IIII
+query III
 select
 	vals[1] as val,
 	keys[1] as key,
 	map(keys, vals)[key] as first_map_entry,
-	keys[1] as c
 		from tbl
 	where
 		not_filtered and first_map_entry[1] != val;
