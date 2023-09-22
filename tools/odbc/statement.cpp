@@ -470,7 +470,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 //	TODO: SQL_DESC_TYPE and SQL_DESC_OCTET_LENGTH should return values if column_number is 0, otherwise they should return undefined values
 	if (column_number < 1 || column_number > hstmt->stmt->GetTypes().size()) {
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Column number out of range",
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Column number out of range",
 		                                   SQLStateType::ST_07009, hstmt->dbc->GetDataSourceName());
 	}
 
@@ -478,9 +478,43 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	auto desc_record = hstmt->row_desc->GetIRD()->GetDescRecord(col_idx);
 
 	switch (field_identifier) {
+	case SQL_DESC_AUTO_UNIQUE_VALUE:
+		// TODO: this
+	case SQL_DESC_BASE_COLUMN_NAME:
+		// TODO: this
+	case SQL_DESC_BASE_TABLE_NAME:
+		// TODO: this
+	case SQL_DESC_CASE_SENSITIVE:
+		// TODO: this
+	case SQL_DESC_CATALOG_NAME:
+		// TODO: this
+	case SQL_DESC_CONCISE_TYPE: {
+		if (numeric_attribute_ptr) {
+			duckdb::Store<SQLLEN>(desc_record->sql_desc_concise_type, (duckdb::data_ptr_t)numeric_attribute_ptr);
+		}
+		return SQL_SUCCESS;
+	}
+	case SQL_COLUMN_COUNT:
+	case SQL_DESC_COUNT: {
+		if (numeric_attribute_ptr) {
+			duckdb::Store<SQLLEN>(hstmt->row_desc->ird->header.sql_desc_count,
+			                      (duckdb::data_ptr_t)numeric_attribute_ptr);
+		}
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_DISPLAY_SIZE: {
+		auto ret = duckdb::ApiInfo::GetColumnSize(hstmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
+		if (ret == SQL_ERROR) {
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Unsupported type for display size",
+			                                   SQLStateType::ST_HY105, hstmt->dbc->GetDataSourceName());
+		}
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_FIXED_PREC_SCALE:
+		// TODO: this
 	case SQL_DESC_LABEL: {
 		if (buffer_length <= 0) {
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Inadequate buffer length",
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Inadequate buffer length",
 			                                   SQLStateType::ST_HY090, hstmt->dbc->GetDataSourceName());
 		}
 
@@ -495,72 +529,25 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 		return SQL_SUCCESS;
 	}
-	case SQL_COLUMN_COUNT:
-	case SQL_DESC_COUNT: {
-		if (numeric_attribute_ptr) {
-			duckdb::Store<SQLLEN>(hstmt->row_desc->ird->header.sql_desc_count,
-			                      (duckdb::data_ptr_t)numeric_attribute_ptr);
-		}
-		return SQL_SUCCESS;
-	}
 	case SQL_COLUMN_LENGTH:
 	case SQL_DESC_LENGTH:
 		if (numeric_attribute_ptr) {
 			duckdb::Store<SQLLEN>(desc_record->sql_desc_length, (duckdb::data_ptr_t)numeric_attribute_ptr);
 		}
 		return SQL_SUCCESS;
-	case SQL_DESC_OCTET_LENGTH:
-		// 0 DuckDB doesn't provide octet length
-		if (numeric_attribute_ptr) {
-			*numeric_attribute_ptr = 0;
-		}
-		return SQL_SUCCESS;
-	case SQL_DESC_TYPE_NAME: {
-		if (buffer_length <= 0) {
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Inadequate buffer length",
-			                                   SQLStateType::ST_HY090, hstmt->dbc->GetDataSourceName());
-		}
-
-		auto internal_type = hstmt->stmt->GetTypes()[col_idx].InternalType();
-		std::string type_name = duckdb::TypeIdToString(internal_type);
-		auto out_len = duckdb::MinValue(type_name.size(), (size_t)buffer_length);
-		memcpy(character_attribute_ptr, type_name.c_str(), out_len);
-		((char *)character_attribute_ptr)[out_len] = '\0';
-
-		if (string_length_ptr) {
-			*string_length_ptr = out_len;
-		}
-
+	case SQL_DESC_LITERAL_PREFIX:
+		// TODO: this
+	case SQL_DESC_LITERAL_SUFFIX:
+		// TODO: this
+	case SQL_DESC_LOCAL_TYPE_NAME:
+		// TODO: this
+	case SQL_COLUMN_NAME:
+	case SQL_DESC_NAME: {
+		duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, (SQLCHAR *)character_attribute_ptr, buffer_length,
+		                               string_length_ptr);
 		return SQL_SUCCESS;
 	}
-	case SQL_DESC_DISPLAY_SIZE: {
-		auto ret = duckdb::ApiInfo::GetColumnSize(hstmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
-		if (ret == SQL_ERROR) {
-			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Unsupported type for display size",
-			                                   SQLStateType::ST_HY105, hstmt->dbc->GetDataSourceName());
-		}
-		return SQL_SUCCESS;
-	}
-	case SQL_DESC_UNSIGNED: {
-		auto type = hstmt->stmt->GetTypes()[col_idx];
-		switch (type.id()) {
-		case LogicalTypeId::UTINYINT:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::UBIGINT:
-			*numeric_attribute_ptr = SQL_TRUE;
-			break;
-		default:
-			*numeric_attribute_ptr = SQL_FALSE;
-		}
-		return SQL_SUCCESS;
-	}
-	case SQL_DESC_CONCISE_TYPE: {
-		if (numeric_attribute_ptr) {
-			duckdb::Store<SQLLEN>(desc_record->sql_desc_concise_type, (duckdb::data_ptr_t)numeric_attribute_ptr);
-		}
-		return SQL_SUCCESS;
-	}
+	// TODO: Not included in documentation?
 	case SQL_COLUMN_NULLABLE: {
 		if (numeric_attribute_ptr) {
 			duckdb::Store<SQLINTEGER>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)numeric_attribute_ptr);
@@ -598,18 +585,12 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		}
 		return SQL_SUCCESS;
 	}
-	case SQL_COLUMN_SCALE: {
+	case SQL_DESC_OCTET_LENGTH:
+		// 0 DuckDB doesn't provide octet length
 		if (numeric_attribute_ptr) {
-			duckdb::Store<SQLINTEGER>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
+			*numeric_attribute_ptr = 0;
 		}
 		return SQL_SUCCESS;
-	}
-	case SQL_DESC_SCALE: {
-		if (numeric_attribute_ptr) {
-			duckdb::Store<SQLLEN>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
-		}
-		return SQL_SUCCESS;
-	}
 	case SQL_COLUMN_PRECISION: {
 		if (numeric_attribute_ptr) {
 			duckdb::Store<SQLINTEGER>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)numeric_attribute_ptr);
@@ -622,10 +603,58 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 		}
 		return SQL_SUCCESS;
 	}
-	case SQL_COLUMN_NAME:
-	case SQL_DESC_NAME: {
-		duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, (SQLCHAR *)character_attribute_ptr, buffer_length,
-		                               string_length_ptr);
+	case SQL_COLUMN_SCALE: {
+		if (numeric_attribute_ptr) {
+			duckdb::Store<SQLINTEGER>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
+		}
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_SCALE: {
+		if (numeric_attribute_ptr) {
+			duckdb::Store<SQLLEN>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)numeric_attribute_ptr);
+		}
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_SCHEMA_NAME:
+		//TODO this
+	case SQL_DESC_SEARCHABLE:
+		//TODO this
+	case SQL_DESC_TABLE_NAME:
+		//TODO this
+	case SQL_DESC_TYPE:
+		// TODO this
+	case SQL_DESC_TYPE_NAME: {
+		if (buffer_length <= 0) {
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Inadequate buffer length",
+			                                   SQLStateType::ST_HY090, hstmt->dbc->GetDataSourceName());
+		}
+
+		auto internal_type = hstmt->stmt->GetTypes()[col_idx].InternalType();
+		std::string type_name = duckdb::TypeIdToString(internal_type);
+		auto out_len = duckdb::MinValue(type_name.size(), (size_t)buffer_length);
+		memcpy(character_attribute_ptr, type_name.c_str(), out_len);
+		((char *)character_attribute_ptr)[out_len] = '\0';
+
+		if (string_length_ptr) {
+			*string_length_ptr = out_len;
+		}
+
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_UNNAMED:
+		// TODO this
+	case SQL_DESC_UNSIGNED: {
+		auto type = hstmt->stmt->GetTypes()[col_idx];
+		switch (type.id()) {
+		case LogicalTypeId::UTINYINT:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
+			*numeric_attribute_ptr = SQL_TRUE;
+			break;
+		default:
+			*numeric_attribute_ptr = SQL_FALSE;
+		}
 		return SQL_SUCCESS;
 	}
 	case SQL_DESC_UPDATABLE: {
@@ -636,8 +665,8 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
 	}
 	default: {
 
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetColAttribute", "Unsupported attribute type",
-		                                   SQLStateType::ST_HY092, hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLColAttribute(s)", "Invalid descriptor field identifier",
+		                                   SQLStateType::ST_HY091, hstmt->dbc->GetDataSourceName());
 	}
 	}
 }
