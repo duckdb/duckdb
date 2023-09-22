@@ -131,7 +131,7 @@ core_functions/scalar/enum/enum_functions.cpp	10
 core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
-core_functions/scalar/list/array_slice.cpp	2
+core_functions/scalar/list/array_slice.cpp	3
 core_functions/scalar/list/flatten.cpp	6
 core_functions/scalar/list/list_aggregates.cpp	2
 core_functions/scalar/list/list_lambdas.cpp	2
