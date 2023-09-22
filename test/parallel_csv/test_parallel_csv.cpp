@@ -36,7 +36,7 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size,
 	multi_conn.Query("SET preserve_insertion_order=false;");
 	multi_conn.Query("PRAGMA threads=" + to_string(thread_count));
 	duckdb::unique_ptr<MaterializedQueryResult> multi_threaded_result =
-	    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "'"+ add_parameters+
+	    multi_conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters +
 	                     ", buffer_size = " + to_string(buffer_size) + ") ORDER BY ALL");
 	bool multi_threaded_passed;
 	ColumnDataCollection *result = nullptr;
@@ -71,8 +71,7 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size,
 	return true;
 }
 
-bool RunFull(std::string &path, std::set<std::string> *skip = nullptr,
-             const string &add_parameters = "") {
+bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
 	Connection conn(db);
 	if (!run) {
@@ -92,8 +91,8 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr,
 	duckdb::unique_ptr<MaterializedQueryResult> single_threaded_res;
 	ColumnDataCollection *ground_truth = nullptr;
 	single_threaded_res =
-	    conn.Query("SELECT * FROM read_csv_auto('" + path + "'"+ add_parameters+", parallel = 0) ORDER BY ALL");
-	if (!single_threaded_res->HasError()){
+	    conn.Query("SELECT * FROM read_csv_auto('" + path + "'" + add_parameters + ", parallel = 0) ORDER BY ALL");
+	if (!single_threaded_res->HasError()) {
 		ground_truth = &single_threaded_res->Collection();
 	}
 	// For parallel CSV Reading the buffer must be at least the size of the biggest line in the File.
@@ -104,8 +103,8 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr,
 	bool all_tests_passed = true;
 	for (auto thread_count = 1; thread_count <= 8; thread_count++) {
 		for (auto buffer_size = min_buffer_size; buffer_size < max_buffer_size; buffer_size++) {
-			all_tests_passed = all_tests_passed && RunParallel(path, thread_count, buffer_size,
-			                                                   ground_truth, add_parameters);
+			all_tests_passed =
+			    all_tests_passed && RunParallel(path, thread_count, buffer_size, ground_truth, add_parameters);
 		}
 	}
 
@@ -125,11 +124,6 @@ void RunTestOnFolder(const string &path, std::set<std::string> *skip = nullptr, 
 		}
 	}
 	REQUIRE(all_tests_passed);
-}
-
-TEST_CASE("Test One File", "[parallel-csv][.]") {
-	string path = "test/sql/copy/csv/data/test/error_too_little_single.csv";
-	REQUIRE(RunFull(path));
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data", "[parallel-csv][.]") {
@@ -191,7 +185,8 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/glob/i1", "[para
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// FIXME: Fix the following tests
-	// This is a baddie, fix before release: Out of Memory Error: failed to allocate data of size 16KB (5.8GB/5.8GB used)
+	// This is a baddie, fix before release: Out of Memory Error: failed to allocate data of size 16KB (5.8GB/5.8GB
+	// used)
 	skip.insert("test/sql/copy/csv/data/real/tmp2013-06-15.csv.gz");
 	RunTestOnFolder("test/sql/copy/csv/data/real/", &skip);
 }
@@ -200,9 +195,6 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[paralle
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/test/5438.csv");
-	// FIXME: Fix the following tests
-	skip.insert("test/sql/copy/csv/data/test/test_null_csv.csv");
-	skip.insert("test/sql/copy/csv/data/test/timestampoffset.csv");
 	RunTestOnFolder("test/sql/copy/csv/data/test/", &skip);
 }
 
