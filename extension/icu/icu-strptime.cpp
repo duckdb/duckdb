@@ -75,6 +75,7 @@ struct ICUStrptime : public ICUDateFunc {
 		calendar->set(UCAL_MINUTE, parsed.data[4]);
 		calendar->set(UCAL_SECOND, parsed.data[5]);
 		calendar->set(UCAL_MILLISECOND, parsed.data[6] / Interval::MICROS_PER_MSEC);
+		micros = parsed.data[6] % Interval::MICROS_PER_MSEC;
 
 		// This overrides the TZ setting, so only use it if an offset was parsed.
 		// Note that we don't bother/worry about the DST setting because the two just combine.

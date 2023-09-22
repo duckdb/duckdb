@@ -1,5 +1,5 @@
 from typing import Optional, Union
-from duckdb.spark._globals import _NoValueType, _NoValue
+from duckdb.experimental.spark._globals import _NoValueType, _NoValue
 from duckdb import DuckDBPyConnection
 
 

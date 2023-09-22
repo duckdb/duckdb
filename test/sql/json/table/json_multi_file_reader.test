@@ -10,7 +10,7 @@ create table test as SELECT to_json([i%4]) as j FROM range(0,20) as tbl(i)
 # FIXME: we can't do partitioned JSON writes yet because the column we partition by is packed into a to_json
 # because we just push an expression and then use the csv writer, this uses the csv writer for now
 statement ok
-COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j));
+COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j), HEADER 0);
 
 # some tests for read_json first
 query III
