@@ -197,9 +197,20 @@ void WriteAheadLog::WriteCreateIndex(const IndexCatalogEntry &entry) {
 		return;
 	}
 	BinarySerializer serializer(*writer);
+
 	serializer.Begin();
 	serializer.WriteProperty(100, "wal_type", WALType::CREATE_INDEX);
 	serializer.WriteProperty(101, "index", &entry);
+
+	// now serialize and write the index data
+	auto &duck_index_entry = entry.Cast<DuckIndexEntry>();
+	auto index_storage_info = duck_index_entry.info->indexes.SerializeIndexes(serializer);
+	serializer.WriteList(104, "index_storage_info", index_storage_info.size(),
+	                     [&](Serializer::List &list, idx_t i) {
+		                     list.WriteElement(index_storage_info[i].name);
+		                     list.WriteElement(index_storage_info[i].root_block_pointer);
+	                     });
+
 	serializer.End();
 }
 

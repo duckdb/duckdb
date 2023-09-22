@@ -91,10 +91,10 @@ vector<column_t> TableIndexList::GetRequiredColumns() {
 	return result;
 }
 
-vector<IndexStorageInfo> TableIndexList::SerializeIndexes(MetadataWriter &writer) {
+vector<IndexStorageInfo> TableIndexList::SerializeIndexes(Serializer &serializer) {
 	vector<IndexStorageInfo> blocks_info;
 	for (auto &index : indexes) {
-		blocks_info.emplace_back(index->name, index->Serialize(writer));
+		blocks_info.emplace_back(index->name, index->Serialize(serializer));
 	}
 	return blocks_info;
 }

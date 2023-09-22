@@ -14,8 +14,10 @@
 #include "duckdb/execution/index/art/iterator.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
+#include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 
 #include <algorithm>
 
@@ -975,43 +977,36 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 // Serialization
 //===--------------------------------------------------------------------===//
 
-BlockPointer ART::Serialize(MetadataWriter &writer) {
+void ART::Serialize(Serializer &serializer) const {
 
 	D_ASSERT(owns_data);
 
-	// early-out, if all allocators are empty
-	if (!tree.HasMetadata()) {
-		root_block_pointer = BlockPointer();
-		return root_block_pointer;
-	}
-
-	lock_guard<mutex> l(lock);
+	// serialize the buffers
 	auto &block_manager = table_io_manager.GetIndexBlockManager();
 	PartialBlockManager partial_block_manager(block_manager, CheckpointType::FULL_CHECKPOINT);
-
-	vector<BlockPointer> allocator_pointers;
-	for (auto &allocator : *allocators) {
-		allocator_pointers.push_back(allocator->Serialize(partial_block_manager, writer));
+	for (const auto &allocator : *allocators) {
+		allocator->SerializeBuffers(partial_block_manager);
 	}
 	partial_block_manager.FlushPartialBlocks();
 
-	root_block_pointer = writer.GetBlockPointer();
-	writer.Write(tree);
-	for (auto &allocator_pointer : allocator_pointers) {
-		writer.Write(allocator_pointer);
-	}
-
-	return root_block_pointer;
+	serializer.WriteProperty(100, "tree", tree.Get());
+	serializer.WriteList(101, "allocators", allocators->size(),
+	                     [&](Serializer::List &list, idx_t i) {
+		                     list.WriteElement((*allocators)[i]);
+	                     });
 }
 
-void ART::Deserialize(const BlockPointer &pointer) {
+ART ART::Deserialize(Deserializer &deserializer) {
 
 	D_ASSERT(pointer.IsValid());
 	MetadataReader reader(table_io_manager.GetMetadataManager(), pointer);
-	tree = reader.Read<Node>();
+	BinaryDeserializer deserializer (reader);
 
-	for (idx_t i = 0; i < ALLOCATOR_COUNT; i++) {
-		(*allocators)[i]->Deserialize(reader.Read<BlockPointer>());
+	tree.Set(deserializer.ReadProperty<idx_t>(102, "tree"));
+	for (const auto &allocator : *allocators) {
+		deserializer.ReadProperty<BlockPointer>(123, "hello");
+//		deserializer.ReadProperty<FixedSizeAllocator>(103, "fixed_size_allocator");
+//		allocator->Deserialize(deserializer);
 	}
 }
 

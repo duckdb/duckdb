@@ -138,7 +138,8 @@ public:
 	}
 
 	//! Serializes the index to disk
-	virtual BlockPointer Serialize(MetadataWriter &writer);
+	virtual void Serialize(Serializer &serializer) const;
+	// TODO: disable?
 	//! Returns the serialized root block pointer
 	BlockPointer GetRootBlockPointer() const {
 		return root_block_pointer;

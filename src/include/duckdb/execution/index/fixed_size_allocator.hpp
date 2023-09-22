@@ -11,8 +11,6 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/metadata/metadata_manager.hpp"
-#include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/execution/index/fixed_size_buffer.hpp"
 #include "duckdb/execution/index/index_pointer.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -20,6 +18,18 @@
 #include "duckdb/common/map.hpp"
 
 namespace duckdb {
+
+struct FixedSizeAllocatorInfo {
+	idx_t segment_size;
+	vector<idx_t> buffer_ids;
+	vector<BlockPointer> buffer_block_pointers;
+	vector<idx_t> buffer_segment_counts;
+	vector<idx_t> buffer_allocation_sizes;
+	vector<idx_t> buffers_with_free_space_vec;
+
+	void Serialize(Serializer &serializer) const;
+	static FixedSizeAllocatorInfo Deserialize(Deserializer &source);
+};
 
 //! The FixedSizeAllocator provides pointers to fixed-size memory segments of pre-allocated memory buffers.
 //! The pointers are IndexPointers, and the leftmost byte (metadata) must always be zero.
@@ -36,8 +46,6 @@ public:
 	BlockManager &block_manager;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
-	//! Metadata manager for (de)serialization
-	MetadataManager &metadata_manager;
 
 public:
 	//! Get a new IndexPointer to a segment, might cause a new buffer allocation
@@ -79,10 +87,12 @@ public:
 	//! Vacuums an IndexPointer
 	IndexPointer VacuumPointer(const IndexPointer ptr);
 
-	//! Serializes all in-memory buffers and the metadata
-	BlockPointer Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer);
+	//! Serializes all in-memory buffers
+	void SerializeBuffers(PartialBlockManager &partial_block_manager);
+	//! Serializes the allocator (this assumes that all buffers are serialized)
+	FixedSizeAllocatorInfo GetInfo() const;
 	//! Deserializes all metadata
-	void Deserialize(const BlockPointer &block_pointer);
+	static FixedSizeAllocator Deserialize(Deserializer &deserializer);
 
 private:
 	//! Allocation size of one segment in a buffer

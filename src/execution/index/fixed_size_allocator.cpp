@@ -1,12 +1,14 @@
 #include "duckdb/execution/index/fixed_size_allocator.hpp"
 
 #include "duckdb/storage/metadata/metadata_reader.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 namespace duckdb {
 
 FixedSizeAllocator::FixedSizeAllocator(const idx_t segment_size, BlockManager &block_manager)
     : block_manager(block_manager), buffer_manager(block_manager.buffer_manager),
-      metadata_manager(block_manager.GetMetadataManager()), segment_size(segment_size), total_segment_count(0) {
+       segment_size(segment_size), total_segment_count(0) {
 
 	if (segment_size > Storage::BLOCK_SIZE - sizeof(validity_t)) {
 		throw InternalException("The maximum segment size of fixed-size allocators is " +
@@ -264,51 +266,103 @@ IndexPointer FixedSizeAllocator::VacuumPointer(const IndexPointer ptr) {
 	return new_ptr;
 }
 
-BlockPointer FixedSizeAllocator::Serialize(PartialBlockManager &partial_block_manager, MetadataWriter &writer) {
-
+void FixedSizeAllocator::SerializeBuffers(PartialBlockManager &partial_block_manager) {
 	for (auto &buffer : buffers) {
 		buffer.second.Serialize(partial_block_manager, available_segments_per_buffer, segment_size, bitmask_offset);
 	}
-
-	auto block_pointer = writer.GetBlockPointer();
-	writer.Write(segment_size);
-	writer.Write(static_cast<idx_t>(buffers.size()));
-	writer.Write(static_cast<idx_t>(buffers_with_free_space.size()));
-
-	for (auto &buffer : buffers) {
-		writer.Write(buffer.first);
-		writer.Write(buffer.second.block_pointer);
-		writer.Write(buffer.second.segment_count);
-		writer.Write(buffer.second.allocation_size);
-	}
-	for (auto &buffer_id : buffers_with_free_space) {
-		writer.Write(buffer_id);
-	}
-
-	return block_pointer;
 }
 
-void FixedSizeAllocator::Deserialize(const BlockPointer &block_pointer) {
+void FixedSizeAllocatorInfo::Serialize(Serializer &serializer) const {
 
-	MetadataReader reader(metadata_manager, block_pointer);
-	segment_size = reader.Read<idx_t>();
-	auto buffer_count = reader.Read<idx_t>();
-	auto buffers_with_free_space_count = reader.Read<idx_t>();
+serializer.WriteProperty(100, "segment_size", segment_size);
+
+serializer.WriteList(101, "buffer_ids", buffer_ids.size(),
+					 [&](Serializer::List &list, idx_t i) {
+						 list.WriteElement(buffer_ids[i]);
+					 });
+
+serializer.WriteList(102, "buffer_block_pointers", buffer_block_pointers.size(),
+					 [&](Serializer::List &list, idx_t i) {
+						 list.WriteElement(buffer_block_pointers[i]);
+					 });
+
+serializer.WriteList(103, "buffer_segment_counts", buffer_segment_counts.size(),
+					 [&](Serializer::List &list, idx_t i) {
+						 list.WriteElement(buffer_segment_counts[i]);
+					 });
+
+serializer.WriteList(104, "buffer_allocation_sizes", buffer_allocation_sizes.size(),
+					 [&](Serializer::List &list, idx_t i) {
+						 list.WriteElement(buffer_allocation_sizes[i]);
+					 });
+
+serializer.WriteList(105, "buffers_with_free_space_vec", buffers_with_free_space_vec.size(),
+					 [&](Serializer::List &list, idx_t i) {
+						 list.WriteElement(buffers_with_free_space_vec[i]);
+					 });
+}
+
+FixedSizeAllocatorInfo FixedSizeAllocatorInfo::Deserialize(Deserializer &source) {
+
+deserializer.ReadProperty<idx_t>(1001, "segment_size_");
+}
+
+FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
+
+	FixedSizeAllocatorInfo info;
+	info.segment_size = segment_size;
+
+	for (const auto &buffer : buffers) {
+		info.buffer_ids.push_back(buffer.first);
+		info.buffer_block_pointers.push_back(buffer.second.block_pointer);
+		info.buffer_segment_counts.push_back(buffer.second.segment_count);
+		info.buffer_allocation_sizes.push_back(buffer.second.allocation_size);
+	}
+
+	for (auto &buffer_id : buffers_with_free_space) {
+		info.buffers_with_free_space_vec.push_back(buffer_id);
+	}
+
+	return info;
+}
+
+FixedSizeAllocator FixedSizeAllocator::Deserialize(Deserializer &deserializer) {
 
 	total_segment_count = 0;
 
-	for (idx_t i = 0; i < buffer_count; i++) {
-		auto buffer_id = reader.Read<idx_t>();
-		auto buffer_block_pointer = reader.Read<BlockPointer>();
-		auto segment_count = reader.Read<idx_t>();
-		auto allocation_size = reader.Read<idx_t>();
-		FixedSizeBuffer new_buffer(block_manager, segment_count, allocation_size, buffer_block_pointer);
-		buffers.insert(make_pair(buffer_id, std::move(new_buffer)));
-		total_segment_count += segment_count;
+	vector<idx_t> buffer_ids;
+	vector<BlockPointer> buffer_block_pointers;
+	vector<idx_t> buffer_segment_counts;
+	vector<idx_t> buffer_allocation_sizes;
+
+	deserializer.ReadList(1002, "buffer_ids", [&](Deserializer::List &list, idx_t i) {
+		buffer_ids.push_back(list.ReadElement<idx_t>());
+	});
+
+	deserializer.ReadList(1003, "buffer_block_pointers", [&](Deserializer::List &list, idx_t i) {
+		buffer_block_pointers.push_back(list.ReadElement<BlockPointer>());
+	});
+
+	deserializer.ReadList(1004, "buffer_segment_counts", [&](Deserializer::List &list, idx_t i) {
+		buffer_segment_counts.push_back(list.ReadElement<idx_t>());
+	});
+
+	deserializer.ReadList(1005, "buffer_allocation_sizes", [&](Deserializer::List &list, idx_t i) {
+		buffer_allocation_sizes.push_back(list.ReadElement<idx_t>());
+	});
+
+	for (idx_t i = 0; i < buffer_ids.size(); i++) {
+		FixedSizeBuffer new_buffer(block_manager, buffer_segment_counts[i],
+		                           buffer_allocation_sizes[i], buffer_block_pointers[i]);
+		buffers.insert(make_pair(buffer_ids[i], std::move(new_buffer)));
+		total_segment_count += buffer_segment_counts[i];
 	}
-	for (idx_t i = 0; i < buffers_with_free_space_count; i++) {
-		buffers_with_free_space.insert(reader.Read<idx_t>());
-	}
+
+	deserializer.ReadList(1006, "buffers_with_free_space_vec", [&](Deserializer::List &list, idx_t i) {
+		buffers_with_free_space.insert(list.ReadElement<idx_t>());
+	});
+
+	return result;
 }
 
 idx_t FixedSizeAllocator::GetAvailableBufferId() const {

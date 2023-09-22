@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE test(i INTEGER, j INTEGER);
 
 statement ok
-INSERT INTO test VALUES (1,100),(2,200);
+INSERT INTO test VALUES (1,100), (2,200);
 
 statement ok
 CREATE UNIQUE INDEX idx ON test (i);
@@ -18,7 +18,7 @@ CREATE UNIQUE INDEX idx ON test (i);
 restart
 
 statement error
-INSERT INTO test VALUES (1,101),(2,201);
+INSERT INTO test VALUES (1,101), (2,201);
 ----
 Constraint Error: Duplicate key "i: 1" violates unique constraint
 
@@ -36,6 +36,6 @@ CREATE UNIQUE INDEX unique_index_test_ordernumber_idx_unique ON unique_index_tes
 restart
 
 statement error
-INSERT INTO unique_index_test VALUES (1,101),(2,201);
+INSERT INTO unique_index_test VALUES (1,101), (2,201);
 ----
 Constraint Error: Duplicate key "ordernumber: 1" violates unique constraint

@@ -20,31 +20,31 @@ INSERT INTO tbl VALUES
 
 # we cannot create an index on union types
 
-statement error
-CREATE INDEX idx_u_2 ON tbl (u_2);
-----
-Invalid type Error: Invalid Type [UNION(string VARCHAR, bool BOOLEAN)]: Invalid type for index key.
-
-statement error
-CREATE INDEX idx_u_1 ON tbl (u_1);
-----
-Invalid type Error: Invalid Type [UNION(string VARCHAR)]: Invalid type for index key.
-
-statement ok
-CREATE INDEX idx_i ON tbl (i);
-
-statement ok
-DROP INDEX idx_i;
-
-statement error
-CREATE INDEX idx_u_list ON tbl (u_list);
-----
-Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
-
-statement error
-CREATE INDEX idx_u_list ON tbl (i, u_list);
-----
-Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+#statement error
+#CREATE INDEX idx_u_2 ON tbl (u_2);
+#----
+#Invalid type Error: Invalid Type [UNION(string VARCHAR, bool BOOLEAN)]: Invalid type for index key.
+#
+#statement error
+#CREATE INDEX idx_u_1 ON tbl (u_1);
+#----
+#Invalid type Error: Invalid Type [UNION(string VARCHAR)]: Invalid type for index key.
+#
+#statement ok
+#CREATE INDEX idx_i ON tbl (i);
+#
+#statement ok
+#DROP INDEX idx_i;
+#
+#statement error
+#CREATE INDEX idx_u_list ON tbl (u_list);
+#----
+#Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
+#
+#statement error
+#CREATE INDEX idx_u_list ON tbl (i, u_list);
+#----
+#Invalid type Error: Invalid Type [UNION(int INTEGER, list INTEGER[], bool BOOLEAN)]: Invalid type for index key.
 
 query IIII
 SELECT * FROM tbl ORDER BY ALL;

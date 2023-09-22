@@ -364,13 +364,11 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	auto &info = create_info->Cast<CreateIndexInfo>();
 
 	// create the index in the catalog
-	auto &schema = catalog.GetSchema(context, create_info->schema);
 	auto &table =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, create_info->schema, info.table).Cast<DuckTableEntry>();
-
-	auto &index = schema.CreateIndex(context, info, table)->Cast<DuckIndexEntry>();
-
+	    catalog.GetEntry<TableCatalogEntry>(context, create_info->schema, info.table).Cast<DuckTableEntry>();
+	auto &index = catalog.CreateIndex(context, info)->Cast<DuckIndexEntry>();
 	index.info = table.GetStorage().info;
+
 	// insert the parsed expressions into the index so that we can (de)serialize them during consecutive checkpoints
 	for (auto &parsed_expr : info.parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
@@ -384,7 +382,6 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	D_ASSERT(!parsed_expressions.empty());
 
 	// add the table to the bind context to bind the parsed expressions
-	auto binder = Binder::CreateBinder(context);
 	vector<LogicalType> column_types;
 	vector<string> column_names;
 	for (auto &col : table.GetColumns().Logical()) {
@@ -393,15 +390,16 @@ void CheckpointReader::ReadIndex(ClientContext &context, Deserializer &deseriali
 	}
 
 	// create a binder to bind the parsed expressions
+	auto binder = Binder::CreateBinder(context);
 	vector<column_t> column_ids;
 	binder->bind_context.AddBaseTable(0, info.table, column_names, column_types, column_ids, &table);
-	IndexBinder idx_binder(*binder, context);
+	IndexBinder index_binder(*binder, context);
 
 	// bind the parsed expressions to create unbound expressions
 	vector<unique_ptr<Expression>> unbound_expressions;
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
-		unbound_expressions.push_back(idx_binder.Bind(expr));
+		unbound_expressions.push_back(index_binder.Bind(expr));
 	}
 
 	// create the index and add it to the storage

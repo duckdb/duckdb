@@ -87,7 +87,9 @@ public:
 	void SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size);
 
 	//! Serializes the index and returns the pair of block_id offset positions
-	BlockPointer Serialize(MetadataWriter &writer) override;
+	void Serialize(Serializer &serializer) const override;
+	//! Deserialize the ART
+	static ART Deserialize(Deserializer &deserializer);
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge
@@ -146,9 +148,6 @@ private:
 	//! Internal function to return the string representation of the ART,
 	//! or only traverses and verifies the index
 	string VerifyAndToStringInternal(const bool only_verify);
-
-	//! Deserialize the allocators of the ART
-	void Deserialize(const BlockPointer &pointer);
 };
 
 } // namespace duckdb

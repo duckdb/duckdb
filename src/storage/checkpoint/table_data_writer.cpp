@@ -39,7 +39,7 @@ unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info,
-                                              Serializer &metadata_serializer) {
+                                              Serializer &serializer) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetMetaBlockPointer();
@@ -66,13 +66,13 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 		row_group_serializer.End();
 	}
 
-	auto index_storage_info = info->indexes.SerializeIndexes(table_data_writer);
+	auto index_storage_info = info->indexes.SerializeIndexes(serializer);
 
 	// Now begin the metadata as a unit
 	// Pointer to the table itself goes to the metadata stream.
-	metadata_serializer.WriteProperty(101, "table_pointer", pointer);
-	metadata_serializer.WriteProperty(102, "total_rows", total_rows);
-	metadata_serializer.WriteList(103, "index_storage_info", index_storage_info.size(),
+	serializer.WriteProperty(101, "table_pointer", pointer);
+	serializer.WriteProperty(102, "total_rows", total_rows);
+	serializer.WriteList(103, "index_storage_info", index_storage_info.size(),
 	                              [&](Serializer::List &list, idx_t i) {
 		                              list.WriteElement(index_storage_info[i].name);
 		                              list.WriteElement(index_storage_info[i].root_block_pointer);
