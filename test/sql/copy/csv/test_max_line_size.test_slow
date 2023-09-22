@@ -12,7 +12,7 @@ INSERT INTO test_base VALUES
     (10, REPEAT('a', 10485760), 20),
 
 statement ok
-COPY test_base TO '__TEST_DIR__/test.csv'
+COPY test_base TO '__TEST_DIR__/test.csv' (HEADER 0)
 
 # value is too big for loading
 statement ok
