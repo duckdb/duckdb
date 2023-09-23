@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-void RegisterICUMakeDateFunctions(ClientContext &context);
+void RegisterICUMakeDateFunctions(DatabaseInstance &db);
 
 } // namespace duckdb

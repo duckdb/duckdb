@@ -8,6 +8,8 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -87,17 +89,57 @@ void ExtensionUtil::RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info
 	system_catalog.CreateFunction(data, info);
 }
 
+void ExtensionUtil::RegisterCollation(DatabaseInstance &db, CreateCollationInfo &info) {
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
+	system_catalog.CreateCollation(data, info);
+}
+
 void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunction function) {
-	D_ASSERT(!function.name.empty());
+	auto &scalar_function = ExtensionUtil::GetFunction(db, function.name);
+	scalar_function.functions.AddFunction(std::move(function));
+}
+
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet functions) {
+	D_ASSERT(!functions.name.empty());
+	auto &scalar_function = ExtensionUtil::GetFunction(db, functions.name);
+	for (auto &function : functions.functions) {
+		function.name = functions.name;
+		scalar_function.functions.AddFunction(function);
+	}
+}
+
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet functions) {
+	auto &table_function = ExtensionUtil::GetTableFunction(db, functions.name);
+	for (auto &function : functions.functions) {
+		function.name = functions.name;
+		table_function.functions.AddFunction(function);
+	}
+}
+
+ScalarFunctionCatalogEntry &ExtensionUtil::GetFunction(DatabaseInstance &db, const string &name) {
+	D_ASSERT(!name.empty());
 	auto &system_catalog = Catalog::GetSystemCatalog(db);
 	auto data = CatalogTransaction::GetSystemTransaction(db);
 	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
-	auto catalog_entry = schema.GetEntry(data, CatalogType::SCALAR_FUNCTION_ENTRY, function.name);
+	auto catalog_entry = schema.GetEntry(data, CatalogType::SCALAR_FUNCTION_ENTRY, name);
 	if (!catalog_entry) {
-		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::AddFunctionOverload", function.name);
+		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetFunction", name);
 	}
-	auto &scalar_function = catalog_entry->Cast<ScalarFunctionCatalogEntry>();
-	scalar_function.functions.AddFunction(std::move(function));
+	return catalog_entry->Cast<ScalarFunctionCatalogEntry>();
+}
+
+TableFunctionCatalogEntry &ExtensionUtil::GetTableFunction(DatabaseInstance &db, const string &name) {
+	D_ASSERT(!name.empty());
+	auto &system_catalog = Catalog::GetSystemCatalog(db);
+	auto data = CatalogTransaction::GetSystemTransaction(db);
+	auto &schema = system_catalog.GetSchema(data, DEFAULT_SCHEMA);
+	auto catalog_entry = schema.GetEntry(data, CatalogType::TABLE_FUNCTION_ENTRY, name);
+	if (!catalog_entry) {
+		throw InvalidInputException("Function with name \"%s\" not found in ExtensionUtil::GetTableFunction", name);
+	}
+	return catalog_entry->Cast<TableFunctionCatalogEntry>();
 }
 
 void ExtensionUtil::RegisterType(DatabaseInstance &db, string type_name, LogicalType type) {
