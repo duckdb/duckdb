@@ -170,7 +170,9 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: |
+        pip install cibuildwheel twine
+        python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
