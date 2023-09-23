@@ -41,20 +41,18 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 	child_list_t<LogicalType> struct_children;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
-		if (child->alias.empty()) {
-			if (bound_function.name == "struct_pack") {
+		string alias;
+		if (bound_function.name == "struct_pack") {
+			if (child->alias.empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-		} else {
-			if (bound_function.name == "row") {
-				throw InternalException("Arguments for row should be unnamed");
-			}
+			alias = child->alias;
 		}
-		if (!child->alias.empty() && name_collision_set.find(child->alias) != name_collision_set.end()) {
-			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
+		if (!alias.empty() && name_collision_set.find(alias) != name_collision_set.end()) {
+			throw BinderException("Duplicate struct entry name \"%s\"", alias);
 		}
-		name_collision_set.insert(child->alias);
-		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));
+		name_collision_set.insert(alias);
+		struct_children.push_back(make_pair(alias, arguments[i]->return_type));
 	}
 
 	// this is more for completeness reasons
