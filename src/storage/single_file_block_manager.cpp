@@ -16,12 +16,22 @@ namespace duckdb {
 
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
+void SerializeVersionNumber(WriteStream &ser, const string &version_str) {
+	constexpr const idx_t MAX_VERSION_SIZE = 32;
+	data_t version[MAX_VERSION_SIZE];
+	memset(version, 0, MAX_VERSION_SIZE);
+	memcpy(version, version_str.c_str(), MinValue<idx_t>(version_str.size(), MAX_VERSION_SIZE));
+	ser.WriteData(version, MAX_VERSION_SIZE);
+}
+
 void MainHeader::Write(WriteStream &ser) {
 	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
 		ser.Write<uint64_t>(flags[i]);
 	}
+	SerializeVersionNumber(ser, DuckDB::LibraryVersion());
+	SerializeVersionNumber(ser, DuckDB::SourceID());
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
