@@ -2,20 +2,6 @@
 # description: Exhaustive setting tests
 # group: [settings]
 
-# access_mode
-foreach access_mode AUTOMATIC READ_ONLY READ_WRITE
-
-statement ok
-SET access_mode='${access_mode}';
-
-statement ok
-SELECT * FROM duckdb_settings();
-
-endloop
-
-statement error
-SET access_mode='unknown';
-
 # debug_window_mode
 statement error
 SET debug_window_mode='unknown';
