@@ -106,7 +106,7 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet 
 	auto &scalar_function = ExtensionUtil::GetFunction(db, functions.name);
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
-		scalar_function.functions.AddFunction(function);
+		scalar_function.functions.AddFunction(std::move(function));
 	}
 }
 
@@ -114,7 +114,7 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet f
 	auto &table_function = ExtensionUtil::GetTableFunction(db, functions.name);
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
-		table_function.functions.AddFunction(function);
+		table_function.functions.AddFunction(std::move(function));
 	}
 }
 
