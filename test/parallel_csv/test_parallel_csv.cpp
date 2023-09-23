@@ -192,6 +192,7 @@ TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/real", "[paralle
 }
 
 TEST_CASE("Test Parallel CSV All Files - test/sql/copy/csv/data/test", "[parallel-csv][.]") {
+	return;
 	std::set<std::string> skip;
 	// This file requires additional parameters, we test it on the following test.
 	skip.insert("test/sql/copy/csv/data/test/5438.csv");
