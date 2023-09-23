@@ -98,7 +98,7 @@ common/types/validity_mask.cpp	13
 common/types/value.cpp	180
 common/types/vector.cpp	153
 common/value_operations/comparison_operations.cpp	32
-common/vector_operations/generators.cpp	29
+common/vector_operations/generators.cpp	31
 common/vector_operations/is_distinct_from.cpp	49
 common/vector_operations/null_operations.cpp	15
 common/vector_operations/numeric_inplace_operators.cpp	6
@@ -131,7 +131,7 @@ core_functions/scalar/enum/enum_functions.cpp	10
 core_functions/scalar/generic/current_setting.cpp	1
 core_functions/scalar/generic/least.cpp	2
 core_functions/scalar/generic/system_functions.cpp	4
-core_functions/scalar/list/array_slice.cpp	2
+core_functions/scalar/list/array_slice.cpp	3
 core_functions/scalar/list/flatten.cpp	6
 core_functions/scalar/list/list_aggregates.cpp	2
 core_functions/scalar/list/list_lambdas.cpp	2
@@ -173,7 +173,7 @@ execution/index/fixed_size_allocator.cpp	2
 execution/index/fixed_size_buffer.cpp	6
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
-execution/nested_loop_join/nested_loop_join_mark.cpp	30
+execution/nested_loop_join/nested_loop_join_mark.cpp	35
 execution/operator/aggregate/aggregate_object.cpp	2
 execution/operator/aggregate/distinct_aggregate_data.cpp	9
 execution/operator/aggregate/physical_hash_aggregate.cpp	30
@@ -194,7 +194,7 @@ execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
 execution/operator/join/physical_hash_join.cpp	8
 execution/operator/join/physical_iejoin.cpp	32
-execution/operator/join/physical_index_join.cpp	2
+execution/operator/join/physical_index_join.cpp	3
 execution/operator/join/physical_nested_loop_join.cpp	4
 execution/operator/join/physical_piecewise_merge_join.cpp	142
 execution/operator/join/physical_range_join.cpp	62

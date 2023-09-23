@@ -178,7 +178,10 @@ public:
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager) {
+		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0)) {
+			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
+			// for now don't reuse the buffer manager
+			buffer_manager.reset();
 			file_handle = ReadCSV::OpenCSV(current_file_path, options.compression, context);
 			file_handle_ptr = file_handle.get();
 		} else {

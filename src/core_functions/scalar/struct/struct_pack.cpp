@@ -39,15 +39,21 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		throw Exception("Can't pack nothing into a struct");
 	}
 	child_list_t<LogicalType> struct_children;
+	bool unnamed = false;
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		auto &child = arguments[i];
-		if (child->alias.empty() && bound_function.name == "struct_pack") {
-			throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+		if (child->alias.empty()) {
+			if (bound_function.name == "struct_pack") {
+				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
+			} else {
+				D_ASSERT(bound_function.name == "row");
+				if (i > 1) {
+					D_ASSERT(unnamed);
+				}
+				unnamed = true;
+			}
 		}
-		if (child->alias.empty() && bound_function.name == "row") {
-			child->alias = "v" + std::to_string(i + 1);
-		}
-		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
+		if (!child->alias.empty() && name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
 		name_collision_set.insert(child->alias);

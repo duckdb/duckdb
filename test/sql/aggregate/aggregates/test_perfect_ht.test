@@ -85,7 +85,7 @@ statement ok
 create table dates as select date '1992-01-01' + concat(i, ' months')::interval as d from range(100) tbl(i);
 
 query II
-select extract(year from d), extract(month from d) from dates group by 1, 2;
+select extract(year from d), extract(month from d) from dates group by 1, 2 ORDER BY ALL;
 ----
 1992	1
 1992	2
