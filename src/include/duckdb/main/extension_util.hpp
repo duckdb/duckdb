@@ -40,6 +40,9 @@ public:
 	//! Register a new macro function - throw an exception if the function already exists
 	DUCKDB_API static void RegisterFunction(DatabaseInstance &db, CreateMacroInfo &info);
 
+	//! Add a function overload
+	DUCKDB_API static void AddFunctionOverload(DatabaseInstance &db, ScalarFunction function);
+
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type);
 
