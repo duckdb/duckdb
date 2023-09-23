@@ -8,6 +8,7 @@
 #include "duckdb/storage/metadata/metadata_writer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <algorithm>
 #include <cstring>
