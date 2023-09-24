@@ -58,10 +58,7 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
-
-if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
+extensions = ['parquet', 'icu', 'json', 'tpch']
 
 if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
     extensions.append('jemalloc')
