@@ -100,13 +100,15 @@ struct DBConfigOptions {
 	//! Whether known extensions are allowed to be automatically loaded when a query depends on them
 	bool autoload_known_extensions = DUCKDB_EXTENSION_AUTOLOAD_DEFAULT;
 #else
-	bool autoload_known_extensions = false;
+	// We expect DUCKDB_EXTENSION_AUTOLOAD_DEFAULT to be always defined to something
+	bool autoload_known_extensions = true;
 #endif
 #ifdef DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT
 	//! Whether known extensions are allowed to be automatically installed when a query depends on them
 	bool autoinstall_known_extensions = DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT;
 #else
-	bool autoinstall_known_extensions = false;
+	// We expect DUCKDB_EXTENSION_AUTOINSTALL_DEFAULT to be always defined to something
+	bool autoinstall_known_extensions = true;
 #endif
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
