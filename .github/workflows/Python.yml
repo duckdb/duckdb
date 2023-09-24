@@ -291,7 +291,7 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
-        CIBW_TEST_COMMAND: 'python -m pytest {project}  --verbose'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests  --verbose'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: '__token__'
