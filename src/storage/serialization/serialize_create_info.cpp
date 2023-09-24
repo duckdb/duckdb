@@ -20,8 +20,8 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(100, "type", type);
 	serializer.WritePropertyWithDefault(101, "catalog", catalog);
 	serializer.WritePropertyWithDefault(102, "schema", schema);
-	serializer.WriteProperty(103, "temporary", temporary);
-	serializer.WriteProperty(104, "internal", internal);
+	serializer.WritePropertyWithDefault(103, "temporary", temporary);
+	serializer.WritePropertyWithDefault(104, "internal", internal);
 	serializer.WriteProperty(105, "on_conflict", on_conflict);
 	serializer.WritePropertyWithDefault(106, "sql", sql);
 }
@@ -30,8 +30,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 	auto type = deserializer.ReadProperty<CatalogType>(100, "type");
 	auto catalog = deserializer.ReadPropertyWithDefault<string>(101, "catalog");
 	auto schema = deserializer.ReadPropertyWithDefault<string>(102, "schema");
-	auto temporary = deserializer.ReadProperty<bool>(103, "temporary");
-	auto internal = deserializer.ReadProperty<bool>(104, "internal");
+	auto temporary = deserializer.ReadPropertyWithDefault<bool>(103, "temporary");
+	auto internal = deserializer.ReadPropertyWithDefault<bool>(104, "internal");
 	auto on_conflict = deserializer.ReadProperty<OnCreateConflict>(105, "on_conflict");
 	auto sql = deserializer.ReadPropertyWithDefault<string>(106, "sql");
 	deserializer.Set<CatalogType>(type);
@@ -128,23 +128,23 @@ unique_ptr<CreateInfo> CreateSchemaInfo::Deserialize(Deserializer &deserializer)
 void CreateSequenceInfo::Serialize(Serializer &serializer) const {
 	CreateInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault(200, "name", name);
-	serializer.WriteProperty(201, "usage_count", usage_count);
-	serializer.WriteProperty(202, "increment", increment);
-	serializer.WriteProperty(203, "min_value", min_value);
-	serializer.WriteProperty(204, "max_value", max_value);
-	serializer.WriteProperty(205, "start_value", start_value);
-	serializer.WriteProperty(206, "cycle", cycle);
+	serializer.WritePropertyWithDefault(201, "usage_count", usage_count);
+	serializer.WritePropertyWithDefault(202, "increment", increment);
+	serializer.WritePropertyWithDefault(203, "min_value", min_value);
+	serializer.WritePropertyWithDefault(204, "max_value", max_value);
+	serializer.WritePropertyWithDefault(205, "start_value", start_value);
+	serializer.WritePropertyWithDefault(206, "cycle", cycle);
 }
 
 unique_ptr<CreateInfo> CreateSequenceInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSequenceInfo>(new CreateSequenceInfo());
 	deserializer.ReadPropertyWithDefault(200, "name", result->name);
-	deserializer.ReadProperty(201, "usage_count", result->usage_count);
-	deserializer.ReadProperty(202, "increment", result->increment);
-	deserializer.ReadProperty(203, "min_value", result->min_value);
-	deserializer.ReadProperty(204, "max_value", result->max_value);
-	deserializer.ReadProperty(205, "start_value", result->start_value);
-	deserializer.ReadProperty(206, "cycle", result->cycle);
+	deserializer.ReadPropertyWithDefault(201, "usage_count", result->usage_count);
+	deserializer.ReadPropertyWithDefault(202, "increment", result->increment);
+	deserializer.ReadPropertyWithDefault(203, "min_value", result->min_value);
+	deserializer.ReadPropertyWithDefault(204, "max_value", result->max_value);
+	deserializer.ReadPropertyWithDefault(205, "start_value", result->start_value);
+	deserializer.ReadPropertyWithDefault(206, "cycle", result->cycle);
 	return std::move(result);
 }
 

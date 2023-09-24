@@ -82,14 +82,14 @@ unique_ptr<Constraint> NotNullConstraint::Deserialize(Deserializer &deserializer
 
 void UniqueConstraint::Serialize(Serializer &serializer) const {
 	Constraint::Serialize(serializer);
-	serializer.WriteProperty(200, "is_primary_key", is_primary_key);
+	serializer.WritePropertyWithDefault(200, "is_primary_key", is_primary_key);
 	serializer.WriteProperty(201, "index", index);
 	serializer.WritePropertyWithDefault(202, "columns", columns);
 }
 
 unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<UniqueConstraint>(new UniqueConstraint());
-	deserializer.ReadProperty(200, "is_primary_key", result->is_primary_key);
+	deserializer.ReadPropertyWithDefault(200, "is_primary_key", result->is_primary_key);
 	deserializer.ReadProperty(201, "index", result->index);
 	deserializer.ReadPropertyWithDefault(202, "columns", result->columns);
 	return std::move(result);

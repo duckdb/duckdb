@@ -135,10 +135,36 @@ struct is_set<duckdb::set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
 };
 
+template <typename T>
+struct is_atomic : std::false_type {};
+
+template <typename T>
+struct is_atomic<std::atomic<T>> : std::true_type {
+	typedef T TYPE;
+};
+
 struct SerializationDefaultValue {
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_atomic<T>::value, T>::type GetDefault() {
+		using INNER = typename is_atomic<T>::TYPE;
+		return static_cast<T>(GetDefault<INNER>());
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_atomic<T>::value, T>::type &value) {
+		using INNER = typename is_atomic<T>::TYPE;
+		return value == GetDefault<INNER>();
+	}
+
 	template <typename T = void>
 	static inline typename std::enable_if<std::is_arithmetic<T>::value, T>::type GetDefault() {
-		return 0;
+		return static_cast<T>(0);
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_arithmetic<T>::value, T>::type &value) {
+		return value == static_cast<T>(0);
 	}
 
 	template <typename T = void>

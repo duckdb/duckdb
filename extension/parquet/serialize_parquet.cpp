@@ -10,15 +10,15 @@
 namespace duckdb {
 
 void ParquetOptions::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "binary_as_string", binary_as_string);
-	serializer.WriteProperty(101, "file_row_number", file_row_number);
+	serializer.WritePropertyWithDefault(100, "binary_as_string", binary_as_string);
+	serializer.WritePropertyWithDefault(101, "file_row_number", file_row_number);
 	serializer.WriteProperty(102, "file_options", file_options);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	ParquetOptions result;
-	deserializer.ReadProperty(100, "binary_as_string", result.binary_as_string);
-	deserializer.ReadProperty(101, "file_row_number", result.file_row_number);
+	deserializer.ReadPropertyWithDefault(100, "binary_as_string", result.binary_as_string);
+	deserializer.ReadPropertyWithDefault(101, "file_row_number", result.file_row_number);
 	deserializer.ReadProperty(102, "file_options", result.file_options);
 	return result;
 }

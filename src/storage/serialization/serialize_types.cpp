@@ -69,14 +69,14 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(Deserializer &dese
 
 void DecimalTypeInfo::Serialize(Serializer &serializer) const {
 	ExtraTypeInfo::Serialize(serializer);
-	serializer.WriteProperty(200, "width", width);
-	serializer.WriteProperty(201, "scale", scale);
+	serializer.WritePropertyWithDefault(200, "width", width);
+	serializer.WritePropertyWithDefault(201, "scale", scale);
 }
 
 shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::shared_ptr<DecimalTypeInfo>(new DecimalTypeInfo());
-	deserializer.ReadProperty(200, "width", result->width);
-	deserializer.ReadProperty(201, "scale", result->scale);
+	deserializer.ReadPropertyWithDefault(200, "width", result->width);
+	deserializer.ReadPropertyWithDefault(201, "scale", result->scale);
 	return std::move(result);
 }
 

@@ -114,6 +114,25 @@ def is_pointer(type):
     return type.endswith('*') or type.startswith('shared_ptr<')
 
 
+def is_zeroable(type):
+    return type in [
+        'bool',
+        'int8_t',
+        'int16_t',
+        'int32_t',
+        'int64_t',
+        'uint8_t',
+        'uint16_t',
+        'uint32_t',
+        'uint64_t',
+        'idx_t',
+        'size_t',
+        'int',
+        'float',
+        'double',
+    ]
+
+
 def requires_move(type):
     return is_container(type) or is_pointer(type) or type in move_list
 
@@ -248,6 +267,8 @@ def has_default_by_default(type):
             return False
         return True
     if type == 'string':
+        return True
+    if is_zeroable(type):
         return True
     return False
 

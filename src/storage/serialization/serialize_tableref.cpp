@@ -120,7 +120,7 @@ void PivotRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(203, "pivots", pivots);
 	serializer.WritePropertyWithDefault(204, "groups", groups);
 	serializer.WritePropertyWithDefault(205, "column_name_alias", column_name_alias);
-	serializer.WriteProperty(206, "include_nulls", include_nulls);
+	serializer.WritePropertyWithDefault(206, "include_nulls", include_nulls);
 }
 
 unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
@@ -131,7 +131,7 @@ unique_ptr<TableRef> PivotRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault(203, "pivots", result->pivots);
 	deserializer.ReadPropertyWithDefault(204, "groups", result->groups);
 	deserializer.ReadPropertyWithDefault(205, "column_name_alias", result->column_name_alias);
-	deserializer.ReadProperty(206, "include_nulls", result->include_nulls);
+	deserializer.ReadPropertyWithDefault(206, "include_nulls", result->include_nulls);
 	return std::move(result);
 }
 

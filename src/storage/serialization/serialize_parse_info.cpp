@@ -67,7 +67,7 @@ void AlterInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(202, "schema", schema);
 	serializer.WritePropertyWithDefault(203, "name", name);
 	serializer.WriteProperty(204, "if_not_found", if_not_found);
-	serializer.WriteProperty(205, "allow_internal", allow_internal);
+	serializer.WritePropertyWithDefault(205, "allow_internal", allow_internal);
 }
 
 unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
@@ -76,7 +76,7 @@ unique_ptr<ParseInfo> AlterInfo::Deserialize(Deserializer &deserializer) {
 	auto schema = deserializer.ReadPropertyWithDefault<string>(202, "schema");
 	auto name = deserializer.ReadPropertyWithDefault<string>(203, "name");
 	auto if_not_found = deserializer.ReadProperty<OnEntryNotFound>(204, "if_not_found");
-	auto allow_internal = deserializer.ReadProperty<bool>(205, "allow_internal");
+	auto allow_internal = deserializer.ReadPropertyWithDefault<bool>(205, "allow_internal");
 	unique_ptr<AlterInfo> result;
 	switch (type) {
 	case AlterType::ALTER_TABLE:
@@ -159,13 +159,13 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(Deserializer &deserializer) {
 void AddColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WriteProperty(400, "new_column", new_column);
-	serializer.WriteProperty(401, "if_column_not_exists", if_column_not_exists);
+	serializer.WritePropertyWithDefault(401, "if_column_not_exists", if_column_not_exists);
 }
 
 unique_ptr<AlterTableInfo> AddColumnInfo::Deserialize(Deserializer &deserializer) {
 	auto new_column = deserializer.ReadProperty<ColumnDefinition>(400, "new_column");
 	auto result = duckdb::unique_ptr<AddColumnInfo>(new AddColumnInfo(std::move(new_column)));
-	deserializer.ReadProperty(401, "if_column_not_exists", result->if_column_not_exists);
+	deserializer.ReadPropertyWithDefault(401, "if_column_not_exists", result->if_column_not_exists);
 	return std::move(result);
 }
 
@@ -226,7 +226,7 @@ void CopyInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(201, "schema", schema);
 	serializer.WritePropertyWithDefault(202, "table", table);
 	serializer.WritePropertyWithDefault(203, "select_list", select_list);
-	serializer.WriteProperty(204, "is_from", is_from);
+	serializer.WritePropertyWithDefault(204, "is_from", is_from);
 	serializer.WritePropertyWithDefault(205, "format", format);
 	serializer.WritePropertyWithDefault(206, "file_path", file_path);
 	serializer.WritePropertyWithDefault(207, "options", options);
@@ -238,7 +238,7 @@ unique_ptr<ParseInfo> CopyInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault(201, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault(202, "table", result->table);
 	deserializer.ReadPropertyWithDefault(203, "select_list", result->select_list);
-	deserializer.ReadProperty(204, "is_from", result->is_from);
+	deserializer.ReadPropertyWithDefault(204, "is_from", result->is_from);
 	deserializer.ReadPropertyWithDefault(205, "format", result->format);
 	deserializer.ReadPropertyWithDefault(206, "file_path", result->file_path);
 	deserializer.ReadPropertyWithDefault(207, "options", result->options);
@@ -265,8 +265,8 @@ void DropInfo::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault(202, "schema", schema);
 	serializer.WritePropertyWithDefault(203, "name", name);
 	serializer.WriteProperty(204, "if_not_found", if_not_found);
-	serializer.WriteProperty(205, "cascade", cascade);
-	serializer.WriteProperty(206, "allow_drop_internal", allow_drop_internal);
+	serializer.WritePropertyWithDefault(205, "cascade", cascade);
+	serializer.WritePropertyWithDefault(206, "allow_drop_internal", allow_drop_internal);
 }
 
 unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
@@ -276,8 +276,8 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault(202, "schema", result->schema);
 	deserializer.ReadPropertyWithDefault(203, "name", result->name);
 	deserializer.ReadProperty(204, "if_not_found", result->if_not_found);
-	deserializer.ReadProperty(205, "cascade", result->cascade);
-	deserializer.ReadProperty(206, "allow_drop_internal", result->allow_drop_internal);
+	deserializer.ReadPropertyWithDefault(205, "cascade", result->cascade);
+	deserializer.ReadPropertyWithDefault(206, "allow_drop_internal", result->allow_drop_internal);
 	return std::move(result);
 }
 
@@ -325,15 +325,15 @@ unique_ptr<ParseInfo> PragmaInfo::Deserialize(Deserializer &deserializer) {
 void RemoveColumnInfo::Serialize(Serializer &serializer) const {
 	AlterTableInfo::Serialize(serializer);
 	serializer.WritePropertyWithDefault(400, "removed_column", removed_column);
-	serializer.WriteProperty(401, "if_column_exists", if_column_exists);
-	serializer.WriteProperty(402, "cascade", cascade);
+	serializer.WritePropertyWithDefault(401, "if_column_exists", if_column_exists);
+	serializer.WritePropertyWithDefault(402, "cascade", cascade);
 }
 
 unique_ptr<AlterTableInfo> RemoveColumnInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RemoveColumnInfo>(new RemoveColumnInfo());
 	deserializer.ReadPropertyWithDefault(400, "removed_column", result->removed_column);
-	deserializer.ReadProperty(401, "if_column_exists", result->if_column_exists);
-	deserializer.ReadProperty(402, "cascade", result->cascade);
+	deserializer.ReadPropertyWithDefault(401, "if_column_exists", result->if_column_exists);
+	deserializer.ReadPropertyWithDefault(402, "cascade", result->cascade);
 	return std::move(result);
 }
 

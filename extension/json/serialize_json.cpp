@@ -32,11 +32,11 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(101, "options", options);
 	serializer.WriteProperty(102, "reader_bind", reader_bind);
 	serializer.WritePropertyWithDefault(103, "files", files);
-	serializer.WriteProperty(104, "ignore_errors", ignore_errors);
-	serializer.WriteProperty(105, "maximum_object_size", maximum_object_size);
-	serializer.WriteProperty(106, "auto_detect", auto_detect);
-	serializer.WriteProperty(107, "sample_size", sample_size);
-	serializer.WriteProperty(108, "max_depth", max_depth);
+	serializer.WritePropertyWithDefault(104, "ignore_errors", ignore_errors);
+	serializer.WritePropertyWithDefault(105, "maximum_object_size", maximum_object_size);
+	serializer.WritePropertyWithDefault(106, "auto_detect", auto_detect);
+	serializer.WritePropertyWithDefault(107, "sample_size", sample_size);
+	serializer.WritePropertyWithDefault(108, "max_depth", max_depth);
 	serializer.WriteProperty(109, "transform_options", transform_options);
 	serializer.WritePropertyWithDefault(110, "names", names);
 	serializer.WritePropertyWithDefault(111, "date_format", GetDateFormat());
@@ -48,11 +48,11 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	auto options = deserializer.ReadProperty<BufferedJSONReaderOptions>(101, "options");
 	auto reader_bind = deserializer.ReadProperty<MultiFileReaderBindData>(102, "reader_bind");
 	auto files = deserializer.ReadPropertyWithDefault<vector<string>>(103, "files");
-	auto ignore_errors = deserializer.ReadProperty<bool>(104, "ignore_errors");
-	auto maximum_object_size = deserializer.ReadProperty<idx_t>(105, "maximum_object_size");
-	auto auto_detect = deserializer.ReadProperty<bool>(106, "auto_detect");
-	auto sample_size = deserializer.ReadProperty<idx_t>(107, "sample_size");
-	auto max_depth = deserializer.ReadProperty<idx_t>(108, "max_depth");
+	auto ignore_errors = deserializer.ReadPropertyWithDefault<bool>(104, "ignore_errors");
+	auto maximum_object_size = deserializer.ReadPropertyWithDefault<idx_t>(105, "maximum_object_size");
+	auto auto_detect = deserializer.ReadPropertyWithDefault<bool>(106, "auto_detect");
+	auto sample_size = deserializer.ReadPropertyWithDefault<idx_t>(107, "sample_size");
+	auto max_depth = deserializer.ReadPropertyWithDefault<idx_t>(108, "max_depth");
 	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(109, "transform_options");
 	auto names = deserializer.ReadPropertyWithDefault<vector<string>>(110, "names");
 	auto date_format = deserializer.ReadPropertyWithDefault<string>(111, "date_format");
@@ -72,20 +72,20 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 }
 
 void JSONTransformOptions::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "strict_cast", strict_cast);
-	serializer.WriteProperty(101, "error_duplicate_key", error_duplicate_key);
-	serializer.WriteProperty(102, "error_missing_key", error_missing_key);
-	serializer.WriteProperty(103, "error_unknown_key", error_unknown_key);
-	serializer.WriteProperty(104, "delay_error", delay_error);
+	serializer.WritePropertyWithDefault(100, "strict_cast", strict_cast);
+	serializer.WritePropertyWithDefault(101, "error_duplicate_key", error_duplicate_key);
+	serializer.WritePropertyWithDefault(102, "error_missing_key", error_missing_key);
+	serializer.WritePropertyWithDefault(103, "error_unknown_key", error_unknown_key);
+	serializer.WritePropertyWithDefault(104, "delay_error", delay_error);
 }
 
 JSONTransformOptions JSONTransformOptions::Deserialize(Deserializer &deserializer) {
 	JSONTransformOptions result;
-	deserializer.ReadProperty(100, "strict_cast", result.strict_cast);
-	deserializer.ReadProperty(101, "error_duplicate_key", result.error_duplicate_key);
-	deserializer.ReadProperty(102, "error_missing_key", result.error_missing_key);
-	deserializer.ReadProperty(103, "error_unknown_key", result.error_unknown_key);
-	deserializer.ReadProperty(104, "delay_error", result.delay_error);
+	deserializer.ReadPropertyWithDefault(100, "strict_cast", result.strict_cast);
+	deserializer.ReadPropertyWithDefault(101, "error_duplicate_key", result.error_duplicate_key);
+	deserializer.ReadPropertyWithDefault(102, "error_missing_key", result.error_missing_key);
+	deserializer.ReadPropertyWithDefault(103, "error_unknown_key", result.error_unknown_key);
+	deserializer.ReadPropertyWithDefault(104, "delay_error", result.delay_error);
 	return result;
 }
 
