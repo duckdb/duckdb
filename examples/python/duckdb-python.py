@@ -5,7 +5,7 @@ import duckdb
 # connect to an in-memory temporary database
 conn = duckdb.connect()
 
-# if you want, you can create a cursor() like described in PEP 249 but its fully redundant
+# if you want, you can create a cursor() like described in PEP 249 but it's fully redundant
 cursor = conn.cursor()
 
 # run arbitrary SQL commands
@@ -128,7 +128,7 @@ print(rel.set_alias('a').join(rel.set_alias('b'), 'a.i=b.i'))
 
 # there are also shorthand methods to directly create a relation and apply an operator from pandas data frame objects
 print(duckdb.filter(test_df, 'i > 1'))
-print(duckdb.project(test_df, 'i +1'))
+print(duckdb.project(test_df, 'i + 1'))
 print(duckdb.order(test_df, 'j'))
 print(duckdb.limit(test_df, 2))
 

@@ -748,6 +748,9 @@ void DataTable::Append(DataChunk &chunk, TableAppendState &state) {
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
+	if (count == 0) {
+		return;
+	}
 	idx_t end = row_start + count;
 
 	vector<column_t> column_ids;
@@ -817,16 +820,12 @@ void DataTable::CommitAppend(transaction_t commit_id, idx_t row_start, idx_t cou
 	info->cardinality += count;
 }
 
-void DataTable::RevertAppendInternal(idx_t start_row, idx_t count) {
-	if (count == 0) {
-		// nothing to revert!
-		return;
-	}
+void DataTable::RevertAppendInternal(idx_t start_row) {
 	// adjust the cardinality
 	info->cardinality = start_row;
 	D_ASSERT(is_root);
 	// revert appends made to row_groups
-	row_groups->RevertAppendInternal(start_row, count);
+	row_groups->RevertAppendInternal(start_row);
 }
 
 void DataTable::RevertAppend(idx_t start_row, idx_t count) {
@@ -837,7 +836,8 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
 		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
-		ScanTableSegment(start_row, count, [&](DataChunk &chunk) {
+		idx_t scan_count = MinValue<idx_t>(count, row_groups->GetTotalRows() - start_row);
+		ScanTableSegment(start_row, scan_count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = current_row_base + i;
 			}
@@ -857,7 +857,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	});
 
 	// revert the data table append
-	RevertAppendInternal(start_row, count);
+	RevertAppendInternal(start_row);
 }
 
 //===--------------------------------------------------------------------===//
