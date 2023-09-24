@@ -89,9 +89,8 @@ class NumpyPandas:
         self.DataFrame = numpy_pandas_df
         self.pandas = pytest.importorskip("pandas")
 
-    def __getattr__(self, __name: str):
-        item = eval(f'self.pandas.{__name}')
-        return item
+    def __getattr__(self, name: str):
+        return getattr(self.pandas, name)
 
 
 def convert_arrow_to_numpy_backend(df):
@@ -125,9 +124,8 @@ class ArrowMockTesting:
         self.testing = pytest.importorskip("pandas").testing
         self.assert_frame_equal = convert_and_equal
 
-    def __getattr__(self, __name: str):
-        item = eval(f'self.testing.{__name}')
-        return item
+    def __getattr__(self, name: str):
+        return getattr(self.testing, name)
 
 
 # This converts dataframes constructed with 'DataFrame(...)' to pyarrow backed dataframes
@@ -145,9 +143,8 @@ class ArrowPandas:
             self.DataFrame = self.pandas.DataFrame
         self.testing = ArrowMockTesting()
 
-    def __getattr__(self, __name: str):
-        item = eval(f'self.pandas.{__name}')
-        return item
+    def __getattr__(self, name: str):
+        return getattr(self.pandas, name)
 
 
 @pytest.fixture(scope="function")
