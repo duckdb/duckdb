@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregates/test_list_aggregate_function.test
+# name: test/sql/aggregate/aggregates/test_list_aggregate_function.test_slow
 # description: Test the list aggregate function for all data types
 # group: [aggregates]
 

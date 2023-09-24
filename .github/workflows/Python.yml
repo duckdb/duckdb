@@ -47,7 +47,7 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
 
@@ -225,7 +225,7 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
-        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1
