@@ -33,4 +33,8 @@ string JoinNode::ToString() {
 	return result;
 }
 
+void JoinNode::Print() {
+	Printer::Print(ToString());
+}
+
 } // namespace duckdb

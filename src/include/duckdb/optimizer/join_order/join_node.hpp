@@ -46,7 +46,7 @@ public:
 
 private:
 public:
-	void PrintJoinNode();
+	void Print();
 	string ToString();
 };
 
