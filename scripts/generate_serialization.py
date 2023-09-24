@@ -125,21 +125,25 @@ def replace_pointer(type):
 def get_serialize_element(
     property_name, property_id, property_key, property_type, has_default, default_value, is_deleted, pointer_type
 ):
-    write_method = 'WriteProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {default_value}'
+    template = serialize_element
     if has_default and is_deleted:
-        write_method = 'WriteDeletedPropertyWithDefault'
+        template = template.replace('WriteProperty', 'WriteDeletedPropertyWithDefault<${PROPERTY_TYPE}>').replace(
+            ', ${PROPERTY_NAME}', ''
+        )
     elif is_deleted:
-        write_method = 'WriteDeletedProperty'
+        template = template.replace('WriteProperty', 'WriteDeletedProperty<${PROPERTY_TYPE}>').replace(
+            ', ${PROPERTY_NAME}', ''
+        )
     elif has_default:
-        write_method = 'WritePropertyWithDefault'
+        template = template.replace('WriteProperty', 'WritePropertyWithDefault')
     return (
-        serialize_element.replace('${PROPERTY_NAME}', property_name)
+        template.replace('${PROPERTY_NAME}', property_name)
+        .replace('${PROPERTY_TYPE}', property_type)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_DEFAULT}', default_argument)
-        .replace('WriteProperty', write_method)
         .replace('${ASSIGNMENT}', assignment)
     )
 
@@ -155,21 +159,24 @@ def get_deserialize_element_template(
     is_deleted,
     pointer_type,
 ):
-    read_method = 'ReadProperty'
+    # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {default_value}'
     if has_default and is_deleted:
-        read_method = 'ReadDeletedPropertyWithDefault'
+        template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
+            'ReadProperty', 'ReadDeletedPropertyWithDefault<${PROPERTY_TYPE}>'
+        )
     elif is_deleted:
-        read_method = 'ReadDeletedProperty'
+        template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
+            'ReadProperty', 'ReadDeletedProperty<${PROPERTY_TYPE}>'
+        )
     elif has_default:
-        read_method = 'ReadPropertyWithDefault'
+        template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
     return (
         template.replace('${PROPERTY_NAME}', property_name)
         .replace('${PROPERTY_KEY}', property_key)
         .replace('${PROPERTY_ID}', str(property_id))
         .replace('${PROPERTY_DEFAULT}', default_argument)
-        .replace('ReadProperty', read_method)
         .replace('${PROPERTY_TYPE}', property_type)
         .replace('${ASSIGNMENT}', assignment)
     )
@@ -229,6 +236,7 @@ supported_member_entries = [
     'optional',
     'base',
     'default',
+    'deleted',
 ]
 
 
