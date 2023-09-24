@@ -9,7 +9,7 @@ try:
     import pandas
 
     pyarrow_dtype = pandas.ArrowDtype
-except:
+except ImportError:
     pyarrow_dtype = None
 
 # Check if pandas has arrow dtypes enabled
@@ -17,7 +17,7 @@ try:
     from pandas.compat import pa_version_under7p0
 
     pyarrow_dtypes_enabled = not pa_version_under7p0
-except:
+except ImportError:
     pyarrow_dtypes_enabled = False
 
 

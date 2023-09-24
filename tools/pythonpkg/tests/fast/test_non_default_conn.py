@@ -32,7 +32,7 @@ class TestNonDefaultConn(object):
     def test_from_parquet(self, duckdb_cursor):
         try:
             import pyarrow as pa
-        except:
+        except ImportError:
             return
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         conn = duckdb.connect()
