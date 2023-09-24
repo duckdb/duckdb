@@ -409,11 +409,11 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make debug
+        run: make relassert
 
       - name: Test
         shell: bash
-        run: build/debug/test/unittest
+        run: build/relassert/test/unittest
 
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
