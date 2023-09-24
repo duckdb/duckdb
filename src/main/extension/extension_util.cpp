@@ -101,7 +101,7 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunction fun
 	scalar_function.functions.AddFunction(std::move(function));
 }
 
-void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet functions) {
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet functions) { // NOLINT
 	D_ASSERT(!functions.name.empty());
 	auto &scalar_function = ExtensionUtil::GetFunction(db, functions.name);
 	for (auto &function : functions.functions) {
@@ -110,7 +110,7 @@ void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, ScalarFunctionSet 
 	}
 }
 
-void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet functions) {
+void ExtensionUtil::AddFunctionOverload(DatabaseInstance &db, TableFunctionSet functions) { // NOLINT
 	auto &table_function = ExtensionUtil::GetTableFunction(db, functions.name);
 	for (auto &function : functions.functions) {
 		function.name = functions.name;
