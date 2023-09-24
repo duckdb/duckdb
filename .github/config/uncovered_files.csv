@@ -164,7 +164,7 @@ execution/expression_executor_state.cpp	2
 execution/index/art/art.cpp	7
 execution/index/art/art_key.cpp	6
 execution/index/art/iterator.cpp	2
-execution/index/art/leaf.cpp	3
+execution/index/art/leaf.cpp	10
 execution/index/art/node.cpp	11
 execution/index/art/node256.cpp	2
 execution/index/art/node48.cpp	10
@@ -452,6 +452,7 @@ include/duckdb/planner/expression/bound_parameter_data.hpp	2
 include/duckdb/planner/expression/bound_subquery_expression.hpp	5
 include/duckdb/planner/filter/conjunction_filter.hpp	3
 include/duckdb/planner/table_filter.hpp	3
+include/duckdb/planner/extension_callback.hpp	2
 include/duckdb/storage/buffer/block_handle.hpp	7
 include/duckdb/storage/compression/chimp/algorithm/chimp128.hpp	10
 include/duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp	3

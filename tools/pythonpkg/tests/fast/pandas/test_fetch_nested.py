@@ -5,7 +5,8 @@ import numpy as np
 
 
 def compare_results(query, list_values=[], list_values_2=[]):
-    df_duck = duckdb.query(query).df()
+    con = duckdb.connect()
+    df_duck = con.query(query).df()
     duck_values = df_duck['a']
     for duck_value in duck_values:
         is_in_list_value = False
@@ -19,7 +20,8 @@ def compare_results(query, list_values=[], list_values_2=[]):
 
 
 class TestFetchNested(object):
-    def test_fetch_df_list(self, duckdb_cursor):
+    def test_fetch_df_list(self):
+        con = duckdb.connect()
         # Integers
         compare_results("SELECT a from (select list_value(3,5,10) as a) as t", [[3, 5, 10]])
         compare_results("SELECT a from (select list_value(3,5,NULL) as a) as t", [[3, 5, None]])
@@ -75,7 +77,7 @@ class TestFetchNested(object):
             [['0', None, None, None, None], [None, None, '5', None, None]],
         )
 
-    def test_struct_df(self, duckdb_cursor):
+    def test_struct_df(self):
         compare_results("SELECT a from (SELECT STRUCT_PACK(a := 42, b := 43) as a) as t", [{'a': 42, 'b': 43}])
 
         compare_results("SELECT a from (SELECT STRUCT_PACK(a := NULL, b := 43) as a) as t", [{'a': None, 'b': 43}])
@@ -114,7 +116,7 @@ class TestFetchNested(object):
             ],
         )
 
-    def test_map_df(self, duckdb_cursor):
+    def test_map_df(self):
         compare_results(
             "SELECT a from (select MAP(LIST_VALUE(1, 2, 3, 4),LIST_VALUE(10, 9, 8, 7)) as a) as t",
             [{'key': [1, 2, 3, 4], 'value': [10, 9, 8, 7]}],
@@ -174,7 +176,8 @@ class TestFetchNested(object):
             ],
         )
 
-    def test_nested_mix(self, duckdb_cursor):
+    def test_nested_mix(self):
+        con = duckdb.connect()
         # List of structs W/ Struct that is NULL entirely
         compare_results(
             "SELECT [{'i':1,'j':2},NULL,{'i':2,'j':NULL}] as a", [[{'i': 1, 'j': 2}, None, {'i': 2, 'j': None}]]
@@ -214,7 +217,7 @@ class TestFetchNested(object):
         )
 
         # Struct that is NULL entirely
-        df_duck = duckdb.query("SELECT col0 as a FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL))").df()
+        df_duck = con.query("SELECT col0 as a FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL))").df()
         duck_values = df_duck['a']
         assert duck_values[0] == {'i': 1, 'j': 2}
         assert np.isnan(duck_values[1])
@@ -222,7 +225,7 @@ class TestFetchNested(object):
         assert np.isnan(duck_values[3])
 
         # MAP that is NULL entirely
-        df_duck = duckdb.query(
+        df_duck = con.query(
             "SELECT col0 as a FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL))"
         ).df()
         duck_values = df_duck['a']
