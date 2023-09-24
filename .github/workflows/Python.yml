@@ -149,6 +149,7 @@ jobs:
     needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests  --verbose'
       CIBW_SKIP: '*-musllinux_aarch64'
       CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -290,6 +291,7 @@ jobs:
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
+        CIBW_TEST_COMMAND: 'python -m pytest {project}  --verbose'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         SETUPTOOLS_USE_DISTUTILS: 'stdlib'
         TWINE_USERNAME: '__token__'
