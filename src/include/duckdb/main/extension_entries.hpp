@@ -247,7 +247,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "fts",
     "httpfs",
     "inet",
-    "icu",
+    // "icu",
     "json",
     "parquet",
     "postgres_scanner",
