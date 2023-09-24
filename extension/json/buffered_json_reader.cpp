@@ -23,7 +23,7 @@ bool JSONFileHandle::IsOpen() const {
 }
 
 void JSONFileHandle::Close() {
-	if (IsOpen() && plain_file_source) {
+	if (IsOpen()) {
 		file_handle->Close();
 		file_handle = nullptr;
 	}
