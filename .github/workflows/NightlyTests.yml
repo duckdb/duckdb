@@ -250,7 +250,7 @@ jobs:
      name: Python Address Sanitizer (Linux)
      runs-on: ubuntu-latest
      needs: linux-memory-leaks
-     container: ubuntu:16.04
+     container: ubuntu:18.04
      env:
         GEN: ninja
         DUCKDEBUG: 1
