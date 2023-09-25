@@ -3,7 +3,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "iostream"
 
 namespace duckdb {
 
