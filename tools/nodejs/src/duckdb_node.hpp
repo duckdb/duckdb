@@ -23,6 +23,7 @@ public:
 	Napi::FunctionReference connection_constructor;
 	Napi::FunctionReference statement_constructor;
 	Napi::FunctionReference query_result_constructor;
+	Napi::ObjectReference token_type_enum_ref;
 };
 
 namespace node_duckdb {
@@ -109,6 +110,7 @@ public:
 	Napi::Value Interrupt(const Napi::CallbackInfo &info);
 	Napi::Value Close(const Napi::CallbackInfo &info);
 	Napi::Value RegisterReplacementScan(const Napi::CallbackInfo &info);
+	Napi::Value Tokenize(const Napi::CallbackInfo &info);
 
 public:
 	constexpr static int DUCKDB_NODEJS_ERROR = -1;

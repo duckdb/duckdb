@@ -127,6 +127,20 @@ export type ReplacementScanCallback = (
   table: string
 ) => ReplacementScanResult | null;
 
+export enum TokenType {
+  IDENTIFIER = 0,
+  NUMERIC_CONSTANT = 1,
+  STRING_CONSTANT = 2,
+  OPERATOR = 3,
+  KEYWORD = 4,
+  COMMENT = 5,
+}
+
+export interface ScriptTokens {
+  offsets: number[];
+  types: TokenType[];
+}
+
 export class Database {
   constructor(path: string, accessMode?: number | Record<string,string>, callback?: Callback<any>);
   constructor(path: string, callback?: Callback<any>);
@@ -169,6 +183,8 @@ export class Database {
   registerReplacementScan(
     replacementScan: ReplacementScanCallback
   ): Promise<void>;
+
+  tokenize(text: string): ScriptTokens;
 }
 
 export type GenericTypeInfo = {

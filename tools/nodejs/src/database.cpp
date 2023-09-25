@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb_node.hpp"
@@ -18,7 +19,8 @@ Napi::FunctionReference Database::Init(Napi::Env env, Napi::Object exports) {
 	    {InstanceMethod("close_internal", &Database::Close), InstanceMethod("wait", &Database::Wait),
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
 	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
-	     InstanceMethod("registerReplacementScan", &Database::RegisterReplacementScan)});
+	     InstanceMethod("registerReplacementScan", &Database::RegisterReplacementScan),
+			 InstanceMethod("tokenize", &Database::Tokenize)});
 
 	exports.Set("Database", t);
 
@@ -362,6 +364,33 @@ Napi::Value Database::RegisterReplacementScan(const Napi::CallbackInfo &info) {
 	Schedule(info.Env(), duckdb::make_uniq<RegisterRsTask>(*this, rs, deferred));
 
 	return deferred.Promise();
+}
+
+Napi::Value Database::Tokenize(const Napi::CallbackInfo &info) {
+	auto env = info.Env();
+
+	if (info.Length() < 1) {
+		throw Napi::TypeError::New(env, "Text argument expected");
+	}
+
+	std::string text = info[0].As<Napi::String>();
+
+	auto tokens = duckdb::Parser::Tokenize(text);
+	auto numTokens = tokens.size();
+
+	auto offsets = Napi::Array::New(env, numTokens);
+	auto types = Napi::Array::New(env, numTokens);
+
+	for (size_t i = 0; i < numTokens; i++) {
+		auto token = tokens[i];
+		offsets.Set(i, token.start);
+		types.Set(i, (uint8_t) token.type);
+	}
+	
+	auto result = Napi::Object::New(env);
+	result.Set("offsets", offsets);
+	result.Set("types", types);
+	return result;
 }
 
 } // namespace node_duckdb

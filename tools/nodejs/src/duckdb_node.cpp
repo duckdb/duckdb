@@ -12,6 +12,15 @@ NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	statement_constructor = node_duckdb::Statement::Init(env, exports);
 	query_result_constructor = node_duckdb::QueryResult::Init(env, exports);
 
+	auto token_type_enum = Napi::Object::New(env);
+	token_type_enum.Set("IDENTIFIER", 0);
+	token_type_enum.Set("NUMERIC_CONSTANT", 1);
+	token_type_enum.Set("STRING_CONSTANT", 2);
+	token_type_enum.Set("OPERATOR", 3);
+	token_type_enum.Set("KEYWORD", 4);
+	token_type_enum.Set("COMMENT", 5);
+	token_type_enum_ref = Napi::ObjectReference::New(token_type_enum);
+
 	exports.DefineProperties({
 	    DEFINE_CONSTANT_INTEGER(exports, node_duckdb::Database::DUCKDB_NODEJS_ERROR, ERROR) DEFINE_CONSTANT_INTEGER(
 	        exports, node_duckdb::Database::DUCKDB_NODEJS_READONLY, OPEN_READONLY) // same as SQLite
@@ -20,6 +29,8 @@ NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_FULLMUTEX)                        // ignored
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_SHAREDCACHE)                      // ignored
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_PRIVATECACHE)                     // ignored
+
+			Napi::PropertyDescriptor::Value("TokenType", token_type_enum, static_cast<napi_property_attributes>(napi_enumerable | napi_configurable))
 	});
 }
 
