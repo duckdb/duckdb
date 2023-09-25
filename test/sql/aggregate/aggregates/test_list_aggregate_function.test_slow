@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregates/test_list_aggregate_function.test
+# name: test/sql/aggregate/aggregates/test_list_aggregate_function.test_slow
 # description: Test the list aggregate function for all data types
 # group: [aggregates]
 
@@ -222,7 +222,7 @@ statement ok
 INSERT INTO list_extract_test VALUES (1, 1), (2, 1), (3, 2), (NULL, 3), (42, 3);
 
 query II
-SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i <> 3) FROM list_extract_test GROUP BY g;
+SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i <> 3) FROM list_extract_test GROUP BY g ORDER BY ALL;
 ----
 1	[1, 2]
 2	NULL

@@ -854,9 +854,10 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	// write a bunch of values to a CSV
 	auto csv_file = TestCreatePath("relationtest.csv");
 
-	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
-
-	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla"));
+	case_insensitive_map_t<duckdb::vector<Value>> options;
+	options["header"] = {duckdb::Value(0)};
+	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file, options);
+	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla", options));
 
 	// now scan the CSV file
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});

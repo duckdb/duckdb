@@ -1,8 +1,8 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
+_ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.spark.sql.types import (
+from duckdb.experimental.spark.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,7 +14,7 @@ from duckdb.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.spark.sql.functions import col, struct, when, lit
+from duckdb.experimental.spark.sql.functions import col, struct, when, lit
 import duckdb
 import re
 
@@ -28,7 +28,7 @@ class TestWithColumnRenamed(object):
             (('Maria', 'Anne', 'Jones'), '1967-12-01', 'F', 4000),
             (('Jen', 'Mary', 'Brown'), '1980-02-17', 'F', -1),
         ]
-        from duckdb.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
 
         schema = StructType(
             [
@@ -58,15 +58,33 @@ class TestWithColumnRenamed(object):
 
         schema2 = StructType(
             [
-                StructField("fname", StringType()),
-                StructField("middlename", StringType()),
-                StructField("lname", StringType()),
+                StructField(
+                    'full name',
+                    StructType(
+                        [
+                            StructField('fname', StringType(), True),
+                            StructField('mname', StringType(), True),
+                            StructField('lname', StringType(), True),
+                        ]
+                    ),
+                ),
             ]
         )
 
-        df2 = df.select(col("name").cast(schema2).alias("name"), col("dob"), col("gender"), col("salary"))
-        assert 'firstname' not in df2.schema['name'].dataType
-        assert 'fname' in df2.schema['name'].dataType
+        df2 = df.withColumnRenamed("name", "full name")
+        assert 'name' not in df2
+        assert 'full name' in df2
+        assert 'firstname' in df2.schema['full name'].dataType
+
+        df2 = df.select(
+            col("name").alias("full name"),
+            col("dob"),
+            col("gender"),
+            col("salary"),
+        )
+        assert 'name' not in df2
+        assert 'full name' in df2
+        assert 'firstname' in df2.schema['full name'].dataType
 
         df2 = df.select(
             col("name.firstname").alias("fname"),

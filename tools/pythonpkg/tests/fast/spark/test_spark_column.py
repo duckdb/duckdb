@@ -1,10 +1,10 @@
 import pytest
 
-_ = pytest.importorskip("duckdb.spark")
+_ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.spark.sql.column import Column
-from duckdb.spark.sql.functions import struct
-from duckdb.spark.sql.types import Row
+from duckdb.experimental.spark.sql.column import Column
+from duckdb.experimental.spark.sql.functions import struct
+from duckdb.experimental.spark.sql.types import Row
 
 import duckdb
 
@@ -15,3 +15,9 @@ class TestSparkColumn(object):
 
         df = df.withColumn('struct', struct(df.col0, df.col1))
         assert 'struct' in df
+        new_col = df.schema['struct']
+        assert 'col0' in new_col.dataType
+        assert 'col1' in new_col.dataType
+
+        with pytest.raises(TypeError, match="argument 'col' should be of type Column"):
+            df = df.withColumn('struct', 'yes')

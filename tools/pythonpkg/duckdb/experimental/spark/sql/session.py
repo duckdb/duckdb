@@ -192,7 +192,7 @@ class SparkSession:
     @property
     def catalog(self) -> "Catalog":
         if not hasattr(self, "_catalog"):
-            from duckdb.spark.sql.catalog import Catalog
+            from duckdb.experimental.spark.sql.catalog import Catalog
 
             self._catalog = Catalog(self)
         return self._catalog
