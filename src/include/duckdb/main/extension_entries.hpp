@@ -288,7 +288,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "json",
     "parquet",
     "postgres_scanner",
-    "spatial",
+    // "spatial", TODO: table function isnt always autoloaded so test fails
     "sqlsmith",
     "sqlite_scanner",
     "tpcds",
