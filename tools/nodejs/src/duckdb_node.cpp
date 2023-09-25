@@ -21,18 +21,17 @@ NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	token_type_enum.Set("COMMENT", 5);
 	token_type_enum_ref = Napi::ObjectReference::New(token_type_enum);
 
-	exports.DefineProperties({
-	    DEFINE_CONSTANT_INTEGER(exports, node_duckdb::Database::DUCKDB_NODEJS_ERROR, ERROR) DEFINE_CONSTANT_INTEGER(
+	exports.DefineProperties(
+	    {DEFINE_CONSTANT_INTEGER(exports, node_duckdb::Database::DUCKDB_NODEJS_ERROR, ERROR) DEFINE_CONSTANT_INTEGER(
 	        exports, node_duckdb::Database::DUCKDB_NODEJS_READONLY, OPEN_READONLY) // same as SQLite
-	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_READWRITE)                        // ignored
-	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_CREATE)                           // ignored
-	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_FULLMUTEX)                        // ignored
-	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_SHAREDCACHE)                      // ignored
-	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_PRIVATECACHE)                     // ignored
+	     DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_READWRITE)                       // ignored
+	     DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_CREATE)                          // ignored
+	     DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_FULLMUTEX)                       // ignored
+	     DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_SHAREDCACHE)                     // ignored
+	     DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_PRIVATECACHE)                    // ignored
 
-	    Napi::PropertyDescriptor::Value("TokenType", token_type_enum,
-	        static_cast<napi_property_attributes>(napi_enumerable | napi_configurable))
-	});
+	     Napi::PropertyDescriptor::Value("TokenType", token_type_enum,
+	                                     static_cast<napi_property_attributes>(napi_enumerable | napi_configurable))});
 }
 
 NODE_API_ADDON(NodeDuckDB);

@@ -384,9 +384,9 @@ Napi::Value Database::Tokenize(const Napi::CallbackInfo &info) {
 	for (size_t i = 0; i < numTokens; i++) {
 		auto token = tokens[i];
 		offsets.Set(i, token.start);
-		types.Set(i, (uint8_t) token.type);
+		types.Set(i, (uint8_t)token.type);
 	}
-	
+
 	auto result = Napi::Object::New(env);
 	result.Set("offsets", offsets);
 	result.Set("types", types);
