@@ -617,10 +617,10 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		}
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			csv_global_state.UpdateVerification(verification_updates,
-			                                    csv_local_state.csv_reader->file_idx,
+			csv_global_state.UpdateVerification(verification_updates, csv_local_state.csv_reader->file_idx,
 			                                    csv_local_state.csv_reader->scanner->scanner_id);
-			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner, csv_local_state.csv_reader->file_idx);
+			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->scanner,
+			                                 csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (csv_local_state.csv_reader) {
 				csv_local_state.csv_reader->linenr = 0;

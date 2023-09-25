@@ -14,8 +14,6 @@ struct TryCastFloatingOperator {
 	}
 };
 
-
-
 static bool StartsWithNumericDate(string &separator, const string &value) {
 	auto begin = value.c_str();
 	auto end = begin + value.size();

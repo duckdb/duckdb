@@ -57,35 +57,45 @@ struct ParseChunk {
 				validity_mask.SetInvalid(scanner.cur_rows);
 			}
 		}
-		if (scanner.state == CSVState::STANDARD) {
+		if (scanner.state == CSVState::STANDARD ||
+		    (scanner.state == CSVState::QUOTED && scanner.previous_state == CSVState::QUOTED)) {
 			scanner.value += current_char;
 		}
-		bool new_line = (scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE)||
-		                 (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return);
-		scanner.cur_rows += new_line;
-		scanner.column_count -= scanner.column_count * new_line;
+		scanner.cur_rows +=
+		    scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE;
+		scanner.column_count -= scanner.column_count * (scanner.previous_state == CSVState::RECORD_SEPARATOR);
 
+		// It means our carriage return is actually a record separator
+		scanner.cur_rows += scanner.state != CSVState::RECORD_SEPARATOR && carriage_return;
+		scanner.column_count -= scanner.column_count * (scanner.state != CSVState::RECORD_SEPARATOR && carriage_return);
 
-		if (scanner.cur_rows >= sniffing_state_machine.options.sample_chunk_size) {
+		if (scanner.cur_rows >= STANDARD_VECTOR_SIZE) {
 			// We sniffed enough rows
-			return true;
-		}
-		if (current_pos >= scanner.end_buffer && new_line) {
-			// We reached the end of the buffer and it's a newline
 			return true;
 		}
 		return false;
 	}
 
 	inline static void Finalize(CSVScanner &scanner, DataChunk &parse_chunk) {
-		if (scanner.cur_rows < scanner.GetStateMachineSniff().options.sample_chunk_size &&
-		    scanner.state != CSVState::EMPTY_LINE) {
+		if (scanner.cur_rows < STANDARD_VECTOR_SIZE && scanner.state != CSVState::EMPTY_LINE) {
 			scanner.VerifyUTF8();
 			auto &v = parse_chunk.data[scanner.column_count++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			parse_data[scanner.cur_rows] = StringVector::AddStringOrBlob(v, string_t(scanner.value));
+			if (scanner.value.empty()) {
+				auto &validity_mask = FlatVector::Validity(v);
+				validity_mask.SetInvalid(scanner.cur_rows);
+			} else {
+				parse_data[scanner.cur_rows] = StringVector::AddStringOrBlob(v, string_t(scanner.value));
+			}
+			while (scanner.column_count < parse_chunk.ColumnCount()) {
+				auto &v_pad = parse_chunk.data[scanner.column_count++];
+				auto &validity_mask = FlatVector::Validity(v_pad);
+				validity_mask.SetInvalid(scanner.cur_rows);
+			}
+			scanner.cur_rows++;
 		}
 		parse_chunk.SetCardinality(scanner.cur_rows);
 	}
+}
 };
 }

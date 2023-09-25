@@ -20,8 +20,8 @@ namespace duckdb {
 //! CSV Reader for Parallel Reading
 class ParallelCSVReader : public BaseCSVReader {
 public:
-	ParallelCSVReader(ClientContext &context, CSVReaderOptions options_p,
-                                     const vector<LogicalType> &requested_types, idx_t file_idx_p, unique_ptr<CSVScanner> scanner);
+	ParallelCSVReader(ClientContext &context, CSVReaderOptions options_p, const vector<LogicalType> &requested_types,
+	                  idx_t file_idx_p, unique_ptr<CSVScanner> scanner);
 	~ParallelCSVReader() override {
 	}
 
@@ -45,7 +45,6 @@ public:
 	void Increment(idx_t buffer_idx) override;
 
 private:
-
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool Parse(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
 };

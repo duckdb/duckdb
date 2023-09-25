@@ -15,7 +15,7 @@ struct SniffDialect {
 	inline static bool Process(CSVScanner &scanner, vector<idx_t> &sniffed_column_counts, char current_char,
 	                           idx_t current_pos) {
 		auto &sniffing_state_machine = scanner.GetStateMachineSniff();
-		D_ASSERT(sniffed_column_counts.size() ==STANDARD_VECTOR_SIZE);
+		D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
 		if (scanner.state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return true;

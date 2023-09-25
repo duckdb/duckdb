@@ -27,7 +27,8 @@ public:
 	//! Constructor used when sniffing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
 	//! Constructor used when parsing
-	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p, idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer, idx_t scanner_id);
+	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
+	                    idx_t buffer_idx, idx_t start_buffer, idx_t end_buffer, idx_t scanner_id);
 
 	//! This functions templates an operation over the CSV File
 	template <class OP, class T>
@@ -86,7 +87,6 @@ public:
 	const idx_t initial_buffer_set = 0;
 	const idx_t scanner_id = 0;
 
-
 	//! Verifies if value is UTF8
 	void VerifyUTF8();
 
@@ -94,7 +94,7 @@ public:
 	idx_t end_buffer = NumericLimits<idx_t>::Maximum();
 
 	//! Parses data into a parse_chunk (chunk where all columns are initially set to varchar)
-	void Parse(DataChunk &parse_chunk, VerificationPositions& verification_positions, const vector<LogicalType> &types);
+	void Parse(DataChunk &parse_chunk, VerificationPositions &verification_positions, const vector<LogicalType> &types);
 
 	idx_t GetBufferIndex();
 
@@ -113,7 +113,7 @@ private:
 	//! The following set of functions and variables are related to actual CSV Parsing
 	//! Sets the start of a buffer. In Parallel CSV Reading, buffers can (and most likely will) start mid-line.
 	//! This function walks the buffer until the first new valid line.
-	bool SetStart(VerificationPositions& verification_positions, const vector<LogicalType> &types);
+	bool SetStart(VerificationPositions &verification_positions, const vector<LogicalType> &types);
 	//! Skips empty lines when reading the first buffer
 	void SkipEmptyLines();
 	//! Skips header when reading the first buffer

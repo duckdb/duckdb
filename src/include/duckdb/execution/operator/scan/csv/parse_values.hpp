@@ -10,7 +10,7 @@
 #include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 #include "duckdb/execution/operator/scan/csv/csv_state_machine.hpp"
 
-namespace duckdb{
+namespace duckdb {
 
 struct TupleOfValues {
 	idx_t line_number;
@@ -37,6 +37,10 @@ struct ParseValues {
 		     (current_char == '\r' || current_char == '\n')) ||
 		    (sniffing_state_machine.dialect_options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
 			scanner.rows_read++;
+		}
+
+		if ((scanner.previous_state == CSVState::RECORD_SEPARATOR && scanner.state != CSVState::EMPTY_LINE) ||
+		    (scanner.state != CSVState::RECORD_SEPARATOR && scanner.previous_state == CSVState::CARRIAGE_RETURN)) {
 			sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;
 			sniffed_values[scanner.cur_rows].set = true;
 			scanner.line_start_pos = current_pos;
@@ -79,18 +83,22 @@ struct ParseValues {
 		return false;
 	}
 
-	inline static void Finalize(CSVScanner &machine, vector<TupleOfValues> &sniffed_values) {
-		if (machine.cur_rows < sniffed_values.size() && machine.state != CSVState::EMPTY_LINE) {
-			machine.VerifyUTF8();
-			sniffed_values[machine.cur_rows].line_number = machine.rows_read;
-			if (!sniffed_values[machine.cur_rows].set) {
-				sniffed_values[machine.cur_rows].position = machine.line_start_pos;
-				sniffed_values[machine.cur_rows].set = true;
+	inline static void Finalize(CSVScanner &scanner, vector<TupleOfValues> &sniffed_values) {
+		if (scanner.cur_rows < sniffed_values.size() && scanner.state == CSVState::DELIMITER) {
+			// Started a new empty value
+			sniffed_values[scanner.cur_rows].values.push_back(Value(scanner.value));
+		}
+		if (scanner.cur_rows < sniffed_values.size() && scanner.state != CSVState::EMPTY_LINE) {
+			scanner.VerifyUTF8();
+			sniffed_values[scanner.cur_rows].line_number = scanner.rows_read;
+			if (!sniffed_values[scanner.cur_rows].set) {
+				sniffed_values[scanner.cur_rows].position = scanner.line_start_pos;
+				sniffed_values[scanner.cur_rows].set = true;
 			}
 
-			sniffed_values[machine.cur_rows++].values.push_back(Value(machine.value));
+			sniffed_values[scanner.cur_rows++].values.push_back(Value(scanner.value));
 		}
-		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - machine.cur_rows), sniffed_values.end());
+		sniffed_values.erase(sniffed_values.end() - (sniffed_values.size() - scanner.cur_rows), sniffed_values.end());
 	}
 };
-}
+} // namespace duckdb
