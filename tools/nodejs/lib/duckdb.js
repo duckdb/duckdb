@@ -64,6 +64,10 @@ var Statement = duckdb.Statement;
  * @class
  */
 var QueryResult = duckdb.QueryResult;
+/**
+ * Types of tokens return by `tokenize`.
+ */
+var TokenType = duckdb.TokenType;
 
 /**
  * @method
@@ -630,6 +634,14 @@ Database.prototype.unregister_udf = function () {
  */
 
 Database.prototype.registerReplacementScan;
+
+/**
+ * Return positions and types of tokens in given text
+ * @method
+ * @arg text
+ * @return {ScriptTokens}
+ */
+Database.prototype.tokenize;
 
 /**
  * Not implemented
