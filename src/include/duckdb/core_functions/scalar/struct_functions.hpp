@@ -34,9 +34,12 @@ struct StructPackFun {
 };
 
 struct RowFun {
-	using ALIAS = StructPackFun;
-
 	static constexpr const char *Name = "row";
+	static constexpr const char *Parameters = "any";
+	static constexpr const char *Description = "Creates an unnamed STRUCT containing the argument values.";
+	static constexpr const char *Example = "row(4, 'hello')";
+
+	static ScalarFunction GetFunction();
 };
 
 } // namespace duckdb

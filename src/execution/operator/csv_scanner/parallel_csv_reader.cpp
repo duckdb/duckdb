@@ -335,8 +335,6 @@ normal : {
 		if (c == options.dialect_options.state_machine_options.delimiter) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (c == options.dialect_options.state_machine_options.quote && try_add_line) {
-			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
 			if (column > 0 || try_add_line || parse_chunk.data.size() == 1) {

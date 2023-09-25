@@ -16,8 +16,16 @@ SELECT CARDINALITY(HISTOGRAM(val)) FROM src AS t(k, val);
 ----
 NULL
 
-statement ok
+statement error
 CREATE TABLE t1 AS (SELECT ARRAY[(1, 'x'), (2, 'y'), (4, 's')] AS list);
+----
+Invalid Input Error: A table cannot be created from an unnamed struct
+
+statement ok
+CREATE TABLE t1 (list STRUCT(a INT, b VARCHAR)[]);
+
+statement ok
+INSERT INTO t1 VALUES (ARRAY[(1, 'x'), (2, 'y'), (4, 's')]);
 
 statement ok
 INSERT INTO t1 VALUES (ARRAY[(2, 'a'), (3,'b')]);

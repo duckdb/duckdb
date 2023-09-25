@@ -237,6 +237,16 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 		auto end_idx = end_data.sel->get_index(i);
 		auto step_idx = step_vector ? step_data.sel->get_index(i) : 0;
 
+		auto list_valid = list_data.validity.RowIsValid(list_idx);
+		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
+		auto end_valid = end_data.validity.RowIsValid(end_idx);
+		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
+
+		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid)) {
+			result_mask.SetInvalid(i);
+			continue;
+		}
+
 		auto sliced = reinterpret_cast<INPUT_TYPE *>(list_data.data)[list_idx];
 		auto begin = begin_is_empty ? 0 : reinterpret_cast<INDEX_TYPE *>(begin_data.data)[begin_idx];
 		auto end = end_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced)
@@ -248,23 +258,19 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 			begin = end_is_empty ? 0 : begin;
 			end = begin_is_empty ? ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced) : end;
 		}
-		auto list_valid = list_data.validity.RowIsValid(list_idx);
-		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
-		auto end_valid = end_data.validity.RowIsValid(end_idx);
-		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		bool clamp_result = false;
-		if (list_valid && begin_valid && end_valid && (step_valid || step == 1)) {
+		if (step_valid || step == 1) {
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
 		auto length = 0;
-		if (step_vector && step_valid && list_valid && begin_valid && end_valid && end - begin > 0) {
+		if (end - begin > 0) {
 			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
 		sel_length += length;
 
-		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid) || !clamp_result) {
+		if (!clamp_result) {
 			result_mask.SetInvalid(i);
 		} else if (!step_vector) {
 			result_data[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
