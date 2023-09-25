@@ -111,12 +111,6 @@ unique_ptr<PendingQueryResult> PreparedStatement::PendingQuery(case_insensitive_
 
 	D_ASSERT(data);
 	parameters.allow_stream_result = allow_stream_result && data->properties.allow_stream_result;
-	auto statement_type = GetStatementType();
-	if (statement_type == StatementType::INSERT_STATEMENT || statement_type == StatementType::UPDATE_STATEMENT ||
-	    statement_type == StatementType::DELETE_STATEMENT) {
-		// don't stream DML statements. allow_stream_result may be true if there is a returning statement.
-		parameters.allow_stream_result = false;
-	}
 	auto result = context->PendingQuery(query, data, parameters);
 	// The result should not contain any reference to the 'vector<Value> parameters.parameters'
 	return result;
