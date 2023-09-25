@@ -18,7 +18,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-      - '.github/config/uncovered_files.csv'
+
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -30,7 +30,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-      - '.github/config/uncovered_files.csv'
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}
@@ -47,7 +47,7 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests --verbose'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
 
@@ -170,7 +170,9 @@ jobs:
 
     - name: Install
       shell: bash
-      run: pip install cibuildwheel twine
+      run: |
+        pip install cibuildwheel twine
+        python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
@@ -223,7 +225,7 @@ jobs:
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
         CIBW_ARCHS: 'x86_64 universal2 arm64'
-        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast  --verbose'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: '__token__'
         DUCKDB_BUILD_UNITY: 1

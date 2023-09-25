@@ -294,7 +294,7 @@ static inline void VerifyStrings(const LogicalTypeId type_id, const data_ptr_t r
 	for (idx_t i = 0; i < count; i++) {
 		const auto &row_location = row_locations[offset + i] + base_col_offset;
 		ValidityBytes row_mask(row_location);
-		if (row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			auto recomputed_string = Load<string_t>(row_location + col_offset);
 			recomputed_string.Verify();
 		}
@@ -328,7 +328,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
 				ValidityBytes row_mask(row_location);
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 					continue;
 				}
 
@@ -352,7 +352,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
 				ValidityBytes row_mask(row_location);
-				if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 					continue;
 				}
 

@@ -228,6 +228,9 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	             "Project the relation object by the projection in project_expr");
 	DefineMethod({"select_types", "select_dtypes"}, relation_module, &DuckDBPyRelation::ProjectFromTypes,
 	             "Select columns from the relation, by filtering based on type(s)", py::arg("types"));
+
+	relation_module.def("__contains__", &DuckDBPyRelation::ContainsColumnByName, py::arg("name"));
+
 	relation_module
 	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))

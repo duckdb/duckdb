@@ -18,8 +18,8 @@ namespace duckdb {
 struct EnumFirstFun {
 	static constexpr const char *Name = "enum_first";
 	static constexpr const char *Parameters = "enum";
-	static constexpr const char *Description = "Returns the first value of the input enum type.";
-	static constexpr const char *Example = "enum_first(null::mood)";
+	static constexpr const char *Description = "Returns the first value of the input enum type";
+	static constexpr const char *Example = "enum_first(NULL::mood)";
 
 	static ScalarFunction GetFunction();
 };
@@ -27,8 +27,8 @@ struct EnumFirstFun {
 struct EnumLastFun {
 	static constexpr const char *Name = "enum_last";
 	static constexpr const char *Parameters = "enum";
-	static constexpr const char *Description = "Returns the last value of the input enum type.";
-	static constexpr const char *Example = "enum_last(null::mood)";
+	static constexpr const char *Description = "Returns the last value of the input enum type";
+	static constexpr const char *Example = "enum_last(NULL::mood)";
 
 	static ScalarFunction GetFunction();
 };
@@ -45,8 +45,8 @@ struct EnumCodeFun {
 struct EnumRangeFun {
 	static constexpr const char *Name = "enum_range";
 	static constexpr const char *Parameters = "enum";
-	static constexpr const char *Description = "Returns all values of the input enum type as an array.";
-	static constexpr const char *Example = "enum_range(null::mood)";
+	static constexpr const char *Description = "Returns all values of the input enum type as an array";
+	static constexpr const char *Example = "enum_range(NULL::mood)";
 
 	static ScalarFunction GetFunction();
 };
@@ -54,7 +54,7 @@ struct EnumRangeFun {
 struct EnumRangeBoundaryFun {
 	static constexpr const char *Name = "enum_range_boundary";
 	static constexpr const char *Parameters = "start,end";
-	static constexpr const char *Description = "Returns the range between the two given enum values as an array. The values must be of the same enum type. When the first parameter is NULL, the result starts with the first value of the enum type. When the second parameter is NULL, the result ends with the last value of the enum type.";
+	static constexpr const char *Description = "Returns the range between the two given enum values as an array. The values must be of the same enum type. When the first parameter is NULL, the result starts with the first value of the enum type. When the second parameter is NULL, the result ends with the last value of the enum type";
 	static constexpr const char *Example = "enum_range_boundary(NULL, 'happy'::mood)";
 
 	static ScalarFunction GetFunction();

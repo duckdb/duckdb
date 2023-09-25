@@ -21,6 +21,10 @@ namespace duckdb {
 // Access Mode
 //===--------------------------------------------------------------------===//
 void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (db) {
+		throw InvalidInputException("Cannot change access_mode setting while database is running - it must be set when "
+		                            "opening or attaching the database");
+	}
 	auto parameter = StringUtil::Lower(input.ToString());
 	if (parameter == "automatic") {
 		config.options.access_mode = AccessMode::AUTOMATIC;

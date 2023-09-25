@@ -55,20 +55,20 @@ bool RunParallel(const string &path, idx_t thread_count, idx_t buffer_size, bool
 	}
 	if (!ground_truth) {
 		//! oh oh, this should not pass
-		std::cout << path << " Failed on single threaded but succeeded on parallel reading" << std::endl;
+		std::cout << path << " Failed on single threaded but succeeded on parallel reading" << '\n';
 		return false;
 	}
 	if (!multi_threaded_passed) {
-		std::cout << path << " Multithreaded failed" << std::endl;
-		std::cout << multi_threaded_result->GetError() << std::endl;
+		std::cout << path << " Multithreaded failed" << '\n';
+		std::cout << multi_threaded_result->GetError() << '\n';
 		return false;
 	}
 	// Results do not match
 	string error_message;
 	if (!ColumnDataCollection::ResultEquals(*ground_truth, *result, error_message, false)) {
 		std::cout << path << " Thread count: " << to_string(thread_count) << " Buffer Size: " << to_string(buffer_size)
-		          << std::endl;
-		std::cout << error_message << std::endl;
+		          << '\n';
+		std::cout << error_message << '\n';
 		return false;
 	}
 	return true;
