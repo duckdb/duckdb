@@ -10,8 +10,8 @@
 namespace duckdb {
 
 struct ListSortBindData : public FunctionData {
-	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up, const LogicalType &return_type_p,
-	                 const LogicalType &child_type_p, ClientContext &context_p);
+	ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up,
+	                 const LogicalType &return_type_p, const LogicalType &child_type_p, ClientContext &context_p);
 	~ListSortBindData() override;
 
 	OrderType order_type;
@@ -35,8 +35,8 @@ public:
 ListSortBindData::ListSortBindData(OrderType order_type_p, OrderByNullType null_order_p, bool is_grade_up_p,
                                    const LogicalType &return_type_p, const LogicalType &child_type_p,
                                    ClientContext &context_p)
-    : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p),  child_type(child_type_p), is_grade_up(is_grade_up_p),
-      context(context_p) {
+    : order_type(order_type_p), null_order(null_order_p), return_type(return_type_p), child_type(child_type_p),
+      is_grade_up(is_grade_up_p), context(context_p) {
 
 	// get the vector types
 	types.emplace_back(LogicalType::USMALLINT);
@@ -198,10 +198,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ListVector::Reserve(result, lists_size);
 		ListVector::SetListSize(result, lists_size);
 		auto result_data = ListVector::GetData(result);
-		for (idx_t i = 0; i < count; i++) {
-			result_data[i].length = list_entries[i].length;
-			result_data[i].offset = list_entries[i].offset;
-		}
+		memcpy(result_data, list_entries, count * sizeof(list_entry_t));
 	}
 
 	if (data_to_sort) {
@@ -243,7 +240,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 			for (idx_t i = 0; i < count; i++) {
 				for (idx_t j = result_data[i].offset; j < result_data[i].offset + result_data[i].length; j++) {
 					auto b = sel_sorted.get_index(j) - result_data[i].offset;
-					result_entry.SetValue(j, Value::UINTEGER(b + 1));
+					result_entry.SetValue(j, Value::BIGINT(b + 1));
 				}
 			}
 		} else {
@@ -300,7 +297,6 @@ static unique_ptr<FunctionData> ListGradeUpBind(ClientContext &context, ScalarFu
 	auto child_type = ListType::GetChildType(arguments[0]->return_type);
 	return make_uniq<ListSortBindData>(order, null_order, true, bound_function.return_type, child_type, context);
 }
-
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
