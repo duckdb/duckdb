@@ -21,7 +21,7 @@ public:
 
 	ClientContext &context;
 	uint32_t seed = 0;
-	idx_t max_queries = 2000;
+	idx_t max_queries = 0;
 	string complete_log;
 	string log;
 	bool verbose_output = false;
