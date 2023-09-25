@@ -31,7 +31,7 @@ on:
         default: "[]"
       # Allows overriding the default s3 deploy script with a custom script
       deploy_script:
-        require: false
+        required: false
         type: string
         default: "./duckdb/scripts/extension-upload-oote.sh"
 jobs:
