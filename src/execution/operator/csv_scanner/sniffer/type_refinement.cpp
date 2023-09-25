@@ -36,8 +36,8 @@ void CSVSniffer::RefineTypes() {
 		return;
 	}
 	DataChunk parse_chunk;
-	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, options.sample_chunk_size);
-	for (idx_t i = 1; i < sniffing_state_machine.options.sample_chunks; i++) {
+	parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types, STANDARD_VECTOR_SIZE);
+	for (idx_t i = 1; i < sniffing_state_machine.options.sample_size_chunks; i++) {
 		bool finished_file = best_candidate->Finished();
 		if (finished_file) {
 			// we finished the file: stop
@@ -56,6 +56,7 @@ void CSVSniffer::RefineTypes() {
 		best_candidate->Process<ParseChunk>(*best_candidate, parse_chunk);
 		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 			vector<LogicalType> &col_type_candidates = best_sql_types_candidates_per_column_idx[col];
+			bool is_bool_type = col_type_candidates.back() == LogicalType::BOOLEAN;
 			while (col_type_candidates.size() > 1) {
 				const auto &sql_type = col_type_candidates.back();
 				//	narrow down the date formats
@@ -88,6 +89,14 @@ void CSVSniffer::RefineTypes() {
 				if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
 					break;
 				} else {
+					if (col_type_candidates.back() == LogicalType::BOOLEAN && is_bool_type) {
+						// If we thought this was a boolean value (i.e., T,F, True, False) and it is not, we
+						// immediately pop to varchar.
+						while (col_type_candidates.back() != LogicalType::VARCHAR) {
+							col_type_candidates.pop_back();
+						}
+						break;
+					}
 					col_type_candidates.pop_back();
 				}
 			}

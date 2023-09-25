@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA verify_external
+
 # scalar quantiles
 query II
 SELECT median(NULL), median(1)

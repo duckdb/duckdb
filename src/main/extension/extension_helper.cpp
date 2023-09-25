@@ -12,6 +12,10 @@
 #define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
 
+#ifndef DUCKDB_EXTENSION_EXCEL_LINKED
+#define DUCKDB_EXTENSION_EXCEL_LINKED false
+#endif
+
 #ifndef DUCKDB_EXTENSION_PARQUET_LINKED
 #define DUCKDB_EXTENSION_PARQUET_LINKED false
 #endif
@@ -54,6 +58,10 @@
 #include "icu_extension.hpp"
 #endif
 
+#if DUCKDB_EXTENSION_EXCEL_LINKED
+#include "excel_extension.hpp"
+#endif
+
 #if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
@@ -94,6 +102,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 static DefaultExtension internal_extensions[] = {
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
+    {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
     {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
@@ -101,12 +110,18 @@ static DefaultExtension internal_extensions[] = {
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
-    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
+    {"autocomplete", "Adds support for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
+    {"substrait", "Adds support for the Substrait integration", false},
+    {"aws", "Provides features that depend on the AWS SDK", false},
+    {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
+    {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
+    {"iceberg", "Adds support for Apache Iceberg", false},
+    {"visualizer", "Creates an HTML-based visualization of the query plan", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -180,13 +195,30 @@ string ExtensionHelper::AddExtensionInstallHintToErrorMsg(ClientContext &context
 	return base_error;
 }
 
-void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string &extension_name) noexcept {
 	auto &dbconfig = DBConfig::GetConfig(context);
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			ExtensionHelper::InstallExtension(context, extension_name, false,
 			                                  context.config.autoinstall_extension_repo);
 		}
+		ExtensionHelper::LoadExternalExtension(context, extension_name);
+		return true;
+	} catch (...) {
+		return false;
+	}
+	return false;
+}
+
+void ExtensionHelper::AutoLoadExtension(ClientContext &context, const string &extension_name) {
+	auto &dbconfig = DBConfig::GetConfig(context);
+	try {
+#ifndef DUCKDB_WASM
+		if (dbconfig.options.autoinstall_known_extensions) {
+			ExtensionHelper::InstallExtension(context, extension_name, false,
+			                                  context.config.autoinstall_extension_repo);
+		}
+#endif
 		ExtensionHelper::LoadExternalExtension(context, extension_name);
 	} catch (Exception &e) {
 		throw AutoloadException(extension_name, e);

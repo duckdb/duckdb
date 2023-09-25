@@ -193,7 +193,7 @@ def require():
 def spark():
     if not hasattr(spark, 'session'):
         # Cache the import
-        from pyduckdb.spark.sql import SparkSession as session
+        from duckdb.experimental.spark.sql import SparkSession as session
 
         spark.session = session
     return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()

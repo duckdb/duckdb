@@ -41,7 +41,7 @@ public:
 	virtual unique_ptr<BaseStatistics> GetStatistics();
 
 	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
-	virtual void WriteDataPointers(RowGroupWriter &writer);
+	virtual void WriteDataPointers(RowGroupWriter &writer, Serializer &serializer);
 
 public:
 	template <class TARGET>
@@ -68,37 +68,22 @@ struct PartialBlockForCheckpoint : public PartialBlock {
 	};
 
 public:
-	PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, BlockManager &block_manager,
-	                          PartialBlockState state);
+	PartialBlockForCheckpoint(ColumnData &data, ColumnSegment &segment, PartialBlockState state,
+	                          BlockManager &block_manager);
 	~PartialBlockForCheckpoint() override;
 
 	// We will copy all segment data into the memory of the shared block.
 	// Once the block is full (or checkpoint is complete) we'll invoke Flush().
 	// This will cause the block to get written to storage (via BlockManger::ConvertToPersistent),
 	// and all segments to have their references updated (via ColumnSegment::ConvertToPersistent)
-	BlockManager &block_manager;
-	shared_ptr<BlockHandle> block;
 	vector<PartialColumnSegment> segments;
-
-private:
-	struct UninitializedRegion {
-		idx_t start;
-		idx_t end;
-	};
-	vector<UninitializedRegion> uninitialized_regions;
 
 public:
 	bool IsFlushed();
-
-	void AddUninitializedRegion(idx_t start, idx_t end) override;
-
-	void Flush(idx_t free_space_left) override;
-
-	void Clear() override;
-
+	void Flush(const idx_t free_space_left) override;
 	void Merge(PartialBlock &other, idx_t offset, idx_t other_size) override;
-
 	void AddSegmentToTail(ColumnData &data, ColumnSegment &segment, uint32_t offset_in_block);
+	void Clear() override;
 };
 
 } // namespace duckdb

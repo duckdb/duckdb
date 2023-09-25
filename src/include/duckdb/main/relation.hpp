@@ -19,8 +19,11 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-
-#include <memory>
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 struct BoundStatement;
@@ -81,9 +84,12 @@ public:
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, const vector<string> &aliases);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, const vector<string> &aliases);
+	DUCKDB_API shared_ptr<Relation> Project(vector<unique_ptr<ParsedExpression>> expressions,
+	                                        const vector<string> &aliases);
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);
+	DUCKDB_API shared_ptr<Relation> Filter(unique_ptr<ParsedExpression> expression);
 	DUCKDB_API shared_ptr<Relation> Filter(const vector<string> &expressions);
 
 	// LIMIT
@@ -92,10 +98,13 @@ public:
 	// ORDER
 	DUCKDB_API shared_ptr<Relation> Order(const string &expression);
 	DUCKDB_API shared_ptr<Relation> Order(const vector<string> &expressions);
+	DUCKDB_API shared_ptr<Relation> Order(vector<OrderByNode> expressions);
 
 	// JOIN operation
 	DUCKDB_API shared_ptr<Relation> Join(const shared_ptr<Relation> &other, const string &condition,
 	                                     JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
+	shared_ptr<Relation> Join(const shared_ptr<Relation> &other, vector<unique_ptr<ParsedExpression>> condition,
+	                          JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
 
 	// CROSS PRODUCT operation
 	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other,
@@ -114,6 +123,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const string &aggregate_list, const string &group_list);
 	DUCKDB_API shared_ptr<Relation> Aggregate(const vector<string> &aggregates, const vector<string> &groups);
+	DUCKDB_API shared_ptr<Relation> Aggregate(vector<unique_ptr<ParsedExpression>> expressions,
+	                                          const string &group_list);
 
 	// ALIAS
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);

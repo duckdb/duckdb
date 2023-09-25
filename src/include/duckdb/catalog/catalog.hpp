@@ -34,6 +34,7 @@ struct CreateIndexInfo;
 struct CreateTypeInfo;
 struct CreateTableInfo;
 struct DatabaseSize;
+struct MetadataBlockInfo;
 
 class AttachedDatabase;
 class ClientContext;
@@ -266,6 +267,7 @@ public:
 	                                                    unique_ptr<LogicalOperator> plan) = 0;
 
 	virtual DatabaseSize GetDatabaseSize(ClientContext &context) = 0;
+	virtual vector<MetadataBlockInfo> GetMetadataInfo(ClientContext &context);
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
@@ -305,6 +307,7 @@ public:
 	static void AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name);
 	//! Autoload the extension required for `function_name` or throw a CatalogException
 	static bool AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogType type, const string &entry_name);
+	DUCKDB_API static bool TryAutoLoad(ClientContext &context, const string &extension_name) noexcept;
 
 protected:
 	//! Reference to the database

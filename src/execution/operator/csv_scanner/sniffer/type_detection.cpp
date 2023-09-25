@@ -203,19 +203,19 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		idx_t sample_size = options.sample_chunk_size;
-		if (options.sample_chunk_size == 1) {
-			sample_size++;
-		}
-		vector<TupleOfValues> tuples(sample_size);
+		vector<TupleOfValues> tuples(STANDARD_VECTOR_SIZE + 1);
 		candidate->Process<ParseValues>(*candidate, tuples);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
+		idx_t true_pos = 0;
 		idx_t values_start = 0;
 		while (true_start < tuples.size()) {
 			if (tuples[true_start].values.empty() ||
 			    (tuples[true_start].values.size() == 1 && tuples[true_start].values[0].IsNull())) {
 				true_start = tuples[true_start].line_number;
+				if (true_start < tuples.size()) {
+					true_pos = tuples[true_start].position;
+				}
 				values_start++;
 			} else {
 				break;
@@ -224,22 +224,28 @@ void CSVSniffer::DetectTypes() {
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < tuples.size()) {
-			if (tuples[true_start].values.size() < max_columns_found) {
+			if (tuples[true_start].values.size() < max_columns_found && !options.null_padding) {
+
 				true_start = tuples[true_start].line_number;
+				if (true_start < tuples.size()) {
+					true_pos = tuples[true_start].position;
+				}
 				values_start++;
 			} else {
 				break;
 			}
 		}
+		if (values_start > 0) {
+			tuples.erase(tuples.begin(), tuples.begin() + values_start);
+		}
 
-		tuples.erase(tuples.begin(), tuples.begin() + values_start);
 		idx_t row_idx = 0;
 		if (tuples.size() > 1 && (!options.has_header || (options.has_header && options.dialect_options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
 		if (!tuples.empty()) {
-			best_start_without_header = tuples[0].position;
+			best_start_without_header = tuples[0].position - true_pos;
 		}
 
 		// First line where we start our type detection
@@ -247,6 +253,9 @@ void CSVSniffer::DetectTypes() {
 		for (; row_idx < tuples.size(); row_idx++) {
 			for (idx_t col = 0; col < tuples[row_idx].values.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
+				// col_type_candidates can't be empty since anything in a CSV file should at least be a string
+				// and we validate utf-8 compatibility when creating the type
+				D_ASSERT(!col_type_candidates.empty());
 				auto cur_top_candidate = col_type_candidates.back();
 				auto dummy_val = tuples[row_idx].values[col];
 				// try cast from string to sql_type
@@ -306,7 +315,7 @@ void CSVSniffer::DetectTypes() {
 			best_sql_types_candidates_per_column_idx = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
 			best_header_row = tuples[0].values;
-			best_start_with_header = tuples[0].position;
+			best_start_with_header = tuples[0].position - true_pos;
 		}
 	}
 	// Assert that it's all good at this point.

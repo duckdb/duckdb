@@ -12,7 +12,6 @@
 #include "duckdb/common/map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
@@ -45,9 +44,6 @@ struct CSVStateMachineOptions {
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape;
 	}
-
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
 };
 
 struct DialectOptions {
@@ -66,9 +62,6 @@ struct DialectOptions {
 	idx_t skip_rows = 0;
 	//! True start of the first CSV Buffer (After skipping empty lines, headers, notes and so on)
 	idx_t true_start = 0;
-
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
 };
 
 struct CSVReaderOptions {
@@ -133,12 +126,10 @@ struct CSVReaderOptions {
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	vector<bool> force_not_null;
+	//! Number of sample chunks used in auto-detection
+	idx_t sample_size_chunks = 20480 / STANDARD_VECTOR_SIZE;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
-	//! Size of sample chunk used for dialect and type detection
-	idx_t sample_chunk_size = STANDARD_VECTOR_SIZE;
-	//! Number of sample chunks used for type detection
-	idx_t sample_chunks = 10;
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! The file path of the CSV file to read
@@ -166,20 +157,33 @@ struct CSVReaderOptions {
 	string suffix;
 	string write_newline;
 
+	//! The date format to use (if any is specified)
+	map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
+	//! Whether or not a type format is specified
+	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
-	void Serialize(FieldWriter &writer) const;
-	void Deserialize(FieldReader &reader);
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static CSVReaderOptions FormatDeserialize(FormatDeserializer &deserializer);
+	void Serialize(Serializer &serializer) const;
+	static CSVReaderOptions Deserialize(Deserializer &deserializer);
 
 	void SetCompression(const string &compression);
+
+	bool GetHeader() const;
 	void SetHeader(bool has_header);
+
+	string GetEscape() const;
 	void SetEscape(const string &escape);
+
+	int64_t GetSkipRows() const;
+	void SetSkipRows(int64_t rows);
+
+	string GetQuote() const;
 	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
+	string GetDelimiter() const;
 
+	NewLineIdentifier GetNewline() const;
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
@@ -191,7 +195,16 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
+	void ToNamedParameters(named_parameter_map_t &out);
+	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context, vector<LogicalType> &return_types,
+	                         vector<string> &names);
 
 	string ToString() const;
+
+	named_parameter_map_t OutputReadSettings();
+
+public:
+	//! Whether columns were explicitly provided through named parameters
+	bool explicitly_set_columns = false;
 };
 } // namespace duckdb

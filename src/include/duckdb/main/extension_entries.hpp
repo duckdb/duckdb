@@ -117,7 +117,10 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_dwithin", "spatial"},
     {"st_dwithin_spheroid", "spatial"},
     {"st_envelope", "spatial"},
+    {"st_envelope_agg", "spatial"},
     {"st_equals", "spatial"},
+    {"st_extent", "spatial"},
+    {"st_exteriorring", "spatial"},
     {"st_flipcoordinates", "spatial"},
     {"st_geometrytype", "spatial"},
     {"st_geomfromgeojson", "spatial"},
@@ -126,7 +129,9 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_geomfromtext", "spatial"},
     {"st_geomfromwkb", "spatial"},
     {"st_intersection", "spatial"},
+    {"st_intersection_agg", "spatial"},
     {"st_intersects", "spatial"},
+    {"st_intersects_extent", "spatial"},
     {"st_isclosed", "spatial"},
     {"st_isempty", "spatial"},
     {"st_isring", "spatial"},
@@ -137,8 +142,12 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_linestring2dfromwkb", "spatial"},
     {"st_list_proj_crs", "spatial"},
     {"st_makeline", "spatial"},
+    {"st_ngeometries", "spatial"},
+    {"st_ninteriorrings", "spatial"},
     {"st_normalize", "spatial"},
     {"st_npoints", "spatial"},
+    {"st_numgeometries", "spatial"},
+    {"st_numinteriorrings", "spatial"},
     {"st_numpoints", "spatial"},
     {"st_overlaps", "spatial"},
     {"st_perimeter", "spatial"},
@@ -148,6 +157,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_point2dfromwkb", "spatial"},
     {"st_point3d", "spatial"},
     {"st_point4d", "spatial"},
+    {"st_pointn", "spatial"},
     {"st_pointonsurface", "spatial"},
     {"st_polygon2dfromwkb", "spatial"},
     {"st_read", "spatial"},
@@ -159,9 +169,14 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"st_touches", "spatial"},
     {"st_transform", "spatial"},
     {"st_union", "spatial"},
+    {"st_union_agg", "spatial"},
     {"st_within", "spatial"},
     {"st_x", "spatial"},
+    {"st_xmax", "spatial"},
+    {"st_xmin", "spatial"},
     {"st_y", "spatial"},
+    {"st_ymax", "spatial"},
+    {"st_ymin", "spatial"},
     {"stem", "fts"},
     {"text", "excel"},
     {"to_arrow_ipc", "arrow"},
@@ -213,6 +228,32 @@ static constexpr ExtensionEntry EXTENSION_TYPES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
+static constexpr ExtensionEntry EXTENSION_COLLATIONS[] = {
+    {"af", "icu"},    {"am", "icu"},    {"ar", "icu"},     {"ar_sa", "icu"}, {"as", "icu"},    {"az", "icu"},
+    {"be", "icu"},    {"bg", "icu"},    {"bn", "icu"},     {"bo", "icu"},    {"br", "icu"},    {"bs", "icu"},
+    {"ca", "icu"},    {"ceb", "icu"},   {"chr", "icu"},    {"cs", "icu"},    {"cy", "icu"},    {"da", "icu"},
+    {"de", "icu"},    {"de_at", "icu"}, {"dsb", "icu"},    {"dz", "icu"},    {"ee", "icu"},    {"el", "icu"},
+    {"en", "icu"},    {"en_us", "icu"}, {"eo", "icu"},     {"es", "icu"},    {"et", "icu"},    {"fa", "icu"},
+    {"fa_af", "icu"}, {"ff", "icu"},    {"fi", "icu"},     {"fil", "icu"},   {"fo", "icu"},    {"fr", "icu"},
+    {"fr_ca", "icu"}, {"fy", "icu"},    {"ga", "icu"},     {"gl", "icu"},    {"gu", "icu"},    {"ha", "icu"},
+    {"haw", "icu"},   {"he", "icu"},    {"he_il", "icu"},  {"hi", "icu"},    {"hr", "icu"},    {"hsb", "icu"},
+    {"hu", "icu"},    {"hy", "icu"},    {"id", "icu"},     {"id_id", "icu"}, {"ig", "icu"},    {"is", "icu"},
+    {"it", "icu"},    {"ja", "icu"},    {"ka", "icu"},     {"kk", "icu"},    {"kl", "icu"},    {"km", "icu"},
+    {"kn", "icu"},    {"ko", "icu"},    {"kok", "icu"},    {"ku", "icu"},    {"ky", "icu"},    {"lb", "icu"},
+    {"lkt", "icu"},   {"ln", "icu"},    {"lo", "icu"},     {"lt", "icu"},    {"lv", "icu"},    {"mk", "icu"},
+    {"ml", "icu"},    {"mn", "icu"},    {"mr", "icu"},     {"ms", "icu"},    {"mt", "icu"},    {"my", "icu"},
+    {"nb", "icu"},    {"nb_no", "icu"}, {"ne", "icu"},     {"nl", "icu"},    {"nn", "icu"},    {"om", "icu"},
+    {"or", "icu"},    {"pa", "icu"},    {"pa_in", "icu"},  {"pl", "icu"},    {"ps", "icu"},    {"pt", "icu"},
+    {"ro", "icu"},    {"ru", "icu"},    {"sa", "icu"},     {"se", "icu"},    {"si", "icu"},    {"sk", "icu"},
+    {"sl", "icu"},    {"smn", "icu"},   {"sq", "icu"},     {"sr", "icu"},    {"sr_ba", "icu"}, {"sr_me", "icu"},
+    {"sr_rs", "icu"}, {"sv", "icu"},    {"sw", "icu"},     {"ta", "icu"},    {"te", "icu"},    {"th", "icu"},
+    {"tk", "icu"},    {"to", "icu"},    {"tr", "icu"},     {"ug", "icu"},    {"uk", "icu"},    {"ur", "icu"},
+    {"uz", "icu"},    {"vi", "icu"},    {"wae", "icu"},    {"wo", "icu"},    {"xh", "icu"},    {"yi", "icu"},
+    {"yo", "icu"},    {"yue", "icu"},   {"yue_cn", "icu"}, {"zh", "icu"},    {"zh_cn", "icu"}, {"zh_hk", "icu"},
+    {"zh_mo", "icu"}, {"zh_sg", "icu"}, {"zh_tw", "icu"},  {"zu", "icu"}}; // END_OF_EXTENSION_COLLATIONS
+
+// Note: these are currently hardcoded in scripts/generate_extensions_function.py
+// TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
     {"http://", "httpfs"}, {"https://", "httpfs"}, {"s3://", "httpfs"},
     //    {"azure://", "azure"}
@@ -220,10 +261,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
-static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {{".parquet", "parquet"},
-                                                              {".json", "json"},
-                                                              {".jsonl", "json"},
-                                                              {".ndjson", "json"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
+    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"}, {".ndjson", "json"},
+    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}}; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -234,6 +274,8 @@ static constexpr ExtensionEntry EXTENSION_FILE_CONTAINS[] = {{".parquet?", "parq
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     //    "azure",
+    "arrow",
+    "aws",
     "autocomplete",
     "excel",
     "fts",
@@ -242,7 +284,9 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     // "icu",
     "json",
     "parquet",
+    "postgres_scanner",
     "sqlsmith",
+    "sqlite_scanner",
     "tpcds",
     "tpch",
     "visualizer",

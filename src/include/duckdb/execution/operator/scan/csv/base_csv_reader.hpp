@@ -77,6 +77,10 @@ public:
 		return line_error + 1;
 	};
 
+	virtual void Increment(idx_t buffer_idx) {
+		return;
+	}
+
 	//! Initialize projection indices to select all columns
 	void InitializeProjection();
 

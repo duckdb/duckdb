@@ -14,7 +14,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/partitionable_hashtable.hpp"
 #include "duckdb/execution/window_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -157,8 +156,7 @@ SinkFinalizeType PhysicalWindow::Finalize(Pipeline &pipeline, Event &event, Clie
 	}
 
 	// Find the first group to sort
-	auto &groups = state.global_partition->grouping_data->GetPartitions();
-	if (groups.empty()) {
+	if (!state.global_partition->HasMergeTasks()) {
 		// Empty input!
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -222,6 +220,7 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 		}
 	} else {
 		built.resize(hash_groups.size());
+		idx_t batch_base = 0;
 		for (auto &hash_group : hash_groups) {
 			if (!hash_group) {
 				continue;
@@ -235,6 +234,9 @@ WindowGlobalSourceState::WindowGlobalSourceState(ClientContext &context_p, Windo
 			auto &sb = *global_sort_state.sorted_blocks[0];
 			auto &sd = *sb.payload_data;
 			tasks_remaining += sd.data_blocks.size();
+
+			hash_group->batch_base = batch_base;
+			batch_base += sd.data_blocks.size();
 		}
 	}
 }
@@ -436,6 +438,7 @@ public:
 	using ReadStates = vector<ReadStatePtr>;
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
+	void UpdateBatchIndex();
 	bool NextPartition();
 	void Scan(DataChunk &chunk);
 
@@ -443,6 +446,8 @@ public:
 	WindowGlobalSourceState &gsource;
 	//! The current bin being processed
 	idx_t hash_bin;
+	//! The current batch index (for output reordering)
+	idx_t batch_index;
 	//! The current source being processed
 	optional_ptr<WindowPartitionSourceState> partition_source;
 	//! The read cursor
@@ -456,7 +461,7 @@ public:
 };
 
 WindowLocalSourceState::WindowLocalSourceState(WindowGlobalSourceState &gsource)
-    : gsource(gsource), hash_bin(gsource.built.size()) {
+    : gsource(gsource), hash_bin(gsource.built.size()), batch_index(0) {
 	auto &gsink = *gsource.gsink.global_partition;
 	auto &op = gsource.gsink.op;
 
@@ -532,7 +537,7 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 	if (hash_bin < bin_count) {
 		//	Find a non-empty hash group.
 		for (; hash_bin < hash_groups.size(); hash_bin = next_build++) {
-			if (hash_groups[hash_bin]) {
+			if (hash_groups[hash_bin] && hash_groups[hash_bin]->count) {
 				auto result = CreateTask(hash_bin);
 				if (result.second) {
 					return result;
@@ -558,10 +563,18 @@ WindowGlobalSourceState::Task WindowGlobalSourceState::NextTask(idx_t hash_bin) 
 
 		//	If there is nothing to steal but there are unfinished partitions,
 		//	yield until any pending builds are done.
-		TaskScheduler::GetScheduler(context).YieldThread();
+		TaskScheduler::YieldThread();
 	}
 
 	return Task();
+}
+
+void WindowLocalSourceState::UpdateBatchIndex() {
+	D_ASSERT(partition_source);
+	D_ASSERT(scanner.get());
+
+	batch_index = partition_source->hash_group ? partition_source->hash_group->batch_base : 0;
+	batch_index += scanner->BlockIndex();
 }
 
 bool WindowLocalSourceState::NextPartition() {
@@ -578,6 +591,7 @@ bool WindowLocalSourceState::NextPartition() {
 		partition_source = task.first;
 		scanner = std::move(task.second);
 		hash_bin = partition_source->hash_bin;
+		UpdateBatchIndex();
 	}
 
 	for (auto &wexec : partition_source->executors) {
@@ -599,6 +613,8 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 			read_states.clear();
 			return;
 		}
+
+		UpdateBatchIndex();
 	}
 
 	const auto position = scanner->Scanned();
@@ -636,6 +652,23 @@ unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContex
 unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
 	return make_uniq<WindowGlobalSourceState>(context, gsink);
+}
+
+bool PhysicalWindow::SupportsBatchIndex() const {
+	//	We can only preserve order for single partitioning
+	//	or work stealing causes out of order batch numbers
+	auto &wexpr = select_list[0]->Cast<BoundWindowExpression>();
+	return wexpr.partitions.empty() && !wexpr.orders.empty();
+}
+
+OrderPreservationType PhysicalWindow::SourceOrder() const {
+	return SupportsBatchIndex() ? OrderPreservationType::FIXED_ORDER : OrderPreservationType::NO_ORDER;
+}
+
+idx_t PhysicalWindow::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                    LocalSourceState &lstate_p) const {
+	auto &lstate = lstate_p.Cast<WindowLocalSourceState>();
+	return lstate.batch_index;
 }
 
 SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,

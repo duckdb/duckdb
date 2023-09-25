@@ -35,6 +35,7 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/catalog/similar_catalog_entry.hpp"
+#include "duckdb/storage/database_size.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -431,6 +432,26 @@ void FindMinimalQualification(ClientContext &context, const string &catalog_name
 	qualify_schema = true;
 }
 
+bool Catalog::TryAutoLoad(ClientContext &context, const string &extension_name) noexcept {
+	if (context.db->ExtensionIsLoaded(extension_name)) {
+		return true;
+	}
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
+	auto &dbconfig = DBConfig::GetConfig(context);
+	if (!dbconfig.options.autoload_known_extensions) {
+		return false;
+	}
+	try {
+		if (ExtensionHelper::CanAutoloadExtension(extension_name)) {
+			return ExtensionHelper::TryAutoLoadExtension(context, extension_name);
+		}
+	} catch (...) {
+		return false;
+	}
+#endif
+	return false;
+}
+
 void Catalog::AutoloadExtensionByConfigName(ClientContext &context, const string &configuration_name) {
 #ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 	auto &dbconfig = DBConfig::GetConfig(context);
@@ -458,6 +479,8 @@ bool Catalog::AutoLoadExtensionByCatalogEntry(ClientContext &context, CatalogTyp
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
 		} else if (type == CatalogType::TYPE_ENTRY) {
 			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
+		} else if (type == CatalogType::COLLATION_ENTRY) {
+			extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 		}
 
 		if (!extension_name.empty() && ExtensionHelper::CanAutoloadExtension(extension_name)) {
@@ -515,6 +538,8 @@ CatalogException Catalog::CreateMissingEntryException(ClientContext &context, co
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_TYPES);
 	} else if (type == CatalogType::COPY_FUNCTION_ENTRY) {
 		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COPY_FUNCTIONS);
+	} else if (type == CatalogType::COLLATION_ENTRY) {
+		extension_name = ExtensionHelper::FindExtensionInEntries(entry_name, EXTENSION_COLLATIONS);
 	}
 
 	// if we found an extension that can handle this catalog entry, create an error hinting the user
@@ -809,6 +834,10 @@ void Catalog::Alter(ClientContext &context, AlterInfo &info) {
 		return;
 	}
 	return lookup.schema->Alter(context, info);
+}
+
+vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
+	return vector<MetadataBlockInfo>();
 }
 
 void Catalog::Verify() {

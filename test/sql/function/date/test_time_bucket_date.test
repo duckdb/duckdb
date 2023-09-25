@@ -504,3 +504,76 @@ query I
 select time_bucket('-1 month'::interval, '2022-12-22'::date, null::date);
 ----
 NULL
+
+# non-foldable NULL testing
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, d)
+FROM cte
+----
+NULL
+
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, t)
+FROM cte
+----
+NULL
+
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, d, i)
+FROM cte
+----
+NULL
+
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, t, i)
+FROM cte
+----
+NULL
+
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, d, d)
+FROM cte
+----
+NULL
+
+query T
+WITH cte AS (
+    SELECT NULL::INTERVAL i,
+           NULL::DATE d,
+           NULL::TIMESTAMP t
+    FROM range(1)
+)
+SELECT time_bucket(i, t, t)
+FROM cte
+----
+NULL

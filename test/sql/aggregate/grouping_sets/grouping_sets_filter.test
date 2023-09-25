@@ -37,7 +37,7 @@ Math	2
 
 # always true: random generates values between 0 and 1
 query II
-SELECT course, COUNT(*) FROM students GROUP BY GROUPING SETS ((), (course)) HAVING random()<1000;
+SELECT course, COUNT(*) FROM students GROUP BY GROUPING SETS ((), (course)) HAVING random()<1000 ORDER BY ALL;
 ----
 NULL	7
 CS	5

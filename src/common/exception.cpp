@@ -355,7 +355,7 @@ MissingExtensionException::MissingExtensionException(const string &msg)
 
 AutoloadException::AutoloadException(const string &extension_name, Exception &e)
     : Exception(ExceptionType::AUTOLOAD,
-                "An error occured while trying to automatically install the required extension '" + extension_name +
+                "An error occurred while trying to automatically install the required extension '" + extension_name +
                     "':\n" + e.RawMessage()),
       wrapped_exception(e) {
 }

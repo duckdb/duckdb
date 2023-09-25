@@ -18,15 +18,15 @@ FROM range(
 statement ok
 SELECT to_timestamp(range) as entry
     FROM range(
-      epoch(date_trunc('month', current_date)),
-      epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day'),
-      epoch(interval '1 day')
+      epoch(date_trunc('month', current_date))::BIGINT,
+      epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day')::BIGINT,
+      epoch(interval '1 day')::BIGINT
     )
 
 statement ok
 SELECT to_timestamp(range) as entry
 FROM range(
-  epoch(date_trunc('month', current_date)),
-  epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day'),
-  epoch(interval '1 day')
+  epoch(date_trunc('month', current_date))::BIGINT,
+  epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day')::BIGINT,
+  epoch(interval '1 day')::BIGINT
 )

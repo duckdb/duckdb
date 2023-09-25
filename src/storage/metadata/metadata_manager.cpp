@@ -1,6 +1,9 @@
 #include "duckdb/storage/metadata/metadata_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/common/serializer/write_stream.hpp"
+#include "duckdb/common/serializer/read_stream.hpp"
+#include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
 
@@ -13,7 +16,7 @@ MetadataManager::~MetadataManager() {
 
 MetadataHandle MetadataManager::AllocateHandle() {
 	// check if there is any free space left in an existing block
-	// if not allocate a new bloc
+	// if not allocate a new block
 	block_id_t free_block = INVALID_BLOCK;
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -32,6 +35,12 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	MetadataPointer pointer;
 	pointer.block_index = free_block;
 	auto &block = blocks[free_block];
+	if (block.block->BlockId() < MAXIMUM_BLOCK) {
+		// this block is a disk-backed block, yet we are planning to write to it
+		// we need to convert it into a transient block before we can write to it
+		ConvertToTransient(block);
+		D_ASSERT(block.block->BlockId() >= MAXIMUM_BLOCK);
+	}
 	D_ASSERT(!block.free_blocks.empty());
 	pointer.index = block.free_blocks.back();
 	// mark the block as used
@@ -52,15 +61,34 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	return handle;
 }
 
+void MetadataManager::ConvertToTransient(MetadataBlock &block) {
+	// pin the old block
+	auto old_buffer = buffer_manager.Pin(block.block);
+
+	// allocate a new transient block to replace it
+	shared_ptr<BlockHandle> new_block;
+	auto new_buffer = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block);
+
+	// copy the data to the transient block
+	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), Storage::BLOCK_SIZE);
+
+	block.block = std::move(new_block);
+
+	// unregister the old block
+	block_manager.UnregisterBlock(block.block_id, false);
+}
+
 block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
+	auto handle = buffer_manager.Allocate(Storage::BLOCK_SIZE, false, &new_block.block);
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(METADATA_BLOCK_COUNT - i - 1);
 	}
+	// zero-initialize the handle
+	memset(handle.Ptr(), 0, Storage::BLOCK_SIZE);
 	AddBlock(std::move(new_block));
 	return new_block_id;
 }
@@ -89,11 +117,11 @@ MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32
 	return MetaBlockPointer(block_pointer, offset);
 }
 
-block_id_t MetaBlockPointer::GetBlockId() {
+block_id_t MetaBlockPointer::GetBlockId() const {
 	return block_id_t(block_pointer & ~(idx_t(0xFF) << 56ULL));
 }
 
-uint32_t MetaBlockPointer::GetBlockIndex() {
+uint32_t MetaBlockPointer::GetBlockIndex() const {
 	return block_pointer >> 56ULL;
 }
 
@@ -151,11 +179,6 @@ void MetadataManager::Flush() {
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
 		auto handle = buffer_manager.Pin(block.block);
-		// zero-initialize any free blocks
-		for (auto free_block : block.free_blocks) {
-			memset(handle.Ptr() + free_block * MetadataManager::METADATA_BLOCK_SIZE, 0,
-			       MetadataManager::METADATA_BLOCK_SIZE);
-		}
 		// there are a few bytes left-over at the end of the block, zero-initialize them
 		memset(handle.Ptr() + total_metadata_size, 0, Storage::BLOCK_SIZE - total_metadata_size);
 		D_ASSERT(kv.first == block.block_id);
@@ -170,17 +193,17 @@ void MetadataManager::Flush() {
 	}
 }
 
-void MetadataManager::Serialize(Serializer &serializer) {
-	serializer.Write<uint64_t>(blocks.size());
+void MetadataManager::Write(WriteStream &sink) {
+	sink.Write<uint64_t>(blocks.size());
 	for (auto &kv : blocks) {
-		kv.second.Serialize(serializer);
+		kv.second.Write(sink);
 	}
 }
 
-void MetadataManager::Deserialize(Deserializer &source) {
+void MetadataManager::Read(ReadStream &source) {
 	auto block_count = source.Read<uint64_t>();
 	for (idx_t i = 0; i < block_count; i++) {
-		auto block = MetadataBlock::Deserialize(source);
+		auto block = MetadataBlock::Read(source);
 		auto entry = blocks.find(block.block_id);
 		if (entry == blocks.end()) {
 			// block does not exist yet
@@ -192,12 +215,12 @@ void MetadataManager::Deserialize(Deserializer &source) {
 	}
 }
 
-void MetadataBlock::Serialize(Serializer &serializer) {
-	serializer.Write<block_id_t>(block_id);
-	serializer.Write<idx_t>(FreeBlocksToInteger());
+void MetadataBlock::Write(WriteStream &sink) {
+	sink.Write<block_id_t>(block_id);
+	sink.Write<idx_t>(FreeBlocksToInteger());
 }
 
-MetadataBlock MetadataBlock::Deserialize(Deserializer &source) {
+MetadataBlock MetadataBlock::Read(ReadStream &source) {
 	MetadataBlock result;
 	result.block_id = source.Read<block_id_t>();
 	auto free_list = source.Read<idx_t>();
@@ -230,27 +253,26 @@ void MetadataBlock::FreeBlocksFromInteger(idx_t free_list) {
 }
 
 void MetadataManager::MarkBlocksAsModified() {
-	if (!modified_blocks.empty()) {
-		// for any blocks that were modified in the last checkpoint - set them to free blocks currently
-		for (auto &kv : modified_blocks) {
-			auto block_id = kv.first;
-			idx_t modified_list = kv.second;
-			auto entry = blocks.find(block_id);
-			D_ASSERT(entry != blocks.end());
-			auto &block = entry->second;
-			idx_t current_free_blocks = block.FreeBlocksToInteger();
-			// merge the current set of free blocks with the modified blocks
-			idx_t new_free_blocks = current_free_blocks | modified_list;
-			//			if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
-			//				// if new free_blocks is all blocks - mark entire block as modified
-			//				blocks.erase(entry);
-			//				block_manager.MarkBlockAsModified(block_id);
-			//			} else {
+	// for any blocks that were modified in the last checkpoint - set them to free blocks currently
+	for (auto &kv : modified_blocks) {
+		auto block_id = kv.first;
+		idx_t modified_list = kv.second;
+		auto entry = blocks.find(block_id);
+		D_ASSERT(entry != blocks.end());
+		auto &block = entry->second;
+		idx_t current_free_blocks = block.FreeBlocksToInteger();
+		// merge the current set of free blocks with the modified blocks
+		idx_t new_free_blocks = current_free_blocks | modified_list;
+		if (new_free_blocks == NumericLimits<idx_t>::Maximum()) {
+			// if new free_blocks is all blocks - mark entire block as modified
+			blocks.erase(entry);
+			block_manager.MarkBlockAsModified(block_id);
+		} else {
 			// set the new set of free blocks
 			block.FreeBlocksFromInteger(new_free_blocks);
-			//			}
 		}
 	}
+
 	modified_blocks.clear();
 	for (auto &kv : blocks) {
 		auto &block = kv.second;
@@ -258,6 +280,39 @@ void MetadataManager::MarkBlocksAsModified() {
 		idx_t occupied_list = ~free_list;
 		modified_blocks[block.block_id] = occupied_list;
 	}
+}
+
+void MetadataManager::ClearModifiedBlocks(const vector<MetaBlockPointer> &pointers) {
+	for (auto &pointer : pointers) {
+		auto block_id = pointer.GetBlockId();
+		auto block_index = pointer.GetBlockIndex();
+		auto entry = modified_blocks.find(block_id);
+		if (entry == modified_blocks.end()) {
+			throw InternalException("ClearModifiedBlocks - Block id %llu not found in modified_blocks", block_id);
+		}
+		auto &modified_list = entry->second;
+		// verify the block has been modified
+		D_ASSERT(modified_list && (1ULL << block_index));
+		// unset the bit
+		modified_list &= ~(1ULL << block_index);
+	}
+}
+
+vector<MetadataBlockInfo> MetadataManager::GetMetadataInfo() const {
+	vector<MetadataBlockInfo> result;
+	for (auto &block : blocks) {
+		MetadataBlockInfo block_info;
+		block_info.block_id = block.second.block_id;
+		block_info.total_blocks = MetadataManager::METADATA_BLOCK_COUNT;
+		for (auto free_block : block.second.free_blocks) {
+			block_info.free_list.push_back(free_block);
+		}
+		std::sort(block_info.free_list.begin(), block_info.free_list.end());
+		result.push_back(std::move(block_info));
+	}
+	std::sort(result.begin(), result.end(),
+	          [](const MetadataBlockInfo &a, const MetadataBlockInfo &b) { return a.block_id < b.block_id; });
+	return result;
 }
 
 block_id_t MetadataManager::GetNextBlockId() {

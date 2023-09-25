@@ -150,12 +150,18 @@ void CSVSniffer::DetectHeader() {
 			names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
+		if (best_header_row.size() < sniffer_state_machine.dialect_options.num_cols && options.null_padding) {
+			for (idx_t col = best_header_row.size(); col < sniffer_state_machine.dialect_options.num_cols; col++) {
+				names.push_back(GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col));
+			}
+		} else if (best_header_row.size() < sniffer_state_machine.dialect_options.num_cols) {
+			throw InternalException("Detected header has number of columns inferior to dialect detection");
+		}
 
 	} else {
 		sniffer_state_machine.dialect_options.header = false;
 		for (idx_t col = 0; col < sniffer_state_machine.dialect_options.num_cols; col++) {
-			string column_name = GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col);
-			names.push_back(column_name);
+			names.push_back(GenerateColumnName(sniffer_state_machine.dialect_options.num_cols, col));
 		}
 	}
 
