@@ -200,7 +200,8 @@ jobs:
         export DISTUTILS_C_COMPILER_LAUNCHER=ccache
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+|.*)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+          sed -i 's@{project}/tests/fast@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
+          sed -i 's@{project}/tests@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
         fi
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
         ls wheelhouse
@@ -260,7 +261,8 @@ jobs:
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+|.*)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+            sed -i 's@{project}/tests/fast@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
+            sed -i 's@{project}/tests@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
           fi
           cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
@@ -328,7 +330,8 @@ jobs:
           export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+|.*)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
+            sed -i 's@{project}/tests/fast@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
+            sed -i 's@{project}/tests@{project}/tests/fast/api/test_dbapi00.py@g cibw.toml
           fi
           cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
