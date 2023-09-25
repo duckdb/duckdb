@@ -116,15 +116,9 @@ public:
 		OnPropertyEnd();
 	}
 
-	// Read a property and discard the value
-	template <typename T>
-	inline void ReadDeletedProperty(const field_id_t field_id, const char *tag) {
-		(void)ReadProperty<T>(field_id, tag);
-	}
-
 	// Try to read a property, if it is not present, continue, otherwise read and discard the value
 	template <typename T>
-	inline void ReadDeletedPropertyWithDefault(const field_id_t field_id, const char *tag) {
+	inline void ReadDeletedProperty(const field_id_t field_id, const char *tag) {
 		// Try to read the property. If not present, great!
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			OnOptionalPropertyEnd(false);

@@ -58,7 +58,7 @@ ${MEMBERS}}
 '''
 
 serialize_element = (
-    '\tserializer.WriteProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+    '\tserializer.WriteProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 )
 
 base_serialize = '\t${BASE_CLASS_NAME}::Serialize(serializer);\n'
@@ -91,7 +91,8 @@ switch_statement = (
 )
 
 deserialize_element = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
-deserialize_element_class = '\tdeserializer.ReadProperty(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
+deserialize_element_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n'
+deserialize_element_class = '\tdeserializer.ReadProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", result${ASSIGNMENT}${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>(${PROPERTY_ID}, "${PROPERTY_KEY}"${PROPERTY_DEFAULT});\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = [
@@ -147,14 +148,8 @@ def get_serialize_element(
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {default_value}'
     template = serialize_element
-    if has_default and is_deleted:
-        template = template.replace('WriteProperty', 'WriteDeletedPropertyWithDefault<${PROPERTY_TYPE}>').replace(
-            ', ${PROPERTY_NAME}', ''
-        )
-    elif is_deleted:
-        template = template.replace('WriteProperty', 'WriteDeletedProperty<${PROPERTY_TYPE}>').replace(
-            ', ${PROPERTY_NAME}', ''
-        )
+    if is_deleted:
+        template = "\t/* [Deleted] (${PROPERTY_TYPE}) \"${PROPERTY_NAME}\" */\n"
     elif has_default:
         template = template.replace('WriteProperty', 'WritePropertyWithDefault')
     return (
@@ -181,13 +176,9 @@ def get_deserialize_element_template(
     # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {default_value}'
-    if has_default and is_deleted:
+    if is_deleted:
         template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
-            'ReadProperty', 'ReadDeletedPropertyWithDefault<${PROPERTY_TYPE}>'
-        )
-    elif is_deleted:
-        template = template.replace(', result${ASSIGNMENT}${PROPERTY_NAME}', '').replace(
-            'ReadProperty', 'ReadDeletedProperty<${PROPERTY_TYPE}>'
+            'ReadProperty', 'ReadDeletedProperty'
         )
     elif has_default:
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
@@ -202,10 +193,14 @@ def get_deserialize_element_template(
 
 
 def get_deserialize_element(
-    property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, pointer_type
+    property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
 ):
+    template = deserialize_element
+    if base:
+        template = deserialize_element_base.replace('${BASE_PROPERTY}', base.replace('*', ''))
+
     return get_deserialize_element_template(
-        deserialize_element,
+        template,
         property_name,
         property_key,
         property_id,
@@ -414,6 +409,7 @@ def generate_base_class_code(base_class):
             entry.has_default,
             default,
             entry.deleted,
+            None,
             base_class.pointer_type,
         )
     expressions = [x for x in base_class.children.items()]
@@ -564,6 +560,7 @@ def generate_class_code(class_entry):
             entry.has_default,
             entry.default,
             entry.deleted,
+            entry.base,
             'unique_ptr',
         )
 

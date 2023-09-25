@@ -57,7 +57,7 @@
       {
         "id": 200,
         "name": "case_checks",
-        "type": "vector<CacheCheck>"
+        "type": "vector<CaseCheck>"
       },
       {
         "id": 201,
@@ -287,12 +287,12 @@
       {
         "id": 201,
         "name": "exclude_list",
-        "type": "unordered_set<string>"
+        "type": "case_insensitive_set_t"
       },
       {
         "id": 202,
         "name": "replace_list",
-        "type": "unordered_set<ParsedExpression*>"
+        "type": "case_insensitive_map_t<ParsedExpression*>"
       },
       {
         "id": 203,
@@ -319,7 +319,7 @@
       {
         "id": 201,
         "name": "subquery",
-        "type": "SelectStatement"
+        "type": "SelectStatement*"
       },
       {
         "id": 202,

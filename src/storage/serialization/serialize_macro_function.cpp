@@ -12,9 +12,9 @@
 namespace duckdb {
 
 void MacroFunction::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "type", type);
-	serializer.WritePropertyWithDefault(101, "parameters", parameters);
-	serializer.WritePropertyWithDefault(102, "default_parameters", default_parameters);
+	serializer.WriteProperty<MacroType>(100, "type", type);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(101, "parameters", parameters);
+	serializer.WritePropertyWithDefault<unordered_map<string, unique_ptr<ParsedExpression>>>(102, "default_parameters", default_parameters);
 }
 
 unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer) {
@@ -39,23 +39,23 @@ unique_ptr<MacroFunction> MacroFunction::Deserialize(Deserializer &deserializer)
 
 void ScalarMacroFunction::Serialize(Serializer &serializer) const {
 	MacroFunction::Serialize(serializer);
-	serializer.WritePropertyWithDefault(200, "expression", expression);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression", expression);
 }
 
 unique_ptr<MacroFunction> ScalarMacroFunction::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ScalarMacroFunction>(new ScalarMacroFunction());
-	deserializer.ReadPropertyWithDefault(200, "expression", result->expression);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(200, "expression", result->expression);
 	return std::move(result);
 }
 
 void TableMacroFunction::Serialize(Serializer &serializer) const {
 	MacroFunction::Serialize(serializer);
-	serializer.WritePropertyWithDefault(200, "query_node", query_node);
+	serializer.WritePropertyWithDefault<unique_ptr<QueryNode>>(200, "query_node", query_node);
 }
 
 unique_ptr<MacroFunction> TableMacroFunction::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<TableMacroFunction>(new TableMacroFunction());
-	deserializer.ReadPropertyWithDefault(200, "query_node", result->query_node);
+	deserializer.ReadPropertyWithDefault<unique_ptr<QueryNode>>(200, "query_node", result->query_node);
 	return std::move(result);
 }
 

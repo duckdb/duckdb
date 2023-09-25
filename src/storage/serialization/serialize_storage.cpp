@@ -12,8 +12,8 @@
 namespace duckdb {
 
 void BlockPointer::Serialize(Serializer &serializer) const {
-	serializer.WriteProperty(100, "block_id", block_id);
-	serializer.WritePropertyWithDefault(101, "offset", offset);
+	serializer.WriteProperty<block_id_t>(100, "block_id", block_id);
+	serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
 }
 
 BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
@@ -24,12 +24,12 @@ BlockPointer BlockPointer::Deserialize(Deserializer &deserializer) {
 }
 
 void DataPointer::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault(100, "row_start", row_start);
-	serializer.WritePropertyWithDefault(101, "tuple_count", tuple_count);
-	serializer.WriteProperty(102, "block_pointer", block_pointer);
-	serializer.WriteProperty(103, "compression_type", compression_type);
-	serializer.WriteProperty(104, "statistics", statistics);
-	serializer.WritePropertyWithDefault(105, "segment_state", segment_state);
+	serializer.WritePropertyWithDefault<uint64_t>(100, "row_start", row_start);
+	serializer.WritePropertyWithDefault<uint64_t>(101, "tuple_count", tuple_count);
+	serializer.WriteProperty<BlockPointer>(102, "block_pointer", block_pointer);
+	serializer.WriteProperty<CompressionType>(103, "compression_type", compression_type);
+	serializer.WriteProperty<BaseStatistics>(104, "statistics", statistics);
+	serializer.WritePropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", segment_state);
 }
 
 DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
@@ -44,15 +44,15 @@ DataPointer DataPointer::Deserialize(Deserializer &deserializer) {
 	result.block_pointer = block_pointer;
 	result.compression_type = compression_type;
 	deserializer.Set<CompressionType>(compression_type);
-	deserializer.ReadPropertyWithDefault(105, "segment_state", result.segment_state);
+	deserializer.ReadPropertyWithDefault<unique_ptr<ColumnSegmentState>>(105, "segment_state", result.segment_state);
 	deserializer.Unset<CompressionType>();
 	return result;
 }
 
 void DistinctStatistics::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault(100, "sample_count", sample_count);
-	serializer.WritePropertyWithDefault(101, "total_count", total_count);
-	serializer.WritePropertyWithDefault(102, "log", log);
+	serializer.WritePropertyWithDefault<idx_t>(100, "sample_count", sample_count);
+	serializer.WritePropertyWithDefault<idx_t>(101, "total_count", total_count);
+	serializer.WritePropertyWithDefault<unique_ptr<HyperLogLog>>(102, "log", log);
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &deserializer) {
@@ -64,8 +64,8 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &des
 }
 
 void MetaBlockPointer::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault(100, "block_pointer", block_pointer);
-	serializer.WritePropertyWithDefault(101, "offset", offset);
+	serializer.WritePropertyWithDefault<idx_t>(100, "block_pointer", block_pointer);
+	serializer.WritePropertyWithDefault<uint32_t>(101, "offset", offset);
 }
 
 MetaBlockPointer MetaBlockPointer::Deserialize(Deserializer &deserializer) {

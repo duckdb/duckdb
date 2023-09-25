@@ -109,23 +109,6 @@ public:
 		OnPropertyEnd();
 	}
 
-	// These are just markers to know that the property was deleted.
-	// For now they function bascially the same as WriteProperty/WithDefault.
-	template <class T>
-	void WriteDeletedPropertyWithDefault(const field_id_t field_id, const char *tag) {
-		// If the property is deleted, and it had a default value, write the default value
-		WritePropertyWithDefault(field_id, tag, SerializationDefaultValue::GetDefault<T>());
-	}
-	template <class T>
-	void WriteDeletedPropertyWithDefault(const field_id_t field_id, const char *tag, const T &&default_value) {
-		// If the property is deleted, and it had a default value, write the default value
-		WritePropertyWithDefault(field_id, tag, default_value);
-	}
-	template <class T>
-	void WriteDeletedProperty(const field_id_t field_id, const char *tag) {
-		WriteProperty(field_id, tag, SerializationDefaultValue::GetDefault<T>());
-	}
-
 protected:
 	template <typename T>
 	typename std::enable_if<std::is_enum<T>::value, void>::type WriteValue(const T value) {
