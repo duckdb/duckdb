@@ -510,14 +510,14 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(Deserializer &deserializer
 
 void LogicalLimitPercent::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<double>(200, "limit_percent", limit_percent);
+	serializer.WriteProperty<double>(200, "limit_percent", limit_percent);
 	serializer.WritePropertyWithDefault<int64_t>(201, "offset_val", offset_val);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(202, "limit", limit);
 	serializer.WritePropertyWithDefault<unique_ptr<Expression>>(203, "offset", offset);
 }
 
 unique_ptr<LogicalOperator> LogicalLimitPercent::Deserialize(Deserializer &deserializer) {
-	auto limit_percent = deserializer.ReadPropertyWithDefault<double>(200, "limit_percent");
+	auto limit_percent = deserializer.ReadProperty<double>(200, "limit_percent");
 	auto offset_val = deserializer.ReadPropertyWithDefault<int64_t>(201, "offset_val");
 	auto limit = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(202, "limit");
 	auto offset = deserializer.ReadPropertyWithDefault<unique_ptr<Expression>>(203, "offset");

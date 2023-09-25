@@ -127,8 +127,6 @@ def is_zeroable(type):
         'idx_t',
         'size_t',
         'int',
-        'float',
-        'double',
     ]
 
 
