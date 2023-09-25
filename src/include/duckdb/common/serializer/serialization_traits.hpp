@@ -8,6 +8,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -89,7 +90,6 @@ struct is_map<typename duckdb::map<Args...>> : std::true_type {
 
 template <typename T>
 struct is_unique_ptr : std::false_type {};
-
 template <typename T>
 struct is_unique_ptr<unique_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
@@ -97,15 +97,20 @@ struct is_unique_ptr<unique_ptr<T>> : std::true_type {
 
 template <typename T>
 struct is_shared_ptr : std::false_type {};
-
 template <typename T>
 struct is_shared_ptr<shared_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
 template <typename T>
-struct is_pair : std::false_type {};
+struct is_optional_ptr : std::false_type {};
+template <typename T>
+struct is_optional_ptr<optional_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
 
+template <typename T>
+struct is_pair : std::false_type {};
 template <typename T, typename U>
 struct is_pair<std::pair<T, U>> : std::true_type {
 	typedef T FIRST_TYPE;
@@ -128,6 +133,129 @@ struct is_set<duckdb::set<Args...>> : std::true_type {
 	typedef typename std::tuple_element<0, std::tuple<Args...>>::type ELEMENT_TYPE;
 	typedef typename std::tuple_element<1, std::tuple<Args...>>::type HASH_TYPE;
 	typedef typename std::tuple_element<2, std::tuple<Args...>>::type EQUAL_TYPE;
+};
+
+template <typename T>
+struct is_atomic : std::false_type {};
+
+template <typename T>
+struct is_atomic<std::atomic<T>> : std::true_type {
+	typedef T TYPE;
+};
+
+struct SerializationDefaultValue {
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_atomic<T>::value, T>::type GetDefault() {
+		using INNER = typename is_atomic<T>::TYPE;
+		return static_cast<T>(GetDefault<INNER>());
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_atomic<T>::value, T>::type &value) {
+		using INNER = typename is_atomic<T>::TYPE;
+		return value == GetDefault<INNER>();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_arithmetic<T>::value, T>::type GetDefault() {
+		return static_cast<T>(0);
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_arithmetic<T>::value, T>::type &value) {
+		return value == static_cast<T>(0);
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_unique_ptr<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_unique_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_optional_ptr<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_optional_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_shared_ptr<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_shared_ptr<T>::value, T>::type &value) {
+		return !value;
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_vector<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_vector<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_unsafe_vector<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_unsafe_vector<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_unordered_set<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_unordered_set<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_unordered_map<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_unordered_map<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<is_map<T>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<is_map<T>::value, T>::type &value) {
+		return value.empty();
+	}
+
+	template <typename T = void>
+	static inline typename std::enable_if<std::is_same<T, string>::value, T>::type GetDefault() {
+		return T();
+	}
+
+	template <typename T = void>
+	static inline bool IsDefault(const typename std::enable_if<std::is_same<T, string>::value, T>::type &value) {
+		return value.empty();
+	}
 };
 
 } // namespace duckdb
