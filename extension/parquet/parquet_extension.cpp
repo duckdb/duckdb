@@ -157,6 +157,43 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	return bind_info;
 }
 
+static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
+                                          vector<string> &names, ParquetReadBindData &result, ParquetOptions &options) {
+	D_ASSERT(!options.schema.empty());
+
+	vector<string> schema_col_names;
+	vector<LogicalType> schema_col_types;
+	schema_col_names.reserve(options.schema.size());
+	schema_col_types.reserve(options.schema.size());
+	for (const auto &column : options.schema) {
+		schema_col_names.push_back(column.name);
+		schema_col_types.push_back(column.type);
+	}
+
+	// perform the binding on the obtained set of names + types
+	auto bind_data =
+	    MultiFileReader::BindOptions(options.file_options, result.files, schema_col_types, schema_col_names);
+
+	names = schema_col_names;
+	return_types = schema_col_types;
+	D_ASSERT(names.size() == return_types.size());
+
+	return bind_data;
+}
+
+static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBindData &bind_data,
+                                    const vector<column_t> &global_column_ids,
+                                    optional_ptr<TableFilterSet> table_filters, ClientContext &context) {
+	if (bind_data.parquet_options.schema.empty()) {
+		MultiFileReader::InitializeReader(reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
+		                                  bind_data.types, bind_data.names, global_column_ids, table_filters,
+		                                  bind_data.files[0], context);
+		return;
+	}
+
+	// a fixed schema was supplied, initialize the MultiFileReader settings here so we can read the schema
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -275,8 +312,16 @@ public:
 	                                                        ParquetOptions parquet_options) {
 		auto result = make_uniq<ParquetReadBindData>();
 		result->files = std::move(files);
-		result->reader_bind =
-		    MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names, *result, parquet_options);
+		if (parquet_options.schema.empty()) {
+			result->reader_bind = MultiFileReader::BindReader<ParquetReader>(context, result->types, result->names,
+			                                                                 *result, parquet_options);
+		} else {
+			// a schema was supplied
+			if (parquet_options.file_options.union_by_name) {
+				throw BinderException("Parquet schema cannot be combined with union_by_name=true");
+			}
+			result->reader_bind = BindSchema(context, result->types, result->names, *result, parquet_options);
+		}
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
@@ -310,6 +355,9 @@ public:
 				// Argument is a map that defines the schema
 				const auto &schema_value = kv.second;
 				const auto column_values = ListValue::GetChildren(schema_value);
+				if (column_values.empty()) {
+					throw BinderException("Parquet schema cannot be empty");
+				}
 				parquet_options.schema.reserve(column_values.size());
 				for (idx_t i = 0; i < column_values.size(); i++) {
 					parquet_options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(column_values[i]));
@@ -384,9 +432,7 @@ public:
 			if (!reader) {
 				continue;
 			}
-			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
-			                                  bind_data.types, bind_data.names, input.column_ids, input.filters,
-			                                  bind_data.files[0], context);
+			InitializeParquetReader(*reader, bind_data, input.column_ids, input.filters, context);
 		}
 
 		result->column_ids = input.column_ids;
@@ -581,10 +627,8 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
-					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
-					                                  parallel_state.column_ids, parallel_state.filters,
-					                                  bind_data.files.front(), context);
+					InitializeParquetReader(*reader, bind_data, parallel_state.column_ids, parallel_state.filters,
+					                        context);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
