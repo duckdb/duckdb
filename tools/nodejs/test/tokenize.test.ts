@@ -63,4 +63,12 @@ describe('tokenize', function () {
       types: [duckdb.TokenType.IDENTIFIER, duckdb.TokenType.NUMERIC_CONSTANT]
     });
   });
+  it('should support inverse TokenType mapping', function () {
+    assert.equal(duckdb.TokenType[duckdb.TokenType.IDENTIFIER], "IDENTIFIER");
+    assert.equal(duckdb.TokenType[duckdb.TokenType.NUMERIC_CONSTANT], "NUMERIC_CONSTANT");
+    assert.equal(duckdb.TokenType[duckdb.TokenType.STRING_CONSTANT], "STRING_CONSTANT");
+    assert.equal(duckdb.TokenType[duckdb.TokenType.OPERATOR], "OPERATOR");
+    assert.equal(duckdb.TokenType[duckdb.TokenType.KEYWORD], "KEYWORD");
+    assert.equal(duckdb.TokenType[duckdb.TokenType.COMMENT], "COMMENT");
+  });
 });
