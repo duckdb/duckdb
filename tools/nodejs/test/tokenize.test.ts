@@ -54,4 +54,13 @@ describe('tokenize', function () {
       types: [duckdb.TokenType.KEYWORD, duckdb.TokenType.NUMERIC_CONSTANT]
     });
   });
+  it('should handle invalid syntax', function () {
+    const db = new duckdb.Database(':memory:');
+    const output = db.tokenize(`selec 1`);
+    // The misspelled keyword is scanned as an identifier.
+    assert.deepStrictEqual(output, {
+      offsets: [0, 6],
+      types: [duckdb.TokenType.IDENTIFIER, duckdb.TokenType.NUMERIC_CONSTANT]
+    });
+  });
 });
