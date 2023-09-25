@@ -57,9 +57,7 @@ void ${CLASS_NAME}::Serialize(Serializer &serializer) const {
 ${MEMBERS}}
 '''
 
-serialize_element = (
-    '\tserializer.WriteProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
-)
+serialize_element = '\tserializer.WriteProperty<${PROPERTY_TYPE}>(${PROPERTY_ID}, "${PROPERTY_KEY}", ${PROPERTY_NAME}${PROPERTY_DEFAULT});\n'
 
 base_serialize = '\t${BASE_CLASS_NAME}::Serialize(serializer);\n'
 
