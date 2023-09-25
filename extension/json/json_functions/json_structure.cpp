@@ -489,22 +489,19 @@ ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                        idx_t depth, const idx_t sample_count) {
+                                        const double field_appearance_threshold, idx_t depth,
+                                        const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::LIST);
 	const auto &desc = node.descriptions[0];
 	D_ASSERT(desc.children.size() == 1);
 
-	return LogicalType::LIST(
-	    JSONStructure::StructureToType(context, desc.children[0], max_depth, depth + 1, desc.children[0].count));
+	return LogicalType::LIST(JSONStructure::StructureToType(
+	    context, desc.children[0], max_depth, field_appearance_threshold, depth + 1, desc.children[0].count));
 }
 
 static LogicalType StructureToTypeObject(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                         idx_t depth, const idx_t sample_count) {
-	// JSON can have wildly inconsistent schema's. We don't want to create a STRUCT for inconsistent JSON objects,
-	// as most of the fields will be NULL. If a JSON objects' fields occur in less than 10% of the objects on average,
-	// we consider it to be inconsistent, and default to the JSON type instead
-	static constexpr double CHILD_OCCURRENCE_TRESHOLD = 0.1;
-
+                                         const double field_appearance_threshold, idx_t depth,
+                                         const idx_t sample_count) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
 
@@ -519,7 +516,7 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 		total_child_counts += double(child.count) / sample_count;
 	}
 	const auto avg_occurrence = total_child_counts / desc.children.size();
-	if (avg_occurrence < CHILD_OCCURRENCE_TRESHOLD) {
+	if (avg_occurrence < field_appearance_threshold) {
 		return JSONCommon::JSONType();
 	}
 
@@ -528,7 +525,8 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
 	for (auto &child : desc.children) {
 		D_ASSERT(child.key);
 		child_types.emplace_back(*child.key,
-		                         JSONStructure::StructureToType(context, child, max_depth, depth + 1, sample_count));
+		                         JSONStructure::StructureToType(context, child, max_depth, field_appearance_threshold,
+		                                                        depth + 1, sample_count));
 	}
 	return LogicalType::STRUCT(child_types);
 }
@@ -543,7 +541,7 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 }
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
-                                           idx_t depth, idx_t sample_count) {
+                                           const double field_appearance_threshold, idx_t depth, idx_t sample_count) {
 	if (depth >= max_depth) {
 		return JSONCommon::JSONType();
 	}
@@ -558,9 +556,9 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	D_ASSERT(desc.type != LogicalTypeId::INVALID);
 	switch (desc.type) {
 	case LogicalTypeId::LIST:
-		return StructureToTypeArray(context, node, max_depth, depth, sample_count);
+		return StructureToTypeArray(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::STRUCT:
-		return StructureToTypeObject(context, node, max_depth, depth, sample_count);
+		return StructureToTypeObject(context, node, max_depth, field_appearance_threshold, depth, sample_count);
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:

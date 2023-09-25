@@ -37,10 +37,11 @@ void JSONScanData::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(106, "auto_detect", auto_detect);
 	serializer.WriteProperty(107, "sample_size", sample_size);
 	serializer.WriteProperty(108, "max_depth", max_depth);
-	serializer.WriteProperty(109, "transform_options", transform_options);
-	serializer.WriteProperty(110, "names", names);
-	serializer.WriteProperty(111, "date_format", GetDateFormat());
-	serializer.WriteProperty(112, "timestamp_format", GetTimestampFormat());
+	serializer.WriteProperty(109, "field_appearance_threshold", field_appearance_threshold);
+	serializer.WriteProperty(110, "transform_options", transform_options);
+	serializer.WriteProperty(111, "names", names);
+	serializer.WriteProperty(112, "date_format", GetDateFormat());
+	serializer.WriteProperty(113, "timestamp_format", GetTimestampFormat());
 }
 
 unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
@@ -53,10 +54,11 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	auto auto_detect = deserializer.ReadProperty<bool>(106, "auto_detect");
 	auto sample_size = deserializer.ReadProperty<idx_t>(107, "sample_size");
 	auto max_depth = deserializer.ReadProperty<idx_t>(108, "max_depth");
-	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(109, "transform_options");
-	auto names = deserializer.ReadProperty<vector<string>>(110, "names");
-	auto date_format = deserializer.ReadProperty<string>(111, "date_format");
-	auto timestamp_format = deserializer.ReadProperty<string>(112, "timestamp_format");
+	auto field_appearance_threshold = deserializer.ReadProperty<double>(109, "field_appearance_threshold");
+	auto transform_options = deserializer.ReadProperty<JSONTransformOptions>(110, "transform_options");
+	auto names = deserializer.ReadProperty<vector<string>>(111, "names");
+	auto date_format = deserializer.ReadProperty<string>(112, "date_format");
+	auto timestamp_format = deserializer.ReadProperty<string>(113, "timestamp_format");
 	auto result = duckdb::unique_ptr<JSONScanData>(new JSONScanData(deserializer.Get<ClientContext &>(), std::move(files), std::move(date_format), std::move(timestamp_format)));
 	result->type = type;
 	result->options = options;
@@ -66,6 +68,7 @@ unique_ptr<JSONScanData> JSONScanData::Deserialize(Deserializer &deserializer) {
 	result->auto_detect = auto_detect;
 	result->sample_size = sample_size;
 	result->max_depth = max_depth;
+	result->field_appearance_threshold = field_appearance_threshold;
 	result->transform_options = transform_options;
 	result->names = std::move(names);
 	return result;
