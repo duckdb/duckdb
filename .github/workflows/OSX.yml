@@ -28,6 +28,7 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: macos-latest
 
     env:
@@ -123,15 +124,18 @@ jobs:
 
       - name: Unit Test
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: make allunit
 
       - name: Tools Tests
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)
@@ -282,7 +286,7 @@ jobs:
 
       # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
       - name: Run tests with auto loading
-        if: ${{ matrix.osx_arch == 'x86_64' }}
+        if: ${{ matrix.osx_arch == 'x86_64' && !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         env:
           LOCAL_EXTENSION_REPO: ${{ github.workspace }}
