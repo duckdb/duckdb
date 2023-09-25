@@ -13,12 +13,22 @@ NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	query_result_constructor = node_duckdb::QueryResult::Init(env, exports);
 
 	auto token_type_enum = Napi::Object::New(env);
+
 	token_type_enum.Set("IDENTIFIER", 0);
 	token_type_enum.Set("NUMERIC_CONSTANT", 1);
 	token_type_enum.Set("STRING_CONSTANT", 2);
 	token_type_enum.Set("OPERATOR", 3);
 	token_type_enum.Set("KEYWORD", 4);
 	token_type_enum.Set("COMMENT", 5);
+	
+	// TypeScript enums expose an inverse mapping.
+	token_type_enum.Set(0, "IDENTIFIER");
+	token_type_enum.Set(1, "NUMERIC_CONSTANT");
+	token_type_enum.Set(2, "STRING_CONSTANT");
+	token_type_enum.Set(3, "OPERATOR");
+	token_type_enum.Set(4, "KEYWORD");
+	token_type_enum.Set(5, "COMMENT");
+
 	token_type_enum_ref = Napi::ObjectReference::New(token_type_enum);
 
 	exports.DefineProperties(
