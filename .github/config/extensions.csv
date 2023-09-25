@@ -14,5 +14,5 @@ substrait,https://github.com/duckdblabs/substrait,5d621b1d7d16fe86f8b1930870c8e6
 arrow,https://github.com/duckdblabs/arrow,1b5b9649d28cd7f79496fb3f2e4dd7b03bf90ac5,no-windows
 aws,https://github.com/duckdblabs/duckdb_aws,348ae2625de86ab760f80a43eb76e4441cd01354,
 azure,https://github.com/duckdblabs/azure,1fe568d3eb3c8842118e395ba8031e2a8566daed,
-spatial,https://github.com/duckdblabs/duckdb_spatial.git,529862db6b8d3ecd8e517457409896304d25e817,
+spatial,https://github.com/duckdblabs/duckdb_spatial.git,36e5a126976ac3b66716893360ef7e6295707082,
 iceberg,https://github.com/duckdblabs/duckdb_iceberg.git,51ba9564859698c29db4165f17143a2f6af2bb18,
