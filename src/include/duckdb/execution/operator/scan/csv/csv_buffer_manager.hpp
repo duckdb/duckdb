@@ -18,12 +18,13 @@ class CSVStateMachine;
 
 //! This class is used to manage the CSV buffers.  Buffers are cached when used for auto detection.
 //! When parsing, buffer are not cached and just returned.
+//! A CSV Buffer Managers, holds all buffers for all csv files used within a CSV Scanner
 class CSVBufferManager {
 public:
 	CSVBufferManager(ClientContext &context, const CSVReaderOptions &options, vector<string> &file_path);
 	//! Returns a buffer from a buffer id (starting from 0). If it's in the auto-detection then we cache new buffers
 	//! Otherwise we remove them from the cache if they are already there, or just return them bypassing the cache.
-	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t pos);
+	unique_ptr<CSVBufferHandle> GetBuffer(const idx_t file_idx, const idx_t pos);
 	//! Returns the starting position of the first buffer
 	idx_t GetStartPos();
 	//! unique_ptr to the file handle, gets stolen after sniffing
@@ -31,7 +32,7 @@ public:
 	//! Initializes the buffer manager, during it's construction/reset
 	void Initialize();
 
-	void UnpinBuffer(idx_t cache_idx);
+	void UnpinBuffer(const idx_t file_idx, const idx_t cache_idx);
 
 	ClientContext &context;
 	idx_t skip_rows = 0;
@@ -39,7 +40,7 @@ public:
 
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
-	bool ReadNextAndCacheIt();
+	bool ReadNextAndCacheIt(const idx_t file_idx);
 	vector<string> file_path;
 	vector<vector<shared_ptr<CSVBuffer>>> cached_buffers;
 	shared_ptr<CSVBuffer> last_buffer;

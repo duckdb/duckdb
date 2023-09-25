@@ -40,7 +40,7 @@ public:
 			if (cur_buffer_idx == 0) {
 				cur_pos = buffer_manager->GetStartPos();
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++);
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_file_idx, cur_buffer_idx++);
 			D_ASSERT(cur_buffer_handle);
 		}
 		while (cur_buffer_handle) {
@@ -53,7 +53,7 @@ public:
 				}
 				cur_pos++;
 			}
-			cur_buffer_handle = buffer_manager->GetBuffer(cur_buffer_idx++);
+			cur_buffer_handle = buffer_manager->GetBuffer(cur_file_idx, cur_buffer_idx++);
 			cur_pos = 0;
 		}
 		//! Done Processing the File
@@ -103,6 +103,7 @@ public:
 private:
 	idx_t cur_pos = 0;
 	idx_t cur_buffer_idx = 0;
+	idx_t cur_file_idx = 0;
 	shared_ptr<CSVBufferManager> buffer_manager;
 	unique_ptr<CSVBufferHandle> cur_buffer_handle;
 	unique_ptr<CSVStateMachine> state_machine;

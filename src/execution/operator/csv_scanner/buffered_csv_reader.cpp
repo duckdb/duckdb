@@ -28,14 +28,14 @@ namespace duckdb {
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, CSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
+    : BaseCSVReader(context, std::move(options_p)), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
+    : BaseCSVReader(context, std::move(options_p)), buffer_size(0), position(0), start(0) {
 	options.file_path = std::move(filename);
 	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
@@ -44,16 +44,18 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	if (options.auto_detect && options.file_options.union_by_name) {
 		// This is required for the sniffer to work on Union By Name
-		D_ASSERT(options.file_path == file_handle->GetFilePath());
-		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
-		auto csv_buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
-		CSVSniffer sniffer(options, csv_buffer_manager, state_machine_cache);
-		auto sniffer_result = sniffer.SniffCSV();
-		return_types = sniffer_result.return_types;
-		names = sniffer_result.names;
-		if (return_types.empty()) {
-			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
-		}
+		D_ASSERT(0);
+		//		D_ASSERT(options.file_path == file_handle->GetFilePath());
+		//		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
+		//		auto csv_buffer_manager = make_shared<CSVBufferManager>(context, options);
+		//		CSVSniffer sniffer(options, csv_buffer_manager, state_machine_cache);
+		//		auto sniffer_result = sniffer.SniffCSV();
+		//		return_types = sniffer_result.return_types;
+		//		names = sniffer_result.names;
+		//		if (return_types.empty()) {
+		//			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV
+		//file?");
+		//		}
 	} else {
 		return_types = requested_types;
 		ResetBuffer();

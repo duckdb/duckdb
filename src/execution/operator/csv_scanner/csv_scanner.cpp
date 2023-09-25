@@ -175,7 +175,7 @@ void CSVScanner::Reset() {
 		cur_buffer_handle.reset();
 	}
 	if (cur_buffer_idx > 0) {
-		buffer_manager->UnpinBuffer(cur_buffer_idx - 1);
+		buffer_manager->UnpinBuffer(cur_file_idx, cur_buffer_idx - 1);
 	}
 	cur_buffer_idx = 0;
 	buffer_manager->Initialize();

@@ -96,6 +96,5 @@ struct ParseChunk {
 		}
 		parse_chunk.SetCardinality(scanner.cur_rows);
 	}
-}
 };
-}
+} // namespace duckdb

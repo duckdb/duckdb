@@ -25,17 +25,17 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	Initialize();
 }
 
-void CSVBufferManager::UnpinBuffer(idx_t cache_idx) {
-	if (cache_idx < cached_buffers.size()) {
-		cached_buffers[cache_idx]->Unpin();
+void CSVBufferManager::UnpinBuffer(const idx_t file_idx, const idx_t cache_idx) {
+	if (file_idx < cached_buffers.size() && cache_idx < cached_buffers[file_idx].size()) {
+		cached_buffers[file_idx][cache_idx]->Unpin();
 	}
 }
 
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
-		cached_buffers.emplace_back(
-		    make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
-		last_buffer = cached_buffers.front();
+		cached_buffers.resize(file_path.size());
+		cached_buffers[0].emplace_back(make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0));
+		last_buffer = cached_buffers.front().front();
 	}
 	start_pos = last_buffer->GetStart();
 }
@@ -43,7 +43,7 @@ void CSVBufferManager::Initialize() {
 idx_t CSVBufferManager::GetStartPos() {
 	return start_pos;
 }
-bool CSVBufferManager::ReadNextAndCacheIt() {
+bool CSVBufferManager::ReadNextAndCacheIt(const idx_t file_idx) {
 	D_ASSERT(last_buffer);
 	if (!last_buffer->IsCSVFileLastBuffer()) {
 		auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, file_idx);
@@ -52,25 +52,25 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 			return false;
 		}
 		last_buffer = std::move(maybe_last_buffer);
-		cached_buffers.emplace_back(last_buffer);
+		cached_buffers[file_idx].emplace_back(last_buffer);
 		return true;
 	}
 	return false;
 }
 
-unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t pos) {
-	while (pos >= cached_buffers.size()) {
+unique_ptr<CSVBufferHandle> CSVBufferManager::GetBuffer(const idx_t file_idx, const idx_t pos) {
+	while (pos >= cached_buffers[file_idx].size()) {
 		if (done) {
 			return nullptr;
 		}
-		if (!ReadNextAndCacheIt()) {
+		if (!ReadNextAndCacheIt(file_idx)) {
 			done = true;
 		}
 	}
 	if (pos != 0) {
-		cached_buffers[pos - 1]->Unpin();
+		cached_buffers[file_idx][pos - 1]->Unpin();
 	}
-	return cached_buffers[pos]->Pin(*file_handle);
+	return cached_buffers[file_idx][pos]->Pin(*file_handle);
 }
 
 } // namespace duckdb

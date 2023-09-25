@@ -59,8 +59,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	csv_options.FromNamedParameters(options, *context, unused_types, unused_names);
 	// Run the auto-detect, populating the options with the detected settings
 
-	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, csv_options);
-	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), csv_options);
+	auto buffer_manager = make_shared<CSVBufferManager>(*context, csv_options, files);
 	CSVStateMachineCache state_machine_cache;
 	CSVSniffer sniffer(csv_options, buffer_manager, state_machine_cache);
 	auto sniffer_result = sniffer.SniffCSV();
