@@ -28,7 +28,6 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: macos-latest
 
     env:
@@ -58,12 +57,14 @@ jobs:
       run: GEN=ninja make debug
 
     - name: Test
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
       run: |
           echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
           make unittestci
 
     - name: Amalgamation
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       shell: bash
       run: |
         python scripts/amalgamation.py --extended
