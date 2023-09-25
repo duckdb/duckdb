@@ -90,10 +90,10 @@ static catalog_entry_vector_t GetCatalogEntries(vector<reference<SchemaCatalogEn
 		// Reorder tables because of foreign key constraint
 		ReorderTableEntries(tables);
 		for (auto &table : tables) {
-			entries.push_back(table);
+			entries.push_back(table.get());
 		}
 		for (auto &view : views) {
-			entries.push_back(view);
+			entries.push_back(view.get());
 		}
 
 		schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry &entry) {
