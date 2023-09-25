@@ -78,18 +78,18 @@ jobs:
 
     - name: Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: make allunit
 
     - name: Tools Tests
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: |
         python3.7 -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
     - name: Examples
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: |
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
@@ -250,7 +250,7 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension functions
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-extensions-64
     env:
@@ -299,7 +299,7 @@ jobs:
 
  symbol-leakage:
     name: Symbol Leakage
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
 
@@ -328,7 +328,7 @@ jobs:
 
  linux-httpfs:
     name: Linux HTTPFS
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-release-64
     env:
@@ -386,7 +386,7 @@ jobs:
 
  amalgamation-tests:
     name: Amalgamation Tests
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     needs: linux-release-64
     runs-on: ubuntu-20.04
     env:

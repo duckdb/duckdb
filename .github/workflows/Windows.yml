@@ -68,14 +68,14 @@ jobs:
 
     - name: Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: |
         echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
         test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
-      if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+      if: ${{ startsWith(github.ref, 'refs/tags/v') }}
       run: |
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
@@ -183,7 +183,7 @@ jobs:
  mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
-     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
      needs: win-release-64
      steps:
        - uses: actions/checkout@v3

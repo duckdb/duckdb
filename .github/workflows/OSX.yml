@@ -28,7 +28,7 @@ env:
 jobs:
   xcode-debug:
     name: OSX Debug
-    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: macos-latest
 
     env:
@@ -124,18 +124,18 @@ jobs:
 
       - name: Unit Test
         shell: bash
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: make allunit
 
       - name: Tools Tests
         shell: bash
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           python -m pytest tools/shell/tests --shell-binary build/release/duckdb
 
       - name: Examples
         shell: bash
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           (cd examples/embedded-c; make)
           (cd examples/embedded-c++; make)
