@@ -362,7 +362,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		}
 
 		auto final_buffer = target_handle.Ptr();
-		StringVector::AddHandle(result, move(target_handle));
+		StringVector::AddHandle(result, std::move(target_handle));
 		return ReadString(final_buffer, 0, length);
 	} else {
 		// read the overflow string from memory
