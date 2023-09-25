@@ -30,7 +30,8 @@ NodeDuckDB::NodeDuckDB(Napi::Env env, Napi::Object exports) {
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_SHAREDCACHE)                      // ignored
 	    DEFINE_CONSTANT_INTEGER(exports, 0, OPEN_PRIVATECACHE)                     // ignored
 
-			Napi::PropertyDescriptor::Value("TokenType", token_type_enum, static_cast<napi_property_attributes>(napi_enumerable | napi_configurable))
+	    Napi::PropertyDescriptor::Value("TokenType", token_type_enum,
+	        static_cast<napi_property_attributes>(napi_enumerable | napi_configurable))
 	});
 }
 

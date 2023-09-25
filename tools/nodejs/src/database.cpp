@@ -20,7 +20,7 @@ Napi::FunctionReference Database::Init(Napi::Env env, Napi::Object exports) {
 	     InstanceMethod("serialize", &Database::Serialize), InstanceMethod("parallelize", &Database::Parallelize),
 	     InstanceMethod("connect", &Database::Connect), InstanceMethod("interrupt", &Database::Interrupt),
 	     InstanceMethod("registerReplacementScan", &Database::RegisterReplacementScan),
-			 InstanceMethod("tokenize", &Database::Tokenize)});
+	     InstanceMethod("tokenize", &Database::Tokenize)});
 
 	exports.Set("Database", t);
 
