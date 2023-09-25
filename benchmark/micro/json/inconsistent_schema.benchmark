@@ -1,6 +1,6 @@
 # name: benchmark/micro/json/inconsistent_schema.benchmark
 # description: Read JSON file with inconsistent schema
-# group: [join]
+# group: [json]
 
 name JSON inconsistent schema
 group json
