@@ -16,7 +16,7 @@ add_definitions(-DDUCKDB_ROOT_DIRECTORY="${PROJECT_SOURCE_DIR}")
 add_executable(benchmark_runner benchmark_runner.cpp interpreted_benchmark.cpp
                                 ${BENCHMARK_OBJECT_FILES})
 
-target_link_libraries(benchmark_runner duckdb imdb test_helpers)
+target_link_libraries(benchmark_runner duckdb imdb test_helpers tpch_extension)
 
 if(${BUILD_TPCE})
   target_link_libraries(benchmark_runner tpce)
