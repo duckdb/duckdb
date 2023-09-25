@@ -70,7 +70,7 @@ jobs:
 
       - name: Java Tests
         shell: bash
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
           org.duckdb.test.TestDuckDBJDBC
@@ -156,7 +156,7 @@ jobs:
 
           cmake --build . --config Release
       - name: Java Tests
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: |
           java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
@@ -198,7 +198,7 @@ jobs:
         shell: bash
         run: make
       - name: Java Tests
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         shell: bash
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
@@ -290,7 +290,7 @@ jobs:
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     needs: java-linux-amd64
     container: quay.io/pypa/manylinux2014_x86_64
     env:

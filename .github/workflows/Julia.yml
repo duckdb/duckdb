@@ -39,7 +39,7 @@ concurrency:
 jobs:
   format_check:
     name: Julia Format Check
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -60,7 +60,7 @@ jobs:
 
   main_julia:
     name: Julia ${{ matrix.version }}
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

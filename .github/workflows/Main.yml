@@ -38,7 +38,7 @@ env:
 jobs:
  linux-debug:
     name: Linux Debug
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     env:
       CC: gcc-10
@@ -75,7 +75,7 @@ jobs:
 
  force-storage:
     name: Force Storage
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -118,7 +118,7 @@ jobs:
 
  force-restart:
     name: Force Restart
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -161,7 +161,7 @@ jobs:
 
  valgrind:
     name: Valgrind
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -196,7 +196,7 @@ jobs:
 
  docs:
     name: Website Docs
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     needs: linux-debug
     steps:
@@ -221,7 +221,7 @@ jobs:
 
  odbc:
     name: ODBC
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     needs: linux-debug
     env:

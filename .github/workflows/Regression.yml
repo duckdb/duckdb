@@ -40,7 +40,7 @@ jobs:
  regression-test-benchmark-runner:
   name: Regression Tests
   runs-on: ubuntu-20.04
-  if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -129,7 +129,7 @@ jobs:
  regression-test-storage:
   name: Storage Size Regression Test
   runs-on: ubuntu-20.04
-  if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -211,7 +211,7 @@ jobs:
  regression-test-python:
   name: Regression Test (Python Client)
   runs-on: ubuntu-20.04
-  if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
@@ -279,7 +279,7 @@ jobs:
  regression-test-plan-cost:
   name: Regression Test Join Order Plan Cost
   runs-on: ubuntu-20.04
-  if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+  if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
   env:
     CC: gcc-10
     CXX: g++-10
