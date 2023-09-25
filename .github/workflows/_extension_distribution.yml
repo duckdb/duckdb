@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: "[]"
+      # Allows overriding the default s3 deploy script with a custom script
+      deploy_script:
+        require: false
+        type: string
+        default: "./duckdb/scripts/extension-upload-oote.sh"
 jobs:
   linux:
     name: Release
@@ -130,24 +135,22 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DEPLOY_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
           BUCKET_NAME: ${{ secrets.S3_BUCKET }}
+          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
+          # Catchall for secrets, allows overriding the deploy script with a custom one
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
           git config --global --add safe.directory '*'
           cd duckdb
           git fetch --tags
           export DUCKDB_VERSION=`git tag --points-at HEAD`
           export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
-          echo "hi"
-          echo "$DUCKDB_VERSION"
-          echo "$BUCKET_NAME"
           cd ..
-          if [[ "$AWS_ACCESS_KEY_ID" == "" ]] ; then
-            echo 'No key set, skipping'
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
+          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
             python3 -m pip install pip awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
           elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
             python3 -m pip install pip awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
           fi
 
   macos:
@@ -227,6 +230,8 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
           BUCKET_NAME: ${{ secrets.S3_BUCKET }}
           DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
+          # Catchall for secrets, allows overriding the deploy script with a custom one
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
           git config --global --add safe.directory '*'
           cd duckdb
@@ -234,14 +239,12 @@ jobs:
           export DUCKDB_VERSION=`git tag --points-at HEAD`
           export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
           cd ..
-          if [[ "$AWS_ACCESS_KEY_ID" == "" ]] ; then
-            echo 'No key set, skipping'
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
+          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
             python3 -m pip install pip awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME true
           elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
             python3 -m pip install pip awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{matrix.duckdb_arch}} $BUCKET_NAME false
           fi
 
   windows:
@@ -256,6 +259,8 @@ jobs:
             vcpkg_triplet: 'x64-windows-static-md'
     env:
       GEN: Ninja
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
     steps:
       - uses: actions/checkout@v3
@@ -276,6 +281,11 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}-${{ matrix.duckdb_arch }}
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
       - name: Build extension
         run: |
@@ -300,6 +310,9 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DEPLOY_KEY }}
           AWS_DEFAULT_REGION: ${{ secrets.S3_REGION }}
           BUCKET_NAME: ${{ secrets.S3_BUCKET }}
+          DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_KEY }}
+          # Catchall for secrets, allows overriding the deploy script with a custom one
+          SECRETS_CONTEXT: ${{ toJson(secrets) }}
         run: |
           git config --global --add safe.directory '*'
           cd duckdb
@@ -307,12 +320,10 @@ jobs:
           export DUCKDB_VERSION=`git tag --points-at HEAD`
           export DUCKDB_VERSION=${DUCKDB_VERSION:=`git log -1 --format=%h`}
           cd ..
-          if [[ "$AWS_ACCESS_KEY_ID" == "" ]] ; then
-            echo 'No key set, skipping'
-          elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
+          if [[ "${{ inputs.extension_ref }}" =~ ^(refs/tags/v.+)$ ]] ; then
             python -m pip install awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME true 
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} ${{ inputs.extension_ref }} $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME true 
           elif [[ "${{ inputs.extension_ref }}" =~ ^(refs/heads/main)$ ]] ; then
             python -m pip install awscli
-            ./scripts/extension-upload.sh ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME false 
+            ${{ inputs.deploy_script }} ${{ inputs.extension_name }} `git log -1 --format=%h` $DUCKDB_VERSION ${{ matrix.duckdb_arch }} $BUCKET_NAME false 
           fi
