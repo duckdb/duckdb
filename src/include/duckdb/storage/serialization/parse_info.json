@@ -174,8 +174,7 @@
       {
         "id": 401,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },

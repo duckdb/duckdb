@@ -153,14 +153,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_val", "offset_val", "limit", "offset"]
@@ -224,8 +222,7 @@
       {
         "id": 202,
         "name": "order_by",
-        "type": "BoundOrderModifier*",
-        "optional": true
+        "type": "BoundOrderModifier*"
       }
     ],
     "constructor": ["distinct_targets", "distinct_type"]
@@ -260,14 +257,12 @@
       {
         "id": 202,
         "name": "limit",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 203,
         "name": "offset",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       }
     ],
     "constructor": ["limit_percent", "offset_val", "limit", "offset"]
@@ -619,14 +614,12 @@
       {
         "id": 210,
         "name": "on_conflict_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 211,
         "name": "do_update_condition",
-        "type": "Expression*",
-        "optional": true
+        "type": "Expression*"
       },
       {
         "id": 212,

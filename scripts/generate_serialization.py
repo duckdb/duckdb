@@ -252,7 +252,6 @@ supported_member_entries = [
     'property',
     'serialize_property',
     'deserialize_property',
-    'optional',
     'base',
     'default',
     'deleted',
@@ -292,8 +291,6 @@ class MemberVariable:
             self.serialize_property = entry['serialize_property']
         if 'deserialize_property' in entry:
             self.deserialize_property = entry['deserialize_property']
-        if 'optional' in entry:
-            self.has_default = True
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']

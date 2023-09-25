@@ -16,8 +16,7 @@
         "id": 101,
         "name": "type_info",
         "type": "shared_ptr<ExtraTypeInfo>",
-        "serialize_property": "type_info_",
-        "optional": true
+        "serialize_property": "type_info_"
       }
     ],
     "pointer_type": "none",
@@ -217,8 +216,7 @@
       {
         "id": 101,
         "name": "star_expr",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 102,
@@ -276,8 +274,7 @@
       {
         "id": 102,
         "name": "expression",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 103,

@@ -36,14 +36,12 @@
       {
         "id": 201,
         "name": "from_table",
-        "type": "TableRef*",
-        "optional": true
+        "type": "TableRef*"
       },
       {
         "id": 202,
         "name": "where_clause",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 203,
@@ -65,20 +63,17 @@
       {
         "id": 206,
         "name": "having",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       },
       {
         "id": 207,
         "name": "sample",
-        "type": "SampleOptions*",
-        "optional": true
+        "type": "SampleOptions*"
       },
       {
         "id": 208,
         "name": "qualify",
-        "type": "ParsedExpression*",
-        "optional": true
+        "type": "ParsedExpression*"
       }
     ]
   },
