@@ -101,7 +101,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	info.options["quote"] = {""};
 	info.options["escape"] = {""};
 	info.options["delimiter"] = {"\n"};
-	info.options["header"] = {0};
+	info.options["header"] = {{0}};
 
 	return binder.Bind(*stmt_copy);
 }

@@ -5503,6 +5503,8 @@ const char* EnumUtil::ToChars<StrTimeSpecifier>(StrTimeSpecifier value) {
 		return "LOCALE_APPROPRIATE_DATE";
 	case StrTimeSpecifier::LOCALE_APPROPRIATE_TIME:
 		return "LOCALE_APPROPRIATE_TIME";
+	case StrTimeSpecifier::NANOSECOND_PADDED:
+		return "NANOSECOND_PADDED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -5605,6 +5607,9 @@ StrTimeSpecifier EnumUtil::FromString<StrTimeSpecifier>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "LOCALE_APPROPRIATE_TIME")) {
 		return StrTimeSpecifier::LOCALE_APPROPRIATE_TIME;
+	}
+	if (StringUtil::Equals(value, "NANOSECOND_PADDED")) {
+		return StrTimeSpecifier::NANOSECOND_PADDED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

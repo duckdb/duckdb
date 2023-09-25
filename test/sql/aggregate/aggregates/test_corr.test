@@ -2,6 +2,9 @@
 # description: Test CORR operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 #Corner cases
 statement error
 select corr()
@@ -26,7 +29,7 @@ statement ok
 insert into aggr values(1, 10, null),(2, 10, 11), (2, 20, 22), (2, 25, null), (2, 30, 35);
 
 query II
-select k, corr(v, v2) from aggr group by k;
+select k, corr(v, v2) from aggr group by k ORDER BY ALL;
 ----
 1	NULL
 2	0.9988445981
