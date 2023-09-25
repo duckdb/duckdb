@@ -244,4 +244,5 @@ jobs:
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
          run_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+         run_autoload_tests: ${{ !startsWith(github.ref, 'refs/tags/v') }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
