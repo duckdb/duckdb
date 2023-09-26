@@ -73,7 +73,10 @@ Binder Error: No function matches the given name and argument types 'cos(INTEGER
 statement error
 SELECT * FROM RANG();
 ----
-PLACEHOLDER_ERROR_MESSAGE3087
+Catalog Error: Table Function with name rang does not exist!
+Did you mean "range"?
+LINE 1: SELECT * FROM RANG();
+                      ^
 
 # unknown named parameters
 statement error

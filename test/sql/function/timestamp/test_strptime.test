@@ -344,7 +344,10 @@ Error: Expected +HH[MM] or -HH[MM]
 statement error
 SELECT strptime('2018-20-10', '%Y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2465
+Invalid Input Error: Could not parse string "2018-20-10" according to format specifier "%Y-%m-%d"
+2018-20-10
+     ^
+Error: Month out of range, expected a value between 1 and 12
 
 # day out of range
 statement error

@@ -188,7 +188,7 @@ Catalog Error: Macro Function with name "IFELSE" already exists!
 statement error
 CREATE MACRO ifelse(a,b) AS a+b
 ----
-PLACEHOLDER_ERROR_MESSAGE1838
+Catalog Error: Macro Function with name "ifelse" already exists!
 
 query T
 SELECT IFELSE(1, 'random', RANDOM())

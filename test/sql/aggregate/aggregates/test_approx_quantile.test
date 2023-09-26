@@ -299,7 +299,7 @@ Binder Error: RESERVOIR_QUANTILE can only take constant quantile parameters
 statement error
 SELECT reservoir_quantile(r, NULL)  from quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1543
+Binder Error: RESERVOIR_QUANTILE QUANTILE parameter cannot be NULL
 
 statement error
 SELECT reservoir_quantile(r, r, r)  from quantile

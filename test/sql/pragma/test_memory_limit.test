@@ -142,4 +142,4 @@ Did you mean "version"?
 statement error
 PRAGMA memory_limit='blabla'
 ----
-PLACEHOLDER_ERROR_MESSAGE1962
+Parser Error: Memory limit must have a number (e.g. SET memory_limit=1GB

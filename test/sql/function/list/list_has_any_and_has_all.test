@@ -282,7 +282,8 @@ Binder Error: No function matches the given name and argument types 'list_contai
 statement error
 select 'hello' <@ l1 from tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE2255
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.l1", "tbl.l2"
 
 query I
 select l1 @> NULL from tbl;

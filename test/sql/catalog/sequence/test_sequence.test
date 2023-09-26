@@ -423,7 +423,7 @@ SELECT currval('"a"."seq"'), currval('"b".seq');
 statement error
 SELECT nextval('"a"."seq');
 ----
-PLACEHOLDER_ERROR_MESSAGE1924
+Parser Error: Unterminated quote in qualified name!
 
 # too many separators
 statement error

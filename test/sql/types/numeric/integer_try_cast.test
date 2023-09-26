@@ -157,7 +157,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 statement error
 SELECT s::INTEGER FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE808
+Conversion Error: Could not convert string '   ' to INT32
 
 query I
 SELECT TRY_CAST(s AS INTEGER) FROM strings

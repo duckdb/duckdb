@@ -209,7 +209,7 @@ Conversion Error: Could not cast value -128 to DECIMAL(18,16)
 statement error
 SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE711
+Conversion Error: Could not cast value -128 to DECIMAL(38,36)
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i

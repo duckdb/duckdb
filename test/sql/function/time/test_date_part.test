@@ -123,7 +123,8 @@ Candidate bindings: "times.d", "times.s"
 statement error
 SELECT dayofweek(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2064
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT isodow(i) FROM times

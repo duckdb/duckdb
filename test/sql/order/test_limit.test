@@ -283,7 +283,7 @@ Invalid Input Error: Type INT32 with value -1 can't be cast because the value is
 statement error
 SELECT * FROM t ORDER BY x OFFSET (SELECT -1);
 ----
-PLACEHOLDER_ERROR_MESSAGE180
+Invalid Input Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
 
 statement ok
 create table t0(c0 int);

@@ -221,7 +221,7 @@ COMMIT
 statement error con2
 INSERT INTO t VALUES(2, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2598
+Constraint Error: NOT NULL constraint failed: t.j
 
 query I con1
 SELECT count(*) from t

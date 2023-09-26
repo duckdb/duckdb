@@ -74,7 +74,7 @@ DELETE FROM fkt1 WHERE k1=1
 statement error
 DELETE FROM pkt1 WHERE i1=1
 ----
-PLACEHOLDER_ERROR_MESSAGE1360
+Constraint Error: Violates foreign key constraint because key "k2: 11" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM fkt2 WHERE k2=11

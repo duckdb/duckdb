@@ -61,7 +61,7 @@ Binder Error: No function matches the given name and argument types 'list_transf
 statement error
 SELECT ${func_name}(NULL, x -> y)
 ----
-PLACEHOLDER_ERROR_MESSAGE2141
+Binder Error: Referenced column "y" not found in FROM clause!
 
 statement error
 SELECT ${func_name}([1])

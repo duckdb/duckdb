@@ -83,7 +83,7 @@ ALTER TABLE employee RENAME COLUMN name TO name_new;
 statement error
 ALTER TABLE employee ALTER COLUMN id SET DATA TYPE TEXT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1371
+Binder Error: Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified
 
 statement ok
 ALTER TABLE employee ALTER COLUMN name_new SET DATA TYPE TEXT;

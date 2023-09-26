@@ -90,7 +90,7 @@ NULL
 statement error
 SELECT CAST(1000000 AS DECIMAL(5,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE393
+Conversion Error: Could not cast value 1000000 to DECIMAL(5,0)
 
 statement error
 SELECT CAST('100000' AS DECIMAL(5,0))

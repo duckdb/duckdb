@@ -68,5 +68,5 @@ Conversion Error: date field value out of range: "-100000000-01-01", expected fo
 statement error
 INSERT INTO dates VALUES ('1000000000-01-01')
 ----
-PLACEHOLDER_ERROR_MESSAGE540
+Conversion Error: date field value out of range: "1000000000-01-01", expected format is (YYYY-MM-DD)
 

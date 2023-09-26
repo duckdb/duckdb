@@ -130,7 +130,7 @@ Conversion Error: Could not convert string '99999999999999' to INT32
 statement error
 SELECT interval '214748364' years;
 ----
-PLACEHOLDER_ERROR_MESSAGE495
+Out of Range Error: Interval value 214748364 years out of range
 
 statement error
 SELECT interval '9223372036854775807' hours;

@@ -233,7 +233,7 @@ Conversion Error: Could not convert string '-years' to INTERVAL
 statement error
 SELECT INTERVAL 'aergjaerghiuaehrgiuhaerg';
 ----
-PLACEHOLDER_ERROR_MESSAGE530
+Conversion Error: Could not convert string 'aergjaerghiuaehrgiuhaerg' to INTERVAL
 
 # overflow in year
 statement error

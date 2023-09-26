@@ -82,7 +82,7 @@ select '5877642-06-25 (BC)'::date + interval (1) day
 statement error
 select '5877642-06-25 (BC)'::date - interval (1) day
 ----
-PLACEHOLDER_ERROR_MESSAGE637
+Out of Range Error: Date out of range
 
 statement error
 select '5877642-06-25 (BC)'::date - interval (365) day

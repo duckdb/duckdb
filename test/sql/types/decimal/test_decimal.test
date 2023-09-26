@@ -150,4 +150,6 @@ Parser Error: A maximum of two modifiers is supported
 statement error
 SELECT '1'::INTEGER(1000);
 ----
-PLACEHOLDER_ERROR_MESSAGE357
+Parser Error: syntax error at or near "("
+LINE 1: SELECT '1'::INTEGER(1000);
+                           ^

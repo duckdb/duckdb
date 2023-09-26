@@ -103,7 +103,7 @@ SELECT
     GROUPING(Product_Name)
 FROM tbl_ProductSales GROUP BY ()
 ----
-PLACEHOLDER_ERROR_MESSAGE166
+Binder Error: GROUPING statement cannot be used without groups
 
 query I rowsort
 SELECT

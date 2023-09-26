@@ -158,7 +158,7 @@ SELECT i::DECIMAL(38,0)::UINTEGER FROM uintegers ORDER BY i
 statement error
 SELECT i::DECIMAL(18,9)::UINTEGER FROM uintegers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE773
+Conversion Error: Could not cast value 4294967295 to DECIMAL(18,9)
 
 statement error
 SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i

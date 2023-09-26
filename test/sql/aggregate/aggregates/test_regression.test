@@ -105,7 +105,9 @@ Binder Error: No function matches the given name and argument types 'regr_slope(
 statement error
 select regr_r2()
 ----
-PLACEHOLDER_ERROR_MESSAGE1599
+Binder Error: No function matches the given name and argument types 'regr_r2()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_r2(DOUBLE, DOUBLE) -> DOUBLE
 
 query I
 select regr_r2(NULL,NULL)

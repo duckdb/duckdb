@@ -47,7 +47,7 @@ IO Error: UINT64 converted type can only be set for value of Type::INT64
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
 ----
-PLACEHOLDER_ERROR_MESSAGE2948
+IO Error: UINT32 converted type can only be set for value of Type::INT32
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';

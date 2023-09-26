@@ -313,7 +313,7 @@ SELECT '{ok=happy, sad=ok}'::MAP(MOOD, MOOD)
 statement error
 SELECT '{sadDucky: nothappy}'::MAP(VARCHAR, MOOD)
 ----
-PLACEHOLDER_ERROR_MESSAGE1497
+Conversion Error: Type VARCHAR with value '{sadDucky: nothappy}' can't be cast to the destination type MAP
 
 #               Larger input test
 # ---------------------------------------------------

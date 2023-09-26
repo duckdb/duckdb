@@ -355,7 +355,7 @@ Conversion Error: Type VARCHAR with value '{{b:1}}' can't be cast to the destina
 statement error
 SELECT CAST('{a: 3 1}' AS STRUCT(a INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1450
+Conversion Error: Could not convert string '3 1' to INT32
 
 statement error
 SELECT CAST('{a:3,, b:1}' AS STRUCT(a INT, b INT));

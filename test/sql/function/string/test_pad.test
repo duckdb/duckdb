@@ -127,7 +127,7 @@ Binder Error: No function matches the given name and argument types 'rpad(INTEGE
 statement error
 select RPAD('Hello', 10, '')
 ----
-PLACEHOLDER_ERROR_MESSAGE2314
+Invalid Error: Insufficient padding in RPAD.
 
 statement error
 select RPAD('a', 100000000000000000, 0)

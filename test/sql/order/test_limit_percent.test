@@ -177,7 +177,7 @@ Conversion Error: Unimplemented type for cast (DATE -> DOUBLE)
 statement error
 select * from test limit "Hello World" %;
 ----
-PLACEHOLDER_ERROR_MESSAGE202
+Binder Error: Referenced column "Hello World" not found in FROM clause!
 
 #LIMIT % with strings
 statement ok

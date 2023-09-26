@@ -66,7 +66,7 @@ Conversion Error: Failed to cast decimal value 2147483648 to type INT32
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::INTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE285
+Conversion Error: Failed to cast decimal value 14751947891758972421513 to type INT32
 
 # bigint
 query IIIII

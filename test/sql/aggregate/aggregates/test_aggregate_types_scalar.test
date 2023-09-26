@@ -116,7 +116,10 @@ SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-
 statement error
 SELECT MAX()
 ----
-PLACEHOLDER_ERROR_MESSAGE1628
+Binder Error: No function matches the given name and argument types 'max()'. You might need to add explicit type casts.
+	Candidate functions:
+	max(DECIMAL) -> DECIMAL
+	max(ANY) -> ANY
 
 statement error
 SELECT MAX(1, 2)

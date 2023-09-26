@@ -42,7 +42,7 @@ INSERT INTO t0 VALUES (42);
 statement error
 ALTER TABLE t0 ADD COLUMN c0 int;
 ----
-PLACEHOLDER_ERROR_MESSAGE2708
+Catalog Error: Column with name c0 already exists!
 
 # Alter existing table with new column
 statement ok

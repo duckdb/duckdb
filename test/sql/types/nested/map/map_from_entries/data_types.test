@@ -194,7 +194,7 @@ select col['1992-09-20'::DATE] from date_key;
 statement error
 create table date_key_dup as select MAP_FROM_ENTRIES(ARRAY[('1992-09-20'::DATE, 'x'), ('1992-09-20'::DATE, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE879
+Invalid Input Error: Map keys have to be unique
 
 # -- DOUBLE --
 # Valid

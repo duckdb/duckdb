@@ -100,7 +100,7 @@ SELECT 42::TINYINT::UBIGINT, 42::SMALLINT::UBIGINT, 42::INTEGER::UBIGINT, 42::BI
 statement error
 SELECT (9223372036854775807)::BIGINT::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE468
+Conversion Error: Type INT64 with value 9223372036854775807 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT (9223372036854775807)::BIGINT::USMALLINT

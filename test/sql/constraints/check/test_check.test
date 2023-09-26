@@ -79,7 +79,7 @@ Binder Error: Table does not contain column k referenced in check constraint!
 statement error
 CREATE TABLE integers3(i INTEGER CHECK(integers2.i < 10), j INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1264
+Binder Error: Cannot extract field 'integers2' from expression "#0" because it is not a struct or a union
 
 statement ok
 CREATE TABLE integers4(i INTEGER CHECK(integers4.i < 10), j INTEGER)

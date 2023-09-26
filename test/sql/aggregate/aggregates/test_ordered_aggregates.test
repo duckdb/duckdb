@@ -162,7 +162,7 @@ Binder Error: Empty list in percentile not allowed
 statement error
 select mode(0.25) within group(order by i) from generate_series(0,100) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1693
+Parser Error: Wrong number of arguments for MODE
 
 # No function matches the given name and argument types 'quantile_disc(BIGINT, VARCHAR)'
 statement error

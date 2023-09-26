@@ -191,7 +191,7 @@ Binder Error: No function matches the given name and argument types 'struct_extr
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), 'zz') FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE858
+Binder Error: Could not find key "zz" in struct
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g)) FROM struct_data

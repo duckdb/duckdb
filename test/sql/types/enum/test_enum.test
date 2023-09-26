@@ -146,7 +146,7 @@ select ['happy','ok','ok']::mood[]
 statement error
 select ['bla']::mood[]
 ----
-PLACEHOLDER_ERROR_MESSAGE652
+Conversion Error: Could not convert string 'bla' to UINT8
 
 statement error
 select [1]::mood[]

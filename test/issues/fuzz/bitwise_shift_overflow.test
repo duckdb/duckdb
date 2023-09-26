@@ -80,7 +80,7 @@ SELECT 1000::integer<<21::integer;
 statement error
 SELECT 1000::bigint<<54::bigint;
 ----
-PLACEHOLDER_ERROR_MESSAGE155
+Out of Range Error: Overflow in left shift (1000 << 54)
 
 query I
 SELECT 1000::bigint<<53::bigint;

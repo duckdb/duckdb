@@ -142,7 +142,11 @@ Binder Error: No function matches the given name and argument types 'dayofweek(T
 statement error
 SELECT EXTRACT(isodow FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2076
+Binder Error: No function matches the given name and argument types 'isodow(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	isodow(DATE) -> BIGINT
+	isodow(TIMESTAMP) -> BIGINT
+	isodow(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(dayofyear FROM i) FROM times

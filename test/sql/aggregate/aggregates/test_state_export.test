@@ -186,7 +186,9 @@ Binder Error: No function matches the given name and argument types 'finalize(IN
 statement error
 SELECT finalize(sum(d)) from dummy;
 ----
-PLACEHOLDER_ERROR_MESSAGE1675
+Binder Error: No function matches the given name and argument types 'finalize(HUGEINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	finalize(AGGREGATE_STATE<?>) -> INVALID
 
 statement error
 SELECT finalize(sum(d)) from dummy group by g;

@@ -87,7 +87,7 @@ Conversion Error: Could not convert string '0b1_0_' to INT32
 statement error
 SELECT '${prefix}_1_0'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1485
+Conversion Error: Could not convert string '0b_1_0' to INT32
 
 
 # Property check! 

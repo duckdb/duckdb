@@ -121,7 +121,7 @@ Conversion Error: Type INT128 with value 100000 can't be cast because the value 
 statement error
 SELECT 32768::HUGEINT::SMALLINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1032
+Conversion Error: Type INT128 with value 32768 can't be cast because the value is out of range for the destination type INT16
 
 statement error
 SELECT -32768::HUGEINT::SMALLINT;

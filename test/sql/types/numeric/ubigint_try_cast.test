@@ -146,7 +146,7 @@ NULL
 statement error
 SELECT i::DECIMAL(3,0)::UBIGINT FROM ubigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE748
+Conversion Error: Could not cast value -1 to DECIMAL(3,0)
 
 statement error
 SELECT i::DECIMAL(9,0)::UBIGINT FROM ubigints ORDER BY i

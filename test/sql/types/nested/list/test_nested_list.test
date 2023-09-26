@@ -320,7 +320,7 @@ Binder Error: UNNEST() can only be applied to lists, structs and NULL
 statement error
 SELECT g, UNNEST() u FROM (SELECT g, LIST(e) l FROM list_data GROUP BY g) u1
 ----
-PLACEHOLDER_ERROR_MESSAGE935
+Binder Error: UNNEST() requires a single argument
 
 statement error
 SELECT UNNEST(42)
