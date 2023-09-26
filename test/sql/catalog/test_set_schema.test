@@ -403,7 +403,8 @@ SELECT main.nextval('out_of_path.oop_sequence');
 statement error
 DROP SEQUENCE main.test_sequence;
 ----
-PLACEHOLDER_ERROR_MESSAGE1870
+Catalog Error: Sequence with name test_sequence does not exist!
+Did you mean "memory.test.test_sequence"?
 
 statement ok
 DROP SEQUENCE test_sequence;

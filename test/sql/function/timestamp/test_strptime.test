@@ -457,7 +457,7 @@ Error: Full specifier did not match: trailing characters
 statement error
 SELECT strptime('', '%Y-%m-%d %H:%M:%S.%f')
 ----
-PLACEHOLDER_ERROR_MESSAGE2452
+Invalid Input Error: Could not parse string "" according to format specifier "%Y-%m-%d %H:%M:%S.%f"
 
 # empty string with am/pm
 statement error

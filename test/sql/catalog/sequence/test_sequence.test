@@ -560,7 +560,7 @@ Parser Error: Start value should be passed as most once
 statement error
 CREATE SEQUENCE wrongseq CYCLE MAXVALUE 2 MINVALUE 1 NO CYCLE;
 ----
-PLACEHOLDER_ERROR_MESSAGE1911
+Parser Error: Cycle value should be passed as most once
 
 # increment value specified more than once
 statement error

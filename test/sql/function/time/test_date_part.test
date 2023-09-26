@@ -210,7 +210,7 @@ Binder Error: julian can only take DATE or TIMESTAMP arguments
 statement error
 select date_part('julian', time '10:00:00');
 ----
-PLACEHOLDER_ERROR_MESSAGE2051
+Binder Error: julian can only take DATE or TIMESTAMP arguments
 
 # Correctness: Compare date_part against function value
 foreach partcode hour minute second millisecond microsecond epoch

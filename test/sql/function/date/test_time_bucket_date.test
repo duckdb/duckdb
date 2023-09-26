@@ -486,7 +486,7 @@ Out of Range Error: Overflow in subtraction of INT64 (-9223372022400000000 - 345
 statement error
 select time_bucket('1 day'::interval, '290309-12-21 (BC)'::date);
 ----
-PLACEHOLDER_ERROR_MESSAGE2020
+Invalid Input Error: Type INT32 with value 290309-12-21 (BC) can't be cast to the destination type INT64
 
 query I
 select time_bucket('1 day'::interval, '290309-12-22 (BC)'::date);

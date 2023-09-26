@@ -164,7 +164,7 @@ select '294246-12-31'::date::timestamp
 statement error
 select '294247-12-31'::date::timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE624
+Conversion Error: Type INT32 with value 294247-12-31 can't be cast to the destination type INT64
 
 # arithmetic
 query I

@@ -363,7 +363,7 @@ Invalid Input Error: Could not convert string '9223372036854775810' to INT64
 statement error
 SELECT INTERVAL 'aa' DAY;
 ----
-PLACEHOLDER_ERROR_MESSAGE517
+Conversion Error: Could not convert string 'aa' to INT32
 
 statement error
 SELECT INTERVAL '100 months' DAY;

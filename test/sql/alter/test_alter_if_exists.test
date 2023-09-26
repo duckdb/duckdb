@@ -90,7 +90,7 @@ ALTER TABLE t0 DROP COLUMN IF EXISTS c3
 statement error
 ALTER TABLE IF EXISTS t0 DROP COLUMN c3
 ----
-PLACEHOLDER_ERROR_MESSAGE2704
+Binder Error: Table "t0" does not have a column with name "c3"
 
 # Change type of column if exists
 statement ok

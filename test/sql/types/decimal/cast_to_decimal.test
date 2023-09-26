@@ -166,7 +166,7 @@ Conversion Error: Could not cast value 1 to DECIMAL(3,3)
 statement error
 SELECT 100::BIGINT::DECIMAL(18,17)
 ----
-PLACEHOLDER_ERROR_MESSAGE332
+Conversion Error: Could not cast value 100 to DECIMAL(18,17)
 
 statement error
 SELECT 100::BIGINT::DECIMAL(9,7)

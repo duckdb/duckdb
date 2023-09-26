@@ -326,7 +326,7 @@ Binder Error: Duplicate default parameters b!
 statement error
 CREATE MACRO macros.add_macro(a, b) AS a + b
 ----
-PLACEHOLDER_ERROR_MESSAGE1825
+Catalog Error: Macro Function with name "add_macro" already exists!
 
 statement error
 CREATE MACRO my_macro(a.b) AS 42;
