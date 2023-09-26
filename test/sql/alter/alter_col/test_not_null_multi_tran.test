@@ -137,7 +137,7 @@ COMMIT
 statement error con2
 INSERT INTO t VALUES(1, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2602
+Constraint Error: NOT NULL constraint failed: t.j
 
 statement ok con2
 ROLLBACK

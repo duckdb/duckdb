@@ -128,7 +128,7 @@ Binder Error: RANGE with composite interval that has mixed signs is not supporte
 statement error
 SELECT COUNT(*) FROM generate_series('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
 ----
-PLACEHOLDER_ERROR_MESSAGE3136
+Binder Error: RANGE with infinite bounds is not supported
 
 statement error
 SELECT COUNT(*) FROM range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');

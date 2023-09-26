@@ -260,4 +260,7 @@ PRAGMA disable_verification
 statement error
 select * from (values (1)) t1(i) natural join ((values (1)) t2(i)  join (values (1)) t3(i) on (t2.i=t3.i))
 ----
-PLACEHOLDER_ERROR_MESSAGE1118
+Binder Error: Column name "i" is ambiguous: it exists more than once on right side of join.
+Candidates:
+	t2.i
+	t3.i

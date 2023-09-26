@@ -51,7 +51,9 @@ LINE 1: CREATE TYPE bla AS ENUM (1,2,3);
 statement error
 CREATE TYPE bla AS ENUM ('sad',NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE656
+Parser Error: syntax error at or near "NULL"
+LINE 1: CREATE TYPE bla AS ENUM ('sad',NULL);
+                                       ^
 
 # We don't accept repeated elements?
 statement error

@@ -42,7 +42,7 @@ Parser Error: window functions are not allowed in window definitions
 statement error
 SELECT avg(42) over (order by row_number() over ())
 ----
-PLACEHOLDER_ERROR_MESSAGE2823
+Parser Error: window functions are not allowed in window definitions
 
 # distinct aggregates not supported for window functions
 statement error

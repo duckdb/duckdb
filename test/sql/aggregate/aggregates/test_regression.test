@@ -57,7 +57,9 @@ Binder Error: No function matches the given name and argument types 'regr_avgy()
 statement error
 select regr_count()
 ----
-PLACEHOLDER_ERROR_MESSAGE1603
+Binder Error: No function matches the given name and argument types 'regr_count()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_count(DOUBLE, DOUBLE) -> UINTEGER
 
 query I
 select regr_count(NULL,NULL)

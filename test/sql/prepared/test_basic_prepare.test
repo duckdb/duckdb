@@ -46,7 +46,9 @@ Binder Error: Prepared statement "s1" does not exist
 statement error
 PREPARE EXPLAIN SELECT 42
 ----
-PLACEHOLDER_ERROR_MESSAGE1105
+Parser Error: syntax error at or near "SELECT"
+LINE 1: PREPARE EXPLAIN SELECT 42
+                        ^
 
 statement error
 PREPARE CREATE TABLE a(i INTEGER)

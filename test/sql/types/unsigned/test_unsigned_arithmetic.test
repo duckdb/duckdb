@@ -66,7 +66,7 @@ Out of Range Error: Overflow in multiplication of UINT64 (18446744073709551615 *
 statement error
 SELECT (200)::UTINYINT - (201)::UTINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE486
+Out of Range Error: Overflow in subtraction of UINT8 (200 - 201)!
 
 statement error
 SELECT (200)::UTINYINT - (201)::USMALLINT;

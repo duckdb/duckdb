@@ -77,5 +77,5 @@ SELECT * FROM test ORDER BY a;
 statement error
 UPDATE test SET b=NULL WHERE a=13;
 ----
-PLACEHOLDER_ERROR_MESSAGE1248
+Constraint Error: NOT NULL constraint failed: test.b
 

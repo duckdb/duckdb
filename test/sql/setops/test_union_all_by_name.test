@@ -178,7 +178,7 @@ NULL	2	2
 statement error
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 EXCEPT SELECT 2, 2 FROM t1;
 ----
-PLACEHOLDER_ERROR_MESSAGE237
+Binder Error: Set operations can only apply to expressions with the same number of result columns
 
 # have to sort here too because EXCEPT does not preserve order
 query III sort

@@ -84,4 +84,4 @@ Conversion Error: Could not convert string 'hello' to INT32
 statement error
 INSERT INTO a VALUES (ROW(1, ROW(1, 7)))
 ----
-PLACEHOLDER_ERROR_MESSAGE419
+Conversion Error: Unimplemented type for cast (STRUCT( INTEGER,  INTEGER) -> INTEGER)

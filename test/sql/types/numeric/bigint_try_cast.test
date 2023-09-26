@@ -33,7 +33,7 @@ Conversion Error: Type INT64 with value -9223372036854775808 can't be cast becau
 statement error
 SELECT i::UTINYINT FROM bigints WHERE i>=0 ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE767
+Conversion Error: Type INT64 with value 9223372036854775807 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT i::USMALLINT FROM bigints WHERE i>=0 ORDER BY i

@@ -29,7 +29,7 @@ Conversion Error: Could not convert string '0b-1' to INT32
 statement error
 SELECT '-${prefix}1'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1489
+Conversion Error: Could not convert string '-0b1' to INT32
 
 # Basic asserts
 query I

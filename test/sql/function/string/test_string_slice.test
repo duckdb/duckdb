@@ -49,7 +49,9 @@ LINE 1: SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 statement error
 SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2412
+Parser Error: syntax error at or near "NULL"
+LINE 1: SELECT NULL::VARCHAR[NULL:NULL+NULL] FROM strings
+                             ^
 
 # test zero length
 query II

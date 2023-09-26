@@ -122,7 +122,7 @@ Invalid Error: Non-inner join on correlated columns not supported
 statement error
 SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1434
+Binder Error: correlated columns in window functions not supported
 
 # union with correlated expression
 query II

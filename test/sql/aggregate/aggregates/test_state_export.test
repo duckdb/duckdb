@@ -162,7 +162,7 @@ Binder Error: Cannot COMBINE aggregate states from different functions, AGGREGAT
 statement error
 SELECT combine(NULL, NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE1679
+Binder Error: Can only FINALIZE aggregate state, not NULL
 
 statement error
 SELECT combine(42, 42);

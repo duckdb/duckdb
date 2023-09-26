@@ -58,7 +58,7 @@ Out of Range Error: Cannot left-shift by negative number -1
 statement error
 SELECT 100::HUGEINT << '1329227995784915872903807060280344576'::HUGEINT
 ----
-PLACEHOLDER_ERROR_MESSAGE1063
+Out of Range Error: Left-shift value 1329227995784915872903807060280344576 is out of range
 
 # right-shift
 query I

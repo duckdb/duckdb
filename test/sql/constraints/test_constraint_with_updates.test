@@ -69,7 +69,7 @@ Constraint Error: NOT NULL constraint failed: integers.i
 statement error
 UPDATE integers SET j=NULL
 ----
-PLACEHOLDER_ERROR_MESSAGE1394
+Constraint Error: NOT NULL constraint failed: integers.j
 
 # verify that the final result is correct
 query II

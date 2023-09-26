@@ -29,7 +29,7 @@ Conversion Error: Could not cast value 100.000000 to DECIMAL(2,0)
 statement error
 SELECT CAST(100::DECIMAL(3,0) AS DECIMAL(2,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE397
+Conversion Error: Casting value "100" to type DECIMAL(2,0) failed: value is out of range!
 
 statement error
 SELECT CAST(10000::DECIMAL(5,0) AS DECIMAL(2,0))

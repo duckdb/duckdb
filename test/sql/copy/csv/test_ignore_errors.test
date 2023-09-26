@@ -116,7 +116,15 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER,
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_invalid_type.csv' (HEADER)
 ----
-PLACEHOLDER_ERROR_MESSAGE2874
+Invalid Input Error: Could not convert string 'a' to INT32 at line 6 in column "j". Parser options:
+  file=test/sql/copy/csv/data/test/error_invalid_type.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0 
 
 # too many columns provided
 query II

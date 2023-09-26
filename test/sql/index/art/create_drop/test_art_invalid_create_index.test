@@ -31,7 +31,7 @@ Binder Error: Index type not supported
 statement error
 CREATE INDEX i_index ON integers(f)
 ----
-PLACEHOLDER_ERROR_MESSAGE2849
+Binder Error: Table "integers" does not have a column named "f"
 
 # index on list columns
 statement ok

@@ -66,7 +66,14 @@ Binder Error: No function matches the given name and argument types 'sum(DATE)'.
 statement error
 SELECT SUM()
 ----
-PLACEHOLDER_ERROR_MESSAGE1632
+Binder Error: No function matches the given name and argument types 'sum()'. You might need to add explicit type casts.
+	Candidate functions:
+	sum(DECIMAL) -> DECIMAL
+	sum(SMALLINT) -> HUGEINT
+	sum(INTEGER) -> HUGEINT
+	sum(BIGINT) -> HUGEINT
+	sum(HUGEINT) -> HUGEINT
+	sum(DOUBLE) -> DOUBLE
 
 statement error
 SELECT SUM(1, 2)

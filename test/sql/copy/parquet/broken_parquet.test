@@ -30,7 +30,7 @@ Invalid Input Error: File 'test/sql/copy/parquet/broken/twomarkers.parquet' too 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/footerlengthzero.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2934
+Invalid Input Error: Footer length error in file 'test/sql/copy/parquet/broken/footerlengthzero.parquet'
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/hugefooter.parquet')

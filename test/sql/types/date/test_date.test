@@ -147,7 +147,7 @@ NULL
 statement error
 SELECT ''::DATE
 ----
-PLACEHOLDER_ERROR_MESSAGE555
+Conversion Error: date field value out of range: "", expected format is (YYYY-MM-DD)
 
 statement error
 SELECT '  '::DATE

@@ -212,7 +212,8 @@ Binder Error: QUANTILE parameter cannot be NULL
 statement error
 SELECT quantile_cont(r, ["0.25", "0.5", "0.75"]) FROM quantiles
 ----
-PLACEHOLDER_ERROR_MESSAGE1715
+Binder Error: Referenced column "0.25" not found in FROM clause!
+Candidate bindings: "quantiles.r"
 
 statement error
 SELECT quantile_cont(r::string, [0.25, 0.5, 0.75]) FROM quantiles

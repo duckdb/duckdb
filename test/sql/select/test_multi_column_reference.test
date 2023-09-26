@@ -174,7 +174,8 @@ Candidate tables: "tbl"
 statement error
 SELECT test.tblX.col FROM test.tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE2994
+Binder Error: Referenced table "test" not found!
+Candidate tables: "tbl"
 
 statement error
 SELECT test.tbl.colX FROM test.tbl;

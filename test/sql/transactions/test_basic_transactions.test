@@ -91,5 +91,5 @@ CREATE TABLE integers2(i INTEGER)
 statement error con1
 CREATE TABLE integers2(i INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE2770
+Catalog Error: Table with name "integers2" already exists!
 

@@ -31,7 +31,9 @@ LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 1)
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 'hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE1403
+Parser Error: syntax error at or near "'hello'"
+LINE 1: ...E TABLE collate_test(s VARCHAR COLLATE 'hello')
+                                                  ^
 
 statement error
 PRAGMA default_collation='blabla'

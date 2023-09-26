@@ -211,7 +211,7 @@ NULL
 statement error
 SELECT INTERVAL '';
 ----
-PLACEHOLDER_ERROR_MESSAGE534
+Conversion Error: Could not convert string '' to INTERVAL
 
 statement error
 SELECT INTERVAL '   	';

@@ -207,7 +207,7 @@ COMMIT
 statement error
 INSERT INTO t VALUES(NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2592
+Constraint Error: NOT NULL constraint failed: t.i
 
 # Drop in the same tran
 statement ok

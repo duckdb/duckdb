@@ -116,7 +116,7 @@ ALTER TABLE test ALTER i TYPE VARCHAR
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2670
+TransactionContext Error: Failed to commit: TransactionContext Error: Transaction conflict: adding entries to a table that has been altered!
 
 statement ok con1
 DROP TABLE test

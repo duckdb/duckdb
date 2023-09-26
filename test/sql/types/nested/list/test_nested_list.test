@@ -259,7 +259,9 @@ Binder Error: No function matches the given name and argument types 'list()'. Yo
 statement error
 SELECT LIST() FROM list_data
 ----
-PLACEHOLDER_ERROR_MESSAGE939
+Binder Error: No function matches the given name and argument types 'list()'. You might need to add explicit type casts.
+	Candidate functions:
+	list(ANY) -> LIST
 
 statement error
 SELECT LIST(e, g) FROM list_data

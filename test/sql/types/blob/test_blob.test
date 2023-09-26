@@ -73,7 +73,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 SELECT 'abc �'::BYTEA;
 ----
-PLACEHOLDER_ERROR_MESSAGE1007
+Conversion Error: Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters must be escaped with hex codes (e.g. \xAA)
 
 # BLOB null and empty values
 query T

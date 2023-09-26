@@ -90,7 +90,7 @@ INSERT INTO tbl VALUES (ARRAY[7,5,7], ARRAY['a', 'b', 'c'])
 statement error
 SELECT MAP(a, b) FROM tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE914
+Invalid Input Error: Map keys have to be unique
 
 # Lists with different size are FORBIDDEN
 statement error

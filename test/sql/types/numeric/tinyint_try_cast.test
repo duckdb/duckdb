@@ -149,7 +149,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'),
 statement error
 SELECT s::TINYINT FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE715
+Conversion Error: Could not convert string '   ' to INT8
 
 query I
 SELECT TRY_CAST(s AS TINYINT) FROM strings

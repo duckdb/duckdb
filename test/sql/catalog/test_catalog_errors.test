@@ -31,7 +31,8 @@ Did you mean "temp.information_schema.tables"?
 statement error
 ALTER TABLE blabla RENAME COLUMN i TO k
 ----
-PLACEHOLDER_ERROR_MESSAGE1807
+Catalog Error: Table with name blabla does not exist!
+Did you mean "temp.information_schema.tables"?
 
 # cannot drop view with DROP TABLE
 statement error

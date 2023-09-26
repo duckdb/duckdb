@@ -51,7 +51,7 @@ Conversion Error: Could not convert string '18446744073709551616' to UINT64
 statement error
 SELECT '-1'::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE472
+Conversion Error: Could not convert string '-1' to UINT8
 
 statement error
 SELECT '-1'::USMALLINT

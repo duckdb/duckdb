@@ -93,7 +93,7 @@ SELECT * FROM t1 JOIN t2 USING(a,b)
 statement error
 SELECT * FROM t1 JOIN t2 USING(a) JOIN t2 t2b USING (b);
 ----
-PLACEHOLDER_ERROR_MESSAGE1126
+Binder Error: Ambiguous reference to column name "b" (use: "t2.b" or "t1.b")
 
 # this is the same, but now with a duplicate potential binding on the RHS
 statement error

@@ -128,7 +128,7 @@ Parser Error: Scale cannot be bigger than width
 statement error
 SELECT '0.1'::DECIMAL('hello');
 ----
-PLACEHOLDER_ERROR_MESSAGE361
+Parser Error: Expected an integer constant as type modifier
 
 # ...or negative numbers
 statement error

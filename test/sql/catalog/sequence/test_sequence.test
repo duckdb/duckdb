@@ -271,7 +271,7 @@ SELECT currval('seq')
 statement error
 SELECT nextval('seq')
 ----
-PLACEHOLDER_ERROR_MESSAGE1928
+Serialization Error: nextval: reached minimum value of sequence "seq" (0)
 
 query I
 SELECT currval('seq')

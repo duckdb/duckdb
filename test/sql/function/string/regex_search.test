@@ -193,4 +193,4 @@ INSERT INTO regex VALUES ('asdf', '(')
 statement error
 SELECT regexp_matches(s, p) FROM regex
 ----
-PLACEHOLDER_ERROR_MESSAGE2334
+Invalid Error: missing ): (

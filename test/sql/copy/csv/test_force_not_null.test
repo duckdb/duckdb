@@ -61,7 +61,7 @@ Binder Error: "force_not_null" expected to find col_c, but it was not found in t
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null_reordered.csv' (FORCE_NOT_NULL (col_c, col_d));
 ----
-PLACEHOLDER_ERROR_MESSAGE2897
+Binder Error: "force_not_null" expected to find col_d, but it was not found in the table
 
 # FORCE_NOT_NULL fails on integer columns with NULL values, but only if there are null values
 query I

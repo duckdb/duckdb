@@ -126,7 +126,7 @@ NULL
 statement error
 SELECT i::DECIMAL(3,0)::USMALLINT FROM usmallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE785
+Conversion Error: Could not cast value 65535 to DECIMAL(3,0)
 
 query I
 SELECT i::DECIMAL(9,0)::USMALLINT FROM usmallints ORDER BY i

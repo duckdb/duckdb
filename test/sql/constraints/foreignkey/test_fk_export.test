@@ -60,7 +60,7 @@ Binder Error: Referenced update column i not found in table!
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1298
+Binder Error: Referenced update column i not found in table!
 
 statement error
 DROP TABLE pk_integers;

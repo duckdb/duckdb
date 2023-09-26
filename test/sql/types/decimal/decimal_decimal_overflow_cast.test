@@ -52,7 +52,7 @@ Conversion Error: Casting value "10.00" to type DECIMAL(38,37) failed: value is 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(2,1);
 ----
-PLACEHOLDER_ERROR_MESSAGE279
+Conversion Error: Casting value "10.00" to type DECIMAL(2,1) failed: value is out of range!
 
 statement error
 SELECT 10.00::DECIMAL(9,7)::DECIMAL(7,6);

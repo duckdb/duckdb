@@ -156,4 +156,4 @@ INSERT INTO t0 VALUES([1E200, 0]);
 statement error
 SELECT list_stddev_pop(c0) FROM t0;
 ----
-PLACEHOLDER_ERROR_MESSAGE2235
+Out of Range Error: STDDEV_POP is out of range!

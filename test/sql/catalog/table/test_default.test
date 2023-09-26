@@ -152,7 +152,7 @@ Binder Error: DEFAULT value cannot contain aggregates!
 statement error
 CREATE TABLE test (a INTEGER DEFAULT row_number() OVER (), b INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1852
+Binder Error: DEFAULT value cannot contain window functions!
 
 # default value must be scalar expression
 statement error

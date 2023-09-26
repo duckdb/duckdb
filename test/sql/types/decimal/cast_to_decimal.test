@@ -40,7 +40,7 @@ Conversion Error: Could not cast value 100 to DECIMAL(9,7)
 statement error
 SELECT 100::TINYINT::DECIMAL(38,37)
 ----
-PLACEHOLDER_ERROR_MESSAGE349
+Conversion Error: Could not cast value 100 to DECIMAL(38,37)
 
 # smallint
 query IIII

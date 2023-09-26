@@ -310,7 +310,10 @@ Error: Expected +HH[MM] or -HH[MM]
 statement error
 select strptime('2020-12-31 21:25:58.745232+0X', '%Y-%m-%d %H:%M:%S.%f%z');
 ----
-PLACEHOLDER_ERROR_MESSAGE2469
+Invalid Input Error: Could not parse string "2020-12-31 21:25:58.745232+0X" according to format specifier "%Y-%m-%d %H:%M:%S.%f%z"
+2020-12-31 21:25:58.745232+0X
+                          ^
+Error: Expected +HH[MM] or -HH[MM]
 
 statement error
 select strptime('2020-12-31 21:25:58.745232+X0', '%Y-%m-%d %H:%M:%S.%f%z');

@@ -115,4 +115,4 @@ No function matches the given name and argument types 'quantile(BIGINT, DECIMAL(
 statement error
 SELECT list_aggr(list(i), 'quantile', i) FROM range(10) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE919
+Binder Error: QUANTILE can only take constant parameters

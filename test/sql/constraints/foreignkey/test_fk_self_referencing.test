@@ -41,7 +41,7 @@ UPDATE employee SET name='Juliet' WHERE id=3;
 statement error
 UPDATE employee SET id=2 WHERE id=3;
 ----
-PLACEHOLDER_ERROR_MESSAGE1375
+Constraint Error: Duplicate key "id: 2" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement ok
 UPDATE employee SET id=4 WHERE id=3;

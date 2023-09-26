@@ -31,7 +31,7 @@ Conversion Error: timestamp field value out of range: "1993-02-29 00:00:00", exp
 statement error
 INSERT INTO timestamp VALUES ('1900-02-29 00:00:00')
 ----
-PLACEHOLDER_ERROR_MESSAGE952
+Conversion Error: timestamp field value out of range: "1900-02-29 00:00:00", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement ok
 INSERT INTO timestamp VALUES ('1992-02-29 00:00:00')

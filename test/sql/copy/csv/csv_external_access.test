@@ -35,4 +35,4 @@ Permission Error: COPY TO is disabled by configuration
 statement error
 SET enable_external_access=true;
 ----
-PLACEHOLDER_ERROR_MESSAGE2902
+Invalid Input Error: Cannot change enable_external_access setting while database is running

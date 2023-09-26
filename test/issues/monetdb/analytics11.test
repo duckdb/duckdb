@@ -73,7 +73,7 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY Product_Category
 ----
-PLACEHOLDER_ERROR_MESSAGE170
+Binder Error: GROUPING child "1" must be a grouping column
 
 statement error
 SELECT

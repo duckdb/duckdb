@@ -75,5 +75,5 @@ COMMIT
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE1259
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "7"
 

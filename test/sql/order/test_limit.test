@@ -74,7 +74,7 @@ Hello World
 statement error
 select 1 limit date '1992-01-01';
 ----
-PLACEHOLDER_ERROR_MESSAGE184
+Conversion Error: Unimplemented type for cast (DATE -> BIGINT)
 
 
 # Test limits with no constants

@@ -164,7 +164,7 @@ LINE 1: ... OVER (ORDER BY a) as row_number, a, b FROM table1;
 statement error
 INSERT INTO table1 VALUES (1, 2, 3) RETURNING [1, 2] IN (SELECT [a, b] from table1);
 ----
-PLACEHOLDER_ERROR_MESSAGE262
+Binder Error: SUBQUERY is not supported in returning statements
 
 # scalar subquery (should fail since scalar is a subquery)
 statement error

@@ -99,7 +99,9 @@ Invalid Error: Insufficient padding in LPAD.
 statement error
 select LPAD('a', 100000000000000000, 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2318
+Binder Error: No function matches the given name and argument types 'lpad(VARCHAR, BIGINT, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	lpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 
 statement error
 select RPAD()

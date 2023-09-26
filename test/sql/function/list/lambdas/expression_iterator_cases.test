@@ -123,7 +123,7 @@ CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
 statement error
 SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
 ----
-PLACEHOLDER_ERROR_MESSAGE2153
+Invalid Input Error: Subqueries are not supported in lambda expressions!
 
 # BOUND_UNNEST
 

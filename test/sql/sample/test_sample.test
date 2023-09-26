@@ -188,7 +188,7 @@ Parser Error: Sample method Bernoulli cannot be used with a discrete sample coun
 statement error
 select * from integers using sample system(5 rows);
 ----
-PLACEHOLDER_ERROR_MESSAGE2829
+Parser Error: Sample method System cannot be used with a discrete sample count, either switch to reservoir sampling or use a sample_size
 
 # sample_size is out of range
 statement error

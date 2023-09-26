@@ -78,4 +78,5 @@ DROP VIEW IF EXISTS v1
 statement error
 CREATE VIEW v1 AS SELECT * FROM dontexist
 ----
-PLACEHOLDER_ERROR_MESSAGE1892
+Catalog Error: Table with name dontexist does not exist!
+Did you mean "t1"?

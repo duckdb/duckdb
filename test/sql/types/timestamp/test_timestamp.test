@@ -85,7 +85,14 @@ Binder Error: No function matches the given name and argument types 'sum(TIMESTA
 statement error
 SELECT AVG(t) FROM timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE961
+Binder Error: No function matches the given name and argument types 'avg(TIMESTAMP)'. You might need to add explicit type casts.
+	Candidate functions:
+	avg(DECIMAL) -> DECIMAL
+	avg(SMALLINT) -> DOUBLE
+	avg(INTEGER) -> DOUBLE
+	avg(BIGINT) -> DOUBLE
+	avg(HUGEINT) -> DOUBLE
+	avg(DOUBLE) -> DOUBLE
 
 statement error
 SELECT t+t FROM timestamp

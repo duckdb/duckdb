@@ -59,7 +59,7 @@ SET enable_progress_bar=true;
 statement error
 SET GLOBAL enable_progress_bar=true;
 ----
-PLACEHOLDER_ERROR_MESSAGE230
+Catalog Error: option "enable_progress_bar" cannot be set globally
 
 # explain_output
 foreach explain_output all optimized_only physical_only

@@ -81,4 +81,4 @@ Binder Error: column integers.i must appear in the GROUP BY clause or be used in
 statement error
 SELECT i + i AS i FROM integers HAVING i=5 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1423
+Binder Error: column integers.i must appear in the GROUP BY clause or be used in an aggregate function

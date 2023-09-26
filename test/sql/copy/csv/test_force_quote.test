@@ -88,5 +88,5 @@ Binder Error: "force_quote" expects a column list or * as parameter
 statement error
 COPY test TO '__TEST_DIR__/test_reorder.csv' (FORCE_QUOTE 42);
 ----
-PLACEHOLDER_ERROR_MESSAGE2915
+Binder Error: "force_quote" expected to find 42, but it was not found in the table
 

@@ -126,7 +126,7 @@ SELECT MAP(
 	]
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE903
+Invalid Input Error: Map keys have to be unique
 
 # Nested keys (map) not succesfull (null)
 statement error

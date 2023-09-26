@@ -107,7 +107,7 @@ Parser Error: DAY TO HOUR is not supported
 statement error
 SELECT interval '12:30' hours to minutes
 ----
-PLACEHOLDER_ERROR_MESSAGE499
+Parser Error: HOUR TO MINUTE is not supported
 
 # 15:06:04.123
 statement error

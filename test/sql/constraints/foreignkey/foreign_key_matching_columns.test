@@ -76,7 +76,7 @@ CREATE TABLE routes (
 	FOREIGN KEY (agency_id) REFERENCES agency
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1349
+Binder Error: Failed to create foreign key: there is no primary key for referenced table "agency"
 
 # self-referential primary key
 statement ok

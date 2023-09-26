@@ -96,7 +96,7 @@ SELECT (-42)::HUGEINT::TINYINT, (-42)::HUGEINT::SMALLINT, (-42)::HUGEINT::INTEGE
 statement error
 SELECT 1000::HUGEINT::TINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE1036
+Conversion Error: Type INT128 with value 1000 can't be cast because the value is out of range for the destination type INT8
 
 # TINYINT
 statement error

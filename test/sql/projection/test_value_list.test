@@ -139,7 +139,7 @@ Binder Error: Column name/value mismatch for insert on varchars: expected 1 colu
 statement error
 INSERT INTO varchars (v) VALUES (1, 2), ('hello'), (DEFAULT, DEFAULT);
 ----
-PLACEHOLDER_ERROR_MESSAGE3118
+Parser Error: VALUES lists must all be the same length
 
 # operation on default not allowed
 statement error

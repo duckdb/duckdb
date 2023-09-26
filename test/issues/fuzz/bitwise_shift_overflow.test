@@ -47,7 +47,7 @@ Out of Range Error: Cannot left-shift negative number -128
 statement error
 SELECT (-10)::tinyint<<4::tinyint;
 ----
-PLACEHOLDER_ERROR_MESSAGE159
+Out of Range Error: Cannot left-shift negative number -10
 
 statement error
 SELECT (-10)::tinyint<<3::tinyint;

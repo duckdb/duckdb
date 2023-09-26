@@ -60,4 +60,4 @@ Binder Error: This function needs an ENUM as an argument
 statement error
 SELECT enum_range_boundary(1, 'orange'::rainbow)
 ----
-PLACEHOLDER_ERROR_MESSAGE2044
+Binder Error: This function needs an ENUM as an argument

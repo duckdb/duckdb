@@ -166,5 +166,6 @@ LINE 1: SELECT i from integers3
 statement error con2
 INSERT INTO integers VALUES (42)
 ----
-PLACEHOLDER_ERROR_MESSAGE1859
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?
 

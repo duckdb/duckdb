@@ -180,7 +180,7 @@ LINE 1: select list_has_all(l1, l2, l1) from list_of_s...
 statement error
 select list_has_all([1, 2], 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2259
+Binder Error: Referenced column "x" not found in FROM clause!
 
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);

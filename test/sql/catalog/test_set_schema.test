@@ -87,7 +87,10 @@ INSERT INTO out_of_path.oop_table (k) VALUES (8), (9);
 statement error
 DELETE FROM main.test_table WHERE i=3;
 ----
-PLACEHOLDER_ERROR_MESSAGE1887
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
+LINE 1: DELETE FROM main.test_table WHERE i=3;
+                    ^
 
 statement error
 DELETE FROM test.main_table WHERE i=5;

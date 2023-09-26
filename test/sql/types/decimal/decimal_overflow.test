@@ -29,7 +29,7 @@ Out of Range Error: Overflow in subtract of DECIMAL(18) (-990000000000000000 - 9
 statement error
 select (-50000000000000000.0::DECIMAL(18,1)-50000000000000000.0::DECIMAL(18,1));
 ----
-PLACEHOLDER_ERROR_MESSAGE374
+Out of Range Error: Overflow in subtract of DECIMAL(18) (-500000000000000000 - 500000000000000000). You might want to add an explicit cast to a bigger decimal.
 
 # decimals can overflow at the hugeint boundary, because we run out of bits
 statement error

@@ -34,7 +34,7 @@ Binder Error: No function matches the given name and argument types 'list_aggr(V
 statement error
 SELECT list_aggr(*, '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2200
+Binder Error: STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.
 
 statement error
 SELECT list_aggr('hello', '${func_name}')

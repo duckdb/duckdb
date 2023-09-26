@@ -63,7 +63,7 @@ Conversion Error: time field value out of range: "14:100:04.500", expected forma
 statement error
 SELECT '14:42:70.500'::TIME::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE694
+Conversion Error: time field value out of range: "14:42:70.500", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 # invalid separator
 statement error

@@ -34,5 +34,5 @@ Binder Error: window functions are not allowed in alter statement
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING othertable.j
 ----
-PLACEHOLDER_ERROR_MESSAGE2664
+Binder Error: Cannot extract field 'othertable' from expression "#0" because it is not a struct or a union
 

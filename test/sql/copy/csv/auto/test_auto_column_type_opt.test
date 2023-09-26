@@ -31,7 +31,7 @@ Did you mean "bool"?
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK(bla := 'INTEGER'))
 ----
-PLACEHOLDER_ERROR_MESSAGE2890
+Binder Error: COLUMN_TYPES error: Columns with names: "bla" do not exist in the CSV File
 
 # Test wrong type throws
 statement error

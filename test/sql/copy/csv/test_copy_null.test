@@ -97,7 +97,7 @@ Invalid Input Error: The delimiter option cannot exceed a size of 1 byte.
 statement error
 COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE2927
+Binder Error: "null" expects a single argument as a string value
 
 # empty integer column with non-default NULL string
 statement ok

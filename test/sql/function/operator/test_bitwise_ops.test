@@ -60,7 +60,18 @@ Out of Range Error: Cannot left-shift by negative number -1
 statement error
 SELECT 'hello' << 3
 ----
-PLACEHOLDER_ERROR_MESSAGE2506
+Binder Error: No function matches the given name and argument types '<<(VARCHAR, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	<<(TINYINT, TINYINT) -> TINYINT
+	<<(SMALLINT, SMALLINT) -> SMALLINT
+	<<(INTEGER, INTEGER) -> INTEGER
+	<<(BIGINT, BIGINT) -> BIGINT
+	<<(HUGEINT, HUGEINT) -> HUGEINT
+	<<(UTINYINT, UTINYINT) -> UTINYINT
+	<<(USMALLINT, USMALLINT) -> USMALLINT
+	<<(UINTEGER, UINTEGER) -> UINTEGER
+	<<(UBIGINT, UBIGINT) -> UBIGINT
+	<<(BIT, INTEGER) -> BIT
 
 statement error
 SELECT 3 << 'hello'

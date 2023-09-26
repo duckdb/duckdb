@@ -203,7 +203,38 @@ Binder Error: QUANTILE parameter cannot be NULL
 statement error
 SELECT quantile_disc(r) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1641
+Binder Error: No function matches the given name and argument types 'quantile_disc(BIGINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	quantile_disc(DECIMAL, DOUBLE) -> DECIMAL
+	quantile_disc(DECIMAL, DOUBLE[]) -> DECIMAL[]
+	quantile_disc(TINYINT, DOUBLE) -> TINYINT
+	quantile_disc(TINYINT, DOUBLE[]) -> TINYINT[]
+	quantile_disc(SMALLINT, DOUBLE) -> SMALLINT
+	quantile_disc(SMALLINT, DOUBLE[]) -> SMALLINT[]
+	quantile_disc(INTEGER, DOUBLE) -> INTEGER
+	quantile_disc(INTEGER, DOUBLE[]) -> INTEGER[]
+	quantile_disc(BIGINT, DOUBLE) -> BIGINT
+	quantile_disc(BIGINT, DOUBLE[]) -> BIGINT[]
+	quantile_disc(HUGEINT, DOUBLE) -> HUGEINT
+	quantile_disc(HUGEINT, DOUBLE[]) -> HUGEINT[]
+	quantile_disc(FLOAT, DOUBLE) -> FLOAT
+	quantile_disc(FLOAT, DOUBLE[]) -> FLOAT[]
+	quantile_disc(DOUBLE, DOUBLE) -> DOUBLE
+	quantile_disc(DOUBLE, DOUBLE[]) -> DOUBLE[]
+	quantile_disc(DATE, DOUBLE) -> DATE
+	quantile_disc(DATE, DOUBLE[]) -> DATE[]
+	quantile_disc(TIMESTAMP, DOUBLE) -> TIMESTAMP
+	quantile_disc(TIMESTAMP, DOUBLE[]) -> TIMESTAMP[]
+	quantile_disc(TIME, DOUBLE) -> TIME
+	quantile_disc(TIME, DOUBLE[]) -> TIME[]
+	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE) -> TIMESTAMP WITH TIME ZONE
+	quantile_disc(TIMESTAMP WITH TIME ZONE, DOUBLE[]) -> TIMESTAMP WITH TIME ZONE[]
+	quantile_disc(TIME WITH TIME ZONE, DOUBLE) -> TIME WITH TIME ZONE
+	quantile_disc(TIME WITH TIME ZONE, DOUBLE[]) -> TIME WITH TIME ZONE[]
+	quantile_disc(INTERVAL, DOUBLE) -> INTERVAL
+	quantile_disc(INTERVAL, DOUBLE[]) -> INTERVAL[]
+	quantile_disc(VARCHAR, DOUBLE) -> VARCHAR
+	quantile_disc(VARCHAR, DOUBLE[]) -> VARCHAR[]
 
 statement error
 SELECT quantile_disc(r, 0.1, 50) FROM quantile

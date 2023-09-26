@@ -196,4 +196,4 @@ Parser Error: Maximum grouping set count of 65535 exceeded
 statement error
 select course, type, count(*) from students group by cube (course, type, course, type, course), cube(type, course, type, course), cube(type, course, type, (course, type), (course, type), course, type) order by 1, 2, 3;
 ----
-PLACEHOLDER_ERROR_MESSAGE1741
+Parser Error: Maximum grouping set count of 65535 exceeded

@@ -105,4 +105,4 @@ Binder Error: Column "blabla" in EXCLUDE list not found in FROM clause
 statement error
 SELECT integers.* EXCLUDE (blabla) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3104
+Binder Error: Column "blabla" in EXCLUDE list not found in integers

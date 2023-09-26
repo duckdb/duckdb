@@ -203,7 +203,7 @@ Conversion Error: Could not convert string '' to INT32
 statement error
 SELECT CAST('{5=5,, 3=3}' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1501
+Conversion Error: Could not convert string ', 3' to INT32
 
 statement error
 SELECT CAST('{3=3, 4=4' AS MAP(INT, INT));

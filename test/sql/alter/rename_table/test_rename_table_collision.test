@@ -170,7 +170,7 @@ ALTER TABLE t2 RENAME TO t3
 statement error con1
 ALTER TABLE t2 RENAME TO t4
 ----
-PLACEHOLDER_ERROR_MESSAGE2623
+TransactionContext Error: Catalog write-write conflict on alter with "t3"
 
 statement ok con1
 ROLLBACK

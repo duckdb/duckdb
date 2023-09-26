@@ -192,7 +192,7 @@ SELECT * FROM tbl;
 statement error
 ALTER TABLE tbl DROP COLUMN gcol1;
 ----
-PLACEHOLDER_ERROR_MESSAGE2548
+Catalog Error: Cannot drop column: column is a dependency of 1 or more generated column(s)
 
 # gcol2 is not a dependency of anything
 statement ok

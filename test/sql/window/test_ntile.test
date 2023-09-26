@@ -173,7 +173,7 @@ SELECT
 FROM ScoreBoard s
 ORDER BY TeamName, Score;
 ----
-PLACEHOLDER_ERROR_MESSAGE2791
+Invalid Input Error: Argument for ntile must be greater than zero
 
 statement error
 SELECT

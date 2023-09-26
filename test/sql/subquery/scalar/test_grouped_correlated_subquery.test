@@ -138,7 +138,7 @@ Invalid Error: Non-inner join on correlated columns not supported
 statement error
 SELECT EXISTS (SELECT RANK() OVER (PARTITION BY SUM(DISTINCT col5))) FROM another_T t1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1429
+Binder Error: correlated columns in window functions not supported
 
 # REQUIRE(CHECK_COLUMN(result, 0, {true}));
 statement error

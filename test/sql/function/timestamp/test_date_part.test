@@ -849,4 +849,4 @@ statement error
 WITH parts(p) AS (VALUES (['year', 'month', 'day']), (['hour', 'minute', 'microsecond']))
 SELECT DATE_PART(p, ts) FROM parts, timestamps;
 ----
-PLACEHOLDER_ERROR_MESSAGE2421
+Binder Error: date_part can only take constant lists of part names

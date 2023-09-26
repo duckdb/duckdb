@@ -164,7 +164,10 @@ Error: Expected a number
 statement error
 SELECT strptime('1000', '%g');
 ----
-PLACEHOLDER_ERROR_MESSAGE2013
+Invalid Input Error: Could not parse string "1000" according to format specifier "%g"
+1000
+   ^
+Error: Full specifier did not match: trailing characters
 
 # this won't work without explicit casts
 statement error

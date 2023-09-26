@@ -33,7 +33,7 @@ Conversion Error: Type INT16 with value -32768 can't be cast because the value i
 statement error
 SELECT i::UTINYINT FROM smallints WHERE i>=0 ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE797
+Conversion Error: Type INT16 with value 32767 can't be cast because the value is out of range for the destination type UINT8
 
 query I
 SELECT i::USMALLINT FROM smallints WHERE i>=0 ORDER BY i

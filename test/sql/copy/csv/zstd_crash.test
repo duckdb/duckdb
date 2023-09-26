@@ -41,7 +41,7 @@ Parser options:
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION INFER);
 ----
-PLACEHOLDER_ERROR_MESSAGE2909
+Not implemented Error: Attempting to open a compressed file, but the compression type is not supported
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION UNKNOWN);

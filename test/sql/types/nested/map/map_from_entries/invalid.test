@@ -33,7 +33,7 @@ Invalid Input Error: The provided struct type should only contain 2 fields, a ke
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(1, 'x'), (2, 'y', 'extra')]);
 ----
-PLACEHOLDER_ERROR_MESSAGE889
+Mismatch Type Error: Type STRUCT( INTEGER,  VARCHAR,  VARCHAR) does not match with STRUCT( INTEGER,  VARCHAR). Cannot cast STRUCTs of different size
 
 #Keys cant be NULL
 statement error

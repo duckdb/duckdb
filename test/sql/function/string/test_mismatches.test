@@ -126,7 +126,7 @@ Invalid Input Error: Mismatch Function: Strings must be of equal length!
 statement error
 SELECT mismatches('hi', '')
 ----
-PLACEHOLDER_ERROR_MESSAGE2392
+Invalid Input Error: Mismatch Function: Strings must be of equal length!
 
 statement error
 SELECT mismatches('', s) FROM strings ORDER BY s

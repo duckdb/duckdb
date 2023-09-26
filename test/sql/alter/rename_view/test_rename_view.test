@@ -86,4 +86,5 @@ Catalog Error: Cannot alter entry "sqlite_master" because it is an internal syst
 statement error
 ALTER VIEW nonexistingview RENAME TO my_new_view
 ----
-PLACEHOLDER_ERROR_MESSAGE2714
+Catalog Error: View with name nonexistingview does not exist!
+Did you mean "pg_views"?

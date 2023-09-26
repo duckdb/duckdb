@@ -154,7 +154,7 @@ INSERT INTO strings VALUES (3, NULL, 30, 'abcde')
 statement error
 SELECT printf(fmt) FROM strings ORDER BY idx
 ----
-PLACEHOLDER_ERROR_MESSAGE2397
+Invalid Error: Argument index "0" out of range
 
 query T
 SELECT printf(CASE WHEN pint < 15 THEN NULL ELSE pint END) FROM strings ORDER BY idx

@@ -117,7 +117,7 @@ Parser Error: Unknown unit for memory_limit: pp (expected: b, mb, gb or tb)
 statement error
 PRAGMA memory_limit='0.01TEST'
 ----
-PLACEHOLDER_ERROR_MESSAGE1966
+Parser Error: Unknown unit for memory_limit: test (expected: b, mb, gb or tb)
 
 # we can't invoke it like this either
 statement error

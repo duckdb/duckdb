@@ -102,7 +102,7 @@ Binder Error: Ambiguous reference to column name "HeLlO" (use: "test2.HeLlO" or 
 statement error
 SELECT "HELLO" FROM test1, test2
 ----
-PLACEHOLDER_ERROR_MESSAGE1417
+Binder Error: Ambiguous reference to column name "HELLO" (use: "test2.HELLO" or "test1.HELLO")
 
 statement error
 SELECT "HELLo" FROM test1, test2

@@ -248,7 +248,9 @@ Binder Error: No function matches the given name and argument types 'list_contai
 statement error
 SELECT list_contains(1,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2272
+Binder Error: No function matches the given name and argument types 'list_contains(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_contains(ANY[], ANY) -> BOOLEAN
 
 statement ok
 PRAGMA debug_force_external=true

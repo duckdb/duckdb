@@ -50,7 +50,7 @@ Conversion Error: Type INT32 with value 290309-01-01 (BC) can't be cast to the d
 statement error
 select '5877642-06-23 (BC)'::date::timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE641
+Conversion Error: date field value out of range: "5877642-06-23 (BC)", expected format is (YYYY-MM-DD)
 
 # date arithmetic
 query I

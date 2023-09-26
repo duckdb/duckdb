@@ -165,7 +165,22 @@ Binder Error: APPROXIMATE QUANTILE can only take constant quantile parameters
 statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1547
+Binder Error: No function matches the given name and argument types 'approx_quantile(VARCHAR, DECIMAL(2,1))'. You might need to add explicit type casts.
+	Candidate functions:
+	approx_quantile(DECIMAL, FLOAT) -> DECIMAL
+	approx_quantile(SMALLINT, FLOAT) -> SMALLINT
+	approx_quantile(INTEGER, FLOAT) -> INTEGER
+	approx_quantile(BIGINT, FLOAT) -> BIGINT
+	approx_quantile(HUGEINT, FLOAT) -> HUGEINT
+	approx_quantile(DOUBLE, FLOAT) -> DOUBLE
+	approx_quantile(DECIMAL, FLOAT[]) -> DECIMAL[]
+	approx_quantile(TINYINT, FLOAT[]) -> TINYINT[]
+	approx_quantile(SMALLINT, FLOAT[]) -> SMALLINT[]
+	approx_quantile(INTEGER, FLOAT[]) -> INTEGER[]
+	approx_quantile(BIGINT, FLOAT[]) -> BIGINT[]
+	approx_quantile(HUGEINT, FLOAT[]) -> HUGEINT[]
+	approx_quantile(FLOAT, FLOAT[]) -> FLOAT[]
+	approx_quantile(DOUBLE, FLOAT[]) -> DOUBLE[]
 
 statement error
 SELECT approx_quantile(r) FROM quantile

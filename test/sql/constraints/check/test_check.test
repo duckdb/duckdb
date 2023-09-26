@@ -57,7 +57,7 @@ Parser Error: subqueries prohibited in CHECK constraints
 statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1268
+Parser Error: subqueries prohibited in CHECK constraints
 
 statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)

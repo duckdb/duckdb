@@ -123,7 +123,7 @@ select bar(1, 0, 10, 1000)
 statement error
 select bar(1, 0, 10, 1001)
 ----
-PLACEHOLDER_ERROR_MESSAGE2368
+Out of Range Error: Max bar width must be <= 1000
 
 query I
 select bar(1, 0, 10, 1)

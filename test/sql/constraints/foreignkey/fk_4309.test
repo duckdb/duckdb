@@ -68,7 +68,7 @@ INSERT INTO tf_2 VALUES (2, NULL, NULL);
 statement error
 DELETE FROM tf_1 WHERE a = 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1343
+Constraint Error: Violates foreign key constraint because key "d: 2" is still referenced by a foreign key in a different table
 
 # delete everything with a|b = 2
 statement ok

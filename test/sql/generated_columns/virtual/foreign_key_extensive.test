@@ -43,7 +43,7 @@ Binder Error: Failed to create foreign key: referenced table "album" does not ha
 statement error
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, song_album) REFERENCES album(artistid, albumname));
 ----
-PLACEHOLDER_ERROR_MESSAGE1156
+Binder Error: column "song_album" named in key does not exist
 
 statement ok
 CREATE TABLE song(songid INTEGER, songartist INTEGER, songalbum TEXT, songname TEXT, FOREIGN KEY(songartist, songalbum) REFERENCES album(artistid, albumname));

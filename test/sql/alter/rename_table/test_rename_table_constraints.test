@@ -51,7 +51,7 @@ Constraint Error: Duplicate key "i: 9999" violates primary key constraint. If th
 statement error
 INSERT INTO new_tbl VALUES (1, 10), (2, 999)
 ----
-PLACEHOLDER_ERROR_MESSAGE2653
+Constraint Error: CHECK constraint failed: new_tbl
 
 statement ok
 INSERT INTO new_tbl VALUES (66, 6), (55, 5)

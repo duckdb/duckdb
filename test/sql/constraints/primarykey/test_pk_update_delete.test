@@ -77,5 +77,5 @@ Constraint Error: NOT NULL constraint failed: test.a
 statement error
 UPDATE test SET a=NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1239
+Constraint Error: NOT NULL constraint failed: test.a
 

@@ -67,7 +67,7 @@ Conversion Error: Unimplemented type for cast (TIMESTAMP_NS -> DATE)
 statement error
 select sec::TIME from timestamp;
 ----
-PLACEHOLDER_ERROR_MESSAGE971
+Conversion Error: Unimplemented type for cast (TIMESTAMP_S -> TIME)
 
 statement error
 select milli::TIME from timestamp;

@@ -112,7 +112,7 @@ Invalid Input Error: Map keys have to be unique
 statement error
 select m[NULL] from (select MAP(LIST_VALUE('Jon Lajoie', NULL, 'Tenacious D',NULL,NULL ),LIST_VALUE(10,9,10,11,13)) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE896
+Invalid Input Error: Map keys can not be NULL
 
 query I
 select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Tenacious D'),LIST_VALUE(10,1)) as m) as T

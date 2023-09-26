@@ -93,5 +93,5 @@ Catalog Error: Sequence with name seq does not exist!
 statement error con2
 SELECT nextval('seq');
 ----
-PLACEHOLDER_ERROR_MESSAGE2765
+Catalog Error: Sequence with name seq does not exist!
 

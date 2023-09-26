@@ -31,4 +31,4 @@ Invalid Input Error: Type INT32 with value -1 can't be cast because the value is
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT 1 OFFSET (SELECT k FROM integers);
 ----
-PLACEHOLDER_ERROR_MESSAGE197
+Invalid Input Error: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT64
