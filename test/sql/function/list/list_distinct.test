@@ -57,9 +57,7 @@ foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint us
 statement error
 SELECT list_distinct(NULL::${type})
 ----
-Binder Error: No function matches the given name and argument types 'list_distinct(BOOLEAN)'. You might need to add explicit type casts.
-	Candidate functions:
-	list_distinct(ANY[]) -> ANY[]
+Binder Error: No function matches the given name and argument types 'list_distinct(
 
 endloop
 

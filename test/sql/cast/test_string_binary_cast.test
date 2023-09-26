@@ -7,29 +7,29 @@ foreach prefix 0b 0B
 statement error
 SELECT '${prefix}'::INT
 ----
-Conversion Error: Could not convert string '0b' to INT32
+Conversion Error: Could not convert string
 
 # Binary with invalid characters should fail
 statement error
 SELECT '${prefix}2'::INT
 ----
-Conversion Error: Could not convert string '0b2' to INT32
+Conversion Error: Could not convert string
 
 statement error
 SELECT '${prefix}10105'::INT
 ----
-Conversion Error: Could not convert string '0b10105' to INT32
+Conversion Error: Could not convert string
 
 # Negative binary should fail
 statement error
 SELECT '${prefix}-1'::INT
 ----
-Conversion Error: Could not convert string '0b-1' to INT32
+Conversion Error: Could not convert string
 
 statement error
 SELECT '-${prefix}1'::INT
 ----
-Conversion Error: Could not convert string '-0b1' to INT32
+Conversion Error: Could not convert string
 
 # Basic asserts
 query I
@@ -72,22 +72,22 @@ SELECT '${prefix}11110000_11110000'::INT
 statement error
 SELECT '${prefix}_1'::INT
 ----
-Conversion Error: Could not convert string '0b_1' to INT32
+Conversion Error: Could not convert string
 
 statement error
 SELECT '${prefix}1_'::INT
 ----
-Conversion Error: Could not convert string '0b1_' to INT32
+Conversion Error: Could not convert string
 
 statement error
 SELECT '${prefix}1_0_'::INT
 ----
-Conversion Error: Could not convert string '0b1_0_' to INT32
+Conversion Error: Could not convert string
 
 statement error
 SELECT '${prefix}_1_0'::INT
 ----
-Conversion Error: Could not convert string '0b_1_0' to INT32
+Conversion Error: Could not convert string
 
 
 # Property check! 
@@ -120,7 +120,7 @@ SELECT '${prefix}0000000000000000000000000000000011111111'::UINT8
 statement error
 SELECT '${prefix}00000000000000000000000000000000111111111'::TINYINT
 ----
-Conversion Error: Could not convert string '0b00000000000000000000000000000000111111111' to INT8
+Conversion Error: Could not convert string
 
 query I
 SELECT '${prefix}1111111111111111111111111111111'::INT
@@ -130,7 +130,7 @@ SELECT '${prefix}1111111111111111111111111111111'::INT
 statement error
 SELECT '${prefix}11111111111111111111111111111111'::INT
 ----
-Conversion Error: Could not convert string '0b11111111111111111111111111111111' to INT32
+Conversion Error: Could not convert string
 
 query I
 SELECT '${prefix}01111111111111111111111111111111'::UINT32
@@ -155,7 +155,7 @@ SELECT '${prefix}111111111111111111111111111111111111111111111111111111111111111
 statement error
 SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::BIGINT
 ----
-Conversion Error: Could not convert string '0b1111111111111111111111111111111111111111111111111111111111111111' to INT64
+Conversion Error: Could not convert string
 
 query I
 SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::UINT64

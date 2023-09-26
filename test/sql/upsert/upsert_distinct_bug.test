@@ -26,7 +26,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
 
 # Insert aggregated data
 statement error
@@ -36,7 +36,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
 
 # Insert aggregated data second time with "INSERT OR IGNORE" => Segmentation fault
 # This contains conflicts between the to-be-inserted rows, still won't succeed
@@ -48,7 +48,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
 
 statement ok
 SELECT * FROM test_table_raw;

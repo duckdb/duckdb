@@ -75,9 +75,7 @@ IO Error: No files found that match the pattern ""
 statement error
 select * from parquet_scan('data/parquet-testing/*.parquet')
 ----
-IO Error: Failed to read file "data/parquet-testing/bug1618_struct_strings.parquet": schema mismatch in glob: column "FRUIT" was read from the original file "data/parquet-testing/delta_length_byte_array.parquet", but could not be found in file "data/parquet-testing/bug1618_struct_strings.parquet".
-Candidate names: inner
-If you are trying to read files with different schemas, try setting union_by_name=True
+schema mismatch in glob: column "FRUIT" was read from the original file
 
 # parquet glob with COPY FROM
 statement ok

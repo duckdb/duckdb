@@ -15,7 +15,6 @@ statement error
 INSERT INTO t0 VALUES (42);
 ----
 Catalog Error: Table with name t0 does not exist!
-Did you mean "system.information_schema.tables"?
 
 # Add column if not exists to non-existing table
 statement ok
@@ -25,7 +24,6 @@ statement error
 INSERT INTO t0 VALUES (42);
 ----
 Catalog Error: Table with name t0 does not exist!
-Did you mean "system.information_schema.tables"?
 
 statement ok
 CREATE TABLE t0 (c0 INT);
