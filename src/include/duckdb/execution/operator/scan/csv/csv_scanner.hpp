@@ -51,6 +51,9 @@ struct CSVIterator {
 //! The CSV Scanner is what iterates over CSV Buffers
 class CSVScanner {
 public:
+	//! Constructor used for result checking in unit-testing
+	CSVScanner(ClientContext &context, CSVReaderOptions &options);
+
 	//! Constructor used when sniffing
 	explicit CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p);
 	//! Constructor used when parsing

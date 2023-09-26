@@ -1,7 +1,6 @@
 // #define CATCH_CONFIG_RUNNER
 #include "catch.hpp"
 
-#include "duckdb/execution/operator/scan/csv/buffered_csv_reader.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "compare_result.hpp"
@@ -11,7 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "pid.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-
+#include "duckdb/execution/operator/scan/csv/csv_scanner.hpp"
 #include <cmath>
 #include <fstream>
 
@@ -323,15 +322,15 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 
 	DuckDB db;
 	Connection con(db);
-	BufferedCSVReader reader(*con.context, std::move(options), sql_types);
-	reader.InitializeProjection();
+	CSVScanner scanner(*con.context, options);
+	VerificationPositions ver;
 
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (true) {
 		// parse a chunk from the CSV file
 		try {
 			parsed_result.Reset();
-			reader.ParseCSV(parsed_result);
+			scanner.Parse(parsed_result, ver, sql_types);
 		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;

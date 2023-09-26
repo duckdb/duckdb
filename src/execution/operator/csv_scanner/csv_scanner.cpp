@@ -11,6 +11,16 @@ CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr
 	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
 };
 
+CSVScanner::CSVScanner(ClientContext &context, CSVReaderOptions &options) {
+	const vector<string> file_path {options.file_path};
+	CSVStateMachineCache state_machine_cache;
+	buffer_manager = make_shared<CSVBufferManager>(context, options, file_path);
+
+	state_machine =
+	    make_shared<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
+	csv_iterator.buffer_pos = buffer_manager->GetStartPos();
+}
+
 // CSVScanner::CSVScanner(shared_ptr<CSVBufferManager> buffer_manager_p, unique_ptr<CSVStateMachine> state_machine_p,
 //                       idx_t buffer_idx, idx_t start_buffer_p, idx_t end_buffer_p, idx_t scanner_id_p)
 //    : buffer_manager(std::move(buffer_manager_p)), state_machine(std::move(state_machine_p)),
