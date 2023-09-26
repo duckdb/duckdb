@@ -418,7 +418,8 @@ DROP SEQUENCE main_sequence;
 statement error
 DROP SEQUENCE oop_sequence;
 ----
-PLACEHOLDER_ERROR_MESSAGE1869
+Catalog Error: Sequence with name oop_sequence does not exist!
+Did you mean "out_of_path.oop_sequence"?
 
 statement ok
 DROP SEQUENCE out_of_path.oop_sequence;

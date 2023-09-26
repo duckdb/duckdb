@@ -175,7 +175,7 @@ select '5881580-07-10'::date - 1
 statement error
 select '5881580-07-10'::date + 1
 ----
-PLACEHOLDER_ERROR_MESSAGE623
+Out of Range Error: Date out of range
 
 statement error
 select '5881580-07-10'::date + 365

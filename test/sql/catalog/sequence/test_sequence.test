@@ -566,4 +566,4 @@ Parser Error: Cycle value should be passed as most once
 statement error
 CREATE SEQUENCE wrongseq INCREMENT 2 INCREMENT BY -1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1910
+Parser Error: Increment value should be passed as most once

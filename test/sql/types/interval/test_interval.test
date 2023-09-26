@@ -368,7 +368,7 @@ Conversion Error: Could not convert string 'aa' to INT32
 statement error
 SELECT INTERVAL '100 months' DAY;
 ----
-PLACEHOLDER_ERROR_MESSAGE516
+Conversion Error: Could not convert string '100 months' to INT32
 
 statement error
 SELECT '100'::INTERVAL;

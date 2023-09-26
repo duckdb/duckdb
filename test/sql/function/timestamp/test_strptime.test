@@ -463,7 +463,7 @@ Invalid Input Error: Could not parse string "" according to format specifier "%Y
 statement error
 SELECT strptime('', '%p')
 ----
-PLACEHOLDER_ERROR_MESSAGE2451
+Invalid Input Error: Could not parse string "" according to format specifier "%p"
 
 statement error
 SELECT strptime('a', '%p')

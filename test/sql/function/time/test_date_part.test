@@ -296,6 +296,6 @@ SELECT d, DATE_PART(['${datepart}'], d) AS parts
 FROM times
 ORDER BY 1;
 ----
-PLACEHOLDER_ERROR_MESSAGE2050
+Not implemented Error: "TIME" units "year" not recognized
 
 endloop

@@ -331,7 +331,7 @@ Catalog Error: Macro Function with name "add_macro" already exists!
 statement error
 CREATE MACRO my_macro(a.b) AS 42;
 ----
-PLACEHOLDER_ERROR_MESSAGE1824
+Binder Error: Invalid parameter name 'a.b': must be unqualified
 
 statement error
 CREATE MACRO my_macro(a.b.c) AS 42;
