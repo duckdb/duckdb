@@ -378,7 +378,7 @@ Conversion Error: Could not convert string '100' to INTERVAL
 statement error
 SELECT '100 unknowns'::INTERVAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE514
+Conversion Error: extract specifier "unknowns" not recognized
 
 statement error
 SELECT '100 months a'::INTERVAL;

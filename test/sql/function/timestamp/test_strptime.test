@@ -477,7 +477,10 @@ Error: Expected AM/PM
 statement error
 SELECT strptime('mp', '%p')
 ----
-PLACEHOLDER_ERROR_MESSAGE2449
+Invalid Input Error: Could not parse string "mp" according to format specifier "%p"
+mp
+^
+Error: Expected AM/PM
 
 statement error
 SELECT strptime('pp', '%p')

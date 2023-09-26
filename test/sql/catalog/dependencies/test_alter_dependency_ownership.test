@@ -114,7 +114,7 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 ALTER SEQUENCE sequence1 OWNED BY tablename2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1792
+Dependency Error: sequence1 already depends on tablename
 
 statement ok
 DROP TABLE tablename;

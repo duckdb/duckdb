@@ -99,4 +99,4 @@ CREATE TABLE vals2 (i INTEGER, j INTEGER)
 statement error
 COPY vals2 FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
 ----
-PLACEHOLDER_ERROR_MESSAGE2958
+IO Error: No files found that match the pattern "*/sql/*/parquet/*/glob/t?.parquet"

@@ -447,7 +447,8 @@ ALTER TABLE test.test_table ADD COLUMN n INTEGER;
 statement error
 ALTER TABLE oop_table ADD COLUMN o INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1867
+Catalog Error: Table with name oop_table does not exist!
+Did you mean "out_of_path.oop_table"?
 
 statement ok
 ALTER TABLE out_of_path.oop_table ADD COLUMN p INTEGER;

@@ -294,7 +294,7 @@ Conversion Error: date field value out of range: "1992-12-32", expected format i
 statement error
 SELECT '1900-02-29'::DATE::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE586
+Conversion Error: date field value out of range: "1900-02-29", expected format is (YYYY-MM-DD)
 
 # 2000 is a leap year
 query I

@@ -292,7 +292,7 @@ INSERT INTO s1.fkt VALUES (1)
 statement error
 DELETE FROM s1.pkt WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1313
+Constraint Error: Violates foreign key constraint because key "j: 2" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM s1.pkt WHERE i=5

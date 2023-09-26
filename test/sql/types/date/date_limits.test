@@ -185,7 +185,7 @@ Out of Range Error: Date out of range
 statement error
 select '5881580-07-10'::date + 2147483647
 ----
-PLACEHOLDER_ERROR_MESSAGE621
+Out of Range Error: Date out of range
 
 statement error
 SELECT '5877642-06-25 (BC)'::DATE - 1;
