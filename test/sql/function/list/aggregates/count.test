@@ -32,5 +32,6 @@ NULL
 
 # incorrect usage
 statement error
-select list_count()----
+select list_count()
+----
 PLACEHOLDER_ERROR_MESSAGE2172
