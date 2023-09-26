@@ -177,7 +177,7 @@ statement error
 INSERT INTO table1 VALUES (-10, -20, -30)
     RETURNING '-10.-20' IN (SELECT group_concat(a) OVER (ORDER BY b) as GC FROM table1);
 ----
-PLACEHOLDER_ERROR_MESSAGE260
+Binder Error: SUBQUERY is not supported in returning statements
 
 
 # new table with multiple types

@@ -49,7 +49,7 @@ Permission Error: COPY FROM is disabled by configuration
 statement error
 COPY lineitem TO '__TEST_DIR__/lineitem.parquet'
 ----
-PLACEHOLDER_ERROR_MESSAGE2979
+Permission Error: COPY TO is disabled by configuration
 
 # we also can't just enable external access again
 statement error

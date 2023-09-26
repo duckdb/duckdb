@@ -345,7 +345,7 @@ Conversion Error: Type VARCHAR with value '{{a: 3}' can't be cast to the destina
 statement error
 SELECT CAST('{a:3}, {b:1}' AS STRUCT(a INT, b INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1452
+Conversion Error: Type VARCHAR with value '{a:3}, {b:1}' can't be cast to the destination type STRUCT
 
 statement error
 SELECT CAST('{a:{a:3}, b:{{b:1}}}' AS STRUCT(a STRUCT(a INT), b STRUCT(b INT)));

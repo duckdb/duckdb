@@ -62,7 +62,7 @@ Conversion Error: Casting value "10.0000000" to type DECIMAL(7,6) failed: value 
 statement error
 SELECT 10.00::DECIMAL(18,16)::DECIMAL(16,15);
 ----
-PLACEHOLDER_ERROR_MESSAGE277
+Conversion Error: Casting value "10.0000000000000000" to type DECIMAL(16,15) failed: value is out of range!
 
 statement error
 SELECT 10.00::DECIMAL(38,36)::DECIMAL(36,35);

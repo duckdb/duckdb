@@ -89,7 +89,7 @@ SELECT
     (SELECT GROUPING(t1.col1) FROM tbl_ProductSales)
 FROM another_T t1
 ----
-PLACEHOLDER_ERROR_MESSAGE168
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT

@@ -77,7 +77,7 @@ Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> TIME)
 statement error
 select nano::TIME from timestamp;
 ----
-PLACEHOLDER_ERROR_MESSAGE969
+Conversion Error: Unimplemented type for cast (TIMESTAMP_NS -> TIME)
 
 # Direct timestamp promotions
 foreach src sec milli micro nano

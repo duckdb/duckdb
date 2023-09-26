@@ -45,7 +45,7 @@ Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
 statement error
 create index i_index on lists(id, l);
 ----
-PLACEHOLDER_ERROR_MESSAGE2847
+Invalid type Error: Invalid Type [INTEGER[]]: Invalid type for index key.
 
 # index on constant columns
 statement error

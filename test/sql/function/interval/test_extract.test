@@ -208,4 +208,4 @@ Not implemented Error: interval units "doy" not recognized
 statement error
 SELECT EXTRACT(dow FROM interval '6 months ago')
 ----
-PLACEHOLDER_ERROR_MESSAGE1999
+Not implemented Error: interval units "dow" not recognized

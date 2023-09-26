@@ -222,7 +222,7 @@ Conversion Error: Could not convert string '   	' to INTERVAL
 statement error
 SELECT INTERVAL 'years';
 ----
-PLACEHOLDER_ERROR_MESSAGE532
+Conversion Error: Could not convert string 'years' to INTERVAL
 
 statement error
 SELECT INTERVAL '-years';

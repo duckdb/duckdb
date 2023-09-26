@@ -133,7 +133,7 @@ Invalid Input Error: Map keys can not be NULL
 statement error
 select m[NULL] from (select MAP(LIST_VALUE(NULL, NULL, NULL,NULL, NULL),LIST_VALUE(NULL, NULL, NULL,NULL,NULL )) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE894
+Invalid Input Error: Map keys can not be NULL
 
 #Searching using a non-constant value (e.g. select m[a] from ...)
 statement ok

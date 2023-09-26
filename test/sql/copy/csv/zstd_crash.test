@@ -61,7 +61,7 @@ COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION ZSTD, AU
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/data/lineitem1k.tbl.gz' (COMPRESSION ZSTD);
 ----
-PLACEHOLDER_ERROR_MESSAGE2907
+IO Error: Unknown frame descriptor
 
 # we can read/write a ZSTD file also without the extension if we specify the compression type
 statement ok

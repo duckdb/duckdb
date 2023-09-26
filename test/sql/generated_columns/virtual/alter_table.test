@@ -50,7 +50,7 @@ Binder Error: Table "unit" does not have a column with name "total_profit"
 statement error
 INSERT INTO unit VALUES (1,1,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1175
+Binder Error: table unit has 2 columns but 3 values were supplied
 
 statement ok
 INSERT INTO unit VALUES (0,1)

@@ -166,7 +166,7 @@ Invalid Error: Limit percentage can't be negative value
 statement error
 SELECT * FROM test LIMIT (SELECT 'ab') %
 ----
-PLACEHOLDER_ERROR_MESSAGE204
+Invalid Input Error: Could not convert string 'ab' to DOUBLE
 
 # can only limit % by integers
 statement error

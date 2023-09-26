@@ -119,7 +119,7 @@ Parser Error: HOUR TO MINUTE is not supported
 statement error
 SELECT interval '12:30' minutes to seconds
 ----
-PLACEHOLDER_ERROR_MESSAGE497
+Parser Error: MINUTE TO SECOND is not supported
 
 # test out of range interval constants
 statement error

@@ -92,7 +92,7 @@ Conversion Error: Could not convert string "1e100e100" to DECIMAL(18,3)
 statement error
 SELECT '1e100.2'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE407
+Conversion Error: Could not convert string "1e100.2" to DECIMAL(18,3)
 
 # very large exponents
 statement error

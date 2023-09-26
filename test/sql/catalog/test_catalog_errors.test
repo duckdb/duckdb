@@ -47,7 +47,7 @@ CREATE INDEX i_index ON integers(i);
 statement error
 CREATE INDEX i_index ON integers(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1805
+Catalog Error: Index with name "i_index" already exists!
 
 # with IF NOT EXISTS it does not fail!
 statement ok

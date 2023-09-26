@@ -124,7 +124,11 @@ Binder Error: No function matches the given name and argument types 'millennium(
 statement error
 SELECT EXTRACT(quarter FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2078
+Binder Error: No function matches the given name and argument types 'quarter(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	quarter(DATE) -> BIGINT
+	quarter(TIMESTAMP) -> BIGINT
+	quarter(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(dayofweek FROM i) FROM times

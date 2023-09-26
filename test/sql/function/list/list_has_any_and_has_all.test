@@ -246,7 +246,8 @@ select l1 && l2 from tbl;
 statement error
 select 'hello' && l1 from tbl;
 ----
-PLACEHOLDER_ERROR_MESSAGE2257
+Binder Error: Referenced column "x" not found in FROM clause!
+Candidate bindings: "tbl.l1", "tbl.l2"
 
 query I
 select NULL && [NULL];

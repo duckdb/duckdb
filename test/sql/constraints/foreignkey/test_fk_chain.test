@@ -80,7 +80,7 @@ DELETE FROM t4 WHERE i4=2
 statement error
 DROP TABLE t1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1305
+Catalog Error: Could not drop the table because this table is main key table of the table "t2"
 
 statement error
 DROP TABLE t2;

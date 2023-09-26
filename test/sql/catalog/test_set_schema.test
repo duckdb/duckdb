@@ -103,7 +103,10 @@ LINE 1: DELETE FROM test.main_table WHERE i=5;
 statement error
 DELETE FROM oop_table WHERE k=8;
 ----
-PLACEHOLDER_ERROR_MESSAGE1885
+Catalog Error: Table with name oop_table does not exist!
+Did you mean "out_of_path.oop_table"?
+LINE 1: DELETE FROM oop_table WHERE k=8;
+                    ^
 
 statement ok
 DELETE FROM test.test_table WHERE i=1;

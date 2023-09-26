@@ -49,7 +49,7 @@ Binder Error: Referenced column "x" not found in FROM clause!
 statement error
 SELECT ${func_name}([1, 2], (SELECT 1) -> x + 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2143
+Binder Error: Invalid parameter list! Parameters must be comma-separated column names, e.g. x or (x, y).
 
 statement error
 SELECT ${func_name}(NULL, i) FROM incorrect_test

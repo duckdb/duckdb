@@ -62,7 +62,7 @@ Conversion Error: time field value out of range: "11:", expected format is ([YYY
 statement error
 SELECT '11:1'::TIME
 ----
-PLACEHOLDER_ERROR_MESSAGE686
+Conversion Error: time field value out of range: "11:1", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '11:11'::TIME

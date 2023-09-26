@@ -377,7 +377,7 @@ DROP SEQUENCE seq;
 statement error
 CREATE SEQUENCE seq INCREMENT 1 START -1 CYCLE;
 ----
-PLACEHOLDER_ERROR_MESSAGE1926
+Parser Error: START value (-1) cannot be less than MINVALUE (1)
 
 # max_value defaults to -1, setting start to 1 gives start > max_value
 statement error

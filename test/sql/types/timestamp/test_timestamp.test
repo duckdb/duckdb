@@ -139,7 +139,22 @@ Binder Error: No function matches the given name and argument types '+(TIMESTAMP
 statement error
 SELECT t*t FROM timestamp
 ----
-PLACEHOLDER_ERROR_MESSAGE959
+Binder Error: No function matches the given name and argument types '*(TIMESTAMP, TIMESTAMP)'. You might need to add explicit type casts.
+	Candidate functions:
+	*(TINYINT, TINYINT) -> TINYINT
+	*(SMALLINT, SMALLINT) -> SMALLINT
+	*(INTEGER, INTEGER) -> INTEGER
+	*(BIGINT, BIGINT) -> BIGINT
+	*(HUGEINT, HUGEINT) -> HUGEINT
+	*(FLOAT, FLOAT) -> FLOAT
+	*(DOUBLE, DOUBLE) -> DOUBLE
+	*(DECIMAL, DECIMAL) -> DECIMAL
+	*(UTINYINT, UTINYINT) -> UTINYINT
+	*(USMALLINT, USMALLINT) -> USMALLINT
+	*(UINTEGER, UINTEGER) -> UINTEGER
+	*(UBIGINT, UBIGINT) -> UBIGINT
+	*(INTERVAL, BIGINT) -> INTERVAL
+	*(BIGINT, INTERVAL) -> INTERVAL
 
 statement error
 SELECT t/t FROM timestamp

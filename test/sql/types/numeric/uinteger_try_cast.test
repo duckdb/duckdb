@@ -136,7 +136,7 @@ NULL
 statement error
 SELECT i::DECIMAL(3,0)::UINTEGER FROM uintegers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE775
+Conversion Error: Could not cast value 4294967295 to DECIMAL(3,0)
 
 statement error
 SELECT i::DECIMAL(9,0)::UINTEGER FROM uintegers ORDER BY i

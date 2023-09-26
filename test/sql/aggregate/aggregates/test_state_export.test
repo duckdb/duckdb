@@ -174,7 +174,7 @@ Binder Error: No function matches the given name and argument types 'combine(INT
 statement error
 SELECT finalize(NULL);
 ----
-PLACEHOLDER_ERROR_MESSAGE1677
+Binder Error: Can only FINALIZE aggregate state, not NULL
 
 statement error
 SELECT finalize(42);

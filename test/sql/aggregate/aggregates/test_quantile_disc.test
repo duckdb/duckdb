@@ -275,7 +275,7 @@ Binder Error: No function matches the given name and argument types 'quantile_di
 statement error
 SELECT quantile_cont(r, q) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1639
+Binder Error: QUANTILE can only take constant parameters
 
 statement ok
 pragma threads=4

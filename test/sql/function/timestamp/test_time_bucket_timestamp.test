@@ -775,7 +775,7 @@ Not implemented Error: Period must be greater than 0
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00'::timestamp);
 ----
-PLACEHOLDER_ERROR_MESSAGE2485
+Conversion Error: Could not convert string '1 day - 172800 seconds' to INTERVAL
 
 statement error
 select time_bucket('1 day - 172800 seconds'::interval, '2018-05-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);

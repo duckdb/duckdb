@@ -129,7 +129,9 @@ Did you mean "version"?
 statement error
 PRAGMA memory_limit()
 ----
-PLACEHOLDER_ERROR_MESSAGE1964
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA memory_limit()
+                            ^
 
 statement error
 PRAGMA memory_limit(1, 2)

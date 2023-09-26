@@ -189,7 +189,7 @@ SELECT (100::UINTEGER)::DECIMAL(3,0);
 statement error
 SELECT (100::UINTEGER)::DECIMAL(2,0);
 ----
-PLACEHOLDER_ERROR_MESSAGE478
+Conversion Error: Could not cast value 100 to DECIMAL(2,0)
 
 query I
 SELECT 100::UINTEGER * 100::DECIMAL(3,0);

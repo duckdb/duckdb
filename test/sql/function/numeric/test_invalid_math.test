@@ -52,7 +52,9 @@ LINE 1: SELECTl log10(-1);
 statement error
 SELECTl sqrt(-1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2093
+Parser Error: syntax error at or near "SELECTl"
+LINE 1: SELECTl sqrt(-1);
+        ^
 
 query I
 SELECT SQRT(0)

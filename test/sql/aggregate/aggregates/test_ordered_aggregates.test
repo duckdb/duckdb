@@ -150,7 +150,7 @@ Parser Error: Wrong number of arguments for PERCENTILE_CONT
 statement error
 SELECT percentile_disc(CAST('NaN' AS REAL)) WITHIN GROUP (ORDER BY 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1695
+Binder Error: QUANTILE parameter cannot be NaN
 
 # Empty list is also not allowed
 statement error

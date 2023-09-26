@@ -107,7 +107,7 @@ Binder Error: No function matches the given name and argument types 'julian(INTE
 statement error
 SELECT extract(era from i) FROM intervals;
 ----
-PLACEHOLDER_ERROR_MESSAGE1992
+Not implemented Error: interval units "era" not recognized
 
 statement error
 SELECT extract(julian from i) FROM intervals;

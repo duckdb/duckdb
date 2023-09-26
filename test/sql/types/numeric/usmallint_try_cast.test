@@ -154,7 +154,7 @@ Conversion Error: Could not cast value 65535 to DECIMAL(9,5)
 statement error
 SELECT i::DECIMAL(18,14)::USMALLINT FROM usmallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE783
+Conversion Error: Could not cast value 65535 to DECIMAL(18,14)
 
 statement error
 SELECT i::DECIMAL(38,34)::USMALLINT FROM usmallints ORDER BY i

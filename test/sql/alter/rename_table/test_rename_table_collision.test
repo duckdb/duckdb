@@ -208,7 +208,7 @@ TransactionContext Error: Catalog write-write conflict on alter with "e1"
 statement error con2
 ALTER TABLE e2 RENAME TO e1
 ----
-PLACEHOLDER_ERROR_MESSAGE2621
+TransactionContext Error: Catalog write-write conflict on alter with "e2"
 
 statement ok con1
 ROLLBACK

@@ -61,7 +61,7 @@ select timestamp '294247-01-10 04:00:54.775806'
 statement error
 select timestamp '294247-01-10 04:00:54.775807'
 ----
-PLACEHOLDER_ERROR_MESSAGE982
+Conversion Error: timestamp field value out of range: "294247-01-10 04:00:54.775807", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 statement error
 select timestamp '294247-01-10 04:00:54.775806' + interval (1) microsecond

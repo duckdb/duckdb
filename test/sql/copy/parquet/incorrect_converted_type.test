@@ -37,7 +37,7 @@ IO Error: TIMESTAMP converted type can only be set for value of Type::INT64
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
 ----
-PLACEHOLDER_ERROR_MESSAGE2950
+IO Error: INT8 converted type can only be set for value of Type::INT32
 
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';

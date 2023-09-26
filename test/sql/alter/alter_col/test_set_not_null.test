@@ -145,7 +145,7 @@ ALTER TABLE t ALTER COLUMN j SET NOT NULL
 statement error
 INSERT INTO t VALUES (null)
 ----
-PLACEHOLDER_ERROR_MESSAGE2585
+Constraint Error: NOT NULL constraint failed: t.j
 
 # Drop not null
 statement ok

@@ -50,7 +50,7 @@ Conversion Error: Failed to cast decimal value 32768 to type INT16
 statement error
 SELECT 14751947891758972421513::DECIMAL(38,0)::SMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE287
+Conversion Error: Failed to cast decimal value 14751947891758972421513 to type INT16
 
 # integer
 query IIIII

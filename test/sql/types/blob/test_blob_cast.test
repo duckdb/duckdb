@@ -81,5 +81,5 @@ Conversion Error: Unimplemented type for cast (BIGINT -> BLOB)
 statement error
 SELECT 1::decimal::BYTEA
 ----
-PLACEHOLDER_ERROR_MESSAGE999
+Conversion Error: Unimplemented type for cast (DECIMAL(18,3) -> BLOB)
 

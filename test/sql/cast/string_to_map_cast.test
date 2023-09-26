@@ -213,7 +213,7 @@ Conversion Error: Type VARCHAR with value '{3=3, 4=4' can't be cast to the desti
 statement error
 SELECT CAST('{3=3, 4=4} bla' AS MAP(INT, INT));
 ----
-PLACEHOLDER_ERROR_MESSAGE1499
+Conversion Error: Type VARCHAR with value '{3=3, 4=4} bla' can't be cast to the destination type MAP
 
 statement error
 SELECT CAST('{                                                                      ' AS MAP(INT, INT));

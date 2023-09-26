@@ -398,7 +398,7 @@ Conversion Error: Could not convert string '3 1' to INT32
 statement error
 SELECT CAST('[[3,, 1]]' AS INT[][]);
 ----
-PLACEHOLDER_ERROR_MESSAGE1475
+Conversion Error: Could not convert string '' to INT32
 
 statement error
 SELECT CAST('[[3], [[5], [4]]' AS INT[][]);

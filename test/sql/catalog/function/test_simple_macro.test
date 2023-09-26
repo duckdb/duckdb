@@ -177,7 +177,7 @@ Binder Error: Macro function 'IFELSE(a, b, c)' requires 3 positional arguments, 
 statement error
 SELECT IFELSE(1, 2, 3, 4);
 ----
-PLACEHOLDER_ERROR_MESSAGE1840
+Binder Error: Macro function 'IFELSE(a, b, c)' requires 3 positional arguments, but 4 positional arguments were provided.
 
 # no duplicate macro function names
 statement error

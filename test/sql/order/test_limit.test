@@ -197,7 +197,7 @@ Invalid Input Error: Type INT32 with value -1 can't be cast because the value is
 statement error
 SELECT * FROM integers as int LIMIT (SELECT 'ab');
 ----
-PLACEHOLDER_ERROR_MESSAGE182
+Invalid Input Error: Could not convert string 'ab' to UINT64
 
 # Test use subquery in limit and offset
 statement ok

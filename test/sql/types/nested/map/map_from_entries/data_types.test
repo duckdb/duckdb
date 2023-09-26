@@ -152,7 +152,7 @@ select col[True] from boolean_key;
 statement error
 create table boolean_key_dup as select MAP_FROM_ENTRIES(ARRAY[(True, 'x'), (True, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE881
+Invalid Input Error: Map keys have to be unique
 
 # -- BLOB --
 # Valid

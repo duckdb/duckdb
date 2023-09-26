@@ -40,4 +40,4 @@ Invalid Input Error: Footer length error in file 'test/sql/copy/parquet/broken/h
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/garbledfooter.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2932
+Invalid Error: TProtocolException: Invalid data

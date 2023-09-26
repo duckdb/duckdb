@@ -84,7 +84,7 @@ NULL
 statement error
 SELECT i::TINYINT FROM integers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE810
+Conversion Error: Type INT32 with value -2147483648 can't be cast because the value is out of range for the destination type INT8
 
 query I
 SELECT TRY_CAST(i AS TINYINT) FROM integers ORDER BY i

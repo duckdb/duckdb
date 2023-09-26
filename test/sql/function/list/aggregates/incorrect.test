@@ -46,7 +46,9 @@ Binder Error: No function matches the given name and argument types 'list_aggr(V
 statement error
 SELECT list_aggr(1, 2, '${func_name}')
 ----
-PLACEHOLDER_ERROR_MESSAGE2198
+Binder Error: No function matches the given name and argument types 'list_aggr(INTEGER, INTEGER, VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_aggr(ANY[], VARCHAR) -> ANY
 
 foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 

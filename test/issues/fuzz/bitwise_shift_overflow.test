@@ -58,7 +58,7 @@ Out of Range Error: Cannot left-shift negative number -10
 statement error
 SELECT 1000::smallint<<6::smallint;
 ----
-PLACEHOLDER_ERROR_MESSAGE157
+Out of Range Error: Overflow in left shift (1000 << 6)
 
 query I
 SELECT 1000::smallint<<5::smallint;
