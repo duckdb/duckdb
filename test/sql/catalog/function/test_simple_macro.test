@@ -211,7 +211,7 @@ SELECT macros.add_macro(40,2)
 statement error
 CREATE MACRO conflict(i, i) AS i + 1
 ----
-PLACEHOLDER_ERROR_MESSAGE1837
+Binder Error: table "0_macro_parametersconflict" has duplicate column name "i"
 
 # aggregation macro's
 statement ok

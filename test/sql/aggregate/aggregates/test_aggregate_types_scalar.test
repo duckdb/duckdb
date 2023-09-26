@@ -124,7 +124,10 @@ Binder Error: No function matches the given name and argument types 'max()'. You
 statement error
 SELECT MAX(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1627
+Binder Error: No function matches the given name and argument types 'max(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	max(DECIMAL) -> DECIMAL
+	max(ANY) -> ANY
 
 query IIRTTTT
 SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')

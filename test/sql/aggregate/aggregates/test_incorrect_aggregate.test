@@ -80,7 +80,10 @@ Binder Error: No function matches the given name and argument types 'first()'. Y
 statement error
 SELECT FIRST(1, 2, 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1572
+Binder Error: No function matches the given name and argument types 'first(INTEGER, INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	first(DECIMAL) -> DECIMAL
+	first(ANY) -> ANY
 
 statement error
 SELECT FIRST(FIRST(1))

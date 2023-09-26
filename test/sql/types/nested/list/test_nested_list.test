@@ -325,7 +325,7 @@ Binder Error: UNNEST() requires a single argument
 statement error
 SELECT UNNEST(42)
 ----
-PLACEHOLDER_ERROR_MESSAGE934
+Binder Error: UNNEST() can only be applied to lists, structs and NULL
 
 statement error
 SELECT UNNEST()

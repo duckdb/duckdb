@@ -151,7 +151,7 @@ Conversion Error: Could not convert string 'bla' to UINT8
 statement error
 select [1]::mood[]
 ----
-PLACEHOLDER_ERROR_MESSAGE651
+Conversion Error: Unimplemented type for cast (INTEGER -> ENUM('sad', 'ok', 'happy'))
 
 query I
 select []::mood[]

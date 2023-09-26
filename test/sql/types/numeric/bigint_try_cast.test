@@ -107,7 +107,7 @@ NULL
 statement error
 SELECT i::INTEGER FROM bigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE762
+Conversion Error: Type INT64 with value -9223372036854775808 can't be cast because the value is out of range for the destination type INT32
 
 query I
 SELECT TRY_CAST(i AS INTEGER) FROM bigints ORDER BY i

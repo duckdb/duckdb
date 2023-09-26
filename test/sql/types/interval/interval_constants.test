@@ -135,7 +135,7 @@ Out of Range Error: Interval value 214748364 years out of range
 statement error
 SELECT interval '9223372036854775807' hours;
 ----
-PLACEHOLDER_ERROR_MESSAGE494
+Out of Range Error: Interval value 9223372036854775807 hours out of range
 
 statement error
 SELECT interval '9223372036854775807' minutes;

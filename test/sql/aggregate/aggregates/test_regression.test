@@ -123,7 +123,7 @@ NULL
 statement error
 select regr_r2(0, 1e230*i) from range(5) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1598
+Out of Range Error: VARPOP(X) is out of range!
 
 statement error
 select regr_r2(1e230*i, i) from range(5) tbl(i);

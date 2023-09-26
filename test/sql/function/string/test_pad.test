@@ -132,5 +132,7 @@ Invalid Error: Insufficient padding in RPAD.
 statement error
 select RPAD('a', 100000000000000000, 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2313
+Binder Error: No function matches the given name and argument types 'rpad(VARCHAR, BIGINT, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	rpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 

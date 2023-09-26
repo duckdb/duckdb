@@ -91,7 +91,7 @@ ALTER TABLE employee ALTER COLUMN name_new SET DATA TYPE TEXT;
 statement error
 ALTER TABLE employee DROP COLUMN id;
 ----
-PLACEHOLDER_ERROR_MESSAGE1370
+Catalog Error: Cannot drop column "id" because there is a UNIQUE constraint that depends on it
 
 statement error
 ALTER TABLE employee DROP COLUMN managerid;

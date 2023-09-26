@@ -108,7 +108,7 @@ Conversion Error: Could not convert string "1e-9999999999" to DECIMAL(18,3)
 statement error
 SELECT '1e-99999999999999999999999999999999'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE404
+Conversion Error: Could not convert string "1e-99999999999999999999999999999999" to DECIMAL(18,3)
 
 # not an exponent
 statement error

@@ -185,7 +185,10 @@ LINE 1: SELECT * FROM memory.main.test_temp_table;
 statement error
 SELECT * FROM test.test_temp_table;
 ----
-PLACEHOLDER_ERROR_MESSAGE1882
+Catalog Error: Table with name test_temp_table does not exist!
+Did you mean "main.test_temp_table"?
+LINE 1: SELECT * FROM test.test_temp_table;
+                      ^
 
 statement ok
 SELECT * FROM test_temp_table;

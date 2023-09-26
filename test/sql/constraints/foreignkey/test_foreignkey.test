@@ -95,7 +95,7 @@ SELECT * FROM song;
 statement error
 UPDATE album SET albumname='B' WHERE albumcover='C_cover';
 ----
-PLACEHOLDER_ERROR_MESSAGE1328
+Constraint Error: Violates foreign key constraint because key "songartist: 3, songalbum: C" is still referenced by a foreign key in a different table
 
 statement error
 UPDATE song SET songalbum='E' WHERE albumcover='C_song';

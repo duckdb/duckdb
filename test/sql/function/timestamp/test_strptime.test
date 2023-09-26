@@ -353,7 +353,10 @@ Error: Month out of range, expected a value between 1 and 12
 statement error
 SELECT strptime('2018-10-100', '%Y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2464
+Invalid Input Error: Could not parse string "2018-10-100" according to format specifier "%Y-%m-%d"
+2018-10-100
+          ^
+Error: Full specifier did not match: trailing characters
 
 # year without century out of range
 statement error

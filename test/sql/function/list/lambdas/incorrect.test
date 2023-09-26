@@ -66,7 +66,9 @@ Binder Error: Referenced column "y" not found in FROM clause!
 statement error
 SELECT ${func_name}([1])
 ----
-PLACEHOLDER_ERROR_MESSAGE2140
+Binder Error: No function matches the given name and argument types 'list_transform(INTEGER[])'. You might need to add explicit type casts.
+	Candidate functions:
+	list_transform(ANY[], LAMBDA) -> ANY[]
 
 statement error
 SELECT ${func_name}([1], NULL)

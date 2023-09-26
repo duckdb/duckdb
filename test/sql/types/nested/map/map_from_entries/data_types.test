@@ -215,7 +215,7 @@ select col['12.3'::DOUBLE] from double_key;
 statement error
 create table double_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::DOUBLE, 'x'), ('12.3'::DOUBLE, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE878
+Invalid Input Error: Map keys have to be unique
 
 # -- REAL --
 # Valid

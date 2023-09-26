@@ -87,7 +87,7 @@ Out of Range Error: Date out of range
 statement error
 select '5877642-06-25 (BC)'::date - interval (365) day
 ----
-PLACEHOLDER_ERROR_MESSAGE636
+Out of Range Error: Date out of range
 
 statement error
 select '5877642-06-25 (BC)'::date - interval (2147483647) day

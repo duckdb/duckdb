@@ -106,7 +106,7 @@ SELECT * FROM fkt2;
 statement error
 UPDATE pkt1 SET i1=3, j1=13 WHERE i1=2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1359
+Constraint Error: Violates foreign key constraint because key "k1: 2" is still referenced by a foreign key in a different table
 
 statement error
 UPDATE pkt2 SET i2=103, j2=1003 WHERE i2=101;

@@ -201,7 +201,7 @@ Conversion Error: Could not cast value -32768 to DECIMAL(3,0)
 statement error
 SELECT i::DECIMAL(9,5)::SMALLINT FROM smallints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE792
+Conversion Error: Could not cast value -32768 to DECIMAL(9,5)
 
 statement error
 SELECT i::DECIMAL(18,14)::SMALLINT FROM smallints ORDER BY i

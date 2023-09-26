@@ -195,7 +195,7 @@ INSERT INTO strings VALUES ('hello', 'world'), ('hallo', 'ola'), ('hello', ''), 
 statement error
 SELECT s, t, hamming(s, t) hd FROM strings WHERE length(s) = length(t)
 ----
-PLACEHOLDER_ERROR_MESSAGE2387
+Invalid Input Error: Mismatch Function: Strings must be of length > 0!
 
 statement error
 SELECT hamming(s, t)  FROM strings

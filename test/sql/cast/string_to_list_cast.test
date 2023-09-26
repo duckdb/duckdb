@@ -413,7 +413,7 @@ Conversion Error: Type VARCHAR with value '][3]' can't be cast to the destinatio
 statement error
 SELECT CAST('[[[[[]][3][[]][][[[][]]]]]' AS INT[][][][]);
 ----
-PLACEHOLDER_ERROR_MESSAGE1472
+Conversion Error: Type VARCHAR with value '[[[[[]][3][[]][][[[][]]]]]' can't be cast to the destination type LIST
 
 
 #               Test WHERE clause

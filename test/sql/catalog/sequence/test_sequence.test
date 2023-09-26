@@ -429,7 +429,7 @@ Parser Error: Unterminated quote in qualified name!
 statement error
 SELECT nextval('a.b.c.d');
 ----
-PLACEHOLDER_ERROR_MESSAGE1923
+Parser Error: Expected catalog.entry, schema.entry or entry: too many entries found
 
 # start exceeds max value
 statement error

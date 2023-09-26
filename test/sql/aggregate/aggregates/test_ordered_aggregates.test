@@ -168,7 +168,7 @@ Parser Error: Wrong number of arguments for MODE
 statement error
 select percentile_disc('duck') within group(order by i) from generate_series(0,100) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1692
+Invalid Input Error: Could not convert string 'duck' to DOUBLE
 
 # No function matches the given name and argument types 'quantile_cont(BIGINT, VARCHAR)'
 statement error

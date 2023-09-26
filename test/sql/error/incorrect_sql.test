@@ -82,7 +82,10 @@ LINE 1: SELECT * FROM RANG();
 statement error
 SELECT * FROM RANGE(1, hello=3);
 ----
-PLACEHOLDER_ERROR_MESSAGE3086
+Binder Error: Invalid named parameter "hello" for function range
+Function does not accept any named parameters.
+LINE 1: SELECT * FROM RANGE(1, hello=3);
+                      ^
 
 statement error
 SELECT * FROM READ_CSV('x', hello=3);

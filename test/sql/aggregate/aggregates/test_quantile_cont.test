@@ -429,4 +429,4 @@ SELECT quantile_cont(t, 0.5) FROM bigints;
 statement error
 SELECT quantile_cont(r, random()) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1651
+Binder Error: QUANTILE can only take constant parameters

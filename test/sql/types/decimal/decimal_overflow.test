@@ -57,7 +57,7 @@ Out of Range Error: Overflow in subtract of DECIMAL(38) (-5000000000000000000000
 statement error
 select 90000000000000000.0::DECIMAL(18,1) * 10::DECIMAL(2,0);
 ----
-PLACEHOLDER_ERROR_MESSAGE369
+Out of Range Error: Overflow in multiplication of DECIMAL(18) (900000000000000000 * 10). You might want to add an explicit cast to a bigger decimal.
 
 statement error
 select 90000000000000000.0::DECIMAL(18,1) * 1000::DECIMAL(4,0);

@@ -163,7 +163,7 @@ Conversion Error: Could not cast value 4294967295 to DECIMAL(18,9)
 statement error
 SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE772
+Conversion Error: Could not cast value 4294967295 to DECIMAL(38,29)
 
 query I
 SELECT TRY_CAST(i AS DECIMAL(3,0))::UINTEGER FROM uintegers ORDER BY i

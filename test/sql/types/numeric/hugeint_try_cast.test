@@ -94,7 +94,7 @@ NULL
 statement error
 SELECT i::SMALLINT FROM hugeints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE735
+Conversion Error: Type INT128 with value -170141183460469231731687303715884105727 can't be cast because the value is out of range for the destination type INT16
 
 query I
 SELECT TRY_CAST(i AS SMALLINT) FROM hugeints ORDER BY i

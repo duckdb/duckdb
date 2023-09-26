@@ -193,7 +193,9 @@ Binder Error: No function matches the given name and argument types 'finalize(HU
 statement error
 SELECT finalize(sum(d)) from dummy group by g;
 ----
-PLACEHOLDER_ERROR_MESSAGE1674
+Binder Error: No function matches the given name and argument types 'finalize(HUGEINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	finalize(AGGREGATE_STATE<?>) -> INVALID
 
 # can't finalize twice
 statement error

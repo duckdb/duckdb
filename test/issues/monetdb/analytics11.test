@@ -455,7 +455,7 @@ INNER JOIN tbl_X
 ON tbl_ProductSales.ColID = tbl_X.ColID
 GROUP BY CUBE(tbl_ProductSales.Product_Category)
 ----
-PLACEHOLDER_ERROR_MESSAGE165
+Binder Error: Ambiguous reference to column name "ColID" (use: "tbl_X.ColID" or "tbl_ProductSales.ColID")
 
 query I rowsort
 SELECT
