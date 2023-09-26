@@ -362,6 +362,3 @@ statement error
 SELECT string_split_regex(a, '[') FROM test ORDER BY a;
 ----
 Catalog Error: Table with name test does not exist!
-Did you mean "temp.information_schema.tables"?
-LINE 1: SELECT string_split_regex(a, '[') FROM test ORDER BY a;
-                                               ^

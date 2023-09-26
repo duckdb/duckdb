@@ -34,9 +34,6 @@ statement error
 SELECT * FROM nonexistanttable
 ----
 Catalog Error: Table with name nonexistanttable does not exist!
-Did you mean "temp.information_schema.tables"?
-LINE 1: SELECT * FROM nonexistanttable
-                      ^
 
 query I
 SELECT 42

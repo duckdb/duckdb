@@ -19,13 +19,13 @@ foreach type <integral> float double varchar
 statement error
 select 42::${type}::"null"
 ----
-Conversion Error: Unimplemented type for cast (TINYINT -> NULL)
+Conversion Error: Unimplemented type for cast
 
 # implicit cast
 statement error
 insert into null_table values (42::${type})
 ----
-Conversion Error: Unimplemented type for cast (TINYINT -> NULL)
+Conversion Error: Unimplemented type for cast
 
 endloop
 
