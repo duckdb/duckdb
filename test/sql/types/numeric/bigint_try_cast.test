@@ -161,7 +161,7 @@ CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000
 statement error
 SELECT s::BIGINT FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE761
+Conversion Error: Could not convert string '   ' to INT64
 
 query I
 SELECT TRY_CAST(s AS BIGINT) FROM strings

@@ -111,7 +111,7 @@ Constraint Error: Violates foreign key constraint because key "k1: 2" is still r
 statement error
 UPDATE pkt2 SET i2=103, j2=1003 WHERE i2=101;
 ----
-PLACEHOLDER_ERROR_MESSAGE1358
+Constraint Error: Violates foreign key constraint because key "l1: 101" is still referenced by a foreign key in a different table
 
 statement ok
 UPDATE pkt2 SET i2=103, j2=1003 WHERE i2=102;

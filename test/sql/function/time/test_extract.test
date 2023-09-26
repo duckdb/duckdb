@@ -160,7 +160,11 @@ Binder Error: No function matches the given name and argument types 'dayofyear(T
 statement error
 SELECT EXTRACT(week FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2074
+Binder Error: No function matches the given name and argument types 'week(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	week(DATE) -> BIGINT
+	week(TIMESTAMP) -> BIGINT
+	week(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(yearweek FROM i) FROM times

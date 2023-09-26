@@ -100,7 +100,7 @@ Conversion Error: Could not convert string "100000" to DECIMAL(5,0)
 statement error
 SELECT CAST('100000'::DOUBLE AS DECIMAL(5,0))
 ----
-PLACEHOLDER_ERROR_MESSAGE391
+Conversion Error: Could not cast value 100000.000000 to DECIMAL(5,0)
 
 statement error
 SELECT CAST(100000::DECIMAL(6,0) AS DECIMAL(5,0))

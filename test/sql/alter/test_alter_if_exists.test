@@ -70,7 +70,8 @@ ALTER TABLE IF EXISTS t0 DROP COLUMN if EXISTS c3;
 statement error
 ALTER TABLE t1 DROP COLUMN IF EXISTS c3;
 ----
-PLACEHOLDER_ERROR_MESSAGE2707
+Catalog Error: Table with name t1 does not exist!
+Did you mean "t0"?
 
 statement error
 ALTER TABLE t1 DROP COLUMN c3;

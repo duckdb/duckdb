@@ -177,4 +177,4 @@ Conversion Error: date field value out of range: "1992-01-", expected format is 
 statement error
 SELECT '30000307-01-01 (BC)'::DATE
 ----
-PLACEHOLDER_ERROR_MESSAGE549
+Conversion Error: date field value out of range: "30000307-01-01 (BC)", expected format is (YYYY-MM-DD)

@@ -150,7 +150,7 @@ Conversion Error: Could not convert string '0x10000' to UINT16
 statement error
 SELECT '0x100000000'::UINT32
 ----
-PLACEHOLDER_ERROR_MESSAGE1460
+Conversion Error: Could not convert string '0x100000000' to UINT32
 
 statement error
 SELECT '0x10000000000000000'::UINT64

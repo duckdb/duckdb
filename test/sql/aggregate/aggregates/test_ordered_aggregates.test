@@ -174,7 +174,7 @@ Invalid Input Error: Could not convert string 'duck' to DOUBLE
 statement error
 select percentile_cont('duck') within group(order by i) from generate_series(0,100) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1691
+Invalid Input Error: Could not convert string 'duck' to DOUBLE
 
 # aggregate function calls cannot be nested
 statement error

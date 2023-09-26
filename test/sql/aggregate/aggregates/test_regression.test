@@ -128,7 +128,7 @@ Out of Range Error: VARPOP(X) is out of range!
 statement error
 select regr_r2(1e230*i, i) from range(5) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE1597
+Out of Range Error: VARPOP(Y) is out of range!
 
 query I
 select regr_r2(1e230*i, 0) from range(5) tbl(i);

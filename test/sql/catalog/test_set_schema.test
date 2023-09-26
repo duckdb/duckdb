@@ -221,7 +221,10 @@ CREATE VIEW out_of_path.oop_view AS SELECT * FROM out_of_path.oop_table;
 statement error
 SELECT * FROM main.test_view;
 ----
-PLACEHOLDER_ERROR_MESSAGE1881
+Catalog Error: Table with name test_view does not exist!
+Did you mean "memory.test.test_view"?
+LINE 1: SELECT * FROM main.test_view;
+                      ^
 
 statement ok
 SELECT * FROM test.test_view;

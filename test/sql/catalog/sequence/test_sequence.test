@@ -435,7 +435,7 @@ Parser Error: Expected catalog.entry, schema.entry or entry: too many entries fo
 statement error
 CREATE SEQUENCE seq MAXVALUE 5 START WITH 6;
 ----
-PLACEHOLDER_ERROR_MESSAGE1922
+Parser Error: START value (6) cannot be greater than MAXVALUE (5)
 
 # start preceeds min value
 statement error

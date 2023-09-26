@@ -795,7 +795,7 @@ Not implemented Error: Month intervals cannot have day or time component
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00'::timestamp, '1 hour 30 minutes':: interval);
 ----
-PLACEHOLDER_ERROR_MESSAGE2481
+Not implemented Error: Month intervals cannot have day or time component
 
 statement error
 select time_bucket('1 month 1 day'::interval, '2018-05-05 00:00:00'::timestamp, '2018-05-05 00:00:00'::timestamp);

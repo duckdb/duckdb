@@ -96,7 +96,7 @@ Catalog Error: Cannot drop column "id" because there is a UNIQUE constraint that
 statement error
 ALTER TABLE employee DROP COLUMN managerid;
 ----
-PLACEHOLDER_ERROR_MESSAGE1369
+Catalog Error: Cannot drop column "managerid" because there is a FOREIGN KEY constraint that depends on it
 
 statement ok
 ALTER TABLE employee DROP COLUMN name_new;

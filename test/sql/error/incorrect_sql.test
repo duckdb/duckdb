@@ -90,7 +90,46 @@ LINE 1: SELECT * FROM RANGE(1, hello=3);
 statement error
 SELECT * FROM READ_CSV('x', hello=3);
 ----
-PLACEHOLDER_ERROR_MESSAGE3085
+Binder Error: Invalid named parameter "hello" for function read_csv
+Candidates:
+    hive_types_autocast BOOLEAN
+    hive_types ANY
+    union_by_name BOOLEAN
+    filename BOOLEAN
+    dtypes ANY
+    null_padding BOOLEAN
+    parallel BOOLEAN
+    decimal_separator VARCHAR
+    buffer_size UBIGINT
+    columns ANY
+    rejects_limit BIGINT
+    names VARCHAR[]
+    compression VARCHAR
+    ignore_errors BOOLEAN
+    quote VARCHAR
+    max_line_size VARCHAR
+    types ANY
+    skip BIGINT
+    column_types ANY
+    rejects_table VARCHAR
+    normalize_names BOOLEAN
+    all_varchar BOOLEAN
+    nullstr VARCHAR
+    auto_type_candidates ANY
+    sample_size BIGINT
+    auto_detect BOOLEAN
+    timestampformat VARCHAR
+    new_line VARCHAR
+    maximum_line_size VARCHAR
+    allow_quoted_nulls BOOLEAN
+    escape VARCHAR
+    header BOOLEAN
+    hive_partitioning BOOLEAN
+    sep VARCHAR
+    rejects_recovery_columns VARCHAR[]
+    column_names VARCHAR[]
+    dateformat VARCHAR
+    delim VARCHAR
 
 # multiple where clauses
 statement error

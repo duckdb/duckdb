@@ -156,7 +156,7 @@ Conversion Error: Could not cast value -1 to DECIMAL(9,0)
 statement error
 SELECT i::DECIMAL(18,0)::UBIGINT FROM ubigints ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE746
+Conversion Error: Could not cast value -1 to DECIMAL(18,0)
 
 query I
 SELECT i::DECIMAL(38,0)::UBIGINT FROM ubigints ORDER BY i

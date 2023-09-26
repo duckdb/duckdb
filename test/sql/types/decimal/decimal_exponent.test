@@ -114,7 +114,7 @@ Conversion Error: Could not convert string "1e-99999999999999999999999999999999"
 statement error
 SELECT '.1f3'::DECIMAL
 ----
-PLACEHOLDER_ERROR_MESSAGE403
+Conversion Error: Could not convert string ".1f3" to DECIMAL(18,3)
 
 statement error
 SELECT '1f3'::DECIMAL

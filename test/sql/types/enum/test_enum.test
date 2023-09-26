@@ -181,7 +181,7 @@ select {'a': 'happy'::mood, 'b': 1, 'c': 'ok'::mood};
 statement error
 select {'a': 'happy'::mood, 'b': 'bla'::mood};
 ----
-PLACEHOLDER_ERROR_MESSAGE650
+Conversion Error: Could not convert string 'bla' to UINT8
 
 statement error
 select {'a': 'bla'::mood};

@@ -236,7 +236,7 @@ SELECT weird_avg(a) FROM integers
 statement error
 CREATE MACRO star() AS *
 ----
-PLACEHOLDER_ERROR_MESSAGE1836
+Binder Error: STAR expression is not supported here
 
 # macro's with default arguments
 statement error

@@ -57,5 +57,5 @@ IO Error: UINT16 converted type can only be set for value of Type::INT32
 statement error
 SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
 ----
-PLACEHOLDER_ERROR_MESSAGE2946
+IO Error: UINT8 converted type can only be set for value of Type::INT32
 

@@ -73,7 +73,7 @@ Binder Error: No function matches the given name and argument types 'list_transf
 statement error
 SELECT ${func_name}([1], NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2139
+Binder Error: Invalid lambda expression!
 
 statement error
 SELECT ${func_name}(1, x -> x + 1)

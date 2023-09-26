@@ -62,7 +62,7 @@ Out of Range Error: Overflow in multiplication of DECIMAL(18) (90000000000000000
 statement error
 select 90000000000000000.0::DECIMAL(18,1) * 1000::DECIMAL(4,0);
 ----
-PLACEHOLDER_ERROR_MESSAGE368
+Out of Range Error: Overflow in multiplication of DECIMAL(18) (900000000000000000 * 1000). You might want to add an explicit cast to a bigger decimal.
 
 # hugeint
 statement error

@@ -201,7 +201,9 @@ Binder Error: No function matches the given name and argument types 'finalize(HU
 statement error
 SELECT finalize(finalize(sum(d) EXPORT_STATE)) from dummy;
 ----
-PLACEHOLDER_ERROR_MESSAGE1673
+Binder Error: No function matches the given name and argument types 'finalize(HUGEINT)'. You might need to add explicit type casts.
+	Candidate functions:
+	finalize(AGGREGATE_STATE<?>) -> INVALID
 
 statement error
 select sum(42) EXPORT_STATE over ();

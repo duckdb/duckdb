@@ -135,7 +135,7 @@ SELECT 32767::HUGEINT::SMALLINT, -32767::HUGEINT::SMALLINT;
 statement error
 SELECT 100000000000::HUGEINT::INTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE1030
+Conversion Error: Type INT128 with value 100000000000 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 SELECT 2147483648::HUGEINT::INTEGER;

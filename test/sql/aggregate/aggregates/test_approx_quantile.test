@@ -342,7 +342,7 @@ Binder Error: No function matches the given name and argument types 'reservoir_q
 statement error
 SELECT reservoir_quantile(r, 0.9, NULL)  from quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1541
+Binder Error: Size of the RESERVOIR_QUANTILE sample cannot be NULL
 
 statement error
 SELECT reservoir_quantile(r, 0.9, r)  from quantile

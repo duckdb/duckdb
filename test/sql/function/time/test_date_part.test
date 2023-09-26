@@ -135,7 +135,8 @@ Candidate bindings: "times.d", "times.s"
 statement error
 SELECT dayofyear(i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2062
+Binder Error: Referenced column "i" not found in FROM clause!
+Candidate bindings: "times.d", "times.s"
 
 statement error
 SELECT week(i) FROM times

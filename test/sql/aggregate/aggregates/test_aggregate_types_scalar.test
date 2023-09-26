@@ -137,7 +137,10 @@ SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DA
 statement error
 SELECT FIRST()
 ----
-PLACEHOLDER_ERROR_MESSAGE1626
+Binder Error: No function matches the given name and argument types 'first()'. You might need to add explicit type casts.
+	Candidate functions:
+	first(DECIMAL) -> DECIMAL
+	first(ANY) -> ANY
 
 statement error
 SELECT FIRST(1, 2)

@@ -203,7 +203,7 @@ Binder Error: No function matches the given name and argument types 'struct_extr
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), g) FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE856
+Binder Error: Key name for struct_extract needs to be a constant string
 
 statement error
 SELECT STRUCT_EXTRACT(STRUCT_PACK(xx := e, yy := g), '42') FROM struct_data

@@ -362,7 +362,10 @@ Error: Full specifier did not match: trailing characters
 statement error
 SELECT strptime('969-10-10', '%y-%m-%d')
 ----
-PLACEHOLDER_ERROR_MESSAGE2463
+Invalid Input Error: Could not parse string "969-10-10" according to format specifier "%y-%m-%d"
+969-10-10
+   ^
+Error: Literal does not match, expected -
 
 # literal part does not match
 statement error

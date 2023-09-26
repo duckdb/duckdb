@@ -236,7 +236,7 @@ select col['12.3'::REAL] from real_key;
 statement error
 create table real_key_dup as select MAP_FROM_ENTRIES(ARRAY[('12.3'::REAL, 'x'), ('12.3'::REAL, 'y')]) col;
 ----
-PLACEHOLDER_ERROR_MESSAGE877
+Invalid Input Error: Map keys have to be unique
 
 # -- DECIMAL --
 # Valid

@@ -144,7 +144,7 @@ ALTER TABLE song ALTER COLUMN songname_new SET DATA TYPE VARCHAR;
 statement error
 ALTER TABLE album DROP COLUMN artistid;
 ----
-PLACEHOLDER_ERROR_MESSAGE1285
+Catalog Error: Cannot drop column "artistid" because there is a FOREIGN KEY constraint that depends on it
 
 statement ok
 ALTER TABLE song DROP COLUMN songname_new;

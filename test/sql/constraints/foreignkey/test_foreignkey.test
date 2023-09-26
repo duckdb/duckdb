@@ -100,7 +100,10 @@ Constraint Error: Violates foreign key constraint because key "songartist: 3, so
 statement error
 UPDATE song SET songalbum='E' WHERE albumcover='C_song';
 ----
-PLACEHOLDER_ERROR_MESSAGE1327
+Binder Error: Referenced column "albumcover" not found in FROM clause!
+Candidate bindings: "song.songalbum"
+LINE 1: UPDATE song SET songalbum='E' WHERE albumcover='C_song';
+                                            ^
 
 statement ok
 UPDATE album SET artistid=5, albumname='D' WHERE albumcover='B_cover';
