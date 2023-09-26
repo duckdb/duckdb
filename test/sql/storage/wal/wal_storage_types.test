@@ -147,5 +147,6 @@ statement error
 CREATE TABLE aliens (
     name text,
     current_mood mood
-);----
+);
+----
 PLACEHOLDER_ERROR_MESSAGE2532
