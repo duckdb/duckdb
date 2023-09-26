@@ -46,5 +46,6 @@ NULL	1	NULL
 
 # incorrect usage
 statement error
-SELECT list_bit_and()----
+SELECT list_bit_and()
+----
 PLACEHOLDER_ERROR_MESSAGE2216

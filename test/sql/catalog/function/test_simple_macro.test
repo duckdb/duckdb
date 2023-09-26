@@ -346,5 +346,6 @@ SELECT my_macro(x := 42);
 PLACEHOLDER_ERROR_MESSAGE1822
 
 statement error
-SELECT my_macro(a := 42, a := 42);----
+SELECT my_macro(a := 42, a := 42);
+----
 PLACEHOLDER_ERROR_MESSAGE1821

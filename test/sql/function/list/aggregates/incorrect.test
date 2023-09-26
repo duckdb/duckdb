@@ -170,5 +170,6 @@ SELECT list_aggr([1, 2, NULL], 'min_by');
 PLACEHOLDER_ERROR_MESSAGE2174
 
 statement error
-SELECT list_aggr([1, 2, NULL], 'argmin');----
+SELECT list_aggr([1, 2, NULL], 'argmin');
+----
 PLACEHOLDER_ERROR_MESSAGE2173

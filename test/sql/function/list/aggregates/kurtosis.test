@@ -39,5 +39,6 @@ NULL
 
 # incorrect usage
 statement error
-select list_kurtosis()----
+select list_kurtosis()
+----
 PLACEHOLDER_ERROR_MESSAGE2170

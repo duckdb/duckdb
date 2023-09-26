@@ -29,5 +29,6 @@ DROP TABLE t0;
 
 # t4 is not exist
 statement error
-ANALYZE t4;----
+ANALYZE t4;
+----
 PLACEHOLDER_ERROR_MESSAGE2628

@@ -96,5 +96,6 @@ PLACEHOLDER_ERROR_MESSAGE839
 
 # Need at least one column
 statement error
-CREATE TABLE tbl1 (u UNION())----
+CREATE TABLE tbl1 (u UNION())
+----
 PLACEHOLDER_ERROR_MESSAGE838

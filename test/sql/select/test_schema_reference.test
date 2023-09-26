@@ -23,5 +23,6 @@ PLACEHOLDER_ERROR_MESSAGE3000
 
 # no schema present
 statement error
-SELECT a.tbl.i FROM range(10) tbl(i)----
+SELECT a.tbl.i FROM range(10) tbl(i)
+----
 PLACEHOLDER_ERROR_MESSAGE2999

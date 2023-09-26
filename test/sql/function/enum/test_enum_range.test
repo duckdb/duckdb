@@ -58,5 +58,6 @@ SELECT enum_range_boundary('orange'::rainbow, 1)
 PLACEHOLDER_ERROR_MESSAGE2045
 
 statement error
-SELECT enum_range_boundary(1, 'orange'::rainbow)----
+SELECT enum_range_boundary(1, 'orange'::rainbow)
+----
 PLACEHOLDER_ERROR_MESSAGE2044
