@@ -178,7 +178,8 @@ public:
 		current_file_path = files_path_p[0];
 		CSVFileHandle *file_handle_ptr;
 
-		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0)) {
+		if (!buffer_manager || (options.skip_rows_set && options.dialect_options.skip_rows > 0) ||
+		    buffer_manager->file_handle->GetFilePath() != current_file_path) {
 			// If our buffers are too small, and we skip too many rows there is a chance things will go over-buffer
 			// for now don't reuse the buffer manager
 			buffer_manager.reset();
@@ -210,6 +211,7 @@ public:
 			line_info.lines_read[0][0]++;
 		}
 		first_position = options.dialect_options.true_start;
+		next_byte = options.dialect_options.true_start;
 	}
 	explicit ParallelCSVGlobalState(idx_t system_threads_p)
 	    : system_threads(system_threads_p), line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
