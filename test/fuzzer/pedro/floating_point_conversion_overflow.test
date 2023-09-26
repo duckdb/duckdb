@@ -15,7 +15,7 @@ SELECT 0::${float_type}::${type}
 statement error
 SELECT (-1)::${float_type}::${type}
 ----
-Conversion Error: Type FLOAT with value -1.0 can't be cast because the value is out of range for the destination type UINT8
+can't be cast because the value is out of range for the destination type
 
 endloop
 
@@ -25,7 +25,7 @@ SELECT 255::${float_type}::UTINYINT
 statement error
 SELECT 256::${float_type}::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE66
+can't be cast because the value is out of range for the destination type
 
 statement ok
 SELECT 65535::${float_type}::USMALLINT
@@ -33,7 +33,7 @@ SELECT 65535::${float_type}::USMALLINT
 statement error
 SELECT 65536::${float_type}::USMALLINT
 ----
-PLACEHOLDER_ERROR_MESSAGE65
+can't be cast because the value is out of range for the destination type
 
 endloop
 
@@ -43,7 +43,7 @@ SELECT 4294967167::REAL::UINTEGER
 statement error
 SELECT 4294967168::REAL::UINTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE64
+can't be cast because the value is out of range for the destination type
 
 statement ok
 SELECT 4294967295::DOUBLE::UINTEGER
@@ -51,7 +51,7 @@ SELECT 4294967295::DOUBLE::UINTEGER
 statement error
 SELECT 4294967296::DOUBLE::UINTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE63
+can't be cast because the value is out of range for the destination type UINT32
 
 statement ok
 SELECT 18446743523953736703::REAL::UBIGINT
@@ -59,7 +59,7 @@ SELECT 18446743523953736703::REAL::UBIGINT
 statement error
 SELECT 18446743523953736704::REAL::UBIGINT
 ----
-PLACEHOLDER_ERROR_MESSAGE62
+can't be cast because the value is out of range for the destination type UINT64
 
 statement ok
 SELECT 18446744073709550591::DOUBLE::UBIGINT
@@ -67,4 +67,4 @@ SELECT 18446744073709550591::DOUBLE::UBIGINT
 statement error
 SELECT 18446744073709550592::DOUBLE::UBIGINT
 ----
-PLACEHOLDER_ERROR_MESSAGE61
+can't be cast because the value is out of range for the destination type UINT64
