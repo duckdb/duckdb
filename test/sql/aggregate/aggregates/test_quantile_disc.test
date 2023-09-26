@@ -192,7 +192,8 @@ Binder Error: QUANTILE can only take parameters in the range [-1, 1]
 statement error
 SELECT quantile_disc(r, "string") FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1643
+Binder Error: Referenced column "string" not found in FROM clause!
+Candidate bindings: "quantile.r"
 
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile

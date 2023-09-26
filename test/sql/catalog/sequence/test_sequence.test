@@ -106,7 +106,7 @@ DROP SEQUENCE seq;
 statement error
 DROP SEQUENCE seq;
 ----
-PLACEHOLDER_ERROR_MESSAGE1930
+Catalog Error: Sequence with name seq does not exist!
 
 # but doesn't fail with IF EXISTS
 statement ok

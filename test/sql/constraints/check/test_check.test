@@ -39,7 +39,7 @@ Constraint Error: CHECK constraint failed: integers
 statement error
 INSERT INTO integers VALUES (3, 3), (5, 5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1270
+Constraint Error: CHECK constraint failed: integers
 
 query II
 SELECT * FROM integers

@@ -78,7 +78,7 @@ Conversion Error: time field value out of range: "02:30:00+4", expected format i
 statement error
 SELECT '02:30:00+4xx'::TIMETZ;
 ----
-PLACEHOLDER_ERROR_MESSAGE680
+Conversion Error: time field value out of range: "02:30:00+4xx", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '02:30:00+2000'::TIMETZ;

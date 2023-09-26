@@ -151,7 +151,7 @@ SELECT
 FROM ScoreBoard s
 ORDER BY TeamName, Score;
 ----
-PLACEHOLDER_ERROR_MESSAGE2793
+Parser Error: Incorrect number of parameters for function ntile
 
 statement error
 SELECT

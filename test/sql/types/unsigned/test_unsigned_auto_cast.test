@@ -131,7 +131,7 @@ SELECT '65535'::UINTEGER;
 statement error
 SELECT '4294967296'::UINTEGER;
 ----
-PLACEHOLDER_ERROR_MESSAGE482
+Conversion Error: Could not convert string '4294967296' to UINT32
 
 query I
 SELECT '4294967295'::UBIGINT;

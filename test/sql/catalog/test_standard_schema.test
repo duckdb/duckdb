@@ -37,7 +37,7 @@ CREATE TABLE test.hello(i INTEGER);
 statement error
 CREATE TABLE test2.hello(i INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1907
+Catalog Error: Schema with name test2 does not exist!
 
 # use the table in queries
 # insert into table

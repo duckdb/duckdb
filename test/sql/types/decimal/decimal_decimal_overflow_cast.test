@@ -41,7 +41,7 @@ Conversion Error: Casting value "10.00" to type DECIMAL(9,8) failed: value is ou
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(18,17);
 ----
-PLACEHOLDER_ERROR_MESSAGE281
+Conversion Error: Casting value "10.00" to type DECIMAL(18,17) failed: value is out of range!
 
 statement error
 SELECT 10.00::DECIMAL(4,2)::DECIMAL(38,37);

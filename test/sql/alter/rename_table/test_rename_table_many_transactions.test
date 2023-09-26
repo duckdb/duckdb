@@ -62,7 +62,10 @@ LINE 1: SELECT * FROM tbl3
 statement error con2
 SELECT * FROM tbl4
 ----
-PLACEHOLDER_ERROR_MESSAGE2618
+Catalog Error: Table with name tbl4 does not exist!
+Did you mean "tbl4"?
+LINE 1: SELECT * FROM tbl4
+                      ^
 
 # con3 sees ONLY tbl2
 statement error con3

@@ -128,7 +128,7 @@ SELECT (SELECT add(i1.a, a) FROM integers) FROM integers i1
 statement error
 CREATE MACRO prep(x) AS ?+1
 ----
-PLACEHOLDER_ERROR_MESSAGE1811
+Binder Error: Parameter expressions within macro's are not supported!
 
 # prepared statements
 statement ok

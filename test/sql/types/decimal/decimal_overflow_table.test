@@ -42,4 +42,4 @@ SELECT 1*d FROM decimals
 statement error
 SELECT 2*d FROM decimals
 ----
-PLACEHOLDER_ERROR_MESSAGE354
+Out of Range Error: Overflow in multiplication of DECIMAL(18) (2 * 990000000000000000). You might want to add an explicit cast to a bigger decimal.

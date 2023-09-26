@@ -49,7 +49,7 @@ Binder Error: "force_not_null" expects a column list or * as parameter
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/force_not_null.csv' (FORCE_NOT_NULL 42, NULL 'test');
 ----
-PLACEHOLDER_ERROR_MESSAGE2899
+Binder Error: "force_not_null" expected to find 42, but it was not found in the table
 
 # test using a column in FORCE_NOT_NULL that is not set as output, but that is a column of the table
 statement error

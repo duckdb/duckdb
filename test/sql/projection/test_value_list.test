@@ -129,7 +129,7 @@ hello
 statement error
 INSERT INTO varchars VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);
 ----
-PLACEHOLDER_ERROR_MESSAGE3120
+Binder Error: table varchars has 1 columns but 2 values were supplied
 
 statement error
 INSERT INTO varchars (v) VALUES (1, 2), ('hello', 3), (DEFAULT, DEFAULT);

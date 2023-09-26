@@ -88,7 +88,11 @@ Binder Error: No function matches the given name and argument types 'month(TIME)
 statement error
 SELECT EXTRACT(day FROM i) FROM times
 ----
-PLACEHOLDER_ERROR_MESSAGE2082
+Binder Error: No function matches the given name and argument types 'day(TIME)'. You might need to add explicit type casts.
+	Candidate functions:
+	day(DATE) -> BIGINT
+	day(TIMESTAMP) -> BIGINT
+	day(INTERVAL) -> BIGINT
 
 statement error
 SELECT EXTRACT(decade FROM i) FROM times

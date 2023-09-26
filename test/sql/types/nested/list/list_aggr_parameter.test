@@ -68,7 +68,11 @@ No function matches the given name and argument types 'quantile(BIGINT)'. You mi
 statement error
 SELECT list_aggr(list(i), 'min', 1) FROM range(10) tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE921
+Binder Error: No matching aggregate function
+No function matches the given name and argument types 'min(BIGINT, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	min(DECIMAL) -> DECIMAL
+	min(ANY) -> ANY
 
 statement error
 SELECT list_aggr(list(i), 'quantile', 0.5, 0.3, 0.5) FROM range(10) tbl(i);

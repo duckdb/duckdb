@@ -54,7 +54,10 @@ COMMIT
 statement error con1
 SELECT * FROM tbl
 ----
-PLACEHOLDER_ERROR_MESSAGE2639
+Catalog Error: Table with name tbl does not exist!
+Did you mean "tbl2"?
+LINE 1: SELECT * FROM tbl
+                      ^
 
 statement error con2
 SELECT * FROM tbl

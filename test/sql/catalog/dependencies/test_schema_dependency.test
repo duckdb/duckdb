@@ -58,7 +58,7 @@ DROP TABLE s1.integers
 statement error con2
 DROP SCHEMA s1
 ----
-PLACEHOLDER_ERROR_MESSAGE1760
+TransactionContext Error: Catalog write-write conflict on alter with "integers"
 
 # now rollback the table drop
 statement ok con1

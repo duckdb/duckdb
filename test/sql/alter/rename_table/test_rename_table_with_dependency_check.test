@@ -31,4 +31,7 @@ DROP TABLE t0;
 statement error
 ANALYZE t4;
 ----
-PLACEHOLDER_ERROR_MESSAGE2628
+Catalog Error: Table with name t4 does not exist!
+Did you mean "t3"?
+LINE 1: ANALYZE t4;
+                ^

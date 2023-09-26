@@ -123,7 +123,8 @@ SELECT i, i + 10 FROM integers GROUP BY i ORDER BY i
 statement error
 SELECT i, SUM(j), j FROM integers GROUP BY i ORDER BY i
 ----
-PLACEHOLDER_ERROR_MESSAGE1728
+Binder Error: column "j" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(j)" if the exact value of "j" is not important.
 
 # but it works if we wrap it in FIRST() or LAST()
 query IRI

@@ -46,7 +46,7 @@ Binder Error: Column "blabla" in REPLACE list not found in FROM clause
 statement error
 SELECT integers.* REPLACE (i+100 AS blabla) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3101
+Binder Error: Column "blabla" in REPLACE list not found in integers
 
 # column cannot occur in both exclude and replace list
 statement error

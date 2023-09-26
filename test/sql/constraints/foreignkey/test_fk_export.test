@@ -50,7 +50,7 @@ DELETE FROM pk_integers WHERE i=3
 statement error
 UPDATE pk_integers SET i=5 WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1300
+Constraint Error: Violates foreign key constraint because key "j: 2" is still referenced by a foreign key in a different table
 
 statement error
 UPDATE fk_integers SET i=4 WHERE j=2

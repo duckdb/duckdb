@@ -165,7 +165,9 @@ Binder Error: No function matches the given name and argument types 'damerau_lev
 statement error
 SELECT damerau_levenshtein()
 ----
-PLACEHOLDER_ERROR_MESSAGE2381
+Binder Error: No function matches the given name and argument types 'damerau_levenshtein()'. You might need to add explicit type casts.
+	Candidate functions:
+	damerau_levenshtein(VARCHAR, VARCHAR) -> BIGINT
 
 
 statement ok

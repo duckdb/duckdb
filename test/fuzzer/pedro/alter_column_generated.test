@@ -36,5 +36,5 @@ INSERT INTO t0 VALUES (NULL);
 statement error
 ALTER TABLE t0 ALTER c1 SET NOT NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE18
+Constraint Error: NOT NULL constraint failed: t0.c1
 

@@ -102,7 +102,7 @@ LINE 1: select list_intersect(l1, l2, l1) from list_of_strings;
 statement error
 select list_intersect([[1,2], [2,4]], ['abc', 'def']);
 ----
-PLACEHOLDER_ERROR_MESSAGE2245
+Conversion Error: Type VARCHAR with value 'abc' can't be cast to the destination type LIST
 
 # Test Large Lists
 

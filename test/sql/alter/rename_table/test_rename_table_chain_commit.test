@@ -70,7 +70,10 @@ LINE 1: SELECT * FROM entry3
 statement error con2
 SELECT * FROM entry4
 ----
-PLACEHOLDER_ERROR_MESSAGE2650
+Catalog Error: Table with name entry4 does not exist!
+Did you mean "entry4"?
+LINE 1: SELECT * FROM entry4
+                      ^
 
 statement ok con1
 COMMIT

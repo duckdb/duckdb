@@ -129,7 +129,7 @@ NULL	4	4
 statement error
 SELECT x, y FROM t1 UNION ALL BY NAME SELECT y, z FROM t2 ORDER BY 4;
 ----
-PLACEHOLDER_ERROR_MESSAGE239
+Binder Error: ORDER term out of range - should be between 1 and 3
 
 query II
 (SELECT x FROM t1 ORDER BY y) UNION ALL BY NAME (SELECT y FROM t2 ORDER BY z) ORDER BY x DESC;

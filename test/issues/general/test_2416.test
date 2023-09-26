@@ -169,7 +169,7 @@ SELECT my_specific_struct_extract('c')
 statement error
 SELECT my_specific_struct_extract(2)
 ----
-PLACEHOLDER_ERROR_MESSAGE115
+Binder Error: Key name for struct_extract needs to be a constant string
 
 statement ok
 CREATE MACRO my_specific_list_extract(index) AS list_value(1, 2, 3, 4)[index]

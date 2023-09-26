@@ -116,7 +116,7 @@ Binder Error: start is smaller than end, but increment is negative: cannot gener
 statement error
 SELECT d FROM range(TIMESTAMP '1993-01-01 00:00:00', TIMESTAMP '1992-01-01 00:00:00', INTERVAL '1 MONTH') tbl(d)
 ----
-PLACEHOLDER_ERROR_MESSAGE3138
+Binder Error: start is bigger than end, but increment is positive: cannot generate infinite series
 
 # composite interval with negative types not supported
 statement error

@@ -18,7 +18,7 @@ Conversion Error: Could not convert string 'AAAA' to INTERVAL
 statement error
 SELECT cast('00:00:' as interval)
 ----
-PLACEHOLDER_ERROR_MESSAGE507
+Conversion Error: Could not convert string '00:00:' to INTERVAL
 
 statement error
 SELECT cast('3 doopiedoos' as interval)

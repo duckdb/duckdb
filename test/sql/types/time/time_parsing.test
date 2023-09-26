@@ -53,7 +53,7 @@ Conversion Error: time field value out of range: "100:42:04.500", expected forma
 statement error
 SELECT '14:70:04.500'::TIME::VARCHAR
 ----
-PLACEHOLDER_ERROR_MESSAGE696
+Conversion Error: time field value out of range: "14:70:04.500", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '14:100:04.500'::TIME::VARCHAR

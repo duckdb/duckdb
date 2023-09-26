@@ -34,4 +34,4 @@ Out of Range Error: Cannot left-shift by negative number -1
 statement error
 SELECT NOT (t1.c0<<-1) FROM t1;
 ----
-PLACEHOLDER_ERROR_MESSAGE124
+Out of Range Error: Cannot left-shift by negative number -1

@@ -225,7 +225,7 @@ Invalid Error: Unsupported compression codec "BROTLI". Supported options are unc
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=1_LZ4.parquet') limit 50
 ----
-PLACEHOLDER_ERROR_MESSAGE100
+Invalid Error: Unsupported compression codec "7". Supported options are uncompressed, gzip, snappy or zstd
 
 statement error
 SELECT * FROM parquet_scan('data/parquet-testing/compression/generated/data_page=2_LZ4.parquet') limit 50

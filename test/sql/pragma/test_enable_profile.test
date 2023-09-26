@@ -18,7 +18,8 @@ Parser Error: Unrecognized print format unsupported, supported formats: [json, q
 statement error
 PRAGMA profiling_output
 ----
-PLACEHOLDER_ERROR_MESSAGE1974
+Catalog Error: Pragma Function with name profiling_output does not exist!
+Did you mean "all_profiling_output"?
 
 # select the location of where to save the profiling output (instead of printing to stdout)
 statement ok

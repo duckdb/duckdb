@@ -39,7 +39,7 @@ NULL
 statement error
 select kurtosis(i) from (values (2e304), (2e305), (2e306), (2e307)) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1665
+Out of Range Error: Kurtosis is out of range!
 
 # Constant Value (This should be an error)
 query I

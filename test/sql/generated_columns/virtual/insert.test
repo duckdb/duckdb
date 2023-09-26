@@ -46,7 +46,7 @@ INSERT INTO test VALUES (22, 10);
 statement error
 INSERT INTO test VALUES (22, 10, 10)
 ----
-PLACEHOLDER_ERROR_MESSAGE1151
+Binder Error: table test has 2 columns but 3 values were supplied
 
 statement ok
 CREATE TABLE tbl (

@@ -62,7 +62,16 @@ COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HE
 statement error
 COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2876
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/error_too_little_single.csv" on line 3: expected 2 values per row, but got 1.
+Parser options:
+  file=test/sql/copy/csv/data/test/error_too_little_single.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 # not enough columns provided, single value
 query II

@@ -97,6 +97,9 @@ DROP TABLE test.t
 statement error
 SELECT * FROM test.v2
 ----
-PLACEHOLDER_ERROR_MESSAGE2529
+Catalog Error: Table with name v2 does not exist!
+Did you mean "v"?
+LINE 1: SELECT * FROM test.v2
+                      ^
 
 endloop

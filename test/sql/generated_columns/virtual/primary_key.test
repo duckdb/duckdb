@@ -39,4 +39,4 @@ INSERT INTO tbl VALUES (5);
 statement error
 INSERT INTO tbl VALUES (5);
 ----
-PLACEHOLDER_ERROR_MESSAGE1193
+Constraint Error: Duplicate key "price: 5" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).

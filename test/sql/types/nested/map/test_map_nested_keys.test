@@ -87,7 +87,7 @@ SELECT MAP(
 	]
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE905
+Invalid Input Error: Map keys have to be unique
 
 # Nested keys (struct) not succesfull (null)
 statement error

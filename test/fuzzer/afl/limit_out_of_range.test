@@ -18,4 +18,4 @@ Conversion Error: Type DOUBLE with value 3.493690519702625e+228 can't be cast be
 statement error
 SELECT 1 LIMIT CAST('NaN' AS REAL)%;
 ----
-PLACEHOLDER_ERROR_MESSAGE82
+Out of Range Error: Limit percent out of range, should be between 0% and 100%

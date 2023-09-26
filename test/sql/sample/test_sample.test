@@ -89,7 +89,9 @@ LINE 1: SELECT COUNT(*) FROM test USING SAMPLE 'hello'
 statement error
 SELECT COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'
 ----
-PLACEHOLDER_ERROR_MESSAGE2831
+Parser Error: syntax error at or near "'1992-01-01'"
+LINE 1: ...T COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'
+                                                  ^
 
 # we can also use postgres/sqlserver-style tablesample syntax
 statement ok

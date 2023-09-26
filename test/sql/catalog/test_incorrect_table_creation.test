@@ -18,7 +18,7 @@ Parser Error: column "i" appears twice in primary key constraint
 statement error
 CREATE TABLE integers(i INTEGER, PRIMARY KEY(i), PRIMARY KEY(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE1939
+Parser Error: syntax error at end of input
 
 statement error
 CREATE TABLE integers(i INTEGER PRIMARY KEY, PRIMARY KEY(i)

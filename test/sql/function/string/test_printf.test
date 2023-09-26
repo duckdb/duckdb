@@ -130,7 +130,7 @@ hello
 statement error
 SELECT printf('%s', 42)
 ----
-PLACEHOLDER_ERROR_MESSAGE2399
+Invalid Error: Invalid type specifier "s" for formatting a value of type int
 
 statement error
 SELECT printf('%d', 'hello')

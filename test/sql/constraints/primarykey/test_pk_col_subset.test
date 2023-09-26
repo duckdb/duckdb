@@ -33,7 +33,7 @@ UPDATE numbers SET c=1 WHERE c=2
 statement error
 UPDATE numbers SET b=1 WHERE b=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1231
+Constraint Error: Duplicate key "a: 1, b: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # this should  work since it won't cause a duplicate
 statement ok

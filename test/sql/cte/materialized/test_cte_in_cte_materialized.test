@@ -61,4 +61,6 @@ Binder Error: Duplicate alias "cte" in query!
 statement error
 with cte as MATERIALIZED (select * from cte) select * from cte
 ----
-PLACEHOLDER_ERROR_MESSAGE3043
+Binder Error: Circular reference to CTE "cte", There are two possible solutions. 
+1. use WITH RECURSIVE to use recursive CTEs. 
+2. If you want to use the TABLE name "cte" the same as the CTE name, please explicitly add "SCHEMA" before table name. You can try "main.cte" (main is the duckdb default schema)

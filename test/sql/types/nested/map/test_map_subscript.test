@@ -54,7 +54,7 @@ select m[2::TINYINT] from (select MAP(LIST_VALUE(1, 2, 3, 4,5),LIST_VALUE(10, 9,
 statement error
 select m['Jon Lajoie'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D','Jon Lajoie' ),LIST_VALUE(10,9,10,11)) as m) as T
 ----
-PLACEHOLDER_ERROR_MESSAGE898
+Invalid Input Error: Map keys have to be unique
 
 query I
 select m['Spice Girls'] from (select MAP(LIST_VALUE('Jon Lajoie', 'Backstreet Boys', 'Tenacious D' ),LIST_VALUE(10,9,10)) as m) as T

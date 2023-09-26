@@ -31,7 +31,7 @@ INSERT INTO song VALUES (11, 1, 'A', 'A_song'), (12, 2, 'B', 'B_song'), (13, 3, 
 statement error
 DELETE FROM album WHERE albumname='C';
 ----
-PLACEHOLDER_ERROR_MESSAGE1293
+Constraint Error: Violates foreign key constraint because key "songartist: 3, songalbum: C" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM album WHERE albumname='D';

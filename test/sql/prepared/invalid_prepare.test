@@ -21,7 +21,7 @@ prepare v1 as select $2::int;
 statement error
 execute v1(0);
 ----
-PLACEHOLDER_ERROR_MESSAGE1095
+Invalid Input Error: Values were not provided for the following prepared statement parameters: 2
 
 # cannot cast from varchar to int
 statement ok

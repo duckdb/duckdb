@@ -48,7 +48,9 @@ Invalid Input Error: Unrecognized parameter for option DEFAULT_ORDER "unknown". 
 statement error
 PRAGMA default_order=UNKNOWN)
 ----
-PLACEHOLDER_ERROR_MESSAGE213
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA default_order=UNKNOWN)
+                                    ^
 
 statement error
 PRAGMA default_order=3)

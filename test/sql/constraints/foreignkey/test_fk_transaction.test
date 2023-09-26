@@ -86,7 +86,7 @@ COMMIT
 statement error
 DELETE FROM pkt WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1391
+Constraint Error: Violates foreign key constraint because key "j: 2" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM fkt WHERE j=2

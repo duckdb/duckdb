@@ -140,7 +140,7 @@ SELECT * FROM test ORDER BY 1
 statement error
 CREATE TABLE test (a INTEGER DEFAULT (SELECT 42), b INTEGER);
 ----
-PLACEHOLDER_ERROR_MESSAGE1854
+Binder Error: DEFAULT value cannot contain subqueries
 
 # aggregate functions are not allowed in DEFAULT expressions
 statement error

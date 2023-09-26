@@ -142,7 +142,7 @@ Invalid Input Error: Failed to parse format specifier %: Trailing format charact
 statement error
 SELECT strftime(DATE '1992-01-01', '%R');
 ----
-PLACEHOLDER_ERROR_MESSAGE2015
+Invalid Input Error: Failed to parse format specifier %R: Unrecognized format for strftime/strptime: %R
 
 # millisecond specifier %g
 query IIII

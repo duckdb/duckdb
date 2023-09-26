@@ -293,7 +293,10 @@ Error: Literal does not match, expected /
 statement error
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;
 ----
-PLACEHOLDER_ERROR_MESSAGE2471
+Invalid Input Error: Could not parse string "Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)" according to format specifier "%a %b %d %Y %X GMT%z (%Z"
+Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)
+                                      ^
+Error: Full specifier did not match: trailing characters
 
 # incorrect usage
 statement error

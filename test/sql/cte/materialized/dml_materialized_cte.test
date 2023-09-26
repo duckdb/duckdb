@@ -29,4 +29,4 @@ statement error
 WITH t(x) AS MATERIALIZED (VALUES (42))
 UPDATE a SET i = 0 WHERE a.i IN (SELECT * FROM t);
 ----
-PLACEHOLDER_ERROR_MESSAGE3040
+Not implemented Error: Materialized CTEs are not implemented for update.

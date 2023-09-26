@@ -90,4 +90,4 @@ Conversion Error: Unimplemented type for cast (INTEGER -> STRUCT(a INTEGER))
 statement error
 INSERT INTO a VALUES (ROW(ROW(1, 2, 3), 1))
 ----
-PLACEHOLDER_ERROR_MESSAGE699
+Mismatch Type Error: Type STRUCT( INTEGER,  INTEGER,  INTEGER) does not match with STRUCT(a INTEGER). Cannot cast STRUCTs of different size

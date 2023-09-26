@@ -19,7 +19,7 @@ Parser Error: Only VARCHAR columns can have collations!
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE NOACCENT.NOACCENT)
 ----
-PLACEHOLDER_ERROR_MESSAGE1405
+Binder Error: Cannot combine collation types "noaccent" and "noaccent"
 
 statement error
 CREATE TABLE collate_test(s VARCHAR COLLATE 1)

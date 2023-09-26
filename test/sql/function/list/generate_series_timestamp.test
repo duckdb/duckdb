@@ -77,7 +77,7 @@ Invalid Input Error: Interval infinite bounds not supported
 statement error
 SELECT range('294247-01-10'::TIMESTAMP, 'infinity'::TIMESTAMP, INTERVAL '1 DAY');
 ----
-PLACEHOLDER_ERROR_MESSAGE2252
+Invalid Input Error: Interval infinite bounds not supported
 
 statement error
 SELECT generate_series('-infinity'::TIMESTAMP, '290309-12-22 (BC) 00:00:00'::TIMESTAMP, INTERVAL '1 DAY');

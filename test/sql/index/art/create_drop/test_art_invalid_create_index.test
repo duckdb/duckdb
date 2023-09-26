@@ -21,7 +21,7 @@ Not implemented Error: Index with collation not supported yet!
 statement error
 CREATE INDEX i_index ON integers(i COLLATE "de_DE")
 ----
-PLACEHOLDER_ERROR_MESSAGE2851
+Not implemented Error: Index with collation not supported yet!
 
 statement error
 CREATE INDEX i_index ON integers using blabla(i)

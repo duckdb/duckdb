@@ -84,7 +84,7 @@ TransactionContext Error: Conflict on update!
 statement error con3
 UPDATE test SET a=99 WHERE a=3
 ----
-PLACEHOLDER_ERROR_MESSAGE1207
+TransactionContext Error: Conflict on update!
 
 # revert to previous state
 statement ok updater

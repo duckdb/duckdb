@@ -20,7 +20,9 @@ Binder Error: No function matches the given name and argument types 'covar_pop(I
 statement error
 SELECT COVAR_POP(COVAR_POP(1))
 ----
-PLACEHOLDER_ERROR_MESSAGE1559
+Binder Error: aggregate function calls cannot be nested
+LINE 1: SELECT COVAR_POP(COVAR_POP(1))
+                         ^
 
 # test incorrect usage of COVAR_SAMP function
 statement error

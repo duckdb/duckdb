@@ -234,7 +234,9 @@ LINE 1: ...LECT list_position([[1,2,3],[1],[1,2,3])
 statement error
 SELECT list_position([[1,2,3],[1],[1,2,3]])
 ----
-PLACEHOLDER_ERROR_MESSAGE2242
+Binder Error: No function matches the given name and argument types 'list_position(INTEGER[][])'. You might need to add explicit type casts.
+	Candidate functions:
+	list_position(ANY[], ANY) -> INTEGER
 
 statement error
 SELECT list_position(1)

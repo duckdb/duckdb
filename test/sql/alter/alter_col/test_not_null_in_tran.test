@@ -68,7 +68,7 @@ COMMIT
 statement error 
 INSERT INTO t VALUES(9999, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2594
+Constraint Error: NOT NULL constraint failed: t.j
 
 # No null data
 query II

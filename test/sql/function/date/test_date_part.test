@@ -156,7 +156,7 @@ Not implemented Error: "date" units "timezone" not recognized
 statement error
 SELECT date_part('timezone_minute', d) FROM dates;
 ----
-PLACEHOLDER_ERROR_MESSAGE2008
+Not implemented Error: "date" units "timezone" not recognized
 
 # timestamps
 query I

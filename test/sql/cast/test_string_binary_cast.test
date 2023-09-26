@@ -18,7 +18,7 @@ Conversion Error: Could not convert string '0b2' to INT32
 statement error
 SELECT '${prefix}10105'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1491
+Conversion Error: Could not convert string '0b10105' to INT32
 
 # Negative binary should fail
 statement error

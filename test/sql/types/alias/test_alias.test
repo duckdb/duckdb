@@ -48,4 +48,5 @@ DROP TYPE IF EXISTS alias;
 statement error
 CREATE TYPE alias as BLOBL;
 ----
-PLACEHOLDER_ERROR_MESSAGE414
+Catalog Error: Type with name BLOBL does not exist!
+Did you mean "blob"?

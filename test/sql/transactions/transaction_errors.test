@@ -21,7 +21,7 @@ BEGIN;
 statement error
 BEGIN;
 ----
-PLACEHOLDER_ERROR_MESSAGE2762
+TransactionContext Error: cannot start a transaction within a transaction
 
 statement ok
 ROLLBACK;

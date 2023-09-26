@@ -57,7 +57,7 @@ FROM tbl_ProductSales
 WHERE GROUPING(Product_Category) > 1
 GROUP BY GROUPING SETS((Product_Category))
 ----
-PLACEHOLDER_ERROR_MESSAGE172
+Binder Error: GROUPING function is not supported here
 
 statement error
 SELECT

@@ -70,7 +70,7 @@ Mismatch Type Error: Type STRUCT( INTEGER) does not match with STRUCT(i INTEGER,
 statement error
 INSERT INTO a VALUES (ROW('hello', 1))
 ----
-PLACEHOLDER_ERROR_MESSAGE708
+Conversion Error: Could not convert string 'hello' to INT32
 
 statement error
 INSERT INTO a VALUES (ROW('hello', [1, 2]))

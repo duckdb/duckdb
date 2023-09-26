@@ -53,7 +53,7 @@ Conversion Error: Invalid hex escape code encountered in string -> blob conversi
 statement error
 SELECT '\\b12'::BLOB
 ----
-PLACEHOLDER_ERROR_MESSAGE1016
+Conversion Error: Invalid hex escape code encountered in string -> blob conversion: \\b1
 
 statement error
 SELECT '\\xx2'::BLOB

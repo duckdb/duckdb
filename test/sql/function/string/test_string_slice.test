@@ -35,7 +35,9 @@ LINE 1: SELECT NULL::VARCHAR[NULL:length+NULL] FROM strings
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings
 ----
-PLACEHOLDER_ERROR_MESSAGE2414
+Parser Error: syntax error at or near "off"
+LINE 1: SELECT NULL::VARCHAR[off:NULL+off] FROM strings
+                             ^
 
 statement error
 SELECT NULL::VARCHAR[off:NULL+off] FROM strings

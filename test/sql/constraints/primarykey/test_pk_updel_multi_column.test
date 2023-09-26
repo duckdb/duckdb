@@ -38,7 +38,7 @@ Constraint Error: Duplicate key "a: 13, b: pandas" violates primary key constrai
 statement error
 UPDATE test SET a=4;
 ----
-PLACEHOLDER_ERROR_MESSAGE1250
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "4, pandas"
 
 query IT
 SELECT * FROM test ORDER BY a;

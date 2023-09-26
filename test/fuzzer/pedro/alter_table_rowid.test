@@ -21,7 +21,7 @@ Binder Error: Table "t0" does not have a column with name "rowid"
 statement error
 ALTER TABLE t0 ALTER rowid TYPE VARCHAR;
 ----
-PLACEHOLDER_ERROR_MESSAGE57
+Binder Error: Table "t0" does not have a column with name "rowid"
 
 statement error
 ALTER TABLE t0 ALTER rowidx SET DEFAULT 0;

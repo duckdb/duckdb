@@ -20,7 +20,9 @@ LINE 1: SELECT COUNT(COUNT(1))
 statement error
 SELECT STDDEV_SAMP()
 ----
-PLACEHOLDER_ERROR_MESSAGE1579
+Binder Error: No function matches the given name and argument types 'stddev_samp()'. You might need to add explicit type casts.
+	Candidate functions:
+	stddev_samp(DOUBLE) -> DOUBLE
 
 statement error
 SELECT STDDEV_SAMP(1, 2, 3)

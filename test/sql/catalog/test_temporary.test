@@ -77,7 +77,7 @@ Not implemented Error: Only ON COMMIT PRESERVE ROWS is supported
 statement error
 CREATE TEMPORARY TABLE integers(i INTEGER)
 ----
-PLACEHOLDER_ERROR_MESSAGE1861
+Catalog Error: Table with name "integers" already exists!
 
 statement ok
 INSERT INTO integers VALUES (42)

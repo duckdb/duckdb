@@ -27,7 +27,7 @@ CREATE TABLE s2(t0 INTEGER, a TEXT, b TEXT, UNIQUE (t0, a));
 statement error
 CREATE TABLE c2(c0 INTEGER, c1 INTEGER UNIQUE, FOREIGN KEY (c0) REFERENCES s2(t0));
 ----
-PLACEHOLDER_ERROR_MESSAGE151
+Binder Error: Failed to create foreign key: referenced table "s2" does not have a primary key or unique constraint on the columns t0
 
 # this works
 statement ok

@@ -153,7 +153,7 @@ Binder Error: Need named argument for struct pack, e.g. STRUCT_PACK(a := b)
 statement error
 SELECT STRUCT_PACK(a := e, a := g) FROM struct_data
 ----
-PLACEHOLDER_ERROR_MESSAGE864
+Binder Error: Duplicate struct entry name "a"
 
 statement error
 SELECT STRUCT_PACK(e, e) FROM struct_data

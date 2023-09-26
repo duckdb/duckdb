@@ -198,7 +198,9 @@ Binder Error: No function matches the given name and argument types 'hash()'. Yo
 statement error
 SELECT r, HASH() FROM enums;
 ----
-PLACEHOLDER_ERROR_MESSAGE2301
+Binder Error: No function matches the given name and argument types 'hash()'. You might need to add explicit type casts.
+	Candidate functions:
+	hash(ANY) -> UBIGINT
 
 # Multiple arguments of any kind are accepted
 query II

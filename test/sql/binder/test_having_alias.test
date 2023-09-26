@@ -57,7 +57,7 @@ Binder Error: column integers.i must appear in the GROUP BY clause or be used in
 statement error
 SELECT COUNT(i) AS i FROM integers HAVING i=5 ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1425
+Binder Error: column integers.i must appear in the GROUP BY clause or be used in an aggregate function
 
 # use the same alias multiple times
 query I

@@ -32,7 +32,7 @@ Did you mean "position"?
 statement error
 SELECT avg(row_number() over ()) over ()
 ----
-PLACEHOLDER_ERROR_MESSAGE2825
+Binder Error: window function calls cannot be nested
 
 statement error
 SELECT avg(42) over (partition by row_number() over ())

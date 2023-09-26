@@ -184,7 +184,8 @@ Did you mean "user"?
 statement error
 select course, count(*) from students group by cube (grouping_sets (course)) order by 1, 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1743
+Catalog Error: Scalar Function with name grouping_sets does not exist!
+Did you mean "range"?
 
 # cube exceeds maximum grouping set
 statement error

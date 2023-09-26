@@ -87,7 +87,9 @@ Binder Error: No function matches the given name and argument types 'lpad(INTEGE
 statement error
 select LPAD(1, 2)
 ----
-PLACEHOLDER_ERROR_MESSAGE2320
+Binder Error: No function matches the given name and argument types 'lpad(INTEGER, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	lpad(VARCHAR, INTEGER, VARCHAR) -> VARCHAR
 
 statement error
 select LPAD('Hello', 10, '')

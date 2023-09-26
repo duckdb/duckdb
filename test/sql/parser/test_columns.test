@@ -75,7 +75,7 @@ Binder Error: No matching columns found that match regex "xxx"
 statement error
 SELECT MIN(COLUMNS('[asdadd')) FROM grouped_table
 ----
-PLACEHOLDER_ERROR_MESSAGE2515
+Binder Error: Failed to compile regex "[asdadd": missing ]: [asdadd
 
 # multiple different COLUMNS statements in the same expression are not supported
 statement error

@@ -81,7 +81,7 @@ SET SEARCH_PATH = 'test,test2';
 statement error
 SET SEARCH_PATH = '"invalid quoted string list';
 ----
-PLACEHOLDER_ERROR_MESSAGE1753
+Parser Error: Unterminated quote in qualified name!
 
 query I
 SELECT MAIN.CURRENT_SETTING('search_path');

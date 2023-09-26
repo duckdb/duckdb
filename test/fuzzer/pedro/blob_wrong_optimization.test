@@ -52,4 +52,4 @@ Conversion Error: Failure in decode: could not convert blob to UTF8 string, the 
 statement error
 SELECT 1 FROM t1 WHERE (decode('\xC0'::BLOB) IS NULL) IS NULL; --1 row, wrong?
 ----
-PLACEHOLDER_ERROR_MESSAGE10
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters

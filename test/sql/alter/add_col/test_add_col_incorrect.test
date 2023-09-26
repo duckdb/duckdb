@@ -26,4 +26,4 @@ Parser Error: Adding columns is only supported for tables
 statement error
 ALTER TABLE i ADD COLUMN j INT, ADD COLUMN k INT
 ----
-PLACEHOLDER_ERROR_MESSAGE2700
+Parser Error: Only one ALTER command per statement is supported

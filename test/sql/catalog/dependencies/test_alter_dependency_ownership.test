@@ -63,7 +63,10 @@ DROP SEQUENCE sequence1 CASCADE;
 statement error
 SELECT * FROM tablename;
 ----
-PLACEHOLDER_ERROR_MESSAGE1795
+Catalog Error: Table with name tablename does not exist!
+Did you mean "system.information_schema.tables"?
+LINE 1: SELECT * FROM tablename;
+                      ^
 
 ##TEST: The owned sequence cannot be dropped without CASCADE
 statement ok

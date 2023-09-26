@@ -206,7 +206,7 @@ Binder Error: No function matches the given name and argument types 'quantile_di
 statement error
 SELECT quantile_disc(r, [0.1, 0.5, NULL]) FROM quantiles
 ----
-PLACEHOLDER_ERROR_MESSAGE1704
+Binder Error: QUANTILE parameter cannot be NULL
 
 statement error
 SELECT quantile_disc(r, ["0.1", "0.5", "0.9"]) FROM quantiles

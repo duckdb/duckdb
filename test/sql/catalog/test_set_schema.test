@@ -60,7 +60,8 @@ LINE 1: SELECT * FROM main.test_table;
 statement error
 INSERT INTO main.test_table (i) VALUES (1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1889
+Catalog Error: Table with name test_table does not exist!
+Did you mean "memory.test.test_table"?
 
 statement ok
 INSERT INTO test_table (i) VALUES (1);

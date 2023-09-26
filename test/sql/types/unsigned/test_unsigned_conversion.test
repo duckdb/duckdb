@@ -40,7 +40,7 @@ Conversion Error: Could not convert string '65536' to UINT16
 statement error
 SELECT '4294967296'::UINTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE474
+Conversion Error: Could not convert string '4294967296' to UINT32
 
 statement error
 SELECT '18446744073709551616'::UBIGINT

@@ -45,7 +45,7 @@ Out of Range Error: Overflow in addition of UINT64 (18446744073709551615 + 18446
 statement error
 SELECT (200)::UTINYINT * (200)::UTINYINT;
 ----
-PLACEHOLDER_ERROR_MESSAGE488
+Out of Range Error: Overflow in multiplication of UINT8 (200 * 200)!
 
 query I
 SELECT (200)::UTINYINT * (200)::USMALLINT;

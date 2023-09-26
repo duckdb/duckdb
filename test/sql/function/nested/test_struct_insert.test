@@ -40,7 +40,7 @@ Invalid Error: Can't insert nothing into a struct
 statement error
 select struct_insert(123, a := 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE2418
+Invalid Error: The first argument to struct_insert must be a STRUCT
 
 statement error
 select struct_insert({a: 1, b: 2}, a := 2)

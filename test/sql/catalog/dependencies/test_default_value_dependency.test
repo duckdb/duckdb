@@ -67,7 +67,8 @@ DROP SEQUENCE seq2
 statement error con1
 INSERT INTO integers (j) VALUES (1)
 ----
-PLACEHOLDER_ERROR_MESSAGE1765
+Catalog Error: Sequence with name seq2 does not exist!
+Did you mean "seq"?
 
 # table is now [1, 1]: query it
 query R con1

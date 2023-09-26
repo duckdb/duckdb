@@ -21,7 +21,7 @@ Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "2"
 statement error
 INSERT INTO t2 SELECT 2 UNION ALL SELECT 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE22
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "2"
 
 statement ok
 BEGIN TRANSACTION

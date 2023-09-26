@@ -42,7 +42,7 @@ SELECT * FROM numbers
 statement error
 INSERT INTO numbers VALUES (NULL, 4);
 ----
-PLACEHOLDER_ERROR_MESSAGE1235
+Constraint Error: NOT NULL constraint failed: numbers.i
 
 # update NULL is also not allowed
 statement error

@@ -18,7 +18,7 @@ Binder Error: read_csv_auto COLUMN_TYPES requires a struct or list as input
 statement error
 select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMN_TYPES=STRUCT_PACK())
 ----
-PLACEHOLDER_ERROR_MESSAGE2892
+Invalid Error: Can't pack nothing into a struct
 
 # Test funky type throws
 statement error

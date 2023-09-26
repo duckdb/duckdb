@@ -27,7 +27,9 @@ LINE 1: ...elect row_number() over (range between unbounded following and unboun
 statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);
 ----
-PLACEHOLDER_ERROR_MESSAGE2807
+Parser Error: frame end cannot be UNBOUNDED PRECEDING
+LINE 1: ...(range between unbounded preceding and unbounded preceding);
+                                                  ^
 
 # ORDER BY is not implemented for window functions
 statement error

@@ -73,7 +73,7 @@ LINE 1: ...t2.a, t2.b, t2.c FROM t1 JOIN t2 USING("")
 statement error
 SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(d)
 ----
-PLACEHOLDER_ERROR_MESSAGE1128
+Binder Error: Column "d" does not exist on left side of join!
 
 statement error
 SELECT t2.a, t2.b, t2.c FROM t1 JOIN t2 USING(t1.a)

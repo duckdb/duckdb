@@ -29,7 +29,7 @@ INSERT INTO tst VALUES ('hel', 'hello');
 statement error
 UPDATE tst SET b='hello' WHERE b='hel'
 ----
-PLACEHOLDER_ERROR_MESSAGE1253
+Constraint Error: Duplicate key "a: hell, b: hello" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 # this should  work since it won't cause a duplicate
 statement ok

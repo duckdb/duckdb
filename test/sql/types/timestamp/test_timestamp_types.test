@@ -57,7 +57,7 @@ Conversion Error: Unimplemented type for cast (TIMESTAMP_S -> DATE)
 statement error
 select milli::DATE from timestamp;
 ----
-PLACEHOLDER_ERROR_MESSAGE973
+Conversion Error: Unimplemented type for cast (TIMESTAMP_MS -> DATE)
 
 statement error
 select nano::DATE from timestamp;

@@ -32,7 +32,7 @@ Binder Error: No function matches the given name and argument types 'string_agg(
 statement error
 SELECT STRING_AGG(STRING_AGG('a',','))
 ----
-PLACEHOLDER_ERROR_MESSAGE1585
+Binder Error: aggregate function calls cannot be nested
 
 # test string aggregation on scalar values
 query T

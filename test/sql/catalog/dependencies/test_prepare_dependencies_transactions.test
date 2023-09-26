@@ -79,4 +79,5 @@ COMMIT
 statement error con2
 EXECUTE v
 ----
-PLACEHOLDER_ERROR_MESSAGE1798
+Catalog Error: Table with name integers does not exist!
+Did you mean "pg_indexes"?

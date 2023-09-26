@@ -51,4 +51,6 @@ LINE 1: SELECT {};
 statement error
 SELECT {1:3};
 ----
-PLACEHOLDER_ERROR_MESSAGE852
+Parser Error: syntax error at or near "1"
+LINE 1: SELECT {1:3};
+                ^

@@ -71,7 +71,7 @@ SELECT * FROM test
 statement error con2
 UPDATE test SET j=100
 ----
-PLACEHOLDER_ERROR_MESSAGE2744
+TransactionContext Error: Transaction conflict: cannot update a table that has been altered!
 
 query I con1
 SELECT * FROM test

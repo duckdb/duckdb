@@ -105,7 +105,7 @@ Binder Error: Ambiguous name in ORDER BY!
 statement error
 SELECT 1, a+1 FROM test UNION SELECT a+1, 1 FROM test ORDER BY a+1;
 ----
-PLACEHOLDER_ERROR_MESSAGE247
+Binder Error: Ambiguous reference to column
 
 # also if we have multiple setops
 query I

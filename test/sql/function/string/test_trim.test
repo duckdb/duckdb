@@ -129,7 +129,10 @@ Binder Error: No function matches the given name and argument types 'ltrim(VARCH
 statement error
 select RTRIM()
 ----
-PLACEHOLDER_ERROR_MESSAGE2364
+Binder Error: No function matches the given name and argument types 'rtrim()'. You might need to add explicit type casts.
+	Candidate functions:
+	rtrim(VARCHAR) -> VARCHAR
+	rtrim(VARCHAR, VARCHAR) -> VARCHAR
 
 statement error
 select RTRIM('hello', 'world', 'aaa')

@@ -34,7 +34,7 @@ Conversion Error: date field value out of range: "5877680-06-23 (BC)", expected 
 statement error
 select '99999999-06-23 (BC)'::date
 ----
-PLACEHOLDER_ERROR_MESSAGE643
+Conversion Error: date field value out of range: "99999999-06-23 (BC)", expected format is (YYYY-MM-DD)
 
 # min date for timestamp micros is -290307
 query I

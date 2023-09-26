@@ -43,7 +43,7 @@ CREATE TABLE routes (
 statement error
 INSERT INTO routes VALUES (1, 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1351
+Constraint Error: Violates foreign key constraint because key "agency_id: 1" does not exist in the referenced table
 
 statement ok
 INSERT INTO agency VALUES (1, 1);

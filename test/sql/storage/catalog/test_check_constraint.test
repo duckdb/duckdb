@@ -36,4 +36,4 @@ INSERT INTO test VALUES (9, 90);
 statement error
 INSERT INTO test VALUES (9, 99);
 ----
-PLACEHOLDER_ERROR_MESSAGE2559
+Constraint Error: CHECK constraint failed: test

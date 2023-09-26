@@ -378,7 +378,7 @@ Conversion Error: Type VARCHAR with value 'Hello World' can't be cast to the des
 statement error
 SELECT CAST('[3]]' AS INT[]);
 ----
-PLACEHOLDER_ERROR_MESSAGE1479
+Conversion Error: Type VARCHAR with value '[3]]' can't be cast to the destination type LIST
 
 statement error
 SELECT CAST('[3],[[]' AS INT[][]);

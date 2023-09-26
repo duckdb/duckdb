@@ -23,7 +23,7 @@ Binder Error: union_value takes exactly one argument
 statement error
 INSERT INTO tbl VALUES (union_value(key := 1))
 ----
-PLACEHOLDER_ERROR_MESSAGE835
+Conversion Error: Type UNION(key INTEGER) can't be cast as UNION(num INTEGER, str VARCHAR). The member 'key' is not present in target union
 
 statement ok
 INSERT INTO tbl VALUES (union_value(num := 1)), (1), (union_value(str := 'hello')), (2), ('world');

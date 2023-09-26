@@ -68,7 +68,7 @@ Conversion Error: Could not convert string "1" to DECIMAL(3,3)
 statement error
 SELECT '-1'::DECIMAL(3, 3)::VARCHAR;
 ----
-PLACEHOLDER_ERROR_MESSAGE363
+Conversion Error: Could not convert string "-1" to DECIMAL(3,3)
 
 # repeat the same cast many times
 query I

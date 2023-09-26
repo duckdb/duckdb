@@ -72,4 +72,6 @@ Parser Error: TIMESTAMP only supports until nano-second precision (9)
 statement error
 CREATE TABLE ts_precision(sec TIMESTAMP(1, 1));
 ----
-PLACEHOLDER_ERROR_MESSAGE966
+Parser Error: syntax error at or near ","
+LINE 1: ...EATE TABLE ts_precision(sec TIMESTAMP(1, 1));
+                                                  ^

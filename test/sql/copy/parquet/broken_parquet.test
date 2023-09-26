@@ -20,7 +20,7 @@ Invalid Input Error: No magic bytes found at end of file 'test/sql/copy/parquet/
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/firstmarker.parquet')
 ----
-PLACEHOLDER_ERROR_MESSAGE2936
+Invalid Input Error: File 'test/sql/copy/parquet/broken/firstmarker.parquet' too small to be a Parquet file
 
 statement error
 select count(*) from parquet_scan('test/sql/copy/parquet/broken/twomarkers.parquet')

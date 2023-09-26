@@ -34,7 +34,7 @@ CREATE TYPE bla AS ENUM ();
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 ----
-PLACEHOLDER_ERROR_MESSAGE658
+Catalog Error: Type with name "mood" already exists!
 
 statement ok
 DROP TYPE bla;

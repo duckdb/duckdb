@@ -18,7 +18,7 @@ Binder Error: LIMIT cannot be negative
 statement error
 SELECT * FROM generate_series(0,10,1) LIMIT -1%
 ----
-PLACEHOLDER_ERROR_MESSAGE199
+Invalid Error: Limit percentage can't be negative value
 
 statement ok
 CREATE TABLE integers AS SELECT -1 k

@@ -23,7 +23,7 @@ Conversion Error: Type DOUBLE with value 9.223372036854776e+18 can't be cast bec
 statement error
 select 2147483648::real::int4;
 ----
-PLACEHOLDER_ERROR_MESSAGE139
+Conversion Error: Type FLOAT with value 2147483600.0 can't be cast because the value is out of range for the destination type INT32
 
 statement error
 select 2147483648::double::int4;

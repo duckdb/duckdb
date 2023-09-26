@@ -103,7 +103,7 @@ COMMIT
 statement error con2
 COMMIT
 ----
-PLACEHOLDER_ERROR_MESSAGE2749
+TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "4"
 
 # Issue #2241: Delete and reinsert fails on unique/indexed column
 statement ok

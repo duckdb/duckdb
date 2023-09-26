@@ -177,7 +177,9 @@ SELECT
 FROM tbl_ProductSales
 GROUP BY CUBE()
 ----
-PLACEHOLDER_ERROR_MESSAGE177
+Parser Error: syntax error at or near ")"
+LINE 4: GROUP BY CUBE()
+                      ^
 
 query TI rowsort
 SELECT

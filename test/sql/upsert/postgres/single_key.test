@@ -83,7 +83,7 @@ LINE 1: ... CONFLICT (key ) DO UPDATE SET fruit = excluded.fruitt
 statement error
 insert into insertconflicttest values (3, 'Kiwi') on conflict (key, fruit) do update set fruit = excluded.fruit;
 ----
-PLACEHOLDER_ERROR_MESSAGE1953
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
 
 statement error
 insert into insertconflicttest values (4, 'Mango') on conflict (fruit, key) do update set fruit = excluded.fruit;

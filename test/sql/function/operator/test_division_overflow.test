@@ -28,7 +28,7 @@ SELECT (-32767)::SMALLINT // (-1)::SMALLINT
 statement error
 SELECT (-2147483648)::INTEGER // (-1)::INTEGER
 ----
-PLACEHOLDER_ERROR_MESSAGE2501
+Out of Range Error: Overflow in division of -2147483648 / -1
 
 query I
 SELECT (-2147483647)::INTEGER // (-1)::INTEGER

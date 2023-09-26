@@ -24,7 +24,7 @@ Binder Error: Table does not contain column blabla referenced in alter statement
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING SUM(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE2666
+Binder Error: aggregate functions are not allowed in alter statement
 
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()

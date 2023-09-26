@@ -89,7 +89,8 @@ SELECT b
 FROM parquet_scan('__TEST_DIR__/ubn*.parquet') 
 ORDER BY b;
 ----
-PLACEHOLDER_ERROR_MESSAGE2962
+Binder Error: Referenced column "b" not found in FROM clause!
+Candidate bindings: "parquet_scan.a", "parquet_scan.c"
 
 query I
 SELECT b

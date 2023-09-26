@@ -36,7 +36,7 @@ SELECT
   name
 FROM test_table_raw;
 ----
-PLACEHOLDER_ERROR_MESSAGE1959
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key "abc001"
 
 # Insert aggregated data second time with "INSERT OR IGNORE" => Segmentation fault
 # This contains conflicts between the to-be-inserted rows, still won't succeed

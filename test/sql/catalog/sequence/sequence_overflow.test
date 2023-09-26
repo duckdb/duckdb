@@ -108,7 +108,7 @@ create sequence seq6 INCREMENT BY 9223372036854775807 MINVALUE 92233720368547758
 statement error
 SELECT nextval('seq6') from generate_series(0,20);
 ----
-PLACEHOLDER_ERROR_MESSAGE1934
+Serialization Error: nextval: reached maximum value of sequence "seq6" (9223372036854775807)
 
 statement ok
 create sequence seq7 INCREMENT BY -9223372036854775808 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800;

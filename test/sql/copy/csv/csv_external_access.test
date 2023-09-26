@@ -24,7 +24,7 @@ Permission Error: Scanning CSV files is disabled through configuration
 statement error
 COPY date_test FROM 'test/sql/copy/csv/data/test/date.csv';
 ----
-PLACEHOLDER_ERROR_MESSAGE2904
+Permission Error: COPY FROM is disabled by configuration
 
 statement error
 COPY date_test TO '__TEST_DIR__/date.csv'

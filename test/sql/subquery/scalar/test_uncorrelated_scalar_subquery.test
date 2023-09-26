@@ -120,7 +120,7 @@ SELECT (SELECT * FROM integers WHERE i=1)
 statement error
 SELECT (SELECT * FROM integers i1, integers i2)
 ----
-PLACEHOLDER_ERROR_MESSAGE1439
+Binder Error: Subquery returns 2 columns - expected 1
 
 #  uncorrelated subquery in SELECT
 query I

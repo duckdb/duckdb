@@ -28,7 +28,7 @@ Invalid Input Error: Unrecognized parameter for option DEFAULT_ORDER "unknown". 
 statement error
 SET enable_external_access=true
 ----
-PLACEHOLDER_ERROR_MESSAGE232
+Invalid Input Error: Cannot change enable_external_access setting while database is running
 
 # enable_profiling
 statement ok

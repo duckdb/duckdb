@@ -47,7 +47,7 @@ Candidate tables: "test"
 statement error
 SELECT xyz.*
 ----
-PLACEHOLDER_ERROR_MESSAGE3114
+Binder Error: * expression without FROM clause!
 
 # issue 415
 statement ok

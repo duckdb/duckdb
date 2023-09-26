@@ -51,7 +51,7 @@ insert into y values (NULL);
 statement error
 delete from x;
 ----
-PLACEHOLDER_ERROR_MESSAGE108
+Constraint Error: Violates foreign key constraint because key "y: 1" is still referenced by a foreign key in a different table
 
 statement ok
 delete from y;

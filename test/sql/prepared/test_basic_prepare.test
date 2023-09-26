@@ -27,7 +27,7 @@ Invalid Input Error: Parameter argument/count mismatch, identifiers of the exces
 statement error
 EXECUTE s1('asdf', 'asdf')
 ----
-PLACEHOLDER_ERROR_MESSAGE1107
+Conversion Error: Could not convert string 'asdf' to INT32
 
 statement ok
 DEALLOCATE s1

@@ -80,7 +80,7 @@ Conversion Error: Could not convert string '0X' to INT32
 statement error
 SELECT '0xHELLO'::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE1468
+Conversion Error: Could not convert string '0xHELLO' to INT32
 
 # Overflow with very large numbers
 

@@ -50,7 +50,7 @@ SELECT * FROM test ORDER BY a;
 statement error
 INSERT INTO test VALUES (11, 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE1241
+Constraint Error: Duplicate key "a: 11" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 query II
 SELECT * FROM test ORDER BY a;

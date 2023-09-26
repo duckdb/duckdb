@@ -156,7 +156,7 @@ statement error
 CREATE MACRO card_select_args(_val_min, _name:='%', _suit:='%', _val_max)
 as TABLE SELECT * FROM  cards_tbl WHERE val>=_val_min AND val<=_val_max AND name like  _name AND suit like _suit;
 ----
-PLACEHOLDER_ERROR_MESSAGE1814
+Parser Error: Positional parameters cannot come after parameters with a default value!
 
 
 # positional parameter repeated

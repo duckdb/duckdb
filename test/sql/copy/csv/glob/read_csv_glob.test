@@ -165,7 +165,7 @@ IO Error: No files found that match the pattern "test/sql/copy/csv/data/glob/*/a
 statement error
 SELECT * FROM read_csv(['test/sql/copy/csv/data/glob/*/a*a.csv'], auto_detect=1) ORDER BY 1
 ----
-PLACEHOLDER_ERROR_MESSAGE2923
+IO Error: No files found that match the pattern "test/sql/copy/csv/data/glob/*/a*a.csv"
 
 statement error
 SELECT * FROM read_csv_auto(['test/sql/copy/csv/data/glob/*/a*a.csv']) ORDER BY 1

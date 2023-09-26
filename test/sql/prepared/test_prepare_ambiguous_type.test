@@ -288,7 +288,7 @@ false
 statement error
 EXECUTE v18([1])
 ----
-PLACEHOLDER_ERROR_MESSAGE1111
+Conversion Error: Unimplemented type for cast (INTEGER -> INTEGER[])
 
 statement ok
 PREPARE v19 AS SELECT ARRAY_CONTAINS(?, 1)

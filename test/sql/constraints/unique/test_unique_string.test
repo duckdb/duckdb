@@ -77,7 +77,7 @@ INSERT INTO integers VALUES (6,NULL), (7,NULL)
 statement error
 INSERT INTO integers VALUES  (3, '4')
 ----
-PLACEHOLDER_ERROR_MESSAGE1211
+Constraint Error: Duplicate key "j: 4" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 
 statement error
 INSERT INTO integers VALUES  (3, '4')

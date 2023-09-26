@@ -38,7 +38,7 @@ Binder Error: Positional reference 2 out of range (total 1 columns)
 statement error
 SELECT #1
 ----
-PLACEHOLDER_ERROR_MESSAGE3003
+Binder Error: Positional reference 1 out of range (total 0 columns)
 
 # zero always fails
 statement error

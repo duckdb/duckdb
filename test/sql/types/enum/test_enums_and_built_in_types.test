@@ -27,7 +27,7 @@ restart
 statement error
 DROP TYPE "INTEGER"
 ----
-PLACEHOLDER_ERROR_MESSAGE669
+Catalog Error: Cannot drop internal catalog entry "INTEGER"!
 
 statement error
 DROP TYPE "INTEGEE"

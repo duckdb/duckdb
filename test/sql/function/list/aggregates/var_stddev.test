@@ -136,7 +136,7 @@ Out of Range Error: VARSAMP is out of range!
 statement error
 select list_var_pop([1e301, -1e301])
 ----
-PLACEHOLDER_ERROR_MESSAGE2237
+Out of Range Error: VARPOP is out of range!
 
 # incorrect usage
 statement error

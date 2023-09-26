@@ -37,7 +37,7 @@ CREATE TABLE unit2 (
 	total_profit INTEGER GENERATED ALWAYS AS (price * amount_sold) VIRTUAL DEFAULT 1
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1172
+Invalid Input Error: DEFAULT constraint on GENERATED column "total_profit" is not allowed
 
 # Table doesnt exist
 statement error

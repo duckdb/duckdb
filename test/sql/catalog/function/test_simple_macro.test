@@ -100,7 +100,7 @@ DROP FUNCTION two;
 statement error
 CREATE MACRO add_macro(a) AS a + b
 ----
-PLACEHOLDER_ERROR_MESSAGE1844
+Binder Error: Referenced column "b" not found in FROM clause!
 
 statement ok
 CREATE MACRO add_macro(a, b) AS a + b

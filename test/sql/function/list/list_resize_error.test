@@ -26,7 +26,10 @@ Conversion Error: Could not convert string 'a' to UINT64
 statement error
 execute ${q}('cici n est pas een list', 2);
 ----
-PLACEHOLDER_ERROR_MESSAGE2267
+Binder Error: No function matches the given name and argument types 'list_resize(VARCHAR, INTEGER)'. You might need to add explicit type casts.
+	Candidate functions:
+	list_resize(ANY[], ANY) -> ANY[]
+	list_resize(ANY[], ANY, ANY) -> ANY[]
 
 statement error
 execute ${q}([1, 2, 3], 'huh');

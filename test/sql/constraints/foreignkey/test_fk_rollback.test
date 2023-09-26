@@ -56,7 +56,7 @@ Constraint Error: Violates foreign key constraint because key "j: 2" is still re
 statement error
 INSERT INTO fk_integers VALUES (3);
 ----
-PLACEHOLDER_ERROR_MESSAGE1387
+Constraint Error: Violates foreign key constraint because key "i: 3" does not exist in the referenced table
 
 statement error
 DROP TABLE pk_integers

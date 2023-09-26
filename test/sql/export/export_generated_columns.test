@@ -45,7 +45,7 @@ SELECT * FROM tbl
 statement error
 INSERT INTO tbl VALUES(2,3)
 ----
-PLACEHOLDER_ERROR_MESSAGE3018
+Binder Error: table tbl has 1 columns but 2 values were supplied
 
 # 'x' can not be removed, as 'gen_x' depends on it
 statement error

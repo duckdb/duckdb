@@ -131,7 +131,9 @@ Parser Error: Unrecognized parameter for option NULL_ORDER "unknown", expected e
 statement error
 PRAGMA default_null_order=UNKNOWN)
 ----
-PLACEHOLDER_ERROR_MESSAGE217
+Parser Error: syntax error at or near ")"
+LINE 1: PRAGMA default_null_order=UNKNOWN)
+                                         ^
 
 statement error
 PRAGMA default_null_order=3)

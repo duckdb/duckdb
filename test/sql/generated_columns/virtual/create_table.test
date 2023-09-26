@@ -56,7 +56,7 @@ CREATE TABLE unit (
     amount_sold INTEGER,
 );
 ----
-PLACEHOLDER_ERROR_MESSAGE1137
+Parser Error: Expression of generated column "total_profit" contains a subquery, which isn't allowed
 
 # Duplicate column definition
 statement error

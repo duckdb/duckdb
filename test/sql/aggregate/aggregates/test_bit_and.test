@@ -82,7 +82,9 @@ Binder Error: No function matches the given name and argument types 'bit_and(INT
 statement error
 SELECT BIT_AND(BIT_AND(1))
 ----
-PLACEHOLDER_ERROR_MESSAGE1535
+Binder Error: aggregate function calls cannot be nested
+LINE 1: SELECT BIT_AND(BIT_AND(1))
+                       ^
 
 #test on bit types
 statement ok

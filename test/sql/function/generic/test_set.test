@@ -43,7 +43,7 @@ NULL
 statement error
 SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i)
 ----
-PLACEHOLDER_ERROR_MESSAGE2298
+Parser Error: Key name for current_setting needs to be a constant string
 
 statement error
 SELECT CURRENT_SETTING(NULL)

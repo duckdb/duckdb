@@ -40,7 +40,7 @@ Constraint Error: Violates foreign key constraint because key "i2: 4" does not e
 statement error
 INSERT INTO t4 VALUES (3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1309
+Constraint Error: Violates foreign key constraint because key "i3: 3" does not exist in the referenced table
 
 statement ok
 INSERT INTO t2 VALUES (4)

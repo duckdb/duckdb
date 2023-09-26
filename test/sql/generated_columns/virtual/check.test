@@ -47,4 +47,4 @@ INSERT INTO chk VALUES (6);
 statement error
 INSERT INTO chk VALUES (3);
 ----
-PLACEHOLDER_ERROR_MESSAGE1140
+Constraint Error: CHECK constraint failed: chk

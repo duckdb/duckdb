@@ -24,7 +24,8 @@ Catalog Error: Existing object integers is of type Table, trying to replace with
 statement error
 DROP TABLE blabla
 ----
-PLACEHOLDER_ERROR_MESSAGE1808
+Catalog Error: Table with name blabla does not exist!
+Did you mean "temp.information_schema.tables"?
 
 # cannot alter a table that does not exist
 statement error

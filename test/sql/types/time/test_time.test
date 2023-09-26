@@ -42,7 +42,7 @@ Conversion Error: time field value out of range: "  ", expected format is ([YYYY
 statement error
 SELECT '  	'::TIME
 ----
-PLACEHOLDER_ERROR_MESSAGE690
+Conversion Error: time field value out of range: "  	", expected format is ([YYYY-MM-DD ]HH:MM:SS[.MS])
 
 statement error
 SELECT '1'::TIME

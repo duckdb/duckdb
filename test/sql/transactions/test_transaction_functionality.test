@@ -24,7 +24,7 @@ START TRANSACTION
 statement error
 START TRANSACTION
 ----
-PLACEHOLDER_ERROR_MESSAGE2779
+TransactionContext Error: cannot start a transaction within a transaction
 
 # now we can rollback
 statement ok

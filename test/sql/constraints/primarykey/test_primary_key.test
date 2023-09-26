@@ -42,7 +42,7 @@ SELECT * FROM integers
 statement error
 INSERT INTO integers VALUES (NULL, 4);
 ----
-PLACEHOLDER_ERROR_MESSAGE1261
+Constraint Error: NOT NULL constraint failed: integers.i
 
 # update NULL is also not allowed
 statement error

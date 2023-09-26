@@ -123,7 +123,7 @@ Binder Error: UNNEST requires a single list as input
 statement error
 SELECT i FROM UNNEST([1, 2], [3, 4]) AS tbl(i);
 ----
-PLACEHOLDER_ERROR_MESSAGE829
+Binder Error: UNNEST requires a single list as input
 
 # issue 7927
 

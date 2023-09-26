@@ -69,7 +69,7 @@ Conversion Error: Could not convert string "1e9" to DECIMAL(9,0)
 statement error
 SELECT '1e18'::DECIMAL(18,0)
 ----
-PLACEHOLDER_ERROR_MESSAGE411
+Conversion Error: Could not convert string "1e18" to DECIMAL(18,0)
 
 statement error
 SELECT '1e38'::DECIMAL(38,0)

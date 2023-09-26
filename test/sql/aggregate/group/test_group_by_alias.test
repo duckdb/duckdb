@@ -93,7 +93,8 @@ NULL	NULL
 statement error
 SELECT (10-i) AS k, SUM(i) FROM integers GROUP BY k ORDER BY i;
 ----
-PLACEHOLDER_ERROR_MESSAGE1723
+Binder Error: column "i" must appear in the GROUP BY clause or must be part of an aggregate function.
+Either add it to the GROUP BY list, or use "ANY_VALUE(i)" if the exact value of "i" is not important.
 
 # we can manually get this behavior by pushing FIRST
 query IR

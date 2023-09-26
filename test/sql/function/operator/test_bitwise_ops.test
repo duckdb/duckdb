@@ -49,7 +49,7 @@ Out of Range Error: Cannot left-shift by negative number -1
 statement error
 SELECT 1::INT << -1::INT, 1::INT >> -1::INT, 1::INT << 40::INT, 1::INT >> 40::INT
 ----
-PLACEHOLDER_ERROR_MESSAGE2508
+Out of Range Error: Cannot left-shift by negative number -1
 
 statement error
 SELECT 1::BIGINT << -1::BIGINT, 1::BIGINT >> -1::BIGINT, 1::BIGINT << 1000::BIGINT, 1::BIGINT >> 1000::BIGINT

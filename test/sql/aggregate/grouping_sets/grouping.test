@@ -200,7 +200,7 @@ LINE 1: SELECT GROUPING() FROM students;
 statement error
 SELECT GROUPING(NULL) FROM students;
 ----
-PLACEHOLDER_ERROR_MESSAGE1738
+Binder Error: GROUPING statement cannot be used without groups
 
 statement error
 SELECT GROUPING(course) FROM students;

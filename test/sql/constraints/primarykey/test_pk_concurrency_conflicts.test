@@ -30,7 +30,7 @@ TransactionContext Error: Conflict on tuple deletion!
 statement error con2
 DELETE FROM integers WHERE i=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1256
+TransactionContext Error: Conflict on tuple deletion!
 
 # we tried to set i=5 in con2 but it failed, we can set it in con1 now though
 statement ok con1

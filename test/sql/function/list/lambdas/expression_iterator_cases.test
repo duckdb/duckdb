@@ -110,7 +110,7 @@ SELECT list_filter([2], x -> x + x = 4)
 statement error
 SELECT list_transform([2], x -> (SELECT 1 - x) * x)
 ----
-PLACEHOLDER_ERROR_MESSAGE2155
+Invalid Input Error: Subqueries are not supported in lambda expressions!
 
 statement error
 SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)

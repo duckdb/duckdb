@@ -162,7 +162,7 @@ CREATE TABLE s2.t1 AS SELECT 84 t
 statement error
 SELECT s1.t1.t FROM s1.t1, s2.t1
 ----
-PLACEHOLDER_ERROR_MESSAGE2996
+Binder Error: Duplicate alias "t1" in query!
 
 # test various failures
 statement error

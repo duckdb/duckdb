@@ -234,7 +234,9 @@ LINE 1: ...LECT list_contains([[1,2,3],[1],[1,2,3])
 statement error
 SELECT list_contains([[1,2,3],[1],[1,2,3]])
 ----
-PLACEHOLDER_ERROR_MESSAGE2274
+Binder Error: No function matches the given name and argument types 'list_contains(INTEGER[][])'. You might need to add explicit type casts.
+	Candidate functions:
+	list_contains(ANY[], ANY) -> BOOLEAN
 
 statement error
 SELECT list_contains(1)

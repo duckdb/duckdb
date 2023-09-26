@@ -169,7 +169,7 @@ SELECT u::UNION(i SMALLINT, b VARCHAR) FROM tbl4 ORDER BY ALL;;
 statement error
 SELECT u::UNION(i SMALLINT, b INT) FROM tbl4;
 ----
-PLACEHOLDER_ERROR_MESSAGE847
+Conversion Error: Unimplemented type for cast (BLOB -> INTEGER)
 
 statement ok
 DELETE FROM tbl4 WHERE union_tag(u) == 'b';

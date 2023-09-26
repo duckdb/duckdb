@@ -284,4 +284,4 @@ Constraint Error: CHECK constraint failed: integers
 statement error
 INSERT INTO strings VALUES(NULL, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE3011
+Constraint Error: NOT NULL constraint failed: strings.d

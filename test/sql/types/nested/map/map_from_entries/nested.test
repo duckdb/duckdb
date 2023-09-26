@@ -40,7 +40,7 @@ SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([4,3,5], 
 statement error
 SELECT MAP_FROM_ENTRIES(ARRAY[(MAP([5,3,4], ['a', 'b', 'c']), 2), (MAP([5,3,4], ['a', 'b', 'c']), 4)]);
 ----
-PLACEHOLDER_ERROR_MESSAGE868
+Invalid Input Error: Map keys have to be unique
 
 # LIST(STRUCT) - correct
 query I

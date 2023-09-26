@@ -22,7 +22,7 @@ CREATE TABLE tbl(a UNION(b INT, c INT));
 statement error
 INSERT INTO tbl VALUES (1), (2), (3);
 ----
-PLACEHOLDER_ERROR_MESSAGE843
+Conversion Error: Type INTEGER can't be cast as UNION(b INTEGER, c INTEGER). The cast is ambiguous, multiple possible members in target: 'b (INTEGER)', 'c (INTEGER)'. Disambiguate the target type by using the 'union_value(<tag> := <arg>)' function to promote the source value to a single member union before casting.
 
 # allow inserting explicitly tagged values using the union_value function 
 # to create singleton unions and utilizing the union(A) -> union(A,B) cast

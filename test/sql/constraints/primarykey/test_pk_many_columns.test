@@ -29,5 +29,5 @@ INSERT INTO numbers VALUES (1,1,1,1,4);
 statement error
 UPDATE numbers SET c=1 WHERE c=2
 ----
-PLACEHOLDER_ERROR_MESSAGE1245
+Constraint Error: Duplicate key "a: 1, b: 1, c: 1, d: 1, e: 1" violates primary key constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (docs - sql - indexes).
 

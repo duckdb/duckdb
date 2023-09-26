@@ -198,4 +198,6 @@ statement error
 SELECT * FROM monthly_sales
     UNPIVOT(SUM(sales) FOR month IN (empid, dept, jan, feb, mar, april))
 ----
-PLACEHOLDER_ERROR_MESSAGE255
+Parser Error: syntax error at or near "("
+LINE 2:     UNPIVOT(SUM(sales) FOR...
+                       ^

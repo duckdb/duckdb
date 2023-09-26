@@ -42,7 +42,14 @@ Binder Error: No function matches the given name and argument types 'sum(BOOLEAN
 statement error
 SELECT SUM('hello')
 ----
-PLACEHOLDER_ERROR_MESSAGE1634
+Binder Error: No function matches the given name and argument types 'sum(VARCHAR)'. You might need to add explicit type casts.
+	Candidate functions:
+	sum(DECIMAL) -> DECIMAL
+	sum(SMALLINT) -> HUGEINT
+	sum(INTEGER) -> HUGEINT
+	sum(BIGINT) -> HUGEINT
+	sum(HUGEINT) -> HUGEINT
+	sum(DOUBLE) -> DOUBLE
 
 statement error
 SELECT SUM(DATE '1992-02-02')

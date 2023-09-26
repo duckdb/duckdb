@@ -43,7 +43,7 @@ INSERT INTO fk_integers VALUES (1), (2)
 statement error con1
 INSERT INTO fk_integers VALUES (4), (5)
 ----
-PLACEHOLDER_ERROR_MESSAGE1338
+Constraint Error: Violates foreign key constraint because key "i: 4" does not exist in the referenced table
 
 statement ok con2
 CREATE TABLE fk_integers_another(j INTEGER, FOREIGN KEY (j) REFERENCES pk_integers(i))

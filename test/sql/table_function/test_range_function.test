@@ -83,7 +83,7 @@ Binder Error: start is smaller than end, but increment is negative: cannot gener
 statement error
 SELECT * FROM range(10, 0, 1)
 ----
-PLACEHOLDER_ERROR_MESSAGE3130
+Binder Error: start is bigger than end, but increment is positive: cannot generate infinite series
 
 # overloads
 # only one parameter defaults to start=0, interval=1

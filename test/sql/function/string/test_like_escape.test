@@ -65,7 +65,7 @@ SELECT '*%' NOT LIKE '*%' ESCAPE '*';
 statement error
 SELECT '%_' LIKE '%_' ESCAPE '\\';
 ----
-PLACEHOLDER_ERROR_MESSAGE2310
+Syntax Error: Invalid escape string. Escape string must be empty or one character.
 
 statement error
 SELECT '%_' LIKE '%_' ESCAPE '**';

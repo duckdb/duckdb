@@ -88,7 +88,7 @@ Not implemented Error: interval units "isodow" not recognized
 statement error
 SELECT EXTRACT(dayofyear FROM i) FROM intervals
 ----
-PLACEHOLDER_ERROR_MESSAGE2003
+Not implemented Error: interval units "doy" not recognized
 
 statement error
 SELECT EXTRACT(week FROM i) FROM intervals

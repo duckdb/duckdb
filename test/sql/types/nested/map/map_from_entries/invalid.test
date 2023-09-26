@@ -21,7 +21,7 @@ Invalid Input Error: The provided argument is not a list of structs
 statement error
 SELECT map_from_entries(ARRAY[5,4,3]);
 ----
-PLACEHOLDER_ERROR_MESSAGE891
+Invalid Input Error: The elements of the list must be structs
 
 # Struct type contains more than 2 fields (key - value)
 statement error

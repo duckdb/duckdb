@@ -113,7 +113,7 @@ DROP TYPE number_enum;
 statement error
 CREATE TYPE number_enum AS ENUM (SELECT NULL::VARCHAR);
 ----
-PLACEHOLDER_ERROR_MESSAGE672
+Invalid Input Error: Attempted to create ENUM type with NULL value!
 
 # Test inserted order
 statement ok

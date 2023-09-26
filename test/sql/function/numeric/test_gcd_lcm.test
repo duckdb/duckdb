@@ -73,4 +73,4 @@ Binder Error: No function matches the given name and argument types 'lcm(INTEGER
 statement error
 select lcm(4200000000000000000,5700000000000000000)
 ----
-PLACEHOLDER_ERROR_MESSAGE2089
+Out of Range Error: lcm value is out of range

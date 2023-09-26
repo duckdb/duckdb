@@ -37,7 +37,7 @@ UPDATE integers SET j=2
 statement error
 UPDATE integers SET j=10
 ----
-PLACEHOLDER_ERROR_MESSAGE1396
+Constraint Error: CHECK constraint failed: integers
 
 # verify that the final result is correct
 query III

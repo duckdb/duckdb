@@ -94,7 +94,7 @@ SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
 statement error
 SELECT * EXCLUDE (i, i) FROM integers
 ----
-PLACEHOLDER_ERROR_MESSAGE3106
+Parser Error: Duplicate entry "i" in EXCLUDE list
 
 # column name that does not exist
 statement error

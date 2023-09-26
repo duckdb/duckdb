@@ -26,7 +26,7 @@ Candidate bindings: "unit.price"
 statement error
 ALTER TABLE unit ADD COLUMN also_total_profit INTEGER GENERATED ALWAYS AS (total_profit) VIRTUAL;
 ----
-PLACEHOLDER_ERROR_MESSAGE1146
+Parser Error: Adding generated columns after table creation is not supported yet
 
 statement error
 SELECT also_total_profit FROM unit

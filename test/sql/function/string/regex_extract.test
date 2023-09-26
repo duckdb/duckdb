@@ -65,7 +65,7 @@ INSERT INTO test VALUES
 statement error
 SELECT regexp_extract(s, p, i) FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2324
+Invalid Input Error: Group specification field must be a constant!
 
 query T
 SELECT regexp_extract(s, p, 0) FROM test

@@ -28,4 +28,4 @@ Conversion Error: Could not convert string '1.7e39' to INT128
 statement error
 select '2e38'::hugeint
 ----
-PLACEHOLDER_ERROR_MESSAGE1068
+Conversion Error: Could not convert string '2e38' to INT128

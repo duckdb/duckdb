@@ -32,7 +32,7 @@ Conversion Error: Could not convert string 'abc' to INT32
 statement error
 select 20.0 = 'abc'
 ----
-PLACEHOLDER_ERROR_MESSAGE2497
+Conversion Error: Could not convert string "abc" to DECIMAL(3,1)
 
 # 1000 > 20
 query T

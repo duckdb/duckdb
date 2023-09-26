@@ -82,7 +82,9 @@ Binder Error: No function matches the given name and argument types 'bit_xor(INT
 statement error
 SELECT BIT_XOR(BIT_XOR(1))
 ----
-PLACEHOLDER_ERROR_MESSAGE1523
+Binder Error: aggregate function calls cannot be nested
+LINE 1: SELECT BIT_XOR(BIT_XOR(1))
+                       ^
 
 #test on bit types
 statement ok

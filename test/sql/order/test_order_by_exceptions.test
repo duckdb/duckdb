@@ -44,7 +44,7 @@ SELECT a AS k, b FROM test UNION SELECT a AS k, b FROM test ORDER BY k
 statement error
 SELECT a % 2, b FROM test UNION SELECT b, a % 2 AS k ORDER BY a % 2
 ----
-PLACEHOLDER_ERROR_MESSAGE192
+Binder Error: Referenced column "b" not found in FROM clause!
 
 # but works if not ambiguous
 query II

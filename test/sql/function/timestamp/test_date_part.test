@@ -836,7 +836,7 @@ Binder Error: Duplicate struct entry name "year" in date_part
 statement error
 SELECT DATE_PART([], ts) FROM timestamps;
 ----
-PLACEHOLDER_ERROR_MESSAGE2423
+Binder Error: date_part requires non-empty lists of part names
 
 # Null parts
 statement error

@@ -52,7 +52,10 @@ SELECT i FROM test
 statement error con2
 SELECT k FROM test
 ----
-PLACEHOLDER_ERROR_MESSAGE2678
+Binder Error: Referenced column "k" not found in FROM clause!
+Candidate bindings: "test.i", "test.j"
+LINE 1: SELECT k FROM test
+               ^
 
 # now rollback the second transasction
 # it should now see the new name

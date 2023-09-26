@@ -22,7 +22,7 @@ Not implemented Error: Attempting to open a compressed file, but the compression
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION GZIP);
 ----
-PLACEHOLDER_ERROR_MESSAGE2911
+IO Error: Input is not a GZIP stream
 
 statement error
 COPY test_zst FROM 'test/sql/copy/csv/broken/test.csv.zst' (COMPRESSION NONE);

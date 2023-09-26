@@ -178,7 +178,7 @@ Invalid Input Error: Regex options field must be a constant
 statement error
 SELECT regexp_matches('asdf', '.*SD.*', 'q')
 ----
-PLACEHOLDER_ERROR_MESSAGE2336
+Invalid Input Error: Unrecognized Regex option q
 
 # can only use "g" with regexp replace
 statement error

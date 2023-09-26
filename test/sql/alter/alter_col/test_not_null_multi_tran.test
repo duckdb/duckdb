@@ -67,7 +67,7 @@ TransactionContext Error: Failed to commit: TransactionContext Error: Transactio
 statement error con1
 INSERT INTO t VALUES(7777, NULL)
 ----
-PLACEHOLDER_ERROR_MESSAGE2604
+Constraint Error: NOT NULL constraint failed: t.j
 
 query I con1
 SELECT COUNT(*) FROM  t

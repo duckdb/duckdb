@@ -31,7 +31,7 @@ SELECT 0::bigint<<999;
 statement error
 SELECT 10::tinyint<<4::tinyint;
 ----
-PLACEHOLDER_ERROR_MESSAGE161
+Out of Range Error: Overflow in left shift (10 << 4)
 
 query I
 SELECT 10::tinyint<<3::tinyint;

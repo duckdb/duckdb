@@ -46,7 +46,7 @@ Conversion Error: timestamp field value out of range: "AA2017-07-23 13:10:11", e
 statement error
 SELECT timestamp '2017-07-23A13:10:11';
 ----
-PLACEHOLDER_ERROR_MESSAGE963
+Conversion Error: timestamp field value out of range: "2017-07-23A13:10:11", expected format is (YYYY-MM-DD HH:MM:SS[.US][±HH:MM| ZONE])
 
 query T
 SELECT t FROM timestamp ORDER BY t;

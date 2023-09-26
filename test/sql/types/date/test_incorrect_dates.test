@@ -20,7 +20,7 @@ Conversion Error: date field value out of range: "1993-20-14", expected format i
 statement error
 INSERT INTO dates VALUES ('1993-08-99')
 ----
-PLACEHOLDER_ERROR_MESSAGE546
+Conversion Error: date field value out of range: "1993-08-99", expected format is (YYYY-MM-DD)
 
 # day out of range because not a leapyear
 statement error

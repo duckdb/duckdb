@@ -155,7 +155,7 @@ Binder Error: APPROXIMATE QUANTILE can only take parameters in range [0, 1]
 statement error
 SELECT approx_quantile(r, NULL) FROM quantile
 ----
-PLACEHOLDER_ERROR_MESSAGE1549
+Binder Error: APPROXIMATE QUANTILE parameter cannot be NULL
 
 statement error
 SELECT approx_quantile(r, r) FROM quantile

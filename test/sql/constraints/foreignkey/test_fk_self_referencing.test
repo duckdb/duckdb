@@ -24,7 +24,7 @@ INSERT INTO employee VALUES (4, 2, 'Mark');
 statement error
 UPDATE employee SET id=5 WHERE id=2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1377
+Constraint Error: Violates foreign key constraint because key "managerid: 2" is still referenced by a foreign key in a different table
 
 statement error
 DELETE FROM employee WHERE id=2;

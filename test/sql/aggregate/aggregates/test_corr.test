@@ -61,7 +61,7 @@ NULL
 statement error
 SELECT corr(a,b) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
 ----
-PLACEHOLDER_ERROR_MESSAGE1613
+Out of Range Error: STDDEV_POP for Y is out of range!
 
 statement error
 SELECT corr(b,a) FROM (values (1e301, 0), (-1e301, 0)) tbl(a,b);
