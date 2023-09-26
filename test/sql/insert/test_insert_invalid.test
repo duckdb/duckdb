@@ -5,11 +5,11 @@
 statement ok
 CREATE TABLE strings(i STRING)
 
-statement error
-INSERT INTO strings VALUES ('â‚(')
+statement ok
+INSERT INTO strings VALUES ('ï¿½(')
 
-statement error
-SELECT * FROM strings WHERE i = 'â‚('
+statement ok
+SELECT * FROM strings WHERE i = 'ï¿½('
 
 # Test insert with too few or too many cols
 statement ok
@@ -21,17 +21,26 @@ INSERT INTO a VALUES (1, 2)
 # scalar inserts
 statement error
 INSERT INTO a VALUES (1)
+----
+Binder Error: table a has 2 columns but 1 values were supplied
 
 statement error
 INSERT INTO a VALUES (1,2,3)
+----
+Binder Error: table a has 2 columns but 3 values were supplied
 
 statement error
 INSERT INTO a VALUES (1,2),(3)
+----
+Parser Error: VALUES lists must all be the same length
 
 statement error
 INSERT INTO a VALUES (1,2),(3,4,5)
+----
+Parser Error: VALUES lists must all be the same length
 
 # also with queries
 statement error
 INSERT INTO a SELECT 42
-
+----
+Binder Error: table a has 2 columns but 1 values were supplied
