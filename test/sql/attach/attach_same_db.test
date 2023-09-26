@@ -13,4 +13,4 @@ ATTACH '__TEST_DIR__/attach_same_db.db' AS db1
 statement error
 ATTACH '__TEST_DIR__/attach_same_db.db' AS db2
 ----
-Binder Error: Database "duckdb_unittest_tempdir/53346/attach_same_db.db" is already attached with alias "db1"
+attach_same_db.db" is already attached with alias "db1"

@@ -75,4 +75,4 @@ Conversion Error: Could not convert string 'hello0' to INT32
 statement error
 SELECT * FROM '__TEST_DIR__/overwrite.parquet';
 ----
-Invalid Input Error: File 'duckdb_unittest_tempdir/56226/overwrite.parquet' too small to be a Parquet file
+overwrite.parquet' too small to be a Parquet file
