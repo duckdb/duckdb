@@ -77,27 +77,14 @@ statement error
 SELECT * FROM xt(100, 'joe');
 ----
 Catalog Error: Table Function with name xt does not exist!
-Did you mean "repeat"?
-LINE 1: SELECT * FROM xt(100, 'joe');
-                      ^
 
 statement error
 SELECT * FROM my_seq(0,3,2);
 ----
 Catalog Error: Table Function with name my_seq does not exist!
-Did you mean "my_range"?
-LINE 1: SELECT * FROM my_seq(0,3,2);
-                      ^
 
 query I
 SELECT * from my_range(2);
 ----
 0
 1
-
-
-
-
-
-
-
