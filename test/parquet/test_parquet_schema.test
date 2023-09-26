@@ -25,6 +25,24 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
 ----
 Binder Error: Parquet schema cannot be combined with union_by_name=true
 
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    0: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+Invalid Input Error: Map keys have to be unique
+
+statement error
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'cool_column', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'cool_column', type: 'UTINYINT', default_value: 43}
+                  }) pq
+----
+Binder Error: table "pq" has duplicate column name "cool_column"
+
 query IIIIII
 DESCRIBE SELECT *
 FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
@@ -54,3 +72,39 @@ FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
                   })
 ----
 42	43
+
+# if we don't supply a field id, we can't refer to it using the schema parameter
+statement ok
+COPY (SELECT 42::INTEGER i) TO '__TEST_DIR__/integers.parquet'
+
+query II
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    0: {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    1: {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  })
+----
+NULL	43
+
+# let's spice it up with more columns
+statement ok
+COPY (
+    SELECT 1 i1, 3 i3, 4 i4, 5 i5
+) TO '__TEST_DIR__/integers.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+
+# this is purposely a bit confusing but we're:
+# 1. deleting field id 2
+# 2. creating field id 4
+# 3. reversing the order of the columns
+# 4. renaming them (except i3)
+# 5. upcasting them
+query IIII
+SELECT *
+FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    1: {name: 'i1', type: 'BIGINT', default_value: NULL},
+                    3: {name: 'i3', type: 'BIGINT', default_value: NULL},
+                    4: {name: 'i4', type: 'BIGINT', default_value: 2},
+                    5: {name: 'i5', type: 'BIGINT', default_value: NULL}
+                  })
+----
+5	3	2	1

@@ -206,7 +206,10 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	unordered_map<uint32_t, idx_t> field_id_to_column_index;
 	auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
 	for (idx_t column_index = 0; column_index < column_readers.size(); column_index++) {
-		field_id_to_column_index[column_readers[column_index]->Schema().field_id] = column_index;
+		auto &column_schema = column_readers[column_index]->Schema();
+		if (column_schema.__isset.field_id) {
+			field_id_to_column_index[column_schema.field_id] = column_index;
+		}
 	}
 
 	// loop through the schema definition
