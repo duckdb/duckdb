@@ -103,77 +103,77 @@ SELECT * FROM test4 ORDER BY 1 LIMIT 3;
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP ',', HEADER 0.2);
 ----
-PLACEHOLDER_ERROR_MESSAGE2871
+Binder Error: "header" expects a boolean value (e.g. TRUE or 1)
 
 # empty delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP);
 ----
-PLACEHOLDER_ERROR_MESSAGE2870
+Binder Error: "sep" expects a single argument as a string value
 
 # number as delimiter
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (SEP 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2869
+Binder Error: "sep" expects a string argument!
 
 # multiple format options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT 'csv', FORMAT 'json');
 ----
-PLACEHOLDER_ERROR_MESSAGE2868
+Catalog Error: Copy Function with name "json" is not in the catalog, but it exists in the json extension.
 
 # number as escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2867
+Binder Error: "escape" expects a string argument!
 
 # no escape string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ESCAPE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2866
+Binder Error: "escape" expects a single argument as a string value
 
 # number as quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE 1);
 ----
-PLACEHOLDER_ERROR_MESSAGE2865
+Binder Error: "quote" expects a string argument!
 
 # no quote string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (QUOTE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2864
+Binder Error: "quote" expects a single argument as a string value
 
 # no format string
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (FORMAT);
 ----
-PLACEHOLDER_ERROR_MESSAGE2863
+Parser Error: Unsupported parameter type for FORMAT: expected e.g. FORMAT 'csv', 'parquet'
 
 # encoding must not be empty and must have the correct parameter type and value
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING);
 ----
-PLACEHOLDER_ERROR_MESSAGE2862
+Binder Error: "encoding" expects a single argument as a string value
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 42);
 ----
-PLACEHOLDER_ERROR_MESSAGE2861
+Binder Error: "encoding" expects a string argument!
 
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (ENCODING 'utf-42');
 ----
-PLACEHOLDER_ERROR_MESSAGE2860
+Binder Error: Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'
 
 # don't allow for non-existant copy options
 statement error
 COPY test4 (a,c) FROM '__TEST_DIR__/test4.csv' (MAGIC '42');
 ----
-PLACEHOLDER_ERROR_MESSAGE2859
+Binder Error: Unrecognized option for CSV reader "magic"
 
 # use a different delimiter
 # create new table
@@ -192,7 +192,14 @@ COPY test FROM 'test/sql/copy/csv/data/test/test_pipe.csv' (SEPARATOR '|');
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/too_many_values.csv';
 ----
-PLACEHOLDER_ERROR_MESSAGE2858
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/too_many_values.csv", on line 1: expected 3 values per row, but got more. (  file=test/sql/copy/csv/data/test/too_many_values.csv
+  delimiter=',' (default)
+  quote='"' (default)
+  escape='"' (default)
+  header=0' (default)
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0)
 
 # test default null string
 query I
@@ -204,7 +211,15 @@ COPY test FROM 'test/sql/copy/csv/data/test/test_null_csv.csv' DELIMITER '|';
 statement error
 COPY test FROM 'test/sql/copy/csv/data/test/invalid_utf.csv' DELIMITER '|';
 ----
-PLACEHOLDER_ERROR_MESSAGE2857
+Invalid Input Error: Error in file "test/sql/copy/csv/data/test/invalid_utf.csv" at line 1 in column ""c"": Invalid unicode (byte sequence mismatch) detected in CSV file. Parser options:
+  file=test/sql/copy/csv/data/test/invalid_utf.csv
+  delimiter='|'
+  quote='"' (default)
+  escape='"' (default)
+  header=0' (default)
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 # empty file
 statement ok

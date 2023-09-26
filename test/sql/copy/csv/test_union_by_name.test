@@ -184,7 +184,16 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 ----
-PLACEHOLDER_ERROR_MESSAGE2882
+Invalid Input Error: Error in file "data/csv/union-by-name/part=b/test.csv" on line 3: expected 3 values per row, but got 2.
+Parser options:
+  file=data/csv/union-by-name/part=b/test.csv
+  delimiter=',' (auto detected)
+  quote='"' (auto detected)
+  escape='"' (auto detected)
+  header=1
+  sample_size=20480
+  ignore_errors=0
+  all_varchar=0
 
 query IIII
 SELECT id, value, a, part
@@ -198,4 +207,4 @@ ORDER BY id
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
 ----
-PLACEHOLDER_ERROR_MESSAGE2881
+Binder Error: Hive partition mismatch between file "data/csv/union-by-name/part=b/test.csv" and "data/csv/union-by-name/mismatching/test.csv": key "part" not found

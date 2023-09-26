@@ -12,17 +12,19 @@ PRAGMA enable_verification
 statement error
 LOAD 'asdf';
 ----
-IO Error: Extension "/Users/thijs/.duckdb/extensions/a79c05a3bc/osx_arm64/asdf.duckdb_extension" not found.
+asdf.duckdb_extension" not found.
 
 statement error
 LOAD 'Makefile';
 ----
-IO Error: Extension "/Users/thijs/.duckdb/extensions/a79c05a3bc/osx_arm64/Makefile.duckdb_extension" not found.
+Makefile.duckdb_extension" not found.
 
 statement error
 LOAD NULL;
 ----
-PLACEHOLDER_ERROR_MESSAGE4
+Parser Error: syntax error at or near "NULL"
+LINE 1: LOAD NULL;
+             ^
 
 statement ok
 LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
@@ -48,12 +50,12 @@ QUACK
 statement error
 QUAC
 ----
-PLACEHOLDER_ERROR_MESSAGE3
+Parser Error: Did you mean... QUACK!?
 
 statement error
 QUACK NOT QUACK
 ----
-PLACEHOLDER_ERROR_MESSAGE2
+Parser Error: This is not a quack: not
 
 query I
 SELECT contains(loaded_extensions(), 'loadable_extension_demo')

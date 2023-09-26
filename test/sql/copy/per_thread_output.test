@@ -73,4 +73,4 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
 statement error
 COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);
 ----
-PLACEHOLDER_ERROR_MESSAGE2854
+Not implemented Error: Can't combine USE_TMP_FILE and PER_THREAD_OUTPUT for COPY

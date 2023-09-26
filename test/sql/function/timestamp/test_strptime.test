@@ -502,115 +502,169 @@ Error: Expected AM/PM
 statement error
 SELECT strptime('moa', '%a')
 ----
-PLACEHOLDER_ERROR_MESSAGE2446
+Invalid Input Error: Could not parse string "moa" according to format specifier "%a"
+moa
+^
+Error: Expected an abbreviated day name (Mon, Tue, Wed, Thu, Fri, Sat, Sun)
 
 # incorrect weekday name
 statement error
 SELECT strptime('moaday', '%A')
 ----
-PLACEHOLDER_ERROR_MESSAGE2445
+Invalid Input Error: Could not parse string "moaday" according to format specifier "%A"
+moaday
+^
+Error: Expected a full day name (Monday, Tuesday, etc...)
 
 statement error
 SELECT strptime('mondayy', '%A')
 ----
-PLACEHOLDER_ERROR_MESSAGE2444
+Invalid Input Error: Could not parse string "mondayy" according to format specifier "%A"
+mondayy
+      ^
+Error: Full specifier did not match: trailing characters
 
 # incorrect abbreviated month name
 statement error
 SELECT strptime('juk', '%b')
 ----
-PLACEHOLDER_ERROR_MESSAGE2443
+Invalid Input Error: Could not parse string "juk" according to format specifier "%b"
+juk
+^
+Error: Expected an abbreviated month name (Jan, Feb, Mar, etc..)
 
 # incorrect weekday name
 statement error
 SELECT strptime('juke', '%B')
 ----
-PLACEHOLDER_ERROR_MESSAGE2442
+Invalid Input Error: Could not parse string "juke" according to format specifier "%B"
+juke
+^
+Error: Expected a full month name (January, February, etc...)
 
 statement error
 SELECT strptime('junee', '%B')
 ----
-PLACEHOLDER_ERROR_MESSAGE2441
+Invalid Input Error: Could not parse string "junee" according to format specifier "%B"
+junee
+    ^
+Error: Full specifier did not match: trailing characters
 
 # day of year out of range
 statement error
 SELECT strptime('500', '%j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2440
+Invalid Input Error: Could not parse string "500" according to format specifier "%j"
+500
+^
+Error: Year day out of range, expected a value between 1 and 366
 
 statement error
 SELECT strptime('500', '%-j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2439
+Invalid Input Error: Could not parse string "500" according to format specifier "%-j"
+500
+^
+Error: Year day out of range, expected a value between 1 and 366
 
 statement error
 SELECT strptime('0', '%j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2438
+Invalid Input Error: Could not parse string "0" according to format specifier "%j"
+0
+^
+Error: Year day out of range, expected a value between 1 and 366
 
 statement error
 SELECT strptime('0', '%-j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2437
+Invalid Input Error: Could not parse string "0" according to format specifier "%-j"
+0
+^
+Error: Year day out of range, expected a value between 1 and 366
 
 # week numbers out of range
 statement error
 SELECT strptime('60', '%U')
 ----
-PLACEHOLDER_ERROR_MESSAGE2436
+Invalid Input Error: Could not parse string "60" according to format specifier "%U"
+60
+^
+Error: Week out of range, expected a value between 0 and 53
 
 statement error
 SELECT strptime('60', '%W')
 ----
-PLACEHOLDER_ERROR_MESSAGE2435
+Invalid Input Error: Could not parse string "60" according to format specifier "%W"
+60
+^
+Error: Week out of range, expected a value between 0 and 53
 
 # weekday out of range
 statement error
 SELECT strptime('9', '%w')
 ----
-PLACEHOLDER_ERROR_MESSAGE2434
+Invalid Input Error: Could not parse string "9" according to format specifier "%w"
+9
+^
+Error: Weekday out of range, expected a value between 0 and 6
 
 # Multiple offset types
 statement error
 SELECT strptime('20 19', '%U %W')
 ----
-PLACEHOLDER_ERROR_MESSAGE2433
+Invalid Input Error: Could not parse string "20 19" according to format specifier "%U %W"
+20 19
+   ^
+Error: Multiple year offsets specified
 
 statement error
 SELECT strptime('20 19', '%U %j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2432
+Invalid Input Error: Could not parse string "20 19" according to format specifier "%U %j"
+20 19
+   ^
+Error: Multiple year offsets specified
 
 statement error
 SELECT strptime('20 19', '%W %j')
 ----
-PLACEHOLDER_ERROR_MESSAGE2431
+Invalid Input Error: Could not parse string "20 19" according to format specifier "%W %j"
+20 19
+   ^
+Error: Multiple year offsets specified
 
 # AM/PM out of range
 statement error
 SELECT strptime('Mon 30, December 30, 20:3:5 PM', '%a %d, %B %y, %H:%M:%S %p')
 ----
-PLACEHOLDER_ERROR_MESSAGE2430
+Invalid Input Error: Could not parse string "Mon 30, December 30, 20:3:5 PM" according to format specifier "%a %d, %B %y, %H:%M:%S %p"
 
 # unrecognized specifier
 statement error
 SELECT strptime('21/10/2018', '%-q/%m/%Y')
 ----
-PLACEHOLDER_ERROR_MESSAGE2429
+Invalid Input Error: Failed to parse format specifier %-q/%m/%Y: Unrecognized format for strftime/strptime: %-q
 
 # microseconds out of range
 statement error
 SELECT strptime('9999999', '%f')
 ----
-PLACEHOLDER_ERROR_MESSAGE2428
+Invalid Input Error: Could not parse string "9999999" according to format specifier "%f"
+9999999
+      ^
+Error: Full specifier did not match: trailing characters
 
 # millisecond out of range
 statement error
 SELECT strptime('9999', '%g')
 ----
-PLACEHOLDER_ERROR_MESSAGE2427
+Invalid Input Error: Could not parse string "9999" according to format specifier "%g"
+9999
+   ^
+Error: Full specifier did not match: trailing characters
 
 statement error
 SELECT strptime('2000/10/10', random()::varchar)
 ----
-PLACEHOLDER_ERROR_MESSAGE2426
+Invalid Input Error: strptime format must be a constant
