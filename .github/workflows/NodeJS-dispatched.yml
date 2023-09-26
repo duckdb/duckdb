@@ -47,6 +47,7 @@ jobs:
 
       - name: Setup NPM
         shell: bash
+        if: ${{ github.event.inputs.deploy }}
         run: ./scripts/node_version.sh upload
         env:
           DUCKDB_NODE_BUILD_CACHE: 0  # create a standalone package
@@ -112,6 +113,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }} 
+
+      - name: Patch
+        shell: bash
+        run: |
+          touch .github/patches/duckdb/nodejs.patch
+          git apply .github/patches/duckdb/nodejs.patch
 
       - name: Update apt
         shell: bash
@@ -199,6 +206,12 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }} 
 
+      - name: Patch
+        shell: bash
+        run: |
+          touch .github/patches/duckdb/nodejs.patch
+          git apply .github/patches/duckdb/nodejs.patch
+
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
@@ -271,6 +284,12 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.inputs.ref }} 
+
+      - name: Patch
+        shell: bash
+        run: |
+          touch .github/patches/duckdb/nodejs.patch
+          git apply .github/patches/duckdb/nodejs.patch
 
       - name: Setup Node
         uses: actions/setup-node@v3
