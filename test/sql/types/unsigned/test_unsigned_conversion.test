@@ -182,7 +182,7 @@ Conversion Error: Type INT16 with value -42 can't be cast because the value is o
 statement error
 SELECT (-42)::SMALLINT::UBIGINT
 ----
-PLACEHOLDER_ERROR_MESSAGE458
+Conversion Error: Type INT16 with value -42 can't be cast because the value is out of range for the destination type UINT64
 
 query I
 SELECT -42::SMALLINT::UTINYINT

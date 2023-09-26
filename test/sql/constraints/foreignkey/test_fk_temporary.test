@@ -259,7 +259,7 @@ INSERT INTO s1.fkt VALUES (2), (3)
 statement error
 INSERT INTO s1.fkt VALUES (6)
 ----
-PLACEHOLDER_ERROR_MESSAGE1277
+Constraint Error: Violates foreign key constraint because key "i: 6" does not exist in the referenced table
 
 statement ok
 INSERT INTO s1.fkt VALUES (1)

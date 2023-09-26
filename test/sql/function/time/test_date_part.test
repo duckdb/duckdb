@@ -195,7 +195,7 @@ Candidate bindings: "times.d", "times.s"
 statement error
 select extract(era from time '10:00:00');
 ----
-PLACEHOLDER_ERROR_MESSAGE2054
+Not implemented Error: "time" units "era" not recognized
 
 statement error
 select date_part('era', time '10:00:00');

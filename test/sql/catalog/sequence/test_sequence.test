@@ -542,7 +542,7 @@ Did you mean "fresh"?
 statement error
 CREATE SEQUENCE wrongseq NO MAXVALUE MAXVALUE 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1914
+Parser Error: Maxvalue should be passed as most once
 
 # min value specified more than once
 statement error

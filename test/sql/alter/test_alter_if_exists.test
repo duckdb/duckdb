@@ -82,7 +82,7 @@ Did you mean "t0"?
 statement error
 ALTER TABLE t0 DROP COLUMN c3;
 ----
-PLACEHOLDER_ERROR_MESSAGE2705
+Binder Error: Table "t0" does not have a column with name "c3"
 
 statement ok
 ALTER TABLE t0 DROP COLUMN IF EXISTS c3

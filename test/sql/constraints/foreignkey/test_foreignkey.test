@@ -225,7 +225,7 @@ INSERT INTO fkt VALUES (3, 103)
 statement error
 DELETE FROM pkt WHERE k=13
 ----
-PLACEHOLDER_ERROR_MESSAGE1319
+Constraint Error: Violates foreign key constraint because key "j: 3" is still referenced by a foreign key in a different table
 
 statement ok
 DELETE FROM fkt WHERE l=103

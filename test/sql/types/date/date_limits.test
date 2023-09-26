@@ -143,7 +143,7 @@ select '5881580-07-10'::date
 statement error
 select '5881580-07-11'::date
 ----
-PLACEHOLDER_ERROR_MESSAGE627
+Conversion Error: date field value out of range: "5881580-07-11", expected format is (YYYY-MM-DD)
 
 statement error
 select '5881580-08-11'::date

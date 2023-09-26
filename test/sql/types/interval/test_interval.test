@@ -302,7 +302,7 @@ SELECT INTERVAL '2562047788 hours';
 statement error
 SELECT INTERVAL '2562047788 hours 2562047788 hours';
 ----
-PLACEHOLDER_ERROR_MESSAGE520
+Out of Range Error: interval value is out of range
 
 query T
 SELECT INTERVAL '-9223372036854775msecs';

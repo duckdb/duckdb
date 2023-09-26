@@ -353,7 +353,8 @@ DROP MACRO main_macro;
 statement error
 DROP MACRO oop_macro;
 ----
-PLACEHOLDER_ERROR_MESSAGE1873
+Catalog Error: Macro Function with name oop_macro does not exist!
+Did you mean "out_of_path.oop_macro"?
 
 statement ok
 DROP MACRO out_of_path.oop_macro;

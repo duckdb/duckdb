@@ -466,7 +466,7 @@ Invalid Input Error: Type INT32 with value 5877642-07-01 (BC) can't be cast to t
 statement error
 select time_bucket('1 month'::interval, '5881580-07-10'::date, '-1 day'::interval);
 ----
-PLACEHOLDER_ERROR_MESSAGE2023
+Out of Range Error: Date out of range
 
 query I
 select time_bucket('1 month'::interval, '5881580-07-10'::date);

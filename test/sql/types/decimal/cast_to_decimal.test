@@ -151,7 +151,7 @@ Conversion Error: Could not cast value 100 to DECIMAL(3,1)
 statement error
 SELECT 10000000::BIGINT::DECIMAL(3,1)
 ----
-PLACEHOLDER_ERROR_MESSAGE335
+Conversion Error: Could not cast value 10000000 to DECIMAL(3,1)
 
 statement error
 SELECT -10000000::BIGINT::DECIMAL(3,1)

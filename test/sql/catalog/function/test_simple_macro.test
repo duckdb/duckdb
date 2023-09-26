@@ -293,7 +293,7 @@ Parser Error: Invalid parameter: '(s = 'not a float')'
 statement error
 CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
 ----
-PLACEHOLDER_ERROR_MESSAGE1828
+Parser Error: Duplicate default parameter: 'a'
 
 statement ok
 CREATE MACRO two_default_params(a := 4, b := 2) AS a + b
