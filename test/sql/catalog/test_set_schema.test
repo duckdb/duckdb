@@ -376,7 +376,8 @@ CREATE SEQUENCE out_of_path.oop_sequence;
 statement error
 SELECT main.nextval('main.test_sequence');
 ----
-PLACEHOLDER_ERROR_MESSAGE1872
+Catalog Error: Sequence with name test_sequence does not exist!
+Did you mean "memory.test.test_sequence"?
 
 statement ok
 SELECT main.nextval('test.test_sequence');

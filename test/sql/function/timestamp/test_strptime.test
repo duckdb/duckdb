@@ -439,7 +439,10 @@ Error: Seconds out of range, expected a value between 0 and 59
 statement error
 SELECT strptime('2000-10-01 23:59:59.10000000', '%Y-%m-%d %H:%M:%S.%f')
 ----
-PLACEHOLDER_ERROR_MESSAGE2454
+Invalid Input Error: Could not parse string "2000-10-01 23:59:59.10000000" according to format specifier "%Y-%m-%d %H:%M:%S.%f"
+2000-10-01 23:59:59.10000000
+                          ^
+Error: Full specifier did not match: trailing characters
 
 # huge number
 statement error

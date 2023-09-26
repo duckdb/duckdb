@@ -200,7 +200,7 @@ Not implemented Error: "time" units "era" not recognized
 statement error
 select date_part('era', time '10:00:00');
 ----
-PLACEHOLDER_ERROR_MESSAGE2053
+Not implemented Error: "time" units "era" not recognized
 
 statement error
 select extract(julian from time '10:00:00');

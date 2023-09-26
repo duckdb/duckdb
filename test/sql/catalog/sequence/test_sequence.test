@@ -548,7 +548,7 @@ Parser Error: Maxvalue should be passed as most once
 statement error
 CREATE SEQUENCE wrongseq MINVALUE 10 MINVALUE 2;
 ----
-PLACEHOLDER_ERROR_MESSAGE1913
+Parser Error: Minvalue should be passed as most once
 
 # start value specified more than once
 statement error

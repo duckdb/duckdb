@@ -207,7 +207,7 @@ SELECT -42::SMALLINT::UBIGINT
 statement error
 SELECT (-42)::INTEGER::UTINYINT
 ----
-PLACEHOLDER_ERROR_MESSAGE457
+Conversion Error: Type INT32 with value -42 can't be cast because the value is out of range for the destination type UINT8
 
 statement error
 SELECT (-42)::INTEGER::USMALLINT

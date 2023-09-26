@@ -83,7 +83,7 @@ ALTER SEQUENCE sequence1 OWNED BY tablename;
 statement error
 DROP SEQUENCE sequence1;
 ----
-PLACEHOLDER_ERROR_MESSAGE1794
+Dependency Error: Cannot drop entry "sequence1" because there are entries that depend on it. Use DROP...CASCADE to drop all dependents.
 
 statement ok
 DROP TABLE tablename;

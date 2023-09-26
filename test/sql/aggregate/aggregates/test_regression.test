@@ -243,7 +243,9 @@ NULL
 statement error
 select regr_intercept(*)
 ----
-PLACEHOLDER_ERROR_MESSAGE1588
+Binder Error: No function matches the given name and argument types 'regr_intercept()'. You might need to add explicit type casts.
+	Candidate functions:
+	regr_intercept(DOUBLE, DOUBLE) -> DOUBLE
 
 statement ok
 create  table aggr(k int, v decimal(10,2), v2 decimal(10, 2));

@@ -316,7 +316,7 @@ SELECT two_default_params(b := 3)
 statement error
 SELECT two_default_params(a := 5, a := 3)
 ----
-PLACEHOLDER_ERROR_MESSAGE1827
+Binder Error: Duplicate default parameters a!
 
 statement error
 SELECT two_default_params(b := 5, b := 3)
