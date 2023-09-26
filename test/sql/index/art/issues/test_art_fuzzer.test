@@ -95,5 +95,6 @@ INSERT INTO t21 VALUES (1);
 Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
 
 statement error
-CREATE INDEX i21 ON t21 (c1);----
+CREATE INDEX i21 ON t21 (c1);
+----
 PLACEHOLDER_ERROR_MESSAGE2842
