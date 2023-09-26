@@ -149,16 +149,16 @@ create table t1 as select range::${type} as a from range(8);
 statement ok
 create table t2 as select (range%4+1)::VARCHAR::new_type as b from range(8);
 
-query I
+query I rowsort
 select a from t1, t2 where t1.a = t2.b;
 ----
 1
-2
-3
-4
 1
 2
+2
 3
+3
+4
 4
 
 query I
